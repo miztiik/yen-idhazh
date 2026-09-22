@@ -317,7 +317,7 @@ Measured 2026-09-22 from GitHub job step timestamps.
 | 7 | The prune re-checks the tip and refuses to force-push over a run | H | 1, 2, 4 | 2 | DONE | 4 | p46h | - | GitHub Copilot |
 | 8 | An unowned path stops the push and names itself | E | 1, 2, 4 | 2 | DONE | 4 | p46e | - | GitHub Copilot |
 | 9 | The published day is folded from per-run fragments | G | 5, 6, 7 | 3 | DONE | 5 | p46g | - | GitHub Copilot |
-| 10 | One clock, and a label on every block that landed | G | 9 | 3 | PENDING | 3 | p46g | - | GitHub Copilot |
+| 10 | One clock that cannot go backwards | G | 9 | 3 | DONE | 3 | p46g | - | GitHub Copilot |
 | 11 | The day directory is the ledger | C | 5, 8 | 4 | PENDING | 5 | - | - | - |
 | 12 | A closed day folds to one file | C | 11 | 4 | PENDING | 3 | - | - | - |
 | 15 | The plan job's own ledgers stop being shared files | C | 11 | 4 | PENDING | 3 | - | - | - |
@@ -650,18 +650,15 @@ Rows appear in numeric order. Wave order is Table F.
 | 9.R2 | Order by first sight, run start, or score | Each moves a story the reader was part-way through | A better-looking order, against the one promise the reader asked for by name | Jony |
 | 9.R3 | Keep the fragments under `frontend/public/` and exclude them at build | An exclusion is a rule somebody has to remember; absence is not | One build-config line, against a reader landing on raw machine text from a search result | Jony |
 
-### Row 10 - One clock, and a label on every block that landed
+### Row 10 - One clock that cannot go backwards
 
-- **Scope:** the freshness line prints one clock that cannot go backwards, and every block after the first says when it arrived.
+- **Scope:** the freshness line prints one clock that cannot go backwards.
 - **Files touched:**
   - `frontend/src/lib/components/DayNotice.svelte`
-  - `frontend/src/lib/components/BlockDivider.svelte` (new)
-  - `frontend/src/lib/components/DigestList.svelte`
   - `frontend/tests/` (the component tests)
   - `frontend/playwright.whole-day.config.ts` suite (the archive-count parity test)
-  - `docs/architecture/contracts/schemas.md`
 - **Acceptance gates:** local - `npm --prefix frontend run test:changed -- --list` then the selected checks, `npm --prefix frontend run check`, and the browser smoke in CLAUDE.md section 12. CI - the full suite.
-- **Oracle:** for the newest published day, the archive row's story count equals the number the day page prints - asserted in a browser, not argued. **It cannot settle** whether the label's wording reads well; that is the section 12 screenshot.
+- **Oracle:** for the newest published day, the archive row's story count equals the number the day page prints - asserted in a browser, not argued. **It cannot settle** whether the sentence reads well; that is the section 12 screenshot.
 - **Decisions:**
 
 | # | Decision | Authority |
@@ -669,14 +666,22 @@ Rows appear in numeric order. Wave order is Table F.
 | 10.1 | **`(update N)` does not survive.** The sentence carried two orderings three words apart: a wall clock that can go backwards and a count that only goes forwards. **What the reader loses**: they can no longer see how many times the day was added to - only that it was, and where. That is the price, and it is paid because a reader who once sees the time go back while the count goes forward stops believing every date on the site. | Jony |
 | 10.2 | The clock is **`day.generated_at`**, not `runs.at(-1).at`. `at` is a per-run stamp, so the last run's `at` is the clock of whichever run landed last, which under parallel folds is any clock at all. The field already exists on both `DigestDay` and `DigestView`; **no new field**. The string is `Updated 06:47 UTC.` - `clockUtc` already appends the zone. | Jony |
 | 10.3 | The second half of the line keeps `laterAdded` and changes wording only: `{laterAdded} added after this page first went up.` - true under arrival order, and it does not borrow the word 10.1 deleted. | Jony |
-| 10.4 | **A block label, and it is computed from the run's clock, never from the stories' own time.** `DigestItem.published_at` is nullable and comes from the feed, so a block routinely holds a back-catalogue story next to one filed an hour ago; a label derived from those says "last Tuesday" over stories the reader is meeting for the first time. The label answers *when did this arrive on this page*. | Jony |
-| 10.5 | The label **never claims a direction relative to the block above it.** "Earlier this morning" is right for a catch-up landing second and a lie for the normal case, and the page cannot tell which it has without comparing clocks that are allowed to be in any order. It states its own clock, absolutely: `Added 02:58 UTC`, from `clockUtc(run.completed_at ?? run.at)`. | Jony |
-| 10.6 | Three conditions, all of them: it draws above the first item of a block only when that item's `introduced_by_run` differs from the previous item's; **never above the first block**, which needs no label saying it is the page; and **never when the block's clock is unknown**, because a divider with no time says nothing. | Jony |
-| 10.7 | New component `frontend/src/lib/components/BlockDivider.svelte`, one prop `{ label: string }`, drawn by `DigestList.svelte` inside the existing item loop. One component, one string, driven by a field every item already carries - not a per-item special case. | Jony |
-| 10.8 | **This gives `introduced_by_run` a renderer**, so deleting it from `DigestView` stops being a deferred option and becomes a refusal (Table A, row A4). | Jony |
-| 10.9 | **Page order does not change.** `placement.py` keeps first-block-wins; the head of the page goes to the first block that landed. Row 6's docstring correction already says so. **What the reader loses**: on a day a slow catch-up lands first, the topic-spread top dozen is that block's and fresher stories sit below it. **What they gain**: the never-reshuffle promise held exactly, at zero code risk, with 10.5's label making it honest - they can see the head block finished at 02:58 and judge for themselves. | Jony |
+| 10.4 | **Withdrawn 2026-09-22, with 10.5 to 10.8. There is no block label.** See the note under this table. | Jony |
+| 10.5 | Withdrawn. No label is left to carry the rule. | Jony |
+| 10.6 | Withdrawn. The page has no blocks to divide. | Jony |
+| 10.7 | Withdrawn. `BlockDivider.svelte` is not built. | Jony |
+| 10.8 | Withdrawn. `introduced_by_run` keeps no renderer. It stays on `DigestView` for the reason `frontend/src/lib/payload/project.ts` already records - taking a name off the list is a contract change rather than a rendering one - at 1.16 gzipped bytes an item, already priced. | Jony |
+| 10.9 | **Page order does not change.** `placement.py` keeps first-block-wins; the head of the page goes to the first block that landed. Row 6's docstring correction already says so. **What the reader loses**: on a day a slow catch-up lands first, the topic-spread top dozen is that block's and fresher stories sit below it, **and with 10.5 withdrawn nothing on the page says so**. **What they gain**: the never-reshuffle promise held exactly, at zero code risk. | Jony |
 | 10.10 | **Row 10 ships in the same pull request as row 9**, after it. The gap between two merges would put a clock that goes backwards on the live site, and a reader-visible defect may not live on main between two merges. | Jony |
 | 10.11 | No frontend change for `items_failed`. `DayNotice` already guards on null, so when the count cannot be computed the sentence simply does not draw. The string is unchanged: `{n} articles did not finish.` | Jony |
+
+**Why the label went, 2026-09-22.** Decision 10.6 assumed a run's stories sit together as one region you can put a heading above. They do not: `frontend/src/lib/day-shape.ts` ranks the whole day by `published_at`, newest first, so runs interleave the length of the page. Walking the 30 committed days that carried more than one run, the rule draws a divider every time the run changes down that list - 256 dividers over 731 stories on 2026-08-24, one every 2.8 stories, against the 4 the decision intended.
+
+This divider had already shipped once, and was deleted on 2026-09-01 "for naming a run boundary a reader cannot use"; the note survives in `frontend/src/lib/payload/project.ts` beside the line that explains why `introduced_by_run` is still on the wire with nothing drawing it. The row was reversing that deletion, and the count is the same verdict arriving a second time. Ordering the page by block instead would buy the label back by restoring, in a new dimension, the scrolling problem removed on 2026-09-13 when the day stopped being desk-blocked.
+
+**What the reader loses:** they can see the page grew, and by how many stories. They cannot see which ones. A reader returning at noon on a five-run day has to re-scan the page, or trust their own read marks, to find what is new.
+
+**No follow-up row, and three conditions if one is ever proposed.** All three, not any one. The mark answers *new since you were last here* rather than *new since the first run* - the run ordinal is this pipeline's plumbing, and two readers arriving at different hours have different answers. It lands on under a quarter of the cards a returning reader actually sees, measured on a return visit, with the bar set before the measurement. And it breaks nothing with JavaScript off, so the count sentence stays the answer for a reader with no script and the mark is only ever an addition. Ruled by Jony, owner decision 2026-09-22.
 
 - **Rejected alternatives:**
 
