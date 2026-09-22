@@ -67,7 +67,9 @@ In the same PR, [`commit-and-push.sh`](../.github/scripts/commit-and-push.sh) re
 
 ### Row 2 - The work shard gets its headroom back
 
-`run.max_parallel: 4 -> 8` in [`config/idhazh.json`](../config/idhazh.json), with the three conditions in `docs/reference/pipeline-cost.md` answered on the line that changes it.
+`run.max_parallel: 4 -> 8` in [`config/idhazh.json`](../config/idhazh.json).
+
+**The measurement this was waiting on is already taken.** [`docs/reference/pipeline-cost.md`](../docs/reference/pipeline-cost.md) line 823 records it: run `33114410534` published the 2026-08-27 day at eight work shards, 25 charts over 25 distinct paths. *"What remains is a decision about `run.max_parallel`, not a measurement."* The field's own description still says eight "has never published a day", which that run falsified. Correct it on the line that changes the value.
 
 The fan-out is `min(ceil(safety_ceiling_per_run / shard_size), max_parallel)` = `min(16, 4)`. **`max_parallel` is the only binding term.** At 8 a worker draws 10 items instead of 20 and the shard roughly halves.
 
