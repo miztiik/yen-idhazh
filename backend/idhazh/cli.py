@@ -726,7 +726,6 @@ def main(argv: Sequence[str] | None = None) -> int:
             extract_config=settings.app.extract,
             retention_config=settings.app.retention,
             lens_weights=settings.app.lens_weights,
-            run=settings.app.run,
             run_id=plan_stage._run_id(pruned_on, args.execution),
             today=date_type.fromisoformat(pruned_on),
             dry_run=args.dry_run,
