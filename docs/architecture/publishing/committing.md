@@ -120,8 +120,12 @@ the commit its run was triggered at. A settling pass ran after each rebase to
 take the repeats back out. Both are gone: the union driver is off every head, no
 commit step settles anything, and a second attempt that really does race its own
 first attempt now stops at the rebase instead of landing a row twice. Only
-`state/published/**` and `state/visual-prunes/**` keep a union driver, and each
-has one writing job.
+`state/published/**`, `state/visual-prunes/**` and `state/seen/**` keep a union
+driver, and each has one writing job. `state/seen/` is the one that never moved
+to a segment - it is a whole day file that `plan` appends to, so two runs of one
+day that both met a new address used to conflict at the push over a file neither
+of them disagreed about. `ledger.load_seen` keeps the earliest stamp per
+address, so a row the union brings twice costs bytes and moves no age.
 
 A shard's two steps carry `continue-on-error`, so neither can fail the shard. The
 shard owes the run its items artifact, and assemble writes the same census again,
@@ -187,6 +191,47 @@ in [`../architecture/publishing/visuals.md`](visuals.md).
 inside attempt 1 under `bash -e`: no attempt 2, no failure message, no day, and a
 checkout left mid-rebase. A guarded failure says what it was, leaves no rebase in
 progress, and ends on the caller's own message plus the attempt it reached.
+
+## A conflicted path is settled by who wrote it, never by which side it came from
+
+Git's own names for the two sides of a conflict invert between a rebase and a
+merge, so a design that reasons in them is a design nobody can check. The
+writer's identity is already in the filename instead.
+`state/segments/<ledger>/<run>-<attempt>-<job>-<shard>.csv` names the run, the
+try at that run, the job and the shard inside it, and GitHub allocates the run
+id, so no second writer can take that name.
+
+So a conflicted filename that opens with this job's own four values is this
+job's work, and what this job wrote is kept. **Every other conflicted path stops
+the push and names the path and this job.** There is no third answer. Retrying
+cannot make another writer's file this job's, and taking the tip's copy instead
+would delete that writer's rows and exit 0 - a loss no gate can see. A path the
+job rebuilds cannot reach the resolver at all, because it was handed back to the
+tip before the rebase, so one that does is a gap in `REFRESH_PATHS` and the same
+refusal names it.
+
+**The rule should never fire**, and it is bought anyway. Two writers cannot name
+one file, so a conflict on one means two jobs claimed one identity - a defect to
+report rather than a race to settle - and this is the only thing that turns the
+next one into a message instead of a silent loss.
+
+**A file this job wrote that the tip has deleted stops the push too**, and that
+case needs a second read of the index to catch. Git's spelling for keeping one
+side of a conflict exits 0 and changes nothing when the side it is asked for is
+the deleted one, so the path is left unmerged with no error anywhere and
+`set -euo pipefail` walks straight past it into a rebase that cannot continue.
+Nothing but retention, the closed-day fold or a person can have taken a file
+named for this job, so putting it back is not a resolution this script may make.
+The message prints one identity, because one is all there is: a second field
+would always be empty.
+
+Two things were considered and neither is taken. A file listing what each job
+owns restates the identity the filename already carries and gives it somewhere
+to drift. A lock taken before the push is not a lock at all - two jobs both read
+"free" from their own stale checkouts and both take it, which is the same
+read-modify-write race that broke the shared heads. **The only compare-and-swap
+this platform offers is the ref update itself**, and the loop above already uses
+it.
 
 ## The loop stops on a clock, and says what each attempt spent
 

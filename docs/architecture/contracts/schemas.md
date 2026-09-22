@@ -128,7 +128,7 @@ The training corpus ships the same way and for the same reason: `corpus/corpus.j
 
 `state/feed-retirements.csv` is the third, committed as a header and no rows on 2026-09-02 - one commit before the plan stage started writing it. It is also registered in `ledger.keyed_paths`, keyed on `endpoint_key` alone, so what makes two of its rows one record is declared with the shape rather than with its first writer - which is what makes the rule true from the first row rather than from the second.
 
-`state/content-similarity-judge/holdout-pairs.csv` is the fourth. It was committed as a header on 2026-09-18 and it has held marks since 2026-09-19, so a fresh clone now gets the marks rather than an empty file - which is what lets the console draw the margin on a checkout that has never run the pipeline. It is the one `state/` CSV that names `merge=text` - two edits of it are two people disagreeing about the same rows, and a union merge of a disagreement silently keeps both marks. Only `state/published/**` and `state/visual-prunes/**` carry a union driver at all.
+`state/content-similarity-judge/holdout-pairs.csv` is the fourth. It was committed as a header on 2026-09-18 and it has held marks since 2026-09-19, so a fresh clone now gets the marks rather than an empty file - which is what lets the console draw the margin on a checkout that has never run the pipeline. It is the one `state/` CSV that names `merge=text` - two edits of it are two people disagreeing about the same rows, and a union merge of a disagreement silently keeps both marks. Only `state/published/**`, `state/visual-prunes/**` and `state/seen/**` carry a union driver at all.
 
 ### The one row contract whose CSV omits `version`
 
