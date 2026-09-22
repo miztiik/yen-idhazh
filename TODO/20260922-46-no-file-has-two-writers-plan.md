@@ -1,6 +1,6 @@
 # No file has two writers
 
-**Status**: DRAFT - not dispatched. The contract in section 0d is not agreed yet. Nothing below it is dispatchable until it is.
+**Status**: DRAFT. **The contract in section 0d is agreed (owner, 2026-09-22).** Rows 1, 2 and 2a are one-line fixes that need nothing further. Rows 3 onward are dispatchable against that contract.
 
 **Last Updated**: 2026-09-22
 
@@ -51,26 +51,28 @@ Two consequences worth stating.
 
 ## Section 0d - The contract
 
-Eight rules. Each one testable. Each holds for unbounded concurrent runs of digest, telemetry, backfill, validate, measure and council. **This section is what has to be agreed before any row is dispatched.**
+**Ruled by the owner, 2026-09-22.** Five rules. Each one testable. Each holds for unbounded concurrent runs of digest, telemetry, backfill, validate, measure and council.
 
-1. **One writer, one path.** Every committed path has exactly one job that may write it, and the path's own name carries enough writer identity that two runs, two attempts, two shards or two jobs can never name one file.
-   *Test: two declarations naming one path fail the build. No data needed.*
-2. **A job declares its paths before it writes one.** The declaration lives in `config/`. Three readers: the workflow's staging argv, the conflict resolution, and the test. It cannot be today's staging argv - `plan`, `assemble` and `fold` each stage `state` whole, so three jobs already claim one directory.
-   *Test: the argv of every `commit-and-push.sh` call equals that job's declaration.*
-3. **Declared means self-derived.** A path may be declared only if its content is a function of this job's own inputs.
-   *Test: run the job in the real-bash harness, `git ls-files` what it wrote, fail on anything outside the declaration.*
-4. **A conflict inside a declared path resolves to the declaring job. A conflict anywhere else stops the push.** There is no third case, and the resolver asserts the index is clean afterwards (section 0c, modify/delete).
-   *Test: the P3 shape, committed - two branches, two directories, assert each side won its own.*
-5. **A derived file is a fold of declared files and nothing else.** Rebuilt from the tip plus this run's own inputs. Never text-merged, and never resolved by rule 4.
-   *Test: every path in `REFRESH_PATHS` is absent from every declaration, and the reverse.*
-6. **A path with no declared owner stops the push and names itself.** Not resolved either way, not dropped.
-   *Test: a harness run that writes an undeclared path exits non-zero with that path in the message.*
-7. **An ordinal is assigned by the fold, never by the writer.** A writer stamps its identity and its arrival time. Any number a reader sees is derived from arrival order at fold time. No writer reads or waits for another writer's ordinal.
+1. **One writer, one path, and the filename is the declaration.** Every committed path carries enough writer identity in its own name that two runs, two attempts, two shards or two jobs can never name one file - the grammar `<run_id>-<attempt>-<job>-<shard>` that `ledger.segment_path` already ships. **There is no separate declaration file.** A path with no identity in its name is un-ownable by construction, so a new writer cannot accidentally claim a shared one.
+   *Test: every `state/` path a production stage writes either matches the grammar or is named in `REFRESH_PATHS` as derived. Nothing may be in both, and nothing may be in neither.*
+2. **A derived file is never owned.** Its content is a function of other jobs' output, so it is rebuilt from the tip plus this run's own inputs. It is never text-merged and never resolved by rule 3.
+   *Test: every path in `REFRESH_PATHS` is absent from the identity grammar, and the reverse.*
+3. **A conflicted path whose name carries this job's identity resolves to what this job wrote. Every other conflicted path stops the push and names both identities.** No third case. The resolver then asserts the index holds no unmerged entry, because the git spelling exits 0 and does nothing on a modify/delete (section 0c).
+   *Test: the P3 shape, committed - two branches, two directories, assert each side won its own; plus a run that writes an unowned path exits non-zero with that path in the message.*
+4. **An ordinal is assigned by the fold, never claimed by the writer.** A writer stamps its identity and its arrival time. Any number a reader sees is derived from arrival order at fold time. No writer reads or waits for another writer's ordinal.
    *Test: a day built from blocks that arrived in any order validates and renders.*
-8. **History rewriting is outside rules 1 to 7.** The one job that force-pushes `main` re-fetches immediately before the push and refuses if the tip moved. It keeps its schedule and is due again next wake.
+5. **History rewriting is outside rules 1 to 4.** The one job that force-pushes `main` re-fetches immediately before the push and refuses if the tip moved. It keeps its schedule and is due again next wake.
    *Test: the harness pushes a commit between the prune's checkout and its push; the prune must refuse rather than force.*
 
-**What the contract costs, stated:** it buys a run that never dies at the push, and pays by making every path's ownership a written claim that one wrong entry turns into silent deletion. Rule 6 is the only thing standing between those two, and it is the rule most likely to be argued away as noisy.
+### Three questions the owner settled, and why
+
+**No ownership-claims file, and no lock file of any kind.** A lock file in a git repository is not a lock: two jobs both read "free" from their own stale checkouts and both take it, which is the read-modify-write race that broke the heads. **The only compare-and-swap this platform offers is the ref update itself** - a push succeeds only if the remote ref is where the pusher thought it was. That primitive is already in use, and a claims file would add a second weaker one beside it, plus a growing collection nobody prunes.
+
+The go/no-go is meant to be mechanical, and rule 1 already is: `basename(path)` begins with `<run_id>-<attempt>-<job>-<shard>`. One string comparison, no state to read, no reasoning. Two jobs can never both answer yes, because GitHub allocates `run_id` and nothing else can reproduce it.
+
+**No parked branch for an unowned conflict.** Under rule 1 it should never happen, and infrastructure for a case that should never occur is scaffolding for a design broken somewhere else. A parked branch nothing drains is a graveyard that looks like the work was saved, which is worse than failing. And the work it would save is already saved - see row 2a. Fail, name the path and both identities, and fix the one job where a failed push really does cost the run.
+
+**The sequential run rule goes.** One of eight validator rules needs it; see row 8.
 
 ## Section 0e - Does this stop run 35660521768? Replayed, not asserted
 
@@ -104,10 +106,11 @@ Note what did **not** happen: the ownership rule never fired. There was no confl
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | The one state writer with no lock gets one, and the failure stops lying | A | - | PENDING | 1 | - | - |
 | 2 | The rebase stops guessing that a drained directory was renamed | A | - | PENDING | 1 | - | - |
+| 2a | The plan job's artifact survives a failed push | A | - | PENDING | 1 | - | - |
 | 3 | The fold becomes a function a reader can call | B | - | PENDING | 3 | - | - |
 | 4 | The day directory is the ledger | C | 3 | PENDING | 5 | - | - |
 | 5 | The head goes | D | 4 | PENDING | 3 | - | - |
-| 6 | A job declares what it owns, and an undeclared path stops the push | E | 5 | PENDING | 4 | - | - |
+| 6 | An unowned path stops the push and names both identities | E | 5 | PENDING | 4 | - | - |
 | 7 | The push window is measured | F | 6 | PENDING | 2 | - | - |
 | 8 | The one rule that needs a sequence is deleted | G | 7 | PENDING | 5 | - | - |
 | 9 | The published day is folded from per-run fragments | G | 8 | PENDING | 5 | - | - |
@@ -140,6 +143,24 @@ With the guess off, the same replay rebases clean. Without it, row 4 still loses
 
 **Out of this plan: the work shard's timeout.** It is at 190.6 of 200 minutes and rising three days running, which is real and urgent, and it is a model-workload problem. The commit contract is correct or wrong at any shard length. It gets its own plan and does not gate a row here.
 
+### Row 2a - The plan job's artifact survives a failed push
+
+The plan job's `actions/upload-artifact` step gets `if: always()`, and its commit step gets `continue-on-error: true`.
+
+**Measured, 2026-09-22 - what a failed push costs, per job:**
+
+| Job | Commit step | The artifact upload after it | What a failed push costs |
+| --- | --- | --- | --- |
+| work shard | `if: always()`, `continue-on-error: true` | four uploads, every one `if: always()` | **Nothing.** The summaries reach `assemble` as artifacts |
+| **plan** | no `if:`, no `continue-on-error` | **no `if:` either** | **The whole run.** The job dies at the commit, `plan.json` never uploads, every downstream job has nothing |
+| assemble | no `continue-on-error` | `if: always()` | The publish, but the record survives |
+
+**That is run `35660521768`, exactly.** It did not die because rows were lost. It died because a failed push skipped the artifact upload, so the plan never reached the shards.
+
+This is why no row in this plan parks work on a side branch. The expensive work is already protected by artifacts, and the one job where it was not is fixed here in one line.
+
+**What was wrong**: the step that carries the day to every other job is conditioned on a push succeeding, and a push is the least reliable thing in the run.
+
 ### Row 3 - The fold becomes a function a reader can call
 
 Extract `_settle` out of `stage_compact` into a function that returns rows instead of writing a file. No behaviour change.
@@ -168,13 +189,19 @@ Delete the reduce in `stage_compact` and the single-file branch in both walkers.
 
 **What was wrong**: dead code that can still be called is a second answer waiting to be given. Separate from row 4 so row 4 stays revertible on its own.
 
-### Row 6 - A job declares what it owns, and an undeclared path stops the push
+### Row 6 - An unowned path stops the push and names both identities
 
-Contract rules 2, 4 and 6 ship here. A declaration file in `config/` names the paths each job may write. `commit-and-push.sh` gains two functions, `keep_what_this_job_wrote` and `keep_what_origin_has`, which between them hold git's inverted `--theirs`/`--ours` spelling and one line saying a rebase reverses it. Nothing outside those two functions uses either word.
+Contract rules 1 and 3 ship here. `commit-and-push.sh` gains two functions, `keep_what_this_job_wrote` and `keep_what_origin_has`, which between them hold git's inverted positional spelling and one line saying a rebase reverses it. Nothing outside those two functions uses either word.
 
-On a conflicted rebase the resolver walks `git diff --name-only --diff-filter=U`. A path whose name carries this job's `<run>-<attempt>-<job>-<shard>` resolves to what this job wrote. **Every other conflicted path stops the push and names itself** - not resolved either way, not dropped. Then the resolver asserts the index holds no unmerged entry, because `--theirs` exits 0 and does nothing on a modify/delete (section 0c).
+On a conflicted rebase the resolver walks `git diff --name-only --diff-filter=U`. The test is one string comparison and reads no state:
 
-The declaration cannot be today's staging argv: `plan`, `assemble` and `fold` each stage `state` whole, so three jobs already claim one directory and a resolution keyed on that argv hands `state` to whoever resolves first.
+```
+mine(path)  :=  basename(path) begins with "<run_id>-<attempt>-<job>-<shard>"
+```
+
+A path that answers yes resolves to what this job wrote. **Every other conflicted path stops the push and names the path and both identities** - not resolved either way, not dropped, not parked. Then the resolver asserts the index holds no unmerged entry, because the git spelling exits 0 and does nothing on a modify/delete (section 0c).
+
+**No declaration file and no claims directory.** The identity is already in the filename and `ledger.segment_path`'s own docstring says *"Nobody else writes this path."* A config list would restate it, and a lock file would be worse than nothing: two jobs both read "free" from their own stale checkouts and both take it. The only compare-and-swap here is the push itself.
 
 **What was wrong**: today any conflict anywhere kills the whole run, and no job has ever said what it owns - so a new `state/` writer has arrived without the right handling three times, by the commit script's own admission.
 
