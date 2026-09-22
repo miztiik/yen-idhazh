@@ -603,6 +603,16 @@ COMMIT_STEPS: Final = {
 #: ends in a force push and commits nothing on 29 of 30 wakes.
 COMPACT_STEP: Final = "Fold any segments an earlier run left behind"
 
+#: The step that gives the fold above a current store to read. `actions/checkout`
+#: restores the commit the run was triggered at, and the `digest` concurrency
+#: group can hold a queued run for hours after that, so without this the fold
+#: derives a day head from a store another run has already drained.
+TAKE_STATE_STEP: Final = "Take the run state from the tip, not from the trigger commit"
+
+TAKE_STATE_SCRIPT: Final = SCRIPTS_DIR / "take-state-from-the-tip.sh"
+
+TAKE_STATE_CALL: Final = ("bash", ".github/scripts/take-state-from-the-tip.sh", "state")
+
 #: The step the `plan` job exists for. The catch-up above runs ahead of it: a
 #: fold that refuses a row ends the job, and a refusal that lands after the feed
 #: reads has spent them for nothing.
