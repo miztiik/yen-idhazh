@@ -310,6 +310,11 @@ class RunManifest(Contract):
     __schema_stem__: ClassVar[str] = "run-manifest"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-22T12:00",
+            change="Runs may be numbered with gaps, and two runs may not share an ordinal.",
+            why="Runs land in parallel, so no writer can know what the next number is.",
+        ),
+        ChangelogEntry(
             version="2026-09-22",
             change="Recorded sampling and runtime flags become mappings; an old run reads.",
             why="Joined, a rename moved the whole record and the console called it a change.",
@@ -325,11 +330,6 @@ class RunManifest(Contract):
             why="Neither number bounded anything the window and the timeout did not.",
         ),
         ChangelogEntry(
-            version="2026-09-21",
-            change="The embedded ModelRef gains companion files; `draft` becomes a plain mapping.",
-            why="Six records name a draft head, and the head is now one companion among several.",
-        ),
-        ChangelogEntry(
             version="2026-09-20",
             change="Earlier changes are in this file's git history.",
             why="A changelog says what moved lately; git is the archive.",
@@ -342,12 +342,16 @@ class RunManifest(Contract):
     @model_validator(mode="after")
     def _runs_are_append_only_and_addressed_by_date(self) -> Self:
         seen: set[str] = set()
-        for index, record in enumerate(self.runs, start=1):
-            if record.n != index:
-                raise ValueError("runs are append-only and numbered from 1 without gaps")
+        ordinals: set[int] = set()
+        for record in self.runs:
             if not record.run_id.startswith(f"{self.date}-"):
                 raise ValueError("run_id must be addressed by this date")
             if record.run_id in seen:
                 raise ValueError("two runs of a day cannot share a run_id")
             seen.add(record.run_id)
+            ordinals.add(record.n)
+        # An ordinal names one block of the day, so two records cannot hold the
+        # same one. It is no longer this record's position in the list.
+        if len(ordinals) != len(self.runs):
+            raise ValueError("two runs cannot share an ordinal")
         return self

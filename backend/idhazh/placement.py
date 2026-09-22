@@ -349,12 +349,13 @@ def place(
     - **Every story comes back, exactly once.** `len(out) == len(in)`.
     - **A later run appends.** `introduced_by_run` never decreases down the
       list, because the order is computed inside each run's block and the blocks
-      keep the order the runs published them in. That is the rule `DigestDay`
-      refuses a payload for breaking, and it is why this is not one sort over
-      the whole day.
+      keep the order they landed in. That is the rule `DigestDay` refuses a
+      payload for breaking, and it is why this is not one sort over the whole
+      day. `introduced_by_run` is arrival order at fold time, not a sequence a
+      run claimed for itself, so the numbers may skip.
     - **The first slot is the score's own first pick** among the stories the
-      first run published. No cap can bind on an empty head, so the frame can
-      never argue with the ranker about which story opens the day.
+      first block to land published. No cap can bind on an empty head, so the
+      frame can never argue with the ranker about which story opens the day.
     - **Past `head_items` the order is the score's, untouched.** The frame is a
       claim about what a reader meets before deciding whether to scroll, and it
       has nothing to say about the four hundredth story.

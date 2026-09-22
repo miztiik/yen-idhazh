@@ -177,7 +177,10 @@ function health(run: RunRecord, floorPct: number): Health {
  * where run-level facts already live.
  */
 function describe(date: string, run: RunRecord, readInPart: number): string {
-	const parts = [`${date} run ${run.n}`, `${run.succeeded} of ${run.planned} succeeded`];
+	// `n` is which block of the day this was, in the order the blocks landed. It
+	// is not a count of the runs before it: two runs finish in parallel and the
+	// numbers may skip.
+	const parts = [`${date} block ${run.n}`, `${run.succeeded} of ${run.planned} succeeded`];
 	if (run.failed > 0) parts.push(`${run.failed} failed`);
 	if (run.skipped > 0) parts.push(`${run.skipped} skipped`);
 	if (readInPart > 0) parts.push(`${readInPart} read only in part`);

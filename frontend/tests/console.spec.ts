@@ -559,7 +559,7 @@ test('a square says what happened without a mouse', async ({ page }) => {
 	// The colour alone is not the answer. Anyone who cannot see the difference
 	// between amber and red still has to be able to read the run.
 	const first = page.locator(`[data-day="${DAY}"] [data-health]`).first();
-	await expect(first).toHaveAttribute('aria-label', new RegExp(`^${DAY} run 1,`));
+	await expect(first).toHaveAttribute('aria-label', new RegExp(`^${DAY} block 1,`));
 	await expect(first).toHaveAttribute('title', /succeeded/);
 });
 
@@ -589,7 +589,7 @@ test('the run that read only the start of an article says so on its own square',
 	expect(carried).toHaveLength(cutByRun.size);
 	for (const [runId, keys] of cutByRun) {
 		const n = Number(runId.split('-').at(-1));
-		expect(carried[0]).toContain(`run ${n},`);
+		expect(carried[0]).toContain(`block ${n},`);
 		expect(carried[0]).toContain(`${keys.size} read only in part`);
 	}
 
