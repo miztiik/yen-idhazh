@@ -81,7 +81,7 @@ Measured on `origin/main`, 2026-09-22, by reading the files.
 
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | The model file gets one reader, and the grammar closes | - | A | PENDING | - | - | - |
+| 1 | The model file gets one reader, and the grammar closes | - | A | DONE | p44r1 | - | R1 |
 | 2 | The two CI-selection scripts go | - | A | PENDING | - | - | - |
 | 3 | The model path becomes one Python program, and the verbs are renamed | 1 | B | PENDING | - | - | - |
 | 4 | The pipeline-test case runner becomes Python | 3 | C | PENDING | - | - | - |
