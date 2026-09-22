@@ -1072,10 +1072,10 @@ def test_the_published_month_file_is_a_list_of_rows_each_carrying_its_stamp(
     }
 
 
-# --- the compaction lag ------------------------------------------------------
+# --- what the band says about the record's reach -----------------------------
 
-#: The backlog the oracle folds. A count the fixture builds rather than one the
-#: committed store happens to hold, so it cannot drift when a run appends.
+#: Rows the fixture builds rather than ones the committed store happens to hold,
+#: so the count cannot drift when a run appends.
 WAITING_ROWS: Final = 303
 STALE_DAYS: Final = 2
 STALE_DAY: Final = (TODAY - timedelta(days=STALE_DAYS)).isoformat()
@@ -1098,8 +1098,8 @@ def _health_row(stamp: str, index: int) -> ItemHealthRow:
     )
 
 
-def _waiting_segment(state: Path, stamp: str, rows: int, *, shard: int) -> None:
-    """One job's slice of `item-health`, left in the store for a later fold."""
+def _a_writers_day(state: Path, stamp: str, rows: int, *, shard: int) -> None:
+    """One job's slice of `item-health`, filed under the day its rows name."""
     ledger.write_segment(
         state,
         ledger.SegmentLedger.ITEM_HEALTH,
@@ -1112,13 +1112,15 @@ def _waiting_segment(state: Path, stamp: str, rows: int, *, shard: int) -> None:
 
 
 def _band_after_folding(state: Path, digest: Path) -> Any:
-    """The band as `assemble` writes it: fold first, then report what waited.
+    """The band as `assemble` writes it, with the three figures it hands over.
 
-    The three figures are taken off the fold's own return value and never off a
-    listing, because the fold drained the directory - a listing taken here is
-    always empty, so the fields could never be anything but zero.
+    Zero, zero and this run's own day. Nothing waits for a fold any more: each
+    writer files its own path under the day its rows name, so a run that died
+    three days ago left those rows in that day rather than in a store somebody
+    has to drain. The fields stay on the payload because a reader holding an
+    older day still finds them there.
     """
-    folded = stage_compact(state)
+    stage_compact(state, date=NEWEST_DAY, after_days=7)
     _publish_all(state, digest, months=None)
     console_band.publish(
         state_root=state,
@@ -1128,64 +1130,30 @@ def _band_after_folding(state: Path, digest: Path) -> Any:
         console=CONSOLE,
         run=RUN,
         collect=COLLECT,
-        compaction_lag_days=folded.lag_days(NEWEST_DAY),
-        rows_uncompacted=folded.rows_waiting_before(NEWEST_DAY),
-        covers_through=folded.newest_row_date,
+        compaction_lag_days=0,
+        rows_uncompacted=0,
+        covers_through=NEWEST_DAY,
     )
     return console_band.read_band(console_band.band_path(digest))
 
 
-def test_the_oracle_a_backlog_two_days_old_reaches_the_band(
+def test_the_band_carries_the_day_the_record_reaches_and_no_backlog(
     tree: tuple[Path, Path],
 ) -> None:
-    """THE ORACLE: a segment directory two days old holding 303 rows.
+    """A fold of two days, and the band still says nothing is behind.
 
-    The band names the days, the rows and the date the record now reaches. The
-    run's own segment is staged beside the stale one because that is the shape
-    of the recovering run: it folds what it wrote today and what an earlier run
-    left behind, and the date the heads reach afterwards is today's.
+    The backlog these three fields were added for cannot happen now. A writer
+    files its own path under the day its rows name, so a run that died two days
+    ago left its rows in that day rather than in a store a later run has to
+    drain, and the fold that follows is a tidy-up rather than a catch-up.
 
-    What it cannot settle: whether an operator acts on it.
+    Zero is what the console has to render as silence. A band printing
+    `0 days behind` on every clean run would teach an operator to read past the
+    line on the day it is not zero.
     """
     state, digest = tree
-    _waiting_segment(state, STALE_DAY, WAITING_ROWS, shard=0)
-    _waiting_segment(state, NEWEST_DAY, 2, shard=1)
-
-    band = _band_after_folding(state, digest)
-
-    assert band.compaction_lag_days == STALE_DAYS
-    assert band.rows_uncompacted == WAITING_ROWS
-    assert band.covers_through == NEWEST_DAY
-
-
-def test_the_oracle_an_empty_segment_store_puts_nothing_on_the_band(
-    tree: tuple[Path, Path],
-) -> None:
-    """THE ORACLE, the other half: nothing waiting says nothing at all.
-
-    Zero is the state of every normal run, so it is the state the console has to
-    render as silence. A band that printed `0 days behind` on every clean run
-    would teach an operator to read past the line on the day it is not zero.
-    """
-    state, digest = tree
-
-    band = _band_after_folding(state, digest)
-
-    assert band.compaction_lag_days == 0
-    assert band.rows_uncompacted == 0
-    assert band.covers_through is None
-
-
-def test_the_rows_this_run_wrote_itself_are_not_counted_as_a_backlog(
-    tree: tuple[Path, Path],
-) -> None:
-    """A normal run folds its own segments and has waited for nothing.
-
-    Every run writes segments, so a count of rows folded would be non-zero on
-    every run and would report the pipeline working as if it were behind.
-    """
-    state, digest = tree
-    _waiting_segment(state, NEWEST_DAY, 5, shard=0)
+    _a_writers_day(state, STALE_DAY, WAITING_ROWS, shard=0)
+    _a_writers_day(state, NEWEST_DAY, 2, shard=1)
 
     band = _band_after_folding(state, digest)
 
@@ -1210,7 +1178,7 @@ def test_a_band_written_before_the_compaction_fields_still_reads(
     saying nothing.
     """
     state, digest = tree
-    _waiting_segment(state, STALE_DAY, WAITING_ROWS, shard=0)
+    _a_writers_day(state, STALE_DAY, WAITING_ROWS, shard=0)
     _band_after_folding(state, digest)
     payload = json.loads(console_band.band_path(digest).read_text(encoding="utf-8"))
     widened = {"compaction_lag_days", "rows_uncompacted", "covers_through"}

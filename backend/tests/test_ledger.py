@@ -18,12 +18,12 @@ from conftest import (
     CONTRACT_FIXTURES_DIR,
     FIXTURES_DIR,
     read_text,
+    seed_feed_health,
     seed_item_health,
-    seed_span_rollup,
 )
 
-from idhazh import config, day_partition, ledger
-from idhazh.contracts.base import derive_url_key
+from idhazh import config, day_partition, day_shards, ledger
+from idhazh.contracts.base import ServerJob, derive_url_key
 from idhazh.contracts.call_cost import COST_FIELDS, CallKind
 from idhazh.contracts.council_shard_outcome import CouncilShardOutcome
 from idhazh.contracts.counterfactual_score import CounterfactualScoreRow
@@ -57,6 +57,10 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 STATE_FIXTURES = FIXTURES_DIR / "state"
 DATE = "2026-08-23"
 RUN_ID = "2026-08-23-1"
+
+#: A day far enough past `DATE` that the fold counts `DATE` closed. Spelled from
+#: `DATE` so the two cannot drift apart.
+AFTER_THE_FOLD: Final = (date_type.fromisoformat(DATE) + timedelta(days=30)).isoformat()
 STAMP = "2026-08-23T06:00:00Z"
 URL = "https://example.org/items/one"
 URL_KEY = derive_url_key(URL)
@@ -178,7 +182,7 @@ def a_fingerprint_day(
             job=row.job,
             shard=row.shard,
         )
-    compact_stage.stage_compact(state_dir)
+    compact_stage.stage_compact(state_dir, date=AFTER_THE_FOLD, after_days=7)
 
 
 def span_fold_row(*, on: str = DATE, shard: int = 0, total_ms: int = 16) -> SpanRollupRow:
@@ -274,14 +278,6 @@ def test_published_ledger_rejects_stale_committed_header(tmp_path: Path) -> None
 
     with pytest.raises(ValueError, match="Migrate the ledger before appending to it"):
         ledger.append_published(state, DATE, [published_row()])
-
-
-def test_feed_health_ledger_rejects_stale_committed_header(tmp_path: Path) -> None:
-    state = tmp_path / "state"
-    stale_header(ledger.health_path(state, DATE), FeedHealthRow.csv_columns())
-
-    with pytest.raises(ValueError, match="Migrate the ledger before appending to it"):
-        ledger.append_health(state, DATE, [health_row()])
 
 
 def test_load_published_answers_the_same_from_either_header(tmp_path: Path) -> None:
@@ -2013,27 +2009,24 @@ def test_the_keyed_set_names_every_ledger_that_declares_one(tmp_path: Path) -> N
     else here says what makes two of its rows one record, and everything that
     says so is settled.
 
-    Both covers name the same eleven ledgers on a tree with one day of each in
-    it. What separates them is what a second day would add: to the operator's
-    pass, a file; to a run's pass, nothing. The span fold is the exception that
-    proves the shape - it files by month, so a second day adds nothing to either
-    cover and a second month adds one file to the operator's.
+    Five trees left this set on 2026-09-22 and they are the ones to look for if
+    this list ever looks short. Each became a day directory where every writer
+    holds its own file, so two files nobody else can write need no settlement to
+    tell them apart and the repeat this pass existed to drop is one they can no
+    longer make.
+
+    Both covers name the same ledgers on a tree with one day of each in it. What
+    separates them is what a second day would add: to the operator's pass, a
+    file; to a run's pass, nothing.
 
     `state/content-similarity-judge/fitted-thresholds/` is registered before
     anything writes it, which is why it is built here by hand rather than by an append
     call. Its sibling `scored-pairs/` has a writer and is filled by one.
     """
     ledger.append_seen(tmp_path, DATE, [seen_row()])
-    ledger.append_health(tmp_path, DATE, [health_row()])
     ledger.append_visual_prunes(tmp_path, DATE, [prune_row(on=DATE)])
-    ledger.append_counterfactual_scores(tmp_path, DATE, [counterfactual_row()])
-    a_fingerprint_day(tmp_path, [fingerprint_row()])
-    seed_span_rollup(tmp_path, DATE, [span_fold_row()])
     ledger.append_story_similarity_pairs(tmp_path, DATE, [pair_row()])
     ledger.append_council_shard_outcomes(tmp_path, DATE, [council_row()])
-    item_health = ledger.item_health_path(tmp_path, DATE)
-    item_health.parent.mkdir(parents=True, exist_ok=True)
-    item_health.write_text(",".join(ItemHealthRow.csv_columns()) + "\n", encoding="utf-8")
     fitted = ledger.fitted_thresholds_path(tmp_path, DATE)
     fitted.parent.mkdir(parents=True, exist_ok=True)
     fitted.write_text(
@@ -2042,16 +2035,6 @@ def test_the_keyed_set_names_every_ledger_that_declares_one(tmp_path: Path) -> N
     named = [
         ("feed-retirements.csv", ledger.FEED_RETIREMENT_KEY),
         (f"visual-prunes/{DATE[:4]}/{DATE[5:7]}/{DATE[8:10]}.csv", ledger.VISUAL_PRUNE_KEY),
-        (
-            f"counterfactual-scores/{DATE[:4]}/{DATE[5:7]}/{DATE[8:10]}.csv",
-            ledger.COUNTERFACTUAL_SCORE_KEY,
-        ),
-        (f"feed-health/{DATE[:4]}/{DATE[5:7]}/{DATE[8:10]}.csv", ledger.FEED_HEALTH_KEY),
-        (f"item-health/{DATE[:4]}/{DATE[5:7]}/{DATE[8:10]}.csv", ledger.ITEM_HEALTH_KEY),
-        (
-            f"host-fingerprint/{DATE[:4]}/{DATE[5:7]}/{DATE[8:10]}.csv",
-            ledger.HOST_FINGERPRINT_KEY,
-        ),
         (
             f"content-similarity-judge/fitted-thresholds/"
             f"{DATE[:4]}/{DATE[5:7]}/{DATE[8:10]}.csv",
@@ -2066,7 +2049,6 @@ def test_the_keyed_set_names_every_ledger_that_declares_one(tmp_path: Path) -> N
             f"llm-council/shard-outcomes/{DATE[:4]}/{DATE[5:7]}/{DATE[8:10]}.csv",
             ledger.COUNCIL_SHARD_OUTCOME_KEY,
         ),
-        (f"span-rollup/{DATE[:7]}.csv", ledger.SPAN_ROLLUP_KEY),
     ]
 
     every = ledger.keyed_paths(tmp_path, date=None)
@@ -2078,6 +2060,11 @@ def test_the_keyed_set_names_every_ledger_that_declares_one(tmp_path: Path) -> N
     assert [
         (target.path.relative_to(tmp_path).as_posix(), target.key) for target in this_run
     ] == named
+    assert not any(
+        tree.value in target.path.relative_to(tmp_path).as_posix()
+        for tree in ledger.SegmentLedger
+        for target in every
+    ), "a day tree of writer-owned files has nothing for this pass to settle"
 
 
 def test_a_re_judged_pair_keeps_its_row_and_a_repeated_attempt_does_not(
@@ -2104,80 +2091,55 @@ def test_a_re_judged_pair_keeps_its_row_and_a_repeated_attempt_does_not(
     assert [row.judged_by_run_id for row in kept] == [None, f"{DATE}-7"]
 
 
-def test_a_repeated_fingerprint_is_settled_inside_the_day_that_holds_it(
+def test_a_repeated_fingerprint_and_span_fold_are_settled_when_a_reader_asks(
     tmp_path: Path,
 ) -> None:
-    """Nothing staged this ledger until 2026-09-16, so nothing could settle it either.
+    """The settlement these two trees used to get after a merge, taken at read time.
 
     A job runs on one machine, so two rows under one `(date, run_id, job, shard)`
-    are one machine written down twice - and counting a machine twice is exactly
-    what would make the fleet distribution lie. The union merge is what puts the
-    second row there: a second attempt at one shard cannot see the rows the first
-    attempt pushed, so it appends its own. The first row wins.
+    are one machine written down twice - and counting a machine twice is what
+    would make the fleet distribution lie. Nothing rewrites a file to fix that
+    any more: each writer owns its own file, so two of them are two attempts and
+    the reader keeps the later one.
+
+    Both trees at once, because what changed is the same change for both: they
+    left `keyed_paths` together when they became day directories.
     """
     state = tmp_path / "state"
-    a_fingerprint_day(state, [fingerprint_row(cpu="first")])
-    path = ledger.host_fingerprint_path(state, DATE)
-    clean = path.read_text(encoding="utf-8")
-    second_attempt = clean.splitlines()[1].replace(",first,", ",second,")
-    assert second_attempt != clean.splitlines()[1], "the two attempts must differ off the key"
-    with path.open("a", encoding="utf-8", newline="") as handle:
-        handle.write(second_attempt + "\n")
+    for attempt, cpu in enumerate(("first", "second"), start=1):
+        ledger.write_segment(
+            state,
+            ledger.SegmentLedger.HOST_FINGERPRINT,
+            [fingerprint_row(cpu=cpu)],
+            run_id=RUN_ID,
+            attempt=attempt,
+            job=ServerJob.WORK,
+            shard=0,
+        )
+        ledger.write_segment(
+            state,
+            ledger.SegmentLedger.SPAN_ROLLUP,
+            [span_fold_row(total_ms=16 * attempt)],
+            run_id=RUN_ID,
+            attempt=attempt,
+            job=ServerJob.WORK,
+            shard=0,
+        )
 
-    registered = {target.path: target.key for target in ledger.keyed_paths(state, date=DATE)}
-    assert registered[path] == ledger.HOST_FINGERPRINT_KEY
-    assert ledger.drop_repeated_rows(path, ledger.HOST_FINGERPRINT_KEY) == 1
-    assert path.read_text(encoding="utf-8") == clean
+    machines = day_shards.settled_day(
+        state / ledger.HOST_FINGERPRINT_DIRNAME,
+        DATE,
+        ledger.HOST_FINGERPRINT_KEY,
+        HostFingerprintRow,
+    )
+    spans = day_shards.settled_day(
+        state / ledger.SPAN_ROLLUP_DIRNAME, DATE, ledger.SPAN_ROLLUP_KEY, SpanRollupRow
+    )
 
-
-def test_a_repeated_span_fold_is_settled_inside_the_month_that_holds_it(
-    tmp_path: Path,
-) -> None:
-    """`SPAN_ROLLUP_KEY` said the first row wins from the day it was written; nothing applied it.
-
-    The row is a fold of a shard's own spans, so a second attempt at that shard
-    recomputes the same numbers - and a second row adds a count to itself rather
-    than recording a new fact. The month file is the one file a repeat can be in:
-    a run appends under one date, and one date is in one month.
-    """
-    state = tmp_path / "state"
-    seed_span_rollup(state, DATE, [span_fold_row(total_ms=16)])
-    path = ledger.span_rollup_path(state, DATE[:7])
-    clean = path.read_text(encoding="utf-8")
-    second_attempt = clean.splitlines()[1].replace(",20,16,", ",20,999,")
-    assert second_attempt != clean.splitlines()[1], "the two attempts must differ off the key"
-    with path.open("a", encoding="utf-8", newline="") as handle:
-        handle.write(second_attempt + "\n")
-
-    registered = {target.path: target.key for target in ledger.keyed_paths(state, date=DATE)}
-    assert registered[path] == ledger.SPAN_ROLLUP_KEY
-    assert ledger.drop_repeated_rows(path, ledger.SPAN_ROLLUP_KEY) == 1
-    assert path.read_text(encoding="utf-8") == clean
-
-
-def test_the_full_pass_reaches_a_fingerprint_day_and_an_aggregate_month_no_run_named(
-    tmp_path: Path,
-) -> None:
-    """What the operator's pass buys: a repeat a run's own settle step never cleared.
-
-    The dated cover names the files this run wrote and nothing else, so a repeat
-    left in an older day is nobody's to sweep up in passing. `--every-shard` is
-    the command that reaches it. The fingerprint files by day and the fold by
-    month, so this asks for both at once and asserts on the paths rather than on
-    a count.
-    """
-    state = tmp_path / "state"
-    older = "2026-07-04"
-    a_fingerprint_day(state, [fingerprint_row(on=older)])
-    seed_span_rollup(state, older, [span_fold_row(on=older)])
-
-    every = {target.path: target.key for target in ledger.keyed_paths(state, date=None)}
-    this_run = {target.path for target in ledger.keyed_paths(state, date=DATE)}
-
-    assert every[ledger.host_fingerprint_path(state, older)] == ledger.HOST_FINGERPRINT_KEY
-    assert every[ledger.span_rollup_path(state, older[:7])] == ledger.SPAN_ROLLUP_KEY
-    assert ledger.host_fingerprint_path(state, older) not in this_run
-    assert ledger.span_rollup_path(state, older[:7]) not in this_run
+    assert len(machines) == 1, "one machine, written down twice, is one machine"
+    assert machines[0]["cpu_model"] == "second"
+    assert len(spans) == 1, "a second attempt recomputes a fold, it does not add one"
+    assert spans[0]["total_ms"] == "32"
 
 
 # --- One feed, one run, one result ------------------------------------------
@@ -2309,7 +2271,7 @@ def test_the_day_grain_answers_what_the_month_grain_answered_over_the_same_rows(
     rows = parity_rows()
     day_tree = tmp_path / "day" / "state"
     for row in rows:
-        ledger.append_health(day_tree, row.date, [row])
+        seed_feed_health(day_tree, row.date, [row])
     month_root = tmp_path / "month" / "state" / ledger.HEALTH_DIRNAME
     month_grain_tree(month_root, rows)
 
@@ -2318,7 +2280,13 @@ def test_the_day_grain_answers_what_the_month_grain_answered_over_the_same_rows(
     from_days = ledger.load_health(day_tree, today=DATE, within_days=window)
     from_months = month_grain_read(month_root, today=DATE, within_days=window)
 
-    assert len(list(day_partition.day_files(day_tree / ledger.HEALTH_DIRNAME))) == PARITY_DAYS
+    recorded = {
+        day_shards.date_of(shard)
+        for shard in day_shards.shard_files(
+            day_tree / ledger.HEALTH_DIRNAME, days=UNBOUNDED_WINDOW
+        )
+    }
+    assert len(recorded) == PARITY_DAYS
     assert len(named) == window + 1, "both ends are named, so a cover of n is n + 1 days"
     assert {row.date for row in from_days} == named, "the day case read a day the window did not name"
     assert len(from_days) == len(named) * len(PARITY_FEEDS)
@@ -2346,20 +2314,18 @@ def test_the_day_grain_answers_what_the_month_grain_answered_over_the_same_rows(
 def test_a_second_attempt_at_one_run_leaves_one_row_per_feed(tmp_path: Path) -> None:
     """The write-side half. A run is one read of one feed, however often it is run.
 
-    A second attempt at one execution appends against the file it checked out,
-    which is frozen at the commit the run was triggered at - so the filter that
-    would have caught this cannot see the first attempt's row until the merge.
-    Settling straight after the append is what stops the shard the same job
-    pushes from already holding both.
+    A second attempt at one execution writes its own file, so both attempts are
+    on disk and neither had to see the other. What settles them is the read, and
+    the later attempt wins - which is the answer the appender used to reach by
+    rewriting the file the first attempt wrote.
     """
-    assert ledger.append_health(tmp_path, DATE, [account(FetchOutcome.TRANSIENT)]) == 1
+    assert seed_feed_health(tmp_path, DATE, [account(FetchOutcome.TRANSIENT)]) == 1
     retry = [account(FetchOutcome.TRANSIENT, at="07:00:00")]
-    assert ledger.append_health(tmp_path, DATE, retry) == 0
+    assert seed_feed_health(tmp_path, DATE, retry, attempt=2) == 1
 
     rows = health_rows(tmp_path)
     assert len(rows) == 1
     assert rows[0].checked_at == f"{DATE}T07:00:00Z"
-    assert ledger.repeated_keys(ledger.health_path(tmp_path, DATE), ledger.FEED_HEALTH_KEY) == {}
 
 
 def test_the_attempt_that_carried_articles_wins_however_late_it_ran(tmp_path: Path) -> None:
@@ -2369,34 +2335,19 @@ def test_the_attempt_that_carried_articles_wins_however_late_it_ran(tmp_path: Pa
     first row would leave a failure on record for a run that recovered; keeping
     the last would throw the recovery away when the retry came back empty.
     """
-    ledger.append_health(tmp_path, DATE, [account(FetchOutcome.TRANSIENT, at="06:00:00")])
-    ledger.append_health(tmp_path, DATE, [account(FetchOutcome.OK, items=9, at="07:00:00")])
+    seed_feed_health(tmp_path, DATE, [account(FetchOutcome.TRANSIENT, at="06:00:00")])
+    seed_feed_health(
+        tmp_path, DATE, [account(FetchOutcome.OK, items=9, at="07:00:00")], attempt=2
+    )
     assert [(row.outcome, row.items) for row in health_rows(tmp_path)] == [(FetchOutcome.OK, 9)]
 
     later = tmp_path / "later"
-    ledger.append_health(later, DATE, [account(FetchOutcome.OK, items=9, at="06:00:00")])
-    ledger.append_health(later, DATE, [account(FetchOutcome.OK, items=0, at="07:00:00")])
+    seed_feed_health(later, DATE, [account(FetchOutcome.OK, items=9, at="06:00:00")])
+    seed_feed_health(
+        later, DATE, [account(FetchOutcome.OK, items=0, at="07:00:00")], attempt=2
+    )
     assert [(row.outcome, row.items) for row in health_rows(later)] == [(FetchOutcome.OK, 9)]
 
-
-def test_a_repeated_row_the_appender_did_not_catch_is_settled_by_key(tmp_path: Path) -> None:
-    """The settlement picks the same winner the appender would have picked.
-
-    `append_health` settles what it writes against the file it can see, and the
-    same rule has to hold when a row it could not see turns up beside it - a row
-    a merge brought, or one an interrupted earlier attempt left. It is
-    unconditional because a repeat arrives with no marker to notice.
-    """
-    path = ledger.health_path(tmp_path, DATE)
-    ledger.append_health(tmp_path, DATE, [account(FetchOutcome.TRANSIENT, at="06:00:00")])
-    theirs = account(FetchOutcome.OK, items=4, at="07:00:00").csv_row()
-    with path.open("a", encoding="utf-8", newline="") as handle:
-        handle.write(",".join(theirs[name] for name in FeedHealthRow.csv_columns()) + "\n")
-    assert len(ledger.repeated_keys(path, ledger.FEED_HEALTH_KEY)) == 1
-
-    assert ledger.drop_repeated_rows(path, ledger.FEED_HEALTH_KEY) == 1
-    assert [(row.outcome, row.items) for row in health_rows(tmp_path)] == [(FetchOutcome.OK, 4)]
-    assert ledger.drop_repeated_rows(path, ledger.FEED_HEALTH_KEY) == 0
 
 
 # --- The server's own counters, and what they are for ----------------------
@@ -2438,7 +2389,9 @@ def test_the_ledgers_prefill_rate_agrees_with_the_servers_own_counters() -> None
 
     server = pool_counters(rows)
     captured = pool_ledger(
-        ledger.item_health_path(STATE_FIXTURES / "prefill-oracle", RECONCILED_DATE),
+        day_shards.one_day(
+            STATE_FIXTURES / "prefill-oracle" / ledger.ITEM_HEALTH_DIRNAME, RECONCILED_DATE
+        ),
         run_id=RECONCILED_RUN,
     )
     assert captured.parts == 116, (
