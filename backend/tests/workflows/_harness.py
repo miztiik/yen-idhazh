@@ -163,6 +163,23 @@ SHELLCHECK_STEP: Final = "Lint the shell"
 
 SHELLCHECK_COMMAND: Final = "shellcheck --severity=style .github/scripts/*.sh"
 
+#: Every shell script `.github/scripts/` is expected to hold. A `.sh` file here that this
+#: tuple does not name is a Level 3 design question, not a convenience, and one appeared with
+#: no owner while this list was being written. The list only ever shrinks: a row that deletes
+#: a script deletes its name in the same commit, and the test reads both directions, so
+#: neither a new file nor a forgotten name can pass.
+SHIPPED_SCRIPTS: Final = (
+    "commit-and-push.sh",
+    "fetch-model-runtime.sh",
+    "install-llama-runtime.sh",
+    "llama-cpp-pin.sh",
+    "push-rewritten-history.sh",
+    "run-pipeline-test-case.sh",
+    "sample-rss.sh",
+    "start-llama-server.sh",
+    "take-state-from-the-tip.sh",
+)
+
 # The ceiling, not the dispatch rule. Guardrail #2 allows 20 concurrent jobs; a regex
 # held the fan-out at four. The empty-input default below stays at four, because
 # that is what every scheduled run gets and no eight-shard run is measured yet.
