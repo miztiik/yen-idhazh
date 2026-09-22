@@ -62,9 +62,12 @@ on:
           - np2_inflight
           - no_draft
           - draft_depth
+      # What the job timeout is spent on is repeats times articles times cases,
+      # and the first two of those now sit beside each other in `bench` so that
+      # raising one shows the other. Empty follows `bench.repeats`.
       runtime_repeats:
-        description: 'Repeats per case. A named candidate runs two cases, so 3 does not fit the job timeout - use 2'
-        default: '3'
+        description: 'Repeats per case, overruling bench.repeats for this run. Use 2 for draft_depth'
+        default: ''
       # The corpus is what the job timeout is actually spent in, and a case set
       # multiplies it: `draft_depth` runs FOUR cases, so two repeats is eight
       # passes rather than the four a named candidate costs. At the 13.1 minutes
@@ -951,6 +954,18 @@ jobs:
           echo "starting: ${LLAMA_ARGV[*]}"
           LD_LIBRARY_PATH=backend/bin nohup "${LLAMA_ARGV[@]}" > llama-server.log 2>&1 &
           echo "$!" > llama-server.pid
+          # A build that refuses one of these flags is gone in under a second,
+          # and the wait below would then spend 900 of them asking a closed
+          # port. Two seconds separates a dead start-up from a slow one. It is
+          # the same check the shared start script does, written out here
+          # because this job cannot call that script - it starts its server
+          # against a scratch config the script does not know about.
+          sleep 2
+          kill -0 "$(cat llama-server.pid)" || {
+            echo "the tokenizer exited before it could answer" >&2
+            tail -50 llama-server.log >&2
+            exit 1
+          }
           for _ in $(seq 1 180); do
             curl -sf "http://127.0.0.1:${LLAMA_PORT}/health" > /dev/null && break
             sleep 5

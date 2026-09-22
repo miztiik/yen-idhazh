@@ -405,9 +405,12 @@ gh workflow run measure.yml --ref <branch> \
  -f runtime_repeats=2
 ```
 
-`runtime_repeats` is 2 here and not 3 on purpose. A named case runs two cases, so
-the repeats multiply the corpus, and the job timeout is what the product is spent
-against (Guardrail #2 - the limit is GitHub's, so the design is what gives).
+`runtime_repeats` is 2 here and not 3 to buy a cheaper dispatch, and it is not a
+correction to the knob. Repeats multiply the corpus and the job timeout is what
+the product is spent against, so the two numbers sit beside each other in config:
+`bench.repeats` is three and `bench.corpus_items` is three, which is six passes
+and 236 minutes against a 330-minute timeout (Guardrail #2 - the limit is
+GitHub's, so the design is what gives). Leave the input empty to take the knob.
 
 **When the question is not what a setting costs but whether it changes the
 words, dispatch a case set.** A named candidate runs the unchanged server and

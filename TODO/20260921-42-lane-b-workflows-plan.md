@@ -98,7 +98,7 @@ Eleven rows, six pull requests, four waves.
 | 7 | The printer learns the whole file set, and the traversal closes | P4 | 6, plan 41 | C | COLLAPSED - plan 44 row 1; the grammar is imported from `measure_llm.py` rather than written a fourth time | - | - | - |
 | 8 | The workflows read the model file instead of relaying it | P4 | 7 | C | COLLAPSED - plan 44 row 2; its grep oracle is scoped to jobs reaching the action or the script | - | - | - |
 | 9 | The cache names the set, and the binary gets its own key | P4 | 8 | C | COLLAPSED - plan 44 row 3; the set-digest half only, the `backend/bin` split refused and priced | - | - | - |
-| 10 | The benchmark arms learn the server died, and the repeat count is config | P5 | 9 | D | COLLAPSED - plan 44 row 4; a 2 s exit check in FRONT of an unchanged readiness wait | - | - | - |
+| 10 | The benchmark arms learn the server died, and the repeat count is config | P5 | 9 | D | COLLAPSED - plan 44 row 4, which is DONE; a 2 s exit check in FRONT of an unchanged readiness wait | - | - | - |
 | 11 | The harness keeps only what more than one module reads | P6 | 9 | D | COLLAPSED - plan 44 row 5; the ratio gate in C13 is deleted as unreachable and inverted | - | - | - |
 
 ### The six pull requests and the files each owns

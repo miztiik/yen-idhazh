@@ -73,8 +73,10 @@ Measured on `origin/main`, 2026-09-22, except where a line says estimate. **Plan
 | 1 | The printer learns the whole file set, and the traversal closes | plan 41, per section 1e | A | PENDING | - | - | - |
 | 2 | The workflows read the model file instead of relaying it | 1 | B | PENDING | - | - | - |
 | 3 | The cache names the set | 2 | B | PENDING | - | - | - |
-| 4 | The benchmark arms learn the server died, and the repeat count is config | 3 | C | PENDING | - | - | - |
+| 4 | The benchmark arms learn the server died, and the repeat count is config | 3 | C | DONE | p42p5 | - | P5 |
 | 5 | The harness keeps only what more than one module reads | 3 | D | PENDING | - | - | - |
+
+**Row 4 landed ahead of its `Depends-on`, and decision 4 was not taken.** Rows 1 to 3 are held behind plan 41's #1036, so waiting would have left a dead server costing fifteen minutes of runner time to notice, twice per sweep, for as long as that branch stays open. Its two halves touch `runtime_sweep.py` at the start call and the repeat count, never the `gguf_cache_hit` column row 3 changes, so row 3 merges this branch in rather than around it. Its tests went into `backend/tests/workflows/test_bench_targets.py`, which is where the other bench workflow assertions already live and is already one of row 5's 22 consumers - the disjointness decision 4 buys was worth nothing while row 5 is held behind row 3 as well.
 
 ### Section 1a - The four pull requests and the files each owns
 
@@ -106,7 +108,8 @@ Measured on `origin/main`, 2026-09-22, except where a line says estimate. **Plan
 
 | At this point | Ready together | Held, and why |
 | --- | --- | --- |
-| Section 1e resolved | **1**, alone | 2 needs the `files` verb. 4 and 5 share files with 2 and 3 |
+| Now | nothing | 1 is held by section 1e. 4 is done |
+| Section 1e resolved | **1**, alone | 2 needs the `files` verb. 5 shares files with 2 and 3 |
 | Row 1 merged | **2**, then **3** in the same worktree | 4 and 5 both touch files rows 2 and 3 own |
 | Row 3 merged | **4 and 5** together | nothing |
 

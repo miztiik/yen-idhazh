@@ -44,6 +44,26 @@ class BenchConfig(Model):
         ),
     )
 
+    repeats: int = Field(
+        default=3,
+        ge=2,
+        description=(
+            "How many times a bench dispatch runs each case. Two is the floor because "
+            "a spread needs two readings; one reading has nothing to be read against, "
+            "and a dispatch that cannot produce a spread is refused before it starts.\n\n"
+            "It lives here, beside `corpus_items`, because the two numbers multiply and "
+            "the product is what the job timeout is spent on. A named candidate runs two "
+            "cases, so three repeats is six passes over `corpus_items` articles - 236 "
+            "minutes against a 330-minute timeout at three articles, which fits. Held in "
+            "two files, the next person raises one of the two without seeing the other "
+            "and finds out at 330 minutes, when GitHub kills the job (Guardrail #2).\n\n"
+            "A case set costs more at the same number: `draft_depth` runs four cases, so "
+            "three repeats there is twelve passes rather than six. That is what "
+            "`measure.yml`'s `runtime_repeats` dispatch input is for - it overrules this "
+            "knob for one run without a commit, and empty follows it."
+        ),
+    )
+
     run_model_speed_case: bool = Field(
         default=True,
         description=(
