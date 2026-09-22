@@ -311,9 +311,10 @@ Measured 2026-09-22 from GitHub job step timestamps.
 | 2 | The rebase stops guessing that a drained directory was renamed | A | 3 | 1 | DONE | 1 | p46a | - | GitHub Copilot |
 | 4 | The push loop becomes a deadline and says what each attempt cost | A | 3 | 1 | DONE | 2 | p46a | - | GitHub Copilot |
 | 16 | The day's metrics file is declared derived | A | 4 | 1 | DONE | 2 | p46a | - | GitHub Copilot |
+| 17 | The corpus moves to its own ref | J | 7 | - | PENDING | 5 | - | - | - |
 | 5 | A day directory reads back as settled rows | B | - | 1 | DONE | 3 | p46b | - | Explore |
 | 6 | The one rule that needs a sequence is deleted | F | - | 1 | DONE | 5 | p46f | - | default |
-| 7 | The corpus moves to its own ref | H | 1, 2, 4 | 2 | PENDING | 4 | - | - | - |
+| 7 | The prune re-checks the tip and refuses to force-push over a run | H | 1, 2, 4 | 2 | DONE | 4 | p46h | - | GitHub Copilot |
 | 8 | An unowned path stops the push and names itself | E | 1, 2, 4 | 2 | PENDING | 4 | - | - | - |
 | 9 | The published day is folded from per-run fragments | G | 5, 6, 7 | 3 | PENDING | 5 | - | - | - |
 | 10 | One clock, and a label on every block that landed | G | 9 | 3 | PENDING | 3 | - | - | - |
@@ -333,7 +334,7 @@ Rows are listed in wave order. **Row 3 keeps its number and runs first**: it is 
 | --- | --- | --- | --- |
 | F1 | 0 | **Z alone** | Four `if: always()` lines in `digest.yml` and one workflow test. Merge it the hour it is written; everything after it assumes it landed. |
 | F2 | 1 | **A, B, F** | A owns `commit-and-push.sh`, `digest.yml`, `measure.yml`, `config/idhazh.json`, `contracts/app_config.py`, `schemas/app-config.schema.json`, `frontend/src/contracts/app-config.ts`, `backend/idhazh/paths.py` and `backend/tests/workflows/`. B owns the backend read side and the server-side TypeScript walkers and **declares no config file** - row 5's retention knob moved into A for exactly this reason. F owns two contract modules, their schemas, the generated frontend contracts and `placement.py`. |
-| F3 | 2 | **H, E** | H must edit `digest.yml` (the harvest step and the `corpus` argument on the commit call), `prune.yml`, and `test_staged_paths.py`, `test_triggers.py` and `_harness.py` - all of which are A's, so it waits for A. E is `commit-and-push.sh`, `.gitattributes` and `test_daily_commit_steps.py`, also behind A. H and E share nothing with each other. |
+| F3 | 2 | **H, E** | H must edit `prune.yml`, the script its push moved into, and `test_staged_paths.py`, `test_triggers.py` and `_harness.py` - the three test files are A's, so it waits for A. E is `commit-and-push.sh`, `.gitattributes` and `test_daily_commit_steps.py`, also behind A. H and E share nothing with each other. |
 | F4 | 3 | **G alone** | The published payload, three contract modules, three page components and `digest.yml` - behind B, F and H. |
 | F5 | 4 | **C alone** | **The one PR that must land alone.** It moves every committed ledger and rewrites every producer's write path. A digest run in flight when it merges pushes an old-shape head the migration missed - a timing call for a person, not a code problem. The measured quiet window is 4 h 48 min. |
 | F6 | 5 | **D** | `compact.py`, `day_shards.py` and both walkers, behind C. |
@@ -546,15 +547,15 @@ Rows appear in numeric order. Wave order is Table F.
 | 6.R1 | Keep contiguity and have writers coordinate the ordinal | Every variant of "read the day, count the runs, claim N+1" has already failed here with a date on it - 2026-08-29, two runs, one ordinal, six counter rows for four shards | A coordination primitive this platform does not have | Fowler |
 | 6.R2 | Ship rows 6 and 9 as one pull request | They share `digest_day.py`, so they cannot run beside each other - but row 6 is a two-line deletion that unblocks row 9 and finishes in wave 1 | One merge saved, against row 9 waiting a wave longer to start | Carmack |
 
-### Row 7 - The corpus moves to its own ref
+### Row 7 - The prune re-checks the tip and refuses to force-push over a run
 
-- **Scope:** `corpus/` leaves `main` for a ref of its own, and the force-pushing job re-checks the tip immediately before it pushes.
+- **Scope:** contract rule 5. The one job that force-pushes `main` reads origin's tip again immediately before it pushes, and refuses if the tip moved while it was rewriting.
 - **Files touched:**
   - `.github/workflows/prune.yml`
-  - `.github/workflows/finetune.yml`
-  - `.github/scripts/` (the prune's own script, if one is extracted)
+  - `.github/scripts/push-rewritten-history.sh` (the push, extracted so a test can drive it)
   - `docs/how-to/fine-tune-a-model.md`
-  - `backend/tests/workflows/` (the prune's test)
+  - `CLAUDE.md` (section 8's standing exception)
+  - `backend/tests/workflows/` (the prune's test, plus `_harness.py`, `test_staged_paths.py` and `test_triggers.py`)
 - **Acceptance gates:** local - `python -m pytest backend/tests/workflows` for the prune's test. CI - the full suite.
 - **Oracle:** the harness pushes a commit between the prune's checkout and its push; the prune refuses rather than forcing, exits non-zero, and the pushed commit survives. **It cannot settle** whether the corpus ref itself stays healthy across a prune - that is the prune's own existing test.
 - **Decisions:**
@@ -565,6 +566,7 @@ Rows appear in numeric order. Wave order is Table F.
 | 7.2 | Today this is held by two things that do not survive unbounded concurrency: a `corpus-prune` group that reaches no other workflow, and a 23:37 cron hand-placed in the one 266-minute idle gap the serial schedule leaves. Parallel runs erase that gap. | Carmack |
 | 7.3 | Contract rule 5 ships here: the prune re-fetches immediately before the push and refuses if the tip moved. An unstamped prune is due again next wake, so refusing costs one cycle. | Fowler |
 | 7.4 | **This PR carries no config knob**, or it collides with row 4 on `config/idhazh.json` and the two cannot run in the same wave. | Carmack |
+| 7.5 | **The corpus does not move to a ref of its own here, and the row is renamed for what it does.** Section 0e rule 5 is the contract this row implements, and it says the opposite of the old title: the force-pushing job re-fetches before pushing and keeps its schedule. All four decisions above implement rule 5, the oracle tests rule 5, and none of them describes a ref move. The move itself touches at least 15 files this row never named - a hardcoded `CORPUS_ROOT_RELPATH` in `backend/idhazh/corpus.py`, four hand-run operator tools, a Colab notebook, and a test that reads the real committed corpus - and one of the five files the old list named, `.github/workflows/finetune.yml`, does not exist. It is row 17, and it is not costed. | Owner, 2026-09-22 |
 
 - **Rejected alternatives:**
 
@@ -572,6 +574,7 @@ Rows appear in numeric order. Wave order is Table F.
 | --- | --- | --- | --- | --- |
 | 7.R1 | One concurrency group shared between `prune.yml` and every pushing workflow | It serialises the entire pipeline behind a maintenance job, which is the end of the feature rather than a fix for it | One line, and the owner's stated intent | Carmack |
 | 7.R2 | Stop pruning and let history grow | The corpus commits article text and git history is append-only, so deleting a row does not delete its bytes | An unbounded repository, which is the reason the prune exists | Fowler |
+| 7.R3 | Ship the ref move here as the title asked | The row names five files, one of which does not exist, and costs none of the fifteen the move really reaches. A Level 4 row cannot carry a Level 5 change nobody has priced | A design consultation, which is what row 17 is for | Owner, 2026-09-22 |
 
 ### Row 8 - An unowned path stops the push and names itself
 
@@ -896,6 +899,44 @@ Rows appear in numeric order. Wave order is Table F.
 | --- | --- | --- | --- | --- |
 | 16.R1 | Give it fragments and a fold, like `digest.json` | A second fragment shape, a second fold, a second schema and a second prune, to answer a question the rebuild already answers | Row 9's whole surface again, for a file no reader opens | Fowler |
 | 16.R2 | Leave it out of `DERIVED` and let the rebase merge it | It is JSON; a text merge of two objects is a file that is not JSON | Nothing to build, and a console payload that fails to parse | Fowler |
+
+### Row 17 - The corpus moves to its own ref
+
+**This row is not costed, and its level is 5.** Nothing below is an answer. It is the list of questions somebody has to settle in a design consultation before any code is written, plus the survey of what the move touches. Row 7 carried this title until 2026-09-22 and never carried the work; the owner split them so the rule-5 half could ship and this half could be priced on its own.
+
+- **Scope:** `corpus/` stops being a directory on `main`. Where it goes instead, how a run reaches it, and what happens to every reader and writer that spells the path today are all open.
+- **Files touched:** **unknown, and that is the finding.** What is surveyed on 2026-09-22, and checked rather than recalled:
+
+| id | Kind | Where |
+| --- | --- | --- |
+| 17.F1 | Writers | `.github/workflows/digest.yml` step "Harvest the training corpus" (line 1157), which runs `python -m idhazh harvest`; the same workflow's commit call (line 1278), whose staged path list ends `... state corpus`; `backend/idhazh/corpus.py` `harvest()` and `write()`; `.github/workflows/prune.yml` step "Stamp the prune" |
+| 17.F2 | Readers, automated | `backend/idhazh/stages/harvest.py`; `backend/idhazh/stages/prune_stamp.py`; `backend/utilities/prune_due.py`; `.github/workflows/measure.yml` `corpus` target; `.github/workflows/validate.yml` qualification freeze |
+| 17.F3 | Readers, run by hand | `backend/utilities/data_wrangler.py`; `backend/utilities/reference_set.py`; `backend/utilities/build_reference_dataset.py`; `notebooks/finetune.ipynb`, which runs on Colab against a clone |
+| 17.F4 | The path itself | `CORPUS_ROOT_RELPATH: Final = "corpus"` in `backend/idhazh/corpus.py`, and `CORPUS_ROOT` in `backend/idhazh/stages/common.py`, which is derived from it. No environment variable and no config knob overrides either |
+| 17.F5 | The test that reads the real thing | `backend/tests/test_corpus_harvest.py::test_the_committed_window_loads_and_agrees_with_its_own_census` opens the committed corpus and runs in CI. It is a `CLAUDE.md` section 13 problem on its own account - it walks a collection the pipeline appends to - so the move has to decide its fate whichever way the ref question goes |
+
+- **What breaks, and how loudly:** two CI gates fail (17.F5's test, and the prune's due check, which reads `corpus/corpus.meta.json` out of a shallow checkout before any install). One CI step degrades in silence, because the harvest is `continue-on-error`: the corpus stops filling and the run still goes green. Seven things a person runs by hand stop finding their input, and one of them is a Colab notebook nobody can fix from this repository in the same commit.
+- **Acceptance gates:** not settled. At minimum the full suite, the contract drift gate, and one real prune dispatched by hand against the new ref - a design that cannot be exercised once before it is trusted is not the design.
+- **Oracle:** not settled, because the row has no design yet. What an oracle must eventually show: a harvest writes to the new ref and a later run reads back what it wrote, with no path spelled in two places.
+- **Open questions - these are what the consultation settles:**
+
+| # | Question nobody has ruled on | Authority |
+| --- | --- | --- |
+| 17.1 | **Where does the ref live, and what is it called?** A branch on this repository, an orphan branch, or a second repository are three different answers with three different permission stories. | Owner |
+| 17.2 | **How does the daily run reach it without paying for it every run?** The harvest runs once a week and the digest runs five times a day. A fetch on every run pays for a corpus four days out of five for nothing. | Carmack |
+| 17.3 | **Does `corpus/` stay in `main`'s working tree as a fetched artifact, or leave it entirely?** Staying keeps every reader's path and moves only the history; leaving is the only version that also removes the bytes from a `main` clone. They are not the same change and only one of them is what the prune exists for. | Fowler |
+| 17.4 | **What replaces `CORPUS_ROOT_RELPATH`?** A config knob is the obvious answer and it is not free: `config/idhazh.json` has a schema, and a path that varies is a path a test has to be given rather than assume. | Fowler |
+| 17.5 | **What happens to the test that reads the committed corpus?** It has to move, become a fixture, or become an operator tool under `backend/utilities/` - section 13 gives it three fates and no fourth. Doing nothing is not one of them, because after the move there is nothing on `main` for it to read. | Fowler |
+| 17.6 | **How does a person running `data_wrangler.py` get a corpus to point at?** Four hand-run tools and one Colab notebook assume the directory is simply there. Whatever replaces that has to be one documented step, or the tools stop being used. | Reader |
+| 17.7 | **Does the prune still exist afterwards, and does it still force-push?** If the corpus leaves `main`, the reason `main`'s history is rewritten leaves with it - and row 7's whole tip check is then guarding a job that may not need to run at all. | Owner |
+
+- **Rejected alternatives:**
+
+| # | Option | Why rejected | What it would cost to take | Authority |
+| --- | --- | --- | --- | --- |
+| 17.R1 | Ship it inside row 7 | Row 7 is Level 4 and named five files, one of which does not exist. The move reaches at least fifteen, including a Colab notebook | A Level 5 change merged without the consultation Level 5 requires | Owner, 2026-09-22 |
+| 17.R2 | Do nothing - leave the corpus on `main` and keep the prune | It is the standing answer, taken by the owner on 2026-08-28 over exactly this option, and it still works. This row reopens that decision rather than overturning it, so the consultation has to say what changed since | Nothing to build. The costs stay: a per-commit squash boundary that collapses `backend/`, `docs/` and `state/` too, `git blame` reaching back 60 to 90 days, and a force push twelve times a year | Owner |
+| 17.R3 | Move the path behind a config knob first, and decide the ref later | It looks like a safe first step and it is a second writer of the same question: a knob whose only value is `corpus` is a knob nobody reads, and the readers still have to be found either way | One schema change and a knob that answers nothing until 17.1 is settled | Fowler |
 
 ## Section 3 - What nobody asked, and it outranks this plan
 
