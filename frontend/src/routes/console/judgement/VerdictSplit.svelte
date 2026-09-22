@@ -119,7 +119,12 @@
 	title="What the judge said about the line"
 	note="Every judged pair, split by whether its score cleared the line the day was built with and by what the judge said about it."
 >
-	<div data-verdict-split data-verdict-line={reads(applied)} data-verdict-days={record?.daysCounted ?? 0}>
+	<div
+		data-verdict-split
+		data-readout-none="two population ranges on one score axis, so there is no column to share, and each range prints its lowest, middle and highest in words"
+		data-verdict-line={reads(applied)}
+		data-verdict-days={record?.daysCounted ?? 0}
+	>
 		<div class="grid">
 			{#each cells as cell (cell.key)}
 				<div class="cell" data-verdict-cell={cell.key}>
@@ -169,7 +174,7 @@
 					>
 						{strip.at === null
 							? `Nothing was ${strip.words} yet`
-							: `${strip.words}: ${reads(strip.at.min)} to ${reads(strip.at.max)}`}
+							: `${strip.words}: ${reads(strip.at.min)} to ${reads(strip.at.max)}, middle ${reads(strip.at.median)}`}
 					</text>
 					{#if strip.at !== null}
 						<line

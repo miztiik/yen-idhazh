@@ -148,4 +148,72 @@ test.describe('what the judge said about the line', () => {
 		await expect(table).toBeVisible();
 		expect(await table.evaluate((node) => (node as HTMLDetailsElement).open)).toBe(false);
 	});
+
+	test('the panel says why it has no column to point at', async ({ page }) => {
+		await open(page);
+
+		// Two population ranges on one score axis. There is no day column the two
+		// share, so the panel says so rather than leaving a reader unable to tell a
+		// decision from an omission.
+		const reason = (await page.locator(SPLIT).getAttribute('data-readout-none')) ?? '';
+		expect(reason.trim().split(/\s+/).length, `the reason reads "${reason}"`).toBeGreaterThanOrEqual(
+			5
+		);
+		expect(reason).toContain('no column to share');
+	});
+
+	test('a strip that has a range prints its middle, where the circle is drawn', async ({ page }) => {
+		await open(page);
+
+		const labels = await page
+			.locator(`${SPLIT} [data-verdict-strip-label]`)
+			.evaluateAll((nodes) =>
+				nodes.map((node) => ({
+					name: node.getAttribute('data-verdict-strip-label') ?? '',
+					words: node.textContent ?? ''
+				}))
+			);
+		expect(labels.length, 'neither strip is labelled').toBe(2);
+
+		// Two x ticks are enough to invert the scale the panel drew with, so the
+		// printed middle is checked against the pixel the circle sits at rather
+		// than against the same number read back from the same string.
+		const ticks = await page
+			.locator(`${SPLIT} [data-tick="x"]`)
+			.evaluateAll((nodes) =>
+				nodes.map((node) => ({
+					at: Number(node.getAttribute('x')),
+					score: Number(node.textContent)
+				}))
+			);
+		expect(ticks.length, 'the score axis drew fewer than two ticks').toBeGreaterThan(1);
+		const first = ticks[0];
+		const last = ticks[ticks.length - 1];
+		const scoreAt = (x: number): number =>
+			first.score + ((x - first.at) * (last.score - first.score)) / (last.at - first.at);
+
+		let checked = 0;
+		for (const label of labels) {
+			if (label.words.startsWith('Nothing was ')) continue;
+			expect(label.words, `the ${label.name} strip does not print its middle`).toMatch(
+				/, middle \d\.\d{3}$/
+			);
+			const printed = Number(label.words.match(/, middle (\d\.\d{3})$/)![1]);
+			const cx = Number(
+				await page.locator(`${SPLIT} [data-verdict-median="${label.name}"]`).getAttribute('cx')
+			);
+			expect(
+				scoreAt(cx),
+				`the ${label.name} strip prints a middle the circle is not drawn at`
+			).toBeCloseTo(printed, 3);
+			checked += 1;
+		}
+
+		// The canary has judged nothing, so both strips can legitimately be empty.
+		// The assertion above is what runs on a tree that has a range; this one
+		// keeps the empty case honest about which state it is in.
+		if (checked === 0) {
+			expect(labels.every((label) => label.words.startsWith('Nothing was '))).toBe(true);
+		}
+	});
 });

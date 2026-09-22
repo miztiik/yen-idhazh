@@ -24,9 +24,13 @@
 		dayTicks,
 		frame,
 		linearAxis,
-		observeWidth
+		observeWidth,
+		pointerReadout,
+		readoutMarks,
+		type DayReadout
 	} from '$lib/charts/frame';
 	import { daysBetween, type TimeWindow } from '$lib/charts/viewport';
+	import ChartReadout from '$lib/components/ChartReadout.svelte';
 	import Panel from '$lib/components/Panel.svelte';
 	import { dayMonth, plural } from '$lib/format';
 	import {
@@ -42,7 +46,8 @@
 		viewport,
 		height,
 		width,
-		tickDensity
+		tickDensity,
+		readoutMaxShare
 	}: {
 		/** Every published day the build read, oldest first. */
 		days: MergeDay[];
@@ -54,7 +59,14 @@
 		width: number;
 		/** The most date labels the day axis may carry - `chart.tick_density`. */
 		tickDensity: number;
+		/** `chart.readout_max_share`. */
+		readoutMaxShare: number;
 	} = $props();
+
+	/** What the panel says in place of a strip when the window holds no column.
+	 * One string, because the sentence a reader sees and the reason the markup
+	 * declares are the same sentence. */
+	const NO_COLUMN = 'No column in this window, so there is nothing to point at.';
 
 	/** Wide enough to read, narrow enough that 90 columns fit. */
 	const MAX_BAR = 18;
@@ -66,6 +78,7 @@
 	const Y_TITLE_X = 8;
 
 	let measured = $state<number | null>(null);
+	let selected = $state<number | null>(null);
 
 	const windowDays = $derived(daysBetween(viewport.start, viewport.end));
 	const drawn = $derived(
@@ -118,6 +131,39 @@
 		}))
 	);
 
+	/** Both marks at one column, in the order they are drawn. Built here from
+	 * `columnsX` rather than by `columnStrip`, which leaves `x` at zero for a
+	 * chart an engine lays out - this one knows its own pixels.
+	 *
+	 * Both rows print at every column, including a column where the count is
+	 * zero. A row that disappears makes the reader compare a two-row strip with
+	 * a one-row strip. */
+	const columns = $derived<DayReadout[]>(
+		drawn.map((day, index) => ({
+			x: px(columnsX[index]),
+			date: dayMonth(day.date),
+			rows: [
+				{
+					label: 'Merged',
+					// The denominator rides in the value. A third row carrying it would
+					// be a key to something the picture does not draw.
+					value:
+						day.published === 0
+							? 'no story published'
+							: `${day.merges} of ${day.published} published`,
+					colour: 'var(--chart-1)'
+				},
+				{
+					label: 'Biggest group',
+					value: day.largest === 0 ? 'none formed' : plural(day.largest, 'story', 'stories'),
+					colour: 'var(--chart-2)'
+				}
+			]
+		}))
+	);
+	const resting = $derived(selected === null);
+	const readout = $derived(columns.length === 0 ? null : columns[selected ?? columns.length - 1]);
+
 	function columnTitle(day: MergeDay): string {
 		if (day.published === 0) return `${dayMonth(day.date)} - no story was published.`;
 		if (day.merges === 0) {
@@ -136,15 +182,24 @@
 		data-window-days={windowDays}
 		data-merge-state={panelState}
 		data-merge-days={drawn.length}
+		data-readout-columns={columns.length > 0 ? columns.length : undefined}
+		data-readout-none={columns.length > 0 ? undefined : NO_COLUMN}
 	>
 		<div use:observeWidth={(next) => (measured = next)}>
+			<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 			<svg
-				class="block max-w-full overflow-visible"
+				class="block max-w-full overflow-visible focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
 				width={box.width}
 				height={box.height}
 				viewBox={`0 0 ${box.width} ${box.height}`}
 				role="img"
+				tabindex="0"
 				aria-label="Stories folded into another a day, over {windowDays} days"
+				use:pointerReadout={{
+					marks: readoutMarks(columns),
+					width: box.width,
+					onSelect: (index) => (selected = index)
+				}}
 			>
 				<line
 					x1={box.left}
@@ -190,7 +245,7 @@
 					<text
 						x={box.left + 8}
 						y={(box.top + box.bottom) / 2 - 8}
-						fill="var(--color-text-tertiary)"
+						fill="var(--color-text-secondary)"
 						font-size="12"
 					>
 						No published day in this window
@@ -267,6 +322,18 @@
 			</svg>
 		</div>
 
+		{#if columns.length === 0}
+			<p class="no-column" data-merge-no-column>{NO_COLUMN}</p>
+		{:else}
+			<ChartReadout
+				{readout}
+				name="merged-stories"
+				maxShare={readoutMaxShare}
+				{resting}
+				restingNote=", the newest published day"
+			/>
+		{/if}
+
 		<p class="merge-note" data-merge-note={panelState}>
 			{note}
 			{#if rate}
@@ -277,11 +344,23 @@
 </Panel>
 
 <style>
+	/* The strip slot keeps its height whether or not there is a column to print.
+	   A strip that is there at one window span and gone at another moves the
+	   panel box, which is the one thing the box below is for. The reserved height
+	   is the loaded strip: a day heading, two rows and the hint line, with the
+	   margins between them, at the 0.75rem the strip is set in. */
+	.no-column {
+		margin: var(--space-3) 0 0;
+		min-height: calc(4 * 1.5em + 2 * var(--space-1) + var(--space-2));
+		font-size: 0.75rem;
+		color: var(--color-text-tertiary);
+	}
+
 	/* Two lines are reserved whichever state the panel is in. The plot is a fixed
-	   220px by construction, so the note is the only part of this panel that can
-	   change its height - and a panel that grows by a line when the operator
-	   widens the window pushes everything below it down the page while he is
-	   reading it. */
+	   220px by construction and the strip slot above reserves its own height, so
+	   the note is the last part of this panel that could change height - and a
+	   panel that grows by a line when the operator widens the window pushes
+	   everything below it down the page while he is reading it. */
 	.merge-note {
 		margin: var(--space-3) 0 0;
 		min-height: calc(var(--leading-sm) * 2);

@@ -253,3 +253,25 @@ test('no config key reaches the screen', async ({ page }) => {
 		expect(text, `the panel printed the config key "${word}"`).not.toContain(word);
 	}
 });
+
+test('the resting heading separates the date from the note', async ({ page }) => {
+	await open(page);
+
+	const day = page.locator(`${PANEL} [data-readout-day]`);
+	if ((await day.count()) === 0) {
+		// K1: no day has fitted a line, so the panel declares it has no column
+		// rather than printing a strip. Asserted rather than returned: a branch
+		// that skips in silence hides the day the panel stops drawing at all.
+		await expect(page.locator(`${PANEL}[data-readout-none]`)).toHaveCount(1);
+		await expect(page.locator('[data-line-state="no-days"]')).toBeVisible();
+		return;
+	}
+
+	// Anchored on the end of the string. A substring match on the note alone
+	// passes when the date runs straight into it, which is how `21 Septhe newest
+	// day` reached the live site past five assertions that all used one.
+	expect(
+		(await day.innerText()).trim(),
+		'the resting heading runs the date into the note'
+	).toMatch(/, the newest day$/);
+});

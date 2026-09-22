@@ -343,4 +343,32 @@ test.describe('the pairs a person marked apart', () => {
 		expect(narrow.height).toBeGreaterThan(0);
 		expect(narrow.width).toBeLessThan(wide.width);
 	});
+
+	test('the panel says why it has no column to point at', async ({ page }) => {
+		await open(page);
+
+		// One score axis and no day column. The panel says so rather than leaving a
+		// reader unable to tell a decision from an omission.
+		const reason = (await page.locator(PANEL).getAttribute('data-readout-none')) ?? '';
+		expect(reason.trim().split(/\s+/).length, `the reason reads "${reason}"`).toBeGreaterThanOrEqual(
+			5
+		);
+		expect(reason).toContain('no column to share');
+	});
+
+	test('the strip prints its middle, so the circle is readable without a pointer', async ({
+		page
+	}) => {
+		await open(page);
+
+		const label = page.locator(`${PANEL} [data-holdout-strip-label]`);
+		await expect(label).toBeVisible();
+		const words = (await label.textContent()) ?? '';
+
+		if (words.startsWith('Nothing has been read as one story yet')) return;
+
+		// The reason above says every row prints its ends in words. The middle is
+		// the third of them, and without it that sentence is false.
+		expect(words, `the strip label reads "${words}"`).toMatch(/, middle \d\.\d{4}, /);
+	});
 });

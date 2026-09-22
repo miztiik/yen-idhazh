@@ -176,6 +176,7 @@
 		data-holdout
 		data-holdout-state={reading}
 		data-holdout-tone={tone}
+		data-readout-none="one score axis with no column to share, so each dot carries its own title and each row prints its ends in words"
 		data-holdout-domain={`${domain[0].toFixed(4)},${domain[1].toFixed(4)}`}
 		data-holdout-zone={`${zone[0].toFixed(4)},${zone[1].toFixed(4)}`}
 		data-holdout-margin={outcome.margin === null ? '' : marginDistance(outcome.margin)}
@@ -369,7 +370,7 @@
 				>
 					{agreedAt === null
 						? 'Nothing has been read as one story yet'
-						: `read as one story: ${agreedAt.min.toFixed(4)} to ${agreedAt.max.toFixed(4)}, ${agreedBelow} below the line`}
+						: `read as one story: ${agreedAt.min.toFixed(4)} to ${agreedAt.max.toFixed(4)}, middle ${agreedAt.median.toFixed(4)}, ${agreedBelow} below the line`}
 				</text>
 
 				{#if agreedAt !== null && agreedOnScale}

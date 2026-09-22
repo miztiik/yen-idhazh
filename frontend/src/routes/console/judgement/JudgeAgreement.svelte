@@ -266,7 +266,7 @@
 			name="judge-agreement"
 			maxShare={readoutMaxShare}
 			{resting}
-			restingNote="the newest day"
+			restingNote=", the newest day"
 		/>
 
 		<p class="agreement-note">
