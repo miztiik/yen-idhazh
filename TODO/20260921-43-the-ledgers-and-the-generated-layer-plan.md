@@ -34,7 +34,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | 3 | The hosted span sink goes | - | A | DONE | p43r23 | - | worker |
 | 4 | The retrieval loaders take their bounds | - | A | PENDING | - | - | - |
 | 5 | The label queue becomes runnable | - | A | PENDING | - | - | - |
-| 6 | The pipeline test commits what it already wrote | 2, 3 | B | PENDING | - | - | - |
+| 6 | The pipeline test commits what it already wrote | 2, 3 | B | DONE | p43r6 | - | worker |
 | 7 | The generated contract layer goes, and the contract catches up | all of plan 46 | C | PENDING | - | - | - |
 
 ### Section 1a - Six pull requests, three waves
