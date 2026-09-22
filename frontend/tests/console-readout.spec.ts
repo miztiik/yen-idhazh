@@ -20,15 +20,19 @@ import { stacked } from '../src/lib/charts/stacked';
  * below fails on a chart that declares neither.
  */
 
-const ROUTES = ['/console/', '/console/model/', '/console/machine/'] as const;
-// `/console/judgement/` and `/console/voices/` are the two routes NOT here, and
-// that is a decision rather than an oversight. Neither draws a chart that prints
-// a readout strip, so every count in this file comes back zero on them.
-// Judgement has a named cause: `MergeLinePlot` declares its columns, while
-// `MergedStoriesPanel` shares a column between its bar and its dot and has never
-// declared one either way. Adding either route costs those panels a readout
-// strip, which is its own row's work - and until it lands, a reader on those two
-// pages can reach a value by hover and by nothing else.
+const ROUTES = [
+	'/console/',
+	'/console/model/',
+	'/console/machine/',
+	'/console/judgement/'
+] as const;
+// Two lists, because the two scans below seed differently. `chartsOn` seeds on
+// `svg`, so it can ask its question only of a route that draws one, and
+// `/console/voices/` draws none of its own - its two day matrices are `<div>`
+// tables. `declarationsOn` seeds on the declaration itself, so it reaches them.
+// Measured on the canary build 2026-09-22: `/console/voices/` renders 0 charts
+// the first scan can see and 6 declarations the second one reads.
+const DECLARING_ROUTES = [...ROUTES, '/console/voices/'] as const;
 const DESKTOP = { width: 1440, height: 1000 };
 const PHONE = { width: 390, height: 844 };
 
@@ -179,7 +183,11 @@ test.describe('the readout is the default', () => {
 				'these charts draw a key as well as a strip'
 			).toEqual([]);
 		});
+	}
 
+	// The wider list. This is the block that reaches a drawing which is not an
+	// `<svg>`, because it seeds on the declaration rather than on the picture.
+	for (const route of DECLARING_ROUTES) {
 		test(`every chart on ${route} that has no readout gives a reason in words`, async ({
 			page
 		}) => {

@@ -27,15 +27,13 @@ import {
  * a hover is not a thing a thumb can do.
  */
 
-// `/console/judgement/` and `/console/voices/` are NOT here, and the reason is a
-// defect rather than a category. Both routes draw charts; neither draws one that
-// prints a readout strip, so every count below comes back zero and the file
-// fails on the route rather than on a chart. What the reader loses is the whole
-// point of the rule - on those two pages a value is reachable by hover and by
-// nothing else, which a thumb cannot do. Giving those panels a readout strip is
-// its own row's work; listing the routes here before that lands would only turn
-// a missing feature into a red suite.
-const ROUTES = ['/console/', '/console/model/', '/console/machine/'];
+// `/console/voices/` is NOT here, and that is a decision rather than an
+// oversight. Every block below needs a strip to read, and the two day matrices
+// on that route declare they have none: each square already names its own day
+// and what that day did, so a strip would reprint the list the pointer is
+// already on. An `if` inside this loop to walk past them is how a route list
+// stops meaning one thing.
+const ROUTES = ['/console/', '/console/model/', '/console/machine/', '/console/judgement/'];
 
 test.describe('the shape switch draws one array two ways', () => {
 	const COLUMNS = ['Mon', 'Tue', 'Wed'];
