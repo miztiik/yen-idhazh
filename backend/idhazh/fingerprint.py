@@ -33,8 +33,7 @@ from typing import Any, Final
 from idhazh.contracts.base import derive_text_digest
 from idhazh.contracts.fingerprint import PipelineInputs
 from idhazh.contracts.knobs.models import ModelRef
-from idhazh.contracts.knobs.turns import TurnsConfig
-from idhazh.llm.server import SETTING_KEYS, setting, turn_markers_digest, window
+from idhazh.llm.server import SETTING_KEYS, TurnMarkers, setting, turn_markers_digest, window
 
 #: Sixty-four zeroes. It satisfies `Sha256`, so a manifest built on it validates,
 #: publishes, and still says nothing about which weights ran (Guardrail #10).
@@ -243,7 +242,7 @@ def build_inputs(
     runner_class: str,
     extractor_version: str,
     sanitizer_version: str,
-    turns: TurnsConfig | None = None,
+    markers: TurnMarkers | None = None,
 ) -> PipelineInputs:
     """Assemble the manifest from the weights that were loaded, not the ones configured.
 
@@ -255,9 +254,9 @@ def build_inputs(
     `PLACEHOLDER_DIGEST`, which turned "nobody measured the weights" into a
     manifest that looked measured.
 
-    `turns` is optional because `ModelRef` does not carry one - a run record
-    embeds the recorded shape, and a caller holding only that shape has no
-    envelope to digest. An absent envelope leaves the key absent rather than
+    `markers` is optional because a caller may have none: they are read off the
+    server at start-up, and a caller holding only a recorded `ModelRef` never
+    stood a server up. An absent envelope leaves the key absent rather than
     substituting a digest, which is the read-side rule
     `PipelineInputs.turn_markers_sha256` states.
     """
@@ -272,7 +271,7 @@ def build_inputs(
         runtime_build=runtime_build,
         chat_template_sha256=text_digest(chat_template),
         prompt_sha256=text_digest(prompt),
-        turn_markers_sha256=turn_markers_digest(turns) if turns is not None else None,
+        turn_markers_sha256=turn_markers_digest(markers) if markers is not None else None,
         output_schema_sha256=text_digest(output_schema),
         truncation_cap_tokens=truncation_cap_tokens,
         sampling=sampling_spelling(request),

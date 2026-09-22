@@ -16,7 +16,6 @@ from idhazh.config import refuse_a_model_nothing_could_run
 from idhazh.contracts import canonical_json
 from idhazh.contracts.app_config import SUPERSEDED_APP_NAMES, AppConfig
 from idhazh.contracts.knobs.models import SUPERSEDED_MODELS_NAMES, ModelsConfig
-from idhazh.contracts.knobs.turns import SystemPlacement
 from idhazh.contracts.run_manifest import RunManifest
 
 from ._fixtures import (
@@ -81,43 +80,8 @@ def point_at(root: Path, models_file: str) -> None:
     )
 
 
-def test_folding_the_system_text_without_a_joiner_is_refused() -> None:
-    """Decision 2, first half. The separator is what keeps the two blocks apart.
-
-    Absent, the last instruction and the opening fence of the untrusted block
-    render on one line. The prompt is still well formed, the grammar still
-    accepts the reply, and the only symptom is a worse summary.
-    """
-    with pytest.raises(ValidationError) as raised:
-        ModelsConfig.model_validate(entry_with(system_role="fold_into_first_user"))
-
-    assert "system_joiner is required under system_role='fold_into_first_user'" in str(raised.value)
-
-
-def test_a_joiner_declared_beside_a_system_turn_is_refused() -> None:
-    """Decision 2, second half. A dead field is a field somebody will trust.
-
-    `own_turn` gives the system text a turn of its own, so nothing joins it to
-    anything. A joiner set here is a value an operator chose, a reviewer read,
-    and no render ever applied.
-    """
-    with pytest.raises(ValidationError) as raised:
-        ModelsConfig.model_validate(entry_with(system_role="own_turn", system_joiner="\n\n"))
-
-    assert "where the system text has a turn of its own" in str(raised.value)
-
-
-def test_a_fold_that_declares_a_joiner_loads() -> None:
-    """The bite proof for both halves: the pair the refusals permit is legal."""
-    folded = ModelsConfig.model_validate(
-        entry_with(system_role="fold_into_first_user", system_joiner="\n\n")
-    )
-
-    assert folded.summarize.turns.system_joiner == "\n\n"
-
-
 def test_a_template_that_reads_no_keyword_may_not_be_asked_to_think() -> None:
-    """Decision 3, second half. Both halves are facts about the same template.
+    """Both halves are facts about the same template, so one entry owns the pair.
 
     A null keyword means the request carries no `chat_template_kwargs` at all,
     so a declared closing marker asks for reasoning through a channel nothing
@@ -135,8 +99,8 @@ def test_a_template_that_reads_no_keyword_loads_with_reasoning_off() -> None:
     """The bite proof. Null is a legal declaration, not a broken entry."""
     silent = ModelsConfig.model_validate(entry_with(thinking_kwarg=None))
 
-    assert silent.summarize.turns.thinking_kwarg is None
-    assert silent.summarize.turns.thinks is False
+    assert silent.summarize.thinking_kwarg is None
+    assert silent.summarize.thinks is False
 
 
 def test_the_closing_marker_is_the_whole_declaration_that_reasoning_is_wanted() -> None:
@@ -149,9 +113,9 @@ def test_the_closing_marker_is_the_whole_declaration_that_reasoning_is_wanted() 
     quiet = ModelsConfig.model_validate(entry_with())
     loud = ModelsConfig.model_validate(entry_with(thinking_close="</think>"))
 
-    assert quiet.summarize.turns.thinks is False
-    assert loud.summarize.turns.thinks is True
-    assert loud.summarize.turns.thinking_close == "</think>"
+    assert quiet.summarize.thinks is False
+    assert loud.summarize.thinks is True
+    assert loud.summarize.thinking_close == "</think>"
 
 
 def test_a_config_that_still_spells_the_old_settings_block_is_refused_by_name() -> None:
@@ -201,8 +165,8 @@ def test_the_committed_entry_names_the_keyword_rather_than_inheriting_it() -> No
     """
     raw = committed_models_raw()
 
-    assert raw["summarize"]["turns"]["thinking_kwarg"] == "enable_thinking"
-    assert committed_models().summarize.turns.system_role is SystemPlacement.OWN_TURN
+    assert raw["summarize"]["thinking_kwarg"] == "enable_thinking"
+    assert "turns" not in raw["summarize"], "the markers are the model's own template now"
 
 
 def changed_lines(before: str, after: str) -> int:

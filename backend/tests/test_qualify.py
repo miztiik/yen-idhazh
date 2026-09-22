@@ -18,7 +18,6 @@ from conftest import a_request, a_server
 from idhazh.contracts.knobs.evaluation import EvaluationConfig
 from idhazh.contracts.knobs.run import RunConfig
 from idhazh.contracts.knobs.summarize import SummarizeConfig
-from idhazh.contracts.knobs.turns import TurnsConfig
 from idhazh.contracts.qualification import (
     CanaryObservation,
     CandidateIdentity,
@@ -194,7 +193,7 @@ def a_passing_budget() -> qualify.Budget:
 def outcomes_of(
     shard: QualificationShard,
     *,
-    turns: TurnsConfig | None = None,
+    thinking: bool = False,
     server: dict[str, Any] | None = None,
 ) -> dict[GateName, Any]:
     _, gates = qualify.gates(
@@ -205,7 +204,7 @@ def outcomes_of(
         run=RUN,
         budget_=a_passing_budget(),
         required_canaries=len(CANARY_NAMES),
-        turns=turns,
+        thinking=thinking,
     )
     return {outcome.gate: outcome for outcome in gates}
 
@@ -271,21 +270,6 @@ def test_a_reasoning_channel_fails_the_reasoning_gate() -> None:
     assert outcomes_of(broken)[GateName.REASONING_LEAKAGE].status is GateStatus.FAILED
 
 
-def thinks() -> TurnsConfig:
-    """An envelope that declares a closing marker, built rather than committed.
-
-    The incumbent declares none, so an assertion against `config/` would say
-    what is configured today rather than what the gate does.
-    """
-    return TurnsConfig(
-        turn_opening="<|im_start|>$role\n",
-        turn_closing="<|im_end|>\n",
-        reply_opening="<|im_start|>assistant\n",
-        reply_opening_thinking="<|im_start|>assistant\n<think>\n",
-        thinking_close="</think>",
-    )
-
-
 def test_reasoning_that_survived_the_discard_still_fails_the_gate() -> None:
     """The third refusal's other case, and it counts exactly as it did before.
 
@@ -296,7 +280,7 @@ def test_reasoning_that_survived_the_discard_still_fails_the_gate() -> None:
     nobody runs.
     """
     broken = with_one_bad_call(a_passing_shard(), reasoning_channel_used=True)
-    outcome = outcomes_of(broken, turns=thinks())[GateName.REASONING_LEAKAGE]
+    outcome = outcomes_of(broken, thinking=True)[GateName.REASONING_LEAKAGE]
 
     assert outcome.status is GateStatus.FAILED
     assert "discard that did not happen" in outcome.detail
@@ -307,7 +291,7 @@ def test_the_gate_says_which_failure_it_found_on_each_case() -> None:
     broken = with_one_bad_call(a_passing_shard(), think_block_words=12)
 
     assert "the flag did not take" in outcomes_of(broken)[GateName.REASONING_LEAKAGE].detail
-    assert outcomes_of(a_passing_shard(), turns=thinks())[
+    assert outcomes_of(a_passing_shard(), thinking=True)[
         GateName.REASONING_LEAKAGE
     ].status is GateStatus.PASSED
 

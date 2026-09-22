@@ -77,16 +77,16 @@ from idhazh.contracts.article import Article
 from idhazh.contracts.base import derive_text_digest
 from idhazh.contracts.corpus import ChatRole, CorpusRow
 from idhazh.contracts.knobs.models import ModelsConfig
-from idhazh.contracts.knobs.turns import TurnsConfig
 from idhazh.elements import element_table
 from idhazh.extract import TOKENS_PER_WORD, approx_tokens, truncate_to_tokens
 from idhazh.llm.server import (
     Completion,
+    TurnMarkers,
     completion_url,
+    derive_turn_markers,
     post,
     props,
     server_argv,
-    turn_markers,
     turn_markers_digest,
     window,
 )
@@ -338,7 +338,7 @@ def common_prefix(left: Sequence[int], right: Sequence[int]) -> int:
     return index
 
 
-def describe(endpoint: str, *, digest: str, turns: TurnsConfig) -> dict[str, Any]:
+def describe(endpoint: str, *, digest: str, markers: TurnMarkers) -> dict[str, Any]:
     """What the server says about itself, beside the weights it was handed.
 
     The chat template no longer renders these two prompts and is still recorded,
@@ -365,7 +365,7 @@ def describe(endpoint: str, *, digest: str, turns: TurnsConfig) -> dict[str, Any
             derive_text_digest(template) if isinstance(template, str) else None
         ),
         "chat_template_characters": len(template) if isinstance(template, str) else None,
-        "turn_markers_sha256": turn_markers_digest(turns),
+        "turn_markers_sha256": turn_markers_digest(markers),
     }
 
 
@@ -650,6 +650,7 @@ def run_item(
     label_cap: int,
     summarize_and_plan_cap: int,
     question_tokens: int | None,
+    markers: TurnMarkers,
 ) -> Reading:
     article = sample.article
     model = models.summarize
@@ -660,7 +661,7 @@ def run_item(
         model_id=model.id,
         server=model.server,
         request=model.request,
-        turns=model.turns,
+        markers=markers,
         prompt_config=app.summarize,
     )
     if label_cap:
@@ -671,7 +672,7 @@ def run_item(
     second = build_summarize_and_plan_request(
         first,
         one.content,
-        turns=model.turns,
+        markers=markers,
         source_words=article.band_source_words,
         brief=article.brief,
     )
@@ -712,6 +713,7 @@ def pick_samples(
     tokenizer: Tokenizer,
     wanted: int,
     prompt_ceiling: int,
+    markers: TurnMarkers,
 ) -> list[tuple[Sample, int]]:
     """The longest corpus articles whose label-call prompt still fits.
 
@@ -730,7 +732,7 @@ def pick_samples(
             model_id=model.id,
             server=model.server,
             request=model.request,
-            turns=model.turns,
+            markers=markers,
             prompt_config=app.summarize,
         )
         tokens = tokenizer.count(str(request["prompt"]))
@@ -925,7 +927,8 @@ def main(argv: list[str] | None = None) -> int:
         endpoint = completion_url(base)
         timeout = args.request_minutes * 60.0
         tokenizer = Tokenizer(base=base, timeout=60.0)
-        described = describe(endpoint, digest=digest, turns=model.turns)
+        markers = derive_turn_markers(base, entry=model, timeout=timeout)
+        described = describe(endpoint, digest=digest, markers=markers)
 
         # What one item needs after the label call's prompt: the label call's decode, the
         # trailing turn and the summarize-and-plan call's decode. The summarize-and-plan call's
@@ -938,7 +941,6 @@ def main(argv: list[str] | None = None) -> int:
         # question's own text, because the difference between the two IS the
         # marker floor row #3e cannot go below - and measuring the report with
         # the rendered number makes that floor come out negative.
-        markers = turn_markers(model.turns)
         question = summarize_and_plan_user_turn(app.summarize)
         rendered_turn = tokenizer.count(markers.turn("user", question))
         question_tokens = tokenizer.tokenize(question)
@@ -969,6 +971,7 @@ def main(argv: list[str] | None = None) -> int:
                 tokenizer=tokenizer,
                 wanted=wanted,
                 prompt_ceiling=ceiling,
+                markers=markers,
             )
             if wanted
             else []
@@ -986,7 +989,7 @@ def main(argv: list[str] | None = None) -> int:
                     model_id=model.id,
                     server=model.server,
                     request=model.request,
-                    turns=model.turns,
+                    markers=markers,
                     prompt_config=app.summarize,
                 )["prompt"]
             )
@@ -1026,6 +1029,7 @@ def main(argv: list[str] | None = None) -> int:
                     label_cap=0 if uncapped else args.decode_cap,
                     summarize_and_plan_cap=args.decode_cap,
                     question_tokens=trailing,
+                    markers=markers,
                 )
             )
     finally:

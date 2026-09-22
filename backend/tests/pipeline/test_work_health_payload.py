@@ -37,7 +37,12 @@ from idhazh.stages.work import stage_work
 from idhazh.telemetry import host
 from idhazh.telemetry.record import HEALTH_SUFFIX
 
-from ._builders import _work_stage, captured_article_fetch, closed_loopback_endpoint, plan
+from ._builders import (
+    _work_stage,
+    a_server_that_refuses_every_completion,
+    captured_article_fetch,
+    plan,
+)
 from .test_degrade import headless_page_fetch, headless_plan
 
 pytestmark = pytest.mark.slow
@@ -317,13 +322,14 @@ def test_an_item_the_shard_abandoned_leaves_a_row_too(
     )
     monkeypatch.setattr(common, "VAR_ROOT", tmp_path / "run")
 
-    stage_work(
-        run_plan,
-        settings=out_of_time,
-        scorer=None,
-        fetcher=captured_article_fetch,
-        model_endpoint=closed_loopback_endpoint(),
-    )
+    with a_server_that_refuses_every_completion() as server:
+        stage_work(
+            run_plan,
+            settings=out_of_time,
+            scorer=None,
+            fetcher=captured_article_fetch,
+            model_endpoint=server.endpoint,
+        )
 
     written = rows(tmp_path / "run" / run_plan.date / "items")
 

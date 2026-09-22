@@ -13,6 +13,7 @@ is easy; a summarizer that cannot be talked out of its shape is the product.
 from __future__ import annotations
 
 import ast
+import dataclasses
 import json
 import re
 import socket
@@ -32,6 +33,7 @@ from conftest import (
     RecordedEndpoint,
     a_request,
     a_server,
+    committed_markers,
     llama_server_flags,
     read_text,
 )
@@ -57,22 +59,20 @@ from idhazh.contracts.knobs.summarize import (
     SummarizeConfig,
     SummaryBand,
 )
-from idhazh.contracts.knobs.turns import SystemPlacement, TurnsConfig
 from idhazh.contracts.sources import SourceForm
 from idhazh.contracts.summary import LengthAction, Summary, SummaryStatus
 from idhazh.evals.metrics import verbatim_run
 from idhazh.llm.server import (
     PROBE_ANSWER,
-    PROBE_SYSTEM,
-    PROBE_USER,
     UNCAPPED_N_PREDICT,
     Completion,
     ProbeRefusedError,
+    SystemPlacement,
+    TurnMarkers,
     answer_span,
     completion_payload,
     continued_completion_payload,
     decoding_still_constrains,
-    gguf_architecture,
     grammar_completion_payload,
     is_context_exceeded,
     one_document_schema,
@@ -82,14 +82,7 @@ from idhazh.llm.server import (
     render_prompt,
     request_payload,
     server_argv,
-    the_prefix_cache_is_live,
-    the_render_agrees,
-    the_weights_are_the_declared_ones,
-    the_window_is_inside_the_trained_window,
     thinking_span,
-    trained_context,
-    turn_markers,
-    window,
 )
 from idhazh.sanitize import (
     FENCE_CLOSE,
@@ -133,26 +126,30 @@ def article(name: str = "ok") -> Article:
     return Article.from_json(read_text(CONTRACT_FIXTURES_DIR / "article" / f"{name}.json"))
 
 
-def configured_turns() -> TurnsConfig:
-    """The turn envelope the committed entry declares, read the way a stage reads it."""
-    return config.load(CONFIG_DIR).models.summarize.turns
+def committed_envelope() -> TurnMarkers:
+    """The turn envelope the incumbent's own template writes."""
+    return committed_markers()
 
 
-def built_turns(**overrides: Any) -> TurnsConfig:
-    """A turn envelope built for one question, never the committed one.
+def built_envelope(**overrides: object) -> TurnMarkers:
+    """A turn envelope built for one question, never the incumbent's.
 
-    A test about a placement the incumbent does not use has to build the entry
-    that uses it - the committed file is one model's answer, and asserting
-    against it would say what is configured today rather than what the code does
-    (`CLAUDE.md` section 13).
+    A test about a placement the incumbent does not use has to build the
+    envelope that uses it - the committed model is one template's answer, and
+    asserting against it would say what is configured today rather than what the
+    code does (`CLAUDE.md` section 13).
     """
-    declared: dict[str, Any] = {
-        "turn_opening": "<|im_start|>$role\n",
+    declared: dict[str, object] = {
+        "turn_opening": Template("<|im_start|>${role}\n"),
         "turn_closing": "<|im_end|>\n",
         "reply_opening": "<|im_start|>assistant\n",
         "reply_opening_thinking": "<|im_start|>assistant\n<think>\n",
+        "system_role": SystemPlacement.OWN_TURN,
+        "system_joiner": "",
+        "thinking_close": None,
+        "thinking_kwarg": "enable_thinking",
     }
-    return TurnsConfig.model_validate(declared | overrides)
+    return TurnMarkers(**(declared | overrides))  # type: ignore[arg-type]
 
 
 def completion(name: str) -> Completion:
@@ -203,7 +200,7 @@ def summarised(name: str, source: str = "ok") -> Summary:
 def test_the_system_prompt_never_carries_the_article() -> None:
     """Decision 1: article text goes in the user turn, or the fence means nothing."""
     payload = build_request(
-        article(), model_id="m", request=a_request(), turns=built_turns()
+        article(), model_id="m", request=a_request(), markers=built_envelope()
     )
     system = payload["messages"][0]
     assert system["role"] == "system"
@@ -244,7 +241,7 @@ def test_decoding_parameters_come_from_config_and_nowhere_else() -> None:
         user="u",
         output_schema={},
         request=a_request(),
-        turns=built_turns(),
+        markers=built_envelope(),
     )
     assert payload["temperature"] == 0.0
     assert payload["top_p"] == 1.0
@@ -269,7 +266,7 @@ def test_the_chat_route_sends_no_token_cap_on_either_envelope() -> None:
         user="u",
         output_schema={},
         request=request,
-        turns=built_turns(),
+        markers=built_envelope(),
     )
     loud = request_payload(
         model_id="m",
@@ -277,7 +274,7 @@ def test_the_chat_route_sends_no_token_cap_on_either_envelope() -> None:
         user="u",
         output_schema={},
         request=request,
-        turns=built_turns(thinking_close="</think>"),
+        markers=built_envelope(thinking_close="</think>"),
     )
 
     for body in (quiet, loud):
@@ -293,7 +290,7 @@ def test_thinking_is_off_in_the_request() -> None:
         user="u",
         output_schema={},
         request=a_request(),
-        turns=configured_turns(),
+        markers=committed_envelope(),
     )
     assert payload["chat_template_kwargs"] == {"enable_thinking": False}
 
@@ -306,7 +303,7 @@ def test_the_declared_closing_marker_is_what_asks_the_template_to_think() -> Non
         user="u",
         output_schema={},
         request=a_request(),
-        turns=built_turns(thinking_close="</think>"),
+        markers=built_envelope(thinking_close="</think>"),
     )
     assert payload["chat_template_kwargs"] == {"enable_thinking": True}
 
@@ -325,7 +322,7 @@ def test_a_template_that_reads_no_keyword_is_sent_none() -> None:
         user="u",
         output_schema={},
         request=a_request(),
-        turns=built_turns(thinking_kwarg=None),
+        markers=built_envelope(thinking_kwarg=None),
     )
     assert "chat_template_kwargs" not in payload
 
@@ -338,7 +335,7 @@ def test_the_keyword_the_request_carries_is_the_one_the_entry_names() -> None:
         user="u",
         output_schema={},
         request=a_request(),
-        turns=built_turns(thinking_kwarg="reasoning"),
+        markers=built_envelope(thinking_kwarg="reasoning"),
     )
     assert payload["chat_template_kwargs"] == {"reasoning": False}
 
@@ -351,7 +348,7 @@ def test_the_output_shape_is_enforced_by_the_decoder() -> None:
         user="u",
         output_schema=output_schema(),
         request=a_request(),
-        turns=built_turns(),
+        markers=built_envelope(),
     )
     assert payload["response_format"]["type"] == "json_schema"
     assert payload["response_format"]["json_schema"]["strict"] is True
@@ -665,11 +662,10 @@ class TestWhereTheSystemTextGoes:
         one states the expression, so a refactor of the branch fails here with a
         diff a person can read rather than with two long strings.
         """
-        turns = configured_turns()
-        markers = turn_markers(turns)
+        markers = committed_envelope()
 
-        assert turns.system_role is SystemPlacement.OWN_TURN
-        assert render_prompt(system="S", user="U", turns=turns) == (
+        assert markers.system_role is SystemPlacement.OWN_TURN
+        assert render_prompt(system="S", user="U", markers=markers) == (
             markers.turn("system", "S") + markers.turn("user", "U") + markers.opening()
         )
 
@@ -680,10 +676,11 @@ class TestWhereTheSystemTextGoes:
         this row exists for has no entry in `config/` and would otherwise be
         untested until the day a model needed it.
         """
-        folded = built_turns(system_role="fold_into_first_user", system_joiner="\n\n")
-        markers = turn_markers(folded)
+        markers = built_envelope(
+            system_role=SystemPlacement.FOLD_INTO_FIRST_USER, system_joiner="\n\n"
+        )
 
-        rendered = render_prompt(system="S", user="U", turns=folded)
+        rendered = render_prompt(system="S", user="U", markers=markers)
 
         assert rendered == markers.turn("user", "S\n\nU") + markers.opening()
         assert "system" not in rendered, "no system role header is written at all"
@@ -708,36 +705,37 @@ class TestWhereTheSystemTextGoes:
         a digest that is blind to how their turns were written, and case 1 of
         `prove_the_entry` is what catches a placement declared wrong.
         """
-        own = configured_turns()
-        folded = TurnsConfig.model_validate(
-            own.model_dump(mode="json")
-            | {"system_role": "fold_into_first_user", "system_joiner": "\n\n"}
+        own = committed_envelope()
+        folded = dataclasses.replace(
+            own,
+            system_role=SystemPlacement.FOLD_INTO_FIRST_USER,
+            system_joiner="\n\n",
         )
 
-        assert render_prompt(system="S", user="U", turns=own) != render_prompt(
-            system="S", user="U", turns=folded
+        assert render_prompt(system="S", user="U", markers=own) != render_prompt(
+            system="S", user="U", markers=folded
         )
-        assert calls.prompt_inputs(turns=own) != calls.prompt_inputs(turns=folded), (
+        assert calls.prompt_inputs(markers=own) != calls.prompt_inputs(
+            markers=folded
+        ), (
             "the digest run's prompt_sha256 renders through the envelope"
         )
-        assert own.turn_opening not in prompt_inputs(), (
+        assert own.turn_opening.template not in prompt_inputs(), (
             "the qualification run's stamp carries no turn marker, so no envelope "
             "field can move it"
         )
 
-    def test_a_placement_nobody_declared_is_refused_rather_than_guessed(self) -> None:
-        """Two topologies, and the field is closed over exactly those two.
+    def test_only_two_placements_exist_to_be_derived(self) -> None:
+        """Two topologies, and the derivation is closed over exactly those two.
 
-        A free-form string here would be a template language in config, and the
-        third value somebody wrote would render a prompt with no turn structure
-        that the grammar still accepts.
+        A third would need a rule this project does not have, so the derivation
+        refuses it at server start rather than rendering a prompt with no turn
+        structure that the grammar still accepts.
         """
         assert {placement.value for placement in SystemPlacement} == {
             "own_turn",
             "fold_into_first_user",
         }
-        with pytest.raises(ValidationError, match="own_turn"):
-            built_turns(system_role="behind_a_prefix")
 
 
 def test_exactly_one_function_spells_a_llama_server_flag() -> None:
@@ -996,7 +994,7 @@ def test_no_placeholder_survives_into_a_rendered_prompt() -> None:
 def test_a_recorded_brief_uses_the_brief_band_even_when_the_source_is_longer() -> None:
     source = article().model_copy(update={"brief": True, "word_count": 190})
     payload = build_request(
-        source, model_id="m", request=a_request(), turns=built_turns()
+        source, model_id="m", request=a_request(), markers=built_envelope()
     )
     system = payload["messages"][0]["content"]
 
@@ -1021,7 +1019,7 @@ def test_a_cut_long_read_is_still_asked_for_a_long_read_summary() -> None:
         }
     )
     system = build_request(
-        source, model_id="m", request=a_request(), turns=built_turns()
+        source, model_id="m", request=a_request(), markers=built_envelope()
     )["messages"][0]["content"]
     assert f"{top.target_words_min} to {top.target_words_max} words" in system
 
@@ -1031,7 +1029,7 @@ def test_an_article_written_before_the_field_keeps_its_post_cap_band() -> None:
     ask = SummarizeConfig()
     older = article().model_copy(update={"word_count": 1900, "source_word_count": None})
     system = build_request(
-        older, model_id="m", request=a_request(), turns=built_turns()
+        older, model_id="m", request=a_request(), markers=built_envelope()
     )["messages"][0]["content"]
     band = ask.band_for(1900)
     assert f"{band.target_words_min} to {band.target_words_max} words" in system
@@ -1590,12 +1588,12 @@ class TestTwoSpansOnOneCall:
             output_schema=output_schema(),
             server=a_server(),
             request=a_request(),
-            turns=self.turns(),
+            markers=self.markers(),
             max_answer_tokens=ANSWER_BUDGET,
         )
 
-    def turns(self) -> TurnsConfig:
-        return built_turns(thinking_close="</think>")
+    def markers(self) -> TurnMarkers:
+        return built_envelope(thinking_close="</think>")
 
     def test_span_one_drops_the_grammar_and_stops_at_the_declared_marker(self) -> None:
         """What is sent first: the same prompt, unconstrained, uncapped, stopped.
@@ -1605,7 +1603,7 @@ class TestTwoSpansOnOneCall:
         turning a flag on could only ever have been a no-op or a total failure.
         """
         answer = self.answer_body()
-        span = thinking_span(answer, turns=self.turns())
+        span = thinking_span(answer, markers=self.markers())
 
         assert "json_schema" not in span, "a schema would make a think opener illegal"
         assert span["n_predict"] == UNCAPPED_N_PREDICT
@@ -1621,7 +1619,7 @@ class TestTwoSpansOnOneCall:
         marker is new.
         """
         answer = self.answer_body()
-        second = answer_span(answer, thought="weighing it up", turns=self.turns())
+        second = answer_span(answer, thought="weighing it up", markers=self.markers())
 
         assert second["prompt"] == answer["prompt"] + "weighing it up</think>"
         assert second["json_schema"] == answer["json_schema"], "the shape is back on"
@@ -1636,8 +1634,8 @@ class TestTwoSpansOnOneCall:
         anywhere saying what was cut.
         """
         answer = self.answer_body()
-        span = thinking_span(answer, turns=self.turns())
-        second = answer_span(answer, thought="x", turns=self.turns())
+        span = thinking_span(answer, markers=self.markers())
+        second = answer_span(answer, thought="x", markers=self.markers())
 
         assert answer["n_predict"] == ANSWER_BUDGET
         assert span["n_predict"] == UNCAPPED_N_PREDICT
@@ -1665,7 +1663,7 @@ class TestTwoSpansOnOneCall:
         never decodes inside an open reasoning block.
         """
         answer = self.answer_body()
-        ran_on = answer_span(answer, thought="a think that never closed", turns=self.turns())
+        ran_on = answer_span(answer, thought="a think that never closed", markers=self.markers())
 
         assert ran_on["prompt"].endswith("</think>")
 
@@ -1676,13 +1674,13 @@ class TestTwoSpansOnOneCall:
         else's weights, which is the class of defect the whole envelope exists
         to end.
         """
-        quiet = built_turns()
+        quiet = built_envelope()
         answer = self.answer_body()
 
         with pytest.raises(ValueError, match="declare no thinking_close"):
-            thinking_span(answer, turns=quiet)
+            thinking_span(answer, markers=quiet)
         with pytest.raises(ValueError, match="declare no thinking_close"):
-            answer_span(answer, thought="x", turns=quiet)
+            answer_span(answer, thought="x", markers=quiet)
 
     def test_the_pair_is_reported_as_one_reply_carrying_the_answers_words(self) -> None:
         """What is thrown away, and where.
@@ -1724,8 +1722,8 @@ class TestAConstrainedCallerGetsBothSpans:
     recorded-reply suite.
     """
 
-    def turns(self) -> TurnsConfig:
-        return built_turns(thinking_close="\n</think>\n\n")
+    def markers(self) -> TurnMarkers:
+        return built_envelope(thinking_close="\n</think>\n\n")
 
     def grammar_body(self, **overrides: Any) -> dict[str, Any]:
         declared: dict[str, Any] = {
@@ -1735,7 +1733,7 @@ class TestAConstrainedCallerGetsBothSpans:
             "grammar": 'root ::= "YES" | "NO" | "UNCLEAR"',
             "server": a_server(),
             "request": a_request(),
-            "turns": self.turns(),
+            "markers": self.markers(),
             "max_answer_tokens": 4,
             "first_token_alternatives": 3,
         }
@@ -1749,7 +1747,7 @@ class TestAConstrainedCallerGetsBothSpans:
             output_schema=output_schema(),
             server=a_server(),
             request=a_request(),
-            turns=self.turns(),
+            markers=self.markers(),
             max_answer_tokens=ANSWER_BUDGET,
         )
 
@@ -1762,7 +1760,7 @@ class TestAConstrainedCallerGetsBothSpans:
         at every position of a span nobody reads a distribution off.
         """
         answer = self.grammar_body()
-        span = thinking_span(answer, turns=self.turns())
+        span = thinking_span(answer, markers=self.markers())
 
         assert "grammar" in answer, "the fixture is only meaningful if the answer carries one"
         assert "grammar" not in span, "constrained to three words, span one cannot think"
@@ -1779,8 +1777,8 @@ class TestAConstrainedCallerGetsBothSpans:
         """
         answer = self.grammar_body(request=a_request(temperature=0.0))
 
-        stated = thinking_span(answer, turns=self.turns(), temperature=0.7)
-        carried = thinking_span(answer, turns=self.turns())
+        stated = thinking_span(answer, markers=self.markers(), temperature=0.7)
+        carried = thinking_span(answer, markers=self.markers())
 
         assert answer["temperature"] == 0.0
         assert stated["temperature"] == 0.7, "the caller's number, not the answer's"
@@ -1789,8 +1787,8 @@ class TestAConstrainedCallerGetsBothSpans:
     def test_the_grammar_is_applied_at_the_answer_position_and_not_at_position_zero(self) -> None:
         """Constraining the first decoded token forces an answer where reasoning starts."""
         answer = self.grammar_body()
-        span = thinking_span(answer, turns=self.turns())
-        second = answer_span(answer, thought="both wires name one filing", turns=self.turns())
+        span = thinking_span(answer, markers=self.markers())
+        second = answer_span(answer, thought="both wires name one filing", markers=self.markers())
 
         assert "grammar" not in span
         assert second["grammar"] == answer["grammar"], "the control is back on, one span later"
@@ -1838,12 +1836,12 @@ class TestAConstrainedCallerGetsBothSpans:
 
         with RecordedEndpoint(200, first.encode("utf-8"), second.encode("utf-8")) as served:
             thought = post(
-                thinking_span(answer, turns=self.turns(), temperature=0.7),
+                thinking_span(answer, markers=self.markers(), temperature=0.7),
                 endpoint=served.endpoint,
                 timeout=5.0,
             )
             verdict = post(
-                answer_span(answer, thought=thought.content, turns=self.turns()),
+                answer_span(answer, thought=thought.content, markers=self.markers()),
                 endpoint=served.endpoint,
                 timeout=5.0,
             )
@@ -1899,7 +1897,7 @@ class TestTheThinkingReachesNothing:
         thought, and none of it is replayed: a prompt is the one place a model's
         own words could steer the next decode.
         """
-        turns = built_turns(thinking_close="</think>")
+        markers = built_envelope(thinking_close="</think>")
         first = completion_payload(
             model_id="m",
             system="S",
@@ -1907,7 +1905,7 @@ class TestTheThinkingReachesNothing:
             output_schema=output_schema(),
             server=a_server(),
             request=a_request(),
-            turns=turns,
+            markers=markers,
             max_answer_tokens=900,
         )
         answer = split_thinking(self.recorded().content)[0]
@@ -1917,14 +1915,13 @@ class TestTheThinkingReachesNothing:
             reply=answer,
             user="and then?",
             output_schema=output_schema(),
-            turns=turns,
+            markers=markers,
             max_answer_tokens=900,
         )
 
         assert answer in second["prompt"]
         assert self.thought() not in second["prompt"]
         appended = second["prompt"][len(str(first["prompt"])) :]
-        markers = turn_markers(turns)
         assert appended == (
             answer
             + markers.turn_closing
@@ -2926,8 +2923,20 @@ def refused_endpoint() -> str:
 
 
 def summarize_against(endpoint: str) -> Summary:
+    """One article at an endpoint, with the start-up question already answered.
+
+    The markers come off the committed renderings rather than off this endpoint,
+    which is what lets these cases be about the completion call. A server that
+    is dead or answering errors settles nothing at start-up, so a stage that
+    derived here would report every one of them as an unread template and none
+    of them as the named item failure each of these tests is the oracle for.
+    """
     return _summarize_one(
-        article(), config.load(CONFIG_DIR), endpoint=endpoint, run_id="2026-08-25-1"
+        article(),
+        config.load(CONFIG_DIR),
+        markers=committed_markers(),
+        endpoint=endpoint,
+        run_id="2026-08-25-1",
     )
 
 
@@ -3039,25 +3048,18 @@ def probe_fixture(name: str) -> dict[str, Any]:
     return loaded
 
 
-class TestTheServerProvesTheEntry:
-    """The entry claims; these five cases make each claim a fact.
+class TestTheServerSettlesTheEntry:
+    """What the server settles before the first item, and how each one fails.
 
-    Every case is driven by a constructed or built value and nothing here touches
-    the network (Guardrail #7). Every case has both halves: with the agreeing
-    value it passes, and with one value changed it refuses and the message names
-    both sides. A check nobody has made fail is a check nobody has tested.
+    Every case is driven by a constructed value and nothing here touches the
+    network (Guardrail #7). Both halves are proved: with the agreeing value it
+    passes, and with one value changed it refuses and the message names both
+    sides. A check nobody has made fail is a check nobody has tested.
 
-    **These fixtures were not captured off a live server** - there are no weights
-    on the machine that wrote them, and each file says so and says how to capture
-    it. So this class proves the comparison rules and the config-derived prompt;
-    tokenizer agreement is proved solely by the live probe on a box with weights.
+    The turn markers have their own module,
+    `backend/tests/contracts/test_turn_envelope.py`, because the derivation is a
+    contract about somebody else's template rather than a check on a reply.
     """
-
-    def render(self, name: str) -> dict[str, list[int]]:
-        return dict(probe_fixture("apply-template-probe.json")[name])
-
-    def models(self, name: str) -> dict[str, Any]:
-        return dict(probe_fixture("props-probe.json")[name])
 
     def test_a_probe_fixture_that_hides_where_it_came_from_is_refused(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -3083,74 +3085,6 @@ class TestTheServerProvesTheEntry:
         )
         with pytest.raises(ValueError, match="does not say how to capture it"):
             probe_fixture("mute.json")
-
-    # Case 1 - the render agrees.
-
-    def test_the_committed_markers_render_the_probe_conversation(self) -> None:
-        """Ties the fixture to config: the recorded template is what the entry renders."""
-        entry = config.load(CONFIG_DIR).models.summarize
-        recorded = probe_fixture("apply-template-probe.json")
-
-        assert (
-            render_prompt(system=PROBE_SYSTEM, user=PROBE_USER, turns=entry.turns)
-            == recorded["template_reply"]["prompt"]
-        )
-
-    def test_a_render_that_agrees_lets_the_run_start(self) -> None:
-        agrees = self.render("agrees")
-
-        the_render_agrees(ours=agrees["ours"], theirs=agrees["theirs"])
-
-    def test_a_server_render_that_leads_by_one_sequence_token_still_agrees(self) -> None:
-        """Why ids and not bytes: the runtime adds that token back for us."""
-        leads = self.render("agrees_under_one_leading_sequence_token")
-
-        the_render_agrees(ours=leads["ours"], theirs=leads["theirs"])
-
-    def test_a_render_that_disagrees_refuses_the_run(self) -> None:
-        differs = self.render("disagrees_on_the_opening_marker")
-
-        with pytest.raises(ProbeRefusedError) as refusal:
-            the_render_agrees(ours=differs["ours"], theirs=differs["theirs"])
-
-        said = str(refusal.value)
-        assert "the turn envelope does not render" in said
-        assert "10 tokens" in said and "first difference at index 0" in said
-
-    # Case 2 - the prefix cache is live.
-
-    def test_a_second_call_that_reused_the_prefix_lets_the_run_start(self) -> None:
-        the_prefix_cache_is_live(
-            first=Completion(content="", prompt_tokens=40),
-            second=Completion(content="", prompt_tokens=52, cached_tokens=44),
-        )
-
-    def test_a_reuse_short_of_the_first_prompt_still_lets_the_run_start(self) -> None:
-        """The numbers a real server produced, which the first version refused.
-
-        llama.cpp restores a slot from a context checkpoint written mid-prompt,
-        so the count it reuses is bounded by where that checkpoint sits and not
-        by the previous prompt's length. Measured 2026-09-14, GitHub
-        `ubuntu-latest`, llama.cpp `b10598`, Qwen3.5-9B-Q4_K_M, run 34820209002:
-        31 prefilled, checkpoint at position 26, 27 of the second prompt's 60
-        reused, 33 evaluated. Prefill fell; the case that wanted 31 refused all
-        four shards and the day published nothing.
-        """
-        the_prefix_cache_is_live(
-            first=Completion(content="", prompt_tokens=31),
-            second=Completion(content="", prompt_tokens=60, cached_tokens=27),
-        )
-
-    def test_a_second_call_that_re_read_the_prefix_refuses_the_run(self) -> None:
-        with pytest.raises(ProbeRefusedError) as refusal:
-            the_prefix_cache_is_live(
-                first=Completion(content="", prompt_tokens=40),
-                second=Completion(content="", prompt_tokens=52, cached_tokens=0),
-            )
-
-        said = str(refusal.value)
-        assert "the prompt cache is not holding the prefix" in said
-        assert "40 tokens" in said and "reused 0" in said
 
     # Case 3 - constrained decoding still constrains.
 
@@ -3178,72 +3112,6 @@ class TestTheServerProvesTheEntry:
         assert "the decoder is not held to the schema it was given" in said
         assert json.dumps(only, sort_keys=True) in said
         assert "Sure! Here is the answer." in said
-
-    # Case 4 - the loaded weights are the declared weights.
-
-    def test_weights_that_declare_the_entrys_architecture_let_the_run_start(
-        self, tmp_path: Path
-    ) -> None:
-        entry = config.load(CONFIG_DIR).models.summarize
-        weights = tmp_path / "built.gguf"
-        weights.write_bytes(_built_weights(entry.arch))
-
-        assert gguf_architecture(weights) == entry.arch
-        the_weights_are_the_declared_ones(declared=entry.arch, reported=gguf_architecture(weights))
-
-    def test_weights_that_declare_another_architecture_refuse_the_run(
-        self, tmp_path: Path
-    ) -> None:
-        """A repackaged file under a familiar name: alias, path and digest all agree."""
-        entry = config.load(CONFIG_DIR).models.summarize
-        weights = tmp_path / "built.gguf"
-        weights.write_bytes(_built_weights("llama"))
-
-        with pytest.raises(ProbeRefusedError) as refusal:
-            the_weights_are_the_declared_ones(
-                declared=entry.arch, reported=gguf_architecture(weights)
-            )
-
-        said = str(refusal.value)
-        assert "the weights declare architecture 'llama'" in said
-        assert f"models.summarize declares '{entry.arch}'" in said
-
-    def test_a_file_that_is_not_weights_at_all_refuses_the_run(self, tmp_path: Path) -> None:
-        """An HTTP error body saved under the weights name is the real version of this."""
-        weights = tmp_path / "built.gguf"
-        weights.write_bytes(b'{"error": "not found"}')
-
-        with pytest.raises(ProbeRefusedError) as refusal:
-            gguf_architecture(weights)
-
-        assert "do not say which architecture they are" in str(refusal.value)
-
-    # Case 5 - the window is inside the trained window.
-
-    def test_a_window_inside_the_trained_window_lets_the_run_start(self) -> None:
-        entry = config.load(CONFIG_DIR).models.summarize
-        trained = trained_context(self.models("inside_the_trained_window"))
-
-        assert trained == 262144
-        the_window_is_inside_the_trained_window(n_ctx=window(entry.server), trained=trained)
-
-    def test_a_window_past_the_trained_window_refuses_the_run(self) -> None:
-        trained = trained_context(self.models("a_short_native_window"))
-
-        with pytest.raises(ProbeRefusedError) as refusal:
-            the_window_is_inside_the_trained_window(n_ctx=49152, trained=trained)
-
-        said = str(refusal.value)
-        assert "--ctx-size is 49152" in said and "trained for 32768" in said
-
-    def test_a_server_that_names_no_trained_window_refuses_the_run(self) -> None:
-        """Case 5 has no skip either. An unread proof is not a proof."""
-        trained = trained_context(self.models("a_model_list_that_names_no_trained_window"))
-
-        with pytest.raises(ProbeRefusedError) as refusal:
-            the_window_is_inside_the_trained_window(n_ctx=49152, trained=trained)
-
-        assert "reports no trained context length" in str(refusal.value)
 
     # The contract half: a required field on the declared shape, never on the
     # recorded one.
@@ -3279,16 +3147,16 @@ def test_every_marker_the_committed_entry_declares_is_one_the_boundary_strips() 
     the committed file rather than restated here: an entry edited to a family
     the pattern does not know fails at the edit.
     """
-    turns = configured_turns()
+    markers = committed_envelope()
 
     for field, marker in (
-        ("turn_opening", Template(turns.turn_opening).safe_substitute(role="user")),
-        ("turn_closing", turns.turn_closing),
-        ("reply_opening", turns.reply_opening),
-        ("reply_opening_thinking", turns.reply_opening_thinking),
+        ("turn_opening", markers.turn_opening.safe_substitute(role="user")),
+        ("turn_closing", markers.turn_closing),
+        ("reply_opening", markers.reply_opening),
+        ("reply_opening_thinking", markers.reply_opening_thinking),
     ):
         assert why_a_forged_turn_would_survive(marker) is None, (
-            f"models.summarize.turns.{field} is {marker!r}, and "
+            f"the derived {field} is {marker!r}, and "
             f"{why_a_forged_turn_would_survive(marker)}"
         )
 
@@ -3361,8 +3229,8 @@ def test_the_incumbents_own_reply_opening_is_what_needed_the_widening() -> None:
     and `</think>` are markers this very model would honour - and the pattern
     knew neither until 2026-09-14, because neither is delimited by a pipe.
     """
-    turns = configured_turns()
+    markers = committed_envelope()
 
-    assert "<think>" in turns.reply_opening and "</think>" in turns.reply_opening
-    assert "<think>" not in sanitize(turns.reply_opening)
-    assert "</think>" not in sanitize(turns.reply_opening)
+    assert "<think>" in markers.reply_opening and "</think>" in markers.reply_opening
+    assert "<think>" not in sanitize(markers.reply_opening)
+    assert "</think>" not in sanitize(markers.reply_opening)

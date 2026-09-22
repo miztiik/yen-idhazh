@@ -1,16 +1,13 @@
-"""Does the server the run is about to use agree with the entry describing it?"""
+"""Read the turn markers off the server the run is about to use, and check the decoder."""
 
 from __future__ import annotations
 
 import argparse
-import os
 from pathlib import Path
 
 from idhazh import config
 from idhazh.classify.calls import summarize_and_plan_schema
 from idhazh.llm.server import prove_the_entry, request_timeout_seconds
-
-WEIGHTS_ENV = "LLAMA_WEIGHTS"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -21,11 +18,10 @@ def main(argv: list[str] | None = None) -> int:
     entry = config.load(args.config_root).models.summarize
     prove_the_entry(
         model=entry,
-        weights=Path(os.environ[WEIGHTS_ENV]),
         output_schema=summarize_and_plan_schema(),
         timeout=request_timeout_seconds(entry.request),
     )
-    print("the entry and the server agree on all five")
+    print("the markers came off this server's own template and the decoder is still bound")
     return 0
 
 

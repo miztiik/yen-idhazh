@@ -35,7 +35,12 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, Final
 
-from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, read_text
+from conftest import (
+    CONFIG_DIR,
+    CONTRACT_FIXTURES_DIR,
+    _rendered_by_the_template,
+    read_text,
+)
 from pytest import MonkeyPatch
 
 from idhazh import config, telemetry
@@ -119,6 +124,11 @@ class RecordedCompletionEndpoint:
 
     It cycles the bodies it was given, so one item's two calls each get the reply
     their own decoder can read.
+
+    `/apply-template` is answered off the recorded renderings and takes nothing
+    from that cycle. The stage reads its turn markers there before its first
+    item, so a server that answered it with a completion would hand a reply to a
+    render and shift every item's body one place down the cycle.
     """
 
     def __init__(self, *bodies: bytes) -> None:
@@ -138,7 +148,10 @@ class RecordedCompletionEndpoint:
                 self._reply(b'{"chat_template": "fixture-template"}')
 
             def do_POST(self) -> None:
-                self.rfile.read(int(self.headers.get("Content-Length") or 0))
+                raw = self.rfile.read(int(self.headers.get("Content-Length") or 0))
+                if self.path.endswith("/apply-template"):
+                    self._reply(_rendered_by_the_template(json.loads(raw)))
+                    return
                 self._reply(next(replies))
 
             def log_message(self, *_args: Any) -> None:

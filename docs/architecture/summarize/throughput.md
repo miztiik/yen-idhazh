@@ -28,7 +28,7 @@ write does not move at all, because the summary length asked for comes from
 ## What a thinking span costs, and the one part that is still an estimate
 
 A call is decoded as an unconstrained thinking span and then the
-schema-constrained answer whenever `models.<role>.turns.thinking_close` is
+schema-constrained answer whenever `models.<role>.thinking_close` is
 declared. The incumbent declares none, so every figure on this page is a
 no-thinking figure and stays comparable. What follows is what turning it on
 costs.

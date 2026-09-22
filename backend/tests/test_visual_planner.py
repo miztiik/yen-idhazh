@@ -18,6 +18,7 @@ from conftest import (
     CONTRACT_FIXTURES_DIR,
     FIXTURES_DIR,
     SUMMARIZE_AND_PLAN_REPLIES,
+    committed_markers,
     label_payload,
     read_text,
 )
@@ -284,12 +285,16 @@ class TestTheGateSuppressesThePlanAndNeverTheCall:
         """
         first = label_payload(article_ok)
         reply = read_text(FIXTURES_DIR / "completions" / "label" / "labelled.json")
-        turns = config.load(CONFIG_DIR).models.summarize.turns
+        markers = committed_markers()
         whole = build_summarize_and_plan_request(
-            first, reply, turns=turns, source_words=article_ok.band_source_words
+            first, reply, markers=markers, source_words=article_ok.band_source_words
         )
         suppressed = build_summarize_and_plan_request(
-            first, reply, turns=turns, source_words=article_ok.band_source_words, plan=False
+            first,
+            reply,
+            markers=markers,
+            source_words=article_ok.band_source_words,
+            plan=False,
         )
         shared = first["prompt"] + reply
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from types import MappingProxyType
-from typing import Any, ClassVar, Final
+from typing import Any, ClassVar, Final, Self
 
 from pydantic import Field, model_validator
 
@@ -17,7 +17,6 @@ from idhazh.contracts.base import (
     Slug,
 )
 from idhazh.contracts.knobs.removed import refuse_a_removed_knob
-from idhazh.contracts.knobs.turns import TurnsConfig
 
 
 class CompanionFile(Model):
@@ -88,10 +87,10 @@ class ModelRef(Model):
     """Which weights, from where. Per-item payloads carry only the `id`.
 
     **This is the shape a run recorded**, and `run_manifest.ModelUse` embeds it.
-    `ModelEntry` below is the shape a person declares in `config/`. The turn
-    envelope belongs to the second and not to this one: no `model_ref` a run has
-    ever written carries markers, and a field required here would stop today's
-    build reading yesterday's run (`CLAUDE.md` section 11).
+    `ModelEntry` below is the shape a person declares in `config/`. What a
+    reasoning span is closed with belongs to the second and not to this one: no
+    `model_ref` a run has ever written carries it, and a field required here
+    would stop today's build reading yesterday's run (`CLAUDE.md` section 11).
     """
 
     id: Slug
@@ -186,15 +185,15 @@ class ModelEntry(ModelRef):
     """Which weights, and everything a run needs to talk to them.
 
     **This is the shape a person declares**, and `ModelsConfig` is made of it.
-    It is `ModelRef` plus the turn envelope, which is required here and absent
-    from the recorded shape - so a config entry that forgets its markers fails
-    at load, and a `run.json` written before the markers were declared still
-    reads. A swap that moved the markers is still visible in a run record:
-    `RunRecord.inputs.prompt_sha256` digests both turns rendered through them.
+    It is `ModelRef` plus the two facts about this model's reasoning that the
+    model's own chat template cannot hand back, and the digest those facts and
+    the settings were derived against - so a config entry that gets one wrong
+    fails here, and a `run.json` written before any of them existed still reads.
 
-    Do not move `turns` down onto `ModelRef` as a tidy-up. That is the change
-    this split exists to prevent. `arch` is here for the same reason and not
-    for a different one.
+    The markers that open and close a turn are not here. They are read off the
+    template itself at server start (`idhazh.llm.server.derive_turn_markers`),
+    because a field restating somebody else's file is a copy a model swap can
+    leave behind.
     """
 
     arch: str = Field(
@@ -202,21 +201,37 @@ class ModelEntry(ModelRef):
         description=(
             "The architecture name inside the GGUF - its `general.architecture` key, "
             "which reads `qwen35` for the weights this entry names. Required and with "
-            "no default, for the reason `turns` is: an entry that inherits the "
-            "incumbent's architecture claims something nobody checked. "
-            "`idhazh.llm.server.prove_the_entry` reads the key back out of the file "
-            "the server was pointed at and refuses the run before the first item when "
-            "the two disagree, which is what makes this a fact rather than a claim. It "
-            "catches a repackaged GGUF under a familiar name - the one case where the "
-            "digest, the alias and the filename all agree and only the words get worse."
+            "no default: an entry that inherits the incumbent's architecture claims "
+            "something nobody checked. It is what a person reads when they want to know "
+            "which family a committed entry belongs to, and it names the family in a "
+            "refusal when a rule cannot read this model's template."
         ),
     )
-    turns: TurnsConfig = Field(
+    thinking_close: str | None = Field(
+        default=None,
+        min_length=1,
         description=(
-            "The turn envelope these weights are rendered with. Required and with no "
-            "default: an entry that forgets its markers must fail rather than inherit "
-            "the incumbent's, because inheriting them renders a prompt the grammar "
-            "still accepts and nothing else can see is wrong."
+            "What this model writes to close its reasoning block, and the whole of the "
+            "declaration that reasoning is wanted. Not null means a call is decoded as "
+            "two spans - one unconstrained span that stops here, then the "
+            "schema-constrained answer on the same slot. Null means one "
+            "schema-constrained span and no reasoning, which is where the incumbent "
+            "sits. It is declared rather than derived because a generation prompt never "
+            "contains it: it is what the model writes, not what the template writes. A "
+            "wrong one means the span never stops and the item lands model_timed_out, "
+            "loudly and one item at a time."
+        ),
+    )
+    thinking_kwarg: str | None = Field(
+        default="enable_thinking",
+        min_length=1,
+        description=(
+            "The template variable that turns this model's reasoning on and off, sent "
+            "as the one key of chat_template_kwargs. It is declared rather than derived "
+            "because a rendering cannot return the name of a variable nobody sent it. "
+            "Null means this template reads no keywords at all, and then the request "
+            "carries no chat_template_kwargs and thinking_close must be null too; this "
+            "entry refuses the pair."
         ),
     )
     declared_for: Sha256 | None = Field(
@@ -230,6 +245,36 @@ class ModelEntry(ModelRef):
             "exists to make loud. Absent means an entry nobody has measured yet."
         ),
     )
+
+    @property
+    def thinks(self) -> bool:
+        """Whether a call on these weights is decoded as two spans.
+
+        One question with one answer, read off the marker that makes the second
+        span possible. There is no flag beside it: a flag and a marker are two
+        places to disagree, and the disagreement renders a prompt the grammar
+        still accepts.
+        """
+        return self.thinking_close is not None
+
+    @model_validator(mode="after")
+    def _a_template_that_reads_no_keyword_cannot_be_asked_to_think(self) -> Self:
+        """Reasoning is asked for through a template keyword, so a null name refuses it.
+
+        Both halves are facts about somebody else's template, so this entry owns
+        the pair. A null keyword with a closing marker declared is a claim
+        nothing can satisfy: the request carries no `chat_template_kwargs` at
+        all, the template renders its own default, and the only symptom is
+        whatever that default happens to be.
+        """
+        if self.thinking_kwarg is None and self.thinking_close is not None:
+            raise ValueError(
+                f"thinking_kwarg is null, so a request sends no chat_template_kwargs at "
+                f"all, and thinking_close is {self.thinking_close!r}, which asks this "
+                "template to turn reasoning on through a keyword nothing sends. Name "
+                "the keyword this model's template reads, or set thinking_close null"
+            )
+        return self
 
     @model_validator(mode="before")
     @classmethod
@@ -266,12 +311,17 @@ class ModelEntry(ModelRef):
 #: spells the flags as the binary spells them, so nineteen keys that existed to
 #: be translated have no translation left to do.
 #:
+#: `turns` was a hand-transcribed copy of the model's own chat template. The
+#: server reads those markers off the template it renders through, so there is
+#: nothing left for a person to write down and nothing to point them at.
+#:
 #: **This map refuses a config file and never a run record.** `ModelRef` is the
 #: shape an earlier run wrote and it still reads `inference` as a plain mapping.
 SUPERSEDED_ENTRY_NAMES: Final[Mapping[str, str]] = MappingProxyType(
     {
         "inference": "models.<role>.server and models.<role>.request",
         "draft": "models.<role>.companion_files and models.<role>.server",
+        "turns": "",
     }
 )
 
@@ -302,15 +352,20 @@ class ModelsConfig(Contract):
 
     It is a file rather than a block of `config/idhazh.json` because everything
     in it is a fact about one set of weights - the repository, the digest, the
-    window they were measured in, the markers their server renders. Held in the
-    shared file, a swap is an edit across every one of those lines and a revert
-    is the same edit backwards, with the previous model's numbers gone. Held
-    here, the incumbent and the candidate are two committed files and the swap
-    is `models_file` in `config/idhazh.json`.
+    window they were measured in. Held in the shared file, a swap is an edit
+    across every one of those lines and a revert is the same edit backwards,
+    with the previous model's numbers gone. Held here, the incumbent and the
+    candidate are two committed files and the swap is `models_file` in
+    `config/idhazh.json`.
     """
 
     __schema_stem__: ClassVar[str] = "models-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-21T06:00",
+            change="The turn block goes; two keys move onto the entry and a run still reads.",
+            why="The markers are the model's own template, so the server reads them off it.",
+        ),
         ChangelogEntry(
             version="2026-09-21T05:00",
             change="The draft head becomes a companion file; its decode settings join `server`.",
@@ -328,11 +383,6 @@ class ModelsConfig(Contract):
         ),
         ChangelogEntry(
             version="2026-09-21",
-            change="Add an optional judge entry, decoding on the served role's weights.",
-            why="The judge could only open a thinking channel by moving the summariser too.",
-        ),
-        ChangelogEntry(
-            version="2026-09-20",
             change="Earlier changes are in this file's git history.",
             why="A changelog says what moved lately; git is the archive.",
         ),

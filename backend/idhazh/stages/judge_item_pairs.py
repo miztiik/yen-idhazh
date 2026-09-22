@@ -35,6 +35,7 @@ from idhazh.contracts.story_similarity_pair import SameStoryVerdict, StorySimila
 from idhazh.llm.server import (
     DEFAULT_ENDPOINT,
     completion_url,
+    derive_turn_markers,
     post,
     request_timeout_seconds,
     token_pieces,
@@ -143,6 +144,7 @@ def stage_judge_item_pairs(
     # column wrong for the whole day. It is a precondition rather than a
     # per-call check.
     prompt.first_token_openings(partial(token_pieces, base_url, timeout=timeout))
+    markers = derive_turn_markers(base_url, entry=entry, timeout=timeout)
     client = partial(post, endpoint=completion_url(base_url), timeout=timeout)
     items = _items_by_url_key(
         date,
@@ -172,7 +174,9 @@ def stage_judge_item_pairs(
         if left is None or right is None:
             unreadable += 1
             continue
-        verdicts = judge.judge_pair(left, right, client=client, settings=settings)
+        verdicts = judge.judge_pair(
+            left, right, client=client, settings=settings, markers=markers
+        )
         readings.append(verdicts)
         judged.append(_with_the_verdict(row, verdicts, stamp=stamp, run_id=run_id))
         if len(judged) % flush_every == 0:
