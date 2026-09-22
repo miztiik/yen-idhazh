@@ -22,12 +22,13 @@ from conftest import (
     CONFIG_DIR,
     CONTRACT_FIXTURES_DIR,
     REPO_ROOT,
+    fold,
     read_text,
     seed_item_health,
 )
 from pydantic import StringConstraints, TypeAdapter, ValidationError
 
-from idhazh import config, extract, ledger, summarize, telemetry
+from idhazh import config, day_shards, extract, ledger, summarize, telemetry
 from idhazh.contracts.article import Article, ArticleStatus
 from idhazh.contracts.base import ServerJob, column_bounds, derive_url_key, field_column
 from idhazh.contracts.call_cost import COST_FIELDS, DERIVED_FIELDS, CallCost, CallKind
@@ -48,7 +49,6 @@ from idhazh.elements import ExtractionHealth
 from idhazh.fetch import BLOCKED_REASONS, FetchResult, refused
 from idhazh.llm.server import Completion, parse_completion
 from idhazh.stages.common import _log_no_reply
-from idhazh.stages.compact import stage_compact
 from idhazh.telemetry.census import EXTRACTION_CELLS
 
 
@@ -221,9 +221,9 @@ def row_for(code: FailureCode) -> ItemHealthRow:
                     FetchOutcome.OK,
                     status=200,
                     body=(
-                        b"<html><head><script type=\"application/ld+json\">"
-                        b"{\"isAccessibleForFree\": false, \"hasPart\": {"
-                        b"\"cssSelector\": \".paywall\", \"isAccessibleForFree\": false}}"
+                        b'<html><head><script type="application/ld+json">'
+                        b'{"isAccessibleForFree": false, "hasPart": {'
+                        b'"cssSelector": ".paywall", "isAccessibleForFree": false}}'
                         b"</script></head><body><p>Subscriber text.</p></body></html>"
                     ),
                 ),
@@ -1469,13 +1469,18 @@ def test_the_fold_writes_one_month_shard_and_a_re_run_adds_nothing(tmp_path: Pat
             )
             == 3
         )
-    assert stage_compact(state).heads_written == (ledger.span_rollup_relpath("2026-08"),)
+    report = fold(state, "2026-08-21")
+    assert report.trees_touched == (ledger.SPAN_ROLLUP_DIRNAME,)
 
-    shard = ledger.span_rollup_path(state, "2026-08")
+    shard = ledger.span_rollup_path(state, "2026-08-21") / day_shards.SETTLED_NAME
     written = [
         SpanRollupRow.from_csv_row(raw) for raw in csv.DictReader(shard.read_text().splitlines())
     ]
-    assert [row.span_name for row in written] == [RollupSpan.ITEM, RollupSpan.ROBOTS, RollupSpan.TAG]
+    assert [row.span_name for row in written] == [
+        RollupSpan.ITEM,
+        RollupSpan.ROBOTS,
+        RollupSpan.TAG,
+    ]
     assert {row.span_name: row.total_ms for row in written} == {
         RollupSpan.ITEM: 900,
         RollupSpan.ROBOTS: 10,
@@ -1533,24 +1538,29 @@ def test_the_residual_may_not_ride_on_a_non_item_row() -> None:
 # --- committed trace paths ---------------------------------------------------
 
 
-def test_a_committed_trace_relpath_spells_the_date_once() -> None:
-    """state/traces/<YYYY>/<MM>/<DD>-<ordinal>-<shard>.jsonl, the run's date once.
+def test_a_committed_trace_relpath_names_the_writer_under_the_day_it_ran() -> None:
+    """state/traces/<YYYY>/<MM>/<DD>/<run>-<attempt>-<job>-<shard>.jsonl.
 
-    The run id already spells the date, so the file name carries the ordinal
-    alone rather than repeating it: the `<YYYY>/<MM>/` directories and the `<DD>`
-    prefix are the date, and the run slot is `1`, not `2026-08-21-1`.
+    The three directories are the run's own date and the name is the identity of
+    the one writer that can have written the file - the same four elements every
+    day tree spells, so two jobs of one run and two attempts at one job never
+    arrive at one path.
     """
     assert (
-        telemetry.committed_trace_relpath("2026-08-21-1", 0)
-        == "state/traces/2026/08/21-1-00.jsonl"
+        telemetry.committed_trace_relpath(
+            run_id="2026-08-21-1", attempt=1, job=ServerJob.WORK, shard=0
+        )
+        == "state/traces/2026/08/21/2026-08-21-1-1-work-00.jsonl"
     )
 
 
 def test_the_shard_is_zero_padded_and_a_multi_digit_ordinal_survives() -> None:
     """The shard matches the run's other per-shard names; the ordinal is left as is."""
     assert (
-        telemetry.committed_trace_relpath("2026-08-21-12", 3)
-        == "state/traces/2026/08/21-12-03.jsonl"
+        telemetry.committed_trace_relpath(
+            run_id="2026-08-21-12", attempt=2, job=ServerJob.WORK, shard=3
+        )
+        == "state/traces/2026/08/21/2026-08-21-12-2-work-03.jsonl"
     )
 
 
@@ -1562,8 +1572,10 @@ def test_a_committed_trace_path_and_its_date_round_trip(tmp_path: Path) -> None:
     decide which files are past the window.
     """
     state = tmp_path / "state"
-    path = telemetry.committed_trace_path(state, "2026-08-21-1", 0)
-    assert path == state / "traces" / "2026" / "08" / "21-1-00.jsonl"
+    path = telemetry.committed_trace_path(
+        state, run_id="2026-08-21-1", attempt=1, job=ServerJob.WORK, shard=0
+    )
+    assert path == state / "traces" / "2026" / "08" / "21" / "2026-08-21-1-1-work-00.jsonl"
     assert telemetry.trace_date(path, state / "traces") == date(2026, 8, 21)
 
 
@@ -1575,7 +1587,9 @@ def test_a_path_that_is_not_a_trace_reads_as_no_date(tmp_path: Path) -> None:
     for the ledger directories.
     """
     root = tmp_path / "traces"
-    assert telemetry.trace_date(root / "2026" / "08" / "notaday-1-00.jsonl", root) is None
+    assert (
+        telemetry.trace_date(root / "2026" / "08" / "notaday" / "a-1-work-00.jsonl", root) is None
+    )
     assert telemetry.trace_date(root / "2026" / "08.jsonl", root) is None
     assert telemetry.trace_date(tmp_path / "elsewhere.jsonl", root) is None
 
@@ -1583,4 +1597,6 @@ def test_a_path_that_is_not_a_trace_reads_as_no_date(tmp_path: Path) -> None:
 def test_a_run_id_that_is_not_a_date_and_ordinal_is_refused() -> None:
     """The helper guards the shape the RunId type already promises upstream."""
     with pytest.raises(ValueError, match="not <YYYY>-<MM>-<DD>-<ordinal>"):
-        telemetry.committed_trace_relpath("2026-08-21", 0)
+        telemetry.committed_trace_relpath(
+            run_id="2026-08-21", attempt=1, job=ServerJob.WORK, shard=0
+        )

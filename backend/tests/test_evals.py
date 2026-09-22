@@ -25,7 +25,7 @@ from pydantic import ValidationError
 
 from idhazh import cli, day_partition, ledger
 from idhazh.contracts.article import Article
-from idhazh.contracts.base import derive_url_key
+from idhazh.contracts.base import ServerJob, derive_url_key
 from idhazh.contracts.eval_row import ConfidenceBand, EvalRow
 from idhazh.contracts.feed_health import FetchOutcome
 from idhazh.contracts.knobs.evaluation import EvaluationConfig
@@ -61,6 +61,25 @@ from idhazh.evals.score import band, to_eval_row
 from idhazh.extract import to_article_with_source
 from idhazh.fetch import FetchResult
 from idhazh.stages.rebuild_score_index import stage_rebuild_score_index
+
+#: The writer every case below files as. `assemble` is the job that scores a
+#: whole day and it runs one shard, so this is what a finished run leaves. A
+#: case that needs a second writer names its own.
+A_SCORING_RUN = "2026-08-21-1"
+
+
+def put(
+    state: Path,
+    rows: Sequence[EvalRow],
+    *,
+    run_id: str = A_SCORING_RUN,
+    attempt: int = 1,
+) -> int:
+    """One writer's measurements, filed the way a finished run files them."""
+    return writer.append_segment(
+        state, rows, run_id=run_id, attempt=attempt, job=ServerJob.ASSEMBLE, shard=0
+    )
+
 
 ARTICLE = (
     "Example Grid ordered four small modular reactors from Northwind Atomics on Tuesday, "
@@ -419,9 +438,9 @@ def test_the_ledger_row_carries_the_repetition_and_leaves_faithfulness_alone() -
     summaries and the same number comes out, while the new column separates
     them.
     """
-    item = RunPlan.from_json(
-        read_text(CONTRACT_FIXTURES_DIR / "run-plan" / "one-day.json")
-    ).items[0]
+    item = RunPlan.from_json(read_text(CONTRACT_FIXTURES_DIR / "run-plan" / "one-day.json")).items[
+        0
+    ]
     article = Article.from_json(read_text(CONTRACT_FIXTURES_DIR / "article" / "ok.json"))
     written = Summary.from_json(read_text(CONTRACT_FIXTURES_DIR / "summary" / "ok.json"))
 
@@ -458,9 +477,9 @@ def test_the_ledger_row_carries_the_repetition_and_leaves_faithfulness_alone() -
 def test_the_row_carries_the_new_fact_rate_of_the_summarys_key_points() -> None:
     """The wiring, not the metric: a scored row reports the share of its own key
     points that add a fact, read at the ceiling the drop uses (0.5 by default)."""
-    item = RunPlan.from_json(
-        read_text(CONTRACT_FIXTURES_DIR / "run-plan" / "one-day.json")
-    ).items[0]
+    item = RunPlan.from_json(read_text(CONTRACT_FIXTURES_DIR / "run-plan" / "one-day.json")).items[
+        0
+    ]
     article = Article.from_json(read_text(CONTRACT_FIXTURES_DIR / "article" / "ok.json"))
     written = Summary.from_json(read_text(CONTRACT_FIXTURES_DIR / "summary" / "ok.json"))
 
@@ -523,9 +542,9 @@ def test_an_eval_row_written_before_this_column_still_loads() -> None:
 
 def _row_for(article: Article) -> EvalRow:
     """One ledger row for one article, with everything else held still."""
-    item = RunPlan.from_json(
-        read_text(CONTRACT_FIXTURES_DIR / "run-plan" / "one-day.json")
-    ).items[0]
+    item = RunPlan.from_json(read_text(CONTRACT_FIXTURES_DIR / "run-plan" / "one-day.json")).items[
+        0
+    ]
     written = Summary.from_json(read_text(CONTRACT_FIXTURES_DIR / "summary" / "ok.json"))
     return to_eval_row(
         item=item,
@@ -758,8 +777,7 @@ def test_scorer_version_spells_its_components() -> None:
         evaluation=EvaluationConfig(),
     )
     assert (
-        version
-        == f"hhem-2.1-open@a1b2c3d4;weights-9f8e7d6c;metrics-{METRICS_VERSION};"
+        version == f"hhem-2.1-open@a1b2c3d4;weights-9f8e7d6c;metrics-{METRICS_VERSION};"
         "window=900/150/anchored;bands=0.80/0.50;lead=0.30"
     )
 
@@ -995,9 +1013,7 @@ def test_a_month_is_summarised_from_its_day_files_and_names_them_all(tmp_path: P
     assert built.month == "2026-01"
     assert built.source_rows == 6
     assert len(built.observation_digests) == 6
-    score_archive.reconcile(
-        built, days, month="2026-01", observation_key=writer.OBSERVATION_KEY
-    )
+    score_archive.reconcile(built, days, month="2026-01", observation_key=writer.OBSERVATION_KEY)
     with pytest.raises(ValueError, match="source_rows"):
         score_archive.reconcile(
             built, days[:1], month="2026-01", observation_key=writer.OBSERVATION_KEY
@@ -1031,7 +1047,7 @@ def test_the_day_grain_holds_the_measurements_the_month_grain_held(tmp_path: Pat
     rows = [*january, retaken, *february]
 
     day_grain = tmp_path / "day" / "state"
-    assert writer.append(day_grain, rows) == len(rows)
+    assert put(day_grain, rows) == len(rows)
 
     month_grain = tmp_path / "month" / "state"
     by_month: dict[str, list[EvalRow]] = {}
@@ -1125,9 +1141,11 @@ def test_a_column_nothing_measured_reads_as_absent_and_never_as_zero(tmp_path: P
     shard = tmp_path / "2026-01.csv"
     _write_shard(shard, [_archive_row(number) for number in range(3)])
 
-    moment = score_archive.summarise(
-        [shard], month="2026-01", observation_key=writer.OBSERVATION_KEY
-    ).cohorts[0].measurements["evidential_density"]
+    moment = (
+        score_archive.summarise([shard], month="2026-01", observation_key=writer.OBSERVATION_KEY)
+        .cohorts[0]
+        .measurements["evidential_density"]
+    )
 
     assert moment.n == 0
     assert moment.min is None and moment.max is None
@@ -1157,7 +1175,7 @@ def test_the_dedupe_reads_the_live_rows_and_the_archived_digests(tmp_path: Path)
     """Decision 2's whole reason for storing the digests, asserted directly."""
     state = tmp_path / "state"
     rows = [_archive_row(number) for number in range(3)]
-    assert writer.append(state, rows) == 3
+    assert put(state, rows) == 3
     live = writer.recorded_observations(state)
 
     days = writer.ledger_days(state)
@@ -1168,7 +1186,7 @@ def test_the_dedupe_reads_the_live_rows_and_the_archived_digests(tmp_path: Path)
         day.unlink()
 
     assert writer.recorded_observations(state) == live
-    assert writer.append(state, rows) == 0, "a deleted day made its rows new again"
+    assert put(state, rows) == 0, "a deleted day made its rows new again"
 
 
 def test_an_archive_is_written_whole_or_not_at_all(tmp_path: Path) -> None:
@@ -1286,9 +1304,9 @@ def test_a_repeat_is_still_refused_when_the_index_is_the_only_thing_read(tmp_pat
     state = tmp_path / "state"
     rows = [_measurement(number) for number in range(4)]
 
-    assert writer.append(state, rows) == 4
-    assert writer.append(state, rows) == 0, "a measurement already held came back as new"
-    assert writer.append(state, [_measurement(9)]) == 1, "a new measurement was refused"
+    assert put(state, rows) == 4
+    assert put(state, rows) == 0, "a measurement already held came back as new"
+    assert put(state, [_measurement(9)]) == 1, "a new measurement was refused"
 
 
 def test_the_writers_read_does_not_grow_with_the_rows_the_day_holds(
@@ -1332,7 +1350,7 @@ def test_an_archived_month_whose_rows_are_gone_still_refuses_its_observations(
     """
     state = tmp_path / "state"
     rows = [_measurement(number) for number in range(3)]
-    assert writer.append(state, rows) == 3
+    assert put(state, rows) == 3
 
     days = writer.ledger_days(state)
     month = rows[0].date[:7]
@@ -1341,7 +1359,7 @@ def test_an_archived_month_whose_rows_are_gone_still_refuses_its_observations(
     for day in days:
         day.unlink()
 
-    assert writer.append(state, rows) == 0, "a deleted day made its rows new again"
+    assert put(state, rows) == 0, "a deleted day made its rows new again"
 
 
 def test_a_tree_with_rows_and_no_index_answers_the_same_as_one_with_an_index(
@@ -1362,7 +1380,7 @@ def test_a_tree_with_rows_and_no_index_answers_the_same_as_one_with_an_index(
 
     assert not writer.index_days(fresh), "the fresh tree was not the un-migrated one"
     assert writer.recorded_observations(fresh) == writer.recorded_observations(carried)
-    assert writer.append(fresh, rows) == 0, "the migrated tree let a held measurement back in"
+    assert put(fresh, rows) == 0, "the migrated tree let a held measurement back in"
     assert [path.name for path in writer.index_days(fresh)] == [
         path.name for path in writer.index_days(carried)
     ]
@@ -1394,8 +1412,8 @@ def test_an_append_leaves_the_index_holding_every_observation_its_day_holds(
         for row in (_measurement(80), _measurement(81))
     ]
 
-    assert writer.append(state, january) == 4
-    assert writer.append(state, [*january, *february]) == 2, "a held measurement came back as new"
+    assert put(state, january) == 4
+    assert put(state, [*january, *february]) == 2, "a held measurement came back as new"
 
     days = [day_partition.date_of(day) for day in writer.ledger_days(state)]
     assert days == ["2026-01-09", "2026-02-03"], f"both days were not written: {days}"
@@ -1429,10 +1447,10 @@ def test_an_index_left_behind_its_rows_is_put_right_by_dropping_it(tmp_path: Pat
     date = held[0].date
 
     stale = tmp_path / "stale" / "state"
-    assert writer.append(stale, held) == 4
+    assert put(stale, held) == 4
     _write_shard(writer.ledger_path(stale, date), [*held, *behind])
 
-    assert writer.append(stale, behind) == 2, (
+    assert put(stale, behind) == 2, (
         "an index behind its rows refused a measurement it has never seen, "
         "so this tree was not the stale one"
     )
@@ -1445,11 +1463,11 @@ def test_an_index_left_behind_its_rows_is_put_right_by_dropping_it(tmp_path: Pat
     )
 
     repaired = tmp_path / "repaired" / "state"
-    assert writer.append(repaired, held) == 4
+    assert put(repaired, held) == 4
     _write_shard(writer.ledger_path(repaired, date), [*held, *behind])
     writer.index_path(repaired, date).unlink()
 
-    assert writer.append(repaired, behind) == 0, "the refilled index let a held measurement back in"
+    assert put(repaired, behind) == 0, "the refilled index let a held measurement back in"
     assert _indexed(repaired, date) == _day_digests(repaired, date)
 
 
@@ -1465,14 +1483,12 @@ def test_a_month_that_became_an_archive_drops_its_live_index(tmp_path: Path) -> 
     """
     state = tmp_path / "state"
     rows = [_measurement(number) for number in range(3)]
-    assert writer.append(state, rows) == 3
+    assert put(state, rows) == 3
     date = rows[0].date
     assert writer.index_path(state, date).exists()
 
     days = writer.ledger_days(state)
-    built = score_archive.summarise(
-        days, month=date[:7], observation_key=writer.OBSERVATION_KEY
-    )
+    built = score_archive.summarise(days, month=date[:7], observation_key=writer.OBSERVATION_KEY)
     score_archive.write(score_archive.archive_path(state, date[:7]), built)
     for day in days:
         day.unlink()
@@ -1491,10 +1507,10 @@ def test_a_live_index_with_no_rows_and_no_archive_is_left_alone(tmp_path: Path) 
     """
     state = tmp_path / "state"
     rows = [_measurement(number) for number in range(3)]
-    assert writer.append(state, rows) == 3
+    assert put(state, rows) == 3
     writer.ledger_days(state)[0].unlink()
 
-    assert writer.append(state, rows) == 0, "the last record of those measurements was dropped"
+    assert put(state, rows) == 0, "the last record of those measurements was dropped"
     assert writer.index_path(state, rows[0].date).exists()
 
 
@@ -1507,7 +1523,7 @@ def test_the_index_costs_a_fixed_number_of_bytes_an_observation(tmp_path: Path) 
     """
     state = tmp_path / "state"
     rows = [_measurement(number) for number in range(10)]
-    writer.append(state, rows)
+    put(state, rows)
     index = writer.index_path(state, rows[0].date)
 
     header = ",".join(ObservationIndexRow.csv_columns()) + "\n"
@@ -1644,9 +1660,7 @@ def test_the_rebuild_names_what_each_day_had_wrong(tmp_path: Path) -> None:
     assert found["2026-01-09"].extra.isdisjoint(produced), (
         "the extra digest was one the rows produce"
     )
-    assert found["2026-02-11"].missing < produced, (
-        "the missing digest was not one the rows produce"
-    )
+    assert found["2026-02-11"].missing < produced, "the missing digest was not one the rows produce"
 
 
 def test_rebuilding_one_day_opens_and_rewrites_only_that_day(
@@ -1664,9 +1678,7 @@ def test_rebuilding_one_day_opens_and_rewrites_only_that_day(
 
     opened = _opened_bytes(monkeypatch, state, lambda: writer.rebuild_index(state, ["2026-02-11"]))
 
-    assert "scores/2026/01/09.csv" not in opened, (
-        f"a day nobody named was read: {sorted(opened)}"
-    )
+    assert "scores/2026/01/09.csv" not in opened, f"a day nobody named was read: {sorted(opened)}"
     assert "scores/2026/02/11.csv" in opened, "the rows of the named day were never read"
     assert writer.index_path(state, "2026-01-09").read_bytes() == untouched
     assert _indexed(state, "2026-02-11") == _rows_produce(state, ["2026-02-11"])
@@ -1768,6 +1780,4 @@ def _write_shard(path: Path, rows: list[EvalRow]) -> None:
         out.writeheader()
         for row in rows:
             payload = row.model_dump(mode="json")
-            out.writerow(
-                {name: "" if payload[name] is None else payload[name] for name in names}
-            )
+            out.writerow({name: "" if payload[name] is None else payload[name] for name in names})
