@@ -1,6 +1,6 @@
 # Console Charts
 
-**Last Updated**: 2026-09-21
+**Last Updated**: 2026-09-22
 What a chart on the operator console has to conform to: the one coordinate
 frame every chart draws through, the pointer readout every chart with a shared
 column carries, how a missing number is marked rather than drawn as a zero, and
@@ -133,14 +133,20 @@ the scatter asked a reader to do. The table prints one row a rung -
 `under 60` / `30 to 45` - read off the ladder rather than off a rung, because a
 rung records only the length it starts at and the last one has no ceiling at all.
 
-**Three things went with the scatter, and none of them has a reader now.** The
-dashed cap lines and their handover labels, which read `extract`'s cut off the
-points in view; the diamond for an article the run cut short; and the pointer
-readout, because a bar of counts has no mark to land on and its column already
-carries a `<title>`. `capsInView`, `capLabel` and `seenWords` were deleted with
-them. `CompressionPoint` keeps `source_seen_words` and `truncation_flagged`,
-because `placeRow` still decides all three of its outcomes off the two lengths
-and nothing else.
+**Two things went with the scatter, and neither has a reader now.** The dashed
+cap lines and their handover labels, which read `extract`'s cut off the points
+in view; and the diamond for an article the run cut short. `capsInView`,
+`capLabel` and `seenWords` were deleted with them. `CompressionPoint` keeps
+`source_seen_words` and `truncation_flagged`, because `placeRow` still decides
+all three of its outcomes off the two lengths and nothing else.
+
+**The pointer readout went with them and came back.** It was dropped on the
+reading that a bar of counts has no mark to land on and its column already
+carries a `<title>`. Both halves of that turned out to be wrong: the bar shares
+a column - the day - and a `<title>` needs a hover, which a thumb cannot do.
+`BandDistance` carries a strip today, and so does the merged-stories bar on
+`/console/judgement/`, which is a bar of counts too. The rule below is what
+settles this for every drawing on the console.
 
 **A row the section cannot place is counted out loud.** The article length before
 the cut is nullable - the pre-cap body is never persisted, so an older cut row
@@ -166,9 +172,33 @@ cannot reach is a state an implementation can pass by never entering.
 
 **Every chart with a shared column carries a pointer readout, and it is not an
 SVG `<title>`.** It was two charts when the strip was written and seven of
-twenty-four by 2026-08-30; it is the default on all three console routes from
-2026-08-31, and a chart with no shared column now says so in
+twenty-four by 2026-08-30; it is the default on every console route that draws
+one, from 2026-08-31, and a chart with no shared column now says so in
 `data-readout-none` rather than by saying nothing.
+
+**The rule has two halves, and a drawing satisfies exactly one of them.** Either
+it resolves to an ancestor carrying `data-readout-columns` - an integer of one
+or more, holding exactly one strip and no competing swatch - or it resolves to
+one carrying `data-readout-none`, free text saying in words why it has no column
+to name. Never both on one element, and never a second strip under one
+`data-readout-columns`. A drawing that carries neither is the failure the rule
+exists to catch, because a chart somebody forgot looks exactly like a chart
+somebody decided about.
+
+**Two scans hold that rule, and they do not reach the same drawings.**
+[frontend/tests/console-readout.spec.ts](../../../frontend/tests/console-readout.spec.ts)
+seeds one on `svg` and asks "does this chart declare?", so it can ask only of a
+route that draws one. It seeds the other on `[data-readout-none]` and asks "is
+this reason worth reading?", so that one reaches any drawing that declares,
+`<svg>` or not - the two day matrices on `/console/voices/` are `<div>` tables,
+and the second scan is the only one that can see them. That asymmetry is why the
+file carries two route lists rather than one. The first runs on `/console/`,
+`/console/model/`, `/console/machine/` and `/console/judgement/`; the second adds
+`/console/voices/`. What falls outside both is a drawing that is neither an
+`<svg>` nor a declaration. Widening the first seed to every `role="img"` drawing
+would reach those, and it turns three console routes red until each one
+declares, so it is a pass of its own rather than a line in this one.
+
 Both are **never pinned to the pointer** - a readout under a thumb is a
 readout nobody reads. One
 Svelte action beside `observeWidth` drives it
