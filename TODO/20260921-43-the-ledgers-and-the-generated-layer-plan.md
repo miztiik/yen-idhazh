@@ -33,7 +33,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | 2 | The spent utilities go, and the keep-rule is written down | - | A | DONE | p43r23 | - | worker |
 | 3 | The hosted span sink goes | - | A | DONE | p43r23 | - | worker |
 | 4 | The retrieval loaders take their bounds | - | A | PENDING | - | - | - |
-| 5 | The label queue becomes runnable | - | A | PENDING | - | - | - |
+| 5 | The label queue becomes runnable | - | A | DONE | p43r5 | - | worker |
 | 6 | The pipeline test commits what it already wrote | 2, 3 | B | PENDING | - | - | - |
 | 7 | The generated contract layer goes, and the contract catches up | all of plan 46 | C | PENDING | - | - | - |
 
@@ -286,7 +286,7 @@ Shares `config/idhazh.json` with P1.
 
 ### Section 6c - Acceptance gates
 
-- `python backend/utilities/label_queue.py` runs end to end and one row exists in `state/labels.csv`, validating against `LabelRow`.
+- `backend/utilities/label_queue.py` runs end to end against a **temporary** state root, and the row it writes validates against `LabelRow`. **No row is committed to `state/labels.csv`.** Amended 2026-09-22: this gate used to ask for one row in the committed ledger, which contradicted decision 3 below and would have had an agent write human ground truth - a fabricated label is indistinguishable from a real one in the only file this project treats as that.
 - The four structural controls still hold: `labeller` required and checked, the CLI still has no `--from-file`, no `--model` and no stdin, the `seconds_spent` floor unchanged, and the import ban in `backend/tests/test_labels.py` still green.
 - `pytest backend/tests/test_labels.py backend/tests/test_evidence.py` green.
 
