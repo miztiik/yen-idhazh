@@ -80,13 +80,6 @@ The machinery words never got that forcing function. When this page was made,
 definitional sentence anywhere in `docs/` - each lived in one docstring, found
 only by somebody who already knew which file to open.
 
-**Renaming was the alternative, and it was declined** (owner decision,
-2026-09-22). "Trial" was the case that raised the question: `grep trial` returns
-several hundred matches in the committed article corpus, almost none of them
-code. A rename to a rarer word would have fixed the search and fixed one word;
-this page fixes two dozen and renames nothing. The search cost stands, and this
-row is the way to the definition instead.
-
 ## See also
 
 - [taxonomy.md](taxonomy.md) - the other half: the words put on a story.
