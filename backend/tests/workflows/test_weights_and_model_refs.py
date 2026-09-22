@@ -772,4 +772,3 @@ def test_a_key_over_seven_files_still_fits_the_cap_a_cache_key_has(tmp_path: Pat
     key = _digest_of(_an_entry(), *seven)
     assert len(key) == 64
     assert key != _digest_of(_an_entry(), *seven[:6]), "the key covers every declared file"
-
