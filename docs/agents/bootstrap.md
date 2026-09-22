@@ -28,6 +28,7 @@ Then read the one page that owns the thing you are changing.
 | A workflow, a gate, or what CI runs | [`../how-to/run-the-gates.md`](../how-to/run-the-gates.md) |
 | Anything whose cost grows as the repository grows | [`../concepts/growing-reads.md`](../concepts/growing-reads.md) |
 | A rough item on a to-do list that is not a plan yet | [`../how-to/take-an-item-to-plan.md`](../how-to/take-an-item-to-plan.md) - intent, then the way, then the contracts, then the sequence |
+| A word you do not recognise | [`../concepts/glossary.md`](../concepts/glossary.md) for a machinery word, [`../concepts/taxonomy.md`](../concepts/taxonomy.md) for a word put on a story |
 | Anything you cannot place | [`../reference/documentation-structure.md`](../reference/documentation-structure.md) says who owns what |
 
 [`CLAUDE.md`](../../CLAUDE.md) is the contract. Read the section that bears on

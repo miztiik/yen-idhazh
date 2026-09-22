@@ -1,6 +1,6 @@
 # Taxonomy
 
-**Last Updated**: 2026-09-13
+**Last Updated**: 2026-09-22
 
 The words this project puts on a story, and which word answers which question.
 
@@ -319,6 +319,7 @@ move does not move, which is the state the lenses were in for weeks.
 
 ## See also
 
+- [glossary.md](glossary.md) - the other half of the vocabulary: the words for the machinery that runs, rather than the words put on a story.
 - [classification.md](classification.md) - what a label on an article is, where each one comes from, and what a reader sees.
 - [../architecture/publishing/autotune-desk-assignment.md](../architecture/publishing/autotune-desk-assignment.md) - **every definition, floor, ceiling and feed minimum here is a person's judgement, and nothing measures whether it still draws the line a reader would.** That page is where a fitted boundary would be argued; it is a stub today.
 - [feed.md](feed.md) - what a feed is, and where it declares its vertical.
