@@ -228,7 +228,7 @@ test.describe('a day with nothing on it', () => {
 		const paragraphs = await notice.locator('p').allInnerTexts();
 		expect(paragraphs[0], 'the notice does not lead with the count').toContain('No stories today.');
 		expect(paragraphs.at(-1), 'the run stamp is not last').toMatch(
-			/Updated \d\d:\d\d UTC \(update \d+\)\./
+			/Updated \d\d:\d\d UTC\./
 		);
 	});
 });

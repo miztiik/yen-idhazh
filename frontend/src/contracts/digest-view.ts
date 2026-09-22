@@ -49,13 +49,32 @@ export interface DigestLead {
 	reason: string;
 }
 
-/** A run of this date, as the page footer and the new-arrivals block need it. */
+/**
+ * A run of this date, as the page footer and the new-arrivals block need it.
+ *
+ * `n` is a position in the day rather than a name a run chose: it is the run's
+ * place in landing order, so the block a reader met first keeps the number it
+ * had. `run_id` is the name, and it is what makes the position reproducible -
+ * two runs that finished in the same second are separated by it and by nothing
+ * else.
+ *
+ * `run_id` and `completed_at` are null together on a day published before the
+ * day was assembled from per-run fragments. Null reads as "this day predates
+ * them", never as zero or as now, and a page that wants a clock for the block
+ * falls back to `at`.
+ */
 export interface DigestRunRef {
 	n: number;
 
 	at: string;
 
 	items_added: number;
+
+	/** The run that wrote this block. Null on a day that predates fragments. */
+	run_id?: string | null;
+
+	/** When the run finished, which is what puts this block where it is. Null on a day that predates fragments. */
+	completed_at?: string | null;
 }
 
 /**
@@ -263,7 +282,7 @@ export interface DigestView {
 
 	date?: string | null;
 
-	/** What a republish moves and nothing else does, so a browser holding this day can tell a re-fetch that changed nothing from one that did. */
+	/** The newest run's completion, not the clock of whatever assembled this file, so a browser holding this day can tell a re-fetch that changed nothing from one that did. */
 	generated_at?: string | null;
 
 	/** Null is unknown, never false: false says the run lost nothing. */

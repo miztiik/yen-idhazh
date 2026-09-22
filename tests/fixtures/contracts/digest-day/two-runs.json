@@ -150,13 +150,17 @@
   "runs": [
     {
       "at": "2026-08-21T06:44:12Z",
+      "completed_at": null,
       "items_added": 2,
-      "n": 1
+      "n": 1,
+      "run_id": null
     },
     {
       "at": "2026-08-21T18:22:05Z",
+      "completed_at": null,
       "items_added": 1,
-      "n": 2
+      "n": 2,
+      "run_id": null
     }
   ],
   "version": "2026-08-21T06:00",

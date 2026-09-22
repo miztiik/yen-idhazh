@@ -81,7 +81,7 @@ const FOOTER_GONE: Array<[string, RegExp]> = [
 
 /** What the old footer stated about today's run, in its new wording. */
 const DAY_FACTS: Array<[string, RegExp]> = [
-	['the run stamp', /Updated \d\d:\d\d UTC \(update \d+\)\./],
+	['the run stamp', /Updated \d\d:\d\d UTC\./],
 	['the did-not-finish count', /did not finish/]
 ];
 
@@ -157,7 +157,7 @@ test.describe('a document that renders no day carries none of the day', () => {
 		const opens = html.indexOf('aria-label="About today"');
 		const notice = html.slice(opens, html.indexOf('</section>', opens));
 
-		expect(occurrences(notice, /Updated \d\d:\d\d UTC \(update \d+\)\./)).toBe(1);
+			expect(occurrences(notice, /Updated \d\d:\d\d UTC\./)).toBe(1);
 		expect(occurrences(footerOf(html), /run \d+/)).toBe(0);
 	});
 });

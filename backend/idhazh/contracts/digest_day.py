@@ -68,6 +68,7 @@ from idhazh.contracts.base import (
     Model,
     Prose,
     RelPath,
+    RunId,
     Slug,
     Timestamp,
     Url,
@@ -134,11 +135,34 @@ class DigestVisual(Model):
 
 
 class DigestRunRef(Model):
-    """A run of this date, as the page footer and the new-arrivals block need it."""
+    """A run of this date, as the page footer and the new-arrivals block need it.
+
+    `n` is a position in the day rather than a name a run chose: it is the run's
+    place in landing order, so the block a reader met first keeps the number it
+    had. `run_id` is the name, and it is what makes the position reproducible -
+    two runs that finished in the same second are separated by it and by nothing
+    else.
+
+    `run_id` and `completed_at` are null together on a day published before the
+    day was assembled from per-run fragments. Null reads as "this day predates
+    them", never as zero or as now, and a page that wants a clock for the block
+    falls back to `at`.
+    """
 
     n: int = Field(ge=1)
     at: Timestamp
     items_added: int = Field(ge=0)
+    run_id: RunId | None = Field(
+        default=None,
+        description="The run that wrote this block. Null on a day that predates fragments.",
+    )
+    completed_at: Timestamp | None = Field(
+        default=None,
+        description=(
+            "When the run finished, which is what puts this block where it is. "
+            "Null on a day that predates fragments."
+        ),
+    )
 
 
 class DigestVerticalRef(Model):
@@ -514,6 +538,11 @@ class DigestDay(Contract):
     __schema_stem__: ClassVar[str] = "digest-day"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-22T12:00",
+            change="Added DigestRunRef.run_id and .completed_at; items_failed may be null.",
+            why="The day is folded from per-run fragments, and a fold can be missing one.",
+        ),
+        ChangelogEntry(
             version="2026-09-22",
             change="Runs may be numbered with gaps, and two runs may not share an ordinal.",
             why="Runs land in parallel, so no writer can know what the next number is.",
@@ -529,11 +558,6 @@ class DigestDay(Contract):
             why="A story can now be the same story as one from yesterday; absent means today.",
         ),
         ChangelogEntry(
-            version="2026-09-13T22:30",
-            change="Retired DigestVisual.path, which named the committed drawing.",
-            why="The reader's browser draws the chart now, so no SVG is written.",
-        ),
-        ChangelogEntry(
             version="2026-08-21",
             change="Earlier changes are in this file's git history.",
             why="A changelog says what moved lately; git is the archive.",
@@ -541,10 +565,17 @@ class DigestDay(Contract):
     )
 
     date: DateStamp
-    generated_at: Timestamp
+    generated_at: Timestamp = Field(
+        description=(
+            "The newest run's completion, not the clock of whatever assembled this file. "
+            "Two assemblies of one set of runs then agree byte for byte."
+        )
+    )
     partial: bool = Field(description="A run with failures publishes, and says it was partial.")
     items_planned: int = Field(ge=0)
-    items_failed: int = Field(ge=0)
+    items_failed: int | None = Field(
+        default=None, ge=0, description="Null is unknown, never 0: 0 says nothing failed."
+    )
     retention_window_months: int = Field(
         default=-1,
         ge=-1,
@@ -612,10 +643,13 @@ class DigestDay(Contract):
             if drawn != ref.desk_count:
                 raise ValueError(f"desk {ref.id} desk_count disagrees with its items")
 
-        if self.partial != (self.items_failed > 0):
-            raise ValueError("partial is exactly whether anything failed")
-        if len(self.items) + self.items_failed > self.items_planned:
-            raise ValueError("published plus failed cannot exceed planned")
+        # Null constrains nothing. It is the reader's "not known", and a rule
+        # applied to an unknown would be this file inventing a zero.
+        if self.items_failed is not None:
+            if self.partial != (self.items_failed > 0):
+                raise ValueError("partial is exactly whether anything failed")
+            if len(self.items) + self.items_failed > self.items_planned:
+                raise ValueError("published plus failed cannot exceed planned")
         return self
 
     @model_validator(mode="after")

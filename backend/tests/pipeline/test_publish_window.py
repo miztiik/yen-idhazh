@@ -325,7 +325,7 @@ def test_a_day_publishes_even_when_items_failed() -> None:
         retention_window_months=-1,
     )
     assert day.partial
-    assert day.items_failed > 0
+    assert day.items_failed is not None and day.items_failed > 0
     assert len(day.items) == 1
 
 
@@ -1248,21 +1248,28 @@ def test_the_manifest_cannot_record_one_run_twice() -> None:
     `run_id` is the identity of the execution rather than a count of what is
     committed, so an assemble job that runs again reads the same plan and
     computes the same id. It replaces its own record instead of appending a
-    second one that planned nothing - the rule `build_day` already applies to
-    the day's own run list. The contract refuses the shape either way.
+    second one that planned nothing - the rule the day's own run list already
+    applies. The contract refuses the shape either way.
+
+    The day is built per execution here because the day is what assigns the
+    ordinal: the manifest reads it off the day rather than counting a second
+    time, so a day and a plan naming two different executions would be those
+    two files disagreeing rather than a case worth covering.
     """
     settings = config.load(CONFIG_DIR)
-    day = assemble.build_day(
-        plan=plan(),
-        items=[digest_item()],
-        previous=None,
-        taxonomy=settings.taxonomy,
-        run_n=1,
-        generated_at="2026-08-21T07:00:00Z",
-        retention_window_months=-1,
-    )
 
-    def manifest_after(previous: RunManifest | None, run_id: str) -> RunManifest:
+    def day_for(run_id: str, run_n: int, previous: DigestDay | None) -> DigestDay:
+        return assemble.build_day(
+            plan=plan().model_copy(update={"run_id": run_id}),
+            items=[digest_item()],
+            previous=previous,
+            taxonomy=settings.taxonomy,
+            run_n=run_n,
+            generated_at="2026-08-21T07:00:00Z",
+            retention_window_months=-1,
+        )
+
+    def manifest_after(day: DigestDay, previous: RunManifest | None, run_id: str) -> RunManifest:
         return assemble.build_manifest(
             plan=plan().model_copy(update={"run_id": run_id}),
             day=day,
@@ -1278,13 +1285,16 @@ def test_the_manifest_cannot_record_one_run_twice() -> None:
             site_files=2,
         )
 
-    first = manifest_after(None, "2026-08-21-33270983446")
-    replayed = manifest_after(first, "2026-08-21-33270983446")
+    first_day = day_for("2026-08-21-33270983446", 1, None)
+    first = manifest_after(first_day, None, "2026-08-21-33270983446")
+    replayed = manifest_after(first_day, first, "2026-08-21-33270983446")
     assert [run.n for run in replayed.runs] == [1], "one execution and its replay are one run"
     assert [run.run_id for run in replayed.runs] == ["2026-08-21-33270983446"]
 
     # A different execution is a different run, and takes the next number.
-    second = manifest_after(first, "2026-08-21-33274853468")
+    second = manifest_after(
+        day_for("2026-08-21-33274853468", 2, first_day), first, "2026-08-21-33274853468"
+    )
     assert [run.n for run in second.runs] == [1, 2]
 
     with pytest.raises(ValidationError, match="cannot share a run_id"):

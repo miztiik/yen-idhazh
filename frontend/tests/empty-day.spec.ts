@@ -152,6 +152,10 @@ for (const state of [
 			{ n: 1, at: `${date}T06:00:00Z`, items_added: day.items.length - 1 },
 			{ n: 2, at: `${date}T12:30:00Z`, items_added: 1 }
 		] : undefined;
+		// The day's own stamp rather than a run's. A payload old enough to say
+		// nothing about its runs says nothing about this either, and the line it
+		// would draw is the one the other branch asserts is absent.
+		day.generated_at = state.history ? `${date}T12:30:00Z` : undefined;
 		let requests = 0;
 		await page.route(`**/digest/${date.replaceAll('-', '/')}/digest.json`, (route) => {
 			requests += 1;
@@ -169,7 +173,7 @@ for (const state of [
 		}
 		if (state.history) {
 			await expect(notice.locator('.notice-run')).toHaveText(
-				'Updated 12:30 UTC (update 2). 1 added since the first update.'
+				'Updated 12:30 UTC. 1 added after this page first went up.'
 			);
 		} else {
 			await expect(notice.locator('.notice-run')).toHaveCount(0);

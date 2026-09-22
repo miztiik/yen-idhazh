@@ -34,6 +34,7 @@ from idhazh.contracts.counterfactual_score import CounterfactualScoreRow
 from idhazh.contracts.day_metrics import DayMetrics
 from idhazh.contracts.day_validation import DayValidationReceipt
 from idhazh.contracts.digest_day import DigestDay
+from idhazh.contracts.digest_run_fragment import DigestRunFragment
 from idhazh.contracts.digest_view import DigestView
 from idhazh.contracts.element import ElementTable
 from idhazh.contracts.eval_row import EvalRow
@@ -105,6 +106,7 @@ CONTRACTS: Final[tuple[type[Contract], ...]] = (
     DayMetrics,
     DayValidationReceipt,
     DigestDay,
+    DigestRunFragment,
     DigestView,
     ElementTable,
     EvalRow,
