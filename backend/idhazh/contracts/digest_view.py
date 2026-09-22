@@ -349,6 +349,11 @@ class DigestView(Contract):
     __schema_stem__: ClassVar[str] = "digest-view"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-22",
+            change="generated_at is the newest run's completion, not the assembling clock.",
+            why="A wall clock makes two assemblies of one set of runs disagree byte for byte.",
+        ),
+        ChangelogEntry(
             version="2026-09-17",
             change="DigestViewItem.summary is Prose - paragraphs split by one blank line.",
             why="A long summary is two paragraphs, and read-side folding keeps old days readable.",
@@ -362,11 +367,6 @@ class DigestView(Contract):
             version="2026-09-13T22:30",
             change="DigestViewVisual.path became data_path.",
             why="The reader's browser draws the chart from the marks, so no SVG is published.",
-        ),
-        ChangelogEntry(
-            version="2026-09-12T18:40",
-            change="item_id accepts a second shape: sixteen Crockford base32 symbols.",
-            why="Ten decimal digits is 33 bits of an address, which collides on a busy day.",
         ),
         ChangelogEntry(
             version="2026-08-31T12:00",
@@ -383,8 +383,9 @@ class DigestView(Contract):
     generated_at: Timestamp | None = Field(
         default=None,
         description=(
-            "What a republish moves and nothing else does, so a browser holding this "
-            "day can tell a re-fetch that changed nothing from one that did."
+            "The newest run's completion, not the clock of whatever assembled this file, "
+            "so a browser holding this day can tell a re-fetch that changed nothing from "
+            "one that did."
         ),
     )
     partial: bool | None = Field(

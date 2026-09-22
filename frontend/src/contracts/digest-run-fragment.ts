@@ -1,4 +1,4 @@
-// Generated from `backend/idhazh/contracts/digest_day.py` by `python -m idhazh.contracts.export`.
+// Generated from `backend/idhazh/contracts/digest_run_fragment.py` by `python -m idhazh.contracts.export`.
 // Never hand-edited: the drift gate regenerates it and fails on any diff
 // (CLAUDE.md section 1a). Edit the Pydantic model instead.
 
@@ -130,93 +130,6 @@ export interface DigestItem {
 }
 
 /**
- * One of the day's leading stories, and the one sentence saying why it leads.
- *
- * The story itself stays in `items` in the published order, so the block adds
- * a way in and removes nothing. Nothing here carries a position: a number
- * beside a story implies a score we would then owe the reader an explanation
- * for.
- */
-export interface DigestLead {
-	item_id: string;
-
-	/** One sentence a reader can check against the story, built from our own published title and our own closed registry and never from fetched text (Guardrail #11). A lead that cannot say something true is not a lead. */
-	reason: string;
-}
-
-/**
- * A run of this date, as the page footer and the new-arrivals block need it.
- *
- * `n` is a position in the day rather than a name a run chose: it is the run's
- * place in landing order, so the block a reader met first keeps the number it
- * had. `run_id` is the name, and it is what makes the position reproducible -
- * two runs that finished in the same second are separated by it and by nothing
- * else.
- *
- * `run_id` and `completed_at` are null together on a day published before the
- * day was assembled from per-run fragments. Null reads as "this day predates
- * them", never as zero or as now, and a page that wants a clock for the block
- * falls back to `at`.
- */
-export interface DigestRunRef {
-	n: number;
-
-	at: string;
-
-	items_added: number;
-
-	/** The run that wrote this block. Null on a day that predates fragments. */
-	run_id?: string | null;
-
-	/** When the run finished, which is what puts this block where it is. Null on a day that predates fragments. */
-	completed_at?: string | null;
-}
-
-/**
- * One topic of the day, and why it ran what it ran.
- *
- * **It carries two counts and they answer two questions.** `count` is every
- * story whose carrying feed declares this vertical. `desk_count` is every
- * story the day publishes under this name, which is what a reader sees. They
- * are equal on every day nothing relabelled, and a page that wants the number
- * on the screen reads `desk_count` and falls back to `count`.
- *
- * Both include a story the duplicate pass grouped behind another - nothing is
- * unpublished by that pass, so the numbers are the payload's own and not what
- * the default view happens to draw.
- *
- * The three shortfall fields are vertical facts, because collection is per
- * feed and a feed declares a vertical. Each is the day's strongest reading:
- * the largest any run of the day recorded. A later run has already taken what
- * an earlier one published, so it sees a smaller pool of the same stories -
- * summing the runs would count one back-catalogue story once per run.
- *
- * All three are null together on a day published before they existed, and a
- * null is unknown rather than a zero, which would claim the feeds offered this
- * vertical nothing.
- */
-export interface DigestVerticalRef {
-	id: string;
-
-	display_name: string;
-
-	/** Stories whose carrying feed declares this vertical. It is not what the page draws where a story was relabelled - `desk_count` is - and it keeps this meaning because 22 frozen published days already carry it. */
-	count: number;
-
-	/** Stories this day publishes under this name, which is the number a reader sees. Equal to `count` on a day nothing relabelled. Null on a day published before this field existed, where a page falls back to `count`. */
-	desk_count?: number | null;
-
-	/** Distinct addresses the feeds offered this vertical today, less what the day had already published or already failed on. It is not an upper bound on `count`: each run counts its own pool and the day's stories accumulate across runs. */
-	considered?: number | null;
-
-	/** Of those, how many were past collect.max_age_hours. A vertical fed by a back catalogue thins for this reason and no other, and a thin topic that cannot say why reads as a broken run. */
-	too_old?: number | null;
-
-	/** Some run today found fewer live feeds than this vertical's floor, so that run planned nothing for it. Published for the operator surfaces; the reading page never draws a sentence from it, because how many of our feeds answered is a fact about our pipeline rather than about a story. */
-	below_feed_floor?: boolean | null;
-}
-
-/**
  * Where a story's chart data is, and never the chart data itself.
  *
  * One pointer and no chart data, ever. The day payload is the record that a
@@ -292,6 +205,28 @@ export const TIME_SOURCE = ['feed', 'first_seen', 'unknown'] as const;
 
 export type TimeSource = (typeof TIME_SOURCE)[number];
 
+/** Why a vertical contributed what it did, including when it contributed nothing. */
+export interface VerticalPlan {
+	id: string;
+
+	/** Distinct URLs the feeds offered. */
+	considered: number;
+
+	planned: number;
+
+	/** Feeds on this desk whose configured address this run may lawfully ask: not a curated tombstone, not a retired endpoint, and not one robots.txt refused or left unknown. A resting or failing endpoint is counted, because the floor measures how many independent sources a desk has rather than how many answered today. */
+	eligible_feeds: number;
+
+	/** The vertical's own min_feeds this count was measured against, so a payload can be read without the config that produced it. Null on a plan written before the field existed - unknown, never a floor of zero. */
+	feed_floor?: number | null;
+
+	/** Under its floor, so it is collected but never rendered. */
+	below_feed_floor?: boolean;
+
+	/** Of those considered, how many were past collect.max_age_hours. A desk whose feeds serve a back catalogue thins for this reason and no other, and a thin desk that cannot say why reads as a broken run. */
+	too_old?: number;
+}
+
 export const VISUAL_KIND = ['chart', 'none'] as const;
 
 export type VisualKind = (typeof VISUAL_KIND)[number];
@@ -304,34 +239,30 @@ export const VISUAL_STATE = ['absent', 'rendered', 'render_failed'] as const;
 
 export type VisualState = (typeof VISUAL_STATE)[number];
 
-/** `frontend/public/digest/<YYYY>/<MM>/<DD>/digest.json`. */
-export interface DigestDay {
+/** One run's block of a published day, before anything folds it in. */
+export interface DigestRunFragment {
 	version?: string;
 
+	/** The published date this block belongs to. */
 	date: string;
 
-	/** The newest run's completion, not the clock of whatever assembled this file. Two assemblies of one set of runs then agree byte for byte. */
-	generated_at: string;
+	run_id: string;
 
-	/** A run with failures publishes, and says it was partial. */
-	partial: boolean;
+	/** When the run finished writing this block. Half the sort key. */
+	completed_at: string;
 
-	items_planned: number;
-
-	/** Null is unknown, never 0: 0 says nothing failed. */
-	items_failed?: number | null;
-
-	/** Stated to the reader before anything is deleted. -1 means nothing is deleted. */
-	retention_window_months?: number;
-
-	runs: DigestRunRef[];
-
-	verticals: DigestVerticalRef[];
-
+	/** The stories this run published, in the order it published them. A story an earlier run already published is not here: the first block to carry a story keeps it. */
 	items: DigestItem[];
 
-	/** The day's leading stories, strongest first, chosen across the whole day rather than off the head of the published order. Empty is the normal state and it means the block does not render: a day with too few stories worth leading goes straight to the stream rather than padding. Every entry names an item this same day holds. */
-	leads?: DigestLead[];
+	/** What this run planned per topic, kept so the day can say why a desk ran thin without the config that produced the plan. */
+	verticals: VerticalPlan[];
 
+	/** How many stories this run set out to write. */
+	items_planned: number;
+
+	/** Stories this run did not finish. A later run can still publish one, so this is a fact about the run and never about the day. */
+	failed_item_ids?: string[];
+
+	/** This run's vectors, for the duplicate pass over the whole day. */
 	embeddings?: DigestEmbeddings | null;
 }

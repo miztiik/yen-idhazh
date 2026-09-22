@@ -110,13 +110,13 @@ def stage_prune_state(
     removed += _prune_host_fingerprint_shards(state, observability, today, dry_run=dry_run)
     removed += _prune_score_shards(state, observability, today, dry_run=dry_run)
     removed += _prune_trial_shards(state, run, retention_config, today, dry_run=dry_run)
+    removed += _prune_digest_fragments(state, retention_config, today, dry_run=dry_run)
     result = retention.prune_telemetry(
         state, observability, today, public_root=public, dry_run=dry_run
     )
     if not result.changed:
         LOG.info(
-            "telemetry fold: nothing older than %s months, so every month is still at "
-            "full grain",
+            "telemetry fold: nothing older than %s months, so every month is still at full grain",
             observability.item_health_full_grain_months,
         )
     else:
@@ -132,9 +132,7 @@ def stage_prune_state(
         )
         removed += list(result.days_removed)
         removed += [public_telemetry.shard_relpath(stem) for stem in result.public_deleted]
-        removed += [
-            ledger.telemetry_aggregate_relpath(stem) for stem in result.hard_deleted
-        ]
+        removed += [ledger.telemetry_aggregate_relpath(stem) for stem in result.hard_deleted]
 
     if digest is not None:
         _clean_the_visuals(
@@ -214,8 +212,7 @@ def _prune_feed_health_shards(
     feed = retention.prune_feed_health(state, observability, today, dry_run=dry_run)
     if not feed.changed:
         LOG.info(
-            "feed-health prune: every shard is inside the %s-month window, so none was "
-            "deleted",
+            "feed-health prune: every shard is inside the %s-month window, so none was deleted",
             observability.feed_health_keep_months,
         )
         return []
@@ -327,8 +324,7 @@ def _prune_counterfactual_shards(
     )
     if not scores.changed:
         LOG.info(
-            "counterfactual prune: every day file is inside the %s-day window, so none "
-            "was deleted",
+            "counterfactual prune: every day file is inside the %s-day window, so none was deleted",
             lens_weights.window_days,
         )
         return []
@@ -361,8 +357,7 @@ def _prune_trace_shards(
     )
     if not traces.changed:
         LOG.info(
-            "trace prune: every committed trace is inside the %s-day window, so none "
-            "was deleted",
+            "trace prune: every committed trace is inside the %s-day window, so none was deleted",
             observability.trace_window_days,
         )
         return []
@@ -374,6 +369,33 @@ def _prune_trace_shards(
         traces.kept,
     )
     return list(traces.deleted)
+
+
+def _prune_digest_fragments(
+    state: Path, retention_config: RetentionConfig, today: date_type, *, dry_run: bool
+) -> list[str]:
+    """Delete the per-run blocks of every day past the window, and say what went.
+
+    A block is one run's half of a published day. The day is assembled from all
+    of them, so they are live while the date can still gain a run and are a
+    second full copy of every story once it cannot. The published day is never
+    touched.
+    """
+    fragments = retention.prune_digest_fragments(state, retention_config, today, dry_run=dry_run)
+    if not fragments.changed:
+        LOG.info(
+            "digest fragment prune: every day's blocks are inside the %s-month window, "
+            "so none was deleted",
+            retention_config.image_months,
+        )
+        return []
+    LOG.info(
+        "digest fragment prune%s: deleted %s files, freed %s bytes",
+        " (dry run)" if fragments.dry_run else "",
+        len(fragments.deleted),
+        fragments.bytes_freed,
+    )
+    return list(fragments.deleted)
 
 
 def _prune_trial_shards(
@@ -437,8 +459,7 @@ def _prune_score_shards(
     scores = retention.prune_scores(state, observability, today, dry_run=dry_run)
     if not scores.changed:
         LOG.info(
-            "score archive: every month is inside the %s-month window, so none was "
-            "summarised",
+            "score archive: every month is inside the %s-month window, so none was summarised",
             observability.scores_full_grain_months,
         )
         return []

@@ -15,8 +15,10 @@ from typing import Final
 from idhazh import assemble, config, ledger, rank, run_context, telemetry
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.digest_day import DigestDay
+from idhazh.contracts.digest_run_fragment import DigestRunFragment
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.fingerprint import PipelineInputs
+from idhazh.contracts.item_health import ItemOutcome
 from idhazh.contracts.run_manifest import ModelRole, ModelUse, RunManifest
 from idhazh.contracts.run_plan import RunPlan
 from idhazh.contracts.seen import PublishedRow
@@ -195,7 +197,6 @@ def stage_assemble(
     # second one here would key assemble's rows differently from the shards' and
     # land every item twice.
     run_id = plan.run_id
-    run_n = assemble.run_n_for(previous_manifest, run_id)
     # The names this run collected but will not render. A story relabelled onto
     # one of them publishes under its feed's vertical instead, so the page and
     # the operator surface cannot say opposite things about the same name.
@@ -278,8 +279,6 @@ def stage_assemble(
             )
         )
 
-    digest_items = [item.model_copy(update={"introduced_by_run": run_n}) for item in digest_items]
-
     generated_at = assemble.utc_now()
     # The one place the merge line is chosen. `collapse_same_story` reads the floor
     # off the block it is handed, so the fitted line arrives the same way the
@@ -290,29 +289,61 @@ def stage_assemble(
         state_dir=common.STATE_ROOT,
         date=plan.date,
     )
-    day = assemble.build_day(
-        plan=plan,
-        items=digest_items,
-        previous=previous_day,
-        taxonomy=settings.taxonomy,
-        run_n=run_n,
-        generated_at=generated_at,
-        retention_window_months=settings.app.retention.image_months,
-        embeddings=assemble.build_embeddings(
-            digest_items, Embedder(config.REPO_ROOT, settings.app.assist)
-        ),
-        item_health_rows=item_health_rows,
-        watchlist=settings.watchlist,
-        ui=settings.app.ui,
-        placement=settings.app.placement,
-        same_story=same_story,
-        group_identical_titles=settings.app.assemble.group_identical_titles,
-        same_story_window_hours=settings.app.assemble.same_story_window_hours,
-        earlier_days=_earlier_days(
-            plan.date, window_hours=settings.app.assemble.same_story_window_hours
-        ),
+
+    # This run's own block, under a name no other run of the day can reach, so
+    # there is nothing here for a rebase to merge. It is written before the day
+    # because the day is assembled out of it.
+    fragment_file = assemble.fragment_path(common.STATE_ROOT, date=plan.date, run_id=run_id)
+    # A run that comes back keeps the clock it already filed under. That clock
+    # is what puts this run's block where it is, so moving it would move a whole
+    # block past one a reader has already read.
+    landed_at = (
+        DigestRunFragment.read(fragment_file).completed_at
+        if fragment_file.exists()
+        else generated_at
     )
-    assemble.write_atomic(target / "digest.json", day.to_json())
+    assemble.write_atomic(
+        fragment_file,
+        DigestRunFragment(
+            version=DigestRunFragment.schema_version(),
+            date=plan.date,
+            run_id=run_id,
+            completed_at=landed_at,
+            items=digest_items,
+            verticals=list(plan.verticals),
+            items_planned=len(plan.items),
+            failed_item_ids=[
+                row.item_id for row in item_health_rows if row.outcome is ItemOutcome.FAILED
+            ],
+            embeddings=assemble.build_embeddings(
+                digest_items, Embedder(config.REPO_ROOT, settings.app.assist)
+            ),
+        ).to_json(),
+    )
+
+    if previous_day is not None and assemble.predates_fragments(previous_day):
+        # This date was published before runs filed their own blocks, so the
+        # blocks that built it do not exist and never will. Assembling from what
+        # is on disk would publish this run alone and delete every story the
+        # reader has already been shown, so the day it already has stands and
+        # this run's block waits in `state/` for nothing.
+        day = previous_day
+    else:
+        day = assemble.assemble_day(
+            assemble.read_fragments(common.STATE_ROOT, plan.date),
+            taxonomy=settings.taxonomy,
+            retention_window_months=settings.app.retention.image_months,
+            watchlist=settings.watchlist,
+            ui=settings.app.ui,
+            placement=settings.app.placement,
+            same_story=same_story,
+            group_identical_titles=settings.app.assemble.group_identical_titles,
+            same_story_window_hours=settings.app.assemble.same_story_window_hours,
+            earlier_days=_earlier_days(
+                plan.date, window_hours=settings.app.assemble.same_story_window_hours
+            ),
+        )
+        assemble.write_atomic(target / "digest.json", day.to_json())
 
     # The month shard is a projection of the days on disk, so it is rebuilt after
     # the day is written and never patched in place.
