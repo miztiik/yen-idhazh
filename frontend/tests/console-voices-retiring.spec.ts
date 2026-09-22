@@ -210,3 +210,16 @@ test('the tail of the ranking is a number, never another page of rows', async ({
 	expect(await more.count()).toBe(hidden > 0 ? 1 : 0);
 	if (hidden > 0) await expect(more).toHaveText(new RegExp(`^${hidden} more`));
 });
+
+test('the matrix says why it has no hover strip', async ({ page }) => {
+	await page.goto(ROUTE);
+	const table = page.locator('[data-retiring="table"]');
+	test.skip((await table.count()) === 0, 'the canary published no source census');
+
+	// The reason belongs to the matrix, not to each source's own strip. One
+	// copy per source is the same sentence, and the console-wide scan reads
+	// every copy.
+	const reason = await table.getAttribute('data-readout-none');
+	expect(reason ?? '').not.toBe('');
+	expect(await page.locator('[data-retiring-strip][data-readout-none]').count()).toBe(0);
+});

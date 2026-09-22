@@ -55,7 +55,7 @@ Playwright runs `fullyParallel: false` with 4 workers, so it parallelises by fil
 | 1 | The merged-stories chart prints its column | - | J | Landed | p45j | #1045 | - |
 | 2 | The two single-population figures say why they have none | - | J | Landed | p45j | #1045 | - |
 | 3 | The judgement strips stop running a date into a note | - | J | Landed | p45j | #1045 | - |
-| 4 | The two day matrices on voices declare | - | V | Not started | - | - | - |
+| 4 | The two day matrices on voices declare | - | V | Landed | p45v | #1046 | - |
 | 5 | The rule reaches the judgement route and the voices reasons | 1, 2, 4 | R | Not started | - | - | - |
 
 ### 1a. Pull requests and file ownership
@@ -85,6 +85,18 @@ Parallel N = 2. Wave 1 runs PR-J and PR-V at the same time in two worktrees. Wav
 N is 2 and not 4 because rows 1 to 3 are one branch, and it is not 1 because row 4 shares no file with them and no reviewer question either. A slot refills the moment its worker returns; a worker never waits on a merge that is not in its Depends-on column.
 
 `backend/utilities/gate_lock.py` serialises `pytest`, `npm run build` and `npm run test:browser` across worktrees. It bounds how fast two workers can gate, not how many may author. Two workers will queue behind each other at the browser gate for about 430 s. That is the whole of the contention cost.
+
+### 1d. Running a gate in a worktree
+
+Three things make a gate here lie. Each one cost a worker a retry.
+
+| # | Fact | What it means |
+| --- | --- | --- |
+| AD1 | There is no `lint` script in `frontend/package.json` | `npm run check` is the type and template gate. It runs `svelte-kit sync` then `svelte-check`. |
+| AD2 | `check` invalidates the canary build record | `svelte-kit sync` rewrites generated files, so every Playwright spec then fails with "The canary build has stale inputs". Run `npm run build:canary` after `check` and before any Playwright gate. |
+| AD3 | The canary build shells out to Python | A worktree shell must put the repository environment on PATH first: `$env:PATH = "<repo-root>\.venv\Scripts;$env:PATH"`. Without it the build dies on `ModuleNotFoundError: No module named 'protego'`, which reads as a missing dependency and is a wrong interpreter. |
+
+A fresh worktree also has no `frontend/node_modules`. `npm ci --no-audit --no-fund` takes about a minute, and without it `check` fails with "'svelte-kit' is not recognized", which is not a PATH problem.
 
 ## 2. Contracts
 
@@ -213,7 +225,7 @@ Both already carry `data-model-rule="no"` with a `data-model-rule-none` reason, 
 | # | Gate |
 | --- | --- |
 | K1 | `npm --prefix frontend run check` clean |
-| K2 | `npm --prefix frontend run lint` clean |
+| K2 | `npm --prefix frontend run build:canary` clean |
 | K3 | `npx playwright test console-judgement-merges` green, including the existing height invariant at line 120 |
 | K4 | Browser smoke on `/console/judgement/` per CLAUDE.md section 12: zero new `[error]`, zero new `404`, and the page still renders with the panel's data absent |
 
@@ -266,7 +278,7 @@ Both also draw a median circle whose value is printed nowhere a reader can see w
 | # | Gate |
 | --- | --- |
 | O1 | `npm --prefix frontend run check` clean |
-| O2 | `npm --prefix frontend run lint` clean |
+| O2 | `npm --prefix frontend run build:canary` clean |
 | O3 | `npx playwright test console-judgement-holdout console-judgement-verdict` green |
 | O4 | Browser smoke on `/console/judgement/` per CLAUDE.md section 12 |
 

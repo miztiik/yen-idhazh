@@ -661,3 +661,16 @@ test('the two counts still add up to the denominator beside them', async ({ page
 		new Set(ledger().map((row) => row.feedId)).size
 	);
 });
+
+test('the matrix says why it has no hover strip', async ({ page }) => {
+	await page.goto('/console/voices/');
+	const section = page.locator('[data-windowed="feed-outcomes"]');
+	test.skip((await section.count()) === 0, 'no feed has failed on the canary');
+
+	// The reason belongs to the matrix, not to each feed's own strip. Sixty
+	// copies of one sentence is the same sentence, and the console-wide scan
+	// reads every copy.
+	const reason = await section.getAttribute('data-readout-none');
+	expect(reason ?? '').not.toBe('');
+	expect(await page.locator('[data-feed-strip][data-readout-none]').count()).toBe(0);
+});

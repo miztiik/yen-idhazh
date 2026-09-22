@@ -501,6 +501,7 @@
 			class="console-table mt-3"
 			data-windowed="feed-outcomes"
 			data-window-days={windowDays}
+			data-readout-none="one square a day for every feed, each naming its own day and what that day did, so a strip would reprint the whole list"
 			data-model-rule="no"
 			data-model-rule-name="feed-outcomes"
 			data-model-rule-none="a feed answered or it did not, before any summary was written"
@@ -630,6 +631,7 @@
 			data-retiring-drawn={strip.rows.length}
 			data-retiring-hidden={strip.hidden}
 			data-retiring-cap={data.console.source_rows}
+			data-readout-none="one square a day for every source, each naming its own day and what that day did, so a strip would reprint the whole list"
 			data-model-rule="no"
 			data-model-rule-name="source-yield"
 			data-model-rule-none="a source published an address or it did not, and no model was asked"
