@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import shlex
-import subprocess
-from pathlib import Path
 from typing import Final, cast
 
 import pytest
@@ -12,26 +10,16 @@ import pytest
 from ._harness import (
     COMMIT_SCRIPT_CALL,
     PUBLISHING_SITE_JOBS,
-    STATUS_PAGE,
-    STATUS_PAGE_GUARD,
-    STATUS_PAGE_JOB,
-    STATUS_PAGE_WRITE,
     VALIDATE_DAYS_CALL,
     VALIDATE_DAYS_JOBS,
-    _bash,
-    _git,
-    _isolated_env,
     _job,
     _load_workflows,
     _mapping,
     _needs,
     _normalize_condition,
-    _script,
     _step,
     _steps,
     _triggers,
-    _write,
-    requires_bash,
 )
 
 pytestmark = pytest.mark.workflow
@@ -361,13 +349,8 @@ def test_ci_keeps_its_push_boundary_and_pages_publishes_only_a_verdict() -> None
     workflows = _load_workflows()
 
     ci_push = cast(dict[str, object], _triggers(workflows["ci.yml"])["push"])
-    assert set(ci_push) == {"branches", "paths-ignore"}
+    assert set(ci_push) == {"branches"}
     assert ci_push["branches"] == ["main"]
-    # The `status-page` job's loop guard, and the reason it is a trigger filter
-    # rather than a job condition or a `[skip ci]` marker: a push holding only
-    # this file starts no run at all, whoever pushed it, and every other gate on
-    # that commit still runs.
-    assert ci_push["paths-ignore"] == [STATUS_PAGE]
 
     pages = _triggers(workflows["pages.yml"])
     assert "push" not in pages, (
@@ -445,111 +428,3 @@ def test_a_newer_build_supersedes_an_older_one_and_a_deploy_is_never_cancelled()
         "the default condition is what refuses a cancelled build; a condition "
         "here would have to keep refusing one, and silently might not"
     )
-
-
-def test_the_plan_queue_has_exactly_one_writer() -> None:
-    """One job regenerates the page, and a pull request may not carry it.
-
-    Two assertions, because either alone leaves the conflict in place: a second
-    writer anywhere puts two branches back on the same lines, and a gate that
-    does not refuse the file lets a branch bring its own copy.
-    """
-    workflow = _load_workflows()["ci.yml"]
-
-    writers = [
-        f"{job_name}/{step.get('name')}"
-        for job_name in _mapping(workflow.get("jobs"), "jobs")
-        for step in _steps(workflow, job_name)
-        if STATUS_PAGE_WRITE in str(step.get("run", ""))
-    ]
-    assert len(writers) == 1, f"{STATUS_PAGE} has one writer; these regenerate it: {writers}"
-    assert writers[0].startswith(f"{STATUS_PAGE_JOB}/")
-
-    guard = _step(workflow, "gates", "name", STATUS_PAGE_GUARD)
-    assert _normalize_condition(guard.get("if"), "plan queue guard condition") == (
-        "github.event_name == 'pull_request'"
-    )
-    script = _script(guard, f"ci.yml/gates/{STATUS_PAGE_GUARD}")
-    assert STATUS_PAGE in script
-    # A pull request is checked out as a merge commit whose first parent is the
-    # base branch, so this range is what the branch changes - and reading it
-    # needs the one extra commit below rather than a fetch over the network.
-    assert "HEAD^1 HEAD" in script
-    checkout = next(
-        step
-        for step in _steps(workflow, "gates")
-        if str(step.get("uses", "")).startswith("actions/checkout@")
-    )
-    assert _mapping(checkout.get("with"), "gates checkout 'with'").get("fetch-depth") == "2"
-
-
-def test_the_status_page_job_writes_only_after_a_merge() -> None:
-    workflow = _load_workflows()["ci.yml"]
-    job = _job(workflow, STATUS_PAGE_JOB)
-
-    assert _normalize_condition(job.get("if"), "status-page condition") == (
-        "github.event_name == 'push'"
-    )
-    assert _mapping(workflow.get("permissions"), "ci.yml permissions") == {
-        "contents": "read"
-    }, "only the job that writes is widened, and it widens itself"
-    assert _mapping(job.get("permissions"), "status-page permissions") == {"contents": "write"}
-    assert "needs" not in job, (
-        "the page is derived from the plan-docs alone, so a gate that is red "
-        "about something else would only hold a correct page back"
-    )
-
-    names = [str(step.get("name")) for step in _steps(workflow, STATUS_PAGE_JOB)]
-    commit_step = "Commit the plan queue, when a Reckoner moved"
-    commit = _step(workflow, STATUS_PAGE_JOB, "name", commit_step)
-    assert names.index("Regenerate the plan queue from the Reckoners") < names.index(commit_step)
-
-    script = _script(commit, f"ci.yml/{STATUS_PAGE_JOB}/commit")
-    # The termination argument the trigger filter does not carry: a run over a
-    # tree this job already wrote finds no diff, so it commits nothing and there
-    # is no second push to guard against.
-    assert f"git diff --quiet -- {STATUS_PAGE}" in script
-    assert f"git add {STATUS_PAGE}" in script
-    assert "git push origin HEAD:main" in script
-
-
-@requires_bash
-def test_the_plan_queue_guard_reads_a_real_merge_commit(tmp_path: Path) -> None:
-    """The shipped shell, against a real merge commit, both ways.
-
-    The check is about what a pull request changes, and a pull request is a
-    merge commit - so the fixture is one, built twice: once where the branch
-    edits the page and once where it does not. A check that read the working
-    tree, or the tip of `main`, would pass both cases.
-    """
-    bash = _bash()
-    assert bash is not None, "requires_bash admitted a run with no bash"
-    script = _script(
-        _step(_load_workflows()["ci.yml"], "gates", "name", STATUS_PAGE_GUARD),
-        f"ci.yml/gates/{STATUS_PAGE_GUARD}",
-    )
-    env = _isolated_env(tmp_path)
-
-    for edits_the_page, expected in ((False, 0), (True, 1)):
-        repo = tmp_path / ("edited" if edits_the_page else "untouched")
-        repo.mkdir()
-        _git(repo, env, "init", "-b", "main")
-        _write(repo / STATUS_PAGE, "# The plan queue\n")
-        _write(repo / "docs" / "page.md", "before\n")
-        _git(repo, env, "add", ".")
-        _git(repo, env, "commit", "-m", "the base")
-        _git(repo, env, "switch", "-c", "branch")
-        _write(repo / "docs" / "page.md", "after\n")
-        if edits_the_page:
-            _write(repo / STATUS_PAGE, "# The plan queue\n\nhand-edited\n")
-        _git(repo, env, "add", ".")
-        _git(repo, env, "commit", "-m", "the branch")
-        _git(repo, env, "switch", "main")
-        _git(repo, env, "merge", "--no-ff", "--no-edit", "branch")
-
-        run = subprocess.run(
-            [bash, "-c", script], cwd=repo, env=env, capture_output=True, text=True
-        )
-        assert run.returncode == expected, f"{run.stdout}\n{run.stderr}"
-        if expected:
-            assert STATUS_PAGE in run.stderr, "the message says which file and why"
