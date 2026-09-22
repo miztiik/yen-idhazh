@@ -59,7 +59,8 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Final
 
-from idhazh import day_partition, ledger
+from idhazh import day_partition, day_shards, ledger
+from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
 from idhazh.evals import writer as score_writer
 from idhazh.prune import one_at_a_time
 
@@ -83,7 +84,7 @@ PruneInterruptedError = one_at_a_time.PruneInterruptedError
 #: `<YYYY>/<MM>/<DD>.csv` day files, and is not one of the two stores below.
 #: `state/day-metrics/` and `state/traces/` are day-shaped and are deliberately
 #: absent - they file `.json` and `<DD>-<run>-<shard>.jsonl`, which
-#: `day_partition.day_files` refuses, and a second walker here would be a second
+#: `day_shards.shard_files` refuses, and a second walker here would be a second
 #: answer to what a day file is. Bringing either in means teaching that one
 #: walker its suffix, which is where the question belongs. `state/span-rollup/`
 #: files by month and `state/segments/` is scratch the compaction drains, so
@@ -332,23 +333,29 @@ def _relpath(state_root: Path, day: Path) -> str:
 def day_collection(state_root: Path, store: str) -> one_at_a_time.Collection[Path]:
     """One store's day tree, as the three callables the core deletes through.
 
-    The listing is `day_partition.day_files`, which is a generator, so a store
-    of any size is walked one path at a time and never held. `day_files` also
-    refuses a name it cannot place, which means a store holding something this
-    walk cannot read stops the pass at that file rather than deleting round it.
+    The listing is `day_shards.shard_files`, which is a generator, so a store
+    of any size is walked one path at a time and never held. It also refuses a
+    name it cannot place, which means a store holding something this walk cannot
+    read stops the pass at that file rather than deleting round it. It reads a
+    `<DD>.csv` day file and a `<DD>/` day directory of writer-owned files alike,
+    so a store that changes shape needs nothing here.
+
+    Unbounded because the range an operator typed is the cover: the walk finds
+    what the range names, and a window over it would hide the older half of the
+    range the operator asked for (Guardrail #12).
     """
 
     def describe(day: Path) -> one_at_a_time.Member:
         return one_at_a_time.Member(
             id=_relpath(state_root, day),
-            day=day_partition.date_of(day),
+            day=day_shards.date_of(day),
             size_bytes=day.stat().st_size,
             label=day.name,
         )
 
     return one_at_a_time.Collection(
         name=store,
-        listing=lambda: day_partition.day_files(state_root / store),
+        listing=lambda: day_shards.shard_files(state_root / store, days=UNBOUNDED_WINDOW),
         describe=describe,
         delete=_delete,
     )

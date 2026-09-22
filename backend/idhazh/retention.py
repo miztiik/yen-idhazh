@@ -150,9 +150,10 @@ from datetime import date, timedelta
 from pathlib import Path
 from typing import Final, NamedTuple, NoReturn
 
-from idhazh import day_partition, ledger, month_partition, telemetry
+from idhazh import day_partition, day_shards, ledger, month_partition, telemetry
 from idhazh.contracts.base import ITEM_ID_PATTERN
 from idhazh.contracts.item_health import ItemHealthRow, ItemOutcome, ItemStage
+from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
 from idhazh.contracts.knobs.observability import ObservabilityConfig
 from idhazh.contracts.knobs.retention import PAGES_HARD_CAP_MB, RetentionConfig
 from idhazh.contracts.telemetry_aggregate import TelemetryAggregateRow, percentile
@@ -1473,11 +1474,13 @@ def prune_trial_state(
     deleted: list[str] = []
     kept = 0
     freed = 0
-    # One ledger directory per child, each a `yyyy/mm/dd` tree, so the walk is
-    # per ledger and `day_files` refuses a stray the same way it does anywhere.
+    # One ledger directory per child, each a day tree, so the walk is per ledger
+    # and `shard_files` refuses a stray the same way it does anywhere. Unbounded
+    # because the question is which of this run's days have aged out, and a
+    # window would leave the oldest ones standing for ever.
     for ledger_root in sorted(child for child in root.iterdir() if child.is_dir()):
-        for path in sorted(day_partition.day_files(ledger_root)):
-            written = date.fromisoformat(day_partition.date_of(path))
+        for path in day_shards.shard_files(ledger_root, days=UNBOUNDED_WINDOW):
+            written = date.fromisoformat(day_shards.date_of(path))
             if (today - written).days < within_days:
                 kept += 1
                 continue
@@ -1509,6 +1512,12 @@ class ScorePruneResult:
     #: `<month>-01` would name a file the ledger may never have held, and the
     #: list a dry run prints has to be the list a live run removes, file for file.
     days_removed: tuple[str, ...]
+    #: Every `state/score-index/<YYYY>/<MM>/<DD>.csv` this took, on the same
+    #: terms. The index is derived from the days above and answers only for
+    #: them, so it is pruned to the same span in the same pass - an index that
+    #: outlives its source is a lookup that misses for ever, and the archive
+    #: beside it already carries those digests.
+    index_days_removed: tuple[str, ...]
     #: Distinct measurements the archives now index. This is the number that
     #: keeps the dedupe exact after the rows are gone, so it is reported rather
     #: than left to be inferred from the row count - they differ whenever a
@@ -1549,9 +1558,15 @@ def prune_scores(
     `day_partition.days_by_month` groups the day files and a month goes whole or
     not at all. That keeps the knob's unit the one it has always had while the
     files below it are days, and it keeps the archive's own input at most 31
-    files. The index beside those days is not touched here:
-    `evals.writer.refresh_index` drops an index day whose month became an
-    archive, and it does that only once the archive is on disk.
+    files.
+
+    **The index beside those days goes in the same pass.** It is derived from
+    them and answers only for them, so an index month that outlived its rows is
+    a lookup that misses for ever. `evals.writer.refresh_index` drops one too,
+    but only on the next run that writes a score, and it never repairs a stale
+    index - so nothing would notice in between. Both guard on the same fact:
+    the month's archive is on disk, and the archive carries those digests, so
+    nothing here can remove the last record of a measurement.
 
     A dry run does the first step and none of the others. It still counts the
     bytes both ways, so the log says what the archive would weigh against what
@@ -1607,6 +1622,23 @@ def prune_scores(
             day.unlink()
             day_partition.drop_empty_day_dirs(day)
 
+    # The months whose digests an archive now carries, including the ones this
+    # pass took - so a dry run names the same index files a live run removes.
+    covered = {path.stem for path in score_archive.archive_files(state_dir)} | set(archived)
+    index_days_removed: list[str] = []
+    for shard in day_shards.shard_files(
+        state_dir / score_writer.INDEX_DIRNAME, days=UNBOUNDED_WINDOW
+    ):
+        month = day_shards.date_of(shard)[:7]
+        if month >= keep_from or month not in covered:
+            continue
+        index_days_removed.append(
+            f"{ledger.STATE_DIRNAME}/{shard.relative_to(state_dir).as_posix()}"
+        )
+        if not dry_run:
+            shard.unlink()
+            day_partition.drop_empty_day_dirs(shard)
+
     hard_deleted: list[str] = []
     if config.score_archive_keep_months is not None:
         delete_from = oldest_month_kept(today, config.score_archive_keep_months)
@@ -1621,6 +1653,7 @@ def prune_scores(
         archived=tuple(archived),
         rows_archived=rows_archived,
         days_removed=tuple(days_removed),
+        index_days_removed=tuple(index_days_removed),
         observations_indexed=observations,
         source_bytes=source_bytes,
         archive_bytes=archive_bytes,
