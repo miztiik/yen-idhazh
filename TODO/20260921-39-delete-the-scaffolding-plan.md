@@ -94,7 +94,7 @@ Twenty rows. Read this before the tables.
 | 1 | The generated contract layer goes | - | - | COLLAPSED - plan 43 row 5, with the 14 files this row did not name | - | - | - |
 | 12 | The engineering contract and the pages catch up | - | - | COLLAPSED - plan 43 row 6; sections 1a, 9 and 10 only, and it no longer restates the clauses plan 41 row 6 owns | - | - | - |
 
-**No row is executed from here.** Lane A is executed from [`20260921-41-lane-a-model-file-plan.md`](20260921-41-lane-a-model-file-plan.md), Lane B from [`20260921-42-lane-b-workflows-plan.md`](20260921-42-lane-b-workflows-plan.md), and lanes C, D and E from [`20260921-43-the-ledgers-and-the-generated-layer-plan.md`](20260921-43-the-ledgers-and-the-generated-layer-plan.md). Those plans carry the rows above, with the contracts they need declared. The rows stay listed here so their numbers still resolve.
+**No row is executed from here.** Lane A was executed from `20260921-41-lane-a-model-file-plan.md`, delivered in PRs #1036 and #1039 and deleted on close; Lane B from [`20260921-42-lane-b-workflows-plan.md`](20260921-42-lane-b-workflows-plan.md), and lanes C, D and E from [`20260921-43-the-ledgers-and-the-generated-layer-plan.md`](20260921-43-the-ledgers-and-the-generated-layer-plan.md). Those plans carry the rows above, with the contracts they need declared. The rows stay listed here so their numbers still resolve.
 
 ### The lanes, and why each is one pull request
 

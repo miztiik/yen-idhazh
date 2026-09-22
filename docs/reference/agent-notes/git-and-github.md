@@ -1,6 +1,6 @@
 # Agent Notes - Git and GitHub
 
-**Last Updated**: 2026-09-21
+**Last Updated**: 2026-09-22
 
 Traps in `git`, worktrees, merges and the `gh` CLI. Index and scope:
 [../agent-notes.md](../agent-notes.md).
@@ -144,6 +144,13 @@ git diff --name-only --diff-filter=A origin/main...origin/<branch> |
 ```
 
 Every file already present means the branch is redundant. Close it with a comment naming the pull request that carried it, so the row's history stays readable.
+
+**Merging the BASE of a stacked pair makes the child look catastrophically conflicted, and it is not.** The squash folds A's commits into one new commit on `main`, B still carries A's originals, so every file the two touched conflicts on both sides at once - 40 files on one pair, and each one was A's own content arriving twice. `--ours` is right on every one of them, and a file A deleted takes `git rm` rather than a resolve. The hazard is that the noise hides the only thing in the merge that is not yours: whatever `main` gained that the child has never seen. Count that first, and verify it survived after you resolve.
+
+```powershell
+git log --oneline HEAD..origin/main            # usually one squash commit, and it is the one to check
+git diff --stat origin/main HEAD -- <path>    # after the merge: only your own edits may remain
+```
 
 ## Reading the tree with `git grep`
 
