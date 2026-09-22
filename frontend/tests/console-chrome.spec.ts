@@ -19,7 +19,7 @@ import {
  * **Every chart resolves to non-empty accessible text.** Prose the page cut
  * still lives in the description, so a reader who cannot see the shape loses
  * nothing - and that is an oracle rather than a promise, because it is checked
- * on every chart of all three routes.
+ * on every chart of every route the console serves.
  *
  * **A chart that plots more than one series prints them together.** A fixed
  * strip below the plot, capped at a share of it, reachable by an arrow key. A
@@ -27,7 +27,13 @@ import {
  * a hover is not a thing a thumb can do.
  */
 
-const ROUTES = ['/console/', '/console/model/', '/console/machine/'];
+const ROUTES = [
+	'/console/',
+	'/console/model/',
+	'/console/machine/',
+	'/console/judgement/',
+	'/console/voices/'
+];
 
 test.describe('the shape switch draws one array two ways', () => {
 	const COLUMNS = ['Mon', 'Tue', 'Wed'];

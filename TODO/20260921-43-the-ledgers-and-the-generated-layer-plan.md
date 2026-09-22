@@ -80,7 +80,7 @@ Measured on `origin/main`, 2026-09-22, except where a line says estimate.
 | 1 | The replay count leaves the dispatch surface | - | A | PENDING | - | - | - |
 | 2 | The unreferenced utilities go, and the search evaluation is bounded | - | B | PENDING | - | - | - |
 | 3 | The pipeline test commits what it produced | 1 | A | PENDING | - | - | - |
-| 4 | Nine console specs visit every route the site serves | - | C | PENDING | - | - | - |
+| 4 | Nine console specs visit every route the site serves | - | C | DONE | p43r4 | - | R4 |
 | 5 | The generated contract layer goes | 1, 2, 3, 4 | D | PENDING | - | - | - |
 | 6 | The engineering contract and the pages catch up | 5 | D | PENDING | - | - | - |
 | 7 | The dependency's beneficiary line says what it buys | 5 | D | PENDING | - | - | - |

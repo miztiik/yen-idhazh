@@ -20,12 +20,12 @@ import { stacked } from '../src/lib/charts/stacked';
  * below fails on a chart that declares neither.
  */
 
-const ROUTES = ['/console/', '/console/model/', '/console/machine/'] as const;
-// `/console/judgement/` is NOT here yet, and that is a decision rather than an
-// oversight. `MergeLinePlot` declares its columns; `MergedStoriesPanel` shares a
-// column between its bar and its dot and has never declared one either way, so
-// the route would fail this file on a chart that predates it. Adding the route
-// costs that panel a readout strip, which is its own row's work.
+const ROUTES = ['/console/', '/console/model/', '/console/machine/', '/console/voices/'] as const;
+// `/console/judgement/` is the one route NOT here, and that is a decision rather
+// than an oversight. `MergeLinePlot` declares its columns; `MergedStoriesPanel`
+// shares a column between its bar and its dot and has never declared one either
+// way, so the route would fail this file on a chart that predates it. Adding the
+// route costs that panel a readout strip, which is its own row's work.
 const DESKTOP = { width: 1440, height: 1000 };
 const PHONE = { width: 390, height: 844 };
 

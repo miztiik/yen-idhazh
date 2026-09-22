@@ -30,7 +30,13 @@ import { movementVerdict, type MovementPolarity } from '../src/lib/charts/theme'
  * which also means this file never parses a colour.
  */
 
-const ROUTES = ['/console/', '/console/model/', '/console/machine/'] as const;
+const ROUTES = [
+	'/console/',
+	'/console/model/',
+	'/console/machine/',
+	'/console/judgement/',
+	'/console/voices/'
+] as const;
 const THEMES = ['light', 'dark'] as const;
 type Theme = (typeof THEMES)[number];
 
