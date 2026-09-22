@@ -236,6 +236,17 @@ order is still fixed by the newest day, because a legend that re-sorts under the
 eye as the pointer moves is a legend nobody can read. Nothing is hidden until a
 pointer arrives, so the no-JavaScript answer is the page as it prerenders.
 
+**The resting heading is one string, and its separator belongs to the caller.**
+`ChartReadout` prints the column's date and then `restingNote` with nothing
+between them, so a caller that passes a bare note publishes `21 Septhe newest
+day`. All twenty-three callers open theirs with `, `; two on
+`/console/judgement/` did not, and that string was on the published site until
+2026-09-22. The separator is not moved into the component, because the other
+twenty-one would then print `21 Sept, , the newest day`. **An assertion on this
+heading anchors on the end of the string.** Five specs matched it with
+`toContainText`, which is a substring test, and all five passed for as long as
+the defect was live.
+
 **The throughput candle's readout moved below its plot on 2026-08-30, and it is
 no longer `caption` verbatim.** It was a box over the plot carrying the
 `<title>` sentence unchanged, on the rule that one day gets one sentence rather

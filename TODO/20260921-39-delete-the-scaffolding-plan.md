@@ -117,7 +117,7 @@ That last line is [`20260922-47-the-pipeline-stops-naming-a-server-plan.md`](202
 | [`20260921-40-bonsai-probe-plan.md`](20260921-40-bonsai-probe-plan.md) | 5 | all 7 rows PENDING |
 | [`20260921-43-the-ledgers-and-the-generated-layer-plan.md`](20260921-43-the-ledgers-and-the-generated-layer-plan.md) | 1, 7, 8, 12, 15, 17, and 19's residue | row 4 DONE, six PENDING |
 | [`20260922-44-the-model-file-is-the-fetch-interface-plan.md`](20260922-44-the-model-file-is-the-fetch-interface-plan.md) | 13 | row 4 DONE, four PENDING |
-| [`20260922-45-the-readout-covers-every-console-route-plan.md`](20260922-45-the-readout-covers-every-console-route-plan.md) | 19's residue | all 4 rows PENDING |
+| Plan 45, the readout over every console route | 19's residue | all 5 rows LANDED in #1045, #1046 and #1049; distilled to [`docs/architecture/publishing/console-charts.md`](../docs/architecture/publishing/console-charts.md) and deleted |
 | [`20260922-47-the-pipeline-stops-naming-a-server-plan.md`](20260922-47-the-pipeline-stops-naming-a-server-plan.md) | 21's remainder | both rows PENDING |
 
 Lane A ran from `20260921-41-lane-a-model-file-plan.md`, delivered in PRs #1036 and #1039, and was deleted on close. Lane B ran from `20260921-42-lane-b-workflows-plan.md`, delivered in PRs #1034, #1035 and #1037, and was deleted on close. Both were renumbered while they ran, so their row numbers are not quoted here - the pull request is what a reader can still open.

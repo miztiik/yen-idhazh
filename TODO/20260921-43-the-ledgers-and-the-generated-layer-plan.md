@@ -89,7 +89,7 @@ Measured on `origin/main`, 2026-09-22, except where a line says estimate.
 | 6 | The engineering contract and the pages catch up | 5 | P3 | PENDING | - | - | - |
 | 7 | The hosted span sink goes | - | P2 | PENDING | - | - | - |
 
-**Row 4 delivered five of the nine lists, and the other four were already whole.** Its oracle - every route visited by every spec that claims all of them - is not reached, and the reason is a defect the widening found: `console-chrome.spec.ts` and `console-readout.spec.ts` leave `/console/judgement/` and `/console/voices/` out, so the rule those two files enforce covers three of the five pages a reader can open. **That defect is now `TODO/20260922-45-the-readout-covers-every-console-route-plan.md` and is no longer unclaimed.** Plan 45 also corrects what the note here and both spec headers said about the two routes. Judgement draws five charts and two of them already print a strip, so the gap there is the other three declaring nothing. Voices draws one chart, `SourceCutRange`, and it already declares a reason - so the fix on that route was never a missing strip, and it stays out of both chart specs because its chart has no column two marks share.
+**Row 4 delivered five of the nine lists, and the other four were already whole.** Its oracle - every route visited by every spec that claims all of them - is not reached, and the reason is a defect the widening found: `console-chrome.spec.ts` and `console-readout.spec.ts` leave `/console/judgement/` and `/console/voices/` out, so the rule those two files enforce covers three of the five pages a reader can open. **That defect is closed.** Plan 45 landed it in #1045, #1046 and #1049: the three undeclared drawings on `/console/judgement/` now declare, the two day matrices on `/console/voices/` say why they have no strip, and both spec headers were rewritten. The rule and the two scans that hold it are in [`docs/architecture/publishing/console-charts.md`](../docs/architecture/publishing/console-charts.md).
 
 ### Section 1a - The three pull requests and the files each owns
 
@@ -464,7 +464,7 @@ Each test fails when one value is removed from either side. **That is not genera
 
 ## Section 5 - Row 4 - Nine console specs visit every route the site serves
 
-**DONE, merged in #1040.** Kept for its decisions, which bind the next person who touches a console route list. The residue it found is [`20260922-45-the-readout-covers-every-console-route-plan.md`](20260922-45-the-readout-covers-every-console-route-plan.md).
+**DONE, merged in #1040.** Kept for its decisions, which bind the next person who touches a console route list. The residue it found is closed: plan 45 landed it in #1045, #1046 and #1049, and the rule now lives in [`docs/architecture/publishing/console-charts.md`](../docs/architecture/publishing/console-charts.md).
 
 - **Scope:** Correct the nine hand-written console route lists so each visits all five routes the site serves.
 - **Files touched:** `frontend/tests/console-axis.spec.ts:29`, `console-chrome.spec.ts:30`, `console-model-rule.spec.ts:133`, `console-nav.spec.ts:37`, `console-polarity.spec.ts:33`, `console-readout.spec.ts:23`, `console-title.spec.ts:48`, `console-voices.spec.ts:27`, `console-window-claims.spec.ts:57`
@@ -608,7 +608,7 @@ Each test fails when one value is removed from either side. **That is not genera
 
 - [`20260921-39-delete-the-scaffolding-plan.md`](20260921-39-delete-the-scaffolding-plan.md) - the parent, whose rows 1, 7, 8, 12, 15, 17 and 19 this plan carries. Its section 1 is the verified ledger of where all twenty-one of its rows went.
 - [`20260922-44-the-model-file-is-the-fetch-interface-plan.md`](20260922-44-the-model-file-is-the-fetch-interface-plan.md) - the workflows, and what plan 42 did not finish.
-- [`20260922-45-the-readout-covers-every-console-route-plan.md`](20260922-45-the-readout-covers-every-console-route-plan.md) - the residue row 4 found and could not fix.
+- [`docs/architecture/publishing/console-charts.md`](../docs/architecture/publishing/console-charts.md) - the residue row 4 found and could not fix. Plan 45 closed it in #1045, #1046 and #1049, and this page now carries the rule and the two scans that hold it.
 - [`20260922-46-no-file-has-two-writers-plan.md`](20260922-46-no-file-has-two-writers-plan.md) - the head ledgers. It does not meet row 3; section 0's `Assumes` says why.
 - Plan 41 owned Guardrail #3 and section 11; delivered in #1036 and #1039 and deleted on close.
 - [`../docs/how-to/execute-a-plan.md`](../docs/how-to/execute-a-plan.md) - how a row is run and closed.
