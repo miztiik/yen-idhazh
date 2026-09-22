@@ -19,7 +19,7 @@ import {
  * **Every chart resolves to non-empty accessible text.** Prose the page cut
  * still lives in the description, so a reader who cannot see the shape loses
  * nothing - and that is an oracle rather than a promise, because it is checked
- * on every chart of all three routes.
+ * on every chart of every route that draws one with a readout strip.
  *
  * **A chart that plots more than one series prints them together.** A fixed
  * strip below the plot, capped at a share of it, reachable by an arrow key. A
@@ -27,6 +27,14 @@ import {
  * a hover is not a thing a thumb can do.
  */
 
+// `/console/judgement/` and `/console/voices/` are NOT here, and the reason is a
+// defect rather than a category. Both routes draw charts; neither draws one that
+// prints a readout strip, so every count below comes back zero and the file
+// fails on the route rather than on a chart. What the reader loses is the whole
+// point of the rule - on those two pages a value is reachable by hover and by
+// nothing else, which a thumb cannot do. Giving those panels a readout strip is
+// its own row's work; listing the routes here before that lands would only turn
+// a missing feature into a red suite.
 const ROUTES = ['/console/', '/console/model/', '/console/machine/'];
 
 test.describe('the shape switch draws one array two ways', () => {

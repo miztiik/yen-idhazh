@@ -53,8 +53,20 @@ const BUILD = resolve(process.cwd(), 'build');
  * the ones this file was opened for - the feed sentence that said feeds "have
  * never failed" is on Voices now, and a route list that had not followed it
  * would have kept the guard pointing at a page the sentence had left.
+ *
+ * `console/judgement` is here because the guard is about the grammar a console
+ * document may use, and a route left off the list is a page free to use it.
+ * The paths are written without the surrounding slashes the other specs use,
+ * because these address files under `build/` rather than addresses a browser
+ * asks for.
  */
-const ROUTES = ['console', 'console/model', 'console/machine', 'console/voices'] as const;
+const ROUTES = [
+	'console',
+	'console/model',
+	'console/machine',
+	'console/judgement',
+	'console/voices'
+] as const;
 
 interface Claim {
 	/** What the pattern is about, in the message a failure prints. */

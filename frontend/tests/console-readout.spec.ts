@@ -21,11 +21,14 @@ import { stacked } from '../src/lib/charts/stacked';
  */
 
 const ROUTES = ['/console/', '/console/model/', '/console/machine/'] as const;
-// `/console/judgement/` is NOT here yet, and that is a decision rather than an
-// oversight. `MergeLinePlot` declares its columns; `MergedStoriesPanel` shares a
-// column between its bar and its dot and has never declared one either way, so
-// the route would fail this file on a chart that predates it. Adding the route
-// costs that panel a readout strip, which is its own row's work.
+// `/console/judgement/` and `/console/voices/` are the two routes NOT here, and
+// that is a decision rather than an oversight. Neither draws a chart that prints
+// a readout strip, so every count in this file comes back zero on them.
+// Judgement has a named cause: `MergeLinePlot` declares its columns, while
+// `MergedStoriesPanel` shares a column between its bar and its dot and has never
+// declared one either way. Adding either route costs those panels a readout
+// strip, which is its own row's work - and until it lands, a reader on those two
+// pages can reach a value by hover and by nothing else.
 const DESKTOP = { width: 1440, height: 1000 };
 const PHONE = { width: 390, height: 844 };
 

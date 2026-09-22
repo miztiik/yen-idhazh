@@ -130,7 +130,13 @@ function canaryManifests(): [string, string][] {
 	return out;
 }
 
-const ROUTES = ['/console/', '/console/model/', '/console/machine/', '/console/voices/'];
+const ROUTES = [
+	'/console/',
+	'/console/model/',
+	'/console/machine/',
+	'/console/judgement/',
+	'/console/voices/'
+];
 
 interface Declared {
 	route: string;

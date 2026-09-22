@@ -79,10 +79,12 @@ Measured on `origin/main`, 2026-09-22, except where a line says estimate.
 | 1 | The replay count leaves the dispatch surface | - | A | PENDING | - | - | - |
 | 2 | The unreferenced utilities go, and the search evaluation is bounded | - | B | PENDING | - | - | - |
 | 3 | The pipeline test commits what it produced | 1 | A | PENDING | - | - | - |
-| 4 | Nine console specs visit every route the site serves | - | C | PENDING | - | - | - |
+| 4 | Nine console specs visit every route the site serves | - | C | DONE | p43r4 | - | R4 |
 | 5 | The generated contract layer goes | 1, 2, 3, 4 | D | PENDING | - | - | - |
 | 6 | The engineering contract and the pages catch up | 5 | D | PENDING | - | - | - |
 | 7 | The hosted span sink goes | - | E | PENDING | - | - | - |
+
+**Row 4 delivered five of the nine lists, and the other four were already whole.** Its oracle - every route visited by every spec that claims all of them - is not reached, and the reason is a defect the widening found. `/console/judgement/` and `/console/voices/` each draw charts, and neither draws one that prints a readout strip, so `console-chrome.spec.ts` and `console-readout.spec.ts` count zero on those routes and fail on the route rather than on a chart. Both files name the two routes they leave out and say what the reader loses: on those pages a value is reachable by hover and by nothing else, which a thumb cannot do. **Giving `MergedStoriesPanel` and the voices panels a readout strip is unclaimed work** - it belongs to whoever takes the next design row, and until it lands the rule those two files exist to enforce does not cover two of the five pages a reader can open.
 
 ### Section 1a - The five pull requests and the files each owns
 
