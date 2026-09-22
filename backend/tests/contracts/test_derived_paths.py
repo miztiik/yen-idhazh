@@ -61,3 +61,24 @@ def test_a_path_that_carries_a_space_is_refused_where_it_is_written() -> None:
     with pytest.raises(ValueError) as refused:
         paths.refresh_paths(day_dir="frontend/public/digest/2026/08/25 copy")
     assert "word-splits" in str(refused.value)
+
+
+def test_the_days_metrics_record_is_rebuilt_and_never_merged() -> None:
+    """`state/day-metrics` is one whole-file-per-day JSON, written by assemble.
+
+    It is the same two-writer shape as `digest.json` one directory over, and it
+    was in no refresh list until now - so two runs of one day wrote it from two
+    bases and git held two versions of one file with no way to choose. A text
+    merge of two JSON objects is a file that is not JSON, which is a console
+    payload no reader can parse.
+
+    It needs no fragments and no fold. It is already a pure function of the day's
+    item-health rows and the published day, so two runs compute the same file and
+    the only question left is who wins a race - which the rebuild answers in
+    milliseconds.
+
+    What this cannot settle is that the rebuild reproduces the file byte for byte
+    from a different tip. That is the producer's own test.
+    """
+    assert "state/day-metrics" in paths.DERIVED
+    assert "frontend/public/day-metrics" in paths.DERIVED

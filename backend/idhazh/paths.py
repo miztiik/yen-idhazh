@@ -32,6 +32,13 @@ DAY_DIR: Final = "{day_dir}"
 #: rendered charts into that directory and no producer in the assemble job can
 #: make those again, so handing the directory back would delete them.
 #:
+#: `state/day-metrics` is the newest entry. It is one whole-file-per-day JSON
+#: written by `assemble`, which is the same two-writer shape as `digest.json` one
+#: directory over, and it was in no refresh list until now. It needs no fragments
+#: and no fold: it is already a pure function of the day's item-health rows and
+#: the published day, so two runs compute the same file and the rebuild answers
+#: the race in milliseconds.
+#:
 #: Some entries here are not derived in the strict sense - `state/traces` is
 #: named for one shard of one run and `state/published` settles on the earliest
 #: publication date - and they are here because the refresh list has always
@@ -58,6 +65,7 @@ DERIVED: Final[tuple[str, ...]] = (
     "state/traces",
     "state/host-fingerprint",
     "state/segments",
+    "state/day-metrics",
 )
 
 
