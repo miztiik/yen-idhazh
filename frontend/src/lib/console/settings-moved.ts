@@ -64,6 +64,170 @@ export const SETTING_WORDS: Readonly<Record<string, string>> = {
 	sanitizer_version: 'the sanitizer'
 };
 
+/** The two inputs that are many settings rather than one.
+ *
+ * Each is a mapping of one setting to its value, so the comparison below runs
+ * per key. Joined into one string they moved as a block: renaming a key or
+ * dropping a setting read as every decode parameter changing at once, on a day
+ * when nothing about the decode had moved at all.
+ */
+const KEYED_SETTINGS: readonly string[] = ['sampling', 'runtime_flags'];
+
+/** What this project called each runtime switch before the model file carried
+ * llama-server's own flags, and what the same switch is called now.
+ *
+ * **This table is closed and cannot grow.** It names spellings that existed in
+ * records written before 2026-09-22 and nowhere else; the writer stopped
+ * emitting every one of them on that day. `RENAMED_FLAGS` in
+ * `backend/idhazh/contracts/fingerprint.py` is the same table for the same
+ * reason, and two copies of a set that will never gain a member cannot drift.
+ */
+const RENAMED_FLAGS: Readonly<Record<string, string>> = {
+	cache_type_k: '-ctk',
+	cache_type_v: '-ctv',
+	flash_attention: '-fa',
+	n_parallel: '-np',
+	n_threads_batch: '-tb',
+	checkpoint_min_step: '-cms',
+	ctx_checkpoints: '-ctxcp',
+	cache_ram: '-cram',
+	slot_prompt_similarity: '-sps'
+};
+
+/** The three that were one boolean and became a pair of flags. True took the
+ * positive flag and false the `--no-` one, and a flag carries no value of its
+ * own, so both sides record `set` or `runtime-default`. */
+const SPLIT_FLAGS: Readonly<Record<string, readonly [string, string]>> = {
+	cache_prompt: ['--cache-prompt', '--no-cache-prompt'],
+	jinja: ['--jinja', '--no-jinja'],
+	reasoning_preserve: ['--reasoning-preserve', '--no-reasoning-preserve']
+};
+
+/** The words for one setting inside a keyed block, per block, in the order a
+ * readout names them.
+ *
+ * `-ctk` is what llama-server calls it and "the key cache precision" is what it
+ * is; a term from a subsystem is not a term for a user (`CLAUDE.md` section
+ * 0b). A key with no words here falls back to its block's own words, so a
+ * switch added next month reads as "the model server switches" rather than as
+ * nothing - unnamed is worse than coarse.
+ *
+ * The order is this table's, never the record's. A readout whose order changes
+ * with the data is a readout a reader cannot scan twice.
+ */
+export const SETTING_KEY_WORDS: Readonly<Record<string, Readonly<Record<string, string>>>> = {
+	sampling: {
+		temperature: 'the sampling temperature',
+		top_p: 'the sampling cut-off',
+		seed: 'the sampling seed'
+	},
+	runtime_flags: {
+		'-ctk': 'the key cache precision',
+		'-ctv': 'the value cache precision',
+		'-fa': 'the attention kernel',
+		'-np': 'the slot count',
+		'-tb': 'the prompt thread count',
+		'-cms': 'the checkpoint step',
+		'-ctxcp': 'the checkpoint count',
+		'-cram': 'the cache memory',
+		'-sps': 'the slot reuse threshold',
+		'--cache-prompt': 'prompt caching',
+		'--no-cache-prompt': 'prompt caching',
+		'--jinja': 'template rendering',
+		'--no-jinja': 'template rendering',
+		'--reasoning-preserve': 'reasoning preservation',
+		'--no-reasoning-preserve': 'reasoning preservation'
+	}
+};
+
+/** Every word a readout can use, in the order it uses them.
+ *
+ * A block that holds many settings contributes its own keys in place of itself,
+ * so the whole list is one declared order rather than two rules a reader has to
+ * hold at once.
+ */
+export const WORDS_IN_ORDER: readonly string[] = Object.keys(SETTING_WORDS).flatMap((name) =>
+	KEYED_SETTINGS.includes(name)
+		? [...new Set(Object.values(SETTING_KEY_WORDS[name])), SETTING_WORDS[name]]
+		: [SETTING_WORDS[name]]
+);
+
+/** One recorded settings block as the pairs it holds, whichever way it was written.
+ *
+ * Both blocks were one `a=1;b=2` string until 2026-09-22 and a published day is
+ * never rewritten, so every day before that is read here and nowhere else. The
+ * split is the whole of it for `sampling`; `runtime_flags` needs the rename
+ * table on top, because the switches took llama-server's own names the day
+ * before the shape changed.
+ */
+function pairsOf(name: string, recorded: unknown): Record<string, string> {
+	const pairs: Record<string, string> = {};
+	if (recorded !== null && typeof recorded === 'object') {
+		for (const [key, value] of Object.entries(recorded as Record<string, unknown>)) {
+			pairs[key] = JSON.stringify(value);
+		}
+		return pairs;
+	}
+	if (typeof recorded !== 'string') return pairs;
+	for (const term of recorded.split(';')) {
+		const at = term.indexOf('=');
+		if (at <= 0) continue;
+		const key = term.slice(0, at);
+		const value = term.slice(at + 1);
+		if (name !== 'runtime_flags') {
+			pairs[key] = JSON.stringify(value);
+			continue;
+		}
+		const split = SPLIT_FLAGS[key];
+		if (split === undefined) {
+			pairs[RENAMED_FLAGS[key] ?? key] = JSON.stringify(value);
+			continue;
+		}
+		const asked = value.trim().toLowerCase() === 'true';
+		pairs[split[0]] = JSON.stringify(asked ? 'set' : 'runtime-default');
+		pairs[split[1]] = JSON.stringify(asked ? 'runtime-default' : 'set');
+	}
+	return pairs;
+}
+
+/** Every field of one record, flattened to the names the comparison asks about.
+ *
+ * A keyed block becomes one entry per setting, named `sampling.temperature`.
+ * Everything else keeps its own name and its serialised value, so an absent key
+ * and a recorded null are one value and a number and its own spelling as a
+ * string are not.
+ */
+export function comparableInputs(inputs: unknown): Map<string, string> {
+	const flat = new Map<string, string>();
+	if (inputs === null || typeof inputs !== 'object') return flat;
+	const record = inputs as Record<string, unknown>;
+	for (const name of Object.keys(SETTING_WORDS)) {
+		if (!KEYED_SETTINGS.includes(name)) {
+			flat.set(name, JSON.stringify(record[name] ?? null));
+			continue;
+		}
+		const pairs = pairsOf(name, record[name]);
+		// The words table's order first, then whatever the record holds that it
+		// does not name, so a key nobody has words for is still compared.
+		const known = Object.keys(SETTING_KEY_WORDS[name]);
+		const rest = Object.keys(pairs)
+			.filter((key) => !known.includes(key))
+			.sort();
+		for (const key of [...known, ...rest]) {
+			if (key in pairs) flat.set(`${name}.${key}`, pairs[key]);
+		}
+	}
+	return flat;
+}
+
+/** The words for one comparison name, keyed or not. */
+function wordsFor(name: string): string {
+	const at = name.indexOf('.');
+	if (at < 0) return SETTING_WORDS[name];
+	const field = name.slice(0, at);
+	return SETTING_KEY_WORDS[field][name.slice(at + 1)] ?? SETTING_WORDS[field];
+}
+
 /** What one day's record says moved since the last day that kept one. */
 export interface SettingsMoved {
 	date: string;
@@ -76,12 +240,20 @@ export interface SettingsMoved {
 
 /** Every day the recorded inputs named a value the last recorded day did not.
  *
- * The same rule the whole-manifest boundary uses, asked once per field: a day
+ * The same rule the whole-manifest boundary uses, asked once per setting: a day
  * is a change when it ran something the previous RECORDED day did not run, and
  * a day that only stopped using one of yesterday's values changed nothing. The
  * comparison is between consecutive recorded days, so a day with no record is
  * skipped rather than read as a day nothing moved on (`CLAUDE.md` Guardrail
  * #10, and the same refusal Row #10 made of a zero theft figure).
+ *
+ * **Once per setting rather than once per field**, because two of the fields
+ * hold many settings each. Compared whole they moved as a block, so the day the
+ * model file took llama-server's own flag names read as every switch changing
+ * at once - a permanent rule on a published day where the decode had not moved.
+ * Per key, a renamed switch compares against itself and a setting that stopped
+ * being sent is a key that is absent, which this rule already treats as no
+ * change.
  *
  * A run that recorded no inputs is skipped by the check below rather than by a
  * date. Before the record existed every run carries a null, so the two rules
@@ -89,18 +261,15 @@ export interface SettingsMoved {
  * could only say when.
  */
 export function settingsMoved(runs: readonly RecordedRunDay[]): SettingsMoved[] {
-	const names = Object.keys(SETTING_WORDS);
 	const byDate = new Map<string, Map<string, Set<string>>>();
 	for (const day of runs) {
 		for (const record of day.records) {
 			const inputs = record.inputs;
 			if (inputs === null || inputs === undefined || typeof inputs !== 'object') continue;
 			const held = byDate.get(day.date) ?? new Map<string, Set<string>>();
-			for (const name of names) {
+			for (const [name, value] of comparableInputs(inputs)) {
 				const values = held.get(name) ?? new Set<string>();
-				// Serialised, so an absent key and a recorded null are one value and a
-				// number and its own spelling as a string are not.
-				values.add(JSON.stringify((inputs as Record<string, unknown>)[name] ?? null));
+				values.add(value);
 				held.set(name, values);
 			}
 			byDate.set(day.date, held);
@@ -111,13 +280,16 @@ export function settingsMoved(runs: readonly RecordedRunDay[]): SettingsMoved[] 
 	for (let index = 1; index < dates.length; index += 1) {
 		const before = byDate.get(dates[index - 1]) as Map<string, Set<string>>;
 		const now = byDate.get(dates[index]) as Map<string, Set<string>>;
-		const changed = names.filter((name) =>
+		const changed = [...now.keys()].filter((name) =>
 			[...(now.get(name) ?? new Set<string>())].some(
 				(value) => !(before.get(name) ?? new Set<string>()).has(value)
 			)
 		);
-		if (changed.length > 0) {
-			moved.push({ date: dates[index], settings: changed.map((name) => SETTING_WORDS[name]) });
+		// One entry a setting, deduplicated: a boolean that became a pair of flags
+		// moves both halves together and is one thing a reader changed.
+		const settings = [...new Set(changed.map(wordsFor))];
+		if (settings.length > 0) {
+			moved.push({ date: dates[index], settings });
 		}
 	}
 	return moved;

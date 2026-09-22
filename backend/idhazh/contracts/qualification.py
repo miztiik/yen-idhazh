@@ -313,6 +313,11 @@ class QualificationShard(Contract):
     __schema_stem__: ClassVar[str] = "qualification-shard"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-22",
+            change="Embedded sampling and runtime flags become mappings; an old shard reads.",
+            why="Joined, a rename moved the whole record and the console called it a change.",
+        ),
+        ChangelogEntry(
             version="2026-09-18",
             change="An observation gains prefill_ms and decode_ms, both optional.",
             why="The runtime reports the split on every reply and the shard was dropping it.",
@@ -326,11 +331,6 @@ class QualificationShard(Contract):
             version="2026-09-15T23:30",
             change="Added calls_per_item, defaulting to 1.",
             why="Qualification can now run the call path the digest runs, which calls twice.",
-        ),
-        ChangelogEntry(
-            version="2026-09-14T04:00",
-            change="inputs gains turn_markers_sha256, optional.",
-            why="The turn envelope is a control, so a verdict has to record which one it ran.",
         ),
         ChangelogEntry(
             version="2026-08-26",
@@ -465,6 +465,11 @@ class QualificationReport(Contract):
     __schema_stem__: ClassVar[str] = "qualification-report"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-22",
+            change="Embedded sampling and runtime flags become mappings; an old report reads.",
+            why="Joined, a rename moved the whole record and the console called it a change.",
+        ),
+        ChangelogEntry(
             version="2026-09-18T12:00",
             change="Added corpus_shortfalls; every diagnostic carries a unit.",
             why="A thin corpus is recorded rather than fatal, and a bare number answers nothing.",
@@ -478,11 +483,6 @@ class QualificationReport(Contract):
             version="2026-09-14T04:00",
             change="inputs gains turn_markers_sha256, optional.",
             why="The verdict records the same controls the shard beside it does.",
-        ),
-        ChangelogEntry(
-            version="2026-09-13T22:00",
-            change="Added inputs, the recorded input manifest, and removed pipeline_fingerprint.",
-            why="Both halves land in one entry because the first was never stamped.",
         ),
         ChangelogEntry(
             version="2026-08-26",

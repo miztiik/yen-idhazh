@@ -139,6 +139,13 @@ def is_context_exceeded(body: str) -> bool:
 #: it, so both `$role` and `${role}` spell it.
 TURN_ROLE: Final = "role"
 
+#: The roles this project renders, and the two a forged turn would be spelled
+#: with. "system" and "user" share no first character and no last one, so what
+#: two renderings have in common is exactly the bytes around the role rather
+#: than part of the role itself. The derivation reads them to find the marker,
+#: and `turn_markers_digest` reads them to record what the marker writes.
+_TURN_ROLES: Final = ("system", "user")
+
 
 class SystemPlacement(StrEnum):
     """Where this model's template takes the system text. Two, and no third.
@@ -252,13 +259,27 @@ def turn_markers_digest(markers: TurnMarkers) -> str:
     the envelope is digested whole, in one place, and both readers take it from
     here - a second rendering is a second answer.
 
+    **The turn opening is digested as the bytes it writes, not as the template
+    that writes them.** `Template("...$role...")` and `Template("...${role}...")`
+    substitute to the same string and are different source, so digesting the
+    source made a brace a change to the envelope. It was: on 2026-09-21 the
+    markers stopped being typed into config and started being read off the
+    model's own template, every one of the eight came back byte-identical, and
+    this digest moved anyway because the derivation writes the braced form. What
+    reaches a model is what a record of the envelope should turn on.
+
+    Both roles are substituted rather than one. A template that spelled the two
+    openings differently would be refused at server start, so the pair is always
+    one marker with a role in it - and digesting both says so rather than
+    assuming it.
+
     `thinking_kwarg` is out. It is a name in somebody else's template that no
     published word is decoded under.
     """
     return derive_text_digest(
         "\n".join(
             (
-                markers.turn_opening.template,
+                *(markers.turn_opening.safe_substitute({TURN_ROLE: role}) for role in _TURN_ROLES),
                 markers.turn_closing,
                 markers.reply_opening,
                 markers.reply_opening_thinking,
@@ -1037,12 +1058,6 @@ PROBE_ANSWER: Final = "probe"
 #: exactly one short document, so this is a ceiling on a shape that cannot vary,
 #: and raising it would only lengthen a refusal (Guardrail #6).
 PROBE_OUTPUT_TOKENS: Final = 32
-
-#: The roles the derivation asks the template to write, and the two a forged
-#: turn would be spelled with. "system" and "user" share no first character and
-#: no last one, so what the two renderings have in common is exactly the bytes
-#: around the role rather than part of the role itself.
-_TURN_ROLES: Final = ("system", "user")
 
 #: What every derived marker is asked about before a prompt is built from it.
 #: The keys are the marker names a refusal has to name; a forged turn is spelled
