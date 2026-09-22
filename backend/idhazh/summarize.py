@@ -30,6 +30,7 @@ from __future__ import annotations
 import json
 import re
 import textwrap
+from collections.abc import Mapping
 from functools import lru_cache
 from pathlib import Path
 from string import Template
@@ -55,12 +56,11 @@ from idhazh.contracts.base import (
 from idhazh.contracts.call_cost import CallCost, CallKind
 from idhazh.contracts.item_health import FailureCode
 from idhazh.contracts.knobs.evaluation import EvaluationConfig
-from idhazh.contracts.knobs.inference import InferenceConfig
 from idhazh.contracts.knobs.summarize import OverLengthAction, SummarizeConfig, SummaryBand
 from idhazh.contracts.knobs.turns import TurnsConfig
 from idhazh.contracts.summary import LengthAction, Summary, SummaryStatus
 from idhazh.evals.metrics import restates_summary, verbatim_run
-from idhazh.llm.server import Completion, request_payload
+from idhazh.llm.server import Completion, request_payload, window
 from idhazh.sanitize import LINK_PLACEHOLDER, sanitize, untrusted_block
 
 PROMPT_PATH: Final = Path(__file__).parent / "prompts" / "summarize.txt"
@@ -383,48 +383,42 @@ def user_turn(article: Article) -> str:
 
 def fits_context(
     article: Article,
-    inference: InferenceConfig,
+    server: Mapping[str, Any],
     prompt_config: SummarizeConfig | None = None,
     *,
     turns: TurnsConfig | None = None,
 ) -> bool:
-    """Prompt plus reply has to fit, or the reply is silently cut off mid-sentence.
+    """The prompt has to leave the window something to reply in.
 
     **This sizes the single call, and the digest does not send a single call.**
     One system turn, one article, one reply - which is what the qualification
     harness sends a candidate model, and it is the only caller. The digest's own
-    path is two calls and `classify.dag.fits_the_window` sizes that one: 2.8
-    times this sum at the same cap, because the label call's reply is paid twice and the
-    candidate menu is paid once, and neither term exists here at all. Sizing the
-    two-call path with this function would admit articles it cannot hold.
+    path is two calls and `classify.dag.fits_the_window` sizes that one: it
+    reserves both derived reply budgets, because the label call's reply is paid
+    twice and the candidate menu is paid once, and neither term exists here at
+    all. Sizing the two-call path with this function would admit articles it
+    cannot hold.
 
-    **The thinking span is inside the window too.** An envelope that declares a
-    closing marker spends its thinking budget in the same sequence as the
-    answer, so the sum carries both. `turns` is optional because the number it
-    adds is zero on an envelope that does not think, which is where a caller
-    with no entry in hand sits.
-
-    **An uncapped thinking span is not reserved for, it spends the headroom.**
-    `inference.max_think_tokens` null means the span ends on the closing marker
-    or on the window, so there is no number to add and this sum reserves the
-    answer alone. What it still refuses is an article that leaves no headroom at
-    all; what it can no longer promise is that the headroom is enough.
+    **Nothing is reserved for the reply, because nothing caps it.** The two
+    decode budgets left `inference` on 2026-09-21, so a reply ends on the window
+    or on the per-request timeout. What this still refuses is an article that
+    leaves no headroom at all; what it can no longer promise is that the
+    headroom is enough. `turns` is kept because a caller with an entry in hand
+    passes one, and an envelope that thinks spends its reasoning in this same
+    sequence.
     """
     rendered = system_prompt(
         prompt_config, source_words=article.band_source_words, brief=article.brief
     )
     overhead = len(rendered.split()) * 2
-    thinks = turns is not None and turns.thinks
-    thinking = inference.max_think_tokens or 0 if thinks else 0
-    reply = inference.max_answer_tokens + thinking
-    return article.token_count + reply + overhead <= inference.n_ctx
+    return article.token_count + overhead < window(server)
 
 
 def build_request(
     article: Article,
     *,
     model_id: str,
-    inference: InferenceConfig,
+    request: Mapping[str, Any],
     turns: TurnsConfig,
     prompt_config: SummarizeConfig | None = None,
 ) -> dict[str, Any]:
@@ -446,7 +440,7 @@ def build_request(
             source_words=article.band_source_words,
             brief=article.brief,
         ),
-        inference=inference,
+        request=request,
         turns=turns,
     )
 

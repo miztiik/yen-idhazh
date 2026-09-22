@@ -21,7 +21,7 @@ is a sequence nobody sized. `sequence_tokens` is that sum, in one place, read by
 the production gate and by the contract test together.
 
 **Item-major is a correctness rule, not a layout taste.**
-`models.summarize.inference` pins `n_parallel` to 1, so the server holds one
+the summarize entry pins `n_parallel` to 1, so the server holds one
 prefix-cache slot. Every label call first and every summarize-and-plan call afterwards would evict
 the prefix before it was reused, on every item, with nothing in any log to say
 so. `walk` runs every node of one item before the next item's first node, and
@@ -34,16 +34,16 @@ items run is deterministic code elsewhere (`CLAUDE.md` section 0a).
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from enum import StrEnum
-from typing import Final, NamedTuple
+from typing import Any, Final, NamedTuple
 
 from idhazh.classify import calls
 from idhazh.contracts.article import Article
 from idhazh.contracts.knobs.extract import ElementsConfig
-from idhazh.contracts.knobs.inference import InferenceConfig
 from idhazh.contracts.knobs.summarize import SummarizeConfig
 from idhazh.extract import TOKENS_PER_WORD
+from idhazh.llm.server import window
 from idhazh.measured import (
     LABEL_BODY_TOKENS_A_WORD,
     LABEL_MENU_TOKENS_A_ROW,
@@ -125,7 +125,7 @@ if len(NODES) != NODE_COUNT:
         "the call sequence changed length and nothing priced it - it now has "
         f"{len(NODES)} nodes against a recorded {NODE_COUNT}. Every node's reply is "
         "paid twice, once as its own decode and once inside the next node's prompt, so "
-        "re-run `sequence_tokens` against models.summarize.inference.n_ctx before "
+        "re-run `sequence_tokens` against --ctx-size on the summarize entry before "
         "moving this number."
     )
 
@@ -208,7 +208,7 @@ def sequence_tokens(
 
 def fits_the_window(
     article: Article,
-    inference: InferenceConfig,
+    server: Mapping[str, Any],
     *,
     menu_rows: int,
     prompt_config: SummarizeConfig | None = None,
@@ -238,7 +238,7 @@ def fits_the_window(
         sequence_tokens(
             article.token_count, menu_rows=menu_rows, prompt_config=prompt_config
         )
-        <= inference.n_ctx
+        <= window(server)
     )
 
 

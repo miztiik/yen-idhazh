@@ -18,12 +18,12 @@ from idhazh.contracts import app_config, story_similarity_distribution
 from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.appearance_config import AppearanceConfig, ChartConfig
 from idhazh.contracts.call_cost import CallKind
+from idhazh.contracts.fingerprint import PipelineInputs
 from idhazh.contracts.knobs import placement
 from idhazh.contracts.knobs.collect import CollectConfig
 from idhazh.contracts.knobs.console import ConsoleConfig
 from idhazh.contracts.knobs.council import CouncilConfig
 from idhazh.contracts.knobs.evaluation import EvaluationConfig
-from idhazh.contracts.knobs.inference import InferenceConfig
 from idhazh.contracts.knobs.models import ModelsConfig
 from idhazh.contracts.knobs.observability import LoggingConfig, LogLevel, ObservabilityConfig
 from idhazh.contracts.knobs.placement import (
@@ -39,7 +39,8 @@ from idhazh.contracts.story_similarity_distribution import (
     StorySimilarityDistribution,
 )
 from idhazh.extract import TOKENS_PER_WORD
-from idhazh.fingerprint import NOT_DIGESTED, digested_inference_fields
+from idhazh.fingerprint import DIGESTED_FLAGS
+from idhazh.llm.server import window
 from idhazh.measured import LABEL_BODY_TOKENS_A_WORD as _LABEL_A_WORD
 from idhazh.measured import LABEL_MENU_TOKENS_A_ROW as _MENU_A_ROW
 from idhazh.measured import LABEL_SCAFFOLD_TOKENS as _LABEL_SCAFFOLD
@@ -57,6 +58,11 @@ from ._fixtures import (
 )
 
 pytestmark = pytest.mark.contract
+
+#: The window this project served on before any measurement widened one, and the
+#: floor the committed entry has to clear. Not a contract default: the model file
+#: declares what it declares and nothing fills a window in behind it.
+UNMEASURED_WINDOW: Final = 8192
 
 
 @pytest.mark.parametrize("name", sorted(CONFIG_FILES), ids=lambda n: n)
@@ -220,27 +226,22 @@ def test_the_model_server_publishes_its_counters_without_being_asked_for() -> No
     models = committed.model_dump()
     for role in ModelsConfig.roles():
         entry = models[role]
-        del entry["inference"]
         entry["sha256"] = None
-        entry["turns"]["declared_for"] = None
+        entry["declared_for"] = None
     fresh = ModelsConfig.model_validate(models)
 
-    assert fresh.summarize.inference.metrics is True, "a fresh clone must count"
-    assert committed.summarize.inference.metrics is True, "the committed config must count"
+    assert "--metrics" in fresh.summarize.server, "a fresh clone must count"
+    assert "--metrics" in committed.summarize.server, "the committed config must count"
 
 
-def test_the_wider_window_is_the_summarizers_alone() -> None:
-    """Row 3 raised one role, because one role is what was measured.
+def test_the_committed_window_is_one_a_measurement_widened() -> None:
+    """The entry names its own window, because one role is what was measured.
 
-    The visual planner is different weights with its own settings block, and
-    nothing has measured a wider window in front of them - so it keeps the
-    conservative default. That is the whole reason the block sits on the entry
-    rather than on `models`: a number measured against one model may not be
-    inherited by another.
-
-    The assertion is the relationship and not either number, so raising the
-    summarizer's window beside the truncation cap does not need an edit here
-    (Guardrail #6).
+    A number measured against one model may not be inherited by another, which
+    is why the settings sit on the entry rather than on `models`. The assertion
+    is the relationship and not the number, so raising the window beside the
+    truncation cap does not need an edit here (Guardrail #6). The floor is the
+    window this project ran on before anybody measured a wider one.
 
     Attention is pinned in the same file. `auto` is a runtime autodetect that
     may resolve differently on other silicon, and a run that cannot name the
@@ -248,13 +249,10 @@ def test_the_wider_window_is_the_summarizers_alone() -> None:
     """
     models = committed_models()
 
-    assert models.summarize.inference.n_ctx > InferenceConfig().n_ctx, (
+    assert window(models.summarize.server) > UNMEASURED_WINDOW, (
         "the summarizer is the one role a measurement widened"
     )
-    assert models.summarize.inference.flash_attention == "on"
-    assert InferenceConfig().n_ctx == 8192, (
-        "the default is the conservative window for weights nobody has measured"
-    )
+    assert models.summarize.server["-fa"] == "on"
 
 
 #: What the summarize prompt costs before a word of the article reaches it, and
@@ -284,11 +282,15 @@ def _worst_sequence_tokens(committed: AppConfig) -> tuple[int, int]:
     article whose prose tokenizes harder than that overruns the budget its own
     cap gave it, and both windows have to cover the article that did rather than
     the one that behaved.
+
+    The answer term is the summarize-and-plan call's derived budget. It was the
+    role's `max_answer_tokens` until 2026-09-21, and with that knob gone the
+    only number that says how long a reply can be is the one derived from the
+    shape the reply is held to.
     """
-    inference = committed_models().summarize.inference
     cut_words = int(committed.extract.truncation_cap_tokens / TOKENS_PER_WORD)
     worst_prompt = PROMPT_OVERHEAD_TOKENS + int(cut_words * WORST_TOKENS_A_WORD)
-    return worst_prompt, worst_prompt + inference.max_answer_tokens
+    return worst_prompt, worst_prompt + summarize_and_plan_budget_tokens(committed.summarize)
 
 
 def test_the_longest_article_the_cap_allows_still_fits_the_window() -> None:
@@ -298,15 +300,16 @@ def test_the_longest_article_the_cap_allows_still_fits_the_window() -> None:
     from word count and can undercount the rendered prompt.
     """
     committed = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json"))
-    inference = committed_models().summarize.inference
+    n_ctx = window(committed_models().summarize.server)
     worst_prompt, worst_sequence = _worst_sequence_tokens(committed)
+    answer = summarize_and_plan_budget_tokens(committed.summarize)
 
-    assert worst_sequence <= inference.n_ctx, (
+    assert worst_sequence <= n_ctx, (
         f"the longest article extract.truncation_cap_tokens "
         f"({committed.extract.truncation_cap_tokens}) lets through is "
-        f"{worst_prompt} prompt tokens, and {inference.max_answer_tokens} of answer "
-        f"puts the sequence at {worst_sequence} against a window of {inference.n_ctx}. "
-        "Raise models.summarize.inference.n_ctx beside the cap, or lower the cap."
+        f"{worst_prompt} prompt tokens, and {answer} of answer "
+        f"puts the sequence at {worst_sequence} against a window of {n_ctx}. "
+        "Raise --ctx-size in models.summarize.server beside the cap, or lower the cap."
     )
 
 
@@ -369,18 +372,18 @@ def test_the_two_calls_fit_the_window_at_the_cap() -> None:
     that could exhaust the window and truncate the summary or visual plan.
     """
     committed = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json"))
-    inference = committed_models().summarize.inference
+    n_ctx = window(committed_models().summarize.server)
     prompt, sequence = _worst_two_call_sequence_tokens(committed)
 
-    assert sequence <= inference.n_ctx, (
+    assert sequence <= n_ctx, (
         f"the longest article extract.truncation_cap_tokens "
         f"({committed.extract.truncation_cap_tokens}) lets through makes a {prompt}-token "
         f"the label call prompt at elements.max_per_article of "
         f"{committed.elements.max_per_article}. The label call's {label_budget_tokens()}-token "
         f"reply, the {SUMMARIZE_AND_PLAN_SEAM_TOKENS}-token seam and the summarize-and-plan call's "
         f"{summarize_and_plan_budget_tokens(committed.summarize)}-token reply put the pair at "
-        f"{sequence} against a window of {inference.n_ctx}, over by "
-        f"{sequence - inference.n_ctx}. Raise models.summarize.inference.n_ctx, or "
+        f"{sequence} against a window of {n_ctx}, over by "
+        f"{sequence - n_ctx}. Raise --ctx-size in models.summarize.server, or "
         "lower extract.truncation_cap_tokens or elements.max_per_article beside it. "
         "KV is 32 KiB a token on the configured weights, so a doubling is about a "
         "gigabyte and docs/reference/pipeline-cost.md says what the runner had free."
@@ -418,15 +421,15 @@ def test_the_training_window_covers_the_longest_row_the_cap_allows() -> None:
 def test_a_wider_window_moves_the_stamp_and_the_verbosity_does_not() -> None:
     """The two halves of the digest decision, in one place.
 
-    `n_ctx` is digested, so raising it stamps the work apart from every summary
-    written at 8,192 - which is correct, because the prompt those summaries were
-    written under could not have carried as much. `log_verbosity` is not, because
-    a log level cannot move a logit and digesting it would have invalidated every
-    earlier identity the day somebody turned the logging up.
+    The window is digested under its own name, so raising it stamps the work
+    apart from every summary written at the old one - which is correct, because
+    the prompt those summaries were written under could not have carried as
+    much. The log level is not digested, because it cannot move a logit and
+    digesting it would have invalidated every earlier identity the day somebody
+    turned the logging up.
     """
-    assert "n_ctx" in digested_inference_fields()
-    assert "log_verbosity" in NOT_DIGESTED
-    assert NOT_DIGESTED["log_verbosity"].moves_logits is False
+    assert "n_ctx" in PipelineInputs.model_fields
+    assert "-lv" not in DIGESTED_FLAGS
 
 
 def test_the_console_chart_size_is_a_knob_the_frontend_agrees_with() -> None:

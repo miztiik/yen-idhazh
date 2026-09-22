@@ -416,7 +416,7 @@ twice the pool to sample a diverse 1000 from, at 154 MB of history a year instea
 of 77 MB.
 
 **`sequence_length` sizes the single call, and it stopped being
-`models.<teacher>.inference.n_ctx` on 2026-09-13.** A training row is a prompt
+`--ctx-size` on the teacher entry on 2026-09-13.** A training row is a prompt
 the pipeline could have sent and an answer it could have returned, and the
 corpus holds single-call rows - so the sum it has to cover is 997 tokens of
 prompt overhead, up to 23,259 for the longest and hardest-tokenizing article

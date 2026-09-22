@@ -1,0 +1,14 @@
+{
+  "--alias": "ornith-1-5-9b-q5-k-m",
+  "--batch-size": "512",
+  "--ctx-size": "65536",
+  "--metrics": null,
+  "--model": "var/models/weights.gguf",
+  "--no-context-shift": null,
+  "--port": "8080",
+  "--threads": "4",
+  "--ubatch-size": "512",
+  "-fa": "on",
+  "-lv": "4",
+  "-np": "1"
+}

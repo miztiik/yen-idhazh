@@ -29,9 +29,9 @@ question, and the four answers do not mix.
 
 | Path | Holds | Written by | Reaches a reader |
 | --- | --- | --- | --- |
-| `config/` | The tunable knobs: `idhazh.json`, `appearance.json`, `sources.json`, `taxonomy.json`, `watchlist.json` | a person | only the slice the site is handed |
+| `config/` | The tunable knobs: `idhazh.json`, `appearance.json`, `sources.json`, `taxonomy.json`, `watchlist.json`, and one whole model per file under `config/models/` | a person | only the slice the site is handed |
 | `corpus/` | The rolling training window: source text as training samples, its census and its holdout. **`corpus/reference-dataset-1/` is a second collection in the same directory and a different thing entirely**: a frozen, hand-labelled set for measuring the article classifier, written once by hand and never by a run. The two must not share an article, and `build_reference_dataset.py verify` is what says so. **`corpus/reference-dataset-2/` is a third**: a collection built from a URL list supplied by hand, for a later balanced classification sample, with its own settings in `config.json` and its own `scratch/` subtree ignored by git | a run, in CI; `reference-dataset-1/` and `reference-dataset-2/` by a person | **never** |
-| `schemas/` | One generated JSON Schema per contract | `python -m idhazh.contracts.export` | no |
+| `schemas/` | One generated JSON Schema per contract. **A configuration file this project authors has none** (`CLAUDE.md` Guardrail #3): `config/models/<name>.json` is validated in Python and generates nothing, because a schema of a file only this repository writes and reads restates its own reader | `python -m idhazh.contracts.export` | no |
 | `backend/` | The build-time producer. Not a service, ever. `backend/idhazh/` is the package, `backend/idhazh/contracts/` the Pydantic models, `backend/idhazh/contracts/knobs/` one module per block of `config/idhazh.json`, `backend/idhazh/stages/` one module per pipeline stage, `backend/utilities/` the operator tooling, `backend/tests/` its tests | a person | no |
 | `.github/workflows/` | CI, the measurement harness, the daily pipeline, and the Pages deploy | a person | no |
 | `.github/scripts/` | A shell step two or more workflow jobs run | a person | no |

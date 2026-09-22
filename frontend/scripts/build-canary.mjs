@@ -164,7 +164,7 @@ function writeItemHealthCanary() {
 		'llama_rss_bytes', 'llama_rss_anon_bytes', 'llama_rss_peak_bytes', 'llama_major_faults',
 		'python_rss_bytes', 'python_rss_anon_bytes', 'model_id',
 		'model_quantisation', 'n_ctx_configured', 'n_parallel', 'n_threads', 'n_batch',
-		'weights_pinned', 'max_output_tokens', 'label_budget_tokens', 'summary_budget_tokens',
+		'weights_pinned', 'label_budget_tokens', 'summary_budget_tokens',
 		'run_visual_decision',
 		'temperature', 'failed_field', 'failed_rule', 'os_mem_available_bytes',
 		'os_mem_total_bytes', 'os_mem_cached_bytes', 'os_swap_free_bytes', 'os_swap_total_bytes',
@@ -401,7 +401,7 @@ function writeItemHealthCanary() {
 	 * the first article would get the same total as one that did not.
 	 *
 	 * Both pinning settings are real: `config/models/qwen3.5-9b-q4km.json` sets
-	 * `inference.load_mode` and the other four leave it null, so neither value
+	 * `-lm` and the other four leave it out, so neither value
 	 * here is a setting the repository cannot produce.
 	 */
 	const MEMORY_DAYS = new Map([
@@ -458,7 +458,7 @@ function writeItemHealthCanary() {
 	 * one for the Python process, one for the whole cgroup, and the window the
 	 * prompt had to fit. Each one ends in the item id's own spread, so a reader
 	 * checking the page against this file can see which row a figure came from.
-	 * `n_ctx_configured` is the committed `inference.n_ctx`, because a fixture
+	 * `n_ctx_configured` is the committed `--ctx-size`, because a fixture
 	 * that disagreed with the config would draw a context share no run had.
 	 *
 	 * `kernelRecorded` is what puts the newest day's kernel account on the row

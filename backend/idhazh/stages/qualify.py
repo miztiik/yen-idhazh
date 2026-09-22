@@ -7,9 +7,9 @@ body of its own (CLAUDE.md section 1a, "A router is the sharpest case").
 from __future__ import annotations
 
 import time
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import NamedTuple
+from typing import Any, NamedTuple
 
 from idhazh import (
     assemble,
@@ -20,7 +20,6 @@ from idhazh import (
 from idhazh.contracts.article import Article, ArticleStatus
 from idhazh.contracts.base import canonical_json
 from idhazh.contracts.knobs.evaluation import EvaluationConfig
-from idhazh.contracts.knobs.inference import InferenceConfig
 from idhazh.contracts.knobs.run import RunConfig
 from idhazh.contracts.knobs.turns import TurnsConfig
 from idhazh.contracts.qualification import (
@@ -54,6 +53,7 @@ from idhazh.llm.server import (
     DEFAULT_ENDPOINT,
     Completion,
     props,
+    request_timeout_seconds,
 )
 from idhazh.sanitize import SANITIZER_VERSION
 from idhazh.stages import common, two_calls
@@ -245,7 +245,7 @@ def _observe(
     replies: Sequence[Completion | None],
     *,
     repeat: int,
-    inference: InferenceConfig,
+    server: Mapping[str, Any],
     turns: TurnsConfig,
     seconds: float,
 ) -> ItemObservation:
@@ -277,7 +277,7 @@ def _observe(
         completion_tokens=sum(reply.completion_tokens for reply in answered),
         prefill_ms=sum(reply.prefill_ms for reply in answered) or None,
         decode_ms=sum(reply.decode_ms for reply in answered) or None,
-        fits_context_predicted=summarize.fits_context(article, inference, turns=turns),
+        fits_context_predicted=summarize.fits_context(article, server, turns=turns),
         summarize_seconds=seconds,
     )
 
@@ -424,13 +424,13 @@ def stage_qualify(
 
     started = time.monotonic()
     read_url = fetcher or common.live_fetcher(settings)
-    inference = settings.models.summarize.inference
     model = settings.models.summarize
-    observed = props(model_endpoint, timeout=inference.request_timeout_minutes * 60)
+    observed = props(model_endpoint, timeout=request_timeout_seconds(model.request))
     inputs = build_inputs(
         model=model,
         model_sha256=candidate.sha256_observed,
-        inference=inference,
+        server=model.server,
+        request=model.request,
         truncation_cap_tokens=settings.app.extract.truncation_cap_tokens,
         runtime_build=candidate.runtime_build,
         chat_template=str(observed.get("chat_template") or UNRECORDED_TEMPLATE),
@@ -514,7 +514,7 @@ def stage_qualify(
                     summary,
                     answer.replies,
                     repeat=repeat,
-                    inference=inference,
+                    server=model.server,
                     turns=model.turns,
                     seconds=answer.seconds,
                 )

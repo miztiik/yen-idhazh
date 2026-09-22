@@ -1,6 +1,6 @@
 # What processor a run draws, and what it does to a reading
 
-**Last Updated**: 2026-09-19
+**Last Updated**: 2026-09-21
 
 GitHub gives a job whatever machine is free. This page is the record of what that
 choice is worth, measured over seventeen bench dispatches between 2026-08-23 and
@@ -209,7 +209,7 @@ reading limited by the instrument rather than by the machine looks like.
 What this costs, concretely: a decode difference smaller than 8.8 percent cannot
 be established by comparing two runs, however tight each one looks. It needs both
 cases inside one job. [The Gemma dossier's draft-head
-section](../models/gemma-4-e4b-qat.md#what-the-draft-head-is-worth) is the worked
+section](../models/gemma-4-e4b-qat.md#what-the-draft-head-was-worth-and-why-it-is-gone) is the worked
 example - a 5.3 percent difference that two runs could not establish and one
 paired run settled.
 

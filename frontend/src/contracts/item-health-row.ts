@@ -433,9 +433,6 @@ export interface ItemHealthRow {
 	/** Was the server told to lock the weights in memory - `inference.load_mode`, which llama-server spells `-lm`? False is the ordinary setting and says the kernel may reclaim them, which is the state llama_major_faults exists to catch. Recorded because a surface that states the weights are not pinned with nothing on the row to check it against starts lying the day somebody sets the flag. Null on a row written before the column. */
 	weights_pinned?: boolean | null;
 
-	/** The configured ceiling on any one decode. */
-	max_output_tokens?: number | null;
-
 	/** The output budget the label call ran under. */
 	label_budget_tokens?: number | null;
 

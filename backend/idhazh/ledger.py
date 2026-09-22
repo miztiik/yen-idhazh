@@ -118,7 +118,12 @@ from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
 from idhazh.contracts.observation_index import ObservationIndexRow
 from idhazh.contracts.seen import PublishedRow, SeenRow
 from idhazh.contracts.span_rollup import SpanRollupRow
-from idhazh.contracts.story_similarity_pair import StorySimilarityPair
+from idhazh.contracts.story_similarity_pair import (
+    DROPPED_CELLS as DROPPED_PAIR_CELLS,
+)
+from idhazh.contracts.story_similarity_pair import (
+    StorySimilarityPair,
+)
 from idhazh.contracts.telemetry_aggregate import TelemetryAggregateRow
 from idhazh.contracts.validation_row import ValidationRow
 from idhazh.contracts.visual_prune import VisualPruneRow
@@ -1346,6 +1351,11 @@ def _as_item_health_row(raw: dict[str, str]) -> dict[str, str]:
 #: the cell goes, which is the point of dropping it.
 ITEM_HEALTH_CARRIED: Final[frozenset[str]] = frozenset(RETIRED_CELLS) | DROPPED_CELLS
 
+#: The same, for the judged-pair store. One column has left this row and none has
+#: moved, so there is no retired half: `from_csv_row` reads a day file by the
+#: names the contract holds now and the dropped heading simply goes.
+STORY_SIMILARITY_PAIR_CARRIED: Final[frozenset[str]] = DROPPED_PAIR_CELLS
+
 
 def _header_and_keys(
     path: Path, key: tuple[str, ...]
@@ -2141,6 +2151,7 @@ def keyed_paths(state_dir: Path, *, date: str | None) -> list[KeyedLedger]:
                 scored_pairs_path(state_dir, date),
                 STORY_SIMILARITY_PAIR_KEY,
                 StorySimilarityPair,
+                STORY_SIMILARITY_PAIR_CARRIED,
             ),
             KeyedLedger(
                 council_shard_outcomes_path(state_dir, date),
@@ -2180,7 +2191,12 @@ def keyed_paths(state_dir: Path, *, date: str | None) -> list[KeyedLedger]:
             )
         ),
         *(
-            KeyedLedger(path, STORY_SIMILARITY_PAIR_KEY, StorySimilarityPair)
+            KeyedLedger(
+                path,
+                STORY_SIMILARITY_PAIR_KEY,
+                StorySimilarityPair,
+                STORY_SIMILARITY_PAIR_CARRIED,
+            )
             for path in day_partition.day_files(
                 state_dir / CONTENT_SIMILARITY_JUDGE_DIRNAME / SCORED_PAIRS_DIRNAME
             )

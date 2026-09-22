@@ -51,7 +51,6 @@
   "llama_rss_bytes": null,
   "llama_rss_peak_bytes": null,
   "load_1m": null,
-  "max_output_tokens": null,
   "model_calls": null,
   "model_id": null,
   "model_quantisation": null,

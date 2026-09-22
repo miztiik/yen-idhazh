@@ -202,7 +202,7 @@ class FinetuneConfig(Model):
             "the longest and hardest-tokenizing article the cap lets through, and 900 "
             "of answer - 25,156 tokens, which config/idhazh.json covers at 32,768 and "
             "this default does not. It does not follow "
-            "models.<teacher>.inference.n_ctx: that window holds the two-call pair, "
+            "--ctx-size on the teacher entry: that window holds the two-call pair, "
             "and nothing trains on a two-call row. A row longer than this is "
             "dropped and counted by the wrangler and "
             "by the notebook, never truncated, because a truncated target teaches the "

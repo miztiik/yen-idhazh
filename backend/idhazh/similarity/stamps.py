@@ -19,7 +19,6 @@ from dataclasses import dataclass
 from idhazh import config
 from idhazh.contracts.story_similarity_pair import ScorerModelId
 from idhazh.embed import EMBEDDER_ID
-from idhazh.llm.server import decode_digest
 from idhazh.similarity import judge, prompt
 
 
@@ -34,7 +33,7 @@ class ScorerStamp:
 
 @dataclass(frozen=True, slots=True)
 class JudgeStamp:
-    """The six values that decide what a verdict means.
+    """The five values that decide what a verdict means.
 
     `judge_model` is a plain string where its scorer twin is a literal, and the
     difference is real rather than untidy: the encoder is a constant this
@@ -42,7 +41,7 @@ class JudgeStamp:
     names. Which of the known ids it has to be is checked where the value is
     written down, by the contract that holds the column.
 
-    **The last three say how the verdict was decoded, and the first three say
+    **The last two say how the verdict was decoded, and the first three say
     what was asked.** Two runs can read the identical ask under two samplers and
     two envelopes, and before these were here the record counted both as one
     population with nothing able to separate them afterwards.
@@ -52,7 +51,6 @@ class JudgeStamp:
     prompt_digest: str
     grammar_digest: str
     judge_temperature: float
-    decode_digest: str
     thinks: bool
 
 
@@ -78,18 +76,11 @@ def judge_inputs(settings: config.Settings) -> JudgeStamp:
     Both digests are taken over the rendered text rather than over a file, so a
     checkout's newline convention cannot archive a record.
 
-    **The decode digest is taken over a real request body, built by the function
-    that builds the real one.** A digest assembled from config values instead
-    would agree with the config and disagree with what goes out, which is the one
-    case worth seeing. The pair stands in as two empty summaries because the
-    prompt is the one posted key the digest excludes, so no pair can move it.
-
-    **The grammar is excluded from that digest and stamped beside it.**
-    `grammar_digest` is its own value here and its own column on the row, so
-    nothing about the shape the decoder was held to is lost - which is not true
-    of a caller posting `json_schema`, where the schema is inside the decode
-    digest and has no column. This judge posts a grammar and never a schema, so
-    the asymmetry costs this stamp nothing.
+    **The temperature is read off a real request body, built by the function that
+    builds the real one.** A value taken from config instead would agree with
+    config and disagree with what goes out, which is the one case worth seeing.
+    The pair stands in as two empty summaries, because nothing a pair carries
+    reaches the sampler.
     """
     entry = judge.entry_of(settings)
     body = judge.decode_body(
@@ -100,6 +91,5 @@ def judge_inputs(settings: config.Settings) -> JudgeStamp:
         prompt_digest=prompt.prompt_digest(),
         grammar_digest=prompt.grammar_digest(),
         judge_temperature=float(body["temperature"]),
-        decode_digest=decode_digest(body),
         thinks=entry.turns.thinks,
     )

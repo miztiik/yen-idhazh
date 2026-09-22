@@ -6,25 +6,33 @@ writer inherits when it omits one."""
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any
 
 import pytest
-from conftest import CONTRACT_FIXTURES_DIR, SCHEMAS_DIR, read_text
+from conftest import CONTRACT_FIXTURES_DIR, FIXTURES_DIR, SCHEMAS_DIR, read_text
 from pydantic import ValidationError
 
 from idhazh.contracts.base import Contract
 from idhazh.contracts.export import CONTRACTS, expected_filenames, export
+from idhazh.contracts.knobs.models import ModelsConfig
 from idhazh.contracts.run_manifest import RunManifest
 
 from ._fixtures import (
     BY_STEM,
+    committed_models_raw,
     fixture_id,
     fixture_paths,
     load,
 )
 
 pytestmark = pytest.mark.contract
+
+#: One record a real run published, copied out of the archive. It carries the
+#: settings block under its old key, with a weights digest, a decode cap and a
+#: draft head that no build declares now.
+RETIRED_OPTION_RECORD = "a-run-that-pinned-a-retired-option.json"
 
 
 @pytest.mark.parametrize("path", fixture_paths(), ids=fixture_id)
@@ -124,90 +132,88 @@ def test_a_manifest_written_before_the_verbosity_knob_still_reads() -> None:
     manifest = RunManifest.model_validate(payload)
     for run in manifest.runs:
         for use in run.models:
-            assert use.model_ref.inference.log_verbosity is None
+            assert "log_verbosity" not in use.model_ref.inference
 
 
-def test_a_manifest_written_before_the_two_spans_still_reads() -> None:
-    """Section 11's release blocker for the budget that was renamed and the flag that went.
+def test_a_run_record_a_real_run_wrote_still_reads_after_the_blocks_split() -> None:
+    """Section 11's release blocker, asked of a payload a run really published.
 
-    A run record embeds `ModelRef`, which embeds the settings block. Every
-    manifest published before 2026-09-14 spells that block's budget
-    `max_output_tokens` and carries a `thinking` flag beside it, and a build
-    that could not read one of those would lose the whole archive.
+    The settings became two plain mappings on 2026-09-21. Every record written
+    before that carries one typed block under the old key, with the spellings
+    that day's build declared - `declared_for`, a decode cap, a draft head. A
+    mapping is what lets all of them keep reading, and that claim is only worth
+    making against bytes somebody's run actually wrote rather than against a
+    fixture rewritten alongside the shape.
 
-    The old spelling is put back into the canonical fixture rather than
-    committed as a second one, so the two payloads differ in exactly the two
-    keys this migration is about.
+    One file, copied out of the archive rather than read from it: a test that
+    walked the published days would cost more every day the pipeline runs and go
+    red on a date nobody chose (`CLAUDE.md` section 13).
+    """
+    payload = json.loads(read_text(FIXTURES_DIR / "run-manifest" / RETIRED_OPTION_RECORD))
+    carried = [
+        use["model_ref"]["inference"]
+        for run in payload["runs"]
+        for use in run["models"]
+        if "inference" in use["model_ref"]
+    ]
+    assert carried, "the fixture stopped carrying a settings block, so this proves nothing"
+    assert any("declared_for" in block for block in carried)
+    assert any("max_think_tokens" in block for block in carried)
+
+    manifest = RunManifest.model_validate(payload)
+    read_back = [use.model_ref.inference for run in manifest.runs for use in run.models]
+    assert read_back == carried, "a mapping reads a recorded block back unchanged"
+
+
+def test_a_manifest_that_named_any_retired_decode_knob_still_reads() -> None:
+    """Section 11's release blocker for every knob that has left this block.
+
+    A run record embeds `ModelRef`, which embeds the settings block. Three
+    spellings of a decode budget have passed through - `max_output_tokens` until
+    2026-09-14, then `max_answer_tokens` and `max_think_tokens` until 2026-09-21
+    - and a `thinking` flag sat beside the first of them. A build that could not
+    read a manifest naming any of the four would lose the whole archive.
+
+    They are carried rather than dropped now: the block is a plain mapping, so a
+    key this build does not name costs nothing to keep and a reader that wants
+    to know what a run really ran on can still see it.
+
+    The keys are put back into the canonical fixture rather than committed as a
+    second one, so the two payloads differ in exactly what this migration is
+    about - and no test here walks `frontend/public/digest/`, which would cost
+    more every day the pipeline runs and go red on a date nobody chose
+    (`CLAUDE.md` section 13).
     """
     payload = json.loads(read_text(CONTRACT_FIXTURES_DIR / "run-manifest" / "two-runs.json"))
+    retired = {
+        "max_output_tokens": 250,
+        "max_answer_tokens": 900,
+        "max_think_tokens": 256,
+        "thinking": False,
+    }
     rewound = 0
     for run in payload["runs"]:
         for use in run["models"]:
-            inference = use["model_ref"]["inference"]
-            inference["max_output_tokens"] = inference.pop("max_answer_tokens")
-            del inference["max_think_tokens"]
-            inference["thinking"] = False
+            use["model_ref"]["inference"].update(retired)
             rewound += 1
     assert rewound, "the fixture stopped carrying an inference block, so this proves nothing"
 
     manifest = RunManifest.model_validate(payload)
     for run in manifest.runs:
         for use in run.models:
-            # The number is carried across rather than defaulted: the old key
-            # sized one call's answer and so does the new one.
-            assert use.model_ref.inference.max_answer_tokens == 900
-            assert "thinking" not in use.model_ref.inference.model_dump(mode="json")
+            assert retired.items() <= use.model_ref.inference.items()
 
 
-def test_a_manifest_that_pins_a_thinking_budget_keeps_the_number_it_pinned() -> None:
-    """Section 11's release blocker for the cap that became nullable on 2026-09-17.
+def test_a_config_file_that_names_the_retired_settings_block_is_refused_by_name() -> None:
+    """The other half of the split: a person's file is told where the block went.
 
-    Every manifest published before that date spells `max_think_tokens` as an
-    integer, and the default under it moved from 256 to null. A widening that
-    re-read a pinned number as "no cap" would rewrite what an archived run says
-    it decoded under, so both directions are asserted here off one fixture: the
-    pinned number survives, and the same payload with the key removed reads as
-    no cap rather than as the retired 256.
-
-    The key is removed from the fixture rather than read off the committed
-    archive. A test that walked `frontend/public/digest/` would cost more every
-    day the pipeline runs and would go green or red on a date nobody chose
-    (`CLAUDE.md` sections 12 and 13).
+    A run record is migrated in silence because refusing it would stop today's
+    build reading yesterday's run. A config file is the opposite case - somebody
+    typed the block, and accepting it in silence teaches a spelling that nothing
+    reads.
     """
-    payload = json.loads(read_text(CONTRACT_FIXTURES_DIR / "run-manifest" / "two-runs.json"))
-    pinned = 0
-    for run in payload["runs"]:
-        for use in run["models"]:
-            use["model_ref"]["inference"]["max_think_tokens"] = 256
-            pinned += 1
-    assert pinned, "the fixture stopped carrying an inference block, so this proves nothing"
+    raw = committed_models_raw()
+    raw["summarize"]["inference"] = {"n_ctx": 4096}
 
-    manifest = RunManifest.model_validate(payload)
-    for run in manifest.runs:
-        for use in run.models:
-            assert use.model_ref.inference.max_think_tokens == 256
-
-    for run in payload["runs"]:
-        for use in run["models"]:
-            del use["model_ref"]["inference"]["max_think_tokens"]
-
-    uncapped = RunManifest.model_validate(payload)
-    for run in uncapped.runs:
-        for use in run.models:
-            assert use.model_ref.inference.max_think_tokens is None
-
-
-def test_a_settings_block_that_carries_both_budget_spellings_is_refused() -> None:
-    """The case that stops the migration turning `extra=forbid` into `extra=ignore`.
-
-    A rename written as "whichever key is there wins" would silently drop one of
-    two numbers an operator wrote. A payload claiming both budgets is not one
-    this migration can read, so it is left alone and the shape refuses it.
-    """
-    payload = json.loads(read_text(CONTRACT_FIXTURES_DIR / "run-manifest" / "two-runs.json"))
-    for run in payload["runs"]:
-        for use in run["models"]:
-            use["model_ref"]["inference"]["max_output_tokens"] = 250
-
-    with pytest.raises(ValidationError, match="max_output_tokens"):
-        RunManifest.model_validate(payload)
+    with pytest.raises(ValidationError, match=re.escape("models.<role>.server")):
+        ModelsConfig.model_validate(raw)

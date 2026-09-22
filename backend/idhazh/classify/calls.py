@@ -22,11 +22,11 @@ built here and `idhazh.stages.work.stage_work` dispatches them, adjacently per i
 the gate in front of them and the picture they lead to are wired at that same
 call site.
 
-**Each call's output budget is derived from its own grammar.** Neither is the
-summariser role's `max_answer_tokens`, which is sized for a summary and knows
-nothing about either shape - and which cost one ordinary 346-word article its
-whole item on 2026-09-12, because the label call's reply passed 900 tokens and was cut
-mid-string. The label call's reply is one flat object, so there is no half to recover
+**Each call's output budget is derived from its own grammar.** The summariser
+role carried one sized for a summary until 2026-09-21, it knew nothing about
+either shape, and it cost one ordinary 346-word article its whole item on
+2026-09-12: the label call's reply passed 900 tokens and was cut mid-string. The
+label call's reply is one flat object, so there is no half to recover
 from a cut; what it has instead is that a cut is reported as one
 (`FailureCode.LABELS_TRUNCATED`) rather than raised as a JSON error several
 frames from the cause.
@@ -74,7 +74,6 @@ from idhazh.contracts.element import (
     derive_element_id,
 )
 from idhazh.contracts.knobs.extract import ElementsConfig
-from idhazh.contracts.knobs.inference import InferenceConfig
 from idhazh.contracts.knobs.summarize import SummarizeConfig
 from idhazh.contracts.knobs.turns import TurnsConfig
 from idhazh.contracts.visual import CODE_STAMPED_FIELDS, VisualPlan, widest_json_characters
@@ -361,9 +360,10 @@ def label_budget_tokens() -> int:
     so the longest reply the grammar admits is arithmetic over the bounds, and
     the arithmetic runs again on every import - move a bound and this number
     moves with it, without anybody remembering to. Until 2026-09-13 the budget
-    was `models.summarize.inference.max_output_tokens` - `max_answer_tokens`
-    since 2026-09-14 - sized for a summary and knowing nothing about this shape,
-    and one ordinary 346-word article lost its whole item to it.
+    was the summariser role's own, sized for a summary and knowing nothing about
+    this shape, and one ordinary 346-word article lost its whole item to it.
+    That role-level number is gone entirely since 2026-09-21, so this arithmetic
+    is the only thing that bounds the call.
 
     **It is not the summarize-and-plan call's rule, and the reason is arithmetic rather than
     taste.** `summarize_and_plan_budget_tokens` spends its prose as words and counts everything
@@ -546,7 +546,8 @@ def build_label_request(
     table: ElementTable,
     *,
     model_id: str,
-    inference: InferenceConfig,
+    server: Mapping[str, Any],
+    request: Mapping[str, Any],
     turns: TurnsConfig,
     prompt_config: SummarizeConfig | None = None,
 ) -> dict[str, Any]:
@@ -555,8 +556,8 @@ def build_label_request(
     The prompt bytes are rendered here rather than by the model's chat
     template, which is what lets the summarize-and-plan call open with them unchanged. The output
     budget is derived from this call's own grammar, as the summarize-and-plan call's is from both
-    replies' bounds together; the role's `max_answer_tokens` sizes the single
-    call and is not this shape's number.
+    replies' bounds together. There is no role-level budget behind either: the
+    settings block carried one until 2026-09-21 and it sized neither shape.
 
     `prompt_config` reaches the label call because the system turn carries both jobs
     now. Every number it spends is a config-level one, the same on every item,
@@ -570,7 +571,8 @@ def build_label_request(
         system=label_system_prompt(prompt_config),
         user=label_user_turn(article, table),
         output_schema=label_schema(),
-        inference=inference,
+        server=server,
+        request=request,
         turns=turns,
         max_answer_tokens=label_budget_tokens(),
     )
@@ -1375,7 +1377,7 @@ def build_summarize_and_plan_request(
     whole article would prefill a second time - roughly double the stage's wall clock
     for a wording nobody could measure the benefit of.
 
-    The two calls belong **adjacent, per item**. `models.summarize.inference`
+    The two calls belong **adjacent, per item**. the summarize entry
     pins `n_parallel` to 1, so the server holds one cache slot: every label call
     first and every summarize-and-plan call after would evict the prefix before it was reused,
     every time, with nothing in any log to say so. Owning the bytes makes a

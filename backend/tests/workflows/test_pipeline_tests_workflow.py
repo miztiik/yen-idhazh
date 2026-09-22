@@ -18,6 +18,7 @@ from pydantic import ValidationError
 from idhazh import config
 from idhazh.contracts.pipeline_tests import MINIMUM_CANDIDATES, PipelineTestsConfig
 from idhazh.contracts.run_plan import RunPlan
+from idhazh.llm.server import setting, window
 from utilities import candidate_pointer, model_refs
 
 from ._harness import (
@@ -527,10 +528,12 @@ def test_the_case_configs_the_workflow_writes_all_load(tmp_path: Path) -> None:
         assert loaded.app.summarize.asks_for_a_visual_plan is case.asks_for_a_visual_plan
         if not case.asks_for_a_visual_plan:
             assert loaded.app.visuals.enabled_kinds == [], "no picture is reachable"
-        inference = loaded.models.summarize.inference
-        committed = config.load(CONFIG_DIR).models.summarize.inference
-        assert inference.n_parallel == (case.n_parallel or committed.n_parallel)
-        assert inference.n_ctx == (case.n_ctx or committed.n_ctx)
+        served = loaded.models.summarize.server
+        committed = config.load(CONFIG_DIR).models.summarize.server
+        assert setting(served, "n_parallel") == (
+            case.n_parallel or setting(committed, "n_parallel")
+        )
+        assert window(served) == (case.n_ctx or window(committed))
 
 
 def test_the_parallel_case_keeps_the_window_the_gate_admits_articles_against() -> None:
@@ -541,12 +544,12 @@ def test_the_parallel_case_keeps_the_window_the_gate_admits_articles_against() -
     still admits articles against the config number. The case would then refuse
     long articles and read as a concurrency result.
     """
-    committed = config.load(CONFIG_DIR).models.summarize.inference
+    committed = config.load(CONFIG_DIR).models.summarize.server
     for case in _settings().cases:
-        if case.n_parallel is None or case.n_parallel == (committed.n_parallel or 1):
+        if case.n_parallel is None or case.n_parallel == (setting(committed, "n_parallel") or 1):
             continue
         assert case.n_ctx is not None, f"{case.id} moves the slot count and not the window"
-        assert case.n_ctx >= committed.n_ctx * case.n_parallel, (
+        assert case.n_ctx >= window(committed) * case.n_parallel, (
             f"{case.id} leaves each slot less than the gate admits articles against"
         )
 

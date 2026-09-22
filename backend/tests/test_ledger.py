@@ -995,10 +995,13 @@ A_RETIRED_GENERATION: Final = (
 #: away rather than only a name. `cgroup_peak_bytes` is empty on every committed
 #: row - that is why it was dropped - so the filled cell here is a case the
 #: archive has never produced and the only way to prove the cell goes with the
-#: heading (`CLAUDE.md` section 13).
+#: heading (`CLAUDE.md` section 13). `max_output_tokens` is the opposite case and
+#: is filled on every committed row, which is exactly what makes the append this
+#: parametrisation covers fail without its entry.
 A_DROPPED_CELL_HELD: Final[dict[str, str]] = {
     "runner_name": "GitHub Actions 1000031786",
     "cgroup_peak_bytes": "15032385536",
+    "max_output_tokens": "900",
 }
 
 
@@ -1154,9 +1157,11 @@ def test_a_dropped_heading_is_carried_and_its_cell_goes(tmp_path: Path, dropped:
     `RETIRED_CELLS` names one that moved, and `from_csv_row` reads it into the
     column that replaced it. `DROPPED_CELLS` names one that went - `runner_name`,
     because the host record carries the label once a job and a second copy is a
-    thing that can disagree, and `cgroup_peak_bytes`, because the kernel file it
-    was read from is absent on every runner this project has probed - so the row
-    re-files with the cell gone, which is the point of dropping it.
+    thing that can disagree; `cgroup_peak_bytes`, because the kernel file it
+    was read from is absent on every runner this project has probed; and
+    `max_output_tokens`, because the two settings behind it left `inference`
+    and the budgets that actually bounded a decode are still on the row - so the
+    row re-files with the cell gone, which is the point of dropping it.
 
     **Driven from the set rather than from one name**, so a column dropped later
     arrives here with its own case instead of relying on somebody remembering.

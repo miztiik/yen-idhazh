@@ -15,10 +15,7 @@ export interface ContentSimilarityJudgeMetrics {
 	/** The sampler temperature, as the number it was set to. An operator reading a row needs the value, not a digest of it. */
 	judge_temperature?: number | null;
 
-	/** sha256 of the canonical JSON of every key the caller posted that is not excluded. Taken from the payload rather than from config, because a digest built off config cannot see a payload-builder defect. Three keys are excluded and each for its own reason: the prompt differs every row and would make this a row id, and the grammar and the model reference both have a column here already. */
-	decode_digest?: string | null;
-
-	/** How many reasoning spans the call decoded before its answer - 0 for a cold answer, 1 under a thinking envelope. A column of its own because the digest above cannot see the envelope: the only posted key it moves is the prompt, and the prompt is excluded. Without this cell a reading taken after reasoning and one taken cold are one population to every reader. */
+	/** How many reasoning spans the call decoded before its answer - 0 for a cold answer, 1 under a thinking envelope. A column of its own because no other cell here moves with it: an envelope moves only the prompt, which nothing stamps. Without this cell a reading taken after reasoning and one taken cold are one population to every reader. */
 	thinking_spans?: number | null;
 
 	/** sha256 of the rendered system turn. */

@@ -105,7 +105,15 @@ RETIRED_CELLS: Final[Mapping[str, str]] = MappingProxyType(
 #: removal declared once is therefore honoured everywhere the row is read, which
 #: is what stops a column leaving the contract while a run is in flight and
 #: taking that run's day with it.
-DROPPED_CELLS: Final[frozenset[str]] = frozenset({"runner_name", "cgroup_peak_bytes"})
+#:
+#: `max_output_tokens` recorded the configured ceiling on one decode. The two
+#: settings behind it left `inference` on 2026-09-21 and nothing replaced them:
+#: what actually bounded a decode was `label_budget_tokens` and
+#: `summary_budget_tokens`, which are still here and are derived from each
+#: call's own reply shape.
+DROPPED_CELLS: Final[frozenset[str]] = frozenset(
+    {"runner_name", "cgroup_peak_bytes", "max_output_tokens"}
+)
 
 #: The surface that reads each column, by the path that reads it. Every column of
 #: this row appears exactly once here or once in `UNREAD_CELLS` below, so minting
@@ -289,7 +297,6 @@ UNREAD_CELLS: Final[Mapping[str, tuple[str, ...]]] = MappingProxyType(
             "model_quantisation",
             "n_parallel",
             "temperature",
-            "max_output_tokens",
             "label_budget_tokens",
             "summary_budget_tokens",
             "run_visual_decision",
@@ -564,6 +571,11 @@ class ItemHealthRow(Contract):
     __schema_stem__: ClassVar[str] = "item-health-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-21",
+            change="Retired max_output_tokens; the two settings behind it left inference.",
+            why="The budgets that bounded a decode are the two derived ones still on the row.",
+        ),
+        ChangelogEntry(
             version="2026-09-20T18:00",
             change="Steal, faults, pinning and anonymous RSS added; empty cgroup_peak_bytes cut.",
             why="Time another tenant used, and pages the kernel took back, are not our own work.",
@@ -577,11 +589,6 @@ class ItemHealthRow(Contract):
             version="2026-09-17T18:00",
             change="Six os_ columns: what the machine had, not only what a process held.",
             why="An RSS mark counts evictable weight pages, so it cannot answer headroom.",
-        ),
-        ChangelogEntry(
-            version="2026-09-17T12:00",
-            change="Retired runner_name; the host record carries it at job grain.",
-            why="Nothing read the item-row copy, and a second copy is a thing that can disagree.",
         ),
         ChangelogEntry(
             version="2026-08-23",
@@ -1154,9 +1161,6 @@ class ItemHealthRow(Contract):
             "with nothing on the row to check it against starts lying the day somebody "
             "sets the flag. Null on a row written before the column."
         ),
-    )
-    max_output_tokens: int | None = Field(
-        default=None, ge=1, description="The configured ceiling on any one decode."
     )
     label_budget_tokens: int | None = Field(
         default=None, ge=1, description="The output budget the label call ran under."

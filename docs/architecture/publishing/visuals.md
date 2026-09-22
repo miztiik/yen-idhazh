@@ -1406,7 +1406,7 @@ as the same event: `--no-context-shift` means a decode that reaches the end of t
 stops there, on an ordinary HTTP 200, with the same `finish_reason` of `length` a decode that spent
 its whole output budget returns. One member for both would have made the largest thing an operator
 can act on unreadable, because the fix for one is not the fix for the other - a budget cut is the
-reply shape's own arithmetic, and a window cut is `models.summarize.inference.n_ctx` against
+reply shape's own arithmetic, and a window cut is `--ctx-size` on the summarize entry against
 `extract.truncation_cap_tokens`. Separating them costs one comparison at the one call site that
 writes either, over numbers already in hand: the server counted the prompt, and the summarize-and-plan call's budget is
 derived from its own grammar. Plan 11 row #3f, 2026-09-13;

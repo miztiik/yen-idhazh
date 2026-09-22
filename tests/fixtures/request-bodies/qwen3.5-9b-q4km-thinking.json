@@ -1,0 +1,111 @@
+{
+  "chat": {
+    "chat_template_kwargs": {
+      "enable_thinking": true
+    },
+    "messages": [
+      {
+        "content": "You summarize one article.",
+        "role": "system"
+      },
+      {
+        "content": "An article about a bridge.",
+        "role": "user"
+      }
+    ],
+    "model": "qwen3-5-9b-q4-k-m-thinking",
+    "response_format": {
+      "json_schema": {
+        "name": "summary",
+        "schema": {
+          "additionalProperties": false,
+          "properties": {
+            "title": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "title"
+          ],
+          "type": "object"
+        },
+        "strict": true
+      },
+      "type": "json_schema"
+    },
+    "seed": 0,
+    "stream": false,
+    "temperature": 0.2,
+    "top_p": 1.0
+  },
+  "completion": {
+    "cache_prompt": true,
+    "json_schema": {
+      "additionalProperties": false,
+      "properties": {
+        "title": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "title"
+      ],
+      "type": "object"
+    },
+    "model": "qwen3-5-9b-q4-k-m-thinking",
+    "n_predict": 512,
+    "prompt": "<|im_start|>system\nYou summarize one article.<|im_end|>\n<|im_start|>user\nAn article about a bridge.<|im_end|>\n<|im_start|>assistant\n<think>\n",
+    "seed": 0,
+    "stream": false,
+    "temperature": 0.2,
+    "top_p": 1.0
+  },
+  "continued": {
+    "cache_prompt": true,
+    "json_schema": {
+      "additionalProperties": false,
+      "properties": {
+        "title": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "title"
+      ],
+      "type": "object"
+    },
+    "model": "qwen3-5-9b-q4-k-m-thinking",
+    "n_predict": 1024,
+    "prompt": "<|im_start|>system\nYou summarize one article.<|im_end|>\n<|im_start|>user\nAn article about a bridge.<|im_end|>\n<|im_start|>assistant\n<think>\n{\"title\": \"a bridge\"}<|im_end|>\n<|im_start|>user\nNow the picture.<|im_end|>\n<|im_start|>assistant\n<think>\n",
+    "seed": 0,
+    "stream": false,
+    "temperature": 0.2,
+    "top_p": 1.0
+  },
+  "grammar": {
+    "cache_prompt": true,
+    "grammar": "root ::= \"same\" | \"different\" | \"unclear\"",
+    "model": "qwen3-5-9b-q4-k-m-thinking",
+    "n_predict": 512,
+    "n_probs": 3,
+    "post_sampling_probs": false,
+    "prompt": "<|im_start|>system\nYou summarize one article.<|im_end|>\n<|im_start|>user\nAn article about a bridge.<|im_end|>\n<|im_start|>assistant\n<think>\n",
+    "seed": 0,
+    "stream": false,
+    "temperature": 0.2,
+    "top_p": 1.0
+  },
+  "thinking_span": {
+    "cache_prompt": true,
+    "model": "qwen3-5-9b-q4-k-m-thinking",
+    "n_predict": -1,
+    "prompt": "<|im_start|>system\nYou summarize one article.<|im_end|>\n<|im_start|>user\nAn article about a bridge.<|im_end|>\n<|im_start|>assistant\n<think>\n",
+    "seed": 0,
+    "stop": [
+      "\n</think>\n\n"
+    ],
+    "stream": false,
+    "temperature": 0.2,
+    "top_p": 1.0
+  }
+}

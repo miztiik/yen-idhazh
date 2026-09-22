@@ -88,7 +88,7 @@ export interface Reading<T> {
  * a derivation, so a test drives them and Guardrail #6 keeps them out of the code.
  */
 export interface MachineLimits {
-	/** `models.summarize.inference.n_ctx` - what the longest sequence is a share of. */
+	/** `--ctx-size` on the summarize entry - what the longest sequence is a share of. */
 	contextWindow: number | null;
 	/** `run.shard_timeout_minutes` as seconds - what `job_seconds` is a share of. */
 	jobTimeoutSeconds: number | null;
@@ -928,7 +928,7 @@ export function plannedShards(
 
 /** The two ceilings, read from `config/idhazh.json` through the one config reader.
  *
- * `models.summarize.inference.n_ctx` and `run.shard_timeout_minutes` (Guardrail #6). Both have
+ * the summarize entry's `--ctx-size` and `run.shard_timeout_minutes` (Guardrail #6). Both have
  * a default there, so a fresh clone with no config file still draws a ceiling
  * rather than none.
  */

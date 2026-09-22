@@ -1,10 +1,10 @@
 """Re-file every committed day of one store under the column list its contract holds now.
 
 `ledger.require_matching_header` compares the committed header to the contract's
-columns and raises rather than append, so a column added to a row shape leaves
-its store unappendable until the files on disk carry the new header. The next run
-to append then loses its whole commit step and every ledger staged beside it. The
-contract change and this pass are therefore one commit
+columns and raises rather than append, so a column added to or removed from a row
+shape leaves its store unappendable until the files on disk carry the new header.
+The next run to append then loses its whole commit step and every ledger staged
+beside it. The contract change and this pass are therefore one commit
 (`docs/architecture/contracts/schemas.md`).
 
 **Nothing in the repository could do this from a command line before.**
@@ -52,6 +52,7 @@ import sys
 import tempfile
 from collections.abc import Mapping
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from types import MappingProxyType
 from typing import Final
@@ -105,19 +106,30 @@ def _data_rows(text: str, first_column: str) -> int:
     )
 
 
-def _refile(path: Path, model: type[CsvContract], *, root: Path) -> tuple[bytes, Refiled]:
+def _refile(
+    path: Path,
+    model: type[CsvContract],
+    *,
+    root: Path,
+    carried: frozenset[str] = frozenset(),
+) -> tuple[bytes, Refiled]:
     """The file as this contract would write it, and what that moved.
 
     Always done on a copy. A dry run wants the answer without the write, and a
     live run wants the answer it is about to commit to - taking both off one pass
     is what stops the printed report and the written file being two claims.
+
+    `carried` is the store's own retired-heading set, read off `keyed_paths` with
+    the reader. Without it this door only ever WIDENS: `migrate_header` refuses a
+    heading it cannot place, so a store that lost a column would be unappendable
+    and unrepairable at the same time.
     """
     columns = model.csv_columns()
     before = path.read_bytes()
     with tempfile.TemporaryDirectory() as scratch:
         spool = Path(scratch) / path.name
         spool.write_bytes(before)
-        moved = ledger.migrate_header(spool, columns, ledger.refiler(model))
+        moved = ledger.migrate_header(spool, columns, ledger.refiler(model), carried=carried)
         after = spool.read_bytes()
 
     was = ledger.read_header(path)
@@ -127,7 +139,7 @@ def _refile(path: Path, model: type[CsvContract], *, root: Path) -> tuple[bytes,
     if rows != _data_rows(after_text, columns[0]):
         raise ValueError(
             f"{path.name} holds {rows} rows and re-filing it produced "
-            f"{_data_rows(after_text, columns[0])}. A widening adds cells and never rows."
+            f"{_data_rows(after_text, columns[0])}. Re-filing moves cells and never rows."
         )
     return after, Refiled(
         path=path.relative_to(root).as_posix(),
@@ -139,18 +151,29 @@ def _refile(path: Path, model: type[CsvContract], *, root: Path) -> tuple[bytes,
     )
 
 
-def _reader_for(root: Path, state_dir: Path) -> type[CsvContract]:
-    """The contract that reads one row of this store.
+def _reader_for(root: Path, state_dir: Path) -> tuple[type[CsvContract], frozenset[str]]:
+    """The contract that reads one row of this store, and the headings it carries.
 
     Taken from `ledger.keyed_paths`, which is where a committed file is already
     paired with the contract that can read it - so the pairing is never written
-    down a second time here. A store whose files that registry names no reader
-    for is refused with the reason rather than skipped: an operator who typed it
-    is holding a real question, and "nothing happened" is not the answer to it.
+    down a second time here. The carried set travels with the reader for the same
+    reason: a store whose retired headings were looked up separately is a store
+    where the two lists can disagree. A store whose files that registry names no
+    reader for is refused with the reason rather than skipped: an operator who
+    typed it is holding a real question, and "nothing happened" is not the answer
+    to it.
+
+    **Asked for one day rather than for every file** (Guardrail #12). This wants
+    a SHAPE, and a shape is the same on every day of a store, so the cover that
+    lists the whole tree costs a walk that grows with the archive to answer a
+    question that does not. The day it names need not exist: the dated cover
+    joins one path per store rather than opening anything, and only the parents
+    of that path are read here.
     """
-    for entry in ledger.keyed_paths(state_dir, date=None):
+    today = datetime.now(UTC).date().isoformat()
+    for entry in ledger.keyed_paths(state_dir, date=today):
         if root == entry.path.parent or root in entry.path.parents:
-            return entry.model
+            return entry.model, entry.carried
     raise ValueError(
         f"{root.name} holds files that `ledger.keyed_paths` names no reader for, so "
         "nothing here knows which contract writes its header. Register the shape "
@@ -176,10 +199,10 @@ def widen(
     paths = sorted(root.rglob("*.csv"))
     if not paths:
         return []
-    model = _reader_for(root, state_dir)
+    model, carried = _reader_for(root, state_dir)
     report: list[Refiled] = []
     for path in paths:
-        refiled, entry = _refile(path, model, root=state_dir)
+        refiled, entry = _refile(path, model, root=state_dir, carried=carried)
         if entry.changed and write:
             spool = path.with_suffix(".csv.tmp")
             spool.write_bytes(refiled)

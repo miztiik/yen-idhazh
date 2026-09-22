@@ -48,6 +48,8 @@ from idhazh.llm.server import (
     DEFAULT_ENDPOINT,
     Completion,
     completion_url,
+    request_timeout_seconds,
+    window,
 )
 from idhazh.render import asset_relpath, render_planned_visual
 from idhazh.stages import common
@@ -451,7 +453,7 @@ def two_calls_one_item(
     paid for before that reason can be written.
 
     **Adjacent per item, and that is a correctness rule rather than a layout
-    taste.** `models.summarize.inference` pins `n_parallel` to 1, so the server
+    taste.** the summarize entry pins `n_parallel` to 1, so the server
     holds one cache slot: every label call first and every summarize-and-plan call
     afterwards would evict the prefix before it was reused, on every item, with nothing in any
     log to say so. The summarize-and-plan prompt IS the label prompt plus the label
@@ -476,13 +478,12 @@ def two_calls_one_item(
     trace = tracer if tracer is not None else silent_tracer()
     kept = recorder if recorder is not None else _silent_recorder()
     model = settings.models.summarize
-    inference = model.inference
     model_id = model.id
     # Both calls render their own prompt bytes, so they go to the completions
     # route and never to the chat one - which accepts `response_format` and
     # ignores it, losing the only control that survives an injection.
     rendered_endpoint = completion_url(endpoint)
-    timeout = inference.request_timeout_minutes * 60
+    timeout = request_timeout_seconds(model.request)
     generated_at = assemble.utc_now()
     stamp = {
         "model_id": model_id,
@@ -528,7 +529,7 @@ def two_calls_one_item(
                 so_far.table = table
                 if not dag.fits_the_window(
                     article,
-                    inference,
+                    model.server,
                     menu_rows=len(table.elements),
                     prompt_config=settings.app.summarize,
                 ):
@@ -543,7 +544,8 @@ def two_calls_one_item(
                     article,
                     table,
                     model_id=model_id,
-                    inference=inference,
+                    server=model.server,
+                    request=model.request,
                     turns=model.turns,
                     prompt_config=settings.app.summarize,
                 )
@@ -567,7 +569,6 @@ def two_calls_one_item(
                 run_id=run_id,
                 trace=trace,
                 turns=model.turns,
-                max_think_tokens=inference.max_think_tokens,
             )
             label_ms = int((time.monotonic() - asked_at) * 1000)
             if one is None:
@@ -664,7 +665,6 @@ def two_calls_one_item(
                 run_id=run_id,
                 trace=trace,
                 turns=model.turns,
-                max_think_tokens=inference.max_think_tokens,
             )
             summary_ms = int((time.monotonic() - asked_at) * 1000)
             if two is None:
@@ -809,15 +809,15 @@ def _decide_the_visual(
     if not wants_a_plan:
         return visual_planner.suppressed_by_the_gate(summary, **stamp)
     if two.hit_the_budget:
-        inference = settings.models.summarize.inference
+        n_ctx = window(settings.models.summarize.server)
         asked_for = calls.summarize_and_plan_budget_tokens(settings.app.summarize)
-        if two.prompt_tokens + asked_for > inference.n_ctx:
+        if two.prompt_tokens + asked_for > n_ctx:
             LOG.warning(
                 "the window stopped the plan id=%s prompt=%s budget=%s n_ctx=%s",
                 summary.item_id,
                 two.prompt_tokens,
                 asked_for,
-                inference.n_ctx,
+                n_ctx,
             )
             return visual_planner.plan_lost_to_the_window(summary, **stamp)
         return visual_planner.plan_lost_to_the_budget(summary, **stamp)

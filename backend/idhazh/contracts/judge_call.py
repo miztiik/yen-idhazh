@@ -1,6 +1,6 @@
 """What was the instrument SET TO when it wrote the reading beside this?
 
-Seven columns, declared once so that two judges spell them one way. Grain-free,
+Six columns, declared once so that two judges spell them one way. Grain-free,
 so any row may carry them whatever its own unit of work is. A judge that runs no
 model does not inherit this at all - it is the stamp for a model call, not for a
 judge.
@@ -86,27 +86,15 @@ class JudgeConfigStamp(Model):
             "reading a row needs the value, not a digest of it."
         ),
     )
-    decode_digest: Sha256 | None = Field(
-        default=None,
-        description=(
-            "sha256 of the canonical JSON of every key the caller posted that is not "
-            "excluded. Taken from the payload rather than from config, because a "
-            "digest built off config cannot see a payload-builder defect. Three keys "
-            "are excluded and each for its own reason: the prompt differs every row "
-            "and would make this a row id, and the grammar and the model reference "
-            "both have a column here already."
-        ),
-    )
     thinking_spans: int | None = Field(
         default=None,
         ge=0,
         description=(
             "How many reasoning spans the call decoded before its answer - 0 for a "
-            "cold answer, 1 under a thinking envelope. A column of its own because "
-            "the digest above cannot see the envelope: the only posted key it moves "
-            "is the prompt, and the prompt is excluded. Without this cell a reading "
-            "taken after reasoning and one taken cold are one population to every "
-            "reader."
+            "cold answer, 1 under a thinking envelope. A column of its own because no "
+            "other cell here moves with it: an envelope moves only the prompt, which "
+            "nothing stamps. Without this cell a reading taken after reasoning and one "
+            "taken cold are one population to every reader."
         ),
     )
     prompt_digest: Sha256 | None = Field(

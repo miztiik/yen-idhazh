@@ -66,45 +66,26 @@ Seven rows, two pull requests. Read this before the tables.
 
 | # | Row title | PR | Depends-on | Parallel-group | Status | Worktree | PR link | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | The server-log reader goes | A | - | A | IN-FLIGHT - committed, unshipped | `p41c` -> `p41a` | - | - |
-| 2 | The decode stamp and the dead fingerprint go | A | 1 | A | IN-FLIGHT - committed, unshipped | `p41a` | - | - |
-| 3 | The draft head becomes a companion file | A | 2 | A | **REDO** - the commit that exists deletes it | `p41c` | - | - |
-| 4 | Both decode caps go | A | 3 | A | IN-FLIGHT - committed, unshipped | `p41c` | - | - |
-| 5 | The model file carries llama-server's own flags | A | 4 | A | **REDO** - written against a superseded C1 | `p41a` | - | - |
-| 6 | The engineering contract catches up | A | 5 | A | IN-FLIGHT - uncommitted, 7 files | `p41a` | - | - |
-| 7 | The markers are derived at server start | B | 6 | B | IN-FLIGHT - uncommitted, 43 files | `p41b` | - | - |
+| 1 | The server-log reader goes | A | - | A | DONE | `p41a` | - | worker |
+| 2 | The decode stamp and the dead fingerprint go | A | 1 | A | DONE | `p41a` | - | worker |
+| 3 | The draft head becomes a companion file | A | 2 | A | DONE | `p41a` | - | owner |
+| 4 | Both decode caps go | A | 3 | A | DONE | `p41a` | - | worker |
+| 5 | The model file carries llama-server's own flags | A | 4 | A | DONE | `p41a` | - | worker |
+| 6 | The engineering contract catches up | A | 5 | A | DONE | `p41a` | - | worker |
+| 7 | The markers are derived at server start | B | 6 | B | IN-FLIGHT - committed in `p41b`, ships as pull request B | `p41b` | - | owner |
 
-## Section 1c - Adopt before dispatch. This plan has already been run once
+## Section 1c - The adoption, and what it found
 
-**Do not dispatch a row until this section is resolved.** An interrupted run left work in three checkouts, none of it pushed, no pull request open, and until 2026-09-21 the table above said every row was `PENDING`. Re-dispatching a row throws its edits away (`docs/reference/agent-notes/shell-and-tools.md:127`).
+**Resolved 2026-09-21.** An interrupted run had left work in three checkouts with nothing pushed. The adoption kept every commit, and the two rows the Reckoner had flagged were redone rather than rebased.
 
-### What exists, measured 2026-09-21
+**Row 3 had deleted the draft head instead of relocating it**, and `config/models/gemma-4-e4b-qat-no-draft.json` with it. Rebasing that commit would have destroyed a live capability with nothing red to say so: Google ships `mtp-gemma-4-E4B-it.gguf` beside the gemma weights, and the deleted file was the only committed control for the A/B pair that measures what the head is worth. Both are back, the head as a `companion_files` entry with a `flag` bridge.
 
-| Branch, in its worktree | Commits not on `main` | State |
-| --- | --- | --- |
-| `feat/the-draft-head-and-the-decode-caps-go` in `p41c` | `f0671283` rows 3, `ffcdf024` row 4 | clean |
-| `feat/the-model-file-stops-being-a-type` in `p41a` | the two above by merge, plus `d1ecf859` row 1, `57697961` row 2, `5a837759` row 5 | **7 uncommitted files** - row 6, half done |
-| `feat/the-markers-come-from-the-model` in `p41b` | the five above | **43 uncommitted files** including a deleted `contracts/knobs/turns.py` - row 7, half done |
+**Row 5 had left the runtime sweep patching `inference`**, a block it had just removed from the file, so every sweep case would have raised. The sweep now patches the server block, and the `no_draft` candidate and `draft_depth` case set came back with it.
 
-All three are **33 commits behind `origin/main`**, and a dry merge reports **16 files changed on both sides**. Together the commits are 158 files, +3,151 / -4,841.
+Two local checks lie on this machine and neither is a regression. `test_start_script_limit_checks_preserve_other_startup_errors` needs a llama.cpp build that only the main checkout has under `backend/bin/`, so it fails in every worktree. `test_gate_lock.py` goes red when two suites run at once and green alone - the fan-out false red `docs/reference/agent-notes/gates-and-builds.md` describes.
 
-### Two of the five committed rows are now wrong, and this is the part that must not be lost
+Why the first run ended half-done is recorded where a later reader will find it, in `docs/reference/agent-notes/shell-and-tools.md`: a worker cannot delegate until the harness allows it and the refusal is silent, and a worker that starts a long gate returns an empty report with its work uncommitted. **The fix is in the brief: commit before any long gate, and leave the full suite to CI.**
 
-| Commit | Why it cannot be rebased as it stands |
-| --- | --- |
-| `f0671283` **Retire the draft head from the model shape** | Row 3 was rewritten on 2026-09-21 to **relocate rather than delete**. `config/models/gemma-4-e4b-qat.json:5-15` declares a multi-token-prediction head the model's publisher ships, and `docs/reference/benchmarks/what-the-draft-head-is-worth.md` measures it. **Rebasing this commit silently destroys a live capability**, and nothing red would say so |
-| `5a837759` **Carry llama-server's own flags in the model file** | Row 5 was written against a C1 that had no `companion_files` block and no `flag` bridge. Both arrived on 2026-09-21 |
-
-Rows 1, 2 and 4 are untouched by that reversal and their commits stand.
-
-### Why it ended this way, so the next dispatch does not repeat it
-
-`docs/reference/agent-notes/shell-and-tools.md:121-129` already records both halves, and neither was read before dispatch:
-
-- **A worker cannot delegate until the harness allows it, and the refusal is silent rather than an error.** `chat.subagents.allowInvocationsFromSubagents` must be enabled, every delegating agent needs `agent` in its `tools` list, and one real read-only nested invocation must be verified before relying on it.
-- **A worker that starts a long gate returns one useless line and leaves its work uncommitted.** The nested turn ends while the suite still runs, so the report is empty and no pull request exists - which reads exactly like a worker that did nothing. The note records three workers on one plan ending this way. **Ask the worktree before concluding anything**: `git -C <worktree> status --porcelain`.
-
-**The fix belongs in the brief, not in the tool: a worker commits before any long gate, and leaves the full browser project to CI.** That line is now in the Execution row of section 0.
 
 ### The two pull requests
 

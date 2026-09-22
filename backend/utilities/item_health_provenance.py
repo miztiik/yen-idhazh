@@ -250,7 +250,6 @@ GROUPS: Final[tuple[Group, ...]] = (
             "n_threads",
             "n_batch",
             "weights_pinned",
-            "max_output_tokens",
             "run_visual_decision",
             "temperature",
         ),
@@ -340,7 +339,7 @@ def function_tokens(
     **The constants the function itself names**, which is what stops a key with
     two holes matching a column it could never have produced: the per-call
     flattener names `CALL_SLOTS` and `COST_FIELDS`, and without this it also
-    claimed `max_output_tokens`, because some other module's list holds `max`.
+    claimed `max_output_tokens`, because some other module's list held `max`.
     A function naming no constant fills its holes from the whole tree - one
     spells its slot as a parameter, and a narrower answer there would be no
     answer at all.

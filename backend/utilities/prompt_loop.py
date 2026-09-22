@@ -50,7 +50,13 @@ from idhazh.evals.metrics import (
     unsupported_numbers,
     verbatim_run,
 )
-from idhazh.llm.server import DEFAULT_ENDPOINT, post, props, request_payload
+from idhazh.llm.server import (
+    DEFAULT_ENDPOINT,
+    post,
+    props,
+    request_payload,
+    request_timeout_seconds,
+)
 
 REPO_ROOT: Final = Path(__file__).resolve().parents[2]
 RUBRIC_PATH: Final = Path(__file__).parent / "prompt_loop_rubric.md"
@@ -355,7 +361,7 @@ class LiveSummarizer:
 
     def summarize(self, prompt: str, items: Sequence[FrozenItem]) -> list[ItemSummary]:
         ask = self._settings.app.summarize
-        inference = self._settings.models.summarize.inference
+        request = self._settings.models.summarize.request
         model_id = self._settings.models.summarize.id
         produced: list[ItemSummary] = []
         for item in items:
@@ -363,7 +369,7 @@ class LiveSummarizer:
             payload = summarize.build_request(
                 article,
                 model_id=model_id,
-                inference=inference,
+                request=request,
                 turns=self._settings.models.summarize.turns,
                 prompt_config=ask,
             )
@@ -371,7 +377,7 @@ class LiveSummarizer:
                 prompt, ask, source_words=article.band_source_words, brief=article.brief
             )
             completion = post(
-                payload, endpoint=self._endpoint, timeout=inference.request_timeout_minutes * 60
+                payload, endpoint=self._endpoint, timeout=request_timeout_seconds(request)
             )
             draft = summarize.parse_draft(
                 completion.content,
@@ -449,18 +455,18 @@ class ModelJudge:
         return bool(reply.get("prefers_candidate", False))
 
     def _call(self, user: str, schema: dict[str, object], schema_name: str) -> dict[str, object]:
-        inference = self._settings.models.summarize.inference
+        request = self._settings.models.summarize.request
         payload = request_payload(
             model_id=self._settings.models.summarize.id,
             system=_JUDGE_SYSTEM,
             user=user,
             output_schema=schema,
-            inference=inference,
+            request=request,
             turns=self._settings.models.summarize.turns,
             schema_name=schema_name,
         )
         completion = post(
-            payload, endpoint=self._endpoint, timeout=inference.request_timeout_minutes * 60
+            payload, endpoint=self._endpoint, timeout=request_timeout_seconds(request)
         )
         parsed = json.loads(completion.content)
         if not isinstance(parsed, dict):

@@ -159,7 +159,7 @@ a second of decode with three other agents working on the box.
 **The label call's reply can exceed its own output budget on an ordinary article, and
 when it does the item is lost with no recovery.** On the third article - 346
 words, the BEFORE layout, so the base commit and not this change - the label call decoded
-**900 tokens, hit `models.summarize.inference.max_output_tokens` exactly, and
+**900 tokens, hit the retired `max_output_tokens` exactly, and
 stopped with `finish_reason = length`**. The reply was cut mid-string and
 `classify.calls.parse_label` raised `Invalid JSON: EOF while parsing a string
 at line 1 column 2805`.

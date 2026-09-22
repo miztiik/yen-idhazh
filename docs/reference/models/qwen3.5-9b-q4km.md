@@ -1,6 +1,6 @@
 # Qwen3.5-9B-Q4_K_M
 
-**Last Updated**: 2026-09-20
+**Last Updated**: 2026-09-21
 **Status: incumbent.** It has summarized every published item since 2026-08-27.
 `incumbent` is one of three words a dossier's status line may hold - `evaluated`,
 `incumbent`, `superseded` - and this line is the only place this model's
@@ -89,7 +89,7 @@ an argument on this page.
 **What the thinking arm has not measured.** Nothing on this page was re-taken
 with reasoning on. A thinking span decodes into the same sequence, so seconds an
 item and the window headroom both move, and neither has a reading - the arm
-exists to take them. `max_think_tokens` is null on both files, so the span ends
+exists to take them. No decode cap is sent on either file, so the span ends
 on the marker above or on the window and on nothing else
 ([../../architecture/summarize/throughput.md](../../architecture/summarize/throughput.md#what-a-thinking-span-costs-and-the-one-part-that-is-still-an-estimate)).
 
@@ -135,9 +135,11 @@ through the chat template. That is why this repository carries two entries over
 one set of weights rather than one entry with a flag.
 
 **The card recommends 32,768 output tokens for most queries.** This entry pins
-`max_answer_tokens: 900`, which is a summariser's budget rather than a
-disagreement with the card - but it is the number to look at first if a
-thinking-on run returns nothing, because the span and the answer share it.
+no decode budget at all, which is not a disagreement with the card: the window
+is what bounds a reply, and each rendered call is bounded further by a budget
+derived from the shape that reply is held to. This entry carried
+`max_answer_tokens: 900` until 2026-09-21, and that number never reached the two
+calls the daily run makes.
 
 **All three candidates were checked on 2026-09-19, and all three are off-recipe
 at 0.2.** [ornith-1.5-9b-q5km.md](ornith-1.5-9b-q5km.md) publishes two recipes

@@ -32,6 +32,7 @@ from idhazh.contracts.run_manifest import ConfigDigest
 from idhazh.contracts.sources import Sources
 from idhazh.contracts.taxonomy import Taxonomy
 from idhazh.contracts.watchlist import Watchlist
+from idhazh.llm.server import SETTING_KEYS
 from idhazh.sanitize import why_a_forged_turn_would_survive
 
 REPO_ROOT: Final = Path(__file__).resolve().parents[2]
@@ -44,12 +45,6 @@ _FILES: Final[tuple[str, ...]] = ("idhazh.json", "sources.json", "taxonomy.json"
 #: the layer under it and can disagree. Its digest is not recorded because
 #: nothing in the run reads a value out of it.
 _APPEARANCE_FILE: Final = "appearance.json"
-
-#: The turn envelope lived here until 2026-09-13 and now lives on the model
-#: entry (`models.<role>.turns`). The path is checked rather than forgotten
-#: because the package location is exactly where somebody would put it back, and
-#: a file nothing reads is a set of markers an operator believes are live.
-RETIRED_TURN_MARKERS: Final = Path(__file__).parent / "prompts" / "turn_markers.json"
 
 #: The roles `idhazh.llm.server.TurnMarkers.conversation` substitutes into the
 #: turn opening. A marker is checked as the bytes an attacker would have to
@@ -112,6 +107,69 @@ def refuse_markers_the_boundary_cannot_hold(models_file: str, models: ModelsConf
             )
 
 
+def refuse_a_model_nothing_could_run(models_file: str, models: ModelsConfig) -> None:
+    """Three questions asked once, before anything is fetched and before any server.
+
+    The settings blocks are plain mappings, so llama-server refuses a flag it
+    does not accept and nothing here second-guesses it. These three are the ones
+    the binary cannot answer for.
+
+    **Two keys are required**, because this project computes on them and a
+    default of ours beside a default of the server's is two answers for one
+    value. The window is real arithmetic in `idhazh.classify.dag` and
+    `idhazh.evals.qualify`, and the published site reads it at build time. The
+    timeout is multiplied by sixty at four call sites and llama-server has no
+    default to fall back on, so it is coerced here - a string then raises naming
+    the key rather than inside a request mid-item.
+
+    **`declared_for` catches one specific edit**: a weights string changed in
+    place with the settings left behind. Nothing else in the tree sees a
+    half-done model swap, and a stale weights reference is silent.
+
+    **The judge rule catches a second entry naming weights nobody serves.** No
+    server is started for it, so it decodes on the weights the summariser's
+    server holds while every verdict is recorded under a model that never saw
+    the pair.
+    """
+    for role, entry in models.entries():
+        for block, name in (
+            (entry.server, "n_ctx"),
+            (entry.request, "request_timeout_minutes"),
+        ):
+            key = SETTING_KEYS[name]
+            if key not in block:
+                raise ValueError(
+                    f"config/{models_file} is refused: models.{role} declares no {key}. "
+                    "This project computes on it, so there is no server-side default "
+                    "to fall back to"
+                )
+        timeout = SETTING_KEYS["request_timeout_minutes"]
+        try:
+            float(entry.request[timeout])
+        except (TypeError, ValueError) as error:
+            raise ValueError(
+                f"config/{models_file} is refused: models.{role}.request.{timeout} is "
+                f"{entry.request[timeout]!r}, which is not a number of minutes"
+            ) from error
+        if entry.declared_for != entry.sha256:
+            raise ValueError(
+                f"config/{models_file} is refused: models.{role} is declared for "
+                f"{entry.declared_for or 'no weights at all'} and names "
+                f"{entry.sha256 or 'no weights at all'}. Every setting and every marker "
+                "on that entry was derived against one model on one runner, so re-derive "
+                f"them for these weights and set models.{role}.declared_for to the digest "
+                "the entry carries - or put the entry back"
+            )
+        if role not in type(models).roles() and entry.sha256 != models.summarize.sha256:
+            raise ValueError(
+                f"config/{models_file} is refused: models.{role} names weights "
+                f"{entry.sha256 or 'nothing at all'} and models.summarize names "
+                f"{models.summarize.sha256 or 'nothing at all'}. No server is started "
+                f"for models.{role}, so it decodes on the weights the summariser's "
+                "server holds - name those, or make it a role of its own"
+            )
+
+
 def models_path(config_dir: Path, app: AppConfig) -> Path:
     """Where the active model is, following the pointer and nothing else.
 
@@ -137,13 +195,6 @@ class Settings:
 
 def load(config_dir: Path = DEFAULT_CONFIG_DIR) -> Settings:
     """A fresh clone runs on the committed defaults; a missing file is a failure, not a default."""
-    if RETIRED_TURN_MARKERS.exists():
-        raise ValueError(
-            f"{RETIRED_TURN_MARKERS.name} is back in backend/idhazh/prompts/ and nothing "
-            "reads it. The turn envelope is models.<role>.turns in the file "
-            "config/idhazh.json points models_file at, pinned to the weights by "
-            "declared_for - delete this file and edit the entry"
-        )
     read = {name: (config_dir / name).read_text(encoding="utf-8") for name in _FILES}
     app = AppConfig.from_json(read["idhazh.json"])
     read[app.models_file] = models_path(config_dir, app).read_text(encoding="utf-8")
@@ -154,6 +205,7 @@ def load(config_dir: Path = DEFAULT_CONFIG_DIR) -> Settings:
         # now, so the one thing a refusal could no longer say for itself is the
         # one an operator needs before they can edit anything.
         raise ValueError(f"config/{app.models_file} is refused: {error}") from error
+    refuse_a_model_nothing_could_run(app.models_file, models)
     refuse_markers_the_boundary_cannot_hold(app.models_file, models)
     appearance = AppearanceConfig.from_json(
         (config_dir / _APPEARANCE_FILE).read_text(encoding="utf-8")

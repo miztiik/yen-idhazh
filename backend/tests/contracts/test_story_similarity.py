@@ -266,11 +266,11 @@ def test_a_verdict_with_no_judge_named_is_refused() -> None:
 def test_the_judge_call_stamp_sits_at_the_tail_of_the_pair_header() -> None:
     """A column inserted in the middle re-reads every committed row one cell out.
 
-    This is why the seven are declared in the row's own body rather than
+    This is why the six are declared in the row's own body rather than
     inherited from `judge_call.JudgeConfigStamp`: pydantic collects a base
     class's fields first, so inheriting would put them at the HEAD. The header
     the store carried before the widening is committed as a fixture, so this
-    asserts the widening was additive rather than counting seven names.
+    asserts the widening was additive rather than counting six names.
     """
     columns = StorySimilarityPair.csv_columns()
     narrow = narrow_header()
@@ -279,7 +279,6 @@ def test_the_judge_call_stamp_sits_at_the_tail_of_the_pair_header() -> None:
     assert columns[len(narrow) :] == (
         "judge_id",
         "judge_temperature",
-        "decode_digest",
         "grammar_applied",
         "first_token_probabilities",
         "thinking_spans",
@@ -311,7 +310,6 @@ def test_a_widened_row_round_trips_through_the_csv_cells() -> None:
     stamped = StorySimilarityPair.model_validate(
         a_pair(
             judge_temperature=0.0,
-            decode_digest=derive_text_digest("a payload"),
             grammar_applied=True,
             first_token_probabilities='[{"token":" YES","probability":0.81}]',
             thinking_spans=0,

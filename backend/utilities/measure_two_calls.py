@@ -67,6 +67,7 @@ from idhazh import config
 from idhazh.classify.calls import (
     build_label_request,
     build_summarize_and_plan_request,
+    label_budget_tokens,
     label_system_prompt,
     summarize_and_plan_budget_tokens,
     summarize_and_plan_user_turn,
@@ -87,6 +88,7 @@ from idhazh.llm.server import (
     server_argv,
     turn_markers,
     turn_markers_digest,
+    window,
 )
 from idhazh.sanitize import FENCE_CLOSE, FENCE_OPEN
 
@@ -124,21 +126,21 @@ def weights_digest(weights: Path) -> str:
 
 
 def refuse_undeclared_weights(weights: Path, models: ModelsConfig, role: str = "summarize") -> str:
-    """Hash the file and compare it with the block that configures it.
+    """Hash the file and compare it with the entry that configures it.
 
-    `inference.declared_for` is the sha256 of the entry its inference block
-    belongs to, and `ModelsConfig` already refuses a config where those two
-    disagree. So this is the one comparison config cannot make for itself: the
-    bytes on this disk against the bytes the run was tuned for.
+    `declared_for` is the sha256 the entry's settings and markers were derived
+    against, and `config.load` already refuses a file where that and the entry's
+    own digest disagree. So this is the one comparison config cannot make for
+    itself: the bytes on this disk against the bytes the run was tuned for.
     """
     entry = getattr(models, role)
-    declared = entry.inference.declared_for
+    declared = entry.declared_for
     if declared is None:
         raise WrongWeightsError(
-            f"models.{role}.inference.declared_for is unset, so there is nothing to "
+            f"models.{role}.declared_for is unset, so there is nothing to "
             "check these weights against - set it before taking a reading"
         )
-    print(f"hashing {weights} against models.{role}.inference.declared_for", flush=True)
+    print(f"hashing {weights} against models.{role}.declared_for", flush=True)
     found = weights_digest(weights)
     if found != declared:
         raise WrongWeightsError(
@@ -656,7 +658,8 @@ def run_item(
         article,
         table,
         model_id=model.id,
-        inference=model.inference,
+        server=model.server,
+        request=model.request,
         turns=model.turns,
         prompt_config=app.summarize,
     )
@@ -725,7 +728,8 @@ def pick_samples(
             sample.article,
             table,
             model_id=model.id,
-            inference=model.inference,
+            server=model.server,
+            request=model.request,
             turns=model.turns,
             prompt_config=app.summarize,
         )
@@ -904,7 +908,7 @@ def main(argv: list[str] | None = None) -> int:
         binary=args.binary,
         weights=args.weights,
         model=model,
-        inference=model.inference,
+        server=model.server,
         port=args.server_port,
     )
     print(" ".join(argv_line), flush=True)
@@ -944,15 +948,16 @@ def main(argv: list[str] | None = None) -> int:
         system_tokens = tokenizer.count(
             markers.turn("system", label_system_prompt(app.summarize))
         )
-        label_decode = model.inference.max_answer_tokens
+        label_decode = label_budget_tokens()
         summarize_and_plan_decode = summarize_and_plan_budget_tokens(app.summarize)
-        ceiling = model.inference.n_ctx - (label_decode + summarize_and_plan_decode + rendered_turn)
+        n_ctx = window(model.server)
+        ceiling = n_ctx - (label_decode + summarize_and_plan_decode + rendered_turn)
         print(
             f"the summarize-and-plan call's question is {trailing} tokens of text and "
             f"{rendered_turn} as a rendered turn; with {label_decode} for the label call's decode "
             f"and {summarize_and_plan_decode} for the second call's, the label "
             f"call's prompt may reach {ceiling} of "
-            f"{model.inference.n_ctx} in production",
+            f"{n_ctx} in production",
             flush=True,
         )
 
@@ -979,7 +984,8 @@ def main(argv: list[str] | None = None) -> int:
                     built.article,
                     element_table(built.article, config=app.elements),
                     model_id=model.id,
-                    inference=model.inference,
+                    server=model.server,
+                    request=model.request,
                     turns=model.turns,
                     prompt_config=app.summarize,
                 )["prompt"]

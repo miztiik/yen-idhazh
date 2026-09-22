@@ -8,6 +8,7 @@ import shutil
 from pathlib import Path
 
 from idhazh.contracts.pipeline_tests import PipelineTestsConfig
+from idhazh.llm.server import SETTING_KEYS
 
 CASES_ROOT = Path("backend/var/cases")
 
@@ -41,12 +42,12 @@ def write_case(case: object, *, source: Path, root: Path) -> Path:
     models_path = root / app["models_file"]
     models = json.loads(models_path.read_text(encoding="utf-8"))
     entry = dict(models["summarize"])
-    inference = dict(entry["inference"])
+    server = dict(entry["server"])
     if case.n_parallel is not None:  # type: ignore[attr-defined]
-        inference["n_parallel"] = case.n_parallel  # type: ignore[attr-defined]
+        server[SETTING_KEYS["n_parallel"]] = case.n_parallel  # type: ignore[attr-defined]
     if case.n_ctx is not None:  # type: ignore[attr-defined]
-        inference["n_ctx"] = case.n_ctx  # type: ignore[attr-defined]
-    entry["inference"] = inference
+        server[SETTING_KEYS["n_ctx"]] = case.n_ctx  # type: ignore[attr-defined]
+    entry["server"] = server
     models["summarize"] = entry
     models_path.write_text(json.dumps(models, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return root

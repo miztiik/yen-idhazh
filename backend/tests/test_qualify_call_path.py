@@ -73,7 +73,7 @@ def folded(*replies: Completion | None) -> ItemObservation:
         a_summary(),
         replies,
         repeat=1,
-        inference=built.INFERENCE,
+        server=built.SERVER,
         turns=built_turns(),
         seconds=1.0,
     )
