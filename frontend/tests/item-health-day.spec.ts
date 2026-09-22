@@ -2,7 +2,8 @@ import { expect, test } from '@playwright/test';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { itemHealthForDay, readDayShards } from '../src/lib/server/payload';
+import { machineRecordDays } from '../src/lib/server/host-fingerprint';
+import { dayShardFiles, itemHealthForDay, readDayShards } from '../src/lib/server/payload';
 
 /**
  * Row 24: the standing console band reads the newest published day's item-health
@@ -121,6 +122,65 @@ test('readDayShards keeps the newest recorded days and opens nothing behind them
 		// A cover wider than the record is not an error and not a starve.
 		expect(readDayShards(dir, 90).rows).toHaveLength(5);
 		expect(readDayShards(join(root, 'nothing-here'), 7).rows).toEqual([]);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+/**
+ * Row 5 of the no-file-has-two-writers plan: a day is a `<DD>.csv` file today
+ * and a `<DD>/` directory of writer-owned files once more than one job writes
+ * the ledger, and every reader here has to take both.
+ *
+ * Nothing writes a directory yet, so the fixture is where the second shape
+ * exists at all. Committed, read inside the test, and small enough that its
+ * cost cannot follow what the archive holds (`CLAUDE.md` section 13).
+ */
+const SHAPES = join(import.meta.dirname, 'fixtures', 'day-shards');
+
+test('dayShardFiles reads a day file and a day directory as one ledger', () => {
+	const dir = join(SHAPES, 'item-health');
+
+	expect(dayShardFiles(dir, -1).map((shard) => shard.date)).toEqual([
+		'2026-09-17',
+		'2026-09-18',
+		'2026-09-18'
+	]);
+	// The cover counts recorded days, never files. The newest day is two writer
+	// files and it is still one day, so a cover of 1 takes both of them.
+	expect(dayShardFiles(dir, 1).map((shard) => shard.date)).toEqual(['2026-09-18', '2026-09-18']);
+	expect(readDayShards(dir, -1).rows.map((entry) => entry.item_id)).toEqual([
+		'a-day-file-item',
+		'shard-zero-item',
+		'shard-one-item'
+	]);
+	// A cover of 1 reads the day directory whole and opens nothing behind it.
+	expect(readDayShards(dir, 1).rows.map((entry) => entry.item_id)).toEqual([
+		'shard-zero-item',
+		'shard-one-item'
+	]);
+});
+
+test('machineRecordDays reports one date a day, however many files the day holds', () => {
+	// The record's own day directory holds two writer files. A reader asking
+	// which days the instrument ran gets one answer for that day, not two.
+	expect(machineRecordDays(-1, SHAPES)).toEqual(['2026-09-18']);
+});
+
+test('a day directory with no readable file stops the read rather than drawing nothing', () => {
+	const root = mkdtempSync(join(tmpdir(), 'day-shards-'));
+	try {
+		// Not in the committed fixture, because git carries no empty directory.
+		mkdirSync(join(root, 'item-health', '2026', '09', '18'), { recursive: true });
+		expect(() => dayShardFiles(join(root, 'item-health'), -1)).toThrow(
+			/day directory with no readable \.csv file/
+		);
+		// A stray anywhere else is still skipped: the producer refuses it at write
+		// time, and a throw here would white-screen a page over one file.
+		writeFileSync(join(root, 'item-health', '2026', '09', 'notes.txt'), '', 'utf8');
+		mkdirSync(join(root, 'scores', '2026', '09'), { recursive: true });
+		writeFileSync(join(root, 'scores', '2026', '09', 'notes.txt'), '', 'utf8');
+		expect(dayShardFiles(join(root, 'scores'), -1)).toEqual([]);
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}

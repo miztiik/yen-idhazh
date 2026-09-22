@@ -444,7 +444,8 @@ def _prune_score_shards(
         return []
     LOG.info(
         "score archive%s: summarised %s - %s rows and %s distinct measurements over "
-        "%s day files, %s bytes of rows into %s bytes of archive - and hard-deleted %s",
+        "%s day files, %s bytes of rows into %s bytes of archive - dropped %s index "
+        "day files beside them - and hard-deleted %s",
         " (dry run)" if scores.dry_run else "",
         ", ".join(scores.archived) or "no month",
         scores.rows_archived,
@@ -452,8 +453,9 @@ def _prune_score_shards(
         len(scores.days_removed),
         scores.source_bytes,
         scores.archive_bytes,
+        len(scores.index_days_removed),
         ", ".join(scores.hard_deleted) or "no month",
     )
-    removed = list(scores.days_removed)
+    removed = list(scores.days_removed) + list(scores.index_days_removed)
     removed += [score_archive.archive_relpath(stem) for stem in scores.hard_deleted]
     return removed

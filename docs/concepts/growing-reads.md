@@ -1,6 +1,6 @@
 # Growing Reads
 
-**Last Updated**: 2026-09-21
+**Last Updated**: 2026-09-22
 One question, asked of every read:
 
 > **Does this read cost more when a run appended more?**
@@ -268,8 +268,8 @@ listed: its cover is its argument. These are `backend/`'s;
 | `retention.count_published_items` | every staged day payload | bytes and items have to come from one corpus |
 | `retention._dated_days` | the expired day directories only | it grows with the **backlog**, not with the archive, and shrinks as the prune works |
 | `build_reference_dataset.archive_candidates` | every committed `digest.json` under `frontend/public/digest/` | the candidate pool for the frozen reference set has to be every article the pipeline has published, because the set is drawn on **outlet diversity** and a window would hide the outlets that publish rarely. It is a verb a person types, off the daily path and run once a set (2026-09-13) |
-| `item_health_provenance.archive_columns` | every day file of `state/item-health/` | the question is whether ANY run has ever written a column, and a window answers only for the days inside it - so it would report a column retired last year and a column nothing was ever wired to fill as the same thing. It is a verb a person types, off the daily path, and what it prints is pasted into [the column report](../architecture/sources/item-health-columns.md). No test repeats it (`CLAUDE.md` section 13) |
-| `empty_column_census.census` | every day file of `state/item-health/` and of `state/host-fingerprint/` | same question as the row above, asked of every published ledger rather than one, and crossed with the reader map on each contract so that a column with neither a reader nor a writer exits non-zero. A window cannot answer it for the same reason, and a test cannot hold it for a second one: an assertion that a column is empty goes red the day it first fills, which is a date rather than an edit. It is a verb a person types, off the daily path. Measured 2026-09-21: 29 day files and 14,026 item rows, 6 day files and 76 host rows |
+| `item_health_provenance.archive_columns` | every shard of every day of `state/item-health/` | the question is whether ANY run has ever written a column, and a window answers only for the days inside it - so it would report a column retired last year and a column nothing was ever wired to fill as the same thing. It is a verb a person types, off the daily path, and what it prints is pasted into [the column report](../architecture/sources/item-health-columns.md). No test repeats it (`CLAUDE.md` section 13) |
+| `empty_column_census.census` | every shard of every day of `state/item-health/` and of `state/host-fingerprint/` | same question as the row above, asked of every published ledger rather than one, and crossed with the reader map on each contract so that a column with neither a reader nor a writer exits non-zero. A window cannot answer it for the same reason, and a test cannot hold it for a second one: an assertion that a column is empty goes red the day it first fills, which is a date rather than an edit. It is a verb a person types, off the daily path. Measured 2026-09-21: 29 day files and 14,026 item rows, 6 day files and 76 host rows |
 | `sample_sheet.index` | every committed `digest.json` under `frontend/public/digest/` | a drawn pair can straddle midnight, so its two articles are not always on the draw's own date - resolving against that date alone lost 2,035 of the 2,804 pairs drawn over 29 days. It is a verb a person types when labelling the holdout ([../how-to/label-the-similarity-holdout.md](../how-to/label-the-similarity-holdout.md)), off the daily path, and nothing in the pipeline reads what it writes |
 
 **Two reads on this table are scheduled by nothing, and that is the whole of
@@ -441,17 +441,38 @@ the last day there was.
 | Read | What it opens | Its cover |
 | --- | --- | --- |
 | `payload.readShards` | the newest `months` shards of a month-sharded series | `LEDGER_WINDOW_MONTHS`, which is `shardMonths(90)` and so 5 |
-| `payload.readDayShards`, `payload.itemHealthRows` | the newest `days` day files of `state/item-health/` | `LEDGER_WINDOW_DAYS`, which is `shardDays(90)` and so 91 |
+| `payload.readDayShards`, `payload.dayShardFiles`, `payload.itemHealthRows` | the shards of the newest `days` recorded days of `state/item-health/` | `LEDGER_WINDOW_DAYS`, which is `shardDays(90)` and so 91. **The cover counts days, never files** - see below |
 | `payload.evalRows` | through `readDayShards`, over `state/scores/` | the same 91 |
 | `payload.feedResults` | through `readDayShards`, over `state/feed-health/` | the same 91 |
 | `similarity-ledger.fittedLines` | through `readDayShards`, over `state/content-similarity-judge/fitted-thresholds/` | its caller's `days`. The Judgement route hands it the widest window preset, worked out before the first file is opened |
 | `similarity-holdout.holdoutReading` | `state/content-similarity-judge/holdout-pairs.csv`, then one published day payload for each distinct date that file names | the length of the holdout file, and nothing else |
 | `similarity-holdout.mergeLineHoldoutScore` | through `readDayShards`, over `state/content-similarity-judge/merge-line-holdout-scores/` | its caller's `days`. The Judgement route hands it the widest window preset, worked out before the first file is opened |
-| `span-rollup.loadSpanRollup` | through `readShards`, over `state/span-rollup/` | the same 5, and the caller wants the newest entry |
+| `span-rollup.loadSpanRollup` | `state/span-rollup/` at both grains: through `readShards` over the month files, and through `readDayShards` over the day tree | the same 5 months for the month files, and the same 91 days for the day tree. Only one of the two shapes is ever on disk, so the sum is what is there |
 | `machine-counters.loadMachineCounters` | `state/host-fingerprint/` and `state/item-health/`, both through `readDayShards` | the day cover, for both |
 | `payload.itemHealthForDay` | one item-health day file | one date |
 | `payload.dayMetrics` | one record a date | the dates handed in |
 | `payload.telemetryMonths`, `payload.indexMonths` | one directory listing, sliced to the newest months | `LEDGER_WINDOW_MONTHS`, where the caller takes it |
+
+**A day is one file today and a directory of writer-owned files later, and the
+cover counts days either way.** Where more than one job writes a ledger there is
+no head to fold into, so the day holds one file per writer -
+`<run_id>-<attempt>-<job>-<shard>.csv`, and no two writers can name one file
+([partitions.md](partitions.md#what-counts-as-a-day-file)). `dayShardFiles`
+groups those files by their day before it takes the newest `days` of them, so
+`LEDGER_WINDOW_DAYS` keeps meaning 91 recorded days whatever shape the store is
+in. What moves is the file count inside the window, not the window.
+
+**What that costs, said rather than implied.** A live day costs one open per
+writer. On the two five-run days measured on 2026-09-17 and 2026-09-20 that is
+20 writers for item-health and 25 for host-fingerprint, against one file each
+today. A day whose writers have been folded to one `settled.csv` costs one open
+again. So the read is bounded by the number of days still unfolded times the
+writers a day, plus one file for every folded day in the window - and by nothing
+in the archive behind it. **Nothing writes a day directory yet**, so today every
+one of these reads opens exactly the files it opened before. The fold that puts
+the ceiling on the unfolded half is a later row of the same plan; until it
+lands, the unfolded half is every day in the 91-day window, which is the honest
+upper bound and the reason this paragraph says so instead of naming a knob.
 
 **The holdout read is the one on this page whose cover is a file rather than a
 number, and it is the one that reaches outside the window.** It asks whether the
