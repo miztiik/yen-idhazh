@@ -41,7 +41,7 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260921-40-bonsai-probe-plan.md](20260921-40-bonsai-probe-plan.md) | 7 | 0 | 7 | 4 |
 | [20260921-41-lane-a-model-file-plan.md](20260921-41-lane-a-model-file-plan.md) | 7 | 0 | 7 | 0 |
 | [20260921-43-the-ledgers-and-the-generated-layer-plan.md](20260921-43-the-ledgers-and-the-generated-layer-plan.md) | 7 | 0 | 7 | 3 |
-| [20260922-44-the-model-file-is-the-fetch-interface-plan.md](20260922-44-the-model-file-is-the-fetch-interface-plan.md) | 5 | 0 | 5 | 0 |
+| [20260922-44-the-model-file-is-the-fetch-interface-plan.md](20260922-44-the-model-file-is-the-fetch-interface-plan.md) | 5 | 1 | 4 | 0 |
 
 ## In flight - 5
 
@@ -106,7 +106,7 @@ section 3 is where it is answered.
 | #2 | 43 | B | The unreferenced utilities go, and the search evaluation is bounded | - |
 | #4 | 43 | C | Nine console specs visit every route the site serves | - |
 
-## Waiting on another row - 87
+## Waiting on another row - 86
 
 | Row | Plan | Group | Title | Waiting on |
 | --- | --- | --- | --- | --- |
@@ -195,7 +195,6 @@ section 3 is where it is answered.
 | #1 | 44 | A | The printer learns the whole file set, and the traversal closes | plan 41 names no row; per section 1e names no row |
 | #2 | 44 | B | The workflows read the model file instead of relaying it | 1 is PENDING |
 | #3 | 44 | B | The cache names the set | 2 is PENDING |
-| #4 | 44 | C | The benchmark arms learn the server died, and the repeat count is config | 3 is PENDING |
 | #5 | 44 | D | The harness keeps only what more than one module reads | 3 is PENDING |
 
 ## Finished - 19 plans with no live row
