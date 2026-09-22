@@ -79,6 +79,7 @@
 | D2 | Callers anywhere that override one of those 18 | **0** | Not in `backend/`, not in `.github/`. The address is a global wearing a parameter's clothes. |
 | D3 | Production call sites relying on a `server.py` default | 2 | `stages/validate.py` line 128 and `utilities/prove_the_entry.py` line 19. The second already loads settings one line above. |
 | D4 | Readers of `DEFAULT_HEALTH` | 0 | Defined, used nowhere. Row 2 deletes it. |
+| D4b | Production readers of `DEFAULT_ENDPOINT` and `DEFAULT_COMPLETION_ENDPOINT` **after row 3** | 0 | `DEFAULT_COMPLETION_ENDPOINT` already has none today. Row 3 deletes both once the eighteen are rewired; their two remaining readers are tests and both move to a fixture. |
 | D5 | Sampling keys a model file may set that reach the wire | **3** | `temperature`, `top_p`, `seed`. A fourth validates and is dropped in silence. |
 | D6 | Identity rows in `SETTING_KEYS` | 3 of 10 | Each maps a name to itself and gates every other key for nothing. Row 9 removes them. |
 | D7 | Samplers llama.cpp applies that this project does not name | at least 12 | Including `top_n_sigma`, which is in the active chain. Row 9 pins 13; it does not pin the chain, and Table B row B3 says so. |
@@ -190,6 +191,8 @@ def resolve_endpoint(base_url: str) -> str:
 
 `_CHAT_PATH: Final = "/v1/chat/completions"` joins `_COMPLETION_PATH` at line 66, and `DEFAULT_ENDPOINT` is composed from it so nothing spells the route twice. `DEFAULT_HEALTH` is deleted - zero readers - and no `health_url()` replaces it, because a replacement would land with zero readers too.
 
+**`DEFAULT_ENDPOINT` and `DEFAULT_COMPLETION_ENDPOINT` survive row 2 and are deleted by row 3.** Row 2 keeps them so the tree still runs between the two commits; row 3 removes the last eighteen readers and then removes the constants. Keeping a constant nothing reads is the defect `DEFAULT_HEALTH` is deleted for, and it would be the one address in the repository that no config value can move.
+
 **`server.py` never reads the config.** Every function that needs the address already has `settings`. A zero-argument load would read `config/idhazh.json` while three workflows run the stage under `backend/var/candidate-config`: the control failing quietly rather than loudly. Escalation triggers 2 and 3.
 
 ### C3 - the eighteen sites, and what each becomes
@@ -207,6 +210,13 @@ Without this row, rows 2 and 4 ship a field, a schema, a frontend type and a val
 **Two live defects this row fixes, not to be read as a no-op.** `stage_validate` at `validate.py:102` takes no address at all and falls through to the module constant twice; it gains one. `--base-url` at `cli.py:518` is dead - the name appears nowhere else in the file and the judge stage's only production caller never passed it - so **the flag is deleted**.
 
 **Two properties checked in advance**: nothing in `backend/` passes `endpoint=None`, `base_url=None` or `model_endpoint=None`; and no test introspects a signature or `__defaults__` of any of the eighteen. **If any of the seven lacks `settings` in scope, stop** - escalation trigger 2.
+
+**Then both constants go.** Once the eighteen are rewired, `DEFAULT_ENDPOINT` and `DEFAULT_COMPLETION_ENDPOINT` have no production reader left - `DEFAULT_COMPLETION_ENDPOINT` has none today either. Their two remaining readers are tests, and both move:
+
+| Test | Today | After |
+| --- | --- | --- |
+| `backend/tests/test_summarize.py` lines 479 to 483 | Asserts the three constants relate correctly to each other | Asserts the same property of `resolve_endpoint` and `completion_url` against a **fixture** base URL. Same check, no constant |
+| `backend/tests/workflows/test_model_server_jobs.py` line 457 | Asserts `DEFAULT_ENDPOINT` begins with the address the workflows probe | Asserts the **committed** `model_server.base_url` matches the address the workflows probe. It is a statement about two committed files, and it going red means somebody committed the mismatch row 5 refuses at run time |
 
 ### C4 - the one loopback literal outside the workflows
 
@@ -489,11 +499,11 @@ One commit per row, in Reckoner order. A worker who follows it never writes an i
 - **The integration test that would have caught the defect this row exists to fix**: a fixture config with `base_url: "http://192.168.1.20:9090"`, one stage run with **no endpoint argument**, an assertion that the outbound URL carries that host. Driven by the recorded-response harness; no socket opens.
 - `pytest backend/tests` green. Both `partial` sites still bind a resolved string.
 
-**Oracle.** `git grep -n '= DEFAULT_ENDPOINT' -- backend` returns nothing. Changing `base_url` in a fixture config changes where the stage posts.
+**Oracle.** `git grep -n '= DEFAULT_ENDPOINT' -- backend` returns nothing, and `git grep -n 'DEFAULT_ENDPOINT\|DEFAULT_COMPLETION_ENDPOINT' -- backend` returns nothing at all - both constants are gone with their last reader. Changing `base_url` in a fixture config changes where the stage posts.
 
 **What it cannot settle.** Whether a real second machine answers. Nothing here binds a server off loopback, so the first end-to-end proof is a person running one elsewhere by hand.
 
-**Decisions.** 3.1 The eight in `server.py` become required with no sentinel - only two call sites rely on a default and one already holds settings. 3.2 The other ten resolve on the first line, because two `partial` sites bind eagerly. 3.3 `--base-url` is deleted, not wired: it has never reached a server. 3.4 `stage_validate` gains an address - the one place in this row where behaviour genuinely changes, and it is a fix.
+**Decisions.** 3.1 The eight in `server.py` become required with no sentinel - only two call sites rely on a default and one already holds settings. 3.2 The other ten resolve on the first line, because two `partial` sites bind eagerly. 3.3 `--base-url` is deleted, not wired: it has never reached a server. 3.4 `stage_validate` gains an address - the one place in this row where behaviour genuinely changes, and it is a fix. 3.5 Both address constants are deleted once nothing reads them, for the same reason `DEFAULT_HEALTH` is: an address no config value can move is the one most likely to drift out of step with the one that can.
 
 **Rejected.** A separate structural commit installing sentinels that resolve to the constant: proven safe, and still pointless - it adds a line the next commit deletes. The real split is row 2 lands the contract, row 3 lands the wiring.
 
