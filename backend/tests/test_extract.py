@@ -1135,8 +1135,9 @@ def test_a_witness_under_the_floor_is_a_caption_and_does_not_count() -> None:
     "kind", ["BreadcrumbList", "Organization", "WebPage"], ids=lambda k: str(k)
 )
 def test_a_json_ld_node_that_is_not_an_article_is_not_a_witness(kind: str) -> None:
-    assert corroborated_words(_page_with(heading=None, json_ld=_ld(400, kind=kind)), 
-                              min_words=100) is None
+    page_text = _page_with(heading=None, json_ld=_ld(400, kind=kind))
+
+    assert corroborated_words(page_text, min_words=100) is None
 
 
 def test_a_type_declared_as_a_list_still_names_an_article() -> None:
