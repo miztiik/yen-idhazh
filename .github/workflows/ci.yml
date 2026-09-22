@@ -74,7 +74,7 @@ jobs:
           # range.
           BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
           HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
-        run: .github/scripts/browser-suite-needed.sh >> "$GITHUB_OUTPUT"
+        run: node frontend/scripts/test-scope.ts --ci >> "$GITHUB_OUTPUT"
 
       # Read once here, used by the two jobs that cache a browser, because a
       # key written twice is a key that drifts and then never hits. The value
@@ -115,7 +115,10 @@ jobs:
           # a push names its own.
           BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
           HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
-        run: .github/scripts/changed-docs.sh >> "$GITHUB_OUTPUT"
+        # The runner's own python, because the step that pins one runs below and
+        # only for a change that touched a page. So this module imports the
+        # standard library and nothing this repository ships.
+        run: python3 backend/utilities/changed_docs.py >> "$GITHUB_OUTPUT"
 
       - uses: actions/setup-python@v7
         if: steps.changed.outputs.any == 'true'
