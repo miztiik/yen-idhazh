@@ -35,8 +35,8 @@
 #
 # When the rebase does conflict, who wrote a path decides it - never which side
 # of the rebase the version came from. A writer's filename carries
-# `<run_id>-<attempt>-<job>-<shard>`, so a conflicted name that opens with this
-# job's four values is this job's own work and what this job wrote is kept.
+# `<run_id>-<attempt>-<job>-<shard>`, so a conflicted name carrying this job's
+# four values is this job's own work and what this job wrote is kept.
 # Every other conflicted path stops the push and names itself: no retry makes
 # another writer's file this job's, and taking the tip's copy instead would
 # delete that writer's rows at exit 0. It should never fire, because two writers
@@ -53,6 +53,8 @@
 #   SHARD                   optional: which shard of the job this is. It names
 #                           the attempt line, and it is the last element of the
 #                           identity a conflicted filename is matched against.
+#                           A whole number, default 0. The filename spells it
+#                           with two digits, so it is padded here.
 #   REFRESH_PATHS           optional: the committed paths this job rebuilds
 #   REGENERATE_COMMAND      optional: the producer that rebuilds them
 #   DROP_RACED_ASSETS_COMMAND optional: deletes this attempt's rendered assets
@@ -182,21 +184,34 @@ clear_what_the_tip_will_write_over() {
 }
 
 # The identity this job's own files carry. `ledger.segment_path` names a
-# writer's file `<run_id>-<attempt>-<job>-<shard>`: the run, the try at that
-# run, the job, and the shard inside it. GitHub allocates the run id and nothing
-# else can reproduce it, so two jobs can never both claim one filename.
+# writer's file `<run_id>-<attempt>-<job>-<shard>`, and this project's run id is
+# itself `<date>-<execution>` - so a committed name reads
+# `2026-09-22-35743751882-1-work-03.csv`. That leading date is why the match
+# below is not anchored to the first character: the runner hands this script the
+# execution number, and the date is the plan job's to choose. The execution
+# number is allocated by GitHub and is eleven digits, so finding it with the
+# attempt, the job and the shard behind it names one writer and no other.
 #
-# Every value comes from what the runner already sets, so no caller passes one.
-# Off a runner they are all empty, and the identity is then a string no
-# committed filename can open with - which is the right answer for a checkout
-# that is not a job: it owns nothing.
-IDENTITY="${GITHUB_RUN_ID:-}-${GITHUB_RUN_ATTEMPT:-}-${GITHUB_JOB:-}-${SHARD:-}"
+# The shard is two digits in the filename and written plainly on the runner, so
+# it is padded here rather than compared as it arrives.
+SHARD_NUMBER="${SHARD:-0}"
+case "$SHARD_NUMBER" in
+  '' | *[!0-9]*)
+    echo "SHARD must be a whole number of shards, 0 or more" >&2
+    exit 2
+    ;;
+esac
+printf -v SHARD_PADDED '%02d' "$SHARD_NUMBER"
+IDENTITY="${GITHUB_RUN_ID:-}-${GITHUB_RUN_ATTEMPT:-}-${GITHUB_JOB:-}-${SHARD_PADDED}"
 
 # TRUE for a file this job is entitled to keep. One string comparison, and it
-# reads no state.
+# reads no state. Off a runner there is no execution number, and a checkout that
+# is not a job owns nothing - so that case answers no before the match runs,
+# which an unanchored pattern would otherwise let through.
 mine() {
+  [ -n "${GITHUB_RUN_ID:-}" ] || return 1
   case "${1##*/}" in
-    "$IDENTITY"*) return 0 ;;
+    *"$IDENTITY"*) return 0 ;;
     *) return 1 ;;
   esac
 }

@@ -198,10 +198,20 @@ Git's own names for the two sides of a conflict invert between a rebase and a
 merge, so a design that reasons in them is a design nobody can check. The
 writer's identity is already in the filename instead.
 `state/segments/<ledger>/<run>-<attempt>-<job>-<shard>.csv` names the run, the
-try at that run, the job and the shard inside it, and GitHub allocates the run
-id, so no second writer can take that name.
+try at that run, the job and the shard inside it, and GitHub allocates the
+execution number inside the run id, so no second writer can take that name.
 
-So a conflicted filename that opens with this job's own four values is this
+**The script looks for that identity anywhere in the name, not only at the
+front.** A run id is `<date>-<execution>`, and the date is the plan job's to
+choose, so the runner never hands a commit step the whole of it. What the runner
+does hand over is the execution number, which is eleven digits nothing else in a
+committed filename produces - so the execution number with the attempt, the job
+and the shard behind it names one writer just as exactly as a match from the
+first character would. Off a runner there is no execution number at all, and the
+script answers "not mine" before it compares anything: a checkout that is not a
+job owns nothing.
+
+So a conflicted filename that carries this job's own four values is this
 job's work, and what this job wrote is kept. **Every other conflicted path stops
 the push and names the path and this job.** There is no third answer. Retrying
 cannot make another writer's file this job's, and taking the tip's copy instead

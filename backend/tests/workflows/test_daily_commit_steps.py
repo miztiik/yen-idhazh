@@ -69,17 +69,28 @@ RESOLVER_ROWS: Final = FIXTURES_DIR / "resolver"
 #: The run this job belongs to, and the run a second job belongs to. Both are
 #: spelled here because `_isolated_env` hands the script the environment it
 #: inherited, and on a GitHub runner that already carries a real run's id.
-THIS_RUN: Final = "40000000001"
-ANOTHER_RUN: Final = "40000000002"
+THIS_EXECUTION: Final = "40000000001"
+ANOTHER_EXECUTION: Final = "40000000002"
+
+#: The day these writers belong to. A run id is `<date>-<execution>`, so the
+#: date is in every committed filename and is not in anything the runner sets.
+#: That gap is the whole reason the script looks for its identity anywhere in a
+#: name rather than only at the front.
+THE_DAY: Final = "2026-09-22"
+
+#: What `ledger.segment_path` is given, as opposed to what GitHub allocates.
+THIS_RUN: Final = f"{THE_DAY}-{THIS_EXECUTION}"
+ANOTHER_RUN: Final = f"{THE_DAY}-{ANOTHER_EXECUTION}"
 
 #: The other two elements of a writer's identity. One attempt and one job is all
 #: these three tests need: what they vary is the run.
 THIS_ATTEMPT: Final = 1
 THIS_JOB: Final = ServerJob.PLAN
 
-#: How the script spells this job when it refuses a path. `SHARD` is empty for
-#: every job but a work shard, so the identity ends on its separator.
-THIS_IDENTITY: Final = f"{THIS_RUN}-{THIS_ATTEMPT}-{THIS_JOB.value}-"
+#: How the script spells this job when it refuses a path. Every job but a work
+#: shard leaves `SHARD` empty, and the filename writes a shard with two digits,
+#: so the identity ends `00`.
+THIS_IDENTITY: Final = f"{THIS_EXECUTION}-{THIS_ATTEMPT}-{THIS_JOB.value}-00"
 
 
 def _as_this_job(settings: dict[str, str]) -> dict[str, str]:
@@ -91,7 +102,7 @@ def _as_this_job(settings: dict[str, str]) -> dict[str, str]:
     """
     return {
         **settings,
-        "GITHUB_RUN_ID": THIS_RUN,
+        "GITHUB_RUN_ID": THIS_EXECUTION,
         "GITHUB_RUN_ATTEMPT": str(THIS_ATTEMPT),
         "GITHUB_JOB": THIS_JOB.value,
         "SHARD": "",
