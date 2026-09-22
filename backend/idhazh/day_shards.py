@@ -45,7 +45,7 @@ without a plan.
 from __future__ import annotations
 
 import csv
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, field
 from datetime import date as date_type
 from pathlib import Path
@@ -315,23 +315,49 @@ def settle(
     return True
 
 
-def settled_rows(
+def one_day(root: Path, date: str) -> list[Path]:
+    """Every shard of one named day, in reading order. Nothing else is opened.
+
+    The peer of `shard_files` for a caller that already knows which day it is
+    asking about. It costs one directory listing whatever the ledger has
+    accumulated, so it needs no cover to declare (Guardrail #12).
+
+    A day nothing recorded has no entry and yields nothing, which is not a
+    fault: a run that planned nothing that day wrote nothing that day.
+    """
+    month = root / date[:4] / date[5:7]
+    if not month.is_dir():
+        return []
+    entry = month / date[8:10]
+    if entry.is_dir():
+        return _one_day(entry, root, date[:4], date[5:7])
+    day_file = month / f"{date[8:10]}{SUFFIX}"
+    return [day_file] if day_file.is_file() else []
+
+
+def settled_day(
     root: Path,
+    date: str,
     key: tuple[str, ...],
     model: type[CsvContract],
-    *,
-    days: int,
 ) -> list[dict[str, str]]:
-    """One row per record the ledger holds, settled, in the order they were first seen.
+    """One row per record one named day holds, settled, first seen first.
 
-    The same answer `stages.compact` writes into a head, taken at read time
-    instead. A caller gets rows it can hand straight to `ledger.render_file` or
-    to a contract, with no repeat and no half-written record.
-
-    `days` has no default for the reason `shard_files` gives.
+    `settled_rows` for a caller that names its day instead of a cover. Same
+    settlement, same order, one directory listing.
     """
+    return _settled(root, one_day(root, date), key, model)
+
+
+def _settled(
+    root: Path,
+    shards: Iterable[Path],
+    key: tuple[str, ...],
+    model: type[CsvContract],
+) -> list[dict[str, str]]:
+    """The settlement itself, over shards somebody else chose."""
     arriving: list[tuple[tuple[int, str], int, Waiting]] = []
-    for shard in shard_files(root, days=days):
+    for shard in shards:
         attempt, where = _order(shard, root)
         for lineno, raw in rows_of(shard):
             cells = parsed(shard, lineno, raw, model)
@@ -346,3 +372,21 @@ def settled_rows(
         else:
             settle(held[record], row, key, prefers)
     return [entry.cells for entry in held.values()]
+
+
+def settled_rows(
+    root: Path,
+    key: tuple[str, ...],
+    model: type[CsvContract],
+    *,
+    days: int,
+) -> list[dict[str, str]]:
+    """One row per record the ledger holds, settled, in the order they were first seen.
+
+    The same answer a fold writes into `settled.csv`, taken at read time
+    instead. A caller gets rows it can hand straight to `ledger.render_file` or
+    to a contract, with no repeat and no half-written record.
+
+    `days` has no default for the reason `shard_files` gives.
+    """
+    return _settled(root, shard_files(root, days=days), key, model)

@@ -412,8 +412,9 @@ def stage_fingerprint(
         row.boot_seconds,
         row.mhz_at_probe,
         landed,
-        ledger.segment_relpath(
+        ledger.day_shard_relpath(
             ledger.SegmentLedger.HOST_FINGERPRINT,
+            date=plan.date,
             run_id=plan.run_id,
             attempt=attempt,
             job=job,
@@ -496,8 +497,9 @@ def stage_job_clock(
         row.server_prompt_tokens,
         row.server_prompt_seconds,
         landed,
-        ledger.segment_relpath(
+        ledger.day_shard_relpath(
             ledger.SegmentLedger.HOST_FINGERPRINT,
+            date=plan.date,
             run_id=plan.run_id,
             attempt=attempt,
             job=job,

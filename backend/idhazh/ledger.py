@@ -96,13 +96,14 @@ from collections.abc import Callable, Collection, Iterable, Iterator, Mapping, S
 from datetime import date as date_type
 from datetime import timedelta
 from enum import StrEnum
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Final, NamedTuple, Protocol
 
-from idhazh import day_partition, month_partition
+from idhazh import day_partition
 from idhazh.contracts.base import RUN_ID_PATTERN, ServerJob
 from idhazh.contracts.council_shard_outcome import CouncilShardOutcome
 from idhazh.contracts.counterfactual_score import CounterfactualScoreRow
+from idhazh.contracts.day_validation import DayValidationReceipt
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.feed_health import FeedHealthRow, supersedes
 from idhazh.contracts.feed_retirement import FeedRetirementRow
@@ -191,13 +192,16 @@ SCORE_ARCHIVE_DIRNAME: Final = "archive"
 
 FEED_RETIREMENTS_FILENAME: Final = "feed-retirements.csv"
 
-#: Where a writer puts its rows before a compaction folds them into a head. Not
-#: a ledger of its own: nothing reads a segment except the compaction, and a
-#: segment the compaction has read is deleted. It sits outside every ledger root
-#: on purpose - a day tree refuses a name it cannot place, and a skip clause in
-#: the one walk whose value is that it skips nothing is how a new writer arrives
-#: unnoticed.
-SEGMENTS_DIRNAME: Final = "segments"
+#: Which frozen days have passed a validation, and against what. A day tree
+#: rather than the one flat `day-validations.csv` it was until 2026-09-22: four
+#: validators can judge one day at once, a flat file gave them all one path, and
+#: a receipt lost to a merge reads exactly like a day nobody has validated.
+DAY_VALIDATIONS_DIRNAME: Final = "day-validations"
+
+#: The column every day tree except the score index routes a row by. Named once
+#: here because the router reads it out of a contract's own cells, and a second
+#: spelling of it would file a row under a day nobody can find it in.
+DATE_CELL: Final = "date"
 
 #: What makes two feed-health rows the same record. One feed, read once, in one
 #: run. The ledger always meant that - `docs/architecture/sources/health.md`
@@ -317,6 +321,12 @@ OBSERVATION_INDEX_KEY: Final = ("observation_digest",)
 #: set judges several, so a date and a run alone would collapse them.
 VALIDATION_KEY: Final = ("date", "run_id", "model_id")
 
+#: What makes two day-validation receipts the same record. The day, and nothing
+#: else. A receipt says a frozen day passed the rules as they stood, so two
+#: receipts for one day are one answer written twice - and when the rules move,
+#: the newer receipt is the one that is true (`DAY_VALIDATION_RULE`).
+DAY_VALIDATION_KEY: Final = ("date",)
+
 #: How far back a health read looks. Not a policy - just enough history to reach
 #: into last month's shard, so a quarantine decided on the first of the month can
 #: still see the failures that caused it.
@@ -412,12 +422,29 @@ def _item_health_rule(later: dict[str, str], kept: dict[str, str]) -> bool:
     return bool(later.get("job")) and not kept.get("job")
 
 
+def _day_validation_rule(later: dict[str, str], kept: dict[str, str]) -> bool:
+    """The newer receipt wins, always.
+
+    A receipt says a frozen day passed the rules as they stood. When the rules
+    move, every day is re-judged and writes a fresh receipt, and the answer that
+    is true is the one taken under the rules in force. Keeping the first would
+    pin a day to a rule set nobody runs any more.
+
+    Both arguments are read and neither is compared, because the ordering has
+    already decided: `day_shards.settled_rows` walks a day's files oldest first,
+    so `later` is later.
+    """
+    return bool(later) or not kept
+
+
 #: The keys whose repeats can disagree, and how each one picks a winner.
 FEED_HEALTH_RULE: Final[Preference] = _feed_health_rule
 ITEM_HEALTH_RULE: Final[Preference] = _item_health_rule
+DAY_VALIDATION_RULE: Final[Preference] = _day_validation_rule
 _PREFERENCES: Final[dict[tuple[str, ...], Preference]] = {
     FEED_HEALTH_KEY: FEED_HEALTH_RULE,
     ITEM_HEALTH_KEY: ITEM_HEALTH_RULE,
+    DAY_VALIDATION_KEY: DAY_VALIDATION_RULE,
 }
 
 
@@ -450,118 +477,122 @@ def seen_path(state_dir: Path, date: str) -> Path:
 
 
 def health_relpath(date: str) -> str:
-    """`state/feed-health/<YYYY>/<MM>/<DD>.csv` - the POSIX form, for a log line."""
-    return f"{STATE_DIRNAME}/{HEALTH_DIRNAME}/{date[:4]}/{date[5:7]}/{date[8:10]}.csv"
+    """`state/feed-health/<YYYY>/<MM>/<DD>` - the day directory, POSIX form."""
+    return f"{STATE_DIRNAME}/{HEALTH_DIRNAME}/{date[:4]}/{date[5:7]}/{date[8:10]}"
 
 
 def health_path(state_dir: Path, date: str) -> Path:
-    """The day file a run on this date appends to.
+    """The day directory a run on this date files its verdicts in.
 
-    A day rather than a month, for the reason `item_health_path` gives: a run
-    writes one day, two runs collide on a file only when they are the same day,
-    and taking a day back is one `rm` rather than an edit inside a shared shard,
-    which an append-only ledger cannot express. Nothing mirrors this store into
+    A day rather than a month, for the reason `item_health_path` gives: taking a
+    day back is one `rm` rather than an edit inside a shared shard, which an
+    append-only ledger cannot express. Nothing mirrors this store into
     `frontend/public/`.
+
+    A directory rather than a file, because two `plan` jobs of one night both
+    have a verdict on every feed and a shared file gave them one path. They
+    conflicted, the conflict killed the job, and `assemble` never ran.
     """
-    return state_dir / HEALTH_DIRNAME / date[:4] / date[5:7] / f"{date[8:10]}.csv"
+    return state_dir / HEALTH_DIRNAME / date[:4] / date[5:7] / date[8:10]
 
 
 def item_health_relpath(date: str) -> str:
-    """`state/item-health/<YYYY>/<MM>/<DD>.csv` - the POSIX form, for a log line."""
-    return f"{STATE_DIRNAME}/{ITEM_HEALTH_DIRNAME}/{date[:4]}/{date[5:7]}/{date[8:10]}.csv"
+    """`state/item-health/<YYYY>/<MM>/<DD>` - the day directory, POSIX form."""
+    return f"{STATE_DIRNAME}/{ITEM_HEALTH_DIRNAME}/{date[:4]}/{date[5:7]}/{date[8:10]}"
 
 
 def item_health_path(state_dir: Path, date: str) -> Path:
-    """The day file a run on this date appends to.
+    """The day directory a run on this date files its item outcomes in.
 
-    A day rather than a month, for the reason `published_path` gives: a run
-    writes one day, two runs collide on a file only when they are the same day,
-    and taking a day back is one `rm` rather than an edit inside a shared shard,
-    which an append-only ledger cannot express. The mirror under
+    A day rather than a month, for the reason `published_path` gives: taking a
+    day back is one `rm` rather than an edit inside a shared shard, which an
+    append-only ledger cannot express. The mirror under
     `frontend/public/telemetry/` stays monthly, because its grain follows what a
     browser fetches - see `docs/concepts/partitions.md`.
+
+    A directory rather than a file, because twenty work shards write this day
+    and each one gets its own file inside it. Nothing here is shared, so nothing
+    here can conflict.
     """
-    return state_dir / ITEM_HEALTH_DIRNAME / date[:4] / date[5:7] / f"{date[8:10]}.csv"
+    return state_dir / ITEM_HEALTH_DIRNAME / date[:4] / date[5:7] / date[8:10]
 
 
 def host_fingerprint_relpath(date: str) -> str:
-    """`state/host-fingerprint/<YYYY>/<MM>/<DD>.csv` - the POSIX form, for a log line."""
-    return f"{STATE_DIRNAME}/{HOST_FINGERPRINT_DIRNAME}/{date[:4]}/{date[5:7]}/{date[8:10]}.csv"
+    """`state/host-fingerprint/<YYYY>/<MM>/<DD>` - the day directory, POSIX form."""
+    return f"{STATE_DIRNAME}/{HOST_FINGERPRINT_DIRNAME}/{date[:4]}/{date[5:7]}/{date[8:10]}"
 
 
 def host_fingerprint_path(state_dir: Path, date: str) -> Path:
-    """The day file this date's machines land in, written only by the compaction.
+    """The day directory this date's machines land in, one file per job.
 
     A day rather than a flat file, for the reason `item_health_path` gives, and
     with a second reason of its own: this collection only earns its keep when
     somebody counts across it, and a day tree is the shape a bounded window can
     read (Guardrail #12).
 
-    Ten jobs of one run each record the machine they drew, so none of them opens
-    this file. Each writes its own segment and the compaction folds them in, which
-    is what stops a lost push race emptying the day - `2026-09-16` is header-only
-    because that is what happened.
+    Twenty-five jobs of one run each record the machine they drew, and each one
+    writes its own file here. None of them opens a file another job holds, which
+    is what stops a lost push race emptying the day - `2026-09-16` is
+    header-only because that is what happened under the old shared shard.
     """
-    return state_dir / HOST_FINGERPRINT_DIRNAME / date[:4] / date[5:7] / f"{date[8:10]}.csv"
+    return state_dir / HOST_FINGERPRINT_DIRNAME / date[:4] / date[5:7] / date[8:10]
 
 
 def scores_relpath(date: str) -> str:
-    """`state/scores/<YYYY>/<MM>/<DD>.csv` - the POSIX form, for a log line."""
-    return f"{STATE_DIRNAME}/{SCORES_DIRNAME}/{date[:4]}/{date[5:7]}/{date[8:10]}.csv"
+    """`state/scores/<YYYY>/<MM>/<DD>` - the day directory, POSIX form."""
+    return f"{STATE_DIRNAME}/{SCORES_DIRNAME}/{date[:4]}/{date[5:7]}/{date[8:10]}"
 
 
 def scores_path(state_dir: Path, date: str) -> Path:
-    """The day file one date's measurements land in, written only by the compaction.
+    """The day directory one date's measurements land in, one file per writer.
 
-    A day rather than a month, for the reason `published_path` gives: a run
-    writes one day, two runs collide on a file only when they are the same day,
-    and taking a day back is one `rm` rather than an edit inside a shared shard,
-    which an append-only ledger cannot express. Nothing mirrors this store into
+    A day rather than a month, for the reason `published_path` gives: taking a
+    day back is one `rm` rather than an edit inside a shared shard, which an
+    append-only ledger cannot express. Nothing mirrors this store into
     `frontend/public/`.
 
     Two jobs of one run measure items - a work shard as each item settles, and
-    assemble over the whole day afterwards - so neither opens this file. Each
-    writes its own segment and the compaction folds them in, which is what stops
-    a lost push race costing the rows rather than a merge.
+    assemble over the whole day afterwards - and each writes its own file here,
+    which is what stops a lost push race costing the rows rather than a merge.
     """
-    return state_dir / SCORES_DIRNAME / date[:4] / date[5:7] / f"{date[8:10]}.csv"
+    return state_dir / SCORES_DIRNAME / date[:4] / date[5:7] / date[8:10]
 
 
 def score_index_relpath(date: str) -> str:
-    """`state/score-index/<YYYY>/<MM>/<DD>.csv` - the POSIX form, for a log line."""
-    return f"{STATE_DIRNAME}/{SCORE_INDEX_DIRNAME}/{date[:4]}/{date[5:7]}/{date[8:10]}.csv"
+    """`state/score-index/<YYYY>/<MM>/<DD>` - the day directory, POSIX form."""
+    return f"{STATE_DIRNAME}/{SCORE_INDEX_DIRNAME}/{date[:4]}/{date[5:7]}/{date[8:10]}"
 
 
 def score_index_path(state_dir: Path, date: str) -> Path:
     """The record of what one day's measurements are, beside the rows themselves.
 
-    The same grain as `scores_path` and filed by the same date, because
-    `evals.writer.refresh_index` fills a partition with no index from the
-    partition beside it - two grains in one relationship would be a mapping
-    somebody maintains.
+    The same grain as `scores_path` and filed by the same date. An index row
+    carries no date column of its own, so its writer names the day: the first
+    ten characters of the run id, which is the date the eval rows beside it
+    carry.
     """
-    return state_dir / SCORE_INDEX_DIRNAME / date[:4] / date[5:7] / f"{date[8:10]}.csv"
+    return state_dir / SCORE_INDEX_DIRNAME / date[:4] / date[5:7] / date[8:10]
 
 
 def validation_relpath(date: str) -> str:
-    """`state/validation/<YYYY>/<MM>/<DD>.csv` - the POSIX form, for a log line."""
-    return f"{STATE_DIRNAME}/{VALIDATION_DIRNAME}/{date[:4]}/{date[5:7]}/{date[8:10]}.csv"
+    """`state/validation/<YYYY>/<MM>/<DD>` - the day directory, POSIX form."""
+    return f"{STATE_DIRNAME}/{VALIDATION_DIRNAME}/{date[:4]}/{date[5:7]}/{date[8:10]}"
 
 
 def validation_path(state_dir: Path, date: str) -> Path:
-    """The day file this date's verdicts land in, written only by the compaction.
+    """The day directory this date's verdicts land in, one file per dispatch.
 
     A day tree rather than `validation-<date>.csv` at the top of `state/`, for
     the reason `item_health_path` gives and with one of its own: the old name was
     built from the repository root, so no config could move it and a candidate
-    qualified on a trial state root still wrote the production tree.
+    qualified on a trial state root still wrote the production tree. The state
+    root a dispatch is handed is what decides where this lands, which is how a
+    pipeline-tests run writes under `state/pipeline-tests/` instead.
 
     Two candidates can be dispatched at once and both judge the same day, so
-    neither opens this file. Each writes its own segment and the compaction folds
-    them in - the filename is what keeps the pair apart, and before the segment
-    store nothing else did.
+    each writes its own file here - the filename is what keeps the pair apart.
     """
-    return state_dir / VALIDATION_DIRNAME / date[:4] / date[5:7] / f"{date[8:10]}.csv"
+    return state_dir / VALIDATION_DIRNAME / date[:4] / date[5:7] / date[8:10]
 
 
 def telemetry_aggregate_relpath(month: str) -> str:
@@ -580,20 +611,21 @@ def telemetry_aggregate_path(state_dir: Path, month: str) -> Path:
     return state_dir / TELEMETRY_AGGREGATE_DIRNAME / f"{month}.csv"
 
 
-def span_rollup_relpath(month: str) -> str:
-    """`state/span-rollup/<YYYY-MM>.csv` - the POSIX form, for a log line."""
-    return f"{STATE_DIRNAME}/{SPAN_ROLLUP_DIRNAME}/{month}.csv"
+def span_rollup_relpath(date: str) -> str:
+    """`state/span-rollup/<YYYY>/<MM>/<DD>` - the day directory, POSIX form."""
+    return f"{STATE_DIRNAME}/{SPAN_ROLLUP_DIRNAME}/{date[:4]}/{date[5:7]}/{date[8:10]}"
 
 
-def span_rollup_path(state_dir: Path, month: str) -> Path:
-    """Where one month's folded span counts live.
+def span_rollup_path(state_dir: Path, date: str) -> Path:
+    """The day directory this date's folded spans land in, one file per writer.
 
-    Its own directory rather than a filename beside another store's shards, for
-    the reason `telemetry_aggregate_path` gives: a reader that walks a directory
-    reads every file it finds as that directory's shape, and the rollup is a
-    different shape from a census row.
+    A day rather than the month this was until 2026-09-22. The month grain was
+    the last thing in `state/` asking a reader to hold two grains at once, and it
+    bought nothing a day does not: twenty writers a day each file their own
+    rows, so the question a month answered - how do twenty writers share one
+    file - stopped being a question.
     """
-    return state_dir / SPAN_ROLLUP_DIRNAME / f"{month}.csv"
+    return state_dir / SPAN_ROLLUP_DIRNAME / date[:4] / date[5:7] / date[8:10]
 
 
 def published_relpath(date: str) -> str:
@@ -1292,10 +1324,14 @@ def load_settled_failures(state_dir: Path, date: str, *, codes: Collection[str])
     """
     if not codes:
         return set()
+    from idhazh import day_shards
+
     wanted = set(codes)
     return {
         row["url_key"]
-        for row in _read_rows(item_health_path(state_dir, date))
+        for row in day_shards.settled_day(
+            state_dir / ITEM_HEALTH_DIRNAME, date, ITEM_HEALTH_KEY, ItemHealthRow
+        )
         if row["date"] == date and row["outcome"] != ItemOutcome.OK and row["code"] in wanted
     }
 
@@ -1312,8 +1348,12 @@ def load_source_counts(state_dir: Path, date: str) -> dict[str, int]:
     can be written by more than one job, and a re-run of the same day writes it
     again. Counting rows would charge a feed twice for one story.
     """
+    from idhazh import day_shards
+
     carried: dict[str, str] = {}
-    for row in _read_rows(item_health_path(state_dir, date)):
+    for row in day_shards.settled_day(
+        state_dir / ITEM_HEALTH_DIRNAME, date, ITEM_HEALTH_KEY, ItemHealthRow
+    ):
         if row["date"] != date or row["outcome"] != ItemOutcome.OK:
             continue
         carried[row["url_key"]] = row["source_id"]
@@ -1322,22 +1362,6 @@ def load_source_counts(state_dir: Path, date: str) -> dict[str, int]:
         counts[source_id] = counts.get(source_id, 0) + 1
     return counts
 
-
-def append_health(state_dir: Path, date: str, rows: Iterable[FeedHealthRow]) -> int:
-    """Append this run's verdict on every feed it tried, one verdict per feed.
-
-    Settled against `FEED_HEALTH_KEY` straight after the write rather than
-    filtered before it, because this is the one ledger here where the row
-    arriving second can be the better account: a second attempt at a run that
-    failed the first time is exactly the case worth keeping. Filtering first
-    would throw the recovery away and leave the failure on record.
-
-    Returns how many rows the shard gained, so a caller can log the count. A row
-    that only replaced an earlier account of the same event is not a gain.
-    """
-    path = health_path(state_dir, date)
-    landed = extend_ledger_file(path, FeedHealthRow.csv_columns(), list(rows))
-    return landed - drop_repeated_rows(path, FEED_HEALTH_KEY)
 
 def _as_item_health_row(raw: dict[str, str]) -> dict[str, str]:
     """The contract's own reader, used as a row-to-row migration."""
@@ -1656,13 +1680,12 @@ def load_visual_prunes(state_dir: Path) -> list[VisualPruneRow]:
 
 
 class SegmentLedger(StrEnum):
-    """Which head a segment belongs to. A closed set, and that is the whole point.
+    """Which day tree a writer's file belongs to. A closed set, and that is the point.
 
-    A directory under `state/segments/` naming something outside this set is a
-    writer that arrived without anyone choosing it, which is the failure the
-    segment store exists to stop. Every value is the head's own `*_DIRNAME`
-    constant rather than a string repeated here, so the transit directory and
-    the file it drains into cannot be spelled two different ways.
+    A directory under `state/` naming something outside this set is a writer that
+    arrived without anyone choosing it. Every value is the tree's own `*_DIRNAME`
+    constant rather than a string repeated here, so the directory a writer fills
+    and the directory a reader walks cannot be spelled two different ways.
 
     A ledger joins this set in the row that moves its writer, never before it.
     """
@@ -1673,10 +1696,13 @@ class SegmentLedger(StrEnum):
     SCORES = SCORES_DIRNAME
     SCORE_INDEX = SCORE_INDEX_DIRNAME
     VALIDATION = VALIDATION_DIRNAME
+    HEALTH = HEALTH_DIRNAME
+    COUNTERFACTUAL_SCORES = COUNTERFACTUAL_SCORES_DIRNAME
+    DAY_VALIDATIONS = DAY_VALIDATIONS_DIRNAME
 
 
 class SegmentName(NamedTuple):
-    """A segment filename read back: who wrote it, and on which try.
+    """A writer's filename read back: who wrote it, and on which try.
 
     `attempt` is the cell that is in the name and in no column. GitHub keeps the
     run id stable across a re-run, so without it a second attempt writes the
@@ -1704,177 +1730,148 @@ _SEGMENT_NAME: Final = re.compile(
 
 SEGMENT_SUFFIX: Final = ".csv"
 
+#: What the migration calls the bytes a committed head already held. A head is
+#: many runs already merged, so it carries no writer identity to stamp and a
+#: synthetic one would claim a run that never wrote it.
+#:
+#: **Removal condition: it goes when the oldest committed day is newer than the
+#: migration date**, because after that no committed day predates identity.
+BEFORE_PARTITION_NAME: Final = "before-partition.csv"
 
-class SegmentHead(NamedTuple):
-    """Where one ledger's rows of one date land, and what settles two of them.
+#: What a committed trace was called before writes carried identity:
+#: `<ordinal>-<shard>.jsonl`, where the ordinal is the run id's last segment
+#: alone. A trace line carries `attributes, duration_ms, kind, name, parent_id,
+#: span_id, started_at, trace_id` and no job and no attempt, so those two
+#: elements are not recoverable and the bytes keep the name they were written
+#: under.
+#:
+#: **Removal condition: it goes when `observability.trace_window_days` has aged
+#: out every file written before the migration.** That is self-clearing and
+#: needs no later row - a trace is never folded, and `stages/prune_state.py`
+#: deletes whole files on that window.
+_PRE_IDENTITY_TRACE: Final = re.compile(r"[0-9]+-[0-9]{2}", re.ASCII)
 
-    `KeyedLedger`'s three travel together here for the same reason, plus the
-    POSIX form: the compaction reports what it wrote, and a report naming an
-    absolute path is a report nobody can compare between two machines
-    (CLAUDE.md section 2).
-    """
 
-    path: Path
-    relpath: str
+class _TreeShape(NamedTuple):
+    """One day tree's answer to "what settles two of its rows, and who reads one"."""
+
     key: tuple[str, ...]
     model: type[CsvContract]
     carried: frozenset[str] = frozenset()
 
 
-def _span_rollup_head(state_dir: Path, date: str) -> Path:
-    return span_rollup_path(state_dir, date[:7])
-
-
-def _span_rollup_head_relpath(date: str) -> str:
-    return span_rollup_relpath(date[:7])
-
-
-class _HeadShape(NamedTuple):
-    """One ledger's answer to "which file, and what settles two of its rows"."""
-
-    path: Callable[[Path, str], Path]
-    relpath: Callable[[str], str]
-    key: tuple[str, ...]
-    model: type[CsvContract]
-    carried: frozenset[str] = frozenset()
-    dates_from_run: bool = False
-
-
-#: Which file a row of a given date belongs in, per ledger. A declared table
-#: rather than a rule the compaction re-derives: a month head and a day head are
-#: two shapes, and which one a ledger has is a fact about the ledger.
-_SEGMENT_HEADS: Final[dict[SegmentLedger, _HeadShape]] = {
-    SegmentLedger.ITEM_HEALTH: _HeadShape(
-        item_health_path,
-        item_health_relpath,
-        ITEM_HEALTH_KEY,
-        ItemHealthRow,
-        ITEM_HEALTH_CARRIED,
+#: What settles two rows of one day tree, and the contract that reads one. A
+#: declared table rather than a rule a reader re-derives: the key is a fact about
+#: the ledger and a second copy of it is how two readers start disagreeing.
+_TREE_SHAPES: Final[dict[SegmentLedger, _TreeShape]] = {
+    SegmentLedger.ITEM_HEALTH: _TreeShape(ITEM_HEALTH_KEY, ItemHealthRow, ITEM_HEALTH_CARRIED),
+    SegmentLedger.HOST_FINGERPRINT: _TreeShape(HOST_FINGERPRINT_KEY, HostFingerprintRow),
+    SegmentLedger.SPAN_ROLLUP: _TreeShape(SPAN_ROLLUP_KEY, SpanRollupRow),
+    SegmentLedger.SCORES: _TreeShape(OBSERVATION_KEY, EvalRow),
+    SegmentLedger.SCORE_INDEX: _TreeShape(OBSERVATION_INDEX_KEY, ObservationIndexRow),
+    SegmentLedger.VALIDATION: _TreeShape(VALIDATION_KEY, ValidationRow),
+    SegmentLedger.HEALTH: _TreeShape(FEED_HEALTH_KEY, FeedHealthRow),
+    SegmentLedger.COUNTERFACTUAL_SCORES: _TreeShape(
+        COUNTERFACTUAL_SCORE_KEY, CounterfactualScoreRow
     ),
-    SegmentLedger.HOST_FINGERPRINT: _HeadShape(
-        host_fingerprint_path,
-        host_fingerprint_relpath,
-        HOST_FINGERPRINT_KEY,
-        HostFingerprintRow,
-    ),
-    SegmentLedger.SPAN_ROLLUP: _HeadShape(
-        _span_rollup_head,
-        _span_rollup_head_relpath,
-        SPAN_ROLLUP_KEY,
-        SpanRollupRow,
-    ),
-    SegmentLedger.SCORES: _HeadShape(
-        scores_path,
-        scores_relpath,
-        OBSERVATION_KEY,
-        EvalRow,
-    ),
-    SegmentLedger.SCORE_INDEX: _HeadShape(
-        score_index_path,
-        score_index_relpath,
-        OBSERVATION_INDEX_KEY,
-        ObservationIndexRow,
-        dates_from_run=True,
-    ),
-    SegmentLedger.VALIDATION: _HeadShape(
-        validation_path,
-        validation_relpath,
-        VALIDATION_KEY,
-        ValidationRow,
-    ),
+    SegmentLedger.DAY_VALIDATIONS: _TreeShape(DAY_VALIDATION_KEY, DayValidationReceipt),
 }
-
-
-def segment_dates_from_run(ledger: SegmentLedger) -> bool:
-    """Whether this ledger's rows are dated by the segment rather than by a cell.
-
-    True for exactly one ledger, and the reason is a column that is not there.
-    `ObservationIndexRow` is a stamp and a digest: it is the record of what the
-    rows beside it are, and it is filed beside them rather than dated itself.
-    Giving it a date column to route by would move a persisted shape to answer a
-    question the filename already answers - the only producer of an eval row
-    stamps it with the run's own date, which is the first ten characters of the
-    run id the segment is named for.
-
-    Every other ledger here names its own day, which is what lets a segment a
-    run left behind three days ago compact into that day rather than into today.
-    """
-    return _SEGMENT_HEADS[ledger].dates_from_run
-
-
-def segment_head(state_dir: Path, ledger: SegmentLedger, date: str) -> SegmentHead:
-    """The head a row of this date belongs in, with what settles two of its rows.
-
-    The date comes off the row, never off the clock. A segment a run left behind
-    three days ago compacts into that day's head, which is the whole of the
-    recovery path.
-    """
-    shape = _SEGMENT_HEADS[ledger]
-    return SegmentHead(
-        shape.path(state_dir, date),
-        shape.relpath(date),
-        shape.key,
-        shape.model,
-        shape.carried,
-    )
 
 
 def segment_contract(ledger: SegmentLedger) -> type[CsvContract]:
     """The model that reads one of this ledger's rows.
 
-    Asked before a head is named, because the head is chosen by a row's date
-    cell and a date cell is only a date once the contract has read it. Naming a
-    file from an unread cell is how a path is built out of something nobody
-    validated.
+    Asked before a file is named, because a file is named for the writer and a
+    row is routed by its own date cell - and a date cell is only a date once the
+    contract has read it. Naming a file from an unread cell is how a path is
+    built out of something nobody validated.
     """
-    return _SEGMENT_HEADS[ledger].model
+    return _TREE_SHAPES[ledger].model
 
 
-def _segment_name(*, run_id: str, attempt: int, job: ServerJob, shard: int) -> str:
-    """The grammar in 2.3, spelled once, so a path and its POSIX form cannot differ."""
-    return f"{run_id}-{attempt}-{job.value}-{shard:02d}{SEGMENT_SUFFIX}"
+def segment_key(ledger: SegmentLedger) -> tuple[str, ...]:
+    """What makes two of this ledger's rows the same record."""
+    return _TREE_SHAPES[ledger].key
 
 
-def segment_path(
+def segment_carried(ledger: SegmentLedger) -> frozenset[str]:
+    """The retired headings this ledger's reader can still place."""
+    return _TREE_SHAPES[ledger].carried
+
+
+def _segment_name(
+    *, run_id: str, attempt: int, job: ServerJob, shard: int, suffix: str = SEGMENT_SUFFIX
+) -> str:
+    """The identity grammar, spelled once, so two trees cannot spell it two ways.
+
+    `suffix` is here because one tree's writer files are not CSV. A committed
+    trace is JSON lines, and one spelling of identity across every tree is worth
+    more than a signature nothing ever passes a second argument to: a second
+    speller is a second grammar, and a reader that knew only one would walk past
+    the other tree's files without saying so.
+    """
+    return f"{run_id}-{attempt}-{job.value}-{shard:02d}{suffix}"
+
+
+def day_shard_path(
     state_dir: Path,
     ledger: SegmentLedger,
     *,
+    date: str,
     run_id: str,
     attempt: int,
     job: ServerJob,
     shard: int,
 ) -> Path:
-    """Where this writer puts its rows. Nobody else writes this path.
+    """Where this writer puts this date's rows. Nobody else writes this path.
 
-    The four elements are what make one writer's file its own: the run, the try
-    at that run, the job, and the shard inside it. Two jobs of one run cannot
-    collide, and neither can two attempts - which is the difference between a
-    lost push race costing a merge and costing the rows.
+    `state/<tree>/<YYYY>/<MM>/<DD>/<run_id>-<attempt>-<job>-<shard>.csv`. The
+    date supplies the three directory segments, the way every sibling helper in
+    this module takes one; the four identity elements are what make the file
+    this writer's own. Two jobs of one run cannot collide, and neither can two
+    attempts - which is the difference between a lost push race costing a merge
+    and costing the rows.
 
-    There is no date element. The run id opens on the date already, and the head
-    a row lands in is chosen by the row's own date cell, so a second date here
-    would be a cell a writer fills for nothing.
+    The day comes off the row rather than off the clock, so rows a run left
+    behind three days ago land under that day rather than under today.
     """
     name = _segment_name(run_id=run_id, attempt=attempt, job=job, shard=shard)
-    return state_dir / SEGMENTS_DIRNAME / ledger.value / name
+    return state_dir / ledger.value / date[:4] / date[5:7] / date[8:10] / name
 
 
-def segment_relpath(
+def day_shard_relpath(
     ledger: SegmentLedger,
     *,
+    date: str,
     run_id: str,
     attempt: int,
     job: ServerJob,
     shard: int,
 ) -> str:
-    """`state/segments/<ledger>/<run_id>-<attempt>-<job>-<shard>.csv`, POSIX form.
-
-    The same grammar as `segment_path`, for a log line and for anything that has
-    to name the store a job fills without holding a state root (CLAUDE.md
-    section 2).
-    """
+    """The POSIX form of `day_shard_path`, for a log line (CLAUDE.md section 2)."""
     name = _segment_name(run_id=run_id, attempt=attempt, job=job, shard=shard)
-    return f"{STATE_DIRNAME}/{SEGMENTS_DIRNAME}/{ledger.value}/{name}"
+    return f"{STATE_DIRNAME}/{ledger.value}/{date[:4]}/{date[5:7]}/{date[8:10]}/{name}"
+
+
+def _dated_rows(
+    ledger: SegmentLedger, rows: Sequence[CsvRecord], date: str | None
+) -> dict[str, list[dict[str, str]]]:
+    """This writer's rows, grouped by the day each one belongs under.
+
+    `date` is for the one tree whose rows carry no date cell. The score index is
+    a stamp and a digest - the record of what the rows beside it are - so it is
+    filed beside them rather than dated itself, and its writer already knows the
+    day because it is the first ten characters of the run id. Every other tree
+    routes each row by its own `date` cell, so a writer holding two days' rows
+    writes two files.
+    """
+    columns = _TREE_SHAPES[ledger].model.csv_columns()
+    grouped: dict[str, list[dict[str, str]]] = {}
+    for row in rows:
+        cells = row.csv_row()
+        day = date if date is not None else cells[DATE_CELL]
+        grouped.setdefault(day, []).append({name: cells.get(name, "") for name in columns})
+    return grouped
 
 
 def write_segment(
@@ -1886,40 +1883,40 @@ def write_segment(
     attempt: int,
     job: ServerJob,
     shard: int,
+    date: str | None = None,
 ) -> int:
-    """This writer's slice of one ledger, written whole. Nobody else writes this path.
+    """This writer's slice of one ledger, written whole. Nobody else writes these paths.
 
-    Whole rather than appended, because the file is this writer's alone: there is
-    no earlier row in it to keep and no header to agree with. That is the whole
-    of what the segment store buys - two jobs of one run, and two attempts at one
-    job, never open one file, so a lost push race costs a merge rather than the
-    rows.
+    Whole rather than appended, because each file is this writer's alone: there
+    is no earlier row in it to keep and no header to agree with. That is what the
+    day directory buys - two jobs of one run, and two attempts at one job, never
+    open one file, so a lost push race costs a merge rather than the rows.
 
-    The rows carry the HEAD's columns and the head's contract. A segment gets no
-    shape of its own on purpose: it holds the head's rows in transit, and a
-    second shape for the same rows is the thing that drifts.
+    One file a day. The rows carry the tree's own columns and the tree's own
+    contract; a writer file gets no shape of its own, because a second shape for
+    the same rows is the thing that drifts.
 
     Written through a temp file and a rename, so a writer killed mid-write leaves
-    nothing rather than half a row for the compaction to refuse. The temp file
-    sits at the store's own top rather than beside the target: `segment_files`
-    reads every name inside a ledger's directory and refuses one it cannot place,
-    so a scratch left there by a dead runner would stop every later compaction.
-    The top of the store is the one place that already holds something which is
-    not a segment.
+    nothing rather than half a row for a reader to refuse. The temp file sits at
+    the tree's own top rather than inside the day directory, which every reader
+    walks and refuses a name it cannot place.
 
     Returns how many rows it wrote, so a caller can log the count.
     """
     if not rows:
         return 0
-    path = segment_path(state_dir, ledger, run_id=run_id, attempt=attempt, job=job, shard=shard)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    columns = _SEGMENT_HEADS[ledger].model.csv_columns()
-    scratch = state_dir / SEGMENTS_DIRNAME / f"{path.stem}.{os.getpid()}.tmp"
-    scratch.write_text(
-        render_file(columns, [row.csv_row() for row in rows]), encoding="utf-8", newline=""
-    )
-    scratch.replace(path)
-    return len(rows)
+    columns = _TREE_SHAPES[ledger].model.csv_columns()
+    written = 0
+    for day, cells in _dated_rows(ledger, rows, date).items():
+        path = day_shard_path(
+            state_dir, ledger, date=day, run_id=run_id, attempt=attempt, job=job, shard=shard
+        )
+        path.parent.mkdir(parents=True, exist_ok=True)
+        scratch = state_dir / ledger.value / f"{path.stem}.{day}.{os.getpid()}.tmp"
+        scratch.write_text(render_file(columns, cells), encoding="utf-8", newline="")
+        scratch.replace(path)
+        written += len(cells)
+    return written
 
 
 def extend_segment(
@@ -1931,58 +1928,58 @@ def extend_segment(
     attempt: int,
     job: ServerJob,
     shard: int,
+    date: str | None = None,
 ) -> int:
-    """Add rows to this writer's own segment, keeping the ones it wrote earlier.
+    """Add rows to this writer's own files, keeping the ones it wrote earlier.
 
     `write_segment` is for a step that has everything its job will ever say. This
     is for a job that learns something later: the machine probe runs before the
     heaviest step because the bandwidth reading wants an idle host, and the job's
-    own clock is only known once the job is over. Two steps, one writer, one
-    file - the grammar in `segment_path` names the job and not the step, so a
-    second file is not something this store can express.
+    own clock is only known once the job is over. Two steps, one writer, one file
+    a day - the grammar in `day_shard_path` names the job and not the step, so a
+    second file is not something this tree can express.
 
     The earlier rows are read and written back unchanged. Nothing is edited and
     nothing is settled here: the arriving row carries the cells it has, the
-    earlier row keeps the cells it had, and `stages.compact` is the one place
-    that decides what two rows of one key mean.
-
-    Whole through a temp file and a rename for `write_segment`'s reason - a
-    writer killed mid-write leaves the file it already had rather than half a
-    row.
+    earlier row keeps the cells it had, and `day_shards.settled_rows` is the one
+    place that decides what two rows of one key mean.
 
     Returns how many rows it added, so a caller can log the count.
     """
     if not rows:
         return 0
-    path = segment_path(state_dir, ledger, run_id=run_id, attempt=attempt, job=job, shard=shard)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    columns = _SEGMENT_HEADS[ledger].model.csv_columns()
-    held = [{name: row.get(name, "") for name in columns} for row in _read_rows(path)]
-    scratch = state_dir / SEGMENTS_DIRNAME / f"{path.stem}.{os.getpid()}.tmp"
-    scratch.write_text(
-        render_file(columns, held + [row.csv_row() for row in rows]),
-        encoding="utf-8",
-        newline="",
-    )
-    scratch.replace(path)
-    return len(rows)
+    columns = _TREE_SHAPES[ledger].model.csv_columns()
+    added = 0
+    for day, cells in _dated_rows(ledger, rows, date).items():
+        path = day_shard_path(
+            state_dir, ledger, date=day, run_id=run_id, attempt=attempt, job=job, shard=shard
+        )
+        path.parent.mkdir(parents=True, exist_ok=True)
+        held = [{name: row.get(name, "") for name in columns} for row in _read_rows(path)]
+        scratch = state_dir / ledger.value / f"{path.stem}.{day}.{os.getpid()}.tmp"
+        scratch.write_text(render_file(columns, held + cells), encoding="utf-8", newline="")
+        scratch.replace(path)
+        added += len(cells)
+    return added
 
 
-def parse_segment_name(path: Path) -> SegmentName:
-    """A segment filename read back, or a refusal naming the file.
+def parse_segment_name(path: Path, *, suffix: str = SEGMENT_SUFFIX) -> SegmentName:
+    """A writer's filename read back, or a refusal naming the file.
 
-    A name this cannot place is not skipped. The store holds one kind of file
-    written by one kind of writer, so a name outside the grammar means something
-    else is writing there - and a glob that passed over it would leave those rows
-    in the tree unread and unmentioned, which is how a ledger starts losing rows
-    with nobody noticing.
+    A name this cannot place is not skipped. A day directory holds one kind of
+    file written by one kind of writer, so a name outside the grammar means
+    something else is writing there - and a walk that passed over it would leave
+    those rows in the tree unread and unmentioned, which is how a ledger starts
+    losing rows with nobody noticing.
+
+    `suffix` is the tree's own, for `_segment_name`'s reason.
     """
-    match = _SEGMENT_NAME.fullmatch(path.stem) if path.suffix == SEGMENT_SUFFIX else None
+    match = _SEGMENT_NAME.fullmatch(path.stem) if path.suffix == suffix else None
     if match is None:
         raise ValueError(
-            f"{path.name} is not a segment name. A segment is "
-            "<run_id>-<attempt>-<job>-<shard>.csv, and a file under "
-            f"{STATE_DIRNAME}/{SEGMENTS_DIRNAME}/ that is not one was written by "
+            f"{path.name} is not a writer's name. A writer's file is "
+            f"<run_id>-<attempt>-<job>-<shard>{suffix}, and a file inside a day "
+            f"directory under {STATE_DIRNAME}/ that is not one was written by "
             "something nobody here declared."
         )
     return SegmentName(
@@ -1993,48 +1990,27 @@ def parse_segment_name(path: Path) -> SegmentName:
     )
 
 
-def _declared_ledger(directory: Path) -> SegmentLedger:
-    try:
-        return SegmentLedger(directory.name)
-    except ValueError:
-        declared = ", ".join(sorted(item.value for item in SegmentLedger))
-        raise ValueError(
-            f"{STATE_DIRNAME}/{SEGMENTS_DIRNAME}/{directory.name} names a ledger "
-            f"nothing here declares. The declared set is {declared}. Every segment "
-            "belongs to a head, so a directory outside that set is a writer that "
-            "arrived without anyone choosing it."
-        ) from None
+def is_written_once(relpath: str) -> bool:
+    """Whether this committed path is a file exactly one writer can have written.
 
+    Two names pass. One is the identity grammar every producer spells through
+    `_segment_name`, whatever the tree's suffix. The other is a reserved
+    pre-identity name, each declared with its own removal condition beside it:
+    `before-partition.csv` for the bytes a committed head already held, and
+    `<ordinal>-<shard>.jsonl` for a trace written before traces carried identity.
 
-def segment_files(state_dir: Path, ledger: SegmentLedger | None = None) -> list[Path]:
-    """Every segment on disk, or one ledger's, oldest name first.
-
-    The only listing there is, and its cost is what is waiting rather than what
-    the project has written: on the normal path a compaction drained the store
-    one run ago, so this reads an empty directory (Guardrail #12).
-
-    **Nothing inside a ledger's directory is skipped**, for the reason
-    `day_partition` gives. The store's own top is different and is allowed to
-    hold something that is not a segment - `state/segments/.gitkeep` is what
-    keeps the empty directory in the checkout at all.
-
-    A missing directory lists nothing, because a fresh clone has no segments and
-    that is not a fault.
+    `settled.csv` is deliberately absent. A fold is derived, not written once,
+    and rule 1 puts those in different classes.
     """
-    root = state_dir / SEGMENTS_DIRNAME
-    if not root.is_dir():
-        return []
-    found: list[Path] = []
-    for entry in sorted(root.iterdir()):
-        if not entry.is_dir():
-            continue
-        declared = _declared_ledger(entry)
-        if ledger is not None and declared is not ledger:
-            continue
-        for candidate in sorted(entry.iterdir()):
-            parse_segment_name(candidate)
-            found.append(candidate)
-    return found
+    name = PurePosixPath(relpath).name
+    if name == BEFORE_PARTITION_NAME:
+        return True
+    stem, _, suffix = name.rpartition(".")
+    if not stem:
+        return False
+    if _SEGMENT_NAME.fullmatch(stem) is not None:
+        return True
+    return suffix == "jsonl" and _PRE_IDENTITY_TRACE.fullmatch(stem) is not None
 
 
 def keyed_paths(state_dir: Path, *, date: str | None) -> list[KeyedLedger]:
@@ -2063,13 +2039,14 @@ def keyed_paths(state_dir: Path, *, date: str | None) -> list[KeyedLedger]:
     `load_seen` folds a second sight by keeping the earliest, so a repeat costs
     bytes and never moves an age.
 
-    `state/feed-health/` was absent too until 2026-09-02, on the reading that two
-    runs are entitled to write a verdict each. They are - and they get different
-    run ids, so they never repeat this key. What repeats it is one run written
-    down twice, which is one event with two accounts (`FEED_HEALTH_KEY`). It
-    moved to a day tree on 2026-09-13 and the cover above did not move with it:
-    a run wrote only its own day before and only its own day now, so the full
-    pass names one file a recorded day where it named one a month.
+    `state/feed-health/`, `state/item-health/`, `state/host-fingerprint/`,
+    `state/span-rollup/` and `state/counterfactual-scores/` were all here until
+    2026-09-22 and none of them is now. Each became a day directory where every
+    writer holds its own file, so a merge has nothing to stack: two files that
+    no one else can write do not need a settlement to tell them apart, and the
+    repeat this pass existed to drop is a repeat those trees can no longer make.
+    What settles two of their rows at read time is `day_shards.settled_rows`,
+    which is where it always decided - this pass only ever rewrote the file.
 
     `state/feed-retirements.csv` is listed before anything writes it, because the
     settlement runs over whatever it finds and a missing file settles to nothing.
@@ -2085,26 +2062,6 @@ def keyed_paths(state_dir: Path, *, date: str | None) -> list[KeyedLedger]:
     stated rather than implied: a repeat the last run of a day leaves behind is
     now settled by the operator's full pass rather than by tomorrow's first run.
 
-    `state/counterfactual-scores/` joined the dated cover on 2026-09-14. Its
-    writer is the plan stage, whose commit step DOES name a settlement command,
-    so its repeats are settled by the run that made them - the same position
-    `state/feed-health/` is in.
-
-    `state/host-fingerprint/` and `state/span-rollup/` joined on 2026-09-16, and
-    they were absent for the same reason rather than for a reason of their own:
-    nothing staged the fingerprint at all, so there was no committed file for a
-    repeat to be in, and the rollup was staged on 2026-09-15 without anyone
-    walking this list. Both declare a key and both are written by a work shard,
-    whose commit step names a settlement command - so a second attempt at one
-    shard is settled by the run that made it, the same position
-    `state/feed-health/` is in. Neither key can disagree with itself: a job runs
-    on one machine, and a re-run of a shard folds the same spans again.
-
-    `state/span-rollup/` is the one month file in the set, so the full pass names
-    one file a recorded month where every dated entry beside it names one a day.
-    The run's own cover is a month file too, and it is still one file: a run
-    appends under one date, and one date is in one month.
-
     `state/content-similarity-judge/fitted-thresholds/` is registered before
     anything writes it, for the reason `state/feed-retirements.csv` was: the settlement
     runs over whatever it finds, a missing file settles to nothing, and
@@ -2118,11 +2075,6 @@ def keyed_paths(state_dir: Path, *, date: str | None) -> list[KeyedLedger]:
     run has one run id and a night hosting two tenants would otherwise file two
     tenants' unit 0 under the same three cells.
     """
-    # Imported here and not at the top: `day_shards` reads a segment name and a
-    # key's preference through this module, so it sits above it. This is the one
-    # call that reaches back up.
-    from idhazh import day_shards
-
     flat: list[KeyedLedger] = [
         KeyedLedger(feed_retirements_path(state_dir), FEED_RETIREMENT_KEY, FeedRetirementRow),
     ]
@@ -2134,18 +2086,6 @@ def keyed_paths(state_dir: Path, *, date: str | None) -> list[KeyedLedger]:
                 counterfactual_scores_path(state_dir, date),
                 COUNTERFACTUAL_SCORE_KEY,
                 CounterfactualScoreRow,
-            ),
-            KeyedLedger(health_path(state_dir, date), FEED_HEALTH_KEY, FeedHealthRow),
-            KeyedLedger(
-                item_health_path(state_dir, date),
-                ITEM_HEALTH_KEY,
-                ItemHealthRow,
-                ITEM_HEALTH_CARRIED,
-            ),
-            KeyedLedger(
-                host_fingerprint_path(state_dir, date),
-                HOST_FINGERPRINT_KEY,
-                HostFingerprintRow,
             ),
             KeyedLedger(
                 fitted_thresholds_path(state_dir, date),
@@ -2163,9 +2103,6 @@ def keyed_paths(state_dir: Path, *, date: str | None) -> list[KeyedLedger]:
                 COUNCIL_SHARD_OUTCOME_KEY,
                 CouncilShardOutcome,
             ),
-            KeyedLedger(
-                span_rollup_path(state_dir, date[:7]), SPAN_ROLLUP_KEY, SpanRollupRow
-            ),
         ]
     return [
         *flat,
@@ -2176,22 +2113,6 @@ def keyed_paths(state_dir: Path, *, date: str | None) -> list[KeyedLedger]:
         *(
             KeyedLedger(path, COUNTERFACTUAL_SCORE_KEY, CounterfactualScoreRow)
             for path in day_partition.day_files(state_dir / COUNTERFACTUAL_SCORES_DIRNAME)
-        ),
-        *(
-            KeyedLedger(path, FEED_HEALTH_KEY, FeedHealthRow)
-            for path in day_partition.day_files(state_dir / HEALTH_DIRNAME)
-        ),
-        *(
-            KeyedLedger(path, ITEM_HEALTH_KEY, ItemHealthRow, ITEM_HEALTH_CARRIED)
-            for path in day_shards.shard_files(
-                state_dir / ITEM_HEALTH_DIRNAME, days=UNBOUNDED_WINDOW
-            )
-        ),
-        *(
-            KeyedLedger(path, HOST_FINGERPRINT_KEY, HostFingerprintRow)
-            for path in day_shards.shard_files(
-                state_dir / HOST_FINGERPRINT_DIRNAME, days=UNBOUNDED_WINDOW
-            )
         ),
         *(
             KeyedLedger(path, STORY_SIMILARITY_THRESHOLD_KEY, FittedSimilarityThreshold)
@@ -2215,10 +2136,6 @@ def keyed_paths(state_dir: Path, *, date: str | None) -> list[KeyedLedger]:
             for path in day_partition.day_files(
                 state_dir / COUNCIL_DIRNAME / SHARD_OUTCOMES_DIRNAME
             )
-        ),
-        *(
-            KeyedLedger(path, SPAN_ROLLUP_KEY, SpanRollupRow)
-            for path in month_partition.month_files(state_dir / SPAN_ROLLUP_DIRNAME, ".csv")
         ),
     ]
 
@@ -2337,25 +2254,28 @@ def load_item_health(state_dir: Path, *, today: str, within_days: int) -> list[I
     """Every item-health row in the window, oldest day first.
 
     Bounded for the same reason `load_health` is (Guardrail #12): this is the
-    fastest-growing ledger in the repository and a run appends to it five times
-    a day, so a reader that walked every partition would cost more every run for
-    an answer about the last few weeks. `day_partition.days_in_window` names both
-    ends, so a cover of `n` days opens at most `n + 1` files and reads exactly
-    those days - where the month shards it replaced could hold up to 120 days of
-    rows behind a 90-day cover.
+    fastest-growing ledger in the repository and twenty work shards file into it
+    every day, so a reader that walked every day would cost more every run for
+    an answer about the last few weeks. `day_shards.settled_rows` names both the
+    cover and the settlement, so a cover of `n` days reads the newest `n`
+    RECORDED days and returns one row per planned item per run.
 
-    A day the ledger never recorded has no file, which is not a fault: a run that
-    planned nothing that day wrote nothing that day.
+    A day the ledger never recorded has no entry, which is not a fault: a run
+    that planned nothing that day wrote nothing that day.
 
     A row that no longer parses is fatal here rather than skipped, which is the
     opposite of `load_health` and deliberate: a census divides by these rows, so
     a silently dropped one moves a ratio instead of costing a decision some
     evidence.
     """
-    rows: list[ItemHealthRow] = []
-    for day in reversed(day_partition.days_in_window(today, within_days)):
-        rows.extend(load_item_health_shard(item_health_path(state_dir, day)))
-    return rows
+    from idhazh import day_shards
+
+    return [
+        ItemHealthRow.from_csv_row(row)
+        for row in day_shards.settled_rows(
+            state_dir / ITEM_HEALTH_DIRNAME, ITEM_HEALTH_KEY, ItemHealthRow, days=within_days
+        )
+    ]
 
 
 def write_telemetry_aggregate(path: Path, rows: list[TelemetryAggregateRow]) -> int:
@@ -2394,18 +2314,21 @@ def load_health(state_dir: Path, *, today: str, within_days: int) -> list[FeedHe
     diagnostic: losing a stale row costs a quarantine decision some evidence,
     and refusing to start costs the reader the whole day.
 
-    `day_partition.days_in_window` names both ends, so a cover of `n` days opens
-    at most `n + 1` files and reads exactly those days - where the month shards
-    it replaced could hold up to 62 days of rows behind a 31-day cover. A day the
-    ledger never recorded has no file, which is not a fault.
+    `day_shards.settled_rows` names both the cover and the settlement, so a
+    cover of `n` days reads the newest `n` RECORDED days and returns one row per
+    feed per run rather than one per write. A day the ledger never recorded has
+    no entry, which is not a fault.
     """
+    from idhazh import day_shards
+
     rows: list[FeedHealthRow] = []
-    for day in reversed(day_partition.days_in_window(today, within_days)):
-        for raw in _read_rows(health_path(state_dir, day)):
-            try:
-                rows.append(FeedHealthRow.from_csv_row(raw))
-            except (KeyError, ValueError):
-                continue
+    for raw in day_shards.settled_rows(
+        state_dir / HEALTH_DIRNAME, FEED_HEALTH_KEY, FeedHealthRow, days=within_days
+    ):
+        try:
+            rows.append(FeedHealthRow.from_csv_row(raw))
+        except (KeyError, ValueError):
+            continue
     rows.sort(key=lambda row: (row.date, _run_n(row.run_id)))
     return rows
 

@@ -12,8 +12,8 @@ from datetime import date as date_type
 from pathlib import Path
 from typing import Final
 
-from idhazh import assemble, config, discover, fetch, ledger, rank, tag
-from idhazh.contracts.base import fit_field
+from idhazh import assemble, config, discover, fetch, ledger, rank, run_context, tag
+from idhazh.contracts.base import ServerJob, fit_field
 from idhazh.contracts.counterfactual_score import CounterfactualScoreRow
 from idhazh.contracts.feed_health import (
     FeedHealthRow,
@@ -33,6 +33,11 @@ from idhazh.telemetry import source_health
 #: Why a feed was not asked, in the one cell a later reader has. A rest ends on
 #: its own and a retirement does not, so the two sentences are different.
 RESTING_DETAIL: Final = "resting after repeated failures"
+
+#: The plan runs once for the whole day, so its writer files are shard 0 of one.
+#: A number rather than nothing, because the grammar every tree shares names a
+#: shard and a stage with one of them still has to say which.
+PLAN_SHARD: Final = 0
 
 
 RETIRED_DETAIL: Final = "address retired after repeated 410 Gone"
@@ -174,7 +179,20 @@ def stage_plan(
     landed = ledger.append_seen(
         state, date, _first_sights(candidates, first_seen, generated_at, run_id)
     )
-    ledger.append_health(state, date, health)
+    # This job's own file, never a day file two plan jobs would share. A night
+    # runs the plan more than once and each run has a verdict on every feed, so
+    # one shared path made them conflict - and a conflict here killed the job,
+    # which meant `assemble` never ran at all. The plan runs once for the whole
+    # day, so it is shard 0 of one.
+    ledger.write_segment(
+        state,
+        ledger.SegmentLedger.HEALTH,
+        health,
+        run_id=run_id,
+        attempt=run_context.run_attempt(),
+        job=ServerJob.PLAN,
+        shard=PLAN_SHARD,
+    )
     published_on = ledger.load_published(
         state, today=date, within_days=collect.published_window_days
     )

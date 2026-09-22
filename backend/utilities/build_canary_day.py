@@ -38,7 +38,7 @@ from itertools import combinations
 from pathlib import Path
 from typing import Final, NamedTuple
 
-from idhazh import config
+from idhazh import config, ledger
 from idhazh.assemble import (
     build_embeddings,
     collapse_same_story,
@@ -52,7 +52,7 @@ from idhazh.assemble import (
     write_atomic,
 )
 from idhazh.contracts.article import Article, ArticleStatus
-from idhazh.contracts.base import derive_url_key, normalize_prose
+from idhazh.contracts.base import ServerJob, derive_url_key, normalize_prose
 from idhazh.contracts.digest_day import DigestDay, DigestItem, DigestRunRef, DigestVerticalRef
 from idhazh.contracts.element import ElementTable
 from idhazh.contracts.eval_row import EvalRow
@@ -84,7 +84,7 @@ from idhazh.contracts.visual_data import (
 from idhazh.contracts.visual_decision import VisualDecision, VisualKind, VisualState
 from idhazh.embed import Embedder
 from idhazh.evals import metrics, score, writer
-from idhazh.ledger import append_health, similarity_holdout_path
+from idhazh.ledger import similarity_holdout_path
 from idhazh.render import asset_relpath, render_planned_visual
 from idhazh.render.write import write_bytes_atomic
 from idhazh.telemetry.publish import (
@@ -1050,10 +1050,22 @@ def _health_rows() -> list[FeedHealthRow]:
 
 
 def health(state: Path) -> int:
-    """Append the canary's feed results, one day file a date."""
+    """Write the canary's feed results, one writer file a date.
+
+    Through the same call the plan stage makes, so the fixture is in the shape a
+    reader meets in production rather than in a shape only this file writes.
+    """
     rows = _health_rows()
     for date in (YESTERDAY, DATE):
-        append_health(state, date, [row for row in rows if row.date == date])
+        ledger.write_segment(
+            state,
+            ledger.SegmentLedger.HEALTH,
+            [row for row in rows if row.date == date],
+            run_id=f"{date}-1",
+            attempt=1,
+            job=ServerJob.PLAN,
+            shard=0,
+        )
     return len(rows)
 
 
