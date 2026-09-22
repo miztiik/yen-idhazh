@@ -7,6 +7,8 @@ import json
 import threading
 import time
 from collections.abc import Iterable
+from datetime import date as date_type
+from datetime import timedelta
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, Final
@@ -25,6 +27,7 @@ from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome
 from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.knobs.extract import ElementsConfig
 from idhazh.contracts.knobs.models import ModelsConfig
+from idhazh.contracts.knobs.run import RunConfig
 from idhazh.contracts.run_plan import PlannedItem
 from idhazh.contracts.span_rollup import SpanRollupRow
 from idhazh.contracts.summary import Summary
@@ -35,7 +38,7 @@ from idhazh.evals import writer as eval_writer
 from idhazh.extract import to_article_with_source
 from idhazh.fetch import FetchResult
 from idhazh.llm.server import TurnMarkers, server_argv
-from idhazh.stages import common
+from idhazh.stages import common, compact
 from utilities.capture_request_bodies import RENDERINGS, markers_for
 
 REPO_ROOT: Final = Path(__file__).resolve().parents[2]
@@ -187,6 +190,19 @@ def seed_scores(
     return eval_writer.append_segment(
         state_dir, rows, run_id=run_id, attempt=attempt, job=job, shard=shard
     )
+
+
+def fold(state_dir: Path, date: str) -> compact.CompactionReport:
+    """Fold `date` and every earlier day of every tree into one settled file each.
+
+    A test writes a day and wants it folded in the next line. Production only
+    folds a day already closed, so this names a later date rather than moving
+    `after_days` to zero - a zero there would fold a day a shard could still be
+    writing, which is not a shape a run can reach.
+    """
+    after_days = RunConfig().settled_fold_after_days
+    closed = date_type.fromisoformat(date) + timedelta(days=after_days + 1)
+    return compact.stage_compact(state_dir, date=closed.isoformat(), after_days=after_days)
 
 
 def read_text(path: Path) -> str:

@@ -26,17 +26,16 @@ from pathlib import Path
 from typing import Final
 
 import pytest
-from conftest import CONFIG_DIR, FIXTURES_DIR, read_text
+from conftest import CONFIG_DIR, FIXTURES_DIR, fold, read_text
 from pytest import MonkeyPatch
 
-from idhazh import config, ledger, telemetry
+from idhazh import config, day_shards, ledger, telemetry
 from idhazh.contracts.article import Article
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.run_plan import PlannedItem, RunPlan
 from idhazh.contracts.summary import Summary
 from idhazh.stages.assemble import stage_assemble
-from idhazh.stages.compact import stage_compact
 from idhazh.stages.record import stage_record
 from idhazh.telemetry.census import EXTRACTION_CELLS
 from idhazh.telemetry.record import HEALTH_SUFFIX
@@ -134,7 +133,7 @@ def test_every_cell_the_shard_sealed_reaches_the_days_ledger(
     state = tmp_path / "state"
 
     stage_record(run_plan, settings=config.load(CONFIG_DIR))
-    stage_compact(state)
+    fold(state, run_plan.date)
 
     kept = committed(state, run_plan.date)
     on_disk = sealed(items_dir)
@@ -163,7 +162,7 @@ def test_the_ledger_row_says_more_than_the_payloads_could(
     state = tmp_path / "state"
 
     stage_record(run_plan, settings=config.load(CONFIG_DIR))
-    stage_compact(state)
+    fold(state, run_plan.date)
 
     kept = committed(state, run_plan.date)
     for planned in run_plan.items:
@@ -192,7 +191,7 @@ def test_which_writer_reaches_the_ledger_first_does_not_change_the_row(
     state = tmp_path / "state"
 
     stage_record(run_plan, settings=settings)
-    stage_compact(state)
+    fold(state, run_plan.date)
     after_the_worker = committed(state, run_plan.date)
 
     ledger.item_health_path(state, run_plan.date).unlink()
@@ -221,7 +220,7 @@ def test_an_item_whose_shard_sealed_nothing_still_gets_a_census_line(
     (items_dir / f"{orphan.item_id}{HEALTH_SUFFIX}").unlink()
 
     stage_record(run_plan, settings=config.load(CONFIG_DIR))
-    stage_compact(state)
+    fold(state, run_plan.date)
 
     kept = committed(state, run_plan.date)
     # `stage_record` runs as shard 0 of 1 in the `work` job here and stamps both
@@ -270,19 +269,22 @@ def test_work_then_assemble_leaves_one_settled_head_and_no_waiting_segments(
     state = tmp_path / "state"
 
     stage_record(run_plan, settings=settings)
-    assert ledger.segment_files(state, ledger.SegmentLedger.ITEM_HEALTH), (
-        "the work stage wrote no segment, so the rest of this proves nothing"
+    health_root = state / ledger.ITEM_HEALTH_DIRNAME
+    assert day_shards.one_day(health_root, run_plan.date), (
+        "the work stage wrote no file, so the rest of this proves nothing"
     )
     stage_assemble(run_plan, settings=settings, commit_sha="a" * 40, runner="fixture")
 
-    head = ledger.item_health_path(state, run_plan.date)
-    lines = head.read_text(encoding="utf-8").splitlines()
+    settled = ledger.item_health_path(state, run_plan.date) / day_shards.SETTLED_NAME
+    lines = settled.read_text(encoding="utf-8").splitlines()
     header = list(ItemHealthRow.csv_columns())
     assert [line for line in lines if line.split(",")[:3] == header[:3]] == [",".join(header)], (
-        "the head carries more than one header block"
+        "the fold carries more than one header block"
     )
 
     kept = committed(state, run_plan.date)
     assert sorted(kept) == sorted(item.item_id for item in run_plan.items)
     assert len(lines) == PLANNED_ITEMS + 1, f"{len(lines) - 1} rows for {PLANNED_ITEMS} items"
-    assert ledger.segment_files(state) == [], "the fold left segments waiting"
+    assert [path.name for path in day_shards.one_day(health_root, run_plan.date)] == [
+        day_shards.SETTLED_NAME
+    ], "the fold left a writer file behind"

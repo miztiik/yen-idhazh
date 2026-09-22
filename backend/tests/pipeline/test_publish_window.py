@@ -7,11 +7,11 @@ import json
 from pathlib import Path
 
 import pytest
-from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR, REPO_ROOT, read_text
+from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR, REPO_ROOT, fold, read_text
 from pydantic import ValidationError
 from pytest import MonkeyPatch
 
-from idhazh import assemble, config, ledger, rank, telemetry
+from idhazh import assemble, config, day_shards, ledger, rank, telemetry
 from idhazh.contracts.article import Article
 from idhazh.contracts.base import StalePayloadError
 from idhazh.contracts.digest_day import DigestDay
@@ -26,7 +26,6 @@ from idhazh.fetch import FetchResult
 from idhazh.stages import common
 from idhazh.stages.assemble import _published_rows, stage_assemble
 from idhazh.stages.common import _item_payloads, _load_manifest, shard_of
-from idhazh.stages.compact import stage_compact
 from idhazh.stages.plan import _next_run_n, stage_plan
 from idhazh.stages.record import stage_record
 from idhazh.stages.work import stage_work
@@ -456,18 +455,18 @@ def test_a_run_that_dies_before_assemble_keeps_what_its_workers_measured(
         )
     recorded, _ = stage_record(run_plan, settings=settings)
 
-    assert ledger.segment_files(state, ledger.SegmentLedger.ITEM_HEALTH), (
+    assert day_shards.one_day(state / ledger.ITEM_HEALTH_DIRNAME, run_plan.date), (
         "the shard committed nothing, so the catch-up fold would have nothing to read"
     )
-    stage_compact(state)
+    fold(state, run_plan.date)
 
     rows = health_rows(state, run_plan.date)
     assert recorded == len(rows) == len(run_plan.items)
     assert {row.run_id for row in rows} == {run_plan.run_id}
     assert [row.item_id for row in rows] == [item.item_id for item in run_plan.items]
-    assert ledger.read_header(ledger.item_health_path(state, run_plan.date)) == (
-        ItemHealthRow.csv_columns()
-    )
+    assert ledger.read_header(
+        ledger.item_health_path(state, run_plan.date) / day_shards.SETTLED_NAME
+    ) == (ItemHealthRow.csv_columns())
 
 
 def test_the_assemble_that_follows_appends_nothing_the_worker_already_recorded(
@@ -493,7 +492,7 @@ def test_the_assemble_that_follows_appends_nothing_the_worker_already_recorded(
             model_endpoint=server.endpoint,
         )
     stage_record(run_plan, settings=settings)
-    stage_compact(state)
+    fold(state, run_plan.date)
     after_the_worker = health_rows(state, run_plan.date)
 
     stage_assemble(run_plan, settings=settings, commit_sha="a" * 40, runner="fixture")
@@ -528,11 +527,11 @@ def test_replaying_a_day_the_worker_already_recorded_appends_no_duplicate(
             model_endpoint=server.endpoint,
         )
     stage_record(run_plan, settings=settings)
-    stage_compact(tmp_path / "state")
+    fold(tmp_path / "state", run_plan.date)
     after_one_run = committed.read_bytes()
 
     stage_record(run_plan, settings=settings)
-    stage_compact(tmp_path / "state")
+    fold(tmp_path / "state", run_plan.date)
 
     assert committed.read_bytes() == after_one_run
 
@@ -623,7 +622,7 @@ def test_a_shard_records_its_own_items_and_nobody_else_s(
         )
 
     stage_record(run_plan, settings=settings, shard=0, shards=2)
-    stage_compact(tmp_path / "state")
+    fold(tmp_path / "state", run_plan.date)
 
     mine = [item.item_id for item in shard_of(run_plan, shard=0, shards=2)]
     assert [row.item_id for row in health_rows(tmp_path / "state", run_plan.date)] == mine
@@ -647,7 +646,7 @@ def test_an_item_whose_summary_is_not_written_yet_is_not_recorded(
     (items_dir / f"{interrupted.item_id}.summary.json").unlink()
 
     recorded, _ = stage_record(run_plan, settings=config.load(CONFIG_DIR))
-    stage_compact(tmp_path / "state")
+    fold(tmp_path / "state", run_plan.date)
 
     settled = [item.item_id for item in run_plan.items if item.item_id != interrupted.item_id]
     assert recorded == len(settled)
@@ -693,7 +692,7 @@ def test_the_two_ledgers_agree_about_which_shards_ran(
             metrics_path=capture,
         )
 
-    stage_compact(state)
+    fold(state, run_plan.date)
     rows = health_rows(state, run_plan.date)
     counted = ledger.load_host_fingerprint_shard(
         ledger.host_fingerprint_path(state, run_plan.date)
