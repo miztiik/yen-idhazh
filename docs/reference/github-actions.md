@@ -853,6 +853,18 @@ redirect for every stage any job in that file runs, present or future, and
 `test_a_decide_run_on_a_trial_config_writes_nothing_outside_its_own_tree` runs the
 stage and lists every file it wrote.
 
+### Three shapes in the digest workflow look like waste, and each is priced
+
+Examined 2026-09-21. All three stay, for three different reasons, so a reader who wants to remove one should know which argument they are up against.
+
+**The `plan` job stays its own job, and folding it into `work` is refused as written.** `stages/plan.py` calls `discover.candidates_from_feed` once per feed, so the stage reads the open web; four shards planning independently would read the feeds at four instants. Some articles would be summarised twice under two addresses and others never, and every source would be read four to eight times a run. The matrix is circular on top of that: `max-parallel` and `matrix` in the `work` job are expressions over `needs.plan.outputs`, and Actions resolves both before any step of `work` runs.
+
+**What the overlap is worth is now measurable rather than arguable.** The plan job costs 0.41 min of its own provisioning ([what a bench dispatch costs](benchmarks/what-a-bench-dispatch-costs.md)). The shape that would collect it is a cheap job carrying only the date, the model refs, the pin and a fanout read from `run.max_parallel`; `work` would then need that job rather than `plan`, run its prelude beside the plan job, and block on the plan artifact with a bounded `gh api` poll. That hides the whole plan job behind a 5 to 6 min prelude - 2.6 to 3.6 percent of an 83.5 to 117.5 min slowest shard ([pipeline-cost.md](pipeline-cost.md)) - for about 120 lines of workflow. It is unbuilt rather than refused, and the plan job now closes the `HostFingerprintRow` it opens, so the saving can be read off a committed duration instead of estimated.
+
+**`shard_bound.py` and the `work` matrix look like the relay this repository otherwise closes, and they are not.** `timeout-minutes` and `strategy.matrix` are job-level keys. Actions resolves them before any step of that job runs, so a value they need cannot be read by a step of their own job - it has to arrive as an expression over a prior job's output. Named here so nobody files them as a defect and "fixes" them into a workflow that cannot start.
+
+**Four callers fetch, verify, start and health-check a model server as a unit, and they stay four.** Whether one composite action would pay for itself is countable rather than arguable: how many merged pull requests in the last quarter changed more than one of the four in the same commit. Zero means four copies cost nothing to keep. Two or more means the action pays for itself. A fifth caller brings it in regardless of the count.
+
 ## What is not on this page
 
 This page answers one question: which workflows exist, when each runs, and what
