@@ -3,7 +3,7 @@
 **Last Updated**: 2026-09-22
 **Level**: 5 (row 11 moves a persisted contract and migrates committed data; every other row is named at its own level in section 1)
 
-Execute per [docs/how-to/execute-a-plan.md](../docs/how-to/execute-a-plan.md): one owner carries the plan and delegates a row where delegation pays; keep parallel N = 4 rows in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0. AUTHOR-AND-STOP until the user authorizes.
+Execute per [docs/how-to/execute-a-plan.md](../docs/how-to/execute-a-plan.md): one owner carries the plan and delegates a row where delegation pays; keep parallel N = 3 rows in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0.
 
 ## Section 0 - Operating contract
 
@@ -94,6 +94,8 @@ Three consequences, each load-bearing.
 *Test (contract tier): for every path a production stage writes, exactly one of `idhazh.paths.is_written_once(path)`, `path in idhazh.paths.DERIVED` and `path in idhazh.paths.UNION_SAFE` is true. The test enumerates the writers from `idhazh.paths` itself, never from the tree and never from a hand-written fixture - nothing in this plan walks `state/`.*
 
 **A third class is not a loophole; it is what the tree already is.** Six committed stores are append-only with an earliest-wins or key-settled read, and forcing them into written-once would migrate data for no gain. What the class costs is the discipline of naming the property: `union-safe` with no sentence saying why a repeat is harmless is `derived` written badly. Table C2 names all six.
+
+**The three classes are closed, and that is what makes this design survive the repository growing.** A tree that appears after this plan was written gets a class, not a redesign: it either names itself, or it is rebuilt from the tip, or its repeat changes no answer. There is no fourth thing a committed file can be. So a new store is one line in `idhazh.paths` and, at most, one migration - never a reopened contract. **Counts are re-measured to size a migration, never to decide one** (section 4).
 
 **The declaration lives in `backend/idhazh/paths.py`, not in a workflow string.** An earlier draft said "there is no separate declaration file" and then tested against `REFRESH_PATHS`, a hand-written space-split YAML string whose own header warns that no path may carry a space. That sentence is deleted, and the harness copy of the same list goes with it - three lists that can drift is the defect, not two.
 
@@ -734,6 +736,7 @@ Rows appear in numeric order. Wave order is Table F.
 | 11.13 | `git add` and clone-plus-checkout rise roughly linearly with the file count - measured 11.9x and 4.3x at 2,940 files, one repetition on a dev machine with no spread, so treat them as a floor on a 4 vCPU runner. Re-derived at row 12's corrected 6,000-file steady state, `git add state` lands near 5 s. **Accepted**: seconds inside a job that used 1.8 of its 20 minutes, and neither is one of the two numbers that fail a run. | Carmack |
 | 11.14 | **Eight paths leave `REFRESH_PATHS` in this row.** Seven because they are written once - item-health, host-fingerprint, scores, score-index, span-rollup, traces and segments - and `state/published` beside them because it is union-safe and the hand-back was **discarding this run's appended rows before the union driver could ever fire**, leaving the publication record dependent on a rebuild succeeding. `hand_back` then touches no `state/` path at all. **What that buys is correctness, not time**: against a 5-second rebuild in an 11-second step there is no time to win. | Fowler |
 | 11.15 | Two callers of the old fold are deleted in this row, because left standing they fold closed days before the day is committed: the `plan` job's step *Fold any segments an earlier run left behind*, and the `stage_compact` call inside `stages/assemble.py`. The two bench call sites in `measure.yml` and `validate.yml` gain the new `--date` argument, and the harness's `BENCH_COMPACT_COMMAND` literal moves with them. | Fowler |
+| 11.16 | **Before this row is dispatched, run rule 1's classification check against the tree as it stands and read Table C against it.** Twice now a claim in this plan about the repository has gone stale between writing and reading, and three other plans merged while this one was being written. **A tree that has appeared since is a class to assign, not a design to revisit** - the three classes are closed, so the answer is one line in `idhazh.paths` plus at most one migration. Re-measure the counts in 11.10 to size the migration; do not let them decide it. Scope by the property - every committed file of the trees in Table C - never by the cardinal. | Carmack and Fowler, converged |
 
 - **Rejected alternatives:**
 
