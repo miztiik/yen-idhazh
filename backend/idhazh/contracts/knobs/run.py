@@ -150,6 +150,22 @@ class RunConfig(Model):
             "production day. `retention.trial_state_days` is what empties it again."
         ),
     )
+    qualification_repeats: int = Field(
+        default=3,
+        ge=3,
+        le=10,
+        description=(
+            "How many times a qualification shard replays each item. Three is the "
+            "smallest count that separates a model that is deterministic from one that "
+            "happened to agree twice, and it is the floor rather than the default "
+            "because a report built on fewer passes is a report that cannot fail. It "
+            "used to be a dispatch input an operator typed per run, where `1` was legal "
+            "and nothing downstream could refuse it. Ten is the ceiling because that is "
+            "past any determinism question; a run that wants more edits this field. "
+            "`idhazh qualify --repeats` overrides it for one invocation and is refused "
+            "on the same floor."
+        ),
+    )
     # Remove this knob once one qualification has cleared `decide` on the production
     # path; the losing branch goes with it, and `_one_call` stays because the
     # injection canaries are the one caller that wants a single call.

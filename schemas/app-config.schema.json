@@ -1814,6 +1814,14 @@
           "title": "Push Deadline Seconds",
           "type": "integer"
         },
+        "qualification_repeats": {
+          "default": 3,
+          "description": "How many times a qualification shard replays each item. Three is the smallest count that separates a model that is deterministic from one that happened to agree twice, and it is the floor rather than the default because a report built on fewer passes is a report that cannot fail. It used to be a dispatch input an operator typed per run, where `1` was legal and nothing downstream could refuse it. Ten is the ceiling because that is past any determinism question; a run that wants more edits this field. `idhazh qualify --repeats` overrides it for one invocation and is refused on the same floor.",
+          "maximum": 10,
+          "minimum": 3,
+          "title": "Qualification Repeats",
+          "type": "integer"
+        },
         "qualify_on_the_production_path": {
           "default": true,
           "description": "Whether `idhazh qualify` summarizes the way the digest does. True is the digest's own path: the article is labelled and then summarized, in two adjacent calls. False is the qualification's own single call, which is what it did until 2026-09-15 and what every shard before that date measured. True by default because a gate that clears a call path nothing publishes has cleared nothing, and the switch exists so a run that goes wrong on it can be put back without a code change. Moving it moves every per-item number in a shard, so `QualificationShard.calls_per_item` records which side produced one.",
@@ -2633,6 +2641,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "run.qualification_repeats, additive, default 3, floor 3, ceiling 10.",
+      "version": "2026-09-22T16:00",
+      "why": "The replay count is a knob with a floor, not a dispatch input that could be 1."
+    },
+    {
       "change": "observability.tracing_enabled drops the hosted-host sentence. No knob moved.",
       "version": "2026-09-22T14:00",
       "why": "A span has one destination now, and it is the committed file."
@@ -2646,11 +2659,6 @@
       "change": "bench.repeats, additive, default 3 and at least 2.",
       "version": "2026-09-22",
       "why": "Both numbers the bench job's timeout is spent on now sit in one file."
-    },
-    {
-      "change": "council.first_night, repair_window_nights and repair_dates_a_night, additive.",
-      "version": "2026-09-21T15:00",
-      "why": "A night plans the older dates its tenants are behind on, inside a bounded window."
     },
     {
       "change": "Earlier changes are in this file's git history.",
@@ -2734,7 +2742,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-09-22T14:00",
+      "default": "2026-09-22T16:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -2745,5 +2753,5 @@
   },
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-09-22T14:00"
+  "version": "2026-09-22T16:00"
 }

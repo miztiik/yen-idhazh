@@ -973,6 +973,9 @@ export interface RunConfig {
 	/** Where a trial run's ledgers go, under `state/`. Null is production and is the default, so a run that says nothing writes where it always did. Set it and every day shard this run appends lands under `state/<name>/` instead - the seen store, feed health, item health, the published ledger, the traces and the rollups, all of them, because a run that split them would put half a trial in the published series. Owner decision, 2026-09-15: a run that exists to exercise production's code path must not be readable as a production day. `retention.trial_state_days` is what empties it again. */
 	trial_state_dirname?: string | null;
 
+	/** How many times a qualification shard replays each item. Three is the smallest count that separates a model that is deterministic from one that happened to agree twice, and it is the floor rather than the default because a report built on fewer passes is a report that cannot fail. It used to be a dispatch input an operator typed per run, where `1` was legal and nothing downstream could refuse it. Ten is the ceiling because that is past any determinism question; a run that wants more edits this field. `idhazh qualify --repeats` overrides it for one invocation and is refused on the same floor. */
+	qualification_repeats?: number;
+
 	/** Whether `idhazh qualify` summarizes the way the digest does. True is the digest's own path: the article is labelled and then summarized, in two adjacent calls. False is the qualification's own single call, which is what it did until 2026-09-15 and what every shard before that date measured. True by default because a gate that clears a call path nothing publishes has cleared nothing, and the switch exists so a run that goes wrong on it can be put back without a code change. Moving it moves every per-item number in a shard, so `QualificationShard.calls_per_item` records which side produced one. */
 	qualify_on_the_production_path?: boolean;
 }
