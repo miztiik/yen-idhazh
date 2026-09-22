@@ -26,6 +26,7 @@
         "too_short",
         "not_prose",
         "boilerplate",
+        "contaminated",
         "paywalled",
         "unsupported_form",
         "model_unreachable",
@@ -77,6 +78,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Added corroborated_word_count; FailureCode gained contaminated.",
+      "version": "2026-09-22",
+      "why": "The page states its own article's length, so an extraction can be checked."
+    },
+    {
       "change": "FailureCode gained model_timed_out and shard_out_of_time.",
       "version": "2026-09-15T22:10",
       "why": "Both were being reported under a name that sends an operator to the wrong place."
@@ -90,11 +96,6 @@
       "change": "title_source records a trust decision, not provenance alone.",
       "version": "2026-09-15T12:00",
       "why": "A page headline and a feed headline are not equally trustworthy."
-    },
-    {
-      "change": "Added title_source: feed or page, the headline's provenance.",
-      "version": "2026-09-15T06:19",
-      "why": "Extract now falls back to the page's own headline when the feed carried none."
     },
     {
       "change": "Earlier changes are in this file's git history.",
@@ -123,6 +124,20 @@
       "minimum": 1,
       "title": "Carried By",
       "type": "integer"
+    },
+    "corroborated_word_count": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Words the page's own markup says its article has, read independently of the extractor: the container whose heading matches `og:title`, JSON-LD `articleBody`, or microdata `articleBody`, whichever states the most. A count, never the text. None means the page stated no length worth reading, or the payload was written before the field existed - the two are not distinguished, because neither yields a ratio. Divide `source_word_count` by it for the ratio `extract.corroboration_ratio_max` bounds; the ratio is not stored, because two numbers that must agree eventually disagree.",
+      "title": "Corroborated Word Count"
     },
     "desk": {
       "anyOf": [
@@ -348,7 +363,7 @@
       "type": "string"
     },
     "version": {
-      "default": "2026-09-15T22:10",
+      "default": "2026-09-22",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -383,5 +398,5 @@
   ],
   "title": "Article",
   "type": "object",
-  "version": "2026-09-15T22:10"
+  "version": "2026-09-22"
 }

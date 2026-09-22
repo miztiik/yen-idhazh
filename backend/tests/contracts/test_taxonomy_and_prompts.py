@@ -220,12 +220,29 @@ def test_the_console_fallback_bands_match_the_committed_ladder() -> None:
 
 
 def test_recorded_item_health_codes_never_count_against_a_source() -> None:
-    assert len(SOURCE_NEUTRAL_FAILURE_CODES) == 19
+    assert len(SOURCE_NEUTRAL_FAILURE_CODES) == 20
     assert FailureCode.NOT_ATTEMPTED in SOURCE_NEUTRAL_FAILURE_CODES
     assert FailureCode.MODEL_UNREACHABLE in SOURCE_NEUTRAL_FAILURE_CODES
     assert FailureCode.MODEL_REFUSED in SOURCE_NEUTRAL_FAILURE_CODES
     assert FailureCode.NOT_PROSE in SOURCE_NEUTRAL_FAILURE_CODES
     assert FailureCode.HTTP_CLIENT_ERROR not in SOURCE_NEUTRAL_FAILURE_CODES
+
+
+def test_a_signal_that_publishes_is_never_charged_to_a_source() -> None:
+    """`counts_against_source` reads the code and not the outcome.
+
+    So a signal that records and still publishes would charge its feed for every
+    story the feed published. All four shape signals ride on an `ok` row -
+    `reject_*` is false for each of them - and all four are therefore neutral.
+    Flip one of those switches and this test is the reason to think again.
+    """
+    for code in (
+        FailureCode.TOO_SHORT,
+        FailureCode.NOT_PROSE,
+        FailureCode.BOILERPLATE,
+        FailureCode.CONTAMINATED,
+    ):
+        assert code in SOURCE_NEUTRAL_FAILURE_CODES, f"{code.value} rides on an ok row"
 
 
 def test_a_signal_that_cannot_fire_is_never_charged_to_a_source() -> None:

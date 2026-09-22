@@ -72,6 +72,36 @@ class ExtractConfig(Model):
         le=1.0,
         description="Share of an item's lines also seen on sibling items from the same host.",
     )
+    corroboration_ratio_max: float = Field(
+        default=2.0,
+        gt=1.0,
+        description=(
+            "Words we extracted, divided by the words the page's own markup says its "
+            "article has. Past this the extraction is contaminated - it returned the "
+            "publisher's front page rather than the one article we asked for. Measured "
+            "over the 58 re-fetchable pages of one run, 41 of which state their own "
+            "length: the median ratio is exactly 1.00, the 90th percentile 1.24 and the "
+            "worst healthy page 1.64, against 3.69 on the page that started this. 2.0 "
+            "sits in that gap and flags 1 of the 41 with no false positive. It is a line "
+            "drawn through 41 pages of one day, which is why `reject_contaminated` is "
+            "false and the run records the signal rather than acting on it."
+        ),
+    )
+    corroboration_min_words: int = Field(
+        default=100,
+        ge=1,
+        description=(
+            "Words a witness needs before it counts as a statement about the article's "
+            "length. Below this it is a caption, a teaser or a stub, and the ratio it "
+            "would give is noise rather than a reading."
+        ),
+    )
+    reject_contaminated: bool = Field(
+        default=False,
+        description=(
+            "If true, a contaminated signal rejects the item. Default records and publishes."
+        ),
+    )
     paywall_markers: list[str] = Field(
         default_factory=lambda: [
             "isaccessibleforfree\":false",

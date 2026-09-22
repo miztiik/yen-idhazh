@@ -471,6 +471,15 @@ export interface ExtractConfig {
 	/** Share of an item's lines also seen on sibling items from the same host. */
 	boilerplate_ratio_max?: number;
 
+	/** Words we extracted, divided by the words the page's own markup says its article has. Past this the extraction is contaminated - it returned the publisher's front page rather than the one article we asked for. Measured over the 58 re-fetchable pages of one run, 41 of which state their own length: the median ratio is exactly 1.00, the 90th percentile 1.24 and the worst healthy page 1.64, against 3.69 on the page that started this. 2.0 sits in that gap and flags 1 of the 41 with no false positive. It is a line drawn through 41 pages of one day, which is why `reject_contaminated` is false and the run records the signal rather than acting on it. */
+	corroboration_ratio_max?: number;
+
+	/** Words a witness needs before it counts as a statement about the article's length. Below this it is a caption, a teaser or a stub, and the ratio it would give is noise rather than a reading. */
+	corroboration_min_words?: number;
+
+	/** If true, a contaminated signal rejects the item. Default records and publishes. */
+	reject_contaminated?: boolean;
+
 	/** Fallback markers used only when publisher JSON-LD does not declare the paywall. */
 	paywall_markers?: string[];
 
@@ -495,7 +504,7 @@ export interface ExtractConfig {
  * fix for a rate limit. `output_truncated` and `labels_truncated` are the two
  * output budgets, derived from two different grammars, for the same reason.
  */
-export const FAILURE_CODE = ['not_attempted', 'robots_denied', 'robots_unreachable', 'blocked_address', 'http_client_error', 'http_rate_limited', 'http_server_error', 'network_error', 'no_text', 'no_title', 'too_short', 'not_prose', 'boilerplate', 'paywalled', 'unsupported_form', 'model_unreachable', 'model_refused', 'model_timed_out', 'context_exceeded', 'output_truncated', 'labels_truncated', 'bad_shape', 'length_out_of_range', 'copied_source', 'leaked_address', 'shard_out_of_time', 'unknown'] as const;
+export const FAILURE_CODE = ['not_attempted', 'robots_denied', 'robots_unreachable', 'blocked_address', 'http_client_error', 'http_rate_limited', 'http_server_error', 'network_error', 'no_text', 'no_title', 'too_short', 'not_prose', 'boilerplate', 'contaminated', 'paywalled', 'unsupported_form', 'model_unreachable', 'model_refused', 'model_timed_out', 'context_exceeded', 'output_truncated', 'labels_truncated', 'bad_shape', 'length_out_of_range', 'copied_source', 'leaked_address', 'shard_out_of_time', 'unknown'] as const;
 
 export type FailureCode = (typeof FAILURE_CODE)[number];
 

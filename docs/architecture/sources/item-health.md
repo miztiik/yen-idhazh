@@ -1,6 +1,6 @@
 # Item Health
 
-**Last Updated**: 2026-09-21
+**Last Updated**: 2026-09-22
 
 What every planned item did on every run, where that record lives, and which
 failures count against a source. This is item-grain evidence. Feed health is
@@ -444,7 +444,7 @@ An item can terminate at one of five stages:
 
 The outcome is either `ok` or `failed`. A failed row has one failure code that
 belongs to its stage. A successful row usually has no code, but may carry an
-extract signal: `too_short`, `not_prose` or `boilerplate`.
+extract signal: `too_short`, `not_prose`, `boilerplate` or `contaminated`.
 
 **`ItemStage` holds a sixth name and this column refuses it.** `visual` is the
 step that plans and draws a picture, and it is a stage the pipeline can name
@@ -476,9 +476,20 @@ stage that did the work.
 | --- | --- |
 | `plan` | `not_attempted` |
 | `fetch` | `robots_denied`, `robots_unreachable`, `blocked_address`, `http_client_error`, `http_rate_limited`, `http_server_error`, `network_error` |
-| `extract` | `no_text`, `no_title`, `too_short`, `not_prose`, `boilerplate`, `paywalled`, `unsupported_form` |
+| `extract` | `no_text`, `no_title`, `too_short`, `not_prose`, `boilerplate`, `contaminated`, `paywalled`, `unsupported_form` |
 | `summarize` | `model_unreachable`, `model_refused`, `model_timed_out`, `shard_out_of_time`, `context_exceeded`, `output_truncated`, `labels_truncated`, `bad_shape`, `length_out_of_range`, `copied_source`, `leaked_address` |
 | any failed stage | `unknown` |
+
+**A new code is named in five places, and the fifth only fails at runtime.**
+`FailureCode` itself, `FAILURE_CODE_STAGES`, `SOURCE_NEUTRAL_FAILURE_CODES`,
+`CollectConfig.settled_failure_codes`, and - the one that is easy to miss -
+`ItemHealthRow._state_is_complete`, which lists the codes an `ok` row may carry.
+Miss the fifth on a signal that publishes and nothing goes red until a real row
+is built: the enum, the schema and the drift gate are all satisfied, and the
+failure is a `ValidationError` raised inside the census. Then the committed
+`config/idhazh.json` names the settled list again, this page enumerates the
+neutral split twice, and `backend/tests/test_telemetry.py` needs a fixture
+writer for the new code - a test walks every member and refuses one without.
 
 `detail` is `str | None`, at most 2,000 characters of printable ASCII on one
 line, and belongs on any failed row. A row coded `unknown` must carry one and
@@ -532,14 +543,21 @@ that happens, and what a change in either rate is allowed to prove, is
 
 ## What counts against a source
 
-Nineteen codes never count against a source:
+Twenty codes never count against a source:
 
 `not_attempted`, `robots_denied`, `robots_unreachable`, `blocked_address`,
-`http_rate_limited`, `boilerplate`, `too_short`, `not_prose`,
+`http_rate_limited`, `boilerplate`, `contaminated`, `too_short`, `not_prose`,
 `model_unreachable`, `model_refused`, `model_timed_out`, `shard_out_of_time`,
 `context_exceeded`, `output_truncated`,
 `labels_truncated`, `bad_shape`, `length_out_of_range`, `copied_source`,
 `leaked_address`
+
+All four extract signals are on that list, and the reason is mechanical rather
+than generous: `counts_against_source` reads the code and never the outcome, and
+all four ride on an `ok` row while their `reject_*` switch is false. A signal
+that publishes and still counted would charge a feed for every story it
+published. Flipping any of those switches is the moment to ask the question
+again.
 
 `boilerplate` left that list on 2026-09-17 and came back the same day, and it is
 the only code that has ever moved. It went when a store started feeding the
@@ -725,15 +743,15 @@ across that date. `url_key` is one shape for every row ever written. Join on
 `url_key`.
 
 **The failed share is not the source failure rate.** 324 of the 1200 committed
-rows are `failed`, but twelve of the nineteen codes never count against a
-source - `model_unreachable` is our own server being down, `robots_denied` is a
-publisher's stated wish. Filter on `counts_against_source` before calling
-anything a source's fault.
+rows are `failed`, but twelve of the nineteen codes those rows carry never count
+against a source - `model_unreachable` is our own server being down,
+`robots_denied` is a publisher's stated wish. Filter on `counts_against_source`
+before calling anything a source's fault.
 
-**Shape signals ride on `ok` rows.** `too_short`, `not_prose` and `boilerplate`
-appear with `outcome = ok` because the item published and the signal still
-matters. `WHERE code IS NOT NULL` is not the same query as `WHERE outcome =
-'failed'`.
+**Shape signals ride on `ok` rows.** `too_short`, `not_prose`, `boilerplate` and
+`contaminated` appear with `outcome = ok` because the item published and the
+signal still matters. `WHERE code IS NOT NULL` is not the same query as `WHERE
+outcome = 'failed'`.
 
 **A merge conflict on the shard is normal.** The pipeline appends to it several
 times an hour, so any branch open for more than a run will conflict. Resolve by
@@ -866,18 +884,46 @@ A failure-only file cannot produce a rate. The ledger writes successes and
 failures in one file so a chart can divide failures by all planned items.
 Authority: Fowler.
 
-Shape is evidence, not a verdict. `too_short`, `not_prose` and `boilerplate`
-can appear on an `ok` row because the item published and the signal still matters
-to the editor. They never count against a source by default. Only a paywall, an
-unsupported form, or genuine missing text stops extract. Authority: Owner
-override O3.
+Shape is evidence, not a verdict. `too_short`, `not_prose`, `boilerplate` and
+`contaminated` can appear on an `ok` row because the item published and the
+signal still matters to the editor. They never count against a source by
+default. Only a paywall, an unsupported form, or genuine missing text stops
+extract. Authority: Owner override O3.
 
-Each of the three has a switch that closes it, all three false
+Each of the four has a switch that closes it, all four false
 ([../../concepts/config.md](../../concepts/config.md)). O3 is what the DEFAULT
 says, not what the code can express, and the difference matters: a curator who
 turns one on is taking a decision O3 left them, not overriding it.
 `reject_too_short` additionally never fires on a feed registered as `abstract`,
 because short is the property that feed was registered for.
+
+**`contaminated` asks the page how long its own article is, rather than asking
+for a better extractor.** An extraction that returns a publisher's front page is
+real prose, of the right vertical, in the right voice - so every check we had
+passed it, and one such item spent about 5,000 tokens of prefill before the
+model refused it. The extractor is already running `favor_precision=True`;
+`fast=True` returns byte-identical text on the page that started this; jusText
+is worse on it at 4,261 words; and link density is inverted on that template,
+so the article scores worse than the front page around it. Upstream's own answer
+to this class of page is a per-site XPath patch, which is a maintenance stream
+rather than a fix. So the gate does not try to extract better. It reads what the
+page itself says its article contains - the container whose heading matches
+`og:title`, JSON-LD `articleBody`, microdata `articleBody` - and compares. Three
+witnesses because no single one is reliable: the page this was written for
+declares a `NewsArticle` node with no `articleBody` at all, and only the
+container witness sees it.
+
+What this does not do, stated because the numbers are small. **The gate is blind
+on 29 percent of pages** - 41 of 58 re-fetchable pages of one run carried any
+witness, so 17 cannot be checked and pass by default. The threshold is a line
+drawn through those 41: median ratio 1.00, 90th percentile 1.24, worst healthy
+page 1.64, against 3.69 on the contaminated one, and `corroboration_ratio_max`
+is 2.0 in that gap. It flags 1 of the 41 with no false positive, which is one
+day's evidence and not a rate. Per-witness coverage was never broken out, so
+how much the JSON-LD and microdata witnesses contribute is unknown. That is why
+`reject_contaminated` defaults to false: the run records the signal and
+publishes the item, and the question of whether to act on it is one a full run's
+recorded ratios can answer and this one cannot. Authority: Fowler.
 
 The row stores both `url_key` and `item_id`. `item_id` is derived from the
 address, so it survives a re-plan - but it was ten decimal digits until

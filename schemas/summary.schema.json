@@ -76,6 +76,7 @@
         "too_short",
         "not_prose",
         "boilerplate",
+        "contaminated",
         "paywalled",
         "unsupported_form",
         "model_unreachable",

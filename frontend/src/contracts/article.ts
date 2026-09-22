@@ -14,7 +14,7 @@ export type ArticleStatus = (typeof ARTICLE_STATUS)[number];
  * fix for a rate limit. `output_truncated` and `labels_truncated` are the two
  * output budgets, derived from two different grammars, for the same reason.
  */
-export const FAILURE_CODE = ['not_attempted', 'robots_denied', 'robots_unreachable', 'blocked_address', 'http_client_error', 'http_rate_limited', 'http_server_error', 'network_error', 'no_text', 'no_title', 'too_short', 'not_prose', 'boilerplate', 'paywalled', 'unsupported_form', 'model_unreachable', 'model_refused', 'model_timed_out', 'context_exceeded', 'output_truncated', 'labels_truncated', 'bad_shape', 'length_out_of_range', 'copied_source', 'leaked_address', 'shard_out_of_time', 'unknown'] as const;
+export const FAILURE_CODE = ['not_attempted', 'robots_denied', 'robots_unreachable', 'blocked_address', 'http_client_error', 'http_rate_limited', 'http_server_error', 'network_error', 'no_text', 'no_title', 'too_short', 'not_prose', 'boilerplate', 'contaminated', 'paywalled', 'unsupported_form', 'model_unreachable', 'model_refused', 'model_timed_out', 'context_exceeded', 'output_truncated', 'labels_truncated', 'bad_shape', 'length_out_of_range', 'copied_source', 'leaked_address', 'shard_out_of_time', 'unknown'] as const;
 
 export type FailureCode = (typeof FAILURE_CODE)[number];
 
@@ -99,6 +99,9 @@ export interface Article {
 
 	/** Words in the extracted body before `extract.truncation_cap_tokens` cut it. A count, never the text: the pre-cap body is not kept and is not ours to republish. None on a payload written before the field existed. */
 	source_word_count?: number | null;
+
+	/** Words the page's own markup says its article has, read independently of the extractor: the container whose heading matches `og:title`, JSON-LD `articleBody`, or microdata `articleBody`, whichever states the most. A count, never the text. None means the page stated no length worth reading, or the payload was written before the field existed - the two are not distinguished, because neither yields a ratio. Divide `source_word_count` by it for the ratio `extract.corroboration_ratio_max` bounds; the ratio is not stored, because two numbers that must agree eventually disagree. */
+	corroborated_word_count?: number | null;
 
 	token_count?: number;
 
