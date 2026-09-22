@@ -201,6 +201,8 @@ Avoid (broad / lossy / history-rewriting):
 
 **The standing exception is `.github/workflows/prune.yml`.** It squashes commits older than `finetune.prune_keep_days` and force-pushes `main`, every `finetune.prune_every_days`. The standing exception exists because the corpus commits article text (section 0a) and git history is append-only, so deleting a row does not delete its bytes - the only way to bound the repository is to rewrite the range those bytes are in.
 
+**The exception does not cover forcing over another run.** The job reads origin's tip again immediately before the push and refuses if it moved, because a force push replaces the whole ref and would delete a commit that landed while the squash ran. A refused prune writes no stamp, so it is due again at the next daily wake - it costs one day, not one cadence. Owner decision, 2026-09-22.
+
 What it costs, stated rather than implied: a squash boundary is per-commit, not per-path, so the range it collapses carries `backend/`, `docs/` and `state/` as well as `corpus/`. `git blame` and `git bisect` reach back `prune_keep_days` to `prune_keep_days + prune_every_days` and no further, and a commit SHA older than that stops resolving. A clone taken before a prune has to be re-fetched.
 
 Safe workflow: `git status --porcelain`, leave unrelated dirty files alone, stage only explicit paths, verify with `git diff --cached --name-only`, small reversible commits on a named branch, push, merge after gates pass.

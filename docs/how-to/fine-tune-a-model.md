@@ -144,7 +144,8 @@ version loses data:
 days out of 30 exits without doing anything. When
 `finetune.prune_every_days` have passed it takes a full clone, squashes every
 commit older than `finetune.prune_keep_days`, stamps the meta file and
-force-pushes `main`.
+force-pushes `main` - unless `main` moved while it was rewriting, which is the
+one case it refuses and pushes nothing.
 
 **This is the only force-push in the repository** and the single exception
 `CLAUDE.md` section 8 carries. It exists because the corpus commits article text
@@ -165,6 +166,27 @@ What it costs, said rather than implied:
 
 Owner decision, 2026-08-28, taken over the alternative of keeping the corpus on a
 branch nobody works from.
+
+**The prune refuses rather than forcing when `main` moved under it.** A force
+push is a whole-ref operation: it replaces the branch with whatever the prune
+holds, so a commit another run pushed while the squash was running is deleted
+and nothing records that it existed. The prune therefore reads origin's tip
+again immediately before the push and compares it with the commit it checked
+out. If the two differ it pushes nothing and fails the run.
+
+**Refusing costs one wake, which is one day.** The stamp that says the prune ran
+is written by the same run, so a refused prune leaves `pruned_date` where it was,
+and `prune_due.py` calls an unstamped prune due. The cron wakes daily, so the
+next morning's wake runs it again. Nothing else changes: the boundary is
+recomputed from that day, and a day of extra history is a day of extra history.
+
+Until 2026-09-22 the only thing holding a clash off was the cron minute, placed
+in the one 266-minute window the serial digest schedule leaves idle. A gap is not
+a lock - GitHub queues scheduled runs by load, and no workflow here can hold a
+lock against another one. The hour still lowers the odds; the tip check is what
+makes losing that bet cost a day rather than another run's commits.
+
+Owner decision, 2026-09-22.
 
 **No data is lost, only deltas.** `git checkout --orphan` at the boundary
 produces a root commit holding a complete copy of the tree, and the tip holds
@@ -401,7 +423,7 @@ All in the `finetune` block of `config/idhazh.json`.
 | `train_rows` | 1000 | GPU hours. A **ceiling**, not a demand |
 | `min_rows` | 500 | nothing trains below it, and a repair refuses to cut past it |
 | `harvest_every_days` | 7 | one commit each time it fires |
-| `prune_every_days` | 30 | one force-push each time it fires |
+| `prune_every_days` | 30 | one force-push each time it fires, or a day's delay when `main` moved |
 | `prune_keep_days` | 60 | storage, and how far `git blame` reaches |
 | `holdout_days` | 14 | rows that never train |
 | `reference_rows` | 500 | human hours, once. About 2 min a drafted row |
