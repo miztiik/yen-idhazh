@@ -1,6 +1,6 @@
 # Dispatch inputs
 
-**Last Updated**: 2026-09-17
+**Last Updated**: 2026-09-22
 
 What shape a `workflow_dispatch` input has to have, which shapes exist, and what
 checks each one. One of them decides a published address, which is why the list
@@ -67,7 +67,7 @@ The named inputs:
  republishes is one bare word.
 - **Matched** - `digest.date`, `drift.recent_days`, `drift.baseline_days`,
  `measure.corpus_links`, `measure.threads`, `measure.budget_samples`,
- `validate.shards`, `validate.repeats`, `validate.corpus_per_shard`,
+ `validate.shards`, `validate.corpus_per_shard`,
  `validate.job_budget_minutes`.
 
 **`candidate_models_file` is the same field on all three, and that is the point.**
