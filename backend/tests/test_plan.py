@@ -23,7 +23,7 @@ from datetime import timedelta
 from pathlib import Path
 
 import pytest
-from conftest import CONFIG_DIR, FIXTURES_DIR, read_text, seed_item_health
+from conftest import CONFIG_DIR, FIXTURES_DIR, read_text, seed_feed_health, seed_item_health
 
 from idhazh import cli, config, fetch, ledger
 from idhazh.contracts.app_config import AppConfig
@@ -1308,7 +1308,7 @@ def test_a_row_that_no_longer_parses_is_skipped_rather_than_fatal() -> None:
 
 def seed_failures(state: Path, feed_id: str, runs: int) -> None:
     """A history of nothing but failed reads, on days before the one under test."""
-    ledger.append_health(
+    seed_feed_health(
         state,
         DATE,
         [
@@ -1409,7 +1409,7 @@ def test_quarantine_never_touches_the_committed_source_list() -> None:
 
 def seed_gone(state: Path, feed: FeedDef, runs: int) -> None:
     """A history of nothing but `410 Gone`, one row per run, keyed on the address."""
-    ledger.append_health(
+    seed_feed_health(
         state,
         DATE,
         [
@@ -1512,7 +1512,7 @@ def test_a_permanent_failure_that_is_not_gone_never_retires_an_address() -> None
     noticing it went.
     """
     state = Path(tempfile.mkdtemp())
-    ledger.append_health(
+    seed_feed_health(
         state,
         DATE,
         [
@@ -1605,7 +1605,7 @@ def test_a_history_with_no_endpoint_key_can_never_retire_anything() -> None:
     writer started filling it. This is that rule, at the stage that files.
     """
     state = Path(tempfile.mkdtemp())
-    ledger.append_health(
+    seed_feed_health(
         state,
         DATE,
         [

@@ -13,6 +13,7 @@ from typing import Final
 from conftest import seed_item_health
 
 from idhazh import day_partition, ledger
+from idhazh.contracts.base import ServerJob
 from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.item_health import (
@@ -221,12 +222,12 @@ NOT_MONTHS: Final = (
 )
 
 def feed_health_history(state_dir: Path, months: list[str], *, day_of_month: int = 11) -> None:
-    """A real feed-health day file per month, written through the real appender."""
+    """A real feed-health file per month, written through the real producer."""
     for index, month in enumerate(months):
         day = f"{month}-{day_of_month:02d}"
-        ledger.append_health(
+        ledger.write_segment(
             state_dir,
-            day,
+            ledger.SegmentLedger.HEALTH,
             [
                 FeedHealthRow(
                     version=FeedHealthRow.schema_version(),
@@ -240,6 +241,10 @@ def feed_health_history(state_dir: Path, months: list[str], *, day_of_month: int
                     detail=None,
                 )
             ],
+            run_id=f"{day}-1",
+            attempt=1,
+            job=ServerJob.PLAN,
+            shard=0,
         )
 
 

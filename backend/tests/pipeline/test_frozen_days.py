@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import csv
 import hashlib
 import json
 import logging
@@ -22,7 +21,6 @@ from idhazh.stages.validate_days import (
     _proved,
     _receipts_for,
     _validator_identity,
-    day_validations_path,
     stage_validate_days,
 )
 
@@ -39,6 +37,16 @@ from idhazh.stages.validate_days import (
 # pipeline has piled up (CLAUDE.md section 13).
 
 A_COMMITTED_DAY = CONTRACT_FIXTURES_DIR / "digest-day" / "two-runs.json"
+
+#: The run every call below files its receipt under. A test here asks which days
+#: are read, never who read them, so one identity serves them all; a case that
+#: needs a second run names its own.
+A_RUN = "2026-08-21-1"
+
+
+def validated(root: Path, *args: Any, run_id: str = A_RUN, **kwargs: Any) -> int:
+    """`stage_validate_days` with an identity, because the receipt is a writer's file."""
+    return stage_validate_days(root, *args, run_id=run_id, **kwargs)
 
 
 def a_published_day(public_root: Path, *, pretty: bool = False) -> Path:
@@ -115,13 +123,13 @@ def test_a_day_with_no_receipt_is_validated_and_earns_one(tmp_path: Path) -> Non
     day = a_published_day(public)
     root = public / "digest"
 
-    code, opened = days_opened(root, lambda: stage_validate_days(root, state_dir=state))
+    code, opened = days_opened(root, lambda: validated(root, state_dir=state))
 
     assert code == 0
     assert "2026/08/21/digest.json" in opened, "a day with no receipt has to be read"
     held = _receipts_for(state, _validator_identity())
     assert set(held) == {"2026-08-21"}
-    (receipt,) = held["2026-08-21"]
+    receipt = held["2026-08-21"]
     assert receipt.payload_bytes == day.stat().st_size
     assert receipt.payload_digest == hashlib.sha256(day.read_bytes()).hexdigest()
 
@@ -139,8 +147,8 @@ def test_an_unchanged_day_under_an_unchanged_validator_is_not_opened(tmp_path: P
     a_published_day(public)
     root = public / "digest"
 
-    first_code, first = days_opened(root, lambda: stage_validate_days(root, state_dir=state))
-    second_code, second = days_opened(root, lambda: stage_validate_days(root, state_dir=state))
+    first_code, first = days_opened(root, lambda: validated(root, state_dir=state))
+    second_code, second = days_opened(root, lambda: validated(root, state_dir=state))
 
     assert (first_code, second_code) == (0, 0)
     assert "2026/08/21/digest.json" in first
@@ -156,26 +164,24 @@ def test_a_day_whose_payload_moved_is_opened_again(tmp_path: Path) -> None:
     recorded length is what `os.stat` answers without opening anything, and a
     re-encode moves it.
 
-    The rewritten day then settles down. The row about the payload that used to
-    be there is still in the file - the receipt file is append-only -
-    and it is ignored rather than held against the day, so the next run is free
-    again.
+    The rewritten day then settles down. The run that re-read it leaves its own
+    receipt beside the first, the settlement takes the newest, and the next run
+    is free again.
     """
     public = tmp_path / "public"
     state = tmp_path / "state"
     a_published_day(public)
     root = public / "digest"
-    assert stage_validate_days(root, state_dir=state) == 0
+    assert validated(root, state_dir=state) == 0
 
     rewritten = a_published_day(public, pretty=True)
-    code, opened = days_opened(root, lambda: stage_validate_days(root, state_dir=state))
-    after, quiet = days_opened(root, lambda: stage_validate_days(root, state_dir=state))
+    code, opened = days_opened(root, lambda: validated(root, state_dir=state, run_id="2026-08-21-2"))
+    after, quiet = days_opened(root, lambda: validated(root, state_dir=state, run_id="2026-08-21-3"))
 
     assert (code, after) == (0, 0)
     assert "2026/08/21/digest.json" in opened, "a rewritten day was skipped on a stale receipt"
     assert quiet == set(), "the rewritten day never settled down"
     held = _receipts_for(state, _validator_identity())
-    assert len(held["2026-08-21"]) == 2, "the superseded row should still be on file"
     assert _proved(held["2026-08-21"], rewritten.stat().st_size)
 
 
@@ -194,14 +200,14 @@ def test_a_telemetry_shard_the_contract_refuses_is_named_by_the_gate(
     state = tmp_path / "state"
     a_published_day(public)
     root = public / "digest"
-    assert stage_validate_days(root, state_dir=state) == 0, "the day itself has to be clean"
+    assert validated(root, state_dir=state) == 0, "the day itself has to be clean"
 
     shard = public / "telemetry" / "2026-08.csv"
     shard.parent.mkdir(parents=True)
     shard.write_text("date,not_the_contract\n2026-08-21,1\n", encoding="utf-8")
 
     with caplog.at_level(logging.ERROR):
-        assert stage_validate_days(root, state_dir=state) == 1
+        assert validated(root, state_dir=state) == 1
     assert "frontend/public/telemetry/2026-08.csv" in caplog.text, "name the file"
     assert "header is" in caplog.text, "and say what the contract wanted instead"
 
@@ -217,10 +223,10 @@ def test_a_named_day_is_opened_even_when_it_carries_a_receipt(tmp_path: Path) ->
     state = tmp_path / "state"
     a_published_day(public)
     root = public / "digest"
-    assert stage_validate_days(root, state_dir=state) == 0
+    assert validated(root, state_dir=state) == 0
 
     code, opened = days_opened(
-        root, lambda: stage_validate_days(root, ["2026-08-21"], state_dir=state)
+        root, lambda: validated(root, ["2026-08-21"], state_dir=state)
     )
 
     assert code == 0
@@ -283,8 +289,8 @@ def test_a_moved_validator_reopens_every_day_once(tmp_path: Path) -> None:
     state = tmp_path / "state"
     a_published_day(public)
     root = public / "digest"
-    assert stage_validate_days(root, state_dir=state) == 0
-    _, quiet = days_opened(root, lambda: stage_validate_days(root, state_dir=state))
+    assert validated(root, state_dir=state) == 0
+    _, quiet = days_opened(root, lambda: validated(root, state_dir=state))
     assert quiet == set()
 
     shipped = _picture_faults
@@ -295,37 +301,39 @@ def test_a_moved_validator_reopens_every_day_once(tmp_path: Path) -> None:
 
     with pytest.MonkeyPatch.context() as patch:
         patch.setattr(validate_days, "_picture_faults", reworded)
-        first, reopened = days_opened(root, lambda: stage_validate_days(root, state_dir=state))
-        second, again = days_opened(root, lambda: stage_validate_days(root, state_dir=state))
+        first, reopened = days_opened(root, lambda: validated(root, state_dir=state))
+        second, again = days_opened(root, lambda: validated(root, state_dir=state))
 
     assert (first, second) == (0, 0)
     assert "2026/08/21/digest.json" in reopened, "a moved rule left the archive unread"
     assert again == set(), "the sweep after a rule change has to happen once"
 
 
-def test_two_receipts_that_disagree_about_one_day_leave_it_unproved(tmp_path: Path) -> None:
-    """Nothing takes a receipt back out, so two runs really can leave two rows.
+def test_two_runs_that_read_one_day_leave_two_files_and_one_answer(tmp_path: Path) -> None:
+    """A receipt is a writer's own file now, so one day really can hold several.
 
-    Where they disagree about the payload the day has no single claim, and a day
-    with no single claim is read rather than trusted. This is what the recorded
-    digest is for: the lengths can match while the bytes do not.
+    Nothing takes a receipt back out, and two runs that both read one day each
+    leave their own file in that day's directory. What the reader hands back is
+    still one receipt a day - the newest under the rules in force - because a
+    reader that stacked them would have to decide which of two claims to trust
+    and would get it wrong the first time a re-encode moved the bytes.
     """
     public = tmp_path / "public"
     state = tmp_path / "state"
-    day = a_published_day(public)
+    a_published_day(public)
     root = public / "digest"
-    assert stage_validate_days(root, state_dir=state) == 0
+    assert validated(root, state_dir=state) == 0
 
-    receipts = day_validations_path(state)
-    rows = list(csv.DictReader(receipts.read_text(encoding="utf-8").splitlines()))
-    disagreeing = {**rows[0], "payload_digest": "b" * 64}
-    with receipts.open("a", encoding="utf-8", newline="") as handle:
-        csv.DictWriter(handle, fieldnames=list(rows[0]), lineterminator="\n").writerow(disagreeing)
+    rewritten = a_published_day(public, pretty=True)
+    assert validated(root, state_dir=state, run_id="2026-08-21-2") == 0
+
+    day_dir = validate_days._receipts_root(state) / "2026" / "08" / "21"
+    assert len(sorted(day_dir.iterdir())) == 2, "each run has to leave its own file"
 
     held = _receipts_for(state, _validator_identity())
-    assert not _proved(held["2026-08-21"], day.stat().st_size)
+    assert set(held) == {"2026-08-21"}
+    assert held["2026-08-21"].payload_bytes == rewritten.stat().st_size
+    assert _proved(held["2026-08-21"], rewritten.stat().st_size)
 
-    code, opened = days_opened(root, lambda: stage_validate_days(root, state_dir=state))
-
-    assert code == 0
-    assert f"2026/08/21/{day.name}" in opened
+    _, quiet = days_opened(root, lambda: validated(root, state_dir=state))
+    assert quiet == set(), "the settled receipt did not answer for the day on disk"

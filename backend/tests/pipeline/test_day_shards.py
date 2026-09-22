@@ -63,23 +63,24 @@ def _rows_of(path: Path) -> list[dict[str, str]]:
         return list(csv.DictReader(handle))
 
 
-def test_a_day_directory_settles_to_what_the_compaction_writes_into_a_head(
+def test_a_day_directory_settles_to_what_the_fold_writes_into_its_settled_file(
     tmp_path: Path,
 ) -> None:
-    """The oracle. Same bytes, two folds, one answer, row for row."""
+    """The oracle. Same bytes, two settlements, one answer, row for row."""
     root = _root()
 
-    segments = tmp_path / ledger.STATE_DIRNAME / ledger.SEGMENTS_DIRNAME / "span-rollup"
-    segments.mkdir(parents=True)
+    day = tmp_path / ledger.STATE_DIRNAME / ledger.SPAN_ROLLUP_DIRNAME / "2026" / "09" / "18"
+    day.mkdir(parents=True)
     for name in WRITERS:
-        shutil.copy(root / "2026" / "09" / "18" / name, segments / name)
-    report = compact.stage_compact(tmp_path / ledger.STATE_DIRNAME)
-    assert report.segments_read == len(WRITERS)
-    head = ledger.span_rollup_path(tmp_path / ledger.STATE_DIRNAME, "2026-09")
-    folded = _rows_of(head)
+        shutil.copy(root / "2026" / "09" / "18" / name, day / name)
+    report = compact.stage_compact(
+        tmp_path / ledger.STATE_DIRNAME, date="2026-09-30", after_days=7
+    )
+    assert report.files_replaced == len(WRITERS)
+    folded = _rows_of(day / day_shards.SETTLED_NAME)
 
     # `days=1` is the newest recorded day, which is the day directory alone -
-    # the same rows the three segments above carried.
+    # the same rows the three writer files above carried.
     settled = day_shards.settled_rows(root, ledger.SPAN_ROLLUP_KEY, SpanRollupRow, days=1)
 
     assert settled == folded

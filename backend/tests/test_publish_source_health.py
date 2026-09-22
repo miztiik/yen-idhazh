@@ -14,7 +14,7 @@ from collections.abc import Sequence
 from pathlib import Path
 
 import pytest
-from conftest import seed_item_health
+from conftest import seed_feed_health, seed_item_health
 from pydantic import ValidationError
 
 from idhazh import config, day_partition, ledger
@@ -451,7 +451,7 @@ def test_the_view_round_trips_through_its_own_serialization() -> None:
 def test_publish_writes_the_view_where_the_console_reads_it(tmp_path) -> None:  # type: ignore[no-untyped-def]
     """And it reads the committed ledgers rather than anything held in memory."""
     state = tmp_path / "state"
-    ledger.append_health(
+    seed_feed_health(
         state,
         DATE,
         [health("wire", date=DATE, n=1, outcome=FetchOutcome.OK, items=3)],
@@ -516,7 +516,7 @@ def test_the_published_factor_is_the_one_the_ranker_applied(tmp_path) -> None:  
     good, bad = known[0].id, known[1].id
     inside = day_partition.days_in_window(DATE, collect.reliability_window_days)
     for offset, date in enumerate((inside[0], inside[1], inside[-1])):
-        ledger.append_health(
+        seed_feed_health(
             state,
             date,
             [
@@ -526,7 +526,7 @@ def test_the_published_factor_is_the_one_the_ranker_applied(tmp_path) -> None:  
         )
     # A read one day past the far edge, which the ranker does not see either.
     stale = day_partition.days_in_window(DATE, collect.reliability_window_days + 1)[-1]
-    ledger.append_health(
+    seed_feed_health(
         state, stale, [health(bad, date=stale, n=9, outcome=FetchOutcome.OK, items=7)]
     )
 

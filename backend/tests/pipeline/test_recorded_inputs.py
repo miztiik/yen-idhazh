@@ -157,9 +157,10 @@ def test_a_traced_work_shard_writes_a_reconciling_span_rollup(
             model_endpoint=server.endpoint,
         )
 
-    shard = ledger.segment_path(
+    shard = ledger.day_shard_path(
         common.STATE_ROOT,
         ledger.SegmentLedger.SPAN_ROLLUP,
+        date=run_plan.date,
         run_id=run_plan.run_id,
         # Asked for rather than assumed: the stage names its file from
         # GITHUB_RUN_ATTEMPT, which is 2 on a re-run of a CI job, so a hardcoded

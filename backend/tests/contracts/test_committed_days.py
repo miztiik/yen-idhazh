@@ -38,6 +38,10 @@ DESK_SHORTFALL = ("considered", "too_old", "below_feed_floor")
 #: run could have written.
 BUILT_DATE: Final = "2026-08-30"
 
+#: The run the gate files its receipt under. These cases ask what the gate says
+#: about a day, never who ran it, so one identity serves them all.
+A_RUN: Final = f"{BUILT_DATE}-1"
+
 
 def a_day_longer_than_the_seed(seed: int) -> dict[str, Any]:
     """A day carrying one story more than a prerendered document seeds.
@@ -122,12 +126,12 @@ def test_a_story_past_the_seed_is_the_one_this_gate_exists_for(
     day = a_day_longer_than_the_seed(seed)
     assert len(day["items"]) > seed, "a day no longer than the seed proves nothing here"
 
-    assert stage_validate_days(a_tree_holding(tmp_path / "whole", day)) == 0
+    assert stage_validate_days(a_tree_holding(tmp_path / "whole", day), run_id=A_RUN) == 0
 
     day["items"][-1]["key_points"] = []
     root = a_tree_holding(tmp_path / "past-the-seed", day)
     with caplog.at_level(logging.ERROR):
-        assert stage_validate_days(root) == 1
+        assert stage_validate_days(root, run_id=A_RUN) == 1
     assert BUILT_DATE in caplog.text, "the failing day has to be named"
     assert "digest-view.schema.json" in caplog.text, "which contract refused it"
 
@@ -139,14 +143,14 @@ def test_a_day_that_is_not_json_at_all_is_named_rather_than_thrown(tmp_path: Pat
     broken.mkdir(parents=True)
     (broken / "digest.json").write_text("{ not json", encoding="utf-8")
 
-    assert stage_validate_days(root) == 1
+    assert stage_validate_days(root, run_id=A_RUN) == 1
 
 
 def test_a_tree_with_no_committed_day_fails_rather_than_passes(tmp_path: Path) -> None:
     """A run over nothing prints the same line as a run over every day."""
     empty = tmp_path / "digest"
     empty.mkdir()
-    assert stage_validate_days(empty) == 1
+    assert stage_validate_days(empty, run_id=A_RUN) == 1
 
 
 def test_the_gate_defaults_to_the_one_committed_tree(
