@@ -44,6 +44,7 @@ from idhazh.contracts.digest_day import (
     DigestVisual,
     EarlierStory,
 )
+from idhazh.contracts.digest_run_fragment import DigestRunFragment
 from idhazh.contracts.eval_row import BandReason, ConfidenceBand
 from idhazh.contracts.fingerprint import PipelineInputs
 from idhazh.contracts.item_health import ItemHealthRow, ItemOutcome, TimeSource
@@ -83,6 +84,11 @@ LOG: Final = logging.getLogger("idhazh")
 
 PUBLIC_ROOT: Final = Path("frontend/public/digest")
 INDEX_ROOT: Final = Path("frontend/public/assist/index")
+#: Where a run files its own block of a day, under `state/` and never under
+#: `frontend/public/`: everything there is copied into the deploy, so a fragment
+#: filed there would be a second full copy of every story on a site Pages
+#: refuses over 1 GB. What keeps a reader off it is that it has no address.
+FRAGMENTS_DIRNAME: Final = "digest-fragments"
 #: The committed label vectors, relative to the repository root. `config/`
 #: rather than `state/`: a person builds this file and commits it, exactly like
 #: the `config/taxonomy.json` it is derived from, and `state/` is what a run
@@ -933,9 +939,7 @@ def _pair_terms(left: str, right: str, day: _DayScoring) -> _Terms | None:
     points = key_point_overlap(day.points[left], day.points[right])
     headline = headlines_match(key, other)
     score = (
-        1.0
-        if headline
-        else day.knobs.cosine_weight * cosine + day.knobs.key_point_weight * points
+        1.0 if headline else day.knobs.cosine_weight * cosine + day.knobs.key_point_weight * points
     )
     return _Terms(cosine=cosine, key_points=points, headline=headline, score=score)
 
@@ -1978,6 +1982,11 @@ def build_day(
 ) -> DigestDay:
     """Append this run's items to whatever the day already carried.
 
+    **This is not how the published day is made.** A run files its own block and
+    `assemble_day` builds the day out of every block of the date. What is here is
+    the older one-run-at-a-time shape, kept because the rules below are pinned
+    against it and are the same rules the assembly keeps.
+
     An item already published keeps its published copy, and this run's copy of it
     is discarded. The reason is crash consistency rather than the order a reader
     sees: `stages.assemble.stage_assemble` writes `digest.json` tens of lines before it
@@ -2058,6 +2067,8 @@ def build_day(
             n=run_n,
             at=generated_at,
             items_added=sum(1 for item in combined if item.introduced_by_run == run_n),
+            run_id=plan.run_id,
+            completed_at=generated_at,
         )
     )
     runs.sort(key=lambda run: run.n)
@@ -2124,25 +2135,230 @@ def build_day(
     )
 
 
-def run_n_for(previous: RunManifest | None, run_id: str) -> int:
-    """Which run of the day this execution is, from what the day already carries.
+def fragment_dir(state_dir: Path, date: str) -> Path:
+    """Every block committed for one date, and nothing from any other date."""
+    return day_dir(state_dir / FRAGMENTS_DIRNAME, date)
 
-    Two different facts used to be one string. `n` is the day's own ordinal -
-    what a page footer would call the morning run - and `run_id` is the identity
-    of the execution that produced it. They were the same number until an id a
-    second execution could not forge was needed, and this is where they meet
-    again: the ordinal is still counted off the day, and an execution that comes
-    back keeps the number it already has rather than claiming the next one.
 
-    That is the same rule `build_day` applies to `DigestRunRef`, so the day and
-    the manifest cannot disagree about how many times the day was built.
+def fragment_path(state_dir: Path, *, date: str, run_id: str) -> Path:
+    """The one file this run may write for this date.
+
+    The name is the run's own id, so no two runs of a date reach for the same
+    path. That is the whole reason the fragment exists: a file with one writer
+    has nothing for git to merge, and a day file had two writers.
     """
-    if previous is None:
-        return 1
-    for record in previous.runs:
-        if record.run_id == run_id:
-            return record.n
-    return previous.runs[-1].n + 1
+    return fragment_dir(state_dir, date) / f"{run_id}.json"
+
+
+def _landing_order(fragment: DigestRunFragment) -> tuple[str, ...]:
+    """The fragment's sort key, read off the contract that declares it."""
+    return tuple(getattr(fragment, name) for name in DigestRunFragment.__sort_key__)
+
+
+def read_fragments(state_dir: Path, date: str) -> list[DigestRunFragment]:
+    """Every block of one date, in landing order.
+
+    Cover: one date's directory, so the cost follows how many times that day ran
+    and never how many days the archive holds (Guardrail #12). A date nobody has
+    published under this shape has no directory, and the answer is empty.
+    """
+    folder = fragment_dir(state_dir, date)
+    if not folder.is_dir():
+        return []
+    return sorted(
+        (DigestRunFragment.read(path) for path in sorted(folder.glob("*.json"))),
+        key=_landing_order,
+    )
+
+
+def predates_fragments(previous: DigestDay) -> bool:
+    """Whether a day already on disk was written before runs filed their own blocks.
+
+    A run that filed one names itself in the day it produced, so a recorded run
+    carrying no `run_id` is a block no fragment can reproduce. Assembling such a
+    day from the fragments would publish only what they hold and delete every
+    story the reader has already been shown, so the day is left exactly as it
+    is instead. That is the whole read-side migration, and it retires itself:
+    once a date's runs all name themselves, this is false forever after.
+    """
+    return any(run.run_id is None for run in previous.runs)
+
+
+def run_ordinal(day: DigestDay, run_id: str) -> int:
+    """This run's place in the day, read off the day rather than counted again.
+
+    `n` is a position and `run_id` is a name. The day assigns every position, so
+    anything else that needs one reads it here and the day and the manifest
+    cannot disagree about how many times the day was built. A day that predates
+    fragments names no run, and the answer is the ordinal after the last one it
+    recorded.
+    """
+    for run in day.runs:
+        if run.run_id == run_id:
+            return run.n
+    return day.runs[-1].n + 1
+
+
+def assemble_day(
+    fragments: Sequence[DigestRunFragment],
+    *,
+    taxonomy: Taxonomy,
+    retention_window_months: int,
+    watchlist: Watchlist | None = None,
+    ui: UiConfig | None = None,
+    placement: PlacementConfig | None = None,
+    same_story: SameStoryConfig | None = None,
+    group_identical_titles: bool = GROUP_IDENTICAL_TITLES,
+    same_story_window_hours: float = 0.0,
+    earlier_days: Sequence[EarlierDay] = (),
+) -> DigestDay:
+    """Assemble one published day out of the blocks its runs filed.
+
+    **Whole blocks, in landing order, never interleaved.** A run's stories stay
+    together and a block keeps the position it landed in, which is what lets a
+    reader come back to a page and find what they were part-way through where
+    they left it. `n` is that position, assigned here by counting down the
+    sorted fragments - no run picks it, because no run can see what else landed.
+
+    Seeing fewer fragments is not an error and needs no special case. The
+    result is a valid prefix of the day, and the next assembly appends the rest
+    rather than recomputing where anything sits.
+
+    **`generated_at` is the newest block's completion, not this function's own
+    clock.** A wall clock would make two assemblies of one set of blocks emit
+    different bytes, which is the collision this shape exists to remove, put
+    back on the one file a reader actually opens. The cost of the rule is that a
+    rewrite adding no run - a deleted drawing, say - leaves the stamp where it
+    was, so a browser already holding the day can draw a path that has since
+    gone, until it reloads.
+
+    An item an earlier block already carried is dropped from a later one, so the
+    block that first published a story keeps it. The three passes that follow
+    are `build_day`'s, in `build_day`'s order and for `build_day`'s reasons:
+    group, then lead, then place.
+    """
+    ordered = sorted(fragments, key=_landing_order)
+    if not ordered:
+        raise ValueError("a day is assembled from at least one fragment")
+    dates = {fragment.date for fragment in ordered}
+    if len(dates) != 1:
+        raise ValueError(f"one day at a time, got {sorted(dates)}")
+    date = ordered[0].date
+
+    combined: list[DigestItem] = []
+    held: set[str] = set()
+    merged: DigestEmbeddings | None = None
+    failed: set[str] = set()
+    planned = 0
+    for n, fragment in enumerate(ordered, start=1):
+        block = [
+            item.model_copy(update={"introduced_by_run": n})
+            for item in fragment.items
+            if item.item_id not in held
+        ]
+        held.update(item.item_id for item in block)
+        combined.extend(block)
+        merged = merge_embeddings(merged, fragment.embeddings)
+        failed.update(fragment.failed_item_ids)
+        planned = max(planned, fragment.items_planned)
+
+    combined = collapse_same_story(
+        combined,
+        merged,
+        same_story=same_story,
+        group_identical_titles=group_identical_titles,
+        window_hours=same_story_window_hours,
+        earlier=earlier_days,
+    )
+    frame = placement or PlacementConfig()
+    combined = place(
+        combined,
+        config=frame,
+        bounds=desk_bounds(taxonomy),
+        # The newest block's plan, because a desk the day has since re-opened
+        # may receive a story again. An older block's answer is a statement
+        # about a run that has already finished.
+        closed=desks_below_floor(ordered[-1].verticals),
+    )
+
+    # Failure is a fact about a run; the reader's question is about the day. A
+    # story that failed at 02:20 and landed at 06:20 did not fail for the day,
+    # so the count and the flag are both read off what is left after publication
+    # is subtracted - never summed across the blocks, which would print
+    # `partial` beside a failure count of zero.
+    failed -= held
+    # The maximum, and the sort key puts it last. Monotonic and deterministic:
+    # the same set of blocks always gives the same stamp.
+    generated_at = ordered[-1].completed_at
+
+    names = vertical_names(taxonomy)
+    # Why each desk ran what it ran, run by run, because `desk_ref` owns the rule
+    # for merging one run's plan into what an earlier run already said. The two
+    # counts come from the finished day, so they are set in the second pass
+    # below rather than carried through this one.
+    shortfall: dict[str, DigestVerticalRef] = {}
+    for fragment in ordered:
+        for vertical in fragment.verticals:
+            shortfall[vertical.id] = desk_ref(
+                vertical.id,
+                display_name=names.get(vertical.id, vertical.id),
+                count=0,
+                desk_count=0,
+                planned=vertical,
+                earlier=shortfall.get(vertical.id),
+            )
+    # Every word any story names. A story can be carried by one vertical's feed,
+    # published under another and hold a claim on a third, and a ref is owed for
+    # each or the day lists a topic it never declared.
+    present = sorted(
+        {item.vertical for item in combined}
+        | {item.desk for item in combined if item.desk}
+        | {item.secondary_desk for item in combined if item.secondary_desk}
+    )
+
+    return DigestDay(
+        version=DigestDay.schema_version(),
+        date=date,
+        generated_at=generated_at,
+        partial=bool(failed),
+        items_planned=max(planned, len(combined) + len(failed)),
+        items_failed=len(failed),
+        retention_window_months=retention_window_months,
+        runs=[
+            DigestRunRef(
+                n=n,
+                at=fragment.completed_at,
+                items_added=sum(1 for item in combined if item.introduced_by_run == n),
+                run_id=fragment.run_id,
+                completed_at=fragment.completed_at,
+            )
+            for n, fragment in enumerate(ordered, start=1)
+        ],
+        verticals=[
+            desk_ref(
+                vertical_id,
+                display_name=names.get(vertical_id, vertical_id),
+                count=sum(1 for item in combined if item.vertical == vertical_id),
+                desk_count=sum(
+                    1 for item in combined if (item.desk or item.vertical) == vertical_id
+                ),
+                planned=None,
+                earlier=shortfall.get(vertical_id),
+            )
+            for vertical_id in present
+        ],
+        items=combined,
+        leads=leading_stories(
+            combined,
+            date=date,
+            watchlist=watchlist or Watchlist(version=Watchlist.schema_version(), entities=[]),
+            ui=ui or UiConfig(),
+            placement=frame,
+            now=generated_at,
+            desk_names=names,
+        ),
+        embeddings=merged,
+    )
 
 
 def build_manifest(
@@ -2188,8 +2404,13 @@ def build_manifest(
     the cell: it is what the plan decided, so it can disagree with how many work
     jobs actually filed a row. Counted off those rows it would only ever equal
     them.
+
+    The day's ordinal for this run is read off the day and never counted here.
+    The day is assembled from the blocks its runs filed and it is what assigns
+    every position, so a second count in this file could only ever be a way for
+    the two files to disagree.
     """
-    run_n = run_n_for(previous, plan.run_id)
+    run_n = run_ordinal(day, plan.run_id)
     if item_health_rows is not None:
         succeeded = sum(1 for row in item_health_rows if row.outcome is ItemOutcome.OK)
         failed = sum(1 for row in item_health_rows if row.outcome is ItemOutcome.FAILED)

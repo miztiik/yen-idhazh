@@ -71,12 +71,26 @@
     },
     "DigestRunRef": {
       "additionalProperties": false,
-      "description": "A run of this date, as the page footer and the new-arrivals block need it.",
+      "description": "A run of this date, as the page footer and the new-arrivals block need it.\n\n`n` is a position in the day rather than a name a run chose: it is the run's\nplace in landing order, so the block a reader met first keeps the number it\nhad. `run_id` is the name, and it is what makes the position reproducible -\ntwo runs that finished in the same second are separated by it and by nothing\nelse.\n\n`run_id` and `completed_at` are null together on a day published before the\nday was assembled from per-run fragments. Null reads as \"this day predates\nthem\", never as zero or as now, and a page that wants a clock for the block\nfalls back to `at`.",
       "properties": {
         "at": {
           "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
           "title": "At",
           "type": "string"
+        },
+        "completed_at": {
+          "anyOf": [
+            {
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "When the run finished, which is what puts this block where it is. Null on a day that predates fragments.",
+          "title": "Completed At"
         },
         "items_added": {
           "minimum": 0,
@@ -87,6 +101,20 @@
           "minimum": 1,
           "title": "N",
           "type": "integer"
+        },
+        "run_id": {
+          "anyOf": [
+            {
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}-[0-9]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The run that wrote this block. Null on a day that predates fragments.",
+          "title": "Run Id"
         }
       },
       "required": [
@@ -564,6 +592,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "generated_at is the newest run's completion, not the assembling clock.",
+      "version": "2026-09-22",
+      "why": "A wall clock makes two assemblies of one set of runs disagree byte for byte."
+    },
+    {
       "change": "DigestViewItem.summary is Prose - paragraphs split by one blank line.",
       "version": "2026-09-17",
       "why": "A long summary is two paragraphs, and read-side folding keeps old days readable."
@@ -577,11 +610,6 @@
       "change": "DigestViewVisual.path became data_path.",
       "version": "2026-09-13T22:30",
       "why": "The reader's browser draws the chart from the marks, so no SVG is published."
-    },
-    {
-      "change": "item_id accepts a second shape: sixteen Crockford base32 symbols.",
-      "version": "2026-09-12T18:40",
-      "why": "Ten decimal digits is 33 bits of an address, which collides on a busy day."
     },
     {
       "change": "Earlier changes are in this file's git history.",
@@ -615,7 +643,7 @@
         }
       ],
       "default": null,
-      "description": "What a republish moves and nothing else does, so a browser holding this day can tell a re-fetch that changed nothing from one that did.",
+      "description": "The newest run's completion, not the clock of whatever assembled this file, so a browser holding this day can tell a re-fetch that changed nothing from one that did.",
       "title": "Generated At"
     },
     "items": {
@@ -712,7 +740,7 @@
       "title": "Runs"
     },
     "version": {
-      "default": "2026-09-17",
+      "default": "2026-09-22",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -739,5 +767,5 @@
   ],
   "title": "DigestView",
   "type": "object",
-  "version": "2026-09-17"
+  "version": "2026-09-22"
 }

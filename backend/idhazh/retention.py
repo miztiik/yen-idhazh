@@ -150,7 +150,7 @@ from datetime import date, timedelta
 from pathlib import Path
 from typing import Final, NamedTuple, NoReturn
 
-from idhazh import day_partition, day_shards, ledger, month_partition, telemetry
+from idhazh import assemble, day_partition, day_shards, ledger, month_partition, telemetry
 from idhazh.contracts.base import ITEM_ID_PATTERN
 from idhazh.contracts.item_health import ItemHealthRow, ItemOutcome, ItemStage
 from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
@@ -647,6 +647,74 @@ def prune(
     )
 
 
+@dataclass(frozen=True, slots=True)
+class FragmentPruneResult:
+    """Which days' blocks went and what they weighed.
+
+    There is no kept-count. Answering it means walking every day still on disk,
+    which is the cost this pass exists to stop the tree charging (Guardrail
+    #12), and the number it would print is the archive's own size rather than
+    anything about this pass.
+    """
+
+    deleted: tuple[str, ...]
+    bytes_freed: int
+    dry_run: bool
+
+    @property
+    def changed(self) -> bool:
+        return bool(self.deleted)
+
+
+def prune_digest_fragments(
+    state_dir: Path, config: RetentionConfig, today: date, *, dry_run: bool = False
+) -> FragmentPruneResult:
+    """Delete the per-run blocks of every day past the window the day itself keeps.
+
+    A block is what one run of a day published, and the published day is
+    assembled out of every block of its date. Once the day is old enough that
+    nothing will be added to it, the blocks are a second full copy of every
+    story with no reader and no writer - an archive that grows one day at a time
+    and answers nothing (Guardrail #12).
+
+    The window is `retention.image_months`, which is the day's own: a date whose
+    pictures may still be deleted is a date whose blocks may still be needed, and
+    one rule for the day means the two can never disagree about when it closed.
+    The published day itself is never deleted here or anywhere - it is the record
+    that the day happened.
+
+    `dry_run` is an override the caller adds on top of `retention.dry_run`,
+    exactly as `prune` takes it, so either source is enough to make the pass
+    report-only. `deleted` carries the committed POSIX relpath of each file, so a
+    dry run names what a live run would take (section 2).
+
+    Cover: the days already past the window, and not the archive. `_dated_days`
+    prunes by name at the year and the month, so a date inside the window is
+    never opened - the cost follows the backlog this pass has to clear and
+    shrinks as it clears it.
+    """
+    root = state_dir / assemble.FRAGMENTS_DIRNAME
+    limit = cutoff(today, config.image_months)
+    if limit is None or not root.is_dir():
+        return FragmentPruneResult((), 0, dry_run or config.dry_run)
+
+    pretend = dry_run or config.dry_run
+    deleted: list[str] = []
+    freed = 0
+    for _published, folder in _dated_days(root, before=limit):
+        for path in sorted(folder.iterdir()):
+            if not path.is_file():
+                continue
+            deleted.append(f"{ledger.STATE_DIRNAME}/{path.relative_to(state_dir).as_posix()}")
+            freed += path.stat().st_size
+            if not pretend:
+                path.unlink()
+        if not pretend:
+            day_partition.drop_empty_day_dirs(folder)
+
+    return FragmentPruneResult(deleted=tuple(deleted), bytes_freed=freed, dry_run=pretend)
+
+
 def prune_row(
     result: PruneResult, config: RetentionConfig, *, date_stamp: str, run_id: str
 ) -> VisualPruneRow:
@@ -1001,9 +1069,7 @@ def fold_visual_month(rows: Sequence[VisualAttemptRow]) -> list[VisualAggregateR
                 element_band=band_of(first.elements_found),
                 downgrade_depth=first.downgrade_depth,
                 attempts=len(members),
-                published=sum(
-                    1 for member in members if member.state is VisualState.RENDERED
-                ),
+                published=sum(1 for member in members if member.state is VisualState.RENDERED),
                 elements_n=elements.n,
                 elements_min=elements.min,
                 elements_p25=elements.p25,

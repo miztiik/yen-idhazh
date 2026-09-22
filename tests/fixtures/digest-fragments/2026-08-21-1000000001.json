@@ -1,7 +1,10 @@
 {
+  "completed_at": "2026-08-21T06:44:12Z",
   "date": "2026-08-21",
   "embeddings": null,
-  "generated_at": "2026-08-21T18:22:05Z",
+  "failed_item_ids": [
+    "ai-02"
+  ],
   "items": [
     {
       "also_covered_by": null,
@@ -94,94 +97,20 @@
       "vertical": "energy",
       "visual": null,
       "watchlist_hit": null
-    },
-    {
-      "also_covered_by": null,
-      "also_ran_earlier": [],
-      "band": "high",
-      "band_reason": null,
-      "carried_by": null,
-      "desk": null,
-      "entities": [
-        "example-lab"
-      ],
-      "events": [
-        "research"
-      ],
-      "introduced_by_run": 2,
-      "item_id": "ai-02",
-      "key_points": [
-        "The paper reports a 12 point gain on a summarization benchmark.",
-        "Training used 4,000 GPU hours."
-      ],
-      "lenses": [],
-      "on_front_page": null,
-      "published_at": "2026-08-21T16:40:00Z",
-      "rank_score": null,
-      "reader_note": null,
-      "same_story_as": null,
-      "secondary_desk": null,
-      "source_form": "article",
-      "source_id": "example-lab-research",
-      "source_kind": "reporting",
-      "source_name": "Example Lab research",
-      "source_url": "https://research.example-lab.org/2026/08/paper",
-      "summary": "A paper from Example Lab reports a 12 point gain on a summarization benchmark, trained in 4,000 GPU hours.",
-      "time_source": null,
-      "title": "Example Lab publishes a summarization paper",
-      "truncated": false,
-      "updated_at": null,
-      "updated_by_run": null,
-      "vertical": "ai",
-      "visual": null,
-      "watchlist_hit": null
     }
   ],
-  "items_failed": 1,
-  "items_planned": 4,
-  "leads": [
-    {
-      "item_id": "energy-01",
-      "reason": "The lead story on our Energy desk."
-    }
-  ],
-  "partial": true,
-  "retention_window_months": -1,
-  "runs": [
-    {
-      "at": "2026-08-21T06:44:12Z",
-      "completed_at": null,
-      "items_added": 2,
-      "n": 1,
-      "run_id": null
-    },
-    {
-      "at": "2026-08-21T18:22:05Z",
-      "completed_at": null,
-      "items_added": 1,
-      "n": 2,
-      "run_id": null
-    }
-  ],
-  "version": "2026-08-21T06:00",
+  "items_planned": 3,
+  "run_id": "2026-08-21-1000000001",
+  "version": "2026-09-22",
   "verticals": [
     {
       "below_feed_floor": false,
       "considered": 9,
-      "count": 2,
-      "desk_count": null,
-      "display_name": "AI",
+      "eligible_feeds": 4,
+      "feed_floor": 2,
       "id": "ai",
+      "planned": 2,
       "too_old": 6
-    },
-    {
-      "below_feed_floor": null,
-      "considered": null,
-      "count": 1,
-      "desk_count": null,
-      "display_name": "Energy",
-      "id": "energy",
-      "too_old": null
     }
   ]
 }
