@@ -1,6 +1,6 @@
 # Model throughput and why it drifts inside a run
 
-**Last Updated**: 2026-09-20
+**Last Updated**: 2026-09-21
 What the two model rates mean, why the slow half of a run is slow, and what a
 change in either number is allowed to prove.
 
@@ -33,15 +33,17 @@ declared. The incumbent declares none, so every figure on this page is a
 no-thinking figure and stays comparable. What follows is what turning it on
 costs.
 
-**The budget is a cap and it is not set.** `max_think_tokens` is null by default
-and every committed entry leaves it there, so the span ends where the model
-writes its closing marker and the window is the only other thing that stops it.
-Owner ruling, 2026-09-17: the 256 that used to sit here was carried over from no
+**No budget is sent, and none can be set.** The two decode caps left
+the entry's settings on 2026-09-21, so the span ends where the model writes
+its closing marker and the window is the only other thing that stops it. Owner
+ruling, 2026-09-17: the 256 that used to sit there was carried over from no
 reading of any of these weights, it was below every published thinking budget we
 could find, and it landed in the band where a thought is cut rather than
 finished - which scores worse than no thought at the same budget
 ([arxiv 2504.09858](https://arxiv.org/abs/2504.09858)). A cap chosen that way
-prices nothing; it only decides where the thought gets cut.
+prices nothing; it only decides where the thought gets cut. Every committed
+entry had already left it null, so the field went with the answer cap beside it
+rather than waiting for a reading nobody was going to take.
 
 **So the cost of a span is unmeasured, and that is the honest statement.** What
 is measured is the rate: **6.01 +/- 0.11 tokens a second** (2026-08-23,
@@ -354,7 +356,7 @@ them was reachable from a stage: `work` made one summarizer call an item and the
 separate `visuals` job drew the pictures on the small model.
 
 **`work` sends both, adjacently, per item**, and that adjacency is a correctness
-rule rather than a layout taste: `models.summarize.inference` pins `n_parallel`
+rule rather than a layout taste: the summarize entry pins `n_parallel`
 to 1, so the server holds one cache slot, and every label call first with every
 summarize-and-plan call afterwards would evict the prefix before it was reused -
 on every item, with nothing in any log to say so.

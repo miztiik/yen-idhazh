@@ -39,9 +39,19 @@ from typing import Any, ClassVar, Self
 
 from pydantic import Field, model_validator
 
-from idhazh.contracts.base import ChangelogEntry, Contract, DateStamp, RunId
+from idhazh.contracts.base import (
+    ChangelogEntry,
+    Contract,
+    DateStamp,
+    RunId,
+    without_retired_keys,
+)
 from idhazh.contracts.judge_call import JudgeConfigStamp
-from idhazh.contracts.story_similarity_pair import ContentSimilarityJudgeId, JudgeModelId
+from idhazh.contracts.story_similarity_pair import (
+    DROPPED_CELLS,
+    ContentSimilarityJudgeId,
+    JudgeModelId,
+)
 
 
 class ContentSimilarityJudgeMetrics(JudgeConfigStamp, Contract):
@@ -49,6 +59,11 @@ class ContentSimilarityJudgeMetrics(JudgeConfigStamp, Contract):
 
     __schema_stem__: ClassVar[str] = "content-similarity-judge-metrics"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-21T14:00",
+            change="decode_digest is gone from the inherited judge-call stamp.",
+            why="It proved two runs asked alike, and this project does not claim that.",
+        ),
         ChangelogEntry(
             version="2026-09-21",
             change="Initial shape: the shard's funnel, its two rates, its margin and its clocks.",
@@ -158,6 +173,18 @@ class ContentSimilarityJudgeMetrics(JudgeConfigStamp, Contract):
             "call is the one that runs out of clock next, and the total alone hides it."
         ),
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _without_the_columns_this_row_stopped_naming(cls, data: Any) -> Any:
+        """The read-side migration `CLAUDE.md` section 11 owes a removed column.
+
+        A shard writes one of these the moment it finishes and a later step reads
+        it back, so a key the row stopped naming is one `extra="forbid"` refuses
+        on a payload nothing is wrong with. The set is the pair row's, so the
+        two shapes that lost the same column cannot name different sets.
+        """
+        return without_retired_keys(data, *DROPPED_CELLS)
 
     @model_validator(mode="after")
     def _the_funnel_closes(self) -> Self:

@@ -30,6 +30,8 @@ from conftest import (
     FIXTURES_DIR,
     REPO_ROOT,
     RecordedEndpoint,
+    a_request,
+    a_server,
     llama_server_flags,
     read_text,
 )
@@ -48,7 +50,6 @@ from idhazh.contracts.base import (
 from idhazh.contracts.call_cost import CallKind
 from idhazh.contracts.item_health import FailureCode
 from idhazh.contracts.knobs.evaluation import EvaluationConfig
-from idhazh.contracts.knobs.inference import InferenceConfig
 from idhazh.contracts.knobs.models import ModelsConfig
 from idhazh.contracts.knobs.summarize import (
     LengthPolicy,
@@ -61,21 +62,16 @@ from idhazh.contracts.sources import SourceForm
 from idhazh.contracts.summary import LengthAction, Summary, SummaryStatus
 from idhazh.evals.metrics import verbatim_run
 from idhazh.llm.server import (
-    FLASH_FUSED,
     PROBE_ANSWER,
     PROBE_SYSTEM,
     PROBE_USER,
     UNCAPPED_N_PREDICT,
-    UNSTAMPED_REQUEST_KEYS,
     Completion,
-    FlashAttention,
     ProbeRefusedError,
     answer_span,
     completion_payload,
     continued_completion_payload,
-    decode_digest,
     decoding_still_constrains,
-    flash_attention_state,
     gguf_architecture,
     grammar_completion_payload,
     is_context_exceeded,
@@ -93,6 +89,7 @@ from idhazh.llm.server import (
     thinking_span,
     trained_context,
     turn_markers,
+    window,
 )
 from idhazh.sanitize import (
     FENCE_CLOSE,
@@ -124,6 +121,12 @@ LLM_ERRORS = COMPLETIONS / "errors"
 #: One reply off the rendered-completion route, which names its fields its own way.
 RENDERED_REPLY = COMPLETIONS / "rendered" / "label.json"
 GENERATED_AT = "2026-08-21T06:12:53Z"
+
+#: A stand-in for the grammar-derived budget a real caller hands the rendered
+#: route. A literal rather than one of the production budgets: what these tests
+#: check is that the number the caller passed is the number the body carries,
+#: which is a property of the builder rather than of any one caller's grammar.
+ANSWER_BUDGET: Final = 512
 
 
 def article(name: str = "ok") -> Article:
@@ -200,7 +203,7 @@ def summarised(name: str, source: str = "ok") -> Summary:
 def test_the_system_prompt_never_carries_the_article() -> None:
     """Decision 1: article text goes in the user turn, or the fence means nothing."""
     payload = build_request(
-        article(), model_id="m", inference=InferenceConfig(), turns=built_turns()
+        article(), model_id="m", request=a_request(), turns=built_turns()
     )
     system = payload["messages"][0]
     assert system["role"] == "system"
@@ -235,43 +238,37 @@ def test_the_prompt_tells_the_model_the_block_is_data() -> None:
 
 
 def test_decoding_parameters_come_from_config_and_nowhere_else() -> None:
-    inference = InferenceConfig()
     payload = request_payload(
         model_id="m",
         system="s",
         user="u",
         output_schema={},
-        inference=inference,
+        request=a_request(),
         turns=built_turns(),
     )
     assert payload["temperature"] == 0.0
     assert payload["top_p"] == 1.0
     assert payload["seed"] == 0
-    assert payload["max_tokens"] == inference.max_answer_tokens
     assert payload["stream"] is False
 
 
-def test_the_chat_route_budget_covers_both_spans_when_the_entry_thinks() -> None:
-    """The runtime owns the split here, so the budget has to hold the pair.
+def test_the_chat_route_sends_no_token_cap_on_either_envelope() -> None:
+    """One span carries both here, so any cap would have to be a sum of two.
 
-    A rendered call stops at the closing marker and restarts under the grammar,
-    so each span is held to its own number. This route cannot: the model's own
-    template wrote the prompt, there is nothing of ours to continue, and a
-    budget sized for the answer alone would cut the answer by whatever the
-    thinking spent.
-
-    An uncapped thinking span leaves no honest sum to send, so the key goes
-    rather than carrying a number that is wrong in one direction or the other.
+    The runtime owns the split on this route: the model's own template wrote
+    the prompt, so a caller cannot stop the decode at a marker and restart it
+    under the grammar. It had two numbers to add until 2026-09-21 and neither
+    was read off these weights. What bounds the decode now is the window with
+    no context shift, and what bounds the wait is the per-request timeout -
+    both per item, both loud.
     """
-    capped = InferenceConfig(max_think_tokens=256)
-    uncapped = InferenceConfig()
-    thinking = built_turns(thinking_close="</think>")
+    request = a_request()
     quiet = request_payload(
         model_id="m",
         system="s",
         user="u",
         output_schema={},
-        inference=capped,
+        request=request,
         turns=built_turns(),
     )
     loud = request_payload(
@@ -279,23 +276,13 @@ def test_the_chat_route_budget_covers_both_spans_when_the_entry_thinks() -> None
         system="s",
         user="u",
         output_schema={},
-        inference=capped,
-        turns=thinking,
-    )
-    unbounded = request_payload(
-        model_id="m",
-        system="s",
-        user="u",
-        output_schema={},
-        inference=uncapped,
-        turns=thinking,
+        request=request,
+        turns=built_turns(thinking_close="</think>"),
     )
 
-    assert uncapped.max_think_tokens is None, "the default is no cap, so this arm is the default"
-    assert capped.max_think_tokens is not None
-    assert quiet["max_tokens"] == capped.max_answer_tokens
-    assert loud["max_tokens"] == capped.max_answer_tokens + capped.max_think_tokens
-    assert "max_tokens" not in unbounded, "no cap is no sum, and no sum is no key"
+    for body in (quiet, loud):
+        assert "max_tokens" not in body
+        assert "n_predict" not in body
 
 
 def test_thinking_is_off_in_the_request() -> None:
@@ -305,7 +292,7 @@ def test_thinking_is_off_in_the_request() -> None:
         system="s",
         user="u",
         output_schema={},
-        inference=InferenceConfig(),
+        request=a_request(),
         turns=configured_turns(),
     )
     assert payload["chat_template_kwargs"] == {"enable_thinking": False}
@@ -318,7 +305,7 @@ def test_the_declared_closing_marker_is_what_asks_the_template_to_think() -> Non
         system="s",
         user="u",
         output_schema={},
-        inference=InferenceConfig(),
+        request=a_request(),
         turns=built_turns(thinking_close="</think>"),
     )
     assert payload["chat_template_kwargs"] == {"enable_thinking": True}
@@ -337,7 +324,7 @@ def test_a_template_that_reads_no_keyword_is_sent_none() -> None:
         system="s",
         user="u",
         output_schema={},
-        inference=InferenceConfig(),
+        request=a_request(),
         turns=built_turns(thinking_kwarg=None),
     )
     assert "chat_template_kwargs" not in payload
@@ -350,7 +337,7 @@ def test_the_keyword_the_request_carries_is_the_one_the_entry_names() -> None:
         system="s",
         user="u",
         output_schema={},
-        inference=InferenceConfig(),
+        request=a_request(),
         turns=built_turns(thinking_kwarg="reasoning"),
     )
     assert payload["chat_template_kwargs"] == {"reasoning": False}
@@ -363,7 +350,7 @@ def test_the_output_shape_is_enforced_by_the_decoder() -> None:
         system="s",
         user="u",
         output_schema=output_schema(),
-        inference=InferenceConfig(),
+        request=a_request(),
         turns=built_turns(),
     )
     assert payload["response_format"]["type"] == "json_schema"
@@ -372,6 +359,7 @@ def test_the_output_shape_is_enforced_by_the_decoder() -> None:
 
 
 def test_the_server_is_started_from_config_not_by_hand() -> None:
+    """Four flags are written in code and the rest are the entry's, emitted in order."""
     from idhazh.contracts.knobs.models import ModelRef
     from idhazh.llm.server import DEFAULT_PORT
 
@@ -381,7 +369,7 @@ def test_the_server_is_started_from_config_not_by_hand() -> None:
         binary=binary,
         weights=weights,
         model=ModelRef(id="m", repo="r", file="w.gguf", quantisation="Q4_K_M"),
-        inference=InferenceConfig(),
+        server=a_server(**{"--metrics": None}),
     )
     assert argv == [
         str(binary),
@@ -389,17 +377,17 @@ def test_the_server_is_started_from_config_not_by_hand() -> None:
         str(weights),
         "--alias",
         "m",
+        "--no-context-shift",
+        "--port",
+        str(DEFAULT_PORT),
         "--ctx-size",
         "8192",
-        "--no-context-shift",
         "--batch-size",
         "512",
         "--ubatch-size",
         "512",
         "--threads",
         "4",
-        "--port",
-        str(DEFAULT_PORT),
         "--metrics",
     ]
 
@@ -416,17 +404,19 @@ def test_the_server_refuses_an_oversized_prompt_rather_than_shifting_it() -> Non
         binary=Path("bin/llama-server"),
         weights=Path("models/w.gguf"),
         model=ModelRef(id="m", repo="r", file="w.gguf", quantisation="Q4_K_M"),
-        inference=InferenceConfig(),
+        server=a_server(**{"--metrics": None}),
     )
 
     assert "--no-context-shift" in argv
 
 
-def test_a_draft_head_is_absent_until_an_entry_declares_one() -> None:
-    """Null is the default, and the default is one model.
+def test_no_speculative_flag_reaches_the_server() -> None:
+    """The draft head is gone, so the flag list has nothing to say about one.
 
-    The bite proof for the other half: a `server_argv` that always spelled the
-    draft flags would start a server looking for weights nobody fetched.
+    A head was on the Gemma entry until 2026-09-21 and was never the
+    output-identical speed-up its publisher claims: two paired dispatches
+    changed the summary on nine articles of nine. What this catches is a
+    re-introduction through the one function that spells a llama-server flag.
     """
     from idhazh.contracts.knobs.models import ModelRef
 
@@ -434,72 +424,32 @@ def test_a_draft_head_is_absent_until_an_entry_declares_one() -> None:
         binary=Path("bin/llama-server"),
         weights=Path("models/w.gguf"),
         model=ModelRef(id="m", repo="r", file="w.gguf", quantisation="Q4_K_M"),
-        inference=InferenceConfig(),
+        server=a_server(**{"--metrics": None}),
     )
 
-    assert not [flag for flag in argv if flag.startswith("--spec-")]
+    assert not [flag for flag in argv if flag.startswith(("--spec-", "--draft"))]
 
 
-def test_the_draft_flags_are_spelled_the_way_the_pinned_build_spells_them() -> None:
-    """The row's whole trap, in one assertion.
+def test_an_entry_a_person_writes_is_refused_for_naming_a_draft_head() -> None:
+    """A config file is refused by name; a run record is migrated in silence.
 
-    `--draft-max` and `--draft-min` are the spellings most of the internet
-    still uses and llama.cpp REMOVED them: the pinned build exits telling the
-    operator to use `--spec-draft-n-max` and `--spec-draft-n-min` instead. A
-    spelling copied from an older page is a server that does not start, and it
-    fails at run time on a runner rather than here.
+    Accepting the block and dropping it would teach an operator a knob that
+    nothing reads, which is the state the refusal exists to make loud. The
+    refusal names where the head went, because it moved rather than died: its
+    bytes to `companion_files`, its decode settings to the server block.
 
-    So this test pins the four flags AND refuses the two retired ones by name,
-    which is what makes it catch a well-meaning rename in either direction.
+    A null round-trips. `ModelEntry` inherits the recorded field, so this is the
+    shape it serialises to, and refusing that would make a config file fail to
+    reload the bytes it just wrote.
     """
-    from idhazh.contracts.knobs.models import DraftConfig, ModelRef, SpeculationType
-
-    argv = server_argv(
-        binary=Path("bin/llama-server"),
-        weights=Path("models/w.gguf"),
-        model=ModelRef(
-            id="m",
-            repo="r",
-            file="w.gguf",
-            quantisation="Q4_K_M",
-            draft=DraftConfig(
-                repo="drafts/tiny",
-                revision="0" * 40,
-                file="tiny.gguf",
-                sha256="a" * 64,
-                n_max=5,
-                n_min=2,
-                p_min=0.25,
-            ),
-        ),
-        inference=InferenceConfig(),
-    )
-
-    assert argv[argv.index("--spec-draft-model") + 1] == str(Path("models/tiny.gguf"))
-    assert argv[argv.index("--spec-type") + 1] == SpeculationType.DRAFT_SIMPLE.value
-    assert argv[argv.index("--spec-draft-n-max") + 1] == "5"
-    assert argv[argv.index("--spec-draft-n-min") + 1] == "2"
-    assert argv[argv.index("--spec-draft-p-min") + 1] == "0.25"
-    for retired in ("--draft-max", "--draft-min", "--draft", "--draft-n"):
-        assert retired not in argv, f"{retired} was removed from llama.cpp and will not start"
-
-
-def test_a_draft_minimum_above_its_maximum_is_refused() -> None:
-    """The runtime starts on this pair and drafts nothing, which is the worst
-    shape a misconfiguration can take: no error, no speedup, no explanation."""
     from pydantic import ValidationError
 
-    from idhazh.contracts.knobs.models import DraftConfig
+    from idhazh.contracts.knobs.models import ModelEntry
 
-    with pytest.raises(ValidationError, match="cannot exist"):
-        DraftConfig(
-            repo="drafts/tiny",
-            revision="0" * 40,
-            file="tiny.gguf",
-            sha256="a" * 64,
-            n_max=2,
-            n_min=8,
-        )
+    # A `mode="before"` refusal runs ahead of field validation, so the block is
+    # all this has to carry to reach it.
+    with pytest.raises(ValidationError, match=r"models\.<role>\.draft is now"):
+        ModelEntry.model_validate({"draft": {"file": "mtp-gemma-4-E4B-it.gguf"}})
 
 
 def test_server_argv_names_the_port_it_was_given() -> None:
@@ -524,7 +474,7 @@ def test_server_argv_names_the_port_it_was_given() -> None:
         binary=Path("bin/llama-server"),
         weights=Path("models/w.gguf"),
         model=ModelRef(id="m", repo="r", file="w.gguf", quantisation="Q4_K_M"),
-        inference=InferenceConfig(),
+        server=a_server(**{"--metrics": None}),
         port=8181,
     )
 
@@ -799,19 +749,25 @@ def test_exactly_one_function_spells_a_llama_server_flag() -> None:
     drifted the moment a flag landed on one copy and not the other. The install
     moved one step earlier and the copy is gone.
 
-    Closed-world: the flags come from `server_argv` itself, so a new one joins
-    this search without anybody remembering to add it, and the file set is
-    compared by equality rather than by membership. The workflow half of the
-    same Oracle is
+    **What a second builder would have to restate is the flags written in code.**
+    Everything else comes out of the entry's `server` block verbatim, so a flag
+    appearing in a run's stamp or in a fixture is data rather than a second
+    answer to what the server runs. The three below are written in this
+    repository rather than in a model file, and none of them is a name an
+    ordinary command-line tool takes - so a file spelling one is a file deciding
+    how an inference server starts. `--model` is left out for the opposite
+    reason: four unrelated tools take a `--model` option and none of them starts
+    a server.
+    The workflow half of the same Oracle is
     `workflows/test_model_server_jobs.py::test_every_job_that_starts_a_server_reaches_the_one_argv_builder`.
     """
-    every_flag = llama_server_flags()
-    assert "--ctx-size" in every_flag and "--no-context-shift" in every_flag
+    written_in_code = ("--alias", "--no-context-shift", "--port")
+    assert set(written_in_code) <= llama_server_flags() | {"--alias", "--port"}
 
     spellers = {
         path.relative_to(REPO_ROOT).as_posix()
         for path in REPO_ROOT.glob("backend/**/*.py")
-        if any(f'"{flag}"' in path.read_text(encoding="utf-8") for flag in every_flag)
+        if any(f'"{flag}"' in path.read_text(encoding="utf-8") for flag in written_in_code)
     }
     # The builder, and the test that pins what it builds. A third file is a
     # second answer to what the server runs.
@@ -917,16 +873,18 @@ def test_runtime_sweep_flags_are_emitted_only_when_configured() -> None:
         binary=Path("bin/llama-server"),
         weights=Path("models/w.gguf"),
         model=ModelRef(id="m", repo="r", file="w.gguf", quantisation="Q4_K_M"),
-        inference=InferenceConfig(
-            n_parallel=1,
-            flash_attention="on",
-            load_mode="mmap+mlock",
-            cache_type_k="q8_0",
-            cache_type_v="q8_0",
-            priority=2,
-            poll=100,
-            n_threads_batch=4,
-            startup_warmup=True,
+        server=a_server(
+            **{
+                "-np": 1,
+                "-fa": "on",
+                "-lm": "mmap+mlock",
+                "-ctk": "q8_0",
+                "-ctv": "q8_0",
+                "--prio": 2,
+                "--poll": 100,
+                "-tb": 4,
+                "--metrics": None,
+            }
         ),
     )
 
@@ -968,7 +926,7 @@ def test_the_server_is_asked_to_describe_itself_only_when_configured() -> None:
         binary=Path("bin/llama-server"),
         weights=Path("models/w.gguf"),
         model=model,
-        inference=InferenceConfig(),
+        server=a_server(),
     )
     assert "-lv" not in quiet
 
@@ -976,7 +934,7 @@ def test_the_server_is_asked_to_describe_itself_only_when_configured() -> None:
         binary=Path("bin/llama-server"),
         weights=Path("models/w.gguf"),
         model=model,
-        inference=InferenceConfig(log_verbosity=4),
+        server=a_server(**{"-lv": 4}),
     )
     assert loud[loud.index("-lv") + 1] == "4"
 
@@ -995,85 +953,9 @@ def test_every_committed_role_starts_a_server_that_names_its_own_settings() -> N
             binary=Path("bin/llama-server"),
             weights=Path(f"models/{entry.file}"),
             model=entry,
-            inference=entry.inference,
+            server=entry.server,
         )
         assert argv[argv.index("-lv") + 1] == "4", f"{role} starts a server that says nothing"
-
-
-# --- Row 3's oracle: attention is read off the server, not off our flag -----
-
-#: The three cases of the 2026-09-09 reading, and what each one settles. Excerpts
-#: rather than whole captures - the provenance is in each file's own header.
-FLASH_CASES: Final = {
-    "2026-09-09-lv4-fa-on.readings.txt": FlashAttention.ACTIVE,
-    "2026-09-09-lv4-no-fa-flag.readings.txt": FlashAttention.ACTIVE,
-    "2026-09-09-lv4-fa-off.readings.txt": FlashAttention.REFUSED,
-}
-
-#: Real runner captures, at the runtime default verbosity. They are the fourth
-#: case and the one that matters: a log with no attention line in it.
-QUIET_CAPTURES: Final = sorted((FIXTURES_DIR / "runtime").glob("2026-08-29-3-shard-*.server-head.txt"))
-
-
-@pytest.mark.parametrize(("capture", "expected"), sorted(FLASH_CASES.items()))
-def test_the_attention_state_is_read_off_the_servers_own_line(
-    capture: str, expected: FlashAttention
-) -> None:
-    """Whether attention fused, from the runtime rather than from the flag we sent.
-
-    The committed config pins `-fa on`, and a check that only asserted the flag
-    was passed would pass on a build that ignored it. These three readings are
-    the ones llama-server printed at `-lv 4` on 2026-09-09, three runs a case
-    and zero spread across the three.
-    """
-    assert flash_attention_state(read_text(FIXTURES_DIR / "runtime" / capture)) is expected
-
-
-@pytest.mark.parametrize("path", QUIET_CAPTURES, ids=lambda p: p.name)
-def test_a_quiet_server_log_fails_the_check_instead_of_answering_it(path: Path) -> None:
-    """The third state, and the one worth writing. Driven by real runner captures.
-
-    These four are `b10598` on GitHub-hosted runners, taken before the verbosity
-    knob existed, so they carry no attention line at all. A reader that took a
-    missing line for "off" would turn a forgotten `-lv 4` into a finding about
-    attention - which is a wrong answer with a citation.
-    """
-    assert flash_attention_state(read_text(path)) is FlashAttention.UNREADABLE
-
-
-def test_auto_with_no_decision_beside_it_is_not_an_answer() -> None:
-    """`flash_attn = auto` states what was asked for. It settles nothing on its own.
-
-    Built by removing one line from the case that recorded it, so the edit is the
-    whole difference between the two verdicts rather than two files that might
-    differ somewhere else.
-    """
-    recorded = read_text(FIXTURES_DIR / "runtime" / "2026-09-09-lv4-no-fa-flag.readings.txt")
-    assert flash_attention_state(recorded) is FlashAttention.ACTIVE
-
-    undecided = "\n".join(line for line in recorded.splitlines() if FLASH_FUSED not in line)
-    assert "flash_attn" in undecided, "the asked-for line has to survive, or this proves nothing"
-    assert flash_attention_state(undecided) is FlashAttention.UNREADABLE
-
-
-def test_the_verdict_agrees_with_the_compute_buffer_it_implies() -> None:
-    """A physical consequence, not a restatement of the same grep.
-
-    The log grammar is llama.cpp's and moves between builds; the buffer size is
-    arithmetic and does not. On these weights at `n_ctx` 8192 it is 112.01 MiB
-    fused and 572.01 MiB not - so every case this reader calls ACTIVE must carry
-    the small one and the REFUSED case the large one.
-    """
-    buffers: dict[FlashAttention, set[float]] = {}
-    for capture, expected in FLASH_CASES.items():
-        text = read_text(FIXTURES_DIR / "runtime" / capture)
-        found = re.search(r"CPU compute buffer size\s*=\s*([\d.]+) MiB", text)
-        assert found, f"{capture} records no compute buffer to corroborate with"
-        buffers.setdefault(expected, set()).add(float(found.group(1)))
-
-    fused = buffers[FlashAttention.ACTIVE]
-    assert len(fused) == 1, f"two ACTIVE cases disagree about the buffer: {sorted(fused)}"
-    assert min(buffers[FlashAttention.REFUSED]) > 4 * max(fused)
 
 
 def test_the_output_schema_is_generated_not_hand_written() -> None:
@@ -1114,7 +996,7 @@ def test_no_placeholder_survives_into_a_rendered_prompt() -> None:
 def test_a_recorded_brief_uses_the_brief_band_even_when_the_source_is_longer() -> None:
     source = article().model_copy(update={"brief": True, "word_count": 190})
     payload = build_request(
-        source, model_id="m", inference=InferenceConfig(), turns=built_turns()
+        source, model_id="m", request=a_request(), turns=built_turns()
     )
     system = payload["messages"][0]["content"]
 
@@ -1139,7 +1021,7 @@ def test_a_cut_long_read_is_still_asked_for_a_long_read_summary() -> None:
         }
     )
     system = build_request(
-        source, model_id="m", inference=InferenceConfig(), turns=built_turns()
+        source, model_id="m", request=a_request(), turns=built_turns()
     )["messages"][0]["content"]
     assert f"{top.target_words_min} to {top.target_words_max} words" in system
 
@@ -1149,7 +1031,7 @@ def test_an_article_written_before_the_field_keeps_its_post_cap_band() -> None:
     ask = SummarizeConfig()
     older = article().model_copy(update={"word_count": 1900, "source_word_count": None})
     system = build_request(
-        older, model_id="m", inference=InferenceConfig(), turns=built_turns()
+        older, model_id="m", request=a_request(), turns=built_turns()
     )["messages"][0]["content"]
     band = ask.band_for(1900)
     assert f"{band.target_words_min} to {band.target_words_max} words" in system
@@ -1706,26 +1588,27 @@ class TestTwoSpansOnOneCall:
             system="S",
             user="U",
             output_schema=output_schema(),
-            inference=InferenceConfig(),
+            server=a_server(),
+            request=a_request(),
             turns=self.turns(),
-            max_answer_tokens=InferenceConfig().max_answer_tokens,
+            max_answer_tokens=ANSWER_BUDGET,
         )
 
     def turns(self) -> TurnsConfig:
         return built_turns(thinking_close="</think>")
 
     def test_span_one_drops_the_grammar_and_stops_at_the_declared_marker(self) -> None:
-        """What is sent first: the same prompt, unconstrained, budgeted, stopped.
+        """What is sent first: the same prompt, unconstrained, uncapped, stopped.
 
         The grammar has to come off. A schema binds the decode from the first
         token, so a think opener is not a legal token under it - which is why
         turning a flag on could only ever have been a no-op or a total failure.
         """
         answer = self.answer_body()
-        span = thinking_span(answer, turns=self.turns(), max_think_tokens=256)
+        span = thinking_span(answer, turns=self.turns())
 
         assert "json_schema" not in span, "a schema would make a think opener illegal"
-        assert span["n_predict"] == 256
+        assert span["n_predict"] == UNCAPPED_N_PREDICT
         assert span["stop"] == ["</think>"]
         assert span["prompt"] == answer["prompt"], "both spans open on the same prompt"
         assert span["cache_prompt"] is True
@@ -1743,35 +1626,22 @@ class TestTwoSpansOnOneCall:
         assert second["prompt"] == answer["prompt"] + "weighing it up</think>"
         assert second["json_schema"] == answer["json_schema"], "the shape is back on"
 
-    def test_the_answer_spans_budget_is_the_declared_one_not_a_share(self) -> None:
-        """The row's oracle. One budget over two spans could not say which overran."""
-        inference = InferenceConfig(max_think_tokens=256)
-        answer = self.answer_body()
-        span = thinking_span(answer, turns=self.turns(), max_think_tokens=inference.max_think_tokens)
-        second = answer_span(answer, thought="x", turns=self.turns())
+    def test_span_one_is_uncapped_rather_than_inheriting_the_answers_budget(self) -> None:
+        """The row's oracle, and the reason `n_predict` is written here at all.
 
-        assert second["n_predict"] == inference.max_answer_tokens
-        assert span["n_predict"] == inference.max_think_tokens
-        assert second["n_predict"] + span["n_predict"] != second["n_predict"], (
-            "the two budgets are separate numbers, not one number split"
-        )
-
-    def test_an_uncapped_thinking_span_is_sent_the_runtimes_own_word_for_infinity(self) -> None:
-        """`-1` is llama.cpp's spelling, recorded in the help text this build ships.
-
-        Null is the default, so this is the arm every entry takes unless it pins
-        a number. The answer span is untouched: the two budgets stay separate
-        numbers, and only one of them went away.
+        The body span one is derived from carries the caller's own
+        grammar-derived budget - four tokens on the judge's route. A span that
+        let that key through would think under a number sized for the answer,
+        and a truncated thought is a silent one: no code, no counter, no line
+        anywhere saying what was cut.
         """
-        inference = InferenceConfig()
         answer = self.answer_body()
-        span = thinking_span(answer, turns=self.turns(), max_think_tokens=inference.max_think_tokens)
+        span = thinking_span(answer, turns=self.turns())
         second = answer_span(answer, thought="x", turns=self.turns())
 
-        assert inference.max_think_tokens is None
-        assert span["n_predict"] == -1
-        assert span["stop"] == ["</think>"], "uncapped, the marker is the only thing that ends it"
-        assert second["n_predict"] == inference.max_answer_tokens
+        assert answer["n_predict"] == ANSWER_BUDGET
+        assert span["n_predict"] == UNCAPPED_N_PREDICT
+        assert second["n_predict"] == ANSWER_BUDGET, "the answer keeps its own number"
 
     def test_the_recorded_help_text_is_where_minus_one_comes_from(self) -> None:
         """Guardrail #10: the spelling is read off the runtime, not remembered.
@@ -1810,7 +1680,7 @@ class TestTwoSpansOnOneCall:
         answer = self.answer_body()
 
         with pytest.raises(ValueError, match="declare no thinking_close"):
-            thinking_span(answer, turns=quiet, max_think_tokens=256)
+            thinking_span(answer, turns=quiet)
         with pytest.raises(ValueError, match="declare no thinking_close"):
             answer_span(answer, thought="x", turns=quiet)
 
@@ -1863,7 +1733,8 @@ class TestAConstrainedCallerGetsBothSpans:
             "system": "S",
             "user": "U",
             "grammar": 'root ::= "YES" | "NO" | "UNCLEAR"',
-            "inference": InferenceConfig(),
+            "server": a_server(),
+            "request": a_request(),
             "turns": self.turns(),
             "max_answer_tokens": 4,
             "first_token_alternatives": 3,
@@ -1876,9 +1747,10 @@ class TestAConstrainedCallerGetsBothSpans:
             system="S",
             user="U",
             output_schema=output_schema(),
-            inference=InferenceConfig(),
+            server=a_server(),
+            request=a_request(),
             turns=self.turns(),
-            max_answer_tokens=InferenceConfig().max_answer_tokens,
+            max_answer_tokens=ANSWER_BUDGET,
         )
 
     def test_span_one_carries_neither_the_grammar_nor_the_alternatives_request(self) -> None:
@@ -1890,7 +1762,7 @@ class TestAConstrainedCallerGetsBothSpans:
         at every position of a span nobody reads a distribution off.
         """
         answer = self.grammar_body()
-        span = thinking_span(answer, turns=self.turns(), max_think_tokens=None)
+        span = thinking_span(answer, turns=self.turns())
 
         assert "grammar" in answer, "the fixture is only meaningful if the answer carries one"
         assert "grammar" not in span, "constrained to three words, span one cannot think"
@@ -1905,10 +1777,10 @@ class TestAConstrainedCallerGetsBothSpans:
         it repeats itself, and the repetition ends at the window rather than at
         the marker it is looping instead of writing.
         """
-        answer = self.grammar_body(inference=InferenceConfig(temperature=0.0))
+        answer = self.grammar_body(request=a_request(temperature=0.0))
 
-        stated = thinking_span(answer, turns=self.turns(), max_think_tokens=None, temperature=0.7)
-        carried = thinking_span(answer, turns=self.turns(), max_think_tokens=None)
+        stated = thinking_span(answer, turns=self.turns(), temperature=0.7)
+        carried = thinking_span(answer, turns=self.turns())
 
         assert answer["temperature"] == 0.0
         assert stated["temperature"] == 0.7, "the caller's number, not the answer's"
@@ -1917,40 +1789,12 @@ class TestAConstrainedCallerGetsBothSpans:
     def test_the_grammar_is_applied_at_the_answer_position_and_not_at_position_zero(self) -> None:
         """Constraining the first decoded token forces an answer where reasoning starts."""
         answer = self.grammar_body()
-        span = thinking_span(answer, turns=self.turns(), max_think_tokens=None)
+        span = thinking_span(answer, turns=self.turns())
         second = answer_span(answer, thought="both wires name one filing", turns=self.turns())
 
         assert "grammar" not in span
         assert second["grammar"] == answer["grammar"], "the control is back on, one span later"
         assert second["prompt"].endswith("both wires name one filing\n</think>\n\n")
-
-    def test_every_posted_key_is_either_stamped_or_named_as_unstamped(self) -> None:
-        """The digest is defined by what it leaves out, so nothing falls between.
-
-        A fixed count would be one route's key set and would go red the day a
-        builder sends one more field. This moves each posted value in turn and
-        asks whether the stamp noticed, which is the property itself rather than
-        a number standing in for it.
-        """
-        for route, posted in (("grammar", self.grammar_body()), ("schema", self.schema_body())):
-            baseline = decode_digest(posted)
-            for name in posted:
-                moved = dict(posted)
-                moved[name] = "something else entirely"
-                noticed = decode_digest(moved) != baseline
-
-                assert noticed is (name not in UNSTAMPED_REQUEST_KEYS), f"{route}.{name}"
-
-    def test_the_stamp_is_the_same_for_two_items_decoded_the_same_way(self) -> None:
-        """A stamp that never repeats cannot say two items were decoded alike."""
-        one = self.grammar_body(user="the first pair of headlines")
-        two = self.grammar_body(user="a completely different pair")
-
-        assert one["prompt"] != two["prompt"]
-        assert decode_digest(one) == decode_digest(two)
-        assert decode_digest(self.grammar_body(inference=InferenceConfig(seed=7))) != decode_digest(
-            one
-        ), "a sampler knob that moved has to move the stamp"
 
     def test_the_probability_mode_is_in_the_body_rather_than_left_to_the_build(self) -> None:
         """Which distribution comes back is a decision, and nothing pins the build.
@@ -1994,7 +1838,7 @@ class TestAConstrainedCallerGetsBothSpans:
 
         with RecordedEndpoint(200, first.encode("utf-8"), second.encode("utf-8")) as served:
             thought = post(
-                thinking_span(answer, turns=self.turns(), max_think_tokens=256, temperature=0.7),
+                thinking_span(answer, turns=self.turns(), temperature=0.7),
                 endpoint=served.endpoint,
                 timeout=5.0,
             )
@@ -2013,8 +1857,6 @@ class TestAConstrainedCallerGetsBothSpans:
         assert [choice.token for choice in verdict.first_token_choices] == ["YES", "NO", "UN"]
         assert merged.content == "YES", "the answer's word"
         assert merged.completion_tokens == 35, "the pair's cost: 34 thought and 1 answered"
-        assert merged.decode_sha256 == decode_digest(span_two), "span two's own stamp"
-        assert merged.decode_sha256 != decode_digest(span_one)
 
 
 class TestTheThinkingReachesNothing:
@@ -2063,7 +1905,8 @@ class TestTheThinkingReachesNothing:
             system="S",
             user="U",
             output_schema=output_schema(),
-            inference=InferenceConfig(),
+            server=a_server(),
+            request=a_request(),
             turns=turns,
             max_answer_tokens=900,
         )
@@ -3004,13 +2847,13 @@ def test_a_truncated_source_is_carried_onto_the_summary() -> None:
 
 
 def test_an_article_inside_the_context_budget_fits() -> None:
-    assert fits_context(article(), InferenceConfig())
+    assert fits_context(article(), a_server())
 
 
 def test_an_article_that_would_be_cut_off_mid_reply_does_not_fit() -> None:
     """Prompt plus reply must fit, or the reply ends mid-sentence and looks fine."""
     oversized = article().model_copy(update={"token_count": 8000})
-    assert not fits_context(oversized, InferenceConfig())
+    assert not fits_context(oversized, a_server())
 
 
 def test_the_biggest_article_the_extractor_hands_over_still_fits() -> None:
@@ -3022,7 +2865,7 @@ def test_the_biggest_article_the_extractor_hands_over_still_fits() -> None:
     from idhazh.contracts.knobs.extract import ExtractConfig
 
     capped = article().model_copy(update={"token_count": ExtractConfig().truncation_cap_tokens})
-    assert fits_context(capped, InferenceConfig())
+    assert fits_context(capped, a_server())
 
 
 def test_the_summary_of_an_ok_article_carries_the_items_identity() -> None:
@@ -3382,7 +3225,7 @@ class TestTheServerProvesTheEntry:
         trained = trained_context(self.models("inside_the_trained_window"))
 
         assert trained == 262144
-        the_window_is_inside_the_trained_window(n_ctx=entry.inference.n_ctx, trained=trained)
+        the_window_is_inside_the_trained_window(n_ctx=window(entry.server), trained=trained)
 
     def test_a_window_past_the_trained_window_refuses_the_run(self) -> None:
         trained = trained_context(self.models("a_short_native_window"))
@@ -3391,7 +3234,7 @@ class TestTheServerProvesTheEntry:
             the_window_is_inside_the_trained_window(n_ctx=49152, trained=trained)
 
         said = str(refusal.value)
-        assert "n_ctx is 49152" in said and "trained for 32768" in said
+        assert "--ctx-size is 49152" in said and "trained for 32768" in said
 
     def test_a_server_that_names_no_trained_window_refuses_the_run(self) -> None:
         """Case 5 has no skip either. An unread proof is not a proof."""

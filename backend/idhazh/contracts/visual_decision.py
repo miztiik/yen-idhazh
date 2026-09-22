@@ -83,7 +83,7 @@ class NoneReason(StrEnum):
     #: than the summarize-and-plan call's grammar may write. Separate from `output_budget_cut`
     #: because the two ask an operator for different things - a budget cut says look at
     #: the reply shape, and this one says look at
-    #: `models.summarize.inference.n_ctx` beside `extract.truncation_cap_tokens`.
+    #: `--ctx-size` on the summarize entry beside `extract.truncation_cap_tokens`.
     WINDOW_EXHAUSTED = "window_exhausted"
 
 

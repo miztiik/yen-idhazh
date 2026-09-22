@@ -98,9 +98,9 @@ in [ci-environment.md](ci-environment.md#platform-limits-that-shape-the-workflow
 ### What the build accepts is recorded, not re-asked
 
 The pin says which binary runs. It does not say what that binary understands,
-and a models entry naming a speculation kind the build cannot drive fails late
-and quietly: the server starts, loads the draft head, drafts nothing, and the
-job spends its hour before anybody reads the flag back.
+and an entry naming a flag or a value the build cannot drive fails late and
+quietly: the server starts and the job spends its hour before anybody reads the
+flag back.
 
 So the answer is committed rather than dispatched.
 `tests/fixtures/runtime/b10598-llama-server-help.txt` is what the pinned build

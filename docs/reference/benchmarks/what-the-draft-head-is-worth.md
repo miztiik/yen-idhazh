@@ -1,11 +1,17 @@
 # What Gemma's draft head is worth
 
-**Last Updated**: 2026-09-19
+**Last Updated**: 2026-09-21
 
-`gemma-4-e4b-qat.json` declares a second file beside the weights: a 56.9 MiB
+**The head is gone, and this page is why.** On 2026-09-21 the `draft` field left
+the model shape, the five `--spec-*` flags left `server_argv`, and the second
+download left the fetch path - on the strength of the readings below. The page
+stays because three other records lean on its method, and because a reading that
+retired something is the reason it went.
+
+`gemma-4-e4b-qat.json` declared a second file beside the weights: a 56.9 MiB
 speculation head, `mtp-gemma-4-E4B-it.gguf`, run with `--spec-type draft-mtp` and
-two tokens drafted a step. The head predicts the next tokens so the runtime can
-accept more than one a step.
+two tokens drafted a step. The head predicted the next tokens so the runtime
+could accept more than one a step.
 
 This page is the record of what it bought and what it cost. The current reading
 is the case set of 2026-09-19; the four dispatches of 2026-09-15 and 2026-09-16
@@ -270,7 +276,7 @@ repeat, for 90 days.
 ## See also
 
 - [../models/gemma-4-e4b-qat.md](../models/gemma-4-e4b-qat.md) - the model this head belongs to, and every other reading of it.
-- [../../architecture/summarize/model-boundary.md](../../architecture/summarize/model-boundary.md#a-second-smaller-model-that-guesses-ahead) - how a draft head is declared and what it was supposed to guarantee about the text. The measurement on this page refuses that guarantee, so read the two together.
+- [../../architecture/summarize/model-boundary.md](../../architecture/summarize/model-boundary.md) - how a draft head was declared and what it was supposed to guarantee about the text. The measurement on this page refuses that guarantee, so read the two together.
 - [the-processor-lottery.md](the-processor-lottery.md) - why a comparison across two dispatches says nothing, and why this one had to be paired.
 - [../../how-to/evaluate-new-summarizer-model.md](../../how-to/evaluate-new-summarizer-model.md) - what a model has to pass before it serves, and how to dispatch this case set.
 - [../../../CLAUDE.md](../../../CLAUDE.md) - Guardrail #10 (a number carries its hardware, date and spread; an instrument too coarse to see a difference has said nothing about it).

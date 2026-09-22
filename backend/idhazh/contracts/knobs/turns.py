@@ -8,7 +8,7 @@ from typing import Final, Self
 
 from pydantic import Field, field_validator, model_validator
 
-from idhazh.contracts.base import Model, Sha256
+from idhazh.contracts.base import Model
 
 #: The name a turn opening substitutes the role under. `string.Template` renders
 #: it, so both `$role` and `${role}` spell it and the validator accepts either.
@@ -135,17 +135,6 @@ class TurnsConfig(Model):
             "model until 2026-09-14. Null means this template reads no keywords at "
             "all, and then the request carries no chat_template_kwargs and "
             "thinking_close must be null too; this block refuses the pair."
-        ),
-    )
-    declared_for: Sha256 | None = Field(
-        default=None,
-        description=(
-            "The weights these markers are recorded from - the sha256 of the entry "
-            "that carries them. It sits here for the reason inference.declared_for "
-            "sits beside the numbers: swap the weights and the block is left behind, "
-            "and this is the one event the field exists to make loud. Absent means an "
-            "entry nobody has measured yet, which is legal; ModelsConfig refuses a "
-            "block whose digest is not the entry's."
         ),
     )
 

@@ -214,9 +214,7 @@ class RunRecord(Model):
             "tree, not the published site and not what the Pages cap is measured against."
         ),
     )
-    site_files: int = Field(
-        ge=0, description="Files under frontend/public/digest/ after this run."
-    )
+    site_files: int = Field(ge=0, description="Files under frontend/public/digest/ after this run.")
 
     evaluation_enabled: bool | None = Field(
         default=None,
@@ -312,27 +310,27 @@ class RunManifest(Contract):
     __schema_stem__: ClassVar[str] = "run-manifest"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-21T03:00",
+            change="The embedded settings become plain mappings, and two blocks replace one.",
+            why="A record carrying a retired option name has to keep reading.",
+        ),
+        ChangelogEntry(
+            version="2026-09-21T02:00",
+            change="The embedded inference block loses both decode caps; an old run reads.",
+            why="Neither number bounded anything the window and the timeout did not.",
+        ),
+        ChangelogEntry(
+            version="2026-09-21",
+            change="The embedded ModelRef gains companion files; `draft` becomes a plain mapping.",
+            why="Six records name a draft head, and the head is now one companion among several.",
+        ),
+        ChangelogEntry(
             version="2026-09-20",
             change="Embedded inference gains CPU, cache, checkpoint and template controls.",
             why="Run records must carry the settings a model used.",
         ),
         ChangelogEntry(
             version="2026-09-19",
-            change="A run records `shards`, the shard count the plan derived.",
-            why="A denominator taken off the numerator's own rows can never disagree.",
-        ),
-        ChangelogEntry(
-            version="2026-09-18",
-            change="A run records the merge line it grouped the day at.",
-            why="The line moves now, so a published day has to say which one shaped it.",
-        ),
-        ChangelogEntry(
-            version="2026-09-17T02:00",
-            change="The embedded ModelRef's inference.seed is the sampling control.",
-            why="It follows models-config, where every entry now pins temperature 0.2.",
-        ),
-        ChangelogEntry(
-            version="2026-08-21",
             change="Earlier changes are in this file's git history.",
             why="A changelog says what moved lately; git is the archive.",
         ),

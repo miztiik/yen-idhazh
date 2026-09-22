@@ -125,9 +125,7 @@ def test_a_hung_model_request_costs_one_item_not_the_shard(
             update={
                 "summarize": summarizer.model_copy(
                     update={
-                        "inference": summarizer.inference.model_copy(
-                            update={"request_timeout_minutes": 0.01}
-                        )
+                        "request": summarizer.request | {"request_timeout_minutes": 0.01}
                     }
                 )
             }

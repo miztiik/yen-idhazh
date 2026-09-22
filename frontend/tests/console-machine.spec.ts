@@ -83,10 +83,10 @@ const CHART_HEIGHT = (
 /** The active model, reached through the pointer and never by filename. */
 const MODELS = JSON.parse(
 	readFileSync(resolve(process.cwd(), '..', 'config', CONFIG.models_file), 'utf8')
-) as { summarize: { inference: { n_ctx: number } } };
+) as { summarize: { server: { '--ctx-size': number } } };
 
 const LIMITS: MachineLimits = {
-	contextWindow: MODELS.summarize.inference.n_ctx,
+	contextWindow: MODELS.summarize.server['--ctx-size'],
 	jobTimeoutSeconds: CONFIG.run.shard_timeout_minutes * 60
 };
 
@@ -1068,7 +1068,7 @@ test.describe('the committed ledger, read as the page reads it', () => {
 	const limits = machineLimits();
 
 	test('the ceilings come from config, and the runner memory from the platform', () => {
-		expect(limits.contextWindow).toBe(MODELS.summarize.inference.n_ctx);
+		expect(limits.contextWindow).toBe(MODELS.summarize.server['--ctx-size']);
 		expect(limits.jobTimeoutSeconds).toBe(runConfig().shard_timeout_minutes * 60);
 		// CLAUDE.md Guardrail #2: a stock ubuntu-latest runner has 16 GB.
 		expect(RUNNER_MEMORY_BYTES).toBe(16 * 1024 * 1024 * 1024);

@@ -124,6 +124,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Retired max_output_tokens; the two settings behind it left inference.",
+      "version": "2026-09-21",
+      "why": "The budgets that bounded a decode are the two derived ones still on the row."
+    },
+    {
       "change": "Steal, faults, pinning and anonymous RSS added; empty cgroup_peak_bytes cut.",
       "version": "2026-09-20T18:00",
       "why": "Time another tenant used, and pages the kernel took back, are not our own work."
@@ -137,11 +142,6 @@
       "change": "Six os_ columns: what the machine had, not only what a process held.",
       "version": "2026-09-17T18:00",
       "why": "An RSS mark counts evictable weight pages, so it cannot answer headroom."
-    },
-    {
-      "change": "Retired runner_name; the host record carries it at job grain.",
-      "version": "2026-09-17T12:00",
-      "why": "Nothing read the item-row copy, and a second copy is a thing that can disagree."
     },
     {
       "change": "Earlier changes are in this file's git history.",
@@ -846,20 +846,6 @@
       "default": null,
       "description": "One-minute load average when the item ended.",
       "title": "Load 1M"
-    },
-    "max_output_tokens": {
-      "anyOf": [
-        {
-          "minimum": 1,
-          "type": "integer"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "description": "The configured ceiling on any one decode.",
-      "title": "Max Output Tokens"
     },
     "model_calls": {
       "anyOf": [
@@ -1660,7 +1646,7 @@
       "type": "string"
     },
     "version": {
-      "default": "2026-09-20T18:00",
+      "default": "2026-09-21",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -1764,5 +1750,5 @@
   ],
   "title": "ItemHealthRow",
   "type": "object",
-  "version": "2026-09-20T18:00"
+  "version": "2026-09-21"
 }

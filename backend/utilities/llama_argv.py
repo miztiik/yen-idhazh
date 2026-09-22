@@ -31,7 +31,7 @@ def argv_for(*, config_root: Path, weights: Path, role: str, port: int) -> list[
         binary=Path("backend/bin/llama-server"),
         weights=weights,
         model=entry,
-        inference=entry.inference,
+        server=entry.server,
         port=port,
     )
 

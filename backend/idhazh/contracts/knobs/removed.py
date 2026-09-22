@@ -21,7 +21,7 @@ def refuse_a_removed_knob(block: str, data: Any, names: Mapping[str, str]) -> An
     **A replacement that carries a dot is already a whole path** and is printed
     as it stands. A knob does not always land in the block it left - reasoning
     stopped being a decoding flag and became a marker on the turn envelope - and
-    an operator sent to `models.<role>.inference.turns.thinking_close` is sent
+    an operator sent to `models.<role>.turns.thinking_close` is sent
     to a key that does not exist.
     """
     if not isinstance(data, dict):

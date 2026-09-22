@@ -21,10 +21,10 @@ CANDIDATE_FIELDS: tuple[str, ...] = ("repo", "revision", "file", "sha256", "id",
 #: never dispatches a candidate, so it never publishes an alias or a digest.
 CONFIGURED_FIELDS: tuple[str, ...] = ("repo", "revision", "file")
 
-#: A draft head is four fields or none. Three is a file fetched against a blank
-#: digest, which `sha256sum --check` reports as "no properly formatted checksum
-#: lines found" - naming neither the entry nor the field.
-DRAFT_FIELDS: tuple[str, ...] = ("repo", "revision", "file", "sha256")
+#: A companion file is four fields or none. Three is a file fetched against a
+#: blank digest, which `sha256sum --check` reports as "no properly formatted
+#: checksum lines found" - naming neither the entry nor the field.
+COMPANION_FIELDS: tuple[str, ...] = ("repo", "revision", "file", "sha256")
 
 CONFIG_DIRNAME = "config"
 POINTER_FILE = "idhazh.json"
@@ -60,18 +60,28 @@ def _pointed_at(repo_root: Path) -> Path:
     return repo_root / CONFIG_DIRNAME / _pointer(repo_root)
 
 
-def _draft_rows(entry: dict[str, Any], names: str, *, prefix: str) -> list[str]:
-    """The head's four refs, or four empty strings where the entry declares none.
+def _companions(entry: dict[str, Any]) -> list[dict[str, Any]]:
+    companions: list[dict[str, Any]] = entry.get("companion_files") or []
+    return companions
 
-    `if draft and`, never `if value and`. The looser spelling passed an empty
+
+def _draft_rows(entry: dict[str, Any], names: str, *, prefix: str) -> list[str]:
+    """The companion's four refs, or four empty strings where there is none.
+
+    The keys stay `draft_*` because a workflow reads them under those names. The
+    entry may declare several companions; the fetch step this feeds still names
+    one, so this publishes the first and the cache key below covers them all.
+
+    `if companion and`, never `if value and`. The looser spelling passed an empty
     field, so an entry naming a `file` with no `sha256` reached the fetch step.
     """
-    draft: dict[str, Any] = entry.get("draft") or {}
+    companions = _companions(entry)
+    companion = companions[0] if companions else {}
     rows = []
-    for field in DRAFT_FIELDS:
-        value = str(draft.get(field) or "")
-        if draft:
-            one_bare_word(value, what=f"{names}.draft.{field}")
+    for field in COMPANION_FIELDS:
+        value = str(companion.get(field) or "")
+        if companion:
+            one_bare_word(value, what=f"{names}.companion_files.0.{field}")
         rows.append(f"{prefix}draft_{field}={value}")
     return rows
 
@@ -80,13 +90,13 @@ def _cache_key(entry: dict[str, Any]) -> str:
     """One key naming every file the candidate needs.
 
     A key that named only the target would serve a complete-looking cache entry
-    with the draft head missing, and the server would fail to start on a hit it
-    could not see into. An entry with no head keeps the key it already had, so
-    adding the head did not throw away what earlier runs paid to download.
+    with a companion missing, and the server would fail to start on a hit it
+    could not see into. An entry with no companion keeps the key it already had,
+    so adding one did not throw away what earlier runs paid to download.
     """
-    draft = entry.get("draft") or {}
-    key = str(entry["sha256"])
-    return f"{key}-{draft['sha256']}" if draft else key
+    parts = [str(entry["sha256"])]
+    parts += [str(companion["sha256"]) for companion in _companions(entry)]
+    return "-".join(parts)
 
 
 def resolve_under_config(named: str, *, root: Path) -> Path:

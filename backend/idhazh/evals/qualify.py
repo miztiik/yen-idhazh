@@ -28,12 +28,11 @@ revision was the mutable string `main`.
 from __future__ import annotations
 
 import statistics
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
-from typing import Final
+from typing import Any, Final
 
 from idhazh.contracts.knobs.evaluation import EvaluationConfig
-from idhazh.contracts.knobs.inference import InferenceConfig
 from idhazh.contracts.knobs.run import RunConfig
 from idhazh.contracts.knobs.summarize import SummarizeConfig
 from idhazh.contracts.knobs.turns import TurnsConfig
@@ -48,6 +47,7 @@ from idhazh.contracts.qualification import (
     ItemScore,
     QualificationShard,
 )
+from idhazh.llm.server import setting, window
 
 #: The finish reason a complete reply carries. Anything else means the runtime
 #: stopped for its own reasons, and a summary cut off mid-sentence is not a
@@ -381,52 +381,42 @@ def publishable_length(
 
 def context_fit(
     observations: Sequence[ItemObservation],
-    inference: InferenceConfig,
+    server: Mapping[str, Any],
     *,
     turns: TurnsConfig | None = None,
 ) -> GateOutcome:
-    """The complete chat-templated request plus the output budget fits, and the
-    cheap predictor never says yes when it should have said no.
+    """The complete chat-templated request fits the window, and the cheap
+    predictor never says yes when it should have said no.
 
     `prompt_tokens` is the runtime's own count of the whole templated request,
     so this measures the candidate tokenizer rather than a words-to-tokens
     estimate taken from another model family.
 
-    **It sizes the single call, and that is correct rather than stale.** The
-    budget it adds is `max_answer_tokens`, which sizes one summarize request -
-    plus `max_think_tokens` where the entry declares a closing marker, because a
-    thinking span decodes into the same sequence. The two-call path's budgets
-    are derived in `classify.calls` and are five and twenty-two times larger.
-    This gate reads what the qualification harness actually ran, and the harness
-    sends one summarize request an article - so reaching for a two-call budget
-    here would size a request nothing sent. What sizes the pair the daily run
-    dispatches is `test_the_two_calls_fit_the_window_at_the_cap`, which is a
-    config-level check and needs no observations.
+    **Nothing is reserved for the reply, because nothing caps it.** The two
+    decode budgets left the settings on 2026-09-21, so what the reply gets is
+    whatever the window has left after the prompt - which is exactly what this
+    measures. A request with no headroom at all is still refused; what this gate
+    no longer promises is that the headroom is enough.
 
-    **A null `max_think_tokens` adds nothing, because there is nothing to add.**
-    An uncapped thinking span ends on the entry's closing marker or on the
-    window, so the reserve is the answer alone and the headroom this sum leaves
-    is what the thinking gets. The gate still refuses a request with no headroom;
-    it stops promising that the headroom is enough.
+    `turns` is carried for the signature's sake: the harness hands it the entry
+    it ran, and an envelope that thinks spends its reasoning inside this same
+    sequence rather than beside it.
     """
-    thinks = turns is not None and turns.thinks
-    reply = inference.max_answer_tokens + (inference.max_think_tokens or 0 if thinks else 0)
-    overflow = [o for o in observations if o.prompt_tokens + reply > inference.n_ctx]
+    n_ctx = window(server)
+    overflow = [o for o in observations if o.prompt_tokens >= n_ctx]
     under_reserved = [
-        o
-        for o in observations
-        if o.fits_context_predicted and o.prompt_tokens + reply > inference.n_ctx
+        o for o in observations if o.fits_context_predicted and o.prompt_tokens >= n_ctx
     ]
     widest = max((o.prompt_tokens for o in observations), default=0)
     return _outcome(
         GateName.CONTEXT_FIT,
         passed=bool(observations) and not overflow and not under_reserved,
         measured=(
-            f"widest request {widest} + {reply} output tokens; "
+            f"widest request {widest} tokens, no reply reserve; "
             f"{len(overflow)} overflowed, {len(under_reserved)} under-reserved"
         ),
-        threshold=f"<= n_ctx {inference.n_ctx}; fits_context over-reserves",
-        source=f"{_CONFIG} models.summarize.inference.n_ctx",
+        threshold=f"< n_ctx {n_ctx}; fits_context over-reserves",
+        source=f"{_CONFIG} models.summarize.server --ctx-size",
         detail=(
             "a request that does not fit is not a shorter summary, it is a reply "
             "cut off before it closed its JSON"
@@ -574,7 +564,7 @@ def gates(
     *,
     evaluation: EvaluationConfig,
     summarize: SummarizeConfig,
-    inference: InferenceConfig,
+    server: Mapping[str, Any],
     run: RunConfig,
     budget_: Budget,
     required_canaries: int,
@@ -597,7 +587,7 @@ def gates(
         schema_validity(corpus.observations),
         injection_canaries(corpus.canaries, required=required_canaries),
         publishable_length(corpus.observations, summarize),
-        context_fit(corpus.observations, inference, turns=turns),
+        context_fit(corpus.observations, server, turns=turns),
         identity(shards),
         budget(budget_),
         scored_denominator(corpus, evaluation=evaluation, run=run),
@@ -615,7 +605,7 @@ def _mean(values: Iterable[float]) -> float:
 
 
 def wording_spread(
-    observations: Sequence[ItemObservation], *, inference: InferenceConfig, repeats: int
+    observations: Sequence[ItemObservation], *, request: Mapping[str, Any], repeats: int
 ) -> list[Diagnostic]:
     """How far apart the repeats of one item landed, above zero temperature.
 
@@ -631,7 +621,8 @@ def wording_spread(
     Empty at `temperature == 0`, where every repeat is the same words by
     construction and a row saying so is a row nobody can act on.
     """
-    if inference.temperature == 0:
+    temperature = setting(request, "temperature", 0)
+    if temperature == 0:
         return []
     by_item: dict[str, set[str]] = {}
     successes: dict[str, int] = {}
@@ -646,7 +637,7 @@ def wording_spread(
     return [
         Diagnostic(
             name="items_whose_repeats_differed",
-            value=f"{len(varied)} of {len(counted)} at temperature {inference.temperature}",
+            value=f"{len(varied)} of {len(counted)} at temperature {temperature}",
             unit="articles",
             denominator=len(counted),
         ),

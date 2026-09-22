@@ -8,7 +8,7 @@ from pathlib import Path
 
 from idhazh import config
 from idhazh.classify.calls import summarize_and_plan_schema
-from idhazh.llm.server import prove_the_entry
+from idhazh.llm.server import prove_the_entry, request_timeout_seconds
 
 WEIGHTS_ENV = "LLAMA_WEIGHTS"
 
@@ -23,7 +23,7 @@ def main(argv: list[str] | None = None) -> int:
         model=entry,
         weights=Path(os.environ[WEIGHTS_ENV]),
         output_schema=summarize_and_plan_schema(),
-        timeout=entry.inference.request_timeout_minutes * 60,
+        timeout=request_timeout_seconds(entry.request),
     )
     print("the entry and the server agree on all five")
     return 0

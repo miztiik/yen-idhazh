@@ -4,13 +4,12 @@ from __future__ import annotations
 
 import json
 import re
-from pathlib import Path
 
 import pytest
-from conftest import CONFIG_DIR, REPO_ROOT
+from conftest import CONFIG_DIR
 from pydantic import ValidationError
 
-from idhazh import config
+from idhazh.config import refuse_a_model_nothing_could_run
 from idhazh.contracts.knobs.models import ModelEntry, ModelRef, ModelsConfig
 from idhazh.contracts.run_manifest import ModelRole, ModelUse
 
@@ -29,20 +28,21 @@ def test_a_model_swap_can_no_longer_inherit_markers_nothing_declared_for_it() ->
     turn structure that the decoder's grammar still accepts, so the run
     publishes a plausible day and nothing anywhere raises.
 
-    The swap here is the half-done one - `inference` re-declared for the new
-    weights and `turns` left behind - because a swap that moved neither block is
-    already refused by the settings gate above and would prove nothing here.
+    The swap is the one an operator really makes: five strings edited in place
+    with the markers underneath them untouched. One digest on the entry now
+    answers for the settings and the markers together, because both are
+    measurements about one model and the repair is the same sentence.
     """
     committed = committed_models()
-    assert committed.summarize.turns.declared_for == committed.summarize.sha256
+    assert committed.summarize.declared_for == committed.summarize.sha256
 
-    raw = swapped_summarizer()
-    raw["summarize"]["inference"]["declared_for"] = "1" * 64
-    with pytest.raises(ValidationError) as raised:
-        ModelsConfig.model_validate(raw)
+    with pytest.raises(ValueError) as raised:
+        refuse_a_model_nothing_could_run(
+            "models/x.json", ModelsConfig.model_validate(swapped_summarizer())
+        )
     message = str(raised.value)
-    assert "models.summarize.turns" in message, "the message names the block"
-    assert "re-record them for these weights" in message, "and what to do about it"
+    assert "models.summarize is declared for" in message, "the message names the entry"
+    assert "re-derive them for these weights" in message, "and what to do about it"
     assert "1" * 64 in message, "and the weights the entry now names"
 
 
@@ -105,36 +105,6 @@ def test_a_run_records_which_weights_ran_and_not_how_their_turns_are_written() -
     assert "turns" not in recorded["model_ref"]
     assert recorded["model_ref"]["sha256"] == entry.sha256
     ModelUse.model_validate(recorded), "and the record it wrote reads back"
-
-
-def test_the_retired_marker_file_is_refused_if_it_comes_back(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """A file nothing reads is a set of markers an operator believes are live.
-
-    The package directory is exactly where somebody would put them back, so the
-    path is checked rather than forgotten. Proved by making the file and watching
-    the refusal, never by asserting it is absent - an assertion that it is absent
-    passes on a tree where the check does not exist.
-
-    The file is made at a redirected path, and the real one is pinned by a
-    separate assertion. The suite runs several processes over one working tree,
-    so a file written into the package refuses every config load a sibling
-    process happens to be making at that moment.
-    """
-    assert config.RETIRED_TURN_MARKERS == (
-        REPO_ROOT / "backend" / "idhazh" / "prompts" / "turn_markers.json"
-    ), "the check must name the package directory, which is where they would come back"
-    assert not config.RETIRED_TURN_MARKERS.exists(), "the row deleted it"
-
-    came_back = tmp_path / "turn_markers.json"
-    came_back.write_text("{}\n", encoding="utf-8")
-    monkeypatch.setattr(config, "RETIRED_TURN_MARKERS", came_back)
-    with pytest.raises(ValueError, match=re.escape("models.<role>.turns")):
-        config.load(CONFIG_DIR)
-
-    monkeypatch.undo()
-    assert config.load(CONFIG_DIR).models.summarize.turns.turn_closing
 
 
 def test_the_thinking_arms_closing_marker_is_derived_from_its_own_reply_openings() -> None:

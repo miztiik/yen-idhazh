@@ -18,14 +18,11 @@ behind. Both were deleted on 2026-09-13 with the field itself.
 
 from __future__ import annotations
 
-import hashlib
-
 from pydantic import Field
 
 from idhazh.contracts.base import (
     Model,
     Sha256,
-    canonical_json,
 )
 
 
@@ -84,20 +81,6 @@ class PipelineInputs(Model):
     runner_class: str = Field(min_length=1)
     extractor_version: str = Field(min_length=1)
     sanitizer_version: str = Field(min_length=1)
-
-    def fingerprint(self) -> str:
-        """sha256 over the sorted, fully-enumerated input set.
-
-        Nothing in the pipeline calls it. It survives as the one way to rebuild
-        the stamp `state/scores/` still carries on rows written before
-        2026-09-12, so a reader comparing a historical row against the inputs
-        beside it does the arithmetic the writer did rather than a second one.
-        The comparison a reader wants from a live run is `changed_inputs`, which
-        names which input moved where a digest can only say that one did.
-        """
-        return hashlib.sha256(
-            canonical_json(self.model_dump(mode="json")).encode("utf-8")
-        ).hexdigest()
 
     def changed_inputs(self, previous: PipelineInputs) -> tuple[str, ...]:
         """Which named inputs differ from an earlier run's, in declaration order.

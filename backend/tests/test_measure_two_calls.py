@@ -334,14 +334,13 @@ def test_a_turn_whose_first_line_is_not_a_title_keeps_its_first_paragraph() -> N
 def declaring(models: ModelsConfig, digest: str) -> ModelsConfig:
     """The same model file, declaring a different set of summarizer weights.
 
-    All three cells move, because `ModelsConfig` refuses a block whose
-    `declared_for` is not its own entry's `sha256` - which is exactly why the
-    tool has to hash the bytes on disk rather than reading any of them.
+    Both cells move, because the loader refuses an entry whose `declared_for`
+    is not its own `sha256` - which is exactly why the tool has to hash the
+    bytes on disk rather than reading any of them.
     """
     raw: dict[str, Any] = models.model_dump(mode="json")
     raw["summarize"]["sha256"] = digest
-    raw["summarize"]["inference"]["declared_for"] = digest
-    raw["summarize"]["turns"]["declared_for"] = digest
+    raw["summarize"]["declared_for"] = digest
     return ModelsConfig.model_validate(raw)
 
 
@@ -365,5 +364,5 @@ def test_the_harness_refuses_weights_config_does_not_declare(tmp_path: Path) -> 
     impostor.write_bytes(b"GGUF, but not the right ones")
     with pytest.raises(WrongWeightsError) as refusal:
         refuse_undeclared_weights(impostor, models)
-    assert str(models.summarize.inference.declared_for) in str(refusal.value)
+    assert str(models.summarize.declared_for) in str(refusal.value)
     assert hashlib.sha256(impostor.read_bytes()).hexdigest() in str(refusal.value)
