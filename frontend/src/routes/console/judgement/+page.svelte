@@ -91,6 +91,7 @@
 		height={data.console.chart_height}
 		width={data.console.chart_width}
 		tickDensity={data.chart.tick_density}
+		readoutMaxShare={data.chart.readout_max_share}
 	/>
 
 	<MergeLinePlot
