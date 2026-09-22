@@ -33,7 +33,11 @@
 	const laterAdded = $derived(
 		runs.filter((run) => run.n > 1).reduce((total, run) => total + run.items_added, 0)
 	);
-	const lastRun = $derived(runs.at(-1) ?? null);
+	// The day's own stamp, and never the last run's `at`. `at` is one run's clock,
+	// so on a day whose runs land in parallel the last entry is whichever run
+	// finished the write, which can be any clock at all - and a reader who once
+	// sees a time go backwards stops believing every date on the site.
+	const updatedAt = $derived(day.generated_at ?? null);
 </script>
 
 <section class="notice" aria-label="About today">
@@ -54,13 +58,13 @@
 		</p>
 	{/if}
 
-	{#if laterAdded > 0 || lastRun}
+	{#if laterAdded > 0 || updatedAt}
 		<p class="notice-run">
-			{#if lastRun}
-				<span>Updated {clockUtc(lastRun.at)} (update {lastRun.n}).</span>
+			{#if updatedAt}
+				<span>Updated {clockUtc(updatedAt)}.</span>
 			{/if}
 			{#if laterAdded > 0}
-				<span>{laterAdded} added since the first update.</span>
+				<span>{laterAdded} added after this page first went up.</span>
 			{/if}
 		</p>
 	{/if}

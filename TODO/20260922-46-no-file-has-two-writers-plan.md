@@ -316,8 +316,8 @@ Measured 2026-09-22 from GitHub job step timestamps.
 | 6 | The one rule that needs a sequence is deleted | F | - | 1 | DONE | 5 | p46f | - | default |
 | 7 | The prune re-checks the tip and refuses to force-push over a run | H | 1, 2, 4 | 2 | DONE | 4 | p46h | - | GitHub Copilot |
 | 8 | An unowned path stops the push and names itself | E | 1, 2, 4 | 2 | DONE | 4 | p46e | - | GitHub Copilot |
-| 9 | The published day is folded from per-run fragments | G | 5, 6, 7 | 3 | PENDING | 5 | - | - | - |
-| 10 | One clock, and a label on every block that landed | G | 9 | 3 | PENDING | 3 | - | - | - |
+| 9 | The published day is folded from per-run fragments | G | 5, 6, 7 | 3 | DONE | 5 | p46g | - | GitHub Copilot |
+| 10 | One clock, and a label on every block that landed | G | 9 | 3 | PENDING | 3 | p46g | - | GitHub Copilot |
 | 11 | The day directory is the ledger | C | 5, 8 | 4 | PENDING | 5 | - | - | - |
 | 12 | A closed day folds to one file | C | 11 | 4 | PENDING | 3 | - | - | - |
 | 15 | The plan job's own ledgers stop being shared files | C | 11 | 4 | PENDING | 3 | - | - | - |
