@@ -53,8 +53,13 @@ def _open_from(date: str, after_days: int) -> str:
 
     Counted back from the run's own date and never from the clock, so a run that
     crosses midnight folds the same days its rows were written against.
+
+    `days_in_window` answers newest first and names both ends, so the oldest day
+    it names is the minimum. That is the idiom `retention.prune_seen` and
+    `ledger.load_seen` already read a cover with, and reading it any other way
+    turns a cover of seven days into a cover of none.
     """
-    return day_partition.days_in_window(date, after_days + 1)[0]
+    return min(day_partition.days_in_window(date, after_days))
 
 
 def _fold_day(
