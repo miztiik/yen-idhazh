@@ -11,11 +11,13 @@ from conftest import REPO_ROOT, read_text
 from idhazh import ledger
 
 from ._harness import (
+    COMMIT_JOBS,
     COMMIT_REFRESH_PATHS,
     COMMIT_SCRIPT,
     COMMIT_SCRIPT_ENV,
     COMMIT_STAGED_PATHS,
     COMMIT_STEPS,
+    COMMIT_WORKFLOWS,
     COMPACT_STEP,
     DROP_ENTRY_POINT,
     FINGERPRINT_STEP,
@@ -25,9 +27,11 @@ from ._harness import (
     SUBSTITUTED_DAY_DIR,
     TAKE_STATE_CALL,
     TAKE_STATE_STEP,
+    TOLERATED,
     _commit_call,
     _load_workflows,
     _mapping,
+    _normalize_condition,
     _script,
     _step,
     _steps,
@@ -316,3 +320,65 @@ def test_only_the_two_single_writer_day_trees_union() -> None:
         "state/published/**/*.csv",
         "state/visual-prunes/**/*.csv",
     }
+
+
+def test_a_commit_that_loses_its_push_cannot_throw_away_what_the_job_already_made() -> None:
+    """Run `35660521768`, asked of the workflow file.
+
+    That run computed a whole plan and published nothing. Its push lost a race,
+    the commit step failed, and every step after it was skipped with the job -
+    including the upload `assemble` downloads the plan from. The work was
+    finished and sitting on the runner's disk; nothing could reach it.
+
+    Two kinds of step may not be skipped that way, and both are read off the
+    file rather than listed here.
+
+    An artifact upload is the only way a finished piece of work leaves a job, so
+    one standing after a commit step must survive that commit failing.
+
+    And `continue-on-error: true` is this file's own mark for a step whose
+    failure must never cost a reader the day. A step carrying that mark, sitting
+    behind a commit step that can fail the job, is skipped by that failure
+    anyway - so the mark says one thing and the job does another.
+
+    Reachable is one of exactly two things: every commit step at or before it
+    tolerates its own failure, or the step declares `always()`.
+
+    A step that measures the published tree is neither of those and never enters
+    this, which is the right answer - after a lost push there is no published
+    tree to measure.
+    """
+    workflow = _load_workflows()["digest.yml"]
+    labels = [label for label, name in COMMIT_WORKFLOWS.items() if name == "digest.yml"]
+    assert labels, "no digest.yml job commits, so this test proves nothing"
+
+    checked = 0
+    for job_name in dict.fromkeys(COMMIT_JOBS[label] for label in labels):
+        steps = _steps(workflow, job_name)
+        commits = [
+            index
+            for index, step in enumerate(steps)
+            if step.get("name") in set(COMMIT_STEPS.values())
+        ]
+        assert commits, f"{job_name} is listed as a committing job and commits nothing"
+
+        intolerant = [
+            index for index in commits if steps[index].get("continue-on-error") != TOLERATED
+        ]
+        for index, step in enumerate(steps):
+            if index <= commits[0]:
+                continue
+            carries = "actions/upload-artifact" in str(step.get("uses", ""))
+            declared = step.get("continue-on-error") == TOLERATED
+            if not (carries or declared):
+                continue
+            checked += 1
+            if not any(stop < index for stop in intolerant):
+                continue
+            where = f"{job_name}/{step.get('name') or step.get('uses')}"
+            assert _normalize_condition(step.get("if"), where) == "always()", (
+                f"{where} is skipped when the commit step before it fails, and it carries "
+                "work that was already finished - give it `if: always()`"
+            )
+
+    assert checked, "no step after a commit step carries anything, so this test proves nothing"
