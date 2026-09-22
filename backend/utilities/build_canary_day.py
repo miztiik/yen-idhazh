@@ -784,8 +784,9 @@ def _inputs(date: str) -> PipelineInputs:
         turn_markers_sha256=_digest("canary turn markers"),
         output_schema_sha256=_digest("canary output schema"),
         truncation_cap_tokens=4096,
-        sampling="temperature=0;top_k=1;top_p=1;seed=0",
-        runtime_flags="flash_attn=1;kv_type=f16" + (";rope_scaling=linear" if after else ""),
+        sampling={"temperature": "0", "top_k": "1", "top_p": "1", "seed": "0"},
+        runtime_flags={"flash_attn": "1", "kv_type": "f16"}
+        | ({"rope_scaling": "linear"} if after else {}),
         n_ctx=16384 if after else 8192,
         n_batch=512,
         n_ubatch=128,

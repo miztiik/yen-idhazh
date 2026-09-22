@@ -1,5 +1,5 @@
 {
-	"why": "Five days of run records, arranged so every state the setting marker has to draw is in one bounded file. Named after what it carries, not after a run that produced it - nothing produced it, and nothing about the committed archive can make it change.",
+	"why": "Six days of run records, arranged so every state the setting marker has to draw is in one bounded file. Named after what it carries, not after a run that produced it - nothing produced it, and nothing about the committed archive can make it change. The two settings blocks carry the spellings runs really published: one joined string until 2026-09-22 and a mapping after, which is what the last day is here to test.",
 	"days": [
 		{
 			"why": "Two days before the record existed. A day with no recorded inputs is a day nothing may be claimed about, so neither of these draws a rule.",
@@ -24,8 +24,8 @@
 						"turn_markers_sha256": "4444444444444444444444444444444444444444444444444444444444444444",
 						"output_schema_sha256": "5555555555555555555555555555555555555555555555555555555555555555",
 						"truncation_cap_tokens": 1800,
-						"sampling": "temperature=0.0,top_p=1.0,seed=0",
-						"runtime_flags": "--flash-attn",
+						"sampling": "temperature=0.0000;top_p=0.9500;seed=7;max_answer_tokens=900",
+						"runtime_flags": "cache_type_k=q8_0;cache_type_v=q8_0;flash_attention=on;n_parallel=1;n_threads_batch=4;checkpoint_min_step=512;ctx_checkpoints=64;cache_ram=4096;cache_prompt=True;slot_prompt_similarity=0.1;jinja=True;reasoning_preserve=True",
 						"n_ctx": 8192,
 						"n_batch": 512,
 						"n_ubatch": 512,
@@ -38,7 +38,7 @@
 			]
 		},
 		{
-			"why": "Five settings at once: the prompt, the turn markers, the truncation cap, the sampling settings and the context size. One rule, and its readout names all five.",
+			"why": "Five settings at once: the prompt, the turn markers, the truncation cap, the sampling temperature and the context size. One rule, and its readout names all five. The temperature moves while the other two sampling values hold still, which is what makes this a reading of one knob rather than of the block it sits in.",
 			"date": "2026-09-17",
 			"records": [
 				{
@@ -51,8 +51,8 @@
 						"turn_markers_sha256": "8888888888888888888888888888888888888888888888888888888888888888",
 						"output_schema_sha256": "5555555555555555555555555555555555555555555555555555555555555555",
 						"truncation_cap_tokens": 2400,
-						"sampling": "temperature=0.2,top_p=0.95,seed=7",
-						"runtime_flags": "--flash-attn",
+						"sampling": "temperature=0.2000;top_p=0.9500;seed=7;max_answer_tokens=900",
+						"runtime_flags": "cache_type_k=q8_0;cache_type_v=q8_0;flash_attention=on;n_parallel=1;n_threads_batch=4;checkpoint_min_step=512;ctx_checkpoints=64;cache_ram=4096;cache_prompt=True;slot_prompt_similarity=0.1;jinja=True;reasoning_preserve=True",
 						"n_ctx": 16384,
 						"n_batch": 512,
 						"n_ubatch": 512,
@@ -78,8 +78,8 @@
 						"turn_markers_sha256": "8888888888888888888888888888888888888888888888888888888888888888",
 						"output_schema_sha256": "5555555555555555555555555555555555555555555555555555555555555555",
 						"truncation_cap_tokens": 2400,
-						"sampling": "temperature=0.2,top_p=0.95,seed=7",
-						"runtime_flags": "--flash-attn",
+						"sampling": "temperature=0.2000;top_p=0.9500;seed=7;max_answer_tokens=900",
+						"runtime_flags": "cache_type_k=q8_0;cache_type_v=q8_0;flash_attention=on;n_parallel=1;n_threads_batch=4;checkpoint_min_step=512;ctx_checkpoints=64;cache_ram=4096;cache_prompt=True;slot_prompt_similarity=0.1;jinja=True;reasoning_preserve=True",
 						"n_ctx": 16384,
 						"n_batch": 512,
 						"n_ubatch": 512,
@@ -99,8 +99,8 @@
 						"turn_markers_sha256": "8888888888888888888888888888888888888888888888888888888888888888",
 						"output_schema_sha256": "5555555555555555555555555555555555555555555555555555555555555555",
 						"truncation_cap_tokens": 2400,
-						"sampling": "temperature=0.2,top_p=0.95,seed=7",
-						"runtime_flags": "--flash-attn",
+						"sampling": "temperature=0.2000;top_p=0.9500;seed=7;max_answer_tokens=900",
+						"runtime_flags": "cache_type_k=q8_0;cache_type_v=q8_0;flash_attention=on;n_parallel=1;n_threads_batch=4;checkpoint_min_step=512;ctx_checkpoints=64;cache_ram=4096;cache_prompt=True;slot_prompt_similarity=0.1;jinja=True;reasoning_preserve=True",
 						"n_ctx": 16384,
 						"n_batch": 512,
 						"n_ubatch": 512,
@@ -126,8 +126,55 @@
 						"turn_markers_sha256": "8888888888888888888888888888888888888888888888888888888888888888",
 						"output_schema_sha256": "5555555555555555555555555555555555555555555555555555555555555555",
 						"truncation_cap_tokens": 2400,
-						"sampling": "temperature=0.2,top_p=0.95,seed=7",
-						"runtime_flags": "--flash-attn",
+						"sampling": "temperature=0.2000;top_p=0.9500;seed=7;max_answer_tokens=900",
+						"runtime_flags": "cache_type_k=q8_0;cache_type_v=q8_0;flash_attention=on;n_parallel=1;n_threads_batch=4;checkpoint_min_step=512;ctx_checkpoints=64;cache_ram=4096;cache_prompt=True;slot_prompt_similarity=0.1;jinja=True;reasoning_preserve=True",
+						"n_ctx": 16384,
+						"n_batch": 512,
+						"n_ubatch": 512,
+						"n_threads": 4,
+						"runner_class": "ubuntu-latest",
+						"extractor_version": "trafilatura-1.12.2",
+						"sanitizer_version": "bleach-7.0.0"
+					}
+				}
+			]
+		},
+		{
+			"why": "The same machine as the day before it, written the way a run writes one now: the two settings blocks are mappings, and every switch carries llama-server's own name. Nothing about the decode moved, so nothing here may draw a rule. Read as two opaque strings these two days differ everywhere, which is the permanent false warning this shape exists to stop.",
+			"date": "2026-09-20",
+			"records": [
+				{
+					"inputs": {
+						"model_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+						"quantisation": "Q4_K_M",
+						"runtime_build": "b1234",
+						"chat_template_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+						"prompt_sha256": "9999999999999999999999999999999999999999999999999999999999999999",
+						"turn_markers_sha256": "8888888888888888888888888888888888888888888888888888888888888888",
+						"output_schema_sha256": "5555555555555555555555555555555555555555555555555555555555555555",
+						"truncation_cap_tokens": 2400,
+						"sampling": {
+							"seed": "7",
+							"temperature": "0.2000",
+							"top_p": "0.9500"
+						},
+						"runtime_flags": {
+							"--cache-prompt": "set",
+							"--jinja": "set",
+							"--no-cache-prompt": "runtime-default",
+							"--no-jinja": "runtime-default",
+							"--no-reasoning-preserve": "runtime-default",
+							"--reasoning-preserve": "set",
+							"-cms": "512",
+							"-cram": "4096",
+							"-ctk": "q8_0",
+							"-ctv": "q8_0",
+							"-ctxcp": "64",
+							"-fa": "on",
+							"-np": "1",
+							"-sps": "0.1",
+							"-tb": "4"
+						},
 						"n_ctx": 16384,
 						"n_batch": 512,
 						"n_ubatch": 512,

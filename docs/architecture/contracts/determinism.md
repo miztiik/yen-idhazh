@@ -1,6 +1,6 @@
 # The Recorded Input Manifest
 
-**Last Updated**: 2026-09-21
+**Last Updated**: 2026-09-22
 
 What a run records about its own inputs, where each value is read from, and the one alarm built on that record. This page owns the enumeration and what the record cannot see.
 
@@ -42,7 +42,7 @@ opaque hex token affords exactly one operation - equality - which is a gate's
 operation and the only one. A set of named values affords reading, so a reader
 can see *which* input moved and the console's boundary can say so.
 
-The declared inputs are the weights digest, the quantisation, the runtime build, the chat-template / prompt / output-schema digests, the turn-envelope digest, the truncation cap, the sampling spelling, the runtime-flags spelling, `n_ctx` / `n_batch` / `n_ubatch` / `n_threads`, the runner class, and the extractor and sanitizer versions. `RunRecord.config_digests` sits beside it and says which config bytes the run read.
+The declared inputs are the weights digest, the quantisation, the runtime build, the chat-template / prompt / output-schema digests, the turn-envelope digest, the truncation cap, the sampling settings, the runtime switches, `n_ctx` / `n_batch` / `n_ubatch` / `n_threads`, the runner class, and the extractor and sanitizer versions. `RunRecord.config_digests` sits beside it and says which config bytes the run read.
 
 **The turn envelope is digested twice, and the second one is not redundant.** The prompt digest covers the envelope already, because the two calls render their own bytes through it. It stops short of two facts all the same: which of the two reply openings a call ends on, and the marker the thinking span stops at. An entry that changed only the string that closes its reasoning block would decode differently and move no rendered prompt, so `turn_markers_sha256` carries the envelope whole - every marker, the system placement and its joiner. **An absent key means a run written before 2026-09-14**, when a marker first became able to move at all; it never means a default value.
 
@@ -124,13 +124,27 @@ The model file spells llama-server's own flags, so the record enumerates flags r
 | Knob | Where it lands |
 | --- | --- |
 | `--ctx-size`, `--batch-size`, `--ubatch-size`, `--threads` | Their own fields, under this project's names for them. They change how the partial sums accumulate. |
-| `temperature`, `top_p`, `seed` | `sampling`, one canonical spelling of the decoding parameters. No span budget is in it, because no span carries one: the two decode caps left the settings on 2026-09-21, and what bounds a span is the window and the per-request timeout, both enumerated elsewhere. |
-| `-ctk`, `-ctv`, `-fa`, `-np`, `-tb` and the cache and template switches | `runtime_flags`, one canonical spelling of the switches that move the arithmetic. A quantised KV cache, another attention kernel, a second slot and a different prompt-thread count each change how the partial sums accumulate. |
+| `temperature`, `top_p`, `seed` | `sampling`, one key each. No span budget is in it, because no span carries one: the two decode caps left the settings on 2026-09-21, and what bounds a span is the window and the per-request timeout, both enumerated elsewhere. |
+| `-ctk`, `-ctv`, `-fa`, `-np`, `-tb` and the cache and template switches | `runtime_flags`, one key each, under llama-server's own flag names. A quantised KV cache, another attention kernel, a second slot and a different prompt-thread count each change how the partial sums accumulate. |
 | The turn envelope | `turn_markers_sha256`, and `prompt_sha256` as well, because the prompt is rendered through the envelope. |
 
-**The switches fold into one field rather than one each, and that is not a shortcut.** They are absent on almost every run, so a column each would be a dozen lines nobody reads. The spelling moves when any one of them moves, which is the property the record needs.
+**The switches fold into one field rather than one each, and that is not a shortcut.** They are absent on almost every run, so a column each would be a dozen lines nobody reads. One field, read key by key, is what lets the console name the switch that moved while still costing the contract one entry.
 
-**The recorded string moved once, on 2026-09-21.** It enumerated this project's own field names until the model file started carrying the flags, so the first run after that reports the server switches moved. That is a one-time true statement rather than a defect.
+**A temperature is recorded to four decimal places, and that is a shipped tolerance.** Two temperatures closer together than 1e-4 record as the same value, so the console reports no change between them. It is the right tolerance - no sampler here is steered by the fifth decimal, and a full float repr would report a change every time a JSON round trip landed one bit out - but it is a choice, so it is written here and asserted on both sides in `backend/tests/test_fingerprint.py`.
+
+**`runtime_flags` records the request, not the applied configuration.** Every key is read off the model file, so a llama.cpp build that changes its own default for a flag we leave out moves the decode with this mapping unchanged. `runtime_build` is the only field that catches that, which is why a reading either side of a build change is compared on the build first.
+
+### Design rationale - the two settings blocks are mappings, not joined strings
+
+Both were one `a=1;b=2` string until 2026-09-22. Joined, the whole field moved when any one term did, and two of the things that move a term move no token at all: a rename, and a setting that stopped being sent.
+
+Plan 41 did both in one week. The model file took llama-server's own flag names on 2026-09-21, so `cache_type_k=q8_0` became `-ctk=q8_0` - the same switch, the same value, a different word. The same plan deleted two decode caps that bounded nothing. Joined, the console would have told an operator that **the sampling settings, the model server switches and the turn markers changed** on the first day plan 41 published: three of seventeen recorded inputs, all false, on a change whose whole intent was to emit the same flags verbatim. A published day is never rewritten, so the rule would have been permanent, and every reading either side of it marked uncomparable.
+
+Read key by key it is not a change at all. The console's rule already says a day that only STOPPED using one of yesterday's values changed nothing, so a deleted setting is a key that is absent. A renamed switch is read through `RENAMED_FLAGS` in `backend/idhazh/contracts/fingerprint.py` and compares against itself. The rule is computed when the page renders rather than stored, so it applies to the days already published as readily as to tomorrow's.
+
+The third field, `turn_markers_sha256`, could not be saved the same way: a published day carries the digest and not the markers, so there is nothing to recompute from. It moved once on 2026-09-22 for a reason worth naming - every one of the eight markers came back byte-identical when they stopped being typed and started being read off the model's own template, and the digest moved because it covered `string.Template`'s source, where `$role` and `${role}` differ and substitute the same. `turn_markers_digest` now digests what the markers write rather than what writes them, so a placeholder spelling can never move the record again.
+
+The migration is a read-side one, in the same commit as the shape (`CLAUDE.md` section 11). One old format is parsed and no chain of them: three historical spellings exist and all three split the same way, because a term the rename table does not name keeps its own name and compares against itself.
 
 ## `host_cpu` is recorded and never digested
 

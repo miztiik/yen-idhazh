@@ -247,16 +247,22 @@
           "type": "string"
         },
         "runtime_flags": {
-          "description": "One canonical spelling of the runtime knobs that move the arithmetic.",
-          "minLength": 1,
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "The runtime switches that can move the arithmetic, one key each, spelled as llama-server spells them. A bare flag records `set`; a flag the model file leaves out records `runtime-default`, because what the server picks is a real and different choice from pinning a value.",
+          "minProperties": 1,
           "title": "Runtime Flags",
-          "type": "string"
+          "type": "object"
         },
         "sampling": {
-          "description": "One canonical spelling of the decoding parameters.",
-          "minLength": 1,
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "The decoding parameters, one key each, under the name the request body spells them with. A mapping rather than one joined string so the console compares key by key: a rename moves no key's value, and a setting that stopped being sent is a key that is absent rather than a record that differs everywhere.",
+          "minProperties": 1,
           "title": "Sampling",
-          "type": "string"
+          "type": "object"
         },
         "sanitizer_version": {
           "minLength": 1,
@@ -350,6 +356,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Embedded sampling and runtime flags become mappings; an old report reads.",
+      "version": "2026-09-22",
+      "why": "Joined, a rename moved the whole record and the console called it a change."
+    },
+    {
       "change": "Added corpus_shortfalls; every diagnostic carries a unit.",
       "version": "2026-09-18T12:00",
       "why": "A thin corpus is recorded rather than fatal, and a bare number answers nothing."
@@ -363,11 +374,6 @@
       "change": "inputs gains turn_markers_sha256, optional.",
       "version": "2026-09-14T04:00",
       "why": "The verdict records the same controls the shard beside it does."
-    },
-    {
-      "change": "Added inputs, the recorded input manifest, and removed pipeline_fingerprint.",
-      "version": "2026-09-13T22:00",
-      "why": "Both halves land in one entry because the first was never stamped."
     },
     {
       "change": "Earlier shapes are in this file's git history.",
@@ -469,7 +475,7 @@
       "$ref": "#/$defs/ScorerIdentity"
     },
     "version": {
-      "default": "2026-09-18T12:00",
+      "default": "2026-09-22",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -492,5 +498,5 @@
   ],
   "title": "QualificationReport",
   "type": "object",
-  "version": "2026-09-18T12:00"
+  "version": "2026-09-22"
 }

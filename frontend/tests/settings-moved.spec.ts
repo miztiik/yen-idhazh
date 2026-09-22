@@ -16,7 +16,8 @@ import {
 	settingsMoved,
 	unreadRuleNote,
 	NAMES_SHOWN,
-	SETTING_WORDS
+	SETTING_WORDS,
+	WORDS_IN_ORDER
 } from '../src/lib/console/settings-moved';
 
 /**
@@ -68,18 +69,38 @@ test.describe('what moved, and on which day', () => {
 			'the prompt',
 			'the turn markers',
 			'the truncation cap',
-			'the sampling settings',
+			'the sampling temperature',
 			'the context size'
 		]);
+	});
+
+	test('a settings block names the knob that moved, not the block', () => {
+		// The reason the two blocks are read key by key. "The sampling settings
+		// changed" sends a reader to four values to find one; the temperature moved
+		// and the seed and the cut-off did not.
+		const day = settingsMoved(fixture()).find((one) => one.date === '2026-09-17');
+		expect(day?.settings).toContain('the sampling temperature');
+		expect(day?.settings).not.toContain('the sampling seed');
+		expect(day?.settings).not.toContain('the sampling settings');
+	});
+
+	test('the day the switches took llama-server’s own names draws nothing', () => {
+		// The Oracle this shape exists for. 2026-09-20 is 2026-09-19's machine
+		// written the way a run writes one now: both blocks are mappings and every
+		// switch carries the runtime's own name. Read as two opaque strings the two
+		// days differ everywhere, and the rule they would draw is permanent - a
+		// published day is never rewritten. Nothing about the decode moved, so
+		// nothing may be drawn.
+		const moved = settingsMoved(fixture());
+		expect(moved.map((one) => one.date)).not.toContain('2026-09-20');
 	});
 
 	test('the names come out in the order the contract declares them', () => {
 		// Never in the order the data happened to differ: a readout whose order
 		// changes with the data is a readout a reader cannot scan twice.
 		const moved = settingsMoved(fixture());
-		const order = Object.values(SETTING_WORDS);
 		for (const one of moved) {
-			const places = one.settings.map((name) => order.indexOf(name));
+			const places = one.settings.map((name) => WORDS_IN_ORDER.indexOf(name));
 			expect(places, `${one.date} names a setting the words table does not`).not.toContain(-1);
 			expect(places, `${one.date} names its settings out of contract order`).toEqual(
 				[...places].sort((left, right) => left - right)
@@ -137,7 +158,7 @@ test.describe('what a chart draws from it', () => {
 		const row = modelRuleRow(namesMoved(moved.get('2026-09-17') ?? []));
 		expect(row.label, 'the heading a reader meets never changes').toBe(MODEL_RULE_ROW.label);
 		expect(row.value).toBe(
-			'the prompt, the turn markers, the truncation cap, the sampling settings and the context size changed on this day'
+			'the prompt, the turn markers, the truncation cap, the sampling temperature and the context size changed on this day'
 		);
 	});
 

@@ -313,16 +313,22 @@
           "type": "string"
         },
         "runtime_flags": {
-          "description": "One canonical spelling of the runtime knobs that move the arithmetic.",
-          "minLength": 1,
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "The runtime switches that can move the arithmetic, one key each, spelled as llama-server spells them. A bare flag records `set`; a flag the model file leaves out records `runtime-default`, because what the server picks is a real and different choice from pinning a value.",
+          "minProperties": 1,
           "title": "Runtime Flags",
-          "type": "string"
+          "type": "object"
         },
         "sampling": {
-          "description": "One canonical spelling of the decoding parameters.",
-          "minLength": 1,
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "The decoding parameters, one key each, under the name the request body spells them with. A mapping rather than one joined string so the console compares key by key: a rename moves no key's value, and a setting that stopped being sent is a key that is absent rather than a record that differs everywhere.",
+          "minProperties": 1,
           "title": "Sampling",
-          "type": "string"
+          "type": "object"
         },
         "sanitizer_version": {
           "minLength": 1,
@@ -736,6 +742,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Recorded sampling and runtime flags become mappings; an old run reads.",
+      "version": "2026-09-22",
+      "why": "Joined, a rename moved the whole record and the console called it a change."
+    },
+    {
       "change": "The embedded settings become plain mappings, and two blocks replace one.",
       "version": "2026-09-21T03:00",
       "why": "A record carrying a retired option name has to keep reading."
@@ -751,13 +762,8 @@
       "why": "Six records name a draft head, and the head is now one companion among several."
     },
     {
-      "change": "Embedded inference gains CPU, cache, checkpoint and template controls.",
-      "version": "2026-09-20",
-      "why": "Run records must carry the settings a model used."
-    },
-    {
       "change": "Earlier changes are in this file's git history.",
-      "version": "2026-09-19",
+      "version": "2026-09-20",
       "why": "A changelog says what moved lately; git is the archive."
     }
   ],
@@ -777,7 +783,7 @@
       "type": "array"
     },
     "version": {
-      "default": "2026-09-21T03:00",
+      "default": "2026-09-22",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -789,5 +795,5 @@
   ],
   "title": "RunManifest",
   "type": "object",
-  "version": "2026-09-21T03:00"
+  "version": "2026-09-22"
 }

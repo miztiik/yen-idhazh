@@ -250,9 +250,9 @@ def test_a_flag_the_file_leaves_out_spells_apart_from_a_pinned_one() -> None:
     value - so it gets its own spelling rather than one of the values it may
     resolve to. A bare flag is neither, and spells as set."""
     spelling = runtime_flags_spelling(a_server())
-    assert "-ctk=runtime-default" in spelling
-    assert "-tb=runtime-default" in spelling
-    assert "--jinja=set" in runtime_flags_spelling(a_server(**{"--jinja": None}))
+    assert spelling["-ctk"] == "runtime-default"
+    assert spelling["-tb"] == "runtime-default"
+    assert runtime_flags_spelling(a_server(**{"--jinja": None}))["--jinja"] == "set"
 
 
 def test_a_moved_sampling_value_moves_the_sampling_spelling() -> None:
@@ -261,9 +261,82 @@ def test_a_moved_sampling_value_moves_the_sampling_spelling() -> None:
     assert sampling_spelling(a_request(seed=7)) != sampling_spelling(a_request())
 
 
+def test_a_temperature_inside_the_recorded_tolerance_records_as_unmoved() -> None:
+    """The Oracle for the shipped tolerance. Four decimal places is a choice, and
+    a choice nobody wrote down is a surprise the day somebody reads the record.
+
+    A move of 1e-5 records the same value, so the console reports no change; a
+    move of 1e-3 records a different one. Asserting both sides is what makes
+    this the tolerance rather than a description of a format string.
+    """
+    base = sampling_spelling(a_request(temperature=0.2))
+
+    assert sampling_spelling(a_request(temperature=0.20001)) == base
+    assert sampling_spelling(a_request(temperature=0.201)) != base
+
+
 def test_a_request_that_pins_nothing_records_the_runtime_default() -> None:
     """A model file may stay silent on a sampler, and the stamp says so."""
-    assert sampling_spelling({}) == "temperature=runtime-default;top_p=runtime-default;seed=runtime-default"
+    assert sampling_spelling({}) == {
+        "seed": "runtime-default",
+        "temperature": "runtime-default",
+        "top_p": "runtime-default",
+    }
+
+
+def test_a_day_written_under_the_joined_spelling_still_reads() -> None:
+    """The read-side migration, against the three spellings really published.
+
+    Both blocks were one joined string until 2026-09-22 and a published day is
+    never rewritten, so a record that cannot be parsed is a console that cannot
+    draw. The keys are checked rather than the count: what the migration owes is
+    that a value survives under a name the writer would use today.
+    """
+    read = PipelineInputs.model_validate(
+        recorded_inputs().model_dump(mode="json")
+        | {
+            "sampling": "temperature=0.2000;top_p=1.0000;seed=0;max_answer_tokens=900",
+            "runtime_flags": "cache_type_k=q8_0;flash_attention=on;n_parallel=1;jinja=True",
+        }
+    )
+
+    assert read.sampling["temperature"] == "0.2000"
+    assert read.sampling["max_answer_tokens"] == "900", "a retired key keeps its own name"
+    assert read.runtime_flags["-ctk"] == "q8_0", "the rename moved the name, not the value"
+    assert read.runtime_flags["-fa"] == "on"
+    assert read.runtime_flags["--jinja"] == "set"
+    assert read.runtime_flags["--no-jinja"] == "runtime-default"
+
+
+def test_the_rename_moves_no_recorded_value() -> None:
+    """The Oracle this whole change exists for. Yesterday's record and today's
+    describe one machine, so every key they share holds the same value.
+
+    A day written under the old names is read through the rename table and
+    compared against what the writer emits for the same settings. A key either
+    side does not have is not asserted on: the console already treats a value a
+    day stopped sending as no change. What would fail here is a table that
+    mapped a name to the wrong flag, which is the one mistake a migration can
+    make that nothing else would catch.
+    """
+    server = a_server(
+        **{"-ctk": "q8_0", "-ctv": "q8_0", "-fa": "on", "-np": 1, "--jinja": None}
+    )
+    today = runtime_flags_spelling(server)
+    yesterday = PipelineInputs.model_validate(
+        recorded_inputs().model_dump(mode="json")
+        | {
+            "runtime_flags": (
+                "cache_type_k=q8_0;cache_type_v=q8_0;flash_attention=on;"
+                "n_parallel=1;jinja=True"
+            )
+        }
+    ).runtime_flags
+
+    shared = sorted(set(today) & set(yesterday))
+
+    assert shared, "the two records share no key, so the table renamed nothing"
+    assert {name: yesterday[name] for name in shared} == {name: today[name] for name in shared}
 
 
 # --- The one alarm that survives the retired gate ---------------------------

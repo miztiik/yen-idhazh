@@ -33,7 +33,6 @@ FINGERPRINT_SURVIVORS: Final[dict[str, str]] = {
     "backend/idhazh/contracts/score_archive.py": "a changelog entry and a docstring, both history",
     "backend/idhazh/contracts/evidence.py": "a changelog entry, which is history",
     "backend/idhazh/contracts/label_row.py": "a changelog entry, which is history",
-    "backend/idhazh/contracts/qualification.py": "a changelog entry, which is history",
     "backend/idhazh/contracts/summary.py": "a changelog entry, which is history",
     "frontend/src/lib/server/model-work.ts": (
         "the arm that reads a day whose identity is a digest, and the precedence "

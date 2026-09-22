@@ -310,6 +310,11 @@ class RunManifest(Contract):
     __schema_stem__: ClassVar[str] = "run-manifest"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-22",
+            change="Recorded sampling and runtime flags become mappings; an old run reads.",
+            why="Joined, a rename moved the whole record and the console called it a change.",
+        ),
+        ChangelogEntry(
             version="2026-09-21T03:00",
             change="The embedded settings become plain mappings, and two blocks replace one.",
             why="A record carrying a retired option name has to keep reading.",
@@ -326,11 +331,6 @@ class RunManifest(Contract):
         ),
         ChangelogEntry(
             version="2026-09-20",
-            change="Embedded inference gains CPU, cache, checkpoint and template controls.",
-            why="Run records must carry the settings a model used.",
-        ),
-        ChangelogEntry(
-            version="2026-09-19",
             change="Earlier changes are in this file's git history.",
             why="A changelog says what moved lately; git is the archive.",
         ),
