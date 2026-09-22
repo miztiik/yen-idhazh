@@ -1,6 +1,6 @@
 # Agent Notes - Gates and Builds
 
-**Last Updated**: 2026-09-21
+**Last Updated**: 2026-09-22
 Traps in the commands that decide whether a change is done: the test selector,
 pytest, ruff, mypy, the schema drift gate, the build, the canary day, and the
 measurement recipes that run on top of them. Index and scope:
@@ -198,6 +198,10 @@ The traceback names `discover.py` importing `feedparser`, several frames below `
 **A case that intercepted nothing is a null result, not a pass.** Print the count of intercepted or aborted requests and require it to be non-zero; an abort case that never fired proves only that the pattern was wrong. The honest degraded case for a build-time surface is a root override: copy `state/` and `frontend/public/` to `TEMP`, truncate every CSV to its header, point `STATE_ROOT`, `TELEMETRY_ROOT` and `DIGEST_ROOT` at the copy, and rebuild.
 
 **`python -m http.server` serves `.js` with the registry MIME type**, which on Windows is often `text/plain`, so the browser refuses the module and SvelteKit never hydrates - while the page still looks right and logs zero errors, and every post-hydration measurement reports the prerendered value. Assert `Object.keys(window).some(k => k.startsWith('__sveltekit'))` before reading a number, or serve through the project's own preview.
+
+**A captured page reduced to fixture size reproduces the symptom and quietly loses the signal.** A minimiser held to one invariant deletes whatever the other one needed: shrinking a 348 KB page to keep its 3,818-word over-extraction stripped the `<h1>` inside the article, so the reduced file reproduced the bug and the check under test read nothing on it - three witnesses all returning zero, which looks like broken code rather than a broken fixture. Hold the minimiser to **every** reading the fixture exists to demonstrate, assert each one on the file after it is written, and expect the cheap structural pass to fail too: stripping `class` and `id` collapsed the same page from 3,818 words to 1,034, because `favor_precision` reads them.
+
+**A synthetic page built from one sentence repeated extracts to one sentence.** trafilatura drops a duplicate paragraph, so `<p>` times ten is not ten paragraphs of prose and a word-count assertion on it fails for a reason the test never mentions. Vary every paragraph - a counter in the text is enough.
 
 ## Measurement recipes
 
