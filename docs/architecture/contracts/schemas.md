@@ -1,6 +1,6 @@
 # Contracts and Schemas
 
-**Last Updated**: 2026-09-21
+**Last Updated**: 2026-09-22
 
 The persisted-shape subsystem: where the models live, how the schemas and frontend types are generated from them, and the gate that stops the three from drifting apart. This is the operational home of Guardrail #3 (contracts before logic) and `CLAUDE.md` sections 1a and 11.
 
@@ -48,7 +48,7 @@ The union alone cannot be tested against at run time, and a reader that has to n
 
 `config/models/<name>.json` is validated by `ModelsConfig` and is deliberately absent from `contracts/export.py`, so no `models-config.schema.json` and no `frontend/src/contracts/models-config.ts` exist. **A configuration file this project authors needs no declared shape** (`CLAUDE.md` Guardrail #3, owner ruling 2026-09-21): nothing but this repository writes one and nothing but this repository reads one, so a generated schema restates a model that is already its only reader, and a generated frontend type restates a file the frontend opens by hand.
 
-What the entry still declares is what this project's own code names: the weights, the architecture, the turn envelope, and the digest the settings were derived against. **What it does not declare is the settings themselves.** The `server` block is llama-server's own flags, spelled as the binary spells them and emitted verbatim, and the `request` block is the four values that go in a request body. A typed field for a value this project hands straight to another program is a second spelling somebody has to keep in step - and llama-server refuses a flag it does not accept at every server start, which names it and does not start.
+What the entry still declares is what this project's own code names: the weights, the architecture, the two turn-envelope strings no template can answer, and the digest the settings were derived against. **What it does not declare is the settings themselves.** The `server` block is llama-server's own flags, spelled as the binary spells them and emitted verbatim, and the `request` block is the four values that go in a request body. A typed field for a value this project hands straight to another program is a second spelling somebody has to keep in step - and llama-server refuses a flag it does not accept at every server start, which names it and does not start.
 
 Two keys are required and both are refused by name at configuration load, in `idhazh.config.refuse_a_model_nothing_could_run`: `server["--ctx-size"]`, because this project does real arithmetic on the window and the published site reads it at build time, and `request["request_timeout_minutes"]`, because four call sites multiply it by sixty and llama-server has no default to fall back on. Everything else is optional, and absent means the server's own default.
 
