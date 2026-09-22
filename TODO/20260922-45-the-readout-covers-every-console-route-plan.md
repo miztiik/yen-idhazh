@@ -56,7 +56,7 @@ Playwright runs `fullyParallel: false` with 4 workers, so it parallelises by fil
 | 2 | The two single-population figures say why they have none | - | J | Landed | p45j | #1045 | - |
 | 3 | The judgement strips stop running a date into a note | - | J | Landed | p45j | #1045 | - |
 | 4 | The two day matrices on voices declare | - | V | Landed | p45v | #1046 | - |
-| 5 | The rule reaches the judgement route and the voices reasons | 1, 2, 4 | R | Not started | - | - | - |
+| 5 | The rule reaches the judgement route and the voices reasons | 1, 2, 4 | R | Landed | p45r | #1049 | - |
 
 ### 1a. Pull requests and file ownership
 
@@ -163,10 +163,12 @@ F5 renders as `called one story: 0.912 to 0.998, middle 0.961`. F6 renders as `r
 
 | # | List | Routes |
 | --- | --- | --- |
-| H1 | `ROUTES` at line 23 - the census that seeds on `svg` | `/console/`, `/console/machine/`, `/console/throughput/`, `/console/judgement/` |
-| H2 | a second list, looped by the declare-or-say-why block (~line 151) and the reason-in-words block (~line 191) only | H1's four, plus `/console/voices/` |
+| H1 | `ROUTES` at line 23 - the census that seeds on `svg` | `/console/`, `/console/model/`, `/console/machine/`, `/console/judgement/` |
+| H2 | `DECLARING_ROUTES`, looped by the reason-in-words block (~line 191) alone | H1's four, plus `/console/voices/` |
 
-`/console/voices/` is in H2 and not in H1 because it draws no `<svg>` of its own (Contract 6). The nine-line exclusion comment at lines 24-32 is deleted - it is false about both routes after this plan.
+`/console/voices/` is in H2 and not in H1 because it draws no `<svg>` of its own (Contract 6). Measured on the canary build 2026-09-22: the route renders 0 charts the first scan can see and 6 declarations the second one reads.
+
+H2 is looped by one block and not two. The declare-or-say-why block asserts `charts.length > 0`, so it fails on a route with no `<svg>` rather than passing it. The eight-line exclusion comment at lines 24-31 is deleted - it is false about both routes after this plan.
 
 `frontend/tests/console-chrome.spec.ts` `ROUTES` at line 38 gains `/console/judgement/`.
 
@@ -405,7 +407,7 @@ Rows 1 to 4 make five drawings obey a rule that does not currently look at them.
 
 | # | File | Change |
 | --- | --- | --- |
-| Z1 | `frontend/tests/console-readout.spec.ts` | `ROUTES` at line 23 gains `/console/judgement/` (H1). Add the second list (H2) and loop it from the declare-or-say-why block at about line 151 and the reason-in-words block at about line 191. Delete the nine-line exclusion comment at lines 24-32. Leave the four column-driven blocks at lines 225, 308, 364 and 393 on `ROUTES` - they need a column axis and `/console/voices/` has none. |
+| Z1 | `frontend/tests/console-readout.spec.ts` | `ROUTES` at line 23 gains `/console/judgement/` (H1). Add `DECLARING_ROUTES` (H2) and loop it from the reason-in-words block at about line 191, and from that block alone. Delete the eight-line exclusion comment at lines 24-31. Leave the declare-or-say-why block and the three column-driven blocks on `ROUTES` - the first asserts `charts.length > 0` and the others need a column axis, and `/console/voices/` has neither. |
 | Z2 | `frontend/tests/console-chrome.spec.ts` | `ROUTES` at line 38 gains `/console/judgement/`. |
 | Z3 | `docs/architecture/publishing/console-charts.md` | Delete the stale clause at line 139 - "a bar of counts has no mark to land on and its column already carries a `<title>`". Row 1 makes it false. Record the declaration rule's two halves and the Contract 6 asymmetry in its place, in the page's own voice. |
 
@@ -414,9 +416,10 @@ Rows 1 to 4 make five drawings obey a rule that does not currently look at them.
 | # | Gate |
 | --- | --- |
 | AA1 | `npm --prefix frontend run check` clean |
-| AA2 | `npx playwright test console-readout console-chrome` green |
-| AA3 | The full console group green - this row changes what every console route is held to |
-| AA4 | Browser smoke on `/console/judgement/` and `/console/voices/` per CLAUDE.md section 12 |
+| AA2 | `npm --prefix frontend run build:canary` clean |
+| AA3 | `npx playwright test console-readout console-chrome` green |
+| AA4 | The full console group green - this row changes what every console route is held to |
+| AA5 | Browser smoke on `/console/judgement/` and `/console/voices/` per CLAUDE.md section 12 |
 
 ### Oracle
 
