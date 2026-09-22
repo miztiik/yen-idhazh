@@ -30,8 +30,9 @@ from collections.abc import Collection
 from pathlib import Path
 from typing import Final
 
-from idhazh import config, day_partition, ledger
+from idhazh import config, day_shards, ledger
 from idhazh.contracts.item_health import ItemHealthRow
+from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
 from idhazh.contracts.public_telemetry import FORBIDDEN_COLUMNS, PublicTelemetryRow
 
 PUBLIC_COLUMNS: Final[tuple[str, ...]] = PublicTelemetryRow.csv_columns()
@@ -176,7 +177,7 @@ def publish(
     re-run does not.
 
     **The ledger files by day and this mirror files by month**, so a month is
-    folded from that month's day files through `day_partition.days_by_month`. Its
+    folded from that month's days through `day_shards.shards_by_month`. Its
     input is one month, so a named month opens at most 31 files.
 
     Cover: the months the caller names. The daily caller passes the one month it
@@ -195,7 +196,7 @@ def publish(
     source_dir = state_root / ledger.ITEM_HEALTH_DIRNAME
     public_root.mkdir(parents=True, exist_ok=True)
     written: list[Path] = []
-    by_month = day_partition.days_by_month(source_dir)
+    by_month = day_shards.shards_by_month(source_dir, days=UNBOUNDED_WINDOW)
     for month in sorted(by_month):
         target = shard_path(public_root, month)
         if months is not None and month not in months and target.exists():

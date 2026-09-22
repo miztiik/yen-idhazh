@@ -16,8 +16,8 @@ The record carries counts and facts about a day and never a line of article text
 (CLAUDE.md section 0a). Every path it could name is relative and POSIX
 (section 2).
 
-The day's slice is read from that one day's month shard alone - not the whole
-ledger - so the cost does not rise as the ledger keeps more months (Guardrail #12).
+The day's slice is read from that one day alone - not the whole ledger - so the
+cost does not rise as the ledger keeps more months (Guardrail #12).
 The figures match the frontend console reducers exactly, so the reader that
 replaces the walk reads the same numbers it computes today: an eval-row
 percentile is nearest-rank as `eval-instruments.ts` takes it, a stage or
@@ -26,7 +26,6 @@ throughput figure is interpolated as `series.ts` takes it.
 
 from __future__ import annotations
 
-import csv
 import json
 import logging
 import math
@@ -36,7 +35,7 @@ from datetime import date
 from pathlib import Path
 from typing import Final
 
-from idhazh import ledger
+from idhazh import day_shards, ledger
 from idhazh.assemble import TaxonomyVectors, nearest_label_cosines, write_atomic
 from idhazh.contracts.base import canonical_json
 from idhazh.contracts.day_metrics import (
@@ -53,8 +52,8 @@ from idhazh.contracts.day_metrics import (
     DayThroughput,
 )
 from idhazh.contracts.digest_day import DigestDay
-from idhazh.contracts.eval_row import BandReason, ConfidenceBand
-from idhazh.contracts.item_health import ElementClass, ItemStage
+from idhazh.contracts.eval_row import BandReason, ConfidenceBand, EvalRow
+from idhazh.contracts.item_health import ElementClass, ItemHealthRow, ItemStage
 from idhazh.contracts.run_manifest import ModelRole, RunManifest
 from idhazh.contracts.visual_decision import VisualKind, VisualState
 from idhazh.evals import writer as eval_writer
@@ -111,25 +110,30 @@ def day_metrics_path(state_root: Path, date: str) -> Path:
 
 
 def read_score_rows(state_root: Path, date: str) -> list[dict[str, str]]:
-    """The committed score rows for one day, from that day's month shard alone.
+    """The committed score rows for one day, settled, from that day alone.
 
-    One shard, never the whole ledger: the record is about one day, and a walk
-    over every month would cost more with each month the ledger keeps
-    (CLAUDE.md Guardrail #12).
+    One day, never the whole ledger: the record is about one day, and a walk over
+    every month would cost more with each month the ledger keeps (CLAUDE.md
+    Guardrail #12).
+
+    Settled rather than concatenated, because a day is a directory of
+    writer-owned files: a work shard and assemble each leave their own, and a
+    re-run leaves a second attempt beside the first. Counting them all would
+    report one measurement twice.
     """
-    return _rows_for_date(eval_writer.ledger_path(state_root, date), date)
+    return day_shards.settled_day(
+        state_root / eval_writer.LEDGER_DIRNAME, date, ledger.OBSERVATION_KEY, EvalRow
+    )
 
 
 def read_health_rows(state_root: Path, date: str) -> list[dict[str, str]]:
-    """The committed item-health rows for one day, from that day's own file alone."""
-    return _rows_for_date(ledger.item_health_path(state_root, date), date)
+    """The committed item-health rows for one day, settled, from that day alone.
 
-
-def _rows_for_date(shard: Path, date: str) -> list[dict[str, str]]:
-    if not shard.is_file():
-        return []
-    with shard.open("r", encoding="utf-8", newline="") as handle:
-        return [row for row in csv.DictReader(handle) if row.get("date") == date]
+    Settled for the reason `read_score_rows` gives, and against the same day.
+    """
+    return day_shards.settled_day(
+        state_root / ledger.ITEM_HEALTH_DIRNAME, date, ledger.ITEM_HEALTH_KEY, ItemHealthRow
+    )
 
 
 # --- reducer arithmetic, matched to the frontend console ---------------------

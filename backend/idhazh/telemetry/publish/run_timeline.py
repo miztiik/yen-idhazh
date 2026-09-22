@@ -41,7 +41,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Final
 
-from idhazh import day_partition, ledger
+from idhazh import day_shards, ledger
+from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
 from idhazh.contracts.run_timeline import RunTimelineRow
 from idhazh.telemetry.publish import series
 
@@ -204,7 +205,9 @@ def publish(
     day, and a browser fetches one month. So a named month opens at most 31
     census files whatever the archive grows to (`CLAUDE.md` Guardrail #12).
     """
-    by_month = day_partition.days_by_month(state_root / ledger.ITEM_HEALTH_DIRNAME)
+    by_month = day_shards.shards_by_month(
+        state_root / ledger.ITEM_HEALTH_DIRNAME, days=UNBOUNDED_WINDOW
+    )
 
     def encode(month: str) -> bytes:
         return series.encode_csv(PUBLIC_COLUMNS, _month_rows(by_month.get(month, [])))

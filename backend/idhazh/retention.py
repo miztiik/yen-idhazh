@@ -900,7 +900,9 @@ def prune_telemetry(
     rows_folded = 0
     aggregate_rows = 0
 
-    by_month = day_partition.days_by_month(state_dir / ledger.ITEM_HEALTH_DIRNAME)
+    by_month = day_shards.shards_by_month(
+        state_dir / ledger.ITEM_HEALTH_DIRNAME, days=UNBOUNDED_WINDOW
+    )
     for month in sorted(by_month):
         if month >= keep_from:
             continue
@@ -910,7 +912,9 @@ def prune_telemetry(
         folded.append(month)
         # Named before anything is written, so the dry run prints the same list
         # the live run removes.
-        days_removed += [ledger.item_health_relpath(f"{month}-{day.stem}") for day in days]
+        days_removed += [
+            f"{ledger.STATE_DIRNAME}/{day.relative_to(state_dir).as_posix()}" for day in days
+        ]
         rows_folded += len(rows)
         aggregate_rows += len(summary)
         if dry_run:
@@ -1133,7 +1137,7 @@ def prune_feed_health(
     for ever.
 
     The ledger files by day and this boundary is a month, so
-    `day_partition.days_by_month` groups the day files and a month goes whole or
+    `day_shards.shards_by_month` groups the day's files and a month goes whole or
     not at all. That keeps the knob's unit the one it has always had while the
     files below it are days.
 
@@ -1152,20 +1156,21 @@ def prune_feed_health(
     kept: list[str] = []
     freed = 0
 
-    by_month = day_partition.days_by_month(state_dir / ledger.HEALTH_DIRNAME)
+    root = state_dir / ledger.HEALTH_DIRNAME
+    by_month = day_shards.shards_by_month(root, days=UNBOUNDED_WINDOW)
     for month in sorted(by_month):
         if month >= boundary:
             kept.append(month)
             continue
         deleted.append(month)
-        for day in by_month[month]:
+        for path in by_month[month]:
             # Named and weighed before anything is unlinked, so the dry run
             # prints the same list the live run removes.
-            days_removed.append(ledger.health_relpath(f"{month}-{day.stem}"))
-            freed += day.stat().st_size
+            days_removed.append(f"{ledger.STATE_DIRNAME}/{path.relative_to(state_dir).as_posix()}")
+            freed += path.stat().st_size
             if not dry_run:
-                day.unlink()
-                day_partition.drop_empty_day_dirs(day)
+                path.unlink()
+                day_partition.drop_empty_day_dirs(path)
 
     return FeedHealthPruneResult(
         deleted=tuple(deleted),
@@ -1226,20 +1231,22 @@ def prune_host_fingerprint(
     kept: list[str] = []
     freed = 0
 
-    by_month = day_partition.days_by_month(state_dir / ledger.HOST_FINGERPRINT_DIRNAME)
+    by_month = day_shards.shards_by_month(
+        state_dir / ledger.HOST_FINGERPRINT_DIRNAME, days=UNBOUNDED_WINDOW
+    )
     for month in sorted(by_month):
         if month >= boundary:
             kept.append(month)
             continue
         deleted.append(month)
-        for day in by_month[month]:
+        for path in by_month[month]:
             # Named and weighed before anything is unlinked, so the dry run
             # prints the same list the live run removes.
-            days_removed.append(ledger.host_fingerprint_relpath(f"{month}-{day.stem}"))
-            freed += day.stat().st_size
+            days_removed.append(f"{ledger.STATE_DIRNAME}/{path.relative_to(state_dir).as_posix()}")
+            freed += path.stat().st_size
             if not dry_run:
-                day.unlink()
-                day_partition.drop_empty_day_dirs(day)
+                path.unlink()
+                day_partition.drop_empty_day_dirs(path)
 
     return FeedHealthPruneResult(
         deleted=tuple(deleted),
@@ -1456,15 +1463,13 @@ def prune_day_validations(
     boundary is a floor, so a run handed a date in the past deletes less rather
     than deleting the live day.
 
-    The walk is `day_shards.shard_files`, because a day here is a directory of
-    writer-owned files: every run that validated one day left its own receipt in
-    it, and a walk that read one file would delete one and leave the rest.
+    The walk is `day_shards.shards_by_month`, because a day here is a directory
+    of writer-owned files: every run that validated one day left its own receipt
+    in it, and a walk that read one file would delete one and leave the rest.
     """
     boundary = oldest_month_kept(today, config.day_validation_keep_months)
     root = state_dir / ledger.DAY_VALIDATIONS_DIRNAME
-    by_month: dict[str, list[Path]] = {}
-    for path in day_shards.shard_files(root, days=UNBOUNDED_WINDOW):
-        by_month.setdefault(day_shards.date_of(path)[:7], []).append(path)
+    by_month = day_shards.shards_by_month(root, days=UNBOUNDED_WINDOW)
 
     deleted: list[str] = []
     days_removed: list[str] = []
@@ -1692,10 +1697,10 @@ def prune_scores(
     `main`, so that file does not come back.
 
     The ledger files by day and this boundary is a month, so
-    `day_partition.days_by_month` groups the day files and a month goes whole or
+    `day_shards.shards_by_month` groups the day's files and a month goes whole or
     not at all. That keeps the knob's unit the one it has always had while the
-    files below it are days, and it keeps the archive's own input at most 31
-    files.
+    files below it are days, and it keeps the archive's own input to the files
+    of at most 31 days.
 
     **The index beside those days goes in the same pass.** It is derived from
     them and answers only for them, so an index month that outlived its rows is
@@ -1726,7 +1731,9 @@ def prune_scores(
     source_bytes = 0
     archive_bytes = 0
 
-    by_month = day_partition.days_by_month(state_dir / score_writer.LEDGER_DIRNAME)
+    by_month = day_shards.shards_by_month(
+        state_dir / score_writer.LEDGER_DIRNAME, days=UNBOUNDED_WINDOW
+    )
     for month in sorted(by_month):
         if month >= keep_from:
             continue
@@ -1737,7 +1744,9 @@ def prune_scores(
         archived.append(month)
         # Named and weighed before anything is written, so the dry run prints the
         # same list the live run removes.
-        days_removed += [score_writer.ledger_relpath(f"{month}-{day.stem}") for day in days]
+        days_removed += [
+            f"{ledger.STATE_DIRNAME}/{day.relative_to(state_dir).as_posix()}" for day in days
+        ]
         rows_archived += built.source_rows
         observations += len(built.observation_digests)
         source_bytes += sum(day.stat().st_size for day in days)

@@ -363,84 +363,10 @@ def _append_index(path: Path, digests: Iterable[str]) -> int:
     return len(pending)
 
 
-def append(state_dir: Path, rows: Iterable[EvalRow]) -> int:
-    """Append the measurements this run made, writing each day file's header once.
-
-    Returns how many landed, so a caller can log the count rather than re-read
-    the files to find out. A row the ledger already holds is not one of them.
-
-    Rows are filed by their own `date`, so a run that publishes either side of
-    midnight writes two day files and neither is wrong. Within one call the
-    header check and the write happen per day.
-
-    A header that no longer matches the contract stops the run. A day file is
-    append-only and its header is written once, so a new column would otherwise
-    put more cells on a row than the header names, and every reader that maps by
-    position would silently read one column under another column's name. Failing
-    here is what makes adding a column a migration instead of a corruption.
-    """
-    pending = list(rows)
-    if not pending:
-        return 0
-
-    # Before the dedupe, not after it. A day file whose header no longer matches
-    # the contract is corrupt whatever this call had to say, and the dedupe would
-    # otherwise return 0 and never reach the check - which is how a stale header
-    # survives a run that appeared to do nothing wrong.
-    #
-    # The cover is the days this call writes, which is one or two, and not every
-    # committed day. It used to be every one, and that was affordable while the
-    # ledger filed by month and held two files; at day grain it would have been a
-    # read that costs one more open every day the pipeline runs, on the hot path
-    # of every append (Guardrail #12). The narrower cover is also the exact one:
-    # a file this call does not append to is a file this call cannot corrupt, and
-    # a back-dated run is covered because the rows' own dates are what name the
-    # files. What it gives up is noticing a stale header on a day nothing is
-    # writing to - which no run can create and which the first reader of that day
-    # refuses through its own contract.
-    for date in sorted({str(row.date)[:10] for row in pending}):
-        day = ledger_path(state_dir, date)
-        if day.exists():
-            require_matching_header(day, columns())
-
-    already = recorded_observations(state_dir)
-    fresh: dict[str, list[dict[str, object]]] = {}
-    minted: dict[str, list[str]] = {}
-    for row, digest in _unrecorded(pending, already):
-        payload = row.model_dump(mode="json")
-        date = str(payload["date"])[:10]
-        fresh.setdefault(date, []).append(payload)
-        minted.setdefault(date, []).append(digest)
-    if not fresh:
-        return 0
-
-    landed = 0
-    for date, payloads in sorted(fresh.items()):
-        path = ledger_path(state_dir, date)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        exists = path.exists()
-        with path.open("a", encoding="utf-8", newline="") as handle:
-            writer = csv.DictWriter(handle, fieldnames=columns(), lineterminator="\n")
-            if not exists:
-                writer.writeheader()
-            for payload in payloads:
-                writer.writerow({name: payload[name] for name in columns()})
-        # The rows first, then the index, and the order is the whole argument. A
-        # crash between the two leaves a measurement recorded and not indexed,
-        # which the next run appends a second time and the compaction settles
-        # against `OBSERVATION_KEY`. The other order leaves a digest whose row
-        # was never written - a measurement nothing will ever take again, and
-        # nothing on disk that says it is missing.
-        _append_index(index_path(state_dir, date), minted[date])
-        landed += len(payloads)
-    return landed
-
-
 def _unrecorded(rows: Sequence[EvalRow], already: set[str]) -> list[tuple[EvalRow, str]]:
     """The measurements the ledger does not already hold, each with its digest.
 
-    One filter for both writers, so the head and the segment admit exactly the
-    same rows. `already` is added to as it goes, because a run can hand the same
+    `already` is added to as it goes, because a run can hand the same
     measurement in twice and the second one is not new either.
     """
     fresh: list[tuple[EvalRow, str]] = []
@@ -471,17 +397,17 @@ def append_segment(
     costs a merge rather than the rows, and a re-run's second attempt corrects
     its first try instead of colliding with it.
 
-    **The dedupe still reads the heads, and what it cannot see is settled later.**
-    A measurement already in a committed day is skipped here exactly as it is on
-    the head path. A measurement this run's other writer put in a segment
-    minutes ago is invisible - the segment is not a head and nothing reads one
-    but the compaction - so both writers mint it, and the fold settles the pair
-    against `OBSERVATION_KEY`. That is the same answer by a later route, which is
-    what makes it safe to run a second time.
+    **The dedupe reads the committed days, and what it cannot see is settled
+    later.** A measurement already in a committed day is skipped here. A
+    measurement this run's other writer left in the day directory minutes ago is
+    invisible - the dedupe reads the index and this run's index files are not in
+    it yet - so both writers mint it, and the fold settles the pair against
+    `OBSERVATION_KEY`. That is the same answer by a later route, which is what
+    makes it safe to run a second time.
 
-    **Nothing here checks a head's header.** The head path fails early on a
-    header the contract no longer names, because it is about to append under it.
-    This writes no head; the compaction reads one, and it re-files a stale header
+    **Nothing here checks a header.** Each file is this writer's alone and is
+    written whole from the contract's own columns, so there is no earlier header
+    to agree with. The fold reads the day, and it re-files a stale header
     through `ledger.settle_header` before it merges a row into it.
 
     Returns how many measurements went into the segment, so a caller can log the
@@ -503,10 +429,11 @@ def append_segment(
         job=job,
         shard=shard,
     )
-    # The rows first, then the index, for the reason `append` gives: a crash
-    # between the two leaves a measurement recorded and not indexed, which the
-    # next run mints again and the fold settles. The other order leaves a digest
-    # whose row was never written.
+    # The rows first, then the index, and the order is the whole argument. A
+    # crash between the two leaves a measurement recorded and not indexed, which
+    # the next run mints again and the fold settles. The other order leaves a
+    # digest whose row was never written - a measurement nothing will ever take
+    # again, and nothing on disk that says it is missing.
     #
     # `date=` because an index row is a stamp and a digest and carries no date
     # cell to be filed by. The day is the run's own, which is the day the eval

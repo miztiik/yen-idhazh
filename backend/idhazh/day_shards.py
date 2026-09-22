@@ -182,6 +182,25 @@ def shard_files(root: Path, *, days: int) -> Iterator[Path]:
         yield from shards
 
 
+def shards_by_month(root: Path, *, days: int) -> dict[str, list[Path]]:
+    """Every shard under `root`, grouped by its month, oldest month first.
+
+    The peer of `day_partition.days_by_month` for a day tree of writer-owned
+    files, and it exists for that helper's reason: a knob counted in months over
+    a store filed by day is a bridge four prunes and one repair all need, and a
+    bridge written once cannot be written two ways.
+
+    A month here holds every writer's file for every day in it, so a caller that
+    deletes a month deletes all of them - which is what makes a month go whole.
+
+    `days` has no default for the reason `shard_files` gives.
+    """
+    months: dict[str, list[Path]] = {}
+    for shard in shard_files(root, days=days):
+        months.setdefault(date_of(shard)[:7], []).append(shard)
+    return months
+
+
 def _is_day_file(shard: Path) -> bool:
     """Whether a shard is a `<DD>.csv` day file rather than a writer's file.
 

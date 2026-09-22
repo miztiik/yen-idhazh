@@ -10,8 +10,9 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from idhazh import (
-    day_partition,
+    day_shards,
 )
+from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
 from idhazh.evals import writer
 from idhazh.stages import common
 from idhazh.stages.common import LOG
@@ -49,7 +50,12 @@ def stage_rebuild_score_index(
     `validate-days` and `site-weight` already hold.
     """
     state = state_dir if state_dir is not None else common.STATE_ROOT
-    by_month = day_partition.days_by_month(state / writer.LEDGER_DIRNAME)
+    # Unbounded because the operator names a month and the answer has to be
+    # whether that month is committed - a cover would make a real month read as
+    # a typo (Guardrail #12).
+    by_month = day_shards.shards_by_month(
+        state / writer.LEDGER_DIRNAME, days=UNBOUNDED_WINDOW
+    )
     named = sorted(by_month) if months is None else sorted({month[:7] for month in months})
     if not named:
         LOG.error(
@@ -62,7 +68,9 @@ def stage_rebuild_score_index(
         LOG.error("rebuild-score-index was asked for months that are not committed: %s", absent)
         return 1
 
-    days = [day_partition.date_of(day) for month in named for day in by_month[month]]
+    # A day is a directory of writer-owned files, so the same date arrives once
+    # per writer and `rebuild_index` is given each day once.
+    days = sorted({day_shards.date_of(shard) for month in named for shard in by_month[month]})
     found = writer.rebuild_index(state, days)
     for date, drift in sorted(found.items()):
         LOG.info(

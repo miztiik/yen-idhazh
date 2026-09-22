@@ -101,6 +101,14 @@ CANARY_DIR = Path("tests/fixtures/canaries")
 DATE = "2026-08-20"
 YESTERDAY = "2026-08-19"
 
+#: Who the canary's score rows are written by. One process builds the whole
+#: fixture, so it is one run, one attempt and one shard - and `assemble` is the
+#: job that measures a whole published day in production.
+SCORE_RUN_ID: Final = f"{DATE}-1"
+SCORE_ATTEMPT: Final = 1
+SCORE_JOB: Final = ServerJob.ASSEMBLE
+SCORE_SHARD: Final = 0
+
 #: Quiet days before the attack day. The console's run strip is a time axis, and
 #: a time axis with one column cannot be read, scrolled or mislabelled - so it
 #: cannot be tested either. Nineteen earlier days give it a week cadence, a
@@ -1481,13 +1489,24 @@ def score_rows(items: Sequence[DigestItem], evaluation: EvaluationConfig) -> lis
 
 
 def append_scores(state: Path, items: Sequence[DigestItem], evaluation: EvaluationConfig) -> int:
-    """Append the day's rows through the writer the pipeline appends with.
+    """Write the day's rows through the writer the pipeline writes with.
 
     Not a CSV written by hand: the contract validates every field, the writer
-    owns the column order and the header check, and a column added to `EvalRow`
-    lands here without this file being told about it.
+    owns the column order and the index beside the rows, and a column added to
+    `EvalRow` lands here without this file being told about it.
+
+    A day is a directory of writer-owned files, so this names its own file the
+    way `health` does - one run, one attempt, one shard, because one process
+    builds the whole fixture.
     """
-    return writer.append(state, score_rows(items, evaluation))
+    return writer.append_segment(
+        state,
+        score_rows(items, evaluation),
+        run_id=SCORE_RUN_ID,
+        attempt=SCORE_ATTEMPT,
+        job=SCORE_JOB,
+        shard=SCORE_SHARD,
+    )
 
 
 def main() -> int:
@@ -1574,7 +1593,15 @@ def main() -> int:
         f"wrote {(args.out.parent / source_health.PUBLIC_FILENAME).as_posix()}: "
         f"{census} sources"
     )
-    print(f"wrote {writer.ledger_path(args.state, DATE).as_posix()}: {scored} scored items")
+    score_file = ledger.day_shard_relpath(
+        ledger.SegmentLedger.SCORES,
+        date=DATE,
+        run_id=SCORE_RUN_ID,
+        attempt=SCORE_ATTEMPT,
+        job=SCORE_JOB,
+        shard=SCORE_SHARD,
+    )
+    print(f"wrote {score_file}: {scored} scored items")
     print(f"wrote {metrics_path.as_posix()}: 1 day-metrics record")
     print(
         f"wrote {index_root.as_posix()}: {len(indexed)} month(s), "

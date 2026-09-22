@@ -28,8 +28,9 @@ from datetime import date
 from pathlib import Path
 from typing import Final
 
-from idhazh import day_partition, ledger
+from idhazh import day_shards, ledger
 from idhazh.contracts.base import WORK_JOB
+from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
 from idhazh.contracts.machine_shard import MachineShardRow
 from idhazh.telemetry.publish import series
 
@@ -84,16 +85,19 @@ def _highest(carried: int | None, value: int | None) -> int | None:
 
 
 def month_days(root: Path, *, oldest_month: str) -> dict[str, list[Path]]:
-    """Each month at or above the boundary, to the day files it holds.
+    """Each month at or above the boundary, to the files its days hold.
 
     One directory listing and no file opened, so this costs the day tree's shape
     rather than its contents. A month below the retention boundary is dropped
     here, because reading one would write a file the prune deletes on the same
     pass (Guardrail #12).
+
+    A day is a directory of writer-owned files, so a month holds one file per
+    writer per day and every one of them is read.
     """
     return {
         month: paths
-        for month, paths in day_partition.days_by_month(root).items()
+        for month, paths in day_shards.shards_by_month(root, days=UNBOUNDED_WINDOW).items()
         if month >= oldest_month
     }
 

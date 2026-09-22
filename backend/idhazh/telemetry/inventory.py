@@ -22,6 +22,7 @@ from pathlib import Path
 
 from idhazh import day_shards, ledger
 from idhazh.assemble import month_of
+from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.span_rollup import SpanRollupRow
 
 
@@ -88,11 +89,22 @@ def files(state_root: Path, *, date: str) -> list[str]:
 def outcomes(state_root: Path, *, date: str) -> list[str]:
     """How this date's items ended, counted by stage, outcome and failure code.
 
-    One day's item-health shard and nothing else. A day the ledger never
-    recorded has no file, which is not a fault: a run that planned nothing that
-    day wrote nothing that day.
+    One day of the census, settled, and nothing else. Every work shard of a run
+    leaves its own file in the day directory, so the count is over all of them
+    and a re-run's second attempt does not add its items a second time.
+
+    A day the ledger never recorded has no file, which is not a fault: a run that
+    planned nothing that day wrote nothing that day.
     """
-    rows = ledger.load_item_health_shard(ledger.item_health_path(state_root, date))
+    rows = [
+        ItemHealthRow.from_csv_row(cells)
+        for cells in day_shards.settled_day(
+            state_root / ledger.ITEM_HEALTH_DIRNAME,
+            date,
+            ledger.ITEM_HEALTH_KEY,
+            ItemHealthRow,
+        )
+    ]
     if not rows:
         return [f"{date}: the item-health ledger recorded no item"]
 
