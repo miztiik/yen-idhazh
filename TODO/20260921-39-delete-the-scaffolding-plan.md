@@ -108,7 +108,7 @@ Twenty rows. Read this before the tables.
 | Delete the llama-specific slot cells | There are **three**, not two, and they have a named instrument at `backend/utilities/slot_probe.py`, a reader at `item_health_provenance.py:236-238` and three doc pages. Measured: 1,668 of 14,346 committed rows carry them - the first call of a two-call stage, sparse by design |
 | **The pipeline stops naming a server** | **Still true, and the only part that is.** The port is already `LLAMA_PORT`; the host is spelled `127.0.0.1` in three module constants with no parameter, config field or environment variable reaching it |
 
-That last line is [`20260922-47-the-pipeline-stops-naming-a-server-plan.md`](20260922-47-the-pipeline-stops-naming-a-server-plan.md) - **two rows, one pull request, Level 2**, not the Level 5 this page estimated before the measurement. It shares no file with any other live plan.
+That last line is [`20260922-47-the-pipeline-stops-naming-a-server-plan.md`](20260922-47-the-pipeline-stops-naming-a-server-plan.md) - **six rows, two pull requests, Level 2**, not the Level 5 this page estimated before the measurement. It shares one file with plan 44, `backend/idhazh/llm/server.py`, and no lines within it.
 
 ### Where the work is now
 
@@ -118,7 +118,7 @@ That last line is [`20260922-47-the-pipeline-stops-naming-a-server-plan.md`](202
 | [`20260921-43-the-ledgers-and-the-generated-layer-plan.md`](20260921-43-the-ledgers-and-the-generated-layer-plan.md) | 1, 7, 8, 12, 15, 17, and 19's residue | row 4 DONE, six PENDING |
 | [`20260922-44-the-model-file-is-the-fetch-interface-plan.md`](20260922-44-the-model-file-is-the-fetch-interface-plan.md) | 13 | row 4 DONE, four PENDING |
 | Plan 45, the readout over every console route | 19's residue | all 5 rows LANDED in #1045, #1046 and #1049; distilled to [`docs/architecture/publishing/console-charts.md`](../docs/architecture/publishing/console-charts.md) and deleted |
-| [`20260922-47-the-pipeline-stops-naming-a-server-plan.md`](20260922-47-the-pipeline-stops-naming-a-server-plan.md) | 21's remainder | both rows PENDING |
+| [`20260922-47-the-pipeline-stops-naming-a-server-plan.md`](20260922-47-the-pipeline-stops-naming-a-server-plan.md) | 21's remainder | all 6 rows PENDING |
 
 Lane A ran from `20260921-41-lane-a-model-file-plan.md`, delivered in PRs #1036 and #1039, and was deleted on close. Lane B ran from `20260921-42-lane-b-workflows-plan.md`, delivered in PRs #1034, #1035 and #1037, and was deleted on close. Both were renumbered while they ran, so their row numbers are not quoted here - the pull request is what a reader can still open.
 
