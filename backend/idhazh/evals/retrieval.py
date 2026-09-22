@@ -49,6 +49,8 @@ from idhazh.embed import DIMENSIONS, DTYPE, EMBEDDER_ID, Embedder, dequantise
 DIGEST_GLOB: Final = "frontend/public/digest/*/*/*/digest.json"
 #: Where the pipeline writes the month shards a reader's tab actually searches.
 INDEX_RELDIR: Final = "frontend/public/assist/index"
+#: One month shard, `YYYY-MM.json`, beside its `.bin` of vectors.
+INDEX_SHARD_GLOB: Final = "[0-9][0-9][0-9][0-9]-[0-9][0-9].json"
 #: The committed query set, relative to the repository root.
 QUERY_SET_RELPATH: Final = "tests/fixtures/search/retrieval-queries.json"
 
@@ -267,8 +269,21 @@ class RetrievalReport:
         )
 
 
-def load_corpus(root: Path) -> Corpus:
-    """Every committed day, decoded the way the browser decodes it.
+def _day_of(path: Path) -> str:
+    """The day a `digest.json` belongs to, read off its own path. Opens nothing."""
+    year, month, day = path.parent.parts[-3:]
+    return f"{year}-{month}-{day}"
+
+
+def load_corpus(root: Path, through: str | None = None) -> Corpus:
+    """Every committed day through `through`, decoded the way the browser decodes it.
+
+    Cover: `through`, a `YYYY-MM-DD` day matched against the day directory in
+    the path, so a later day is never opened. Narrowing the rows afterwards
+    answers the same question and costs the whole archive to do it, which is the
+    cost Guardrail #12 refuses. `None` reads every committed day, which is what
+    an operator asking about the whole archive needs. Either way the day
+    directories are listed, and that listing is the residue.
 
     A day whose embedding block names another encoder, another width or another
     dtype contributes no vectors. That is `searchable()` in `search.ts`: a
@@ -277,6 +292,8 @@ def load_corpus(root: Path) -> Corpus:
     """
     items: list[CorpusItem] = []
     for path in sorted(root.glob(DIGEST_GLOB)):
+        if through is not None and _day_of(path) > through:
+            continue
         payload = json.loads(path.read_text(encoding="utf-8"))
         block = payload.get("embeddings") or {}
         usable = (
@@ -318,7 +335,24 @@ def _days_in(shards: list[Path]) -> set[str]:
     return days
 
 
-def load_index_corpus(root: Path, months: int | None = None, min_days: int = 0) -> Corpus:
+def index_months(root: Path) -> tuple[str, ...]:
+    """The month stems the archive has committed, oldest first.
+
+    One directory listing. No shard is opened, so a question about which months
+    exist costs the same on the thousandth month as on the second.
+    """
+    directory = root / INDEX_RELDIR
+    if not directory.is_dir():
+        return ()
+    return tuple(sorted(path.stem for path in directory.glob(INDEX_SHARD_GLOB)))
+
+
+def load_index_corpus(
+    root: Path,
+    months: int | None = None,
+    min_days: int = 0,
+    through: str | None = None,
+) -> Corpus:
     """The same corpus, read the way a reader's tab now reads it.
 
     `load_corpus` above reads the day payloads. The published archive stopped
@@ -335,6 +369,15 @@ def load_index_corpus(root: Path, months: int | None = None, min_days: int = 0) 
     became a knob. The rule is `readScope` in `frontend/src/lib/assist/search.ts`
     and this is the copy that measures it, so the two have to move together.
 
+    **`through` and `months` are two covers for two questions, and a caller
+    takes the one that fits.** `months` is the trailing window a reader gets
+    today; it counts newest first, so it can never reach a pin that sits in the
+    oldest month. `through` is that pin: the shard stem is compared against the
+    pin's own month before the file is opened, and the rows are narrowed to the
+    day afterwards because a month shard is coarser than a day. That second step
+    is cheap precisely because the first one already refused the later shards.
+    They compose, and `None` for both reads everything.
+
     A shard whose header names another encoder, another width or another dtype
     contributes no vectors, exactly as a day payload does above. The header's
     own `scale` decodes the bytes, rather than a constant here, because that is
@@ -345,7 +388,9 @@ def load_index_corpus(root: Path, months: int | None = None, min_days: int = 0) 
     if not directory.is_dir():
         return Corpus(items=())
 
-    shards = sorted(directory.glob("[0-9][0-9][0-9][0-9]-[0-9][0-9].json"), reverse=True)
+    shards = sorted(directory.glob(INDEX_SHARD_GLOB), reverse=True)
+    if through is not None:
+        shards = [path for path in shards if path.stem <= through[:7]]
     if months is not None:
         wanted = max(months, 1)
         taken = shards[:wanted]
@@ -378,7 +423,7 @@ def load_index_corpus(root: Path, months: int | None = None, min_days: int = 0) 
                     vector=vector,
                 )
             )
-    return Corpus(items=tuple(items))
+    return Corpus(items=tuple(items)).through(through)
 
 
 def _scaled(raw: bytes, scale: float) -> list[float]:
