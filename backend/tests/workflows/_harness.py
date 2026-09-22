@@ -1001,6 +1001,34 @@ def _run_bodies(workflow: dict[str, object]) -> list[str]:
         if isinstance(script := step.get("run"), str)
     ]
 
+
+def _stages_a_state_path(workflow: dict[str, object]) -> bool:
+    """Whether any step of this workflow hands git a path under `state/`.
+
+    Read off the file rather than listed here, so a workflow that starts
+    committing a ledger is covered the day it lands. Two spellings count: the
+    shared commit script, which stages every path it is handed, and a bare
+    `git add` written inline.
+
+    What it cannot see is a path built at run time. `llm-council.yml` stages
+    what its registered tenants named, so the paths are in a shell variable and
+    no reader of the file can resolve them - that workflow is covered by the
+    tests that read it against its tenants instead.
+
+    A folded `run: >-` body is one line by the time PyYAML has read it and a
+    `run: |` body is many, so the search is per line with the continuations
+    folded first.
+    """
+    roots = (ledger.STATE_DIRNAME, f"{ledger.STATE_DIRNAME}/")
+    for body in _run_bodies(workflow):
+        for line in body.replace("\\\n", " ").splitlines():
+            if "commit-and-push.sh" not in line and "git add" not in line:
+                continue
+            if any(word == roots[0] or word.startswith(roots[1]) for word in line.split()):
+                return True
+    return False
+
+
 CONFIG_FILE_NAME: Final = "idhazh.json"
 
 

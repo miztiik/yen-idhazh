@@ -303,6 +303,12 @@ for attempt in 1 2 3; do
     break
   fi
 done
+# The attempt this run really spent, printed beside the caller's own sentence
+# rather than folded into it. A conflicting rebase leaves the loop on the first
+# attempt, so every recorded failure had spent one while the message said three,
+# and that sentence sends the next reader to the retry count - which cannot help
+# them.
 report_rebased || echo "could not say whether the push rebased" >&2
 echo "$PUSH_FAILED_MESSAGE" >&2
+echo "the push was given up on attempt $attempt" >&2
 exit 1

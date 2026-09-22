@@ -362,6 +362,10 @@ def test_a_rebase_it_cannot_finish_still_ends_the_script_cleanly(tmp_path: Path)
     assert result.stdout.count("push rejected, rebasing (attempt ") == 1
     assert "the rebase did not apply cleanly" in result.stderr
     assert settings["PUSH_FAILED_MESSAGE"] in result.stderr
+    # The attempt it really spent. A conflicting rebase leaves the loop on the
+    # first one, so a message naming the count it was allowed sends the reader
+    # to the retry budget, which is not what stopped it.
+    assert "the push was given up on attempt 1" in result.stderr
     assert _git(origin, env, "log", "-1", "--format=%s").strip() == "retire the ledger"
     assert not _mid_rebase(runner)
 
