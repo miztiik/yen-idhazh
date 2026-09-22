@@ -38,8 +38,8 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | 3 | The hosted span sink goes | - | A | PENDING | - | - | - |
 | 4 | The retrieval loaders take the pin | - | A | PENDING | - | - | - |
 | 5 | The human-label path goes | - | A | PENDING | - | - | - |
-| 6 | The pipeline test commits what it produced | 1, 3, **plan 46** | B | PENDING | - | - | - |
-| 7 | The generated contract layer goes, and the contract catches up | 5, 6 | C | PENDING | - | - | - |
+| 6 | The pipeline test commits what it produced | 1, 3, **plan 46 rows 8 and 11** | B | PENDING | - | - | - |
+| 7 | The generated contract layer goes, and the contract catches up | 5, 6, **all of plan 46** | C | PENDING | - | - | - |
 | 8 | Nine console specs visit every route the site serves | - | - | DONE | p43r4 | #1040 | R4 |
 
 **Row 8 shipped in #1040** and its residue - two specs whose route lists still omitted `/console/judgement/` and `/console/voices/` - was closed by plan 45 in #1045, #1046 and #1049. The rule and the two scans that hold it are in [`docs/architecture/publishing/console-charts.md`](../docs/architecture/publishing/console-charts.md). Nothing is left to do; the line stays so the next reader is not sent looking.
@@ -59,7 +59,21 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 
 **Wave B is P5 alone.** Row 6 shares `cli.py` and `config/idhazh.json` with row 1 and `stages/work.py` with row 3, so it waits for P1 and P2 rather than resolving them. It also waits on **plan 46**, which owns the rule its new committed path must follow, and shares `ledger.py`, `stages/work.py`, `cli.py`, `config/idhazh.json` and the push script with it.
 
-**Nothing else here depends on another plan.** Plan 44 and plan 47 collide with this one on `schemas/`, `validate.yml`, `pyproject.toml`, `cli.py`, `CLAUDE.md` and `determinism.md`, and a collision is a rebase, not a dependency. One ordering hazard is worth naming: **P6 deletes `schemas/` and `frontend/src/contracts/` whole**, while plans 44 and 46 both add files to them. Whichever lands second re-reads C9's census rather than assuming the name list is still six.
+### Section 1c - What waits for plan 46, and what does not
+
+Plan 46 is in flight. Six of its sixteen rows are DONE and nine are PENDING, including three at Level 5. **Five of the seven rows here do not wait**, and blocking them on a sixteen-row plan would be serialisation nobody asked for.
+
+| Row | Waits? | Measured reason |
+| --- | --- | --- |
+| 1 | No | Shares `validate.yml`, `cli.py` and `config/idhazh.json`, in different hunks: plan 46 edits commit steps and state paths, this edits an input block and an argument parser. Three trivial rebases. |
+| 2 | No | Zero intersection. Plan 46 names six utilities and none is one of these three. |
+| 3 | No, and land it early | Collides on `stages/work.py` and on the regenerated `app-config` pair. A regenerated conflict is resolved by regenerating. Landing early shrinks plan 46's rebase rather than growing it. |
+| 4 | No | Zero intersection. |
+| 5 | No | Zero intersection. Deleting one file from `schemas/` does not conflict with a plan that adds a different one. |
+| **6** | **Yes - plan 46 rows 8 and 11** | Row 11 is *the day directory is the ledger*, PENDING and Level 5. Minting a ledger first mints it in the shape row 11 must then migrate. Row 8 makes an unowned committed path stop the push, so a path minted before the ownership register exists is a path nobody classified. |
+| **7** | **Yes - all of plan 46** | It deletes `schemas/` and `frontend/src/contracts/` whole while nine PENDING rows still write into both, including a new `schemas/digest-run-fragment.schema.json`. Both plans also edit `frontend/src/lib/server/host-fingerprint.ts`. And row 7 amends Guardrail #3 to say contracts are no longer generated, while plan 46's unlanded rows mint contracts under the rule that says they are. |
+
+**Nothing else here depends on another plan.** Plan 44 and plan 47 collide with this one on `schemas/`, `validate.yml`, `pyproject.toml`, `cli.py`, `CLAUDE.md` and `determinism.md`, and a collision is a rebase, not a dependency. Whichever of P6, plan 44 and plan 46 lands second re-reads C9's census rather than assuming the name list is still six.
 
 **Wave C is P6 alone, and it is the long pole**: about 32,800 deleted lines, the only browser smoke in the plan, nine `CLAUDE.md` clauses, four new tests, a 31-field hand copy, and a rebase over every predecessor. It deletes the generated twin of every contract P4 and P5 move, so it runs last whatever else is ready.
 
@@ -141,9 +155,11 @@ A new `Contract` in `backend/idhazh/contracts/pipeline_test_summary.py`. `__sche
 
 **The write site is `stage_work`**, in `backend/idhazh/stages/work.py`, inside the per-item loop that already writes `items_dir / f"{item.item_id}.article.json"`. It is the only place in the pipeline that holds the article, the summary and the reply object at once. `stage_assemble` cannot be the site: it has no reply, so `finish_reason` is unreachable from it. `stage_record` cannot be the site either - five of the fourteen columns are not in scope there.
 
-**`stage_work` is sharded, so the file is partitioned by writer.** It takes a `shard: int` and already writes its spans to a per-shard path. One day file appended by up to nine shards is the defect plan 46 exists to delete - a head written by more than one process, which no merge driver, sort order or refresh timing repairs. **This row writes one file per shard and folds at read**, which is plan 46's chosen strategy: partition by writer identity in the filename, settle at read time, fold a closed day once. Adopt whatever partition spelling plan 46 lands; do not invent a second one.
+**`stage_work` is sharded, so the file is partitioned by writer.** It takes a `shard: int` and already writes its spans to a per-shard path. One day file appended by up to nine shards is the defect plan 46 exists to delete - a head written by more than one process, which no merge driver, sort order or refresh timing repairs.
 
-**This is why row 6 depends on plan 46.** It is not waiting for an artifact - it is waiting for the rule, so that the day this plan mints a new committed path it mints it in the shape the other plan is converging everything else on.
+**Plan 46 already owns this rule, so do not invent a second spelling of it.** That plan declares three classes for every committed path - `written-once`, `derived` and `union-safe` - and the filename grammar `<run_id>-<attempt>-<job>-<shard>` for the first. This collection is **written-once**: each shard names its own file, nothing rewrites it, and retention is the only other process that touches it. Take the grammar, the class and the ownership entry from plan 46 as they land; this row adds a member to a register it does not design.
+
+**This is why row 6 waits on plan 46 rows 8 and 11.** Row 11 makes the day directory the ledger, so minting one before it lands mints the shape row 11 then has to migrate - a Level 5 data migration made larger by this row. Row 8 makes an unowned committed path stop the push, so a path minted before the ownership register exists is a path nobody classified, and the failure surfaces as a blocked push in an unrelated job.
 
 **Guard.** The row is appended only when `settings.app.run.case_id` is set. A production run leaves it unset and writes nothing, so the pipeline's own output is unchanged.
 
@@ -410,7 +426,7 @@ The same pass corrects the four documentation pages that describe the generator 
 
 ## Section 8 - Row 6: the pipeline test commits what it produced
 
-**PAUSE for decision D2 before the pull request opens.** Depends on rows 1 and 3, and on plan 46's one-writer rule (C2).
+**PAUSE for decision D2 before the pull request opens.** Depends on rows 1 and 3, and on plan 46 rows 8 and 11 (section 1c).
 
 **Scope.** Implement C2, C3, C4, C5 and C6 together: the fourteen-column contract, the fold codec, the case identity, the marker-free prune, and the two-job commit.
 
@@ -446,7 +462,7 @@ The same pass corrects the four documentation pages that describe the generator 
 
 ## Section 9 - Row 7: the generated contract layer goes, and the contract catches up
 
-**PAUSE for decision D3 before the pull request opens.** Depends on rows 5 and 6. Runs last.
+**PAUSE for decision D3 before the pull request opens.** Depends on rows 5 and 6, and on **all of plan 46** (section 1c). Runs last.
 
 **Scope.** Implement C9, C10, C11, C12 and C13 in one pull request: inline the six names, add the four tests, delete `schemas/` (65 files) and `frontend/src/contracts/` (65 files), delete the generator, re-home `CONTRACTS`, sweep the prose, and amend the nine engineering-contract clauses.
 
@@ -454,10 +470,11 @@ The same pass corrects the four documentation pages that describe the generator 
 
 **Order, and it is not negotiable.**
 
-1. Copy the six names out of the generated files into hand-written TypeScript.
-2. Add the four tests from C10 and watch them pass against the generated layer still in place.
-3. Only then delete. A test that has never passed against the old layer proves nothing about the new one - this is ESCALATE trigger 4.
-4. Amend `CLAUDE.md` and `AGENTS.md` in the same commit - ESCALATE trigger 5.
+1. **Confirm plan 46 has landed.** It mints contracts under the rule this row deletes, and nine of its rows were still writing into `schemas/` and `frontend/src/contracts/` when this was written. Starting before it finishes means deleting a directory another plan is still filling.
+2. Copy the six names out of the generated files into hand-written TypeScript.
+3. Add the four tests from C10 and watch them pass against the generated layer still in place.
+4. Only then delete. A test that has never passed against the old layer proves nothing about the new one - this is ESCALATE trigger 4.
+5. Amend `CLAUDE.md` and `AGENTS.md` in the same commit - ESCALATE trigger 5.
 
 **Files.** P6's row in section 1a.
 
