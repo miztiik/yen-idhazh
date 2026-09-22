@@ -20,6 +20,9 @@ def write_case(case: object, *, source: Path, root: Path) -> Path:
     `summarize.asks_for_a_visual_plan` false is what sizes the window for the
     call really sent. Apart they disagree, and the disagreement refuses articles
     that fit.
+
+    The case also names its own trial root, so three cases write three trees and
+    none of them shares a path with another.
     """
     if root.exists():
         shutil.rmtree(root)
@@ -37,6 +40,9 @@ def write_case(case: object, *, source: Path, root: Path) -> Path:
         visuals = dict(app.get("visuals") or {})
         visuals["enabled_kinds"] = []
         app["visuals"] = visuals
+    run = dict(app.get("run") or {})
+    run["trial_state_dirname"] = case.trial_state_dirname  # type: ignore[attr-defined]
+    app["run"] = run
     app_path.write_text(json.dumps(app, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
     models_path = root / app["models_file"]

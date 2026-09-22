@@ -9,17 +9,16 @@ from __future__ import annotations
 from datetime import date as date_type
 from pathlib import Path
 
-from idhazh import ledger, retention
+from idhazh import assemble, ledger, retention, telemetry
 from idhazh.contracts.knobs.collect import CollectConfig
 from idhazh.contracts.knobs.extract import ExtractConfig
 from idhazh.contracts.knobs.observability import ObservabilityConfig
 from idhazh.contracts.knobs.placement import LensWeightsConfig
 from idhazh.contracts.knobs.retention import RetentionConfig
-from idhazh.contracts.knobs.run import RunConfig
 from idhazh.evals import archive as score_archive
 from idhazh.stages import common
 from idhazh.stages.common import LOG
-from idhazh.telemetry.publish import public_telemetry
+from idhazh.telemetry.publish import day_metrics, public_telemetry
 
 
 def stage_prune_state(
@@ -31,7 +30,6 @@ def stage_prune_state(
     today: date_type,
     extract_config: ExtractConfig | None = None,
     lens_weights: LensWeightsConfig | None = None,
-    run: RunConfig | None = None,
     state_dir: Path | None = None,
     public_root: Path | None = None,
     digest_root: Path | None = None,
@@ -109,7 +107,7 @@ def stage_prune_state(
     removed += _prune_feed_health_shards(state, observability, today, dry_run=dry_run)
     removed += _prune_host_fingerprint_shards(state, observability, today, dry_run=dry_run)
     removed += _prune_score_shards(state, observability, today, dry_run=dry_run)
-    removed += _prune_trial_shards(state, run, retention_config, today, dry_run=dry_run)
+    removed += _prune_trial_shards(state, retention_config, today, dry_run=dry_run)
     removed += _prune_digest_fragments(state, retention_config, today, dry_run=dry_run)
     result = retention.prune_telemetry(
         state, observability, today, public_root=public, dry_run=dry_run
@@ -398,47 +396,77 @@ def _prune_digest_fragments(
     return list(fragments.deleted)
 
 
+def _trial_roots(state: Path) -> list[str]:
+    """Every child of `state/` that is a trial run's tree rather than a store.
+
+    Read off the tree, not off `run.trial_state_dirname`. That knob is null in
+    production and cannot be set there: `idhazh.cli` redirects
+    `common.STATE_ROOT` into `state/<trial_state_dirname>/` on every stage but
+    this one, so a production value would move the daily pipeline's own ledgers
+    into the trial root. Nothing had ever pruned `state/pipeline-tests/`
+    because of it.
+
+    A store is created through its directory constant, so the names subtracted
+    here gain a member in the same commit that adds a store and discovery
+    cannot fall out of step. The four below are the stores `ledger` does not
+    own; each is read from its owning module rather than retyped, and they are
+    imported here rather than into `ledger` because two of those modules import
+    `ledger` themselves.
+    """
+    if not state.is_dir():
+        return []
+    stores = ledger.STORE_DIRNAMES | {
+        telemetry.TRACES_DIRNAME,
+        day_metrics.DIRNAME,
+        assemble.FRAGMENTS_DIRNAME,
+        score_archive.ARCHIVE_DIRNAME,
+    }
+    return sorted(
+        child.name for child in state.iterdir() if child.is_dir() and child.name not in stores
+    )
+
+
 def _prune_trial_shards(
     state: Path,
-    run: RunConfig | None,
     retention_config: RetentionConfig,
     today: date_type,
     *,
     dry_run: bool,
 ) -> list[str]:
-    """Empty a trial run's ledgers past their window, and say what went.
+    """Empty every trial run's ledgers past their window, and say what went.
 
-    It cleans the directory `run.trial_state_dirname` names and no other. A
-    trial renamed since its last run leaves its old tree behind for a person to
-    remove - the cost of not keeping a list of every name anybody has ever used,
-    which would rot the first time somebody deleted a directory by hand.
+    One call per trial root, and the root itself goes once the pass has emptied
+    it - without that the child count under `state/` only ever rises
+    (Guardrail #12). A trial renamed since its last run is cleaned like any
+    other, because nothing here is matched against a name anybody remembered.
     """
-    if run is None or not run.trial_state_dirname:
-        return []
-    trial = retention.prune_trial_state(
-        state,
-        dirname=run.trial_state_dirname,
-        today=today,
-        within_days=retention_config.trial_state_days,
-        dry_run=dry_run,
-    )
-    if not trial.changed:
-        LOG.info(
-            "trial prune: every day file under state/%s is inside the %s-day window, "
-            "so none was deleted",
-            run.trial_state_dirname,
-            retention_config.trial_state_days,
+    removed: list[str] = []
+    for dirname in _trial_roots(state):
+        trial = retention.prune_trial_state(
+            state,
+            dirname=dirname,
+            today=today,
+            within_days=retention_config.trial_state_days,
+            dry_run=dry_run,
         )
-        return []
-    LOG.info(
-        "trial prune%s: deleted %s files under state/%s, freed %s bytes, kept %s",
-        " (dry run)" if trial.dry_run else "",
-        len(trial.deleted),
-        run.trial_state_dirname,
-        trial.bytes_freed,
-        trial.kept,
-    )
-    return list(trial.deleted)
+        if not trial.changed:
+            LOG.info(
+                "trial prune: every file under state/%s is inside the %s-day window, "
+                "so none was deleted",
+                dirname,
+                retention_config.trial_state_days,
+            )
+            continue
+        LOG.info(
+            "trial prune%s: deleted %s files under state/%s, freed %s bytes, kept %s",
+            " (dry run)" if trial.dry_run else "",
+            len(trial.deleted),
+            dirname,
+            trial.bytes_freed,
+            trial.kept,
+        )
+        removed += list(trial.deleted)
+    return removed
 
 
 def _prune_score_shards(

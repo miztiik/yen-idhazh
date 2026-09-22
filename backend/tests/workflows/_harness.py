@@ -1042,6 +1042,9 @@ def _stages_a_state_path(workflow: dict[str, object]) -> bool:
     what its registered tenants named, so the paths are in a shell variable and
     no reader of the file can resolve them - that workflow is covered by the
     tests that read it against its tenants instead.
+    `idhazh-pipeline-tests.yaml` is the second: its roots are printed by
+    `pipeline_test_ledgers place` out of the declared cases, and
+    `test_pipeline_tests_workflow.py` holds it against those.
 
     A folded `run: >-` body is one line by the time PyYAML has read it and a
     `run: |` body is many, so the search is per line with the continuations
