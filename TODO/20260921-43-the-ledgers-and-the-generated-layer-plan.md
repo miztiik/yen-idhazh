@@ -525,6 +525,6 @@ Each test fails when one value is removed from either side. **That is not genera
 ## See also
 
 - [`20260921-39-delete-the-scaffolding-plan.md`](20260921-39-delete-the-scaffolding-plan.md) - the parent, whose rows 1, 7, 8, 12, 15, 17 and 19 this plan carries.
-- [`20260921-41-lane-a-model-file-plan.md`](20260921-41-lane-a-model-file-plan.md) - owns Guardrail #3 and section 11; merges before row 6.
+- `20260921-41-lane-a-model-file-plan.md` - owned Guardrail #3 and section 11; delivered in #1036 and #1039 and deleted on close.
 - [`20260921-42-lane-b-workflows-plan.md`](20260921-42-lane-b-workflows-plan.md) - the workflows.
 - [`../docs/how-to/execute-a-plan.md`](../docs/how-to/execute-a-plan.md) - how a row is run and closed.

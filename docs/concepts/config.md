@@ -1,6 +1,6 @@
 # Config
 
-**Last Updated**: 2026-09-21
+**Last Updated**: 2026-09-22
 
 Where tunable behaviour lives, and the rule that separates a knob from an identifier. Config-driven with sane defaults is a project principle ([principles.md](principles.md), Guardrail #6): a fresh clone runs on the defaults, and no threshold, cap or source list is hardcoded in code.
 
@@ -68,7 +68,7 @@ The knobs are spread across six files rather than one, along the line of who edi
 
 ## `config/models/<name>.json` - one file per model, and a pointer
 
-Everything that is a fact about one set of weights lives in one file of its own: the repository, the revision, the digest, the window and threads they were measured in, and the turn markers their server renders. `config/idhazh.json` carries `models_file` and nothing else about the model.
+Everything that is a fact about one set of weights lives in one file of its own: the repository, the revision, the digest, the flags its server is started with, the four values that go in a request body, and the two turn-envelope strings no template can answer. `config/idhazh.json` carries `models_file` and nothing else about the model.
 
 **The swap is that one line, and so is the revert.** Point `models_file` at another committed file and the run opens another model; point it back and the incumbent's measured numbers are still on disk rather than in git history. Before 2026-09-14 a swap was eleven lines edited in place in the file every other knob lives in, and a revert had to reconstruct the previous model's numbers out of a diff.
 
@@ -600,7 +600,8 @@ whose weights have no recorded digest.
 
 ### The turn envelope sits on the entry too, and obeys the same rule
 
-Four strings decide where a turn opens and closes and how a reply begins. They
+Eight strings decide where a turn opens and closes, how a reply begins, and how
+this model is asked to reason. They
 lived in `backend/idhazh/prompts/turn_markers.json` until 2026-09-13 - one
 global file with no model key, in a package this project writes, holding a fact
 about somebody else's weights. A model whose turns differ was a source edit, and
@@ -609,19 +610,25 @@ model's own template at server start and typed nowhere, and the two that cannot
 be - `models.<role>.thinking_close` and `models.<role>.thinking_kwarg` - sit on
 the entry, where `declared_for` pins them to its `sha256`.
 
-| Marker | What it is |
-| --- | --- |
-| `turn_opening` | opens a turn, with `$role` substituted into it |
-| `turn_closing` | closes a turn, and is where the summarize-and-plan call's prompt splices onto the label call's |
-| `reply_opening` | where the model starts writing, reasoning off |
-| `reply_opening_thinking` | the same, reasoning on |
+| Marker | What it is | Where it comes from |
+| --- | --- | --- |
+| `turn_opening` | opens a turn, with the role substituted into it | the template |
+| `turn_closing` | closes a turn, and is where the summarize-and-plan call's prompt splices onto the label call's | the template |
+| `reply_opening` | where the model starts writing, reasoning off | the template |
+| `reply_opening_thinking` | the same, reasoning on | the template |
+| `system_role` | whether this model gives the system block a turn of its own or folds it into the first user turn | the template |
+| `system_joiner` | what separates the two blocks where it folds | the template |
+| `thinking_close` | what the model writes when it stops reasoning | the entry |
+| `thinking_kwarg` | the template variable that turns reasoning on | the entry |
 
-**The block is required and has no default**, which is the one place the model
-references' "no honest default" rule reaches past the weights themselves: an
-entry that inherited the incumbent's markers would render a prompt with no turn
-structure that the decoder's grammar still accepts, so the only symptom is worse
-summaries. `turn_opening` must name `$role` and the other three may not be
-empty, because both of those failures are silent in the same way.
+**A template the derivation cannot read refuses the run at server start**, and
+that is what replaced the rule that the four strings were required and had no
+default. The failure being guarded against did not move: a prompt with no turn
+structure renders cleanly, the decoder's grammar still accepts it, and the only
+symptom is worse summaries. What moved is who can be wrong. A hand-typed marker
+was wrong silently; a template that spells a role its own way, or writes an
+opening carrying no role at all, is named in the refusal and the server does not
+start.
 
 **What is per model is the envelope, never the words.** The instructions stay
 one set for every model - a per-model prompt would hide every wording change
