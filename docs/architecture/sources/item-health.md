@@ -1,6 +1,6 @@
 # Item Health
 
-**Last Updated**: 2026-09-21
+**Last Updated**: 2026-09-22
 
 What every planned item did on every run, where that record lives, and which
 failures count against a source. This is item-grain evidence. Feed health is
@@ -479,6 +479,17 @@ stage that did the work.
 | `extract` | `no_text`, `no_title`, `too_short`, `not_prose`, `boilerplate`, `contaminated`, `paywalled`, `unsupported_form` |
 | `summarize` | `model_unreachable`, `model_refused`, `model_timed_out`, `shard_out_of_time`, `context_exceeded`, `output_truncated`, `labels_truncated`, `bad_shape`, `length_out_of_range`, `copied_source`, `leaked_address` |
 | any failed stage | `unknown` |
+
+**A new code is named in five places, and the fifth only fails at runtime.**
+`FailureCode` itself, `FAILURE_CODE_STAGES`, `SOURCE_NEUTRAL_FAILURE_CODES`,
+`CollectConfig.settled_failure_codes`, and - the one that is easy to miss -
+`ItemHealthRow._state_is_complete`, which lists the codes an `ok` row may carry.
+Miss the fifth on a signal that publishes and nothing goes red until a real row
+is built: the enum, the schema and the drift gate are all satisfied, and the
+failure is a `ValidationError` raised inside the census. Then the committed
+`config/idhazh.json` names the settled list again, this page enumerates the
+neutral split twice, and `backend/tests/test_telemetry.py` needs a fixture
+writer for the new code - a test walks every member and refuses one without.
 
 `detail` is `str | None`, at most 2,000 characters of printable ASCII on one
 line, and belongs on any failed row. A row coded `unknown` must carry one and
