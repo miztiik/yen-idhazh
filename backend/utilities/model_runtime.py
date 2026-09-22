@@ -115,6 +115,15 @@ FLOOR_GRACE_SECONDS: Final = 60
 #: The row of `/proc/self/limits` that says what `ulimit -l` says.
 LOCKED_MEMORY_ROW: Final = "Max locked memory"
 
+#: How long a server gets to die before a health wait starts. A build that
+#: refuses one of its own flags is gone in well under a second, so two seconds
+#: separates that from a server still reading weights.
+START_GRACE_SECONDS: Final = 2.0
+
+#: How much of the server log a start-up failure carries out with it. The
+#: refused flag is named in the last few lines, and the log dies with the runner.
+LOG_TAIL_LINES: Final = 50
+
 #: What a retry is for. A 4xx is the server saying the request was wrong, and
 #: asking again three times is three ways to be wrong about the same thing.
 RETRIABLE_STATUS: Final = frozenset({408, 429})
@@ -480,6 +489,34 @@ def _raise_the_locked_memory_limit() -> None:
     _say(f"locked-memory limit after: {_locked_memory_limit()}")
 
 
+def refuse_a_server_that_died_at_startup(
+    server: subprocess.Popen[bytes], log_path: Path
+) -> None:
+    """Say the server is gone now, rather than after ten minutes of health polling.
+
+    A health wait asks a port for up to six hundred seconds. That is the right
+    patience for weights still loading and the wrong answer entirely for a
+    process that has already exited: a dispatch once burned five hours on a flag
+    the build refused, and nothing between the start and the first item said so.
+
+    It is here rather than beside `server_argv` in `idhazh.llm.server`, and that
+    is a boundary rather than a preference: no module under `backend/idhazh/`
+    may import `subprocess` at all, because that package is what handles fetched
+    web text (Guardrail #11). Answering this needs a process handle, so the
+    answer lives outside the package that may not hold one. `runtime_sweep.py`
+    imports it from here, which is why it is public.
+    """
+    try:
+        server.wait(timeout=START_GRACE_SECONDS)
+    except subprocess.TimeoutExpired:
+        return
+    tail = ""
+    if log_path.exists():
+        lines = log_path.read_text(encoding="utf-8", errors="replace").splitlines()
+        tail = "\n".join(lines[-LOG_TAIL_LINES:])
+    raise RuntimeError(f"llama-server exited {server.returncode} before it could answer\n{tail}")
+
+
 def start_server(config_root: Path, name: str) -> None:
     """Start llama-server against one config root and prove the process survived.
 
@@ -492,7 +529,7 @@ def start_server(config_root: Path, name: str) -> None:
     answer to which bytes it opened.
     """
     from idhazh import config
-    from idhazh.llm.server import refuse_a_server_that_died_at_startup, server_argv
+    from idhazh.llm.server import server_argv
 
     _raise_the_locked_memory_limit()
     SERVER_BINARY.chmod(0o755)

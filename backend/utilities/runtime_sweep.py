@@ -27,10 +27,11 @@ from idhazh import config
 from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.knobs.models import ModelsConfig
 from idhazh.contracts.run_plan import RunPlan
-from idhazh.llm.server import refuse_a_server_that_died_at_startup, server_argv
+from idhazh.llm.server import server_argv
 from idhazh.stages.common import CAPTURES_DIRNAME
 from idhazh.telemetry import silicon
 from utilities import sweep_verdict
+from utilities.model_runtime import refuse_a_server_that_died_at_startup
 
 ROOT = Path("backend/var/runtime-sweep")
 CONFIG_ROOT = ROOT / "configs"

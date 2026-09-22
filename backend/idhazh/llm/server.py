@@ -25,7 +25,6 @@ from __future__ import annotations
 
 import json
 import os
-import subprocess
 from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from enum import StrEnum
@@ -493,42 +492,6 @@ def server_argv(
             # captured into a committed golden (`CLAUDE.md` section 2).
             argv += [companion.flag, companion_path(weights, companion).as_posix()]
     return argv
-
-
-#: How long a server gets to die before a health wait starts. A build that
-#: refuses one of its own flags is gone in well under a second, so two seconds
-#: separates that from a server still reading weights.
-START_GRACE_SECONDS: Final = 2.0
-
-#: How much of the server log a start-up failure carries out with it. The
-#: refused flag is named in the last few lines, and the log dies with the runner.
-LOG_TAIL_LINES: Final = 50
-
-
-def refuse_a_server_that_died_at_startup(
-    server: subprocess.Popen[bytes], log_path: Path
-) -> None:
-    """Say the server is gone now, rather than after ten minutes of health polling.
-
-    A health wait asks a port for up to six hundred seconds. That is the right
-    patience for weights still loading and the wrong answer entirely for a
-    process that has already exited: a dispatch once burned five hours on a flag
-    the build refused, and nothing between the start and the first item said so.
-
-    It lives beside `server_argv` because both callers hold a `Popen` - the
-    sweep that spells the argv in process, and the launcher a workflow step
-    calls - and a second copy of this in either of them is a second answer to
-    what a dead start looks like.
-    """
-    try:
-        server.wait(timeout=START_GRACE_SECONDS)
-    except subprocess.TimeoutExpired:
-        return
-    tail = ""
-    if log_path.exists():
-        lines = log_path.read_text(encoding="utf-8", errors="replace").splitlines()
-        tail = "\n".join(lines[-LOG_TAIL_LINES:])
-    raise RuntimeError(f"llama-server exited {server.returncode} before it could answer\n{tail}")
 
 
 def request_payload(    *,

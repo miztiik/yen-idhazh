@@ -18,11 +18,16 @@ from idhazh import cli, config, ledger
 from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.run_plan import RunPlan
-from idhazh.llm import server as llm_server
 from idhazh.stages import compact as compact_stage
 from idhazh.stages.common import CAPTURES_DIRNAME
 from idhazh.telemetry import silicon
-from utilities import candidate_pointer, model_speed_case, runtime_sweep, sweep_verdict
+from utilities import (
+    candidate_pointer,
+    model_runtime,
+    model_speed_case,
+    runtime_sweep,
+    sweep_verdict,
+)
 
 from ._harness import (
     BENCH_ARTIFACTS,
@@ -859,10 +864,10 @@ def test_a_server_that_died_at_startup_is_refused_in_about_two_seconds(tmp_path:
     dead = _a_process_that_exits_at_once(log)
     started = time.perf_counter()
     with pytest.raises(RuntimeError) as refused:
-        llm_server.refuse_a_server_that_died_at_startup(dead, log)
+        model_runtime.refuse_a_server_that_died_at_startup(dead, log)
     took = time.perf_counter() - started
 
-    assert took < llm_server.START_GRACE_SECONDS, (
+    assert took < model_runtime.START_GRACE_SECONDS, (
         f"a dead process should be reported as soon as it is reaped, not in {took:.2f}s"
     )
     assert "exited 1" in str(refused.value)
@@ -884,13 +889,13 @@ def test_a_server_that_is_still_running_is_not_refused(tmp_path: Path) -> None:
         )
     try:
         started = time.perf_counter()
-        llm_server.refuse_a_server_that_died_at_startup(alive, log)
+        model_runtime.refuse_a_server_that_died_at_startup(alive, log)
         took = time.perf_counter() - started
     finally:
         alive.kill()
         alive.wait(timeout=20)
 
-    assert took >= llm_server.START_GRACE_SECONDS, (
+    assert took >= model_runtime.START_GRACE_SECONDS, (
         f"the check returned after {took:.2f}s, so it waited for nothing"
     )
 
