@@ -15,8 +15,11 @@ runs it inside the worker job so a run that dies before it publishes still
 keeps what it measured.
 
     idhazh backfill-vectors   re-encode closed days whose vectors are short
+    idhazh derived-paths      print the committed paths a rebuild owns
 
-That last one is a repair, not a stage. Nothing schedules it.
+Neither is a stage. Nothing schedules the first; the second answers one question
+for the commit step that runs seconds later, and its answer comes from
+`idhazh.paths`.
 
     idhazh telemetry <subcommand>   read or republish one day's instrument
 
@@ -47,6 +50,7 @@ from typing import Final
 from idhazh import (
     assemble,
     config,
+    paths,
 )
 from idhazh.contracts.base import WORK_JOB, ServerJob
 from idhazh.contracts.knobs.observability import ObservabilityConfig
@@ -144,6 +148,7 @@ STAGES: Final[tuple[str, ...]] = (
     "qualify-canaries",
     "qualify-decide",
     "backfill-vectors",
+    "derived-paths",
     "site-weight",
     "validate-days",
     "score-merge-line-holdout",
@@ -429,6 +434,17 @@ def main(argv: Sequence[str] | None = None) -> int:
         ),
     )
     parser.add_argument(
+        "--day-dir",
+        default=None,
+        help=(
+            "The published day's directory, as the workflow already derived it: "
+            "frontend/public/digest/<YYYY>/<MM>/<DD>. `derived-paths` names two files "
+            "inside it one at a time, because the day's directory itself must never be "
+            "handed back - this run's rendered charts are in it and no producer here "
+            "can make them again."
+        ),
+    )
+    parser.add_argument(
         "--digest-root",
         type=Path,
         default=common.PUBLIC_ROOT,
@@ -527,6 +543,19 @@ def main(argv: Sequence[str] | None = None) -> int:
             "trial run: every ledger goes to %s and no published series reads it",
             common.STATE_ROOT.relative_to(config.REPO_ROOT).as_posix(),
         )
+    if args.stage == "derived-paths":
+        # Above everything, including the config-dependent verbs: it reads one
+        # tuple and prints one line, and the commit step that consumes it runs
+        # seconds later. A fetcher started here would read every host's
+        # robots.txt to answer a question about a tuple.
+        if args.day_dir is None:
+            parser.error(
+                "derived-paths needs --day-dir: two of the paths sit inside the day this "
+                "run published, and nothing else in this process says which day that is"
+            )
+        print(f"refresh_paths={paths.refresh_paths(day_dir=args.day_dir)}")
+        return 0
+
     if args.stage == "site-weight":
         # Placed above the fetcher because measuring a directory reads no socket,
         # and starting one to do it would read every host's robots.txt for nothing.

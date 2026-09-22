@@ -23,7 +23,7 @@ import pytest
 import yaml  # type: ignore[import-untyped]
 from conftest import CONFIG_DIR, REPO_ROOT, read_text
 
-from idhazh import ledger
+from idhazh import ledger, paths
 from idhazh.contracts.visual_decision import PAYLOAD_SUFFIX, VisualDecision, VisualKind, VisualState
 from idhazh.telemetry.publish import series
 
@@ -627,12 +627,21 @@ COMMIT_BASE_ENV: Final = frozenset(
 # one. Every other job takes the base three and nothing else: no path under
 # `state/` has two writers now, so those commit steps settle nothing after their
 # rebase.
+#
+# Four of the five name a push deadline. The bench does not: `measure.yml` has no
+# job that reads config before the one that commits, so it takes the script's
+# own value for a caller that names none.
 COMMIT_SCRIPT_ENV: Final = {
-    "plan": COMMIT_BASE_ENV,
-    "work": COMMIT_BASE_ENV,
+    "plan": COMMIT_BASE_ENV | {"PUSH_DEADLINE_SECONDS"},
+    "work": COMMIT_BASE_ENV | {"PUSH_DEADLINE_SECONDS", "SHARD"},
     "assemble": COMMIT_BASE_ENV
-    | {"REFRESH_PATHS", "REGENERATE_COMMAND", "DROP_RACED_ASSETS_COMMAND"},
-    "fold": COMMIT_BASE_ENV,
+    | {
+        "PUSH_DEADLINE_SECONDS",
+        "REFRESH_PATHS",
+        "REGENERATE_COMMAND",
+        "DROP_RACED_ASSETS_COMMAND",
+    },
+    "fold": COMMIT_BASE_ENV | {"PUSH_DEADLINE_SECONDS"},
     "bench": COMMIT_BASE_ENV,
 }
 
@@ -854,47 +863,31 @@ SUBSTITUTED_COUNCIL_RUN: Final = "2026-08-26-35534060762"
 #: the venue never checks it against a list of who may exist.
 SUBSTITUTED_TENANT: Final = "a-paper-tenant"
 
+#: What the plan job hands every commit step of the run, read from config by
+#: `backend/utilities/shard_bound.py`. A stand-in for what Actions would expand,
+#: like the date above it - the value config carries is checked where the knob
+#: itself is, not here.
+SUBSTITUTED_PUSH_DEADLINE: Final = "300"
+
 EXPRESSION_VALUES: Final = {
     "needs.plan.outputs.date": SUBSTITUTED_DATE,
     "needs.plan.outputs.day_dir": SUBSTITUTED_DAY_DIR,
     "needs.plan.outputs.shards": SUBSTITUTED_SHARDS,
+    "needs.plan.outputs.push_deadline_seconds": SUBSTITUTED_PUSH_DEADLINE,
     "needs.draw.outputs.date": SUBSTITUTED_DATE,
     "needs.draw.outputs.run_id": SUBSTITUTED_COUNCIL_RUN,
     "steps.decide.outputs.date": SUBSTITUTED_DATE,
+    "steps.bounds.outputs.push_deadline_seconds": SUBSTITUTED_PUSH_DEADLINE,
+    # What the `derived` step prints into `$GITHUB_OUTPUT`, computed rather than
+    # written out. A second copy of that list is the thing this expression
+    # exists to remove.
+    "steps.derived.outputs.refresh_paths": paths.refresh_paths(day_dir=SUBSTITUTED_DAY_DIR),
     "github.sha": SUBSTITUTED_SHA,
     "matrix.shard": SUBSTITUTED_SHARD,
     "matrix.shards": SUBSTITUTED_SHARDS,
     "matrix.tenant": SUBSTITUTED_TENANT,
     "matrix.date": SUBSTITUTED_DATE,
     "inputs.runtime_candidate": SUBSTITUTED_CANDIDATE,
-}
-
-# What a label hands back to origin's tip before it rebuilds. Assemble's day
-# directory is never in its list: the `shard-visuals-*` artifacts unpack this
-# run's rendered charts into it, and no producer in the assemble job can make
-# those again, so the two payload files are named one at a time.
-COMMIT_REFRESH_PATHS: Final = {
-    "assemble": [
-        f"{SUBSTITUTED_DAY_DIR}/digest.json",
-        f"{SUBSTITUTED_DAY_DIR}/run.json",
-        "frontend/public/telemetry",
-        "frontend/public/assist/index",
-        "frontend/public/source-health.json",
-        "frontend/public/console",
-        "frontend/public/run-days",
-        "frontend/public/day-metrics",
-        "frontend/public/machine",
-        "frontend/public/span-rollup",
-        "frontend/public/run-timeline",
-        "state/published",
-        "state/scores",
-        "state/score-index",
-        "state/item-health",
-        "state/span-rollup",
-        "state/traces",
-        "state/host-fingerprint",
-        "state/segments",
-    ],
 }
 
 # The producer the harness drives through the loop. See its own docstring for
@@ -1000,6 +993,34 @@ def _run_bodies(workflow: dict[str, object]) -> list[str]:
         for step in _steps(workflow, job_name)
         if isinstance(script := step.get("run"), str)
     ]
+
+
+def _stages_a_state_path(workflow: dict[str, object]) -> bool:
+    """Whether any step of this workflow hands git a path under `state/`.
+
+    Read off the file rather than listed here, so a workflow that starts
+    committing a ledger is covered the day it lands. Two spellings count: the
+    shared commit script, which stages every path it is handed, and a bare
+    `git add` written inline.
+
+    What it cannot see is a path built at run time. `llm-council.yml` stages
+    what its registered tenants named, so the paths are in a shell variable and
+    no reader of the file can resolve them - that workflow is covered by the
+    tests that read it against its tenants instead.
+
+    A folded `run: >-` body is one line by the time PyYAML has read it and a
+    `run: |` body is many, so the search is per line with the continuations
+    folded first.
+    """
+    roots = (ledger.STATE_DIRNAME, f"{ledger.STATE_DIRNAME}/")
+    for body in _run_bodies(workflow):
+        for line in body.replace("\\\n", " ").splitlines():
+            if "commit-and-push.sh" not in line and "git add" not in line:
+                continue
+            if any(word == roots[0] or word.startswith(roots[1]) for word in line.split()):
+                return True
+    return False
+
 
 CONFIG_FILE_NAME: Final = "idhazh.json"
 
@@ -2159,6 +2180,51 @@ def _run_commit_script(
         capture_output=True,
         text=True,
     )
+
+
+def _reject_the_first_pushes(origin: Path, count: int) -> None:
+    """Make origin refuse the next `count` pushes and take everything after them.
+
+    A racing commit can only reject one push, and what the deadline has to be
+    shown doing is surviving more rejections than the old three-attempt loop
+    allowed. A `pre-receive` hook is the only thing that can reject on demand,
+    and it counts down in a file beside itself so each attempt sees one fewer.
+
+    The rejection is what a lost race looks like to the pusher, which is the
+    point: the script cannot tell the two apart and must not try to.
+    """
+    budget = origin / "reject-this-many-pushes"
+    budget.write_text(f"{count}\n", encoding="utf-8", newline="\n")
+    hook = origin / "hooks" / "pre-receive"
+    hook.parent.mkdir(parents=True, exist_ok=True)
+    hook.write_text(
+        "#!/bin/sh\n"
+        'budget="$(dirname "$0")/../reject-this-many-pushes"\n'
+        'left=$(cat "$budget" 2>/dev/null || echo 0)\n'
+        'if [ "$left" -gt 0 ]; then\n'
+        '  echo $((left - 1)) > "$budget"\n'
+        '  echo "rejecting this push on purpose, $left left" >&2\n'
+        "  exit 1\n"
+        "fi\n"
+        "exit 0\n",
+        encoding="utf-8",
+        newline="\n",
+    )
+    hook.chmod(0o755)
+
+
+def _push_attempts(stdout: str) -> list[dict[str, str]]:
+    """Every `push attempt=` line the loop printed, as the fields it carries.
+
+    Parsed rather than matched as text, because what the line is for is being
+    read by whoever is deciding whether the deadline is the right number. The
+    leading word is the line's own label and carries no value, so it goes.
+    """
+    return [
+        dict(pair.split("=", 1) for pair in line.split()[1:])
+        for line in stdout.splitlines()
+        if line.startswith("push attempt=")
+    ]
 
 
 #: Every job that builds the site and then commits what it built, named with the

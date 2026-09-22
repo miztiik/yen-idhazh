@@ -9,12 +9,11 @@ from pathlib import Path
 import pytest
 from conftest import REPO_ROOT
 
-from idhazh import ledger, telemetry
+from idhazh import ledger, paths, telemetry
 from idhazh.contracts.base import ServerJob
 from idhazh.evals import writer as score_writer
 
 from ._harness import (
-    COMMIT_REFRESH_PATHS,
     COMMIT_STAGED_PATHS,
     COMMIT_STEPS,
     FINGERPRINT_COMMAND,
@@ -420,7 +419,7 @@ def test_the_observation_index_travels_with_the_rows_it_describes() -> None:
     assert segments in staged, "the shard stages the store both segments go to"
     assert score_writer.INDEX_RELDIR not in staged, "the shard no longer writes the head"
     assert score_writer.LEDGER_RELDIR not in staged
-    assert score_writer.INDEX_RELDIR in COMMIT_REFRESH_PATHS["assemble"]
+    assert score_writer.INDEX_RELDIR in paths.DERIVED
     assert (REPO_ROOT / score_writer.INDEX_RELDIR).is_dir()
     tracked = subprocess.run(
         ["git", "ls-files", score_writer.INDEX_RELDIR],

@@ -423,7 +423,7 @@ jobs:
           # for the other night's rows in a commit that does not mention it.
           COMMIT_MESSAGE: "council: ${{ join(fromJSON(needs.draw.outputs.dates), ' ') }}"
           NOTHING_STAGED_MESSAGE: "the night's tenants wrote nothing"
-          PUSH_FAILED_MESSAGE: "could not push what the night judged after three attempts"
+          PUSH_FAILED_MESSAGE: "could not push what the night judged"
           COMMITTED_PATHS: ${{ needs.draw.outputs.committed_paths }}
         run: |
           set -euo pipefail
