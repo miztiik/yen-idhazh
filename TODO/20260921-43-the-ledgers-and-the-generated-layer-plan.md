@@ -255,15 +255,17 @@ Each test fails when one value is removed from either side. **That is not genera
 
 ### C8 - The engineering contract after row 6
 
-**Plan 41 row 6 already owns Guardrail #3 and section 11. Row 6 does not restate either.**
+**Measured against `CLAUDE.md` on 2026-09-22, after plan 41 merged.** Plan 41 added the configuration carve-out to Guardrail #3 and scoped section 11, and **left the generation sentence standing**. That sentence is row 6's.
 
-| Clause | After |
-| --- | --- |
-| Section 1a, second bullet | Deleted. Nothing generates and nothing drifts |
-| Section 9, the drift-gate line | Deleted from the Definition of Done |
-| Section 10, hand-editing a generated artifact | Deleted - there are none |
-| `AGENTS.md` | The three phrases saying contracts are generated from the models, named in section 7 and removed |
-| Guardrail #3, section 11 | **Not row 6's.** Plan 41 row 6 owns both. Row 6's oracle checks the tree, not this table |
+| Clause | Reads today | After |
+| --- | --- | --- |
+| Guardrail #3, `CLAUDE.md:90`, **one sentence only** | "Every downstream artifact (DB migration, API spec, frontend type, cross-service binding) is generated from that schema, never hand-written." | Deleted. The clause keeps its first sentence, its reason and plan 41's configuration carve-out, all untouched |
+| Section 1a, second bullet, `:105` | "`schemas/*.schema.json` is generated from those models, and the frontend's TypeScript types and validators are generated from those schemas. A CI drift gate regenerates both and fails on any diff. Nobody hand-edits a generated artifact." | Rewritten: the Pydantic models are the validation, each in its own language, and nothing is generated into a second one |
+| Section 9, `:221` | "Contract drift gate green: schemas and frontend types regenerate byte-identical to what is committed." | Deleted from the Definition of Done |
+| Section 9, `:225` | "Schemas version-stamped + changelogged..." | **Kept.** The stamp survives the schemas - `schema_version()` reads `__changelog__[0]` and thirty-plus production call sites use it (C7) |
+| Section 10, `:240` | "Hand-edit a generated artifact (`schemas/*.schema.json`, `frontend/src/contracts/*`). Edit the Pydantic model and regenerate." | Deleted - there are none |
+| Section 11 | already scoped by plan 41 | **Not row 6's.** Untouched |
+| `AGENTS.md` | three phrases saying contracts are generated from the models | Named and removed |
 
 **Guardrail #11 and Guardrail #12 are untouched.**
 
@@ -466,7 +468,7 @@ Each test fails when one value is removed from either side. **That is not genera
 ## Section 7 - Row 6 - The engineering contract and the pages catch up
 
 - **Scope:** Amend the engineering-contract clauses this plan contradicts that plan 41 does not own, and refresh every page whose description of the contract layer or the qualification surface is now wrong.
-- **Files touched:** `CLAUDE.md` (section 1a second bullet, section 9's drift-gate line, section 10's hand-editing line), `AGENTS.md`, `docs/reference/ci-model-runtime.md`, `docs/architecture/contracts/determinism.md`, `docs/reference/repository-layout.md`, `docs/how-to/run-the-gates.md`
+- **Files touched:** `CLAUDE.md` (Guardrail #3's generation sentence at `:90`, section 1a's second bullet at `:105`, section 9's drift-gate line at `:221`, section 10's hand-editing line at `:240`), `AGENTS.md`, `docs/reference/ci-model-runtime.md`, `docs/architecture/contracts/determinism.md`, `docs/reference/repository-layout.md`, `docs/how-to/run-the-gates.md`
 - **Acceptance gates:** `python backend/utilities/doc_load.py` before and after, and the split test on any page gaining a section. No application suite is required for a documentation-only closure.
 - **Oracle:** no clause of the engineering contract requires a generated artefact, a schema file, or a drift gate - **checked clause by clause against the tree after plan 41 has merged, not against this plan's table.** That is what stops this row reverting plan 41. **What it cannot settle:** whether a later agent reads the amended clause the way it was meant. Decision 5 is the mitigation.
 - **Decisions:**
@@ -474,7 +476,7 @@ Each test fails when one value is removed from either side. **That is not genera
  | # | Decision | Authority |
  | --- | --- | --- |
  | 1 | The amendment ships with row 5, not after it. CLAUDE.md section 0 requires a conflicting rule to be amended in the same change | Owner, CLAUDE.md section 0 |
- | 2 | **Row 6 does not restate Guardrail #3 or section 11.** Plan 41 row 6 owns both. Plan 39's clause table quotes the text on main today, and applying it verbatim after plan 41 merges reverts plan 41 - cleanly, with nothing red, because no gate reads CLAUDE.md | Fowler |
+ | 2 | **Row 6 amends one sentence of Guardrail #3 and leaves the rest of that clause alone.** Measured on 2026-09-22 after plan 41 merged: plan 41 added the configuration carve-out and scoped section 11, but the sentence requiring every downstream artifact to be generated from the schema is still standing at `CLAUDE.md:90`. Rewriting the whole guardrail from plan 39's table would revert plan 41 - cleanly, with nothing red, because no gate reads CLAUDE.md | Fowler |
  | 3 | Each guardrail that moves records who moved it and when, on the line that moved (CLAUDE.md section 1) | Fowler |
  | 4 | Guardrail #11 and Guardrail #12 are untouched | Fowler |
  | 5 | The three phrases in `AGENTS.md` saying the contracts are generated from the models are named and removed. An unnamed amendment is one nobody checks, and agent tools read that file instead of the engineering contract | Fowler |
