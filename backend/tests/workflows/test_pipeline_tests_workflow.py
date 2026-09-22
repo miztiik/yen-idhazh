@@ -15,13 +15,18 @@ import pytest
 from conftest import CONFIG_DIR, REPO_ROOT, read_text
 from pydantic import ValidationError
 
-from idhazh import config
-from idhazh.contracts.pipeline_tests import MINIMUM_CANDIDATES, PipelineTestsConfig
+from idhazh import config, ledger
+from idhazh.contracts.pipeline_tests import (
+    MINIMUM_CANDIDATES,
+    TRIAL_STATE_PREFIX,
+    PipelineTestsConfig,
+)
 from idhazh.contracts.run_plan import RunPlan
 from idhazh.llm.server import setting, window
-from utilities import candidate_pointer, model_refs
+from utilities import candidate_pointer, model_refs, pipeline_test_ledgers
 
 from ._harness import (
+    COMMIT_SCRIPT_CALL,
     DOWNLOAD_MODEL_FILES,
     INSTALL_RUNTIME_CALL,
     MODEL_RUNTIME_MODULE,
@@ -50,6 +55,16 @@ pytestmark = [pytest.mark.workflow, pytest.mark.slow]
 WORKFLOW: str = "idhazh-pipeline-tests.yaml"
 
 JOB: str = "cases"
+
+#: The second job, which is the only thing here that writes to the repository.
+COMMIT_JOB: str = "commit"
+
+CHECK_STEP: str = "Check the ledgers against their contracts"
+
+COMMIT_STEP: str = "Commit the ledgers the cases wrote"
+
+#: The one module that moves a dispatch's ledgers and reads them back.
+LEDGER_MODULE: str = "backend/utilities/pipeline_test_ledgers.py"
 
 #: The one step that opens the address list, and the two steps that read what it
 #: chose. Named here so a fourth reader has to be added on purpose.
@@ -204,15 +219,21 @@ def test_the_cases_run_in_sequence_in_one_job_on_one_runner() -> None:
     anything a case here is looking for. Three jobs would report the three hosts
     they drew. One job in sequence cancels the host, so the cases differ by what
     they changed and by nothing else.
+
+    The commit job beside it runs no case and measures nothing. It exists so the
+    write lands somewhere the case job's permissions do not reach.
     """
     workflow = _load_workflows()[WORKFLOW]
     jobs = workflow.get("jobs")
-    assert isinstance(jobs, dict) and list(jobs) == [JOB], (
-        "one job, so the cases share one runner and one model load"
+    assert isinstance(jobs, dict) and list(jobs) == [JOB, COMMIT_JOB], (
+        "one job measures, so the cases share one runner and one model load"
     )
     job = _job(workflow, JOB)
     assert "strategy" not in job, "a matrix would measure the hosts rather than the cases"
     assert job.get("runs-on") == "ubuntu-latest"
+    assert _job(workflow, COMMIT_JOB).get("needs") == JOB, "nothing commits before the cases run"
+    for text in _strings(_job(workflow, COMMIT_JOB)):
+        assert "run-pipeline-test-case.sh" not in text, "the committing job runs no case"
 
 
 def test_the_job_bound_is_the_budget_config_declares() -> None:
@@ -397,19 +418,31 @@ def test_the_report_refuses_a_comparison_across_different_articles(tmp_path: Pat
     assert cases[-1] in completed.stderr, "the case that disagreed is named"
 
 
-def test_it_publishes_nothing_and_commits_nothing() -> None:
+def test_it_publishes_nothing_a_reader_sees_and_writes_only_the_trial_roots() -> None:
     """A test workflow that could write the site would be a second publisher.
 
-    Everything it produces lives under `backend/var/`, which is never committed,
-    and leaves as an artifact. Nothing it wrote is on a reader's path.
+    It does commit now, and that is the whole of the write: a second job appends
+    what the cases measured under their own trial roots, which no console page
+    reads. Everything else it produced lives under `backend/var/`, which is never
+    committed, and leaves as an artifact.
+
+    Spelled against the two jobs rather than against the words `git commit`. The
+    file carried that pair of assertions until 2026-09-22 and they would have
+    stayed green through this change by accident, because `commit-and-push.sh`
+    contains neither word.
     """
     workflow = _load_workflows()[WORKFLOW]
-    permissions = workflow.get("permissions")
-    assert permissions == {"contents": "read"}, "it reads the repository and writes nothing back"
+    assert workflow.get("permissions") == {"contents": "read"}, (
+        "the file-level default is read, so a job that writes has to say so itself"
+    )
+    assert _job(workflow, JOB).get("permissions") == {"contents": "read"}, (
+        "the job that reads the open web holds no write"
+    )
+    assert _job(workflow, COMMIT_JOB).get("permissions") == {"contents": "write"}, (
+        "the committing job takes the write, and takes nothing else with it"
+    )
 
     for text in _strings(workflow):
-        assert "git commit" not in text, "a test dispatch commits nothing"
-        assert "git push" not in text, "a test dispatch pushes nothing"
         assert "frontend/public" not in text, "a test dispatch publishes nothing"
 
     upload = _step(workflow, JOB, "name", "Upload what the cases produced")
@@ -417,6 +450,153 @@ def test_it_publishes_nothing_and_commits_nothing() -> None:
     assert isinstance(with_block, dict)
     assert str(with_block.get("path")).startswith("backend/var/")
     assert with_block.get("retention-days") == "90"
+
+
+def test_the_commit_job_stages_the_declared_trial_roots_and_nothing_wider() -> None:
+    """Every path handed to `git add` comes from committed config, not from a body.
+
+    The staged paths are printed by `pipeline_test_ledgers place`, which reads
+    the declared cases and names one root each. A path spelled in the workflow
+    would be a second copy of the naming rule, and a wider one - `state`, or
+    `state/pipeline-tests` before the cases had their own roots - would let this
+    job push a ledger the daily run owns.
+    """
+    workflow = _load_workflows()[WORKFLOW]
+    body = _script(_step(workflow, COMMIT_JOB, "name", COMMIT_STEP), "the commit step")
+
+    assert f"{LEDGER_MODULE} place" in body, "the roots to stage are printed, never spelled"
+    assert " ".join(COMMIT_SCRIPT_CALL) in body, "it commits through the shared script"
+    staged = re.search(r"commit-and-push\.sh (?P<paths>.+)", body)
+    assert staged is not None
+    assert staged["paths"].strip() == '"${TRIAL_ROOTS[@]}"', (
+        f"the commit step stages a path of its own: {staged['paths']}"
+    )
+
+    settings = _settings()
+    roots = [case.trial_state_dirname for case in settings.cases]
+    assert len(set(roots)) == len(roots), "two cases share a trial root, so one overwrites the other"
+    for root in roots:
+        assert root.startswith(f"{TRIAL_STATE_PREFIX}-"), (
+            f"{root} is not under the prefix the bench and the qualification already use"
+        )
+
+
+def test_the_check_reads_the_download_before_anything_is_staged() -> None:
+    """The control is the check, not the job split (Guardrail #11).
+
+    The bytes are downstream of pages this project did not write. The split
+    bounds what a bad push could reach; what stops one is reading every payload
+    through the contract that declares it, and the reading has to come first.
+    """
+    workflow = _load_workflows()[WORKFLOW]
+    steps = _steps(workflow, COMMIT_JOB)
+    names = [step.get("name") for step in steps]
+    check = _script(_step(workflow, COMMIT_JOB, "name", CHECK_STEP), "the check step")
+
+    assert f"{LEDGER_MODULE} check" in check
+    assert names.index(CHECK_STEP) < names.index(COMMIT_STEP), (
+        "a check after the push is a report, not a control"
+    )
+
+    download = _step(workflow, COMMIT_JOB, "uses", "actions/download-artifact@v8")
+    settings = _mapping(download.get("with"), "the ledger download")
+    assert str(settings["merge-multiple"]) == "true"
+    assert str(settings["path"]).startswith("backend/var/"), (
+        "a download unpacked over state/ would be read together with rows already committed"
+    )
+    assert steps.index(download) < names.index(CHECK_STEP), (
+        "the check reads what arrived, so it runs after the download"
+    )
+
+
+def _a_downloaded_tree(root: Path, *, case: str) -> Path:
+    """One case's ledgers as the artifact carries them: a segment and a trace."""
+    rows = ledger.segment_contract(ledger.SegmentLedger.SPAN_ROLLUP).csv_columns()
+    segment = root / case / "segments" / "span-rollup" / "2026-09-22-40000000001-1-work-00.csv"
+    segment.parent.mkdir(parents=True, exist_ok=True)
+    segment.write_text(
+        ",".join(rows)
+        + "\n"
+        + ",".join(
+            {
+                "version": "2026-09-06T15:00",
+                "date": "2026-09-22",
+                "run_id": "2026-09-22-40000000001",
+                "shard": "0",
+                "span_name": "item",
+                "count": "2",
+                "total_ms": "9000",
+            }.get(column, "")
+            for column in rows
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    trace = root / case / "traces" / "2026" / "09" / "22-40000000001-00.jsonl"
+    trace.parent.mkdir(parents=True, exist_ok=True)
+    trace.write_text('{"kind":"span","name":"item","duration_ms":1}\n', encoding="utf-8")
+    return root
+
+
+def test_the_check_passes_the_two_shapes_a_case_really_writes(tmp_path: Path) -> None:
+    """A segment and a trace, filed under a declared case's own trial root."""
+    case = _settings().cases[0]
+    tree = _a_downloaded_tree(tmp_path / "trial-ledgers", case=case.trial_state_dirname)
+
+    assert pipeline_test_ledgers.refusals(tree, roots=frozenset({case.trial_state_dirname})) == []
+
+
+@pytest.mark.parametrize(
+    ("relative", "because"),
+    [
+        ("a-tenant/segments/span-rollup/2026-09-22-40000000001-1-work-00.csv", "no declared case"),
+        ("{case}/items/ai-0000000001.summary.json", "a store a case run does not write"),
+        ("{case}/segments/summaries/2026-09-22-40000000001-1-work-00.csv", "no such ledger"),
+        ("{case}/traces/2026/09/22-40000000001-00.jsonl", "a line that is not a span"),
+    ],
+)
+def test_the_check_refuses_what_no_case_producer_wrote(
+    tmp_path: Path, relative: str, because: str
+) -> None:
+    """The oracle for the control. A check nothing can fail is not a control.
+
+    Every row here is a path an artifact could carry and a case producer could
+    not: a directory no config declares, a store no case run writes, a ledger
+    outside the closed set, and a payload that does not read back. The last one
+    is why the check opens the files rather than matching their names.
+    """
+    case = _settings().cases[0]
+    tree = _a_downloaded_tree(tmp_path / "trial-ledgers", case=case.trial_state_dirname)
+    path = tree / relative.format(case=case.trial_state_dirname)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("not a span\n", encoding="utf-8")
+
+    refused = pipeline_test_ledgers.refusals(
+        tree, roots=frozenset({case.trial_state_dirname})
+    )
+
+    assert refused, f"the check let through {because}"
+
+
+def test_every_declared_case_is_placed_whether_or_not_it_wrote_anything(tmp_path: Path) -> None:
+    """`git add` aborts on a path the checkout does not hold, and takes the step with it.
+
+    A dispatch that lost two cases still has to hand the commit script paths it
+    can stage. An empty directory git cannot see costs nothing; a missing one
+    costs the whole push, including the case that did produce rows.
+    """
+    cases = _settings().cases
+    tree = _a_downloaded_tree(tmp_path / "trial-ledgers", case=cases[0].trial_state_dirname)
+    state = tmp_path / "state"
+
+    staged = pipeline_test_ledgers.place(
+        tree, state, roots=[case.trial_state_dirname for case in cases]
+    )
+
+    assert len(staged) == len(cases)
+    for case in cases:
+        assert (state / case.trial_state_dirname).is_dir()
+    assert (state / cases[0].trial_state_dirname / "segments").is_dir()
 
 
 def test_the_address_list_can_still_answer_a_draw() -> None:
@@ -530,6 +710,37 @@ def test_the_case_configs_the_workflow_writes_all_load(tmp_path: Path) -> None:
             case.n_parallel or setting(committed, "n_parallel")
         )
         assert window(served) == (case.n_ctx or window(committed))
+
+
+def test_each_case_writes_its_own_trial_root(tmp_path: Path) -> None:
+    """Three cases, three roots, and no two of them share a path.
+
+    The dispatch runs one plan, so the three cases share a run id, a shard, a
+    job and an attempt. Those four fields are the whole of a writer's filename,
+    so without a root of its own the last case to write would be the only one
+    anybody could read - and the three numbers this workflow exists to subtract
+    would be one number.
+
+    Read out of the config each case really runs on, not out of the helper: the
+    helper agreeing with itself says nothing about what `work` opens.
+    """
+    scratch = _scratch(tmp_path, models_file=None)
+    written = _module_outputs(
+        ["--config-root", scratch.as_posix()], cwd=tmp_path, module=CASE_CONFIG_MODULE
+    )
+
+    roots = {
+        case_id: config.load(tmp_path / relative).app.run.trial_state_dirname
+        for case_id, relative in written.items()
+    }
+    declared = {case.id: case.trial_state_dirname for case in _settings().cases}
+
+    assert len(set(roots.values())) == len(roots), f"two cases share a trial root: {roots}"
+    for case_id, root in roots.items():
+        assert root == declared[case_id]
+        assert root.startswith(f"{TRIAL_STATE_PREFIX}-"), (
+            f"{root} is outside the prefix the bench and the qualification already use"
+        )
 
 
 def test_the_parallel_case_keeps_the_window_the_gate_admits_articles_against() -> None:

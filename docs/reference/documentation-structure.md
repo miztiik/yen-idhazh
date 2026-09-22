@@ -1,6 +1,6 @@
 # Documentation Structure
 
-**Last Updated**: 2026-09-18
+**Last Updated**: 2026-09-22
 How `docs/` is organised, and where a new statement of project knowledge belongs. Companion to [CLAUDE.md](../../CLAUDE.md) section 5 (Documentation Discipline) - this doc defines the _placement rules_; CLAUDE.md section 5 defines the _constraints_ (ASCII, single source of truth, no duplicate definitions).
 
 This reference is **domain-neutral** so it can be copied between projects unchanged (CLAUDE.md section 5).
@@ -98,6 +98,37 @@ day" - two questions, and the log is the one every other doc links to.
 row. That is the honest outcome for an exploratory sweep, and it is cheaper than
 the alternative this project has already paid for twice: a number in the log
 that no config key reads, which a later reader treats as load-bearing.
+
+### An instrument a page cites stays; a migration whose rows have gone goes
+
+A page that prints a number owes a reader the way to take that number again.
+So **a utility under `backend/utilities/` that a live page cites as the
+instrument behind a figure is kept**, whatever else argues for deleting it:
+removing it turns every figure it produced into a number nobody can reproduce
+and nobody can challenge, which is the one failure a measurement page cannot
+survive (`CLAUDE.md` Guardrail #10). `measure_two_calls.py` and
+`measure_day_window.py` are protected by this, and so is every other utility
+named in a page under `docs/reference/benchmarks/`.
+
+**A migration is the opposite case.** It exists to move one store from one
+shape to another, it says so in its own first sentence, and once the last row
+it was written for has gone - aged out of its retention window, or re-filed by
+an engine that absorbed the job - it is a file nobody can run against anything.
+Keeping it costs a reader one more door to try and costs every gate one more
+file to lint, for a pass that would do nothing.
+
+**The three deleted on 2026-09-22 were all of the second kind.**
+`backfill_day_metrics.py` seeded `state/day-metrics/` for days published before
+the producer existed, and every published day carries its record now.
+`migrate_item_health.py` re-filed `state/item-health/` day files under a changed
+header, which `ledger.migrate_header` does through
+[`widen_ledger_header.py`](../architecture/contracts/schemas.md) for every store
+rather than one file per store. `measure_definition_placement.py` priced where
+the labelling vocabulary sits in a prompt, was cited by no page, and left no
+figure behind to reproduce.
+
+**The test is a citation, not an age.** An old instrument a page still cites
+stays; a migration written last week whose store has been re-filed goes.
 
 ### A dossier is per subject; a record is per run
 

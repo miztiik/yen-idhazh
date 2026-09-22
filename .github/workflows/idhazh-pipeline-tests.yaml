@@ -20,8 +20,12 @@
 # would pass for as long as those two pages stayed up and say nothing about
 # anything else the extractor meets.
 #
-# It publishes nothing. No step writes `frontend/public/`, no step commits, and
-# nothing here is on any reader's path. What the cases produced leaves as an
+# It publishes nothing a reader sees. No step writes `frontend/public/` and
+# nothing here is on any reader's path. It does commit one thing: a `commit` job
+# appends what the cases wrote under `state/pipeline-tests/`, the trial root
+# `validate.yml` and the bench already commit into and no console page reads.
+# The case job keeps `contents: read`; the write is the second job's alone. What
+# the cases produced - the article text included - still leaves only as an
 # artifact.
 #
 # It also answers "can this candidate model walk the real path", for the price
@@ -74,9 +78,18 @@ env:
 jobs:
   cases:
     runs-on: ubuntu-latest
+    # Said here rather than inherited. The `commit` job below takes the write,
+    # and a reader comparing the two has to be able to see that this one does
+    # not have it without first working out what the file-level default was.
+    permissions:
+      contents: read
     # The whole promise of this workflow, and `pipeline-tests.budget_minutes`
     # is where it is written. A test holds the two together.
     timeout-minutes: 140
+    # Whether anything was gathered to push. The job below is skipped when it is
+    # false, because `download-artifact` on a name nobody uploaded fails.
+    outputs:
+      ledgers: ${{ steps.ledgers.outputs.ledgers }}
     steps:
       - uses: actions/checkout@v6
 
@@ -397,3 +410,94 @@ jobs:
           name: pipeline-tests-${{ github.run_id }}
           path: backend/var/cases/
           retention-days: 90
+
+      # The ledgers, separately from the tree above, because the `commit` job
+      # downloads this one into its own checkout and must never be handed the
+      # article text that tree carries (CLAUDE.md section 0a).
+      #
+      # Gathered into one fixed directory rather than uploaded by a glob over
+      # `state/`. An artifact's internal root is the common ancestor of what
+      # matched, so a glob would unpack one case's store at the depth three
+      # cases' stores sit at the moment two of them died.
+      - name: Gather the ledgers the cases wrote
+        id: ledgers
+        if: always()
+        run: |
+          set -euo pipefail
+          python3 backend/utilities/pipeline_test_ledgers.py gather \
+            --tree backend/var/trial-ledgers \
+            | tee /dev/stderr >> "$GITHUB_OUTPUT"
+
+      - name: Upload the ledgers the cases wrote
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: pipeline-tests-ledgers-${{ github.run_id }}
+          path: backend/var/trial-ledgers/
+          if-no-files-found: ignore
+          retention-days: 90
+
+  # The run's own measurements, kept. Until now every case wrote a span rollup
+  # and a trace for each item, and the runner was torn down with all of it - so a
+  # dispatch could only ever be read off its own run page.
+  #
+  # Its own job because it is the only thing here that writes to the repository.
+  # The cases read the open web; this one never does, and what crosses between
+  # them is read against the contracts before anything is staged.
+  commit:
+    needs: cases
+    # A case that failed still measured what it reached, and a dispatch that died
+    # on case three has two cases worth keeping. A dispatch that never started a
+    # case uploaded nothing, and downloading an artifact nobody made fails the
+    # step - so the job asks first.
+    if: always() && needs.cases.outputs.ledgers == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      # The check below reads the committed contracts, so it needs the package.
+      - name: Install
+        run: pip install -e .
+
+      # Into a scratch directory, never straight onto `state/`. The check has to
+      # read exactly what arrived, and a download unpacked over the checkout
+      # would be read together with rows that are already committed.
+      - name: Take the ledgers the cases wrote
+        uses: actions/download-artifact@v8
+        with:
+          pattern: pipeline-tests-ledgers-*
+          merge-multiple: true
+          path: backend/var/trial-ledgers
+
+      # The control, and the reason this job may hold a write at all. Every file
+      # is read through the contract that declares it and every directory name
+      # comes from committed config, so nothing the open web touched decides a
+      # path (Guardrail #11). A refusal ends the job before anything is staged.
+      - name: Check the ledgers against their contracts
+        run: |
+          set -euo pipefail
+          python3 backend/utilities/pipeline_test_ledgers.py check \
+            --tree backend/var/trial-ledgers
+
+      # `place` prints the roots to stage, and creates every declared one first.
+      # The commit script hands its arguments to `git add`, which aborts on a
+      # path the checkout does not hold and takes the whole step with it.
+      - name: Commit the ledgers the cases wrote
+        env:
+          COMMIT_MESSAGE: 'pipeline tests: what the cases wrote'
+          NOTHING_STAGED_MESSAGE: 'the cases wrote no ledger this dispatch has not already committed'
+          PUSH_FAILED_MESSAGE: 'the pipeline-test ledgers lost every push attempt'
+        run: |
+          set -euo pipefail
+          mapfile -t TRIAL_ROOTS < <(python3 backend/utilities/pipeline_test_ledgers.py place \
+            --tree backend/var/trial-ledgers)
+          bash .github/scripts/commit-and-push.sh "${TRIAL_ROOTS[@]}"

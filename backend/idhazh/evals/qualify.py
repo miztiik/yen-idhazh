@@ -448,7 +448,7 @@ def identity(shards: Sequence[QualificationShard]) -> GateOutcome:
     )
 
 
-def budget(budget_: Budget) -> GateOutcome:
+def budget(budget_: Budget, *, repeats: int) -> GateOutcome:
     """Every job finished inside its bound, with the margin measured not guessed."""
     spent_minutes = budget_.slowest_shard_seconds / 60.0
     margin = budget_.job_budget_minutes - spent_minutes
@@ -460,7 +460,7 @@ def budget(budget_: Budget) -> GateOutcome:
             f"slowest job {spent_minutes:.1f} min ({share * 100:.0f} percent of the bound), "
             f"slowest item {budget_.slowest_item_seconds:.0f} s"
         ),
-        threshold=f"{budget_.job_budget_minutes:.0f} min per job",
+        threshold=f"{budget_.job_budget_minutes:.0f} min per job, at {repeats} passes per item",
         source=f"{_DISPATCH} job_budget_minutes, Rule #2",
         detail=f"margin {margin:.1f} min",
     )
@@ -582,7 +582,7 @@ def gates(
         publishable_length(corpus.observations, summarize),
         context_fit(corpus.observations, server),
         identity(shards),
-        budget(budget_),
+        budget(budget_, repeats=corpus.repeats),
         scored_denominator(corpus, evaluation=evaluation, run=run),
         faithfulness_floor(corpus, evaluation=evaluation, pinned=pinned),
         brief_copying_ceiling(corpus, evaluation=evaluation),

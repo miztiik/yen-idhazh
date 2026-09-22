@@ -200,6 +200,20 @@ read**, and where it is, the read needs nothing.
 opens one file, never a collection, and half a payload validated is a payload
 reported good on the half that happened to be first.
 
+**A bounded window can be the wrong window, and 2026-09-22 measured one.** The
+retrieval eval's live line scores every published day against a label set frozen
+on `assist.eval_corpus_through`. The obvious cover was the trailing window
+`assist.search_months` already names - bounded, and the shards a reader's tab
+actually fetches. It holds **7,044 items and not one labelled answer**, because
+the labels close in the oldest month and the window reaches the newest, so the
+reading came out at recall 0.000 with all 60 queries unanswerable. **That number
+is a fact about the window rather than about search**, and it is why this read is
+declared instead of covered: the question is how far the labels have drifted from
+the archive, and the items that answer it are the ones a window excludes. The two
+reads either side of it in the same module took their covers and every gated
+number stayed identical to the last digit
+([search-quality.md](search-quality.md#design-rationale)).
+
 **And three whole-tree walks that stayed.** `assemble.site_size` and
 `retention.measure` read the size of every file in the tree;
 `retention.count_published_items` parses every staged day payload. Each says so
@@ -221,9 +235,11 @@ of nineteen and looked finished, and its own upkeep grew with the other
 seventeen. Read the rows below to see the three answers in service. Do not read
 them as the set of places the rule applies.
 
-**Thirty reads over a collection a run appends to**, each with the cover or
+**Every read over a collection a run appends to**, each with the cover or
 the bound its own code declares. A helper that opens one named file is not
-listed: its cover is its argument. These are `backend/`'s;
+listed: its cover is its argument. A count of these rows would be a rotting
+number - the list grows every time a read is added - so the table states which
+reads are here and not how many. These are `backend/`'s;
 [the site's are below](#the-site-reads-the-same-collections-2026-09-09).
 
 ### A cover that is a span of days
@@ -238,6 +254,9 @@ listed: its cover is its argument. These are `backend/`'s;
 | the window refusal count | the same day files, through `load_item_health` | 30 days ending at the run date. **It took no new read.** The question - how many items the two-call sequence would not fit the window - is about the recent tail, and an answer over a longer span is dominated by shapes the pipeline no longer sends. The 30 dates are named by date arithmetic inside `load_item_health`, never by a directory walk, so the cost is 30 file opens whatever the archive holds. Read once on 2026-09-13 and written up in [the throughput page](../architecture/summarize/throughput.md); it is a verb a person types, off the daily path |
 | `ledger.reliability` | the feed-health day files in range | `collect.reliability_window_days` |
 | `ledger.load_published` | day files of `state/published/` | `collect.published_window_days`, **committed at `-1`** |
+| `evals.retrieval.load_corpus` | day directories of `frontend/public/digest/` | `assist.eval_corpus_through`, a pinned day rather than a rolling count. The day is read off the path and a later one is never opened, which is the whole saving: the gate was loading 32 days to score 6. A rolling count would be the wrong cover here - the pin holds the competitor set still for a frozen label set, so a cover that moved with the calendar would put the gate back where it was. `None` reads every day and is what the operator surface asks for |
+| `evals.retrieval.load_index_corpus`, pinned | one month shard of `frontend/public/assist/index/` | `assist.eval_corpus_through` again, matched against the shard **stem** before the file is opened, then the rows narrowed to the day. A month shard is coarser than a pin, so the second step is what makes the read exact - and it is cheap only because the first already refused every later shard |
+| `evals.retrieval.load_index_corpus`, live | the newest shards of the same directory | `assist.search_months` and `assist.search_min_days`, the two knobs `readScope` in `search.ts` reads. Newest-first, so it is at most `months + 1` shards whatever the archive holds |
 | `retention.prune_counterfactual_scores` | day files of `state/counterfactual-scores/` | `lens_weights.window_days`, committed at 30. It walks the tree to find what to delete, so its cost falls as it works - a day it deletes is a day no later run opens. The walk is what bounds the collection: the ledger gains rows on every run and nothing else takes any away |
 | `stages.assemble._earlier_days` | `digest.json` of the published days the same-story window can still reach | `assemble.same_story_window_hours`, committed at 36, which is `ceil(hours / 24)` days - one. The dates are named by date arithmetic, never by a directory walk, so it is one file open on the thousandth day and on the third. A bounded fixture cannot answer its question: whether this morning's story is one an earlier PUBLISHED day already carried, which only that day's own payload holds the vectors for. 0 reads nothing |
 
@@ -254,6 +273,7 @@ listed: its cover is its argument. These are `backend/`'s;
 | `ledger.load_host_fingerprint_shard` | one host-fingerprint day file | one date |
 | `similarity.holdout.score_marks` | `state/content-similarity-judge/holdout-pairs.csv`, then one published day payload for each distinct date its rows name | the length of the hand-marked file, and nothing else. The verb that calls it is typed by a person; another year of archive adds no read, and a day nothing marks is never opened. This is the backend twin of `similarity-holdout.holdoutReading` below, and it has the same cover for the same reason |
 | `corpus.scored_from_items` | one run's items directory | one run |
+| `evals.retrieval.index_months` | one listing of `frontend/public/assist/index/` | the shards' own names. The question is which months exist, and a file answers it without being opened. The eval's knob check used to load every shard to learn the same thing |
 
 ### Unbounded, and it says so
 
@@ -271,6 +291,8 @@ listed: its cover is its argument. These are `backend/`'s;
 | `item_health_provenance.archive_columns` | every shard of every day of `state/item-health/` | the question is whether ANY run has ever written a column, and a window answers only for the days inside it - so it would report a column retired last year and a column nothing was ever wired to fill as the same thing. It is a verb a person types, off the daily path, and what it prints is pasted into [the column report](../architecture/sources/item-health-columns.md). No test repeats it (`CLAUDE.md` section 13) |
 | `empty_column_census.census` | every shard of every day of `state/item-health/` and of `state/host-fingerprint/` | same question as the row above, asked of every published ledger rather than one, and crossed with the reader map on each contract so that a column with neither a reader nor a writer exits non-zero. A window cannot answer it for the same reason, and a test cannot hold it for a second one: an assertion that a column is empty goes red the day it first fills, which is a date rather than an edit. It is a verb a person types, off the daily path. Measured 2026-09-21: 29 day files and 14,026 item rows, 6 day files and 76 host rows |
 | `sample_sheet.index` | every committed `digest.json` under `frontend/public/digest/` | a drawn pair can straddle midnight, so its two articles are not always on the draw's own date - resolving against that date alone lost 2,035 of the 2,804 pairs drawn over 29 days. It is a verb a person types when labelling the holdout ([../how-to/label-the-similarity-holdout.md](../how-to/label-the-similarity-holdout.md)), off the daily path, and nothing in the pipeline reads what it writes |
+| the retrieval eval's live reading | every published day, through `load_corpus` with no `through` | it asks how far the frozen labels have drifted from the archive, so the answer is about the items OUTSIDE any window: every story published since the labels closed competes for the same ten slots. It is the one read in that module a cover cannot take, and the paragraph below records the window that was tried |
+| `measure_retrieval.report` | every published day and every committed month shard | it asks whether the index names every published item. A window would compare the days inside it and say nothing about the ones outside, which is the only place a dropped item can hide. It is a verb a person types, off the daily path, and it was a gated test until 2026-09-22 |
 
 **Two reads on this table are scheduled by nothing, and that is the whole of
 their cover.** `plan` is one of four verbs on

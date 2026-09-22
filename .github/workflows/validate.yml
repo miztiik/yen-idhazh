@@ -42,9 +42,6 @@ on:
       corpus_per_shard:
         description: 'Frozen articles each shard replays'
         default: '10'
-      repeats:
-        description: 'Deterministic repeats per frozen article'
-        default: '3'
       job_budget_minutes:
         description: 'Per-job bound. The budget gate is measured against it (Guardrail #2).'
         default: '330'
@@ -160,7 +157,6 @@ jobs:
         env:
           SHARDS: ${{ inputs.shards }}
           CORPUS_PER_SHARD: ${{ inputs.corpus_per_shard }}
-          REPEATS: ${{ inputs.repeats }}
           JOB_BUDGET_MINUTES: ${{ inputs.job_budget_minutes }}
         run: |
           set -euo pipefail
@@ -168,9 +164,9 @@ jobs:
             echo "shards must be an integer from 1 through 8" >&2
             exit 1
           fi
-          for count in "$CORPUS_PER_SHARD" "$REPEATS" "$JOB_BUDGET_MINUTES"; do
+          for count in "$CORPUS_PER_SHARD" "$JOB_BUDGET_MINUTES"; do
             if ! [[ "$count" =~ ^[1-9][0-9]{0,3}$ ]]; then
-              echo "corpus_per_shard, repeats and job_budget_minutes are 1 through 9999" >&2
+              echo "corpus_per_shard and job_budget_minutes are 1 through 9999" >&2
               exit 1
             fi
           done
@@ -358,7 +354,6 @@ jobs:
             --date "${{ needs.plan.outputs.date }}" \
             --shard "${{ matrix.shard }}" \
             --shards "${{ fromJSON(inputs.shards) }}" \
-            --repeats "${{ fromJSON(inputs.repeats) }}" \
             --corpus-per-shard "${{ fromJSON(inputs.corpus_per_shard) }}" \
             --weights "$CANDIDATE_WEIGHTS" \
             --commit "${GITHUB_SHA}" \

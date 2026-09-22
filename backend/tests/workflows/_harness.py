@@ -139,7 +139,6 @@ DISPATCH_INPUT_SHAPES: Final[dict[tuple[str, str], str]] = {
     ("validate.yml", "candidate_models_file"): DISPATCH_READ_BY_NAME,
     ("validate.yml", "corpus_per_shard"): "^[1-9][0-9]{0,3}$",
     ("validate.yml", "job_budget_minutes"): "^[1-9][0-9]{0,3}$",
-    ("validate.yml", "repeats"): "^[1-9][0-9]{0,3}$",
     ("validate.yml", "shards"): "^[1-8]$",
 }
 
@@ -1052,6 +1051,9 @@ def _stages_a_state_path(workflow: dict[str, object]) -> bool:
     what its registered tenants named, so the paths are in a shell variable and
     no reader of the file can resolve them - that workflow is covered by the
     tests that read it against its tenants instead.
+    `idhazh-pipeline-tests.yaml` is the second: its roots are printed by
+    `pipeline_test_ledgers place` out of the declared cases, and
+    `test_pipeline_tests_workflow.py` holds it against those.
 
     A folded `run: >-` body is one line by the time PyYAML has read it and a
     `run: |` body is many, so the search is per line with the continuations

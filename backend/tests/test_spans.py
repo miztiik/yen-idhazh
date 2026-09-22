@@ -377,10 +377,10 @@ def test_tracing_off_writes_nothing_at_all(tmp_path: Path, monkeypatch: MonkeyPa
 
 
 def test_there_is_no_free_text_key_to_put_a_prompt_in() -> None:
-    """The structural half: the SDK's own text fields have no name here.
+    """The structural half: a tracing client's own text fields have no name here.
 
-    Langfuse fills `input` and `output` with the prompt and the completion by
-    default, and this repository is public. So the vocabulary is closed and
+    A tracing SDK fills `input` and `output` with the prompt and the completion
+    by default, and this repository is public. So the vocabulary is closed and
     neither name is in it, along with the three source fields a call site could
     reach for.
     """
@@ -417,38 +417,16 @@ def test_a_span_records_nothing_for_a_value_nobody_measured() -> None:
     assert dict(span.attributes()) == {"http_status": 200, "body_bytes": 0}
 
 
-def test_a_named_host_with_no_package_falls_back_to_the_file(
-    monkeypatch: MonkeyPatch,
-) -> None:
-    """A publish job may not fail on an observability dependency (section 1a).
+def test_a_traced_shard_writes_a_file_and_opens_no_socket() -> None:
+    """The only destination a span has is a file on the machine that opened it.
 
-    `langfuse` is an optional extra, so this is the state CI is always in: the
-    variables could be set and the package is not installed. The run keeps its
-    file sink and says so in the log.
+    The hosted sink went on 2026-09-22 (Guardrail #1: a build-time producer makes
+    no runtime call to a third party). This is what stops a second destination
+    arriving by a fan-out nobody reviewed: with tracing on the sink IS the file
+    sink, not a fan-out that happens to contain one.
     """
-    monkeypatch.setenv("LANGFUSE_HOST", "https://cloud.langfuse.test")
-    monkeypatch.setenv("LANGFUSE_PUBLIC_KEY", "pk-fixture")
-    monkeypatch.setenv("LANGFUSE_SECRET_KEY", "sk-fixture")
-
     sink = trace_sink(traced_settings(), run_id="2026-08-30-1", shard=0)
-
-    assert isinstance(sink, telemetry.FileSink | telemetry.FanOut)
-
-
-def test_a_host_is_never_reached_unless_all_three_variables_are_set(
-    monkeypatch: MonkeyPatch,
-) -> None:
-    """Owner decision, 2026-08-30: a file by default, a host only when named.
-
-    Asserted one variable at a time, because a check written as `if host` would
-    pass this with the keys missing and then fail inside the client.
-    """
-    for named in ("LANGFUSE_HOST", "LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY"):
-        for variable in ("LANGFUSE_HOST", "LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY"):
-            monkeypatch.delenv(variable, raising=False)
-        monkeypatch.setenv(named, "set")
-        sink = trace_sink(traced_settings(), run_id="2026-08-30-1", shard=0)
-        assert isinstance(sink, telemetry.FileSink)
+    assert isinstance(sink, telemetry.FileSink)
 
 
 class Collect:

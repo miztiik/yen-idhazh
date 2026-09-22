@@ -99,6 +99,16 @@ class AppConfig(Contract):
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-22T16:00",
+            change="run.qualification_repeats, additive, default 3, floor 3, ceiling 10.",
+            why="The replay count is a knob with a floor, not a dispatch input that could be 1.",
+        ),
+        ChangelogEntry(
+            version="2026-09-22T14:00",
+            change="observability.tracing_enabled drops the hosted-host sentence. No knob moved.",
+            why="A span has one destination now, and it is the committed file.",
+        ),
+        ChangelogEntry(
             version="2026-09-22T12:00",
             change="run.push_deadline_seconds, additive, default 300.",
             why="The push loop is bounded by a clock now, not by three attempts.",
@@ -107,16 +117,6 @@ class AppConfig(Contract):
             version="2026-09-22",
             change="bench.repeats, additive, default 3 and at least 2.",
             why="Both numbers the bench job's timeout is spent on now sit in one file.",
-        ),
-        ChangelogEntry(
-            version="2026-09-21T15:00",
-            change="council.first_night, repair_window_nights and repair_dates_a_night, additive.",
-            why="A night plans the older dates its tenants are behind on, inside a bounded window.",
-        ),
-        ChangelogEntry(
-            version="2026-09-21T13:00",
-            change="council descriptions say shard where they said leg. No knob moved.",
-            why="`leg` was a second name for the shard the council already sizes by.",
         ),
         ChangelogEntry(
             version="2026-08-21",

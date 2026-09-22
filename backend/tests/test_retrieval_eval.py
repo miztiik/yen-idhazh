@@ -11,10 +11,19 @@ number with its spread. It is a gate on the ranking - `assist.recall_min` - and
 a report on everything else. Nothing here touches the network: the encoder is
 committed under `frontend/static/` and the archive is committed under
 `frontend/public/` (Guardrail #7).
+
+**Three of the four reads here carry a cover, and the fourth says why it has
+none.** The gate reads the days through `assist.eval_corpus_through`, because
+nothing it asks can be answered by a day the pin excludes. The index comparison
+reads the shard that pin names. The knob check reads a listing. The live
+reading opens every published day, and `live_corpus` below carries the reason
+that is the only honest answer. The one question none of them fits - does the
+index name every published item - is `backend/utilities/measure_retrieval.py`.
 """
 
 from __future__ import annotations
 
+import json
 import math
 from collections import Counter
 from pathlib import Path
@@ -241,14 +250,86 @@ def test_a_day_written_by_another_encoder_contributes_no_vectors(tmp_path: Path)
     assert corpus.coverage == 0.0
 
 
+def write_day(root: Path, date: str, body: str) -> None:
+    year, month, day = date.split("-")
+    directory = root / f"frontend/public/digest/{year}/{month}/{day}"
+    directory.mkdir(parents=True)
+    (directory / "digest.json").write_text(body, encoding="utf-8")
+
+
+def day_payload(date: str) -> str:
+    return f'{{"date": "{date}", "items": [{{"item_id": "ai-01", "entities": []}}]}}'
+
+
+def test_the_pin_cuts_the_read_rather_than_the_rows_it_returns(tmp_path: Path) -> None:
+    """The bound has to hold when a later day lands, and cost nothing when it does.
+
+    Three days, one of them past the pin. The pinned read returns two and the
+    unpinned read returns three, so the filter is doing the work rather than the
+    fixture happening to be small. Then the later day is replaced by bytes no
+    JSON parser accepts: the pinned read still returns two, which it could only
+    do by never opening that file, and the unpinned read fails on it.
+    """
+    for date in ("2026-08-25", "2026-08-26", "2026-08-27"):
+        write_day(tmp_path, date, day_payload(date))
+
+    assert len(retrieval.load_corpus(tmp_path, through="2026-08-26").items) == 2
+    assert len(retrieval.load_corpus(tmp_path).items) == 3
+
+    later = tmp_path / "frontend/public/digest/2026/08/27/digest.json"
+    later.write_text("not json at all", encoding="utf-8")
+    assert len(retrieval.load_corpus(tmp_path, through="2026-08-26").items) == 2
+    with pytest.raises(json.JSONDecodeError):
+        retrieval.load_corpus(tmp_path)
+
+
+def test_the_pin_drops_a_month_shard_before_the_shard_is_opened(tmp_path: Path) -> None:
+    """The index bound, proved the same way, and then narrowed to the day.
+
+    A month shard is coarser than the pin, so the stem test alone keeps days the
+    pin excludes. The rows are narrowed afterwards - which is only cheap because
+    the stem test already refused every later shard.
+    """
+    directory = tmp_path / retrieval.INDEX_RELDIR
+    directory.mkdir(parents=True)
+    (directory / "2026-08.json").write_text(
+        '{"entries": [{"date": "2026-08-26", "item_id": "ai-01", "vector": null}, '
+        '{"date": "2026-08-27", "item_id": "ai-02", "vector": null}]}',
+        encoding="utf-8",
+    )
+    (directory / "2026-09.json").write_text("not json at all", encoding="utf-8")
+
+    pinned = retrieval.load_index_corpus(tmp_path, through="2026-08-26")
+    assert [row.item_id for row in pinned.items] == ["ai-01"]
+    with pytest.raises(json.JSONDecodeError):
+        retrieval.load_index_corpus(tmp_path)
+
+
+def test_the_months_on_file_are_read_off_their_own_names(tmp_path: Path) -> None:
+    """Which months exist is a listing. Opening one to find out would be the cost."""
+    assert retrieval.index_months(tmp_path) == ()
+    directory = tmp_path / retrieval.INDEX_RELDIR
+    directory.mkdir(parents=True)
+    for stem in ("2026-09", "2026-08"):
+        (directory / f"{stem}.json").write_text("not json at all", encoding="utf-8")
+    assert retrieval.index_months(tmp_path) == ("2026-08", "2026-09")
+
+
 # --------------------------------------------------------------------------
 # The query set
 # --------------------------------------------------------------------------
 
 
 @pytest.fixture(scope="session")
-def corpus() -> Corpus:
-    return retrieval.load_corpus(REPO_ROOT)
+def corpus(config: AppConfig) -> Corpus:
+    """The scored set, cut by the pin rather than filtered after the read.
+
+    Cover: `assist.eval_corpus_through`. Nothing here asks a question a day past
+    the pin can answer - the gate is pinned, the labels close on the same day,
+    and the floor is measured against the set the gate scores - so opening the
+    rest of the archive would cost more every week and change no number.
+    """
+    return retrieval.load_corpus(REPO_ROOT, through=config.assist.eval_corpus_through)
 
 
 @pytest.fixture(scope="session")
@@ -308,28 +389,6 @@ def test_the_pin_holds_the_competitor_set_still() -> None:
     assert corpus.through(None) is corpus
 
 
-def test_the_pinned_gate_cannot_drift_with_the_archive(
-    corpus: Corpus, config: AppConfig
-) -> None:
-    """The gate's own defence, asserted rather than argued.
-
-    Unpinned, this measurement fell 0.0479 per thousand published items and the
-    gate failed twice in five days on commits that touched no ranking code. The
-    pin is only worth having if a later day genuinely cannot reach the scored
-    set, so that is the assertion - not the recall number, which the gate above
-    already owns.
-    """
-    pinned = config.assist.eval_corpus_through
-    assert pinned is not None, "the gate is unpinned and will expire again"
-    scored = corpus.through(pinned)
-    assert scored.items, "the pin excludes the whole archive"
-    assert max(row.date for row in scored.items) <= pinned
-    assert len(scored.items) < len(corpus.items), (
-        "the pin is at or past the newest published day, so it is not yet holding "
-        "anything still - it will start drifting again as soon as it does"
-    )
-
-
 # --------------------------------------------------------------------------
 # The measurement
 # --------------------------------------------------------------------------
@@ -350,7 +409,7 @@ def report(
 ) -> RetrievalReport:
     """The gated measurement, scored against the corpus the labellers saw."""
     return retrieval.evaluate(
-        corpus.through(config.assist.eval_corpus_through),
+        corpus,
         queries,
         embedded,
         limit=config.assist.result_limit,
@@ -359,15 +418,34 @@ def report(
 
 
 @pytest.fixture(scope="session")
+def live_corpus() -> Corpus:
+    """Every published day. Cover: `-1`, and the reason is the question itself.
+
+    This is the one read in this module a cover cannot take, and it is declared
+    rather than bounded (`docs/concepts/growing-reads.md`). The question is how
+    far the frozen labels have drifted from the archive, and every item
+    published since they closed is a competitor for the same ten slots - so the
+    answer is about the items outside any window, not the ones inside it.
+
+    Measured 2026-09-22: the trailing window `assist.search_months` names holds
+    7,044 items and not one labelled answer, because the labels close on
+    `assist.eval_corpus_through` and the window reaches the newest month only.
+    The reading over it is 0.000 with all 60 queries unanswerable, which is a
+    fact about the window rather than about search.
+    """
+    return retrieval.load_corpus(REPO_ROOT)
+
+
+@pytest.fixture(scope="session")
 def live_report(
-    corpus: Corpus,
+    live_corpus: Corpus,
     queries: tuple[LabelledQuery, ...],
     embedded: list[list[float]],
     config: AppConfig,
 ) -> RetrievalReport:
     """The same measurement over the whole archive. Reported, never gated."""
     return retrieval.evaluate(
-        corpus,
+        live_corpus,
         queries,
         embedded,
         limit=config.assist.result_limit,
@@ -434,9 +512,13 @@ def test_the_reader_facing_number_is_reported_with_its_coverage(
 
 
 @pytest.fixture(scope="session")
-def index_corpus() -> Corpus:
-    """Every committed month, read the way a reader's tab reads it."""
-    return retrieval.load_index_corpus(REPO_ROOT)
+def index_corpus(config: AppConfig) -> Corpus:
+    """The pinned set again, read the way a reader's tab reads it.
+
+    Cover: `assist.eval_corpus_through`, matched against the shard stem, so the
+    comparison below opens the month the pin names and no later one.
+    """
+    return retrieval.load_index_corpus(REPO_ROOT, through=config.assist.eval_corpus_through)
 
 
 @pytest.fixture(scope="session")
@@ -453,27 +535,12 @@ def index_report(
     it is only the days between the pin and today.
     """
     return retrieval.evaluate(
-        index_corpus.through(config.assist.eval_corpus_through),
+        index_corpus,
         queries,
         embedded,
         limit=config.assist.result_limit,
         floor=config.assist.similarity_floor,
     )
-
-
-def test_the_index_names_every_published_item(corpus: Corpus, index_corpus: Corpus) -> None:
-    """The archive stopped carrying day payloads, so the index is the corpus.
-
-    Membership first, because a lost item is a different failure from a lost
-    vector and only one of them shows up in recall as a small number.
-    """
-    if not index_corpus.items:
-        pytest.skip("no committed month index in this checkout")
-
-    assert {item.address for item in index_corpus.items} == {
-        item.address for item in corpus.items
-    }
-    assert len(index_corpus.searchable) == len(corpus.searchable)
 
 
 def test_moving_search_to_the_index_cost_no_recall(
@@ -514,9 +581,12 @@ def test_a_reader_only_searches_the_months_the_knob_names(config: AppConfig) -> 
     the knobs are the only thing standing between a reader and a fourteen-second
     wait at three months. The floor is the other half: a calendar shard is not a
     window, so on the first of a month `search_months` alone reaches one day.
+
+    The set of months on file comes from a listing rather than a load. The
+    question is which months exist, and a shard's own name answers it.
     """
-    whole = retrieval.load_index_corpus(REPO_ROOT)
-    if not whole.items:
+    every = set(retrieval.index_months(REPO_ROOT))
+    if not every:
         pytest.skip("no committed month index in this checkout")
 
     scoped = retrieval.load_index_corpus(
@@ -527,7 +597,6 @@ def test_a_reader_only_searches_the_months_the_knob_names(config: AppConfig) -> 
     assert scoped.items, "the configured scope reads no month at all"
 
     months = {item.date[:7] for item in scoped.items}
-    every = {item.date[:7] for item in whole.items}
     # One extra shard when the floor bites, and one only. Never more.
     assert len(months) <= config.assist.search_months + 1
     assert months <= every
