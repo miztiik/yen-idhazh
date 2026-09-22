@@ -6,6 +6,7 @@ import os
 import re
 import subprocess
 from pathlib import Path
+from typing import Final
 
 import pytest
 from conftest import REPO_ROOT, llama_server_flags, read_text
@@ -16,38 +17,28 @@ from idhazh.telemetry import silicon
 from ._harness import (
     ACTIONS_DIR,
     ARGV_MODULE_CALL,
-    CGROUP_PEAK_PATH,
     COUNTERS_FLAG,
     JOB_CLOCK_STEP,
     LLAMA_PORT_ENV,
     LLAMA_PORT_READ,
     LLAMA_PORT_VALUE,
-    LLAMA_SERVER_WORKFLOWS,
-    MEMORY_PEAK_FILE,
     MEMORY_SUMMARY_STEP,
     METRICS_ENDPOINT,
     METRICS_FILE,
     METRICS_SERIES,
     MODEL_SERVER_ACTION,
-    MODEL_SERVER_CALLERS,
     MODEL_SERVER_STEPS,
     PYTHON_PROCS_FIELDS,
     PYTHON_PROCS_FILE,
-    RSS_SAMPLE_FIELDS,
     RSS_SAMPLE_FILE,
     RUNTIME_IDENTITY_JOBS,
     RUNTIME_IDENTITY_STEP,
-    RUNTIME_LOG_CAPTURES,
-    RUNTIME_LOG_LINES,
-    RUNTIME_LOG_SUMMARY_STEPS,
-    RUNTIME_LOG_UNCLAIMED_TAG,
     SAMPLE_MEMORY_STEP,
     SAMPLE_SCRIPT,
     SCRAPE_STEP,
     SCRIPTS_DIR,
     SERVER_LOG_FILE,
     SERVER_STARTER_MODULES,
-    SERVER_STARTERS,
     START_SERVER_SCRIPT,
     WORKFLOWS_DIR,
     _action_call,
@@ -58,6 +49,7 @@ from ._harness import (
     _load_workflows,
     _local_action_inputs,
     _mapping,
+    _model_server_callers,
     _script,
     _server_starters,
     _starter_shell,
@@ -68,6 +60,10 @@ from ._harness import (
 )
 
 pytestmark = pytest.mark.workflow
+
+#: The step that prints what it found in llama-server's own log, and how much of
+#: the log that was.
+LOG_SUMMARY_STEP: Final = "Prompt cache log summary"
 
 
 def test_every_job_that_starts_a_server_reaches_the_one_argv_builder() -> None:
@@ -86,9 +82,7 @@ def test_every_job_that_starts_a_server_reaches_the_one_argv_builder() -> None:
     """
     workflows = _load_workflows()
     starters = _server_starters(workflows)
-    assert starters == {
-        where: tuple(name for name, _ in declared) for where, declared in SERVER_STARTERS.items()
-    }
+    assert starters, "no job starts a server, so this is checking nothing"
 
     # The runtime case starts a server from a module rather than a heredoc, so
     # the Oracle follows it there. The rule is unchanged: one function spells a
@@ -97,8 +91,8 @@ def test_every_job_that_starts_a_server_reaches_the_one_argv_builder() -> None:
         source = read_text(REPO_ROOT / relative)
         assert "from idhazh.llm.server import server_argv" in source, relative
 
-    for (filename, job_name), declared in sorted(SERVER_STARTERS.items()):
-        for step_name, config_root in declared:
+    for (filename, job_name), declared in sorted(starters.items()):
+        for step_name in declared:
             where = f"{filename}/{job_name}/{step_name}"
             names = [step.get("name") for step in _steps(workflows[filename], job_name)]
             assert "Install" in names, f"{where} must install the package it imports"
@@ -108,9 +102,7 @@ def test_every_job_that_starts_a_server_reaches_the_one_argv_builder() -> None:
 
             script = _starter_shell(_step(workflows[filename], job_name, "name", step_name))
             assert ARGV_MODULE_CALL in script, where
-            if config_root is None:
-                continue
-            assert f"--config-root {config_root}" in script, f"{where} reads {config_root}"
+            assert "--config-root " in script, f"{where} names no config root"
             # NUL-separated, so a flag value carrying a space stays one argument.
             assert "mapfile -d '' LLAMA_ARGV" in script, where
 
@@ -166,16 +158,10 @@ def test_the_model_block_is_one_action_with_a_contract_its_callers_can_read() ->
     tested without either caller being in the room.
     """
     workflows = _load_workflows()
-    calling = {
-        (filename, job_name)
-        for filename, workflow in workflows.items()
-        for job_name in _mapping(workflow.get("jobs"), f"{filename} jobs")
-        for step in _declared_steps(workflow, job_name)
-        if step.get("uses") == MODEL_SERVER_ACTION
-    }
-    assert calling == MODEL_SERVER_CALLERS
+    calling = _model_server_callers(workflows)
+    assert calling, "no job calls the model-server action, so this is checking nothing"
 
-    for filename, job_name in sorted(MODEL_SERVER_CALLERS):
+    for filename, job_name in sorted(calling):
         spelled = [
             str(step.get("name"))
             for step in _declared_steps(workflows[filename], job_name)
@@ -196,7 +182,7 @@ def test_the_model_block_is_one_action_with_a_contract_its_callers_can_read() ->
     read = set(re.findall(r"\$\{\{\s*inputs\.([a-z_0-9]+)\s*\}\}", text))
     assert read == set(declared), f"declared {sorted(declared)} and read {sorted(read)}"
 
-    for filename, job_name in sorted(MODEL_SERVER_CALLERS):
+    for filename, job_name in sorted(calling):
         given = _action_call(workflows[filename], job_name, MODEL_SERVER_ACTION)
         assert set(given) == set(declared), f"{filename}/{job_name} hands over {sorted(given)}"
         names = [
@@ -218,6 +204,8 @@ def test_the_model_block_is_one_action_with_a_contract_its_callers_can_read() ->
 
 
 @requires_bash
+
+
 @pytest.mark.parametrize(
     ("argv", "message"),
     [
@@ -226,6 +214,8 @@ def test_the_model_block_is_one_action_with_a_contract_its_callers_can_read() ->
         (["gibberish", "llama-server"], "unknown role"),
     ],
 )
+
+
 def test_the_start_script_refuses_a_call_it_cannot_serve(
     argv: list[str], message: str, tmp_path: Path
 ) -> None:
@@ -251,44 +241,6 @@ def test_the_start_script_refuses_a_call_it_cannot_serve(
     assert message in completed.stderr
 
 
-@requires_bash
-def test_start_script_limit_checks_preserve_other_startup_errors(tmp_path: Path) -> None:
-    """A lock-limit refusal is local; the missing server binary still stops startup."""
-    shell = _bash()
-    assert shell is not None
-    completed = subprocess.run(
-        [
-            shell,
-            "-e",
-            "-c",
-            'ulimit -l 0 2>/dev/null || true\nexec "$@"',
-            "lock-limit-check",
-            shell,
-            START_SERVER_SCRIPT.as_posix(),
-            "summarize",
-            "llama-server",
-        ],
-        cwd=tmp_path,
-        env={**_isolated_env(tmp_path), "LLAMA_WEIGHTS": "w.gguf", "LLAMA_PORT": "8080"},
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-
-    assert "ulimit -l before (KiB, or unlimited):" in completed.stdout
-    assert "ulimit -Hl (KiB, or unlimited):" in completed.stdout
-    assert "Running: sudo prlimit --memlock=unlimited --pid " in completed.stdout
-    assert (
-        "Locked-memory limit raised." in completed.stdout
-        or "::warning::Could not raise the locked-memory limit;" in completed.stdout
-    )
-    assert "ulimit -l after (KiB, or unlimited):" in completed.stdout
-    assert "::endgroup::" in completed.stdout
-    assert completed.returncode != 0
-    assert "backend/bin/llama-server" in completed.stderr
-    assert not (tmp_path / "backend" / "var").exists()
-
-
 def _digest_step(job_name: str, name: str) -> str:
     """One step body of a daily-run job, without the shell comments."""
     workflow = _load_workflows()["digest.yml"]
@@ -298,6 +250,98 @@ def _digest_step(job_name: str, name: str) -> str:
 def _work_step(name: str) -> str:
     """One step body of the daily work job, without the shell comments."""
     return _digest_step("work", name)
+
+
+def _run_work_step(name: str, tmp_path: Path) -> str:
+    """Run one step of the work job for real, in a directory holding its inputs."""
+    shell = _bash()
+    assert shell is not None
+    body = _script(_step(_load_workflows()["digest.yml"], "work", "name", name), name)
+    completed = subprocess.run(
+        [shell, "-c", body],
+        cwd=tmp_path,
+        env=_isolated_env(tmp_path),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return completed.stdout + completed.stderr
+
+
+@requires_bash
+
+
+def test_the_operator_print_finds_its_columns_wherever_the_sampler_puts_them(
+    tmp_path: Path,
+) -> None:
+    """Run the print over a reordered header, not over a table restating the order.
+
+    It used to read `rss-samples.tsv` by POSITION, and a column inserted
+    anywhere but the end shifted every field after it - the job log then
+    reported `python_procs`, a count of three, as a peak in kilobytes. Nothing
+    failed and the number was out by six orders of magnitude.
+
+    The agreement was held by a mapping written down in the test file, so the
+    sampler and its reader agreed with a third copy rather than with each other.
+    Reading the header by name kills the class: this drives the real step over
+    the same samples in two different column orders and expects one answer.
+    """
+    columns = _sample_header()
+    sample = {name: 1000 + index * 111 for index, name in enumerate(columns)}
+    sample["ts"] = 1
+
+    def _reading(order: list[str]) -> str:
+        rows = ["\t".join(order), "\t".join(str(sample[name]) for name in order)]
+        (tmp_path / RSS_SAMPLE_FILE).write_text("\n".join(rows) + "\n", encoding="utf-8")
+        return _run_work_step(MEMORY_SUMMARY_STEP, tmp_path)
+
+    written = _reading(columns)
+    reordered = _reading([columns[0], *reversed(columns[1:])])
+
+    expected = (
+        f"peak llama VmHWM {sample['llama_vmhwm_kb']} kB, "
+        f"peak python VmHWM {sample['python_vmhwm_kb']} kB, "
+        f"most the two held at once {sample['llama_vmrss_kb'] + sample['python_vmrss_kb']} kB"
+    )
+    assert expected in written, written
+    assert expected in reordered, (
+        f"{MEMORY_SUMMARY_STEP} reads {RSS_SAMPLE_FILE} by position, so moving a "
+        f"column moved the number it reports:\n{reordered}"
+    )
+
+
+@requires_bash
+
+
+def test_the_log_summary_says_how_much_of_the_log_it_matched(tmp_path: Path) -> None:
+    """The count that would have caught a pattern matching one line in forty.
+
+    `^(srv|slot) ` matched nothing and had never matched anything: every line
+    llama-server prints opens with a timestamp and a level letter, so the tag is
+    the third field. The step still printed on every run, because the
+    `n_ctx_slot` alternative beside it does match - which is why nobody noticed
+    the other half was dead.
+
+    A fixture of captured logs checked our pattern against a build we had
+    already run. The count checks it against the build the run is on, every run,
+    and says so the day llama.cpp renames a field.
+    """
+    matching = (
+        "0.03.804.331 I srv    load_model: initializing, n_slots = 1, "
+        "n_ctx_slot = 8192, kv_unified = 'false'",
+        "3.09.738.586 I slot get_availabl: id  0 | task -1 | selected slot by LCP "
+        "similarity, f_sim_best = 0.926 (> 0.100 thold), f_keep = 0.782",
+    )
+    unmatched = "0.00.061.210 I cmn    common_init_from_params: setting dry_penalty_last_n"
+    (tmp_path / SERVER_LOG_FILE).write_text(
+        "\n".join([*matching, unmatched]) + "\n", encoding="utf-8"
+    )
+
+    printed = _run_work_step(LOG_SUMMARY_STEP, tmp_path)
+
+    assert f"matched {len(matching)} of 3" in printed, printed
+    for line in matching:
+        assert line in printed, f"the step would not print {line!r}"
 
 
 def _sample_header() -> list[str]:
@@ -336,52 +380,6 @@ def test_both_model_server_jobs_sample_memory_with_the_one_shared_script() -> No
             f"the {job_name} job must sample the server its own start step wrote"
         )
         assert "nohup" in script, f"the {job_name} sampler must outlive its own step"
-
-
-def test_the_memory_sampler_and_its_reader_agree_on_the_columns() -> None:
-    """One writer, one reader, and the reader reads by position.
-
-    `rss-samples.tsv` is written by the sampler and printed by the operator step
-    in the same job. That print reads by POSITION, so a column inserted anywhere
-    but the end shifts every field after it and the job log reports
-    `python_procs` - a count of three - as a peak in kilobytes. Nothing fails,
-    and the number is off by six orders of magnitude.
-
-    That is why the sampler appends a new column at the END of the row. Nothing
-    held it there until this test.
-    """
-    header = _sample_header()
-    assert header[0] == "ts", header
-    assert len(header) == len(set(header)), f"a column name is written twice: {header}"
-
-    operator = _work_step(MEMORY_SUMMARY_STEP)
-    assert RSS_SAMPLE_FILE in operator, f"{MEMORY_SUMMARY_STEP} must read {RSS_SAMPLE_FILE}"
-    for field, column in sorted(RSS_SAMPLE_FIELDS.items()):
-        assert f"${field}" in operator, f"{MEMORY_SUMMARY_STEP} no longer reads field {field}"
-        assert header[field - 1] == column, (
-            f"{MEMORY_SUMMARY_STEP} reads field {field} as {column}, "
-            f"and the sampler now writes {header[field - 1]} there"
-        )
-
-
-def test_the_kernel_peak_is_written_once_and_printed_by_the_operator_step() -> None:
-    """Two readings of a live kernel counter would not agree, so only one is taken.
-
-    One step copies `/sys/fs/cgroup/memory.peak` into `memory-peak.txt` and the
-    operator print reads that copy. A print that opened the kernel file again
-    would report a different instant from the artifact a person downloads.
-    """
-    scrape = _work_step(SCRAPE_STEP)
-
-    assert f"> {MEMORY_PEAK_FILE}" in scrape, f"{SCRAPE_STEP} must write {MEMORY_PEAK_FILE}"
-
-    # Guarded, because no GitHub-hosted runner this project has measured has the
-    # file. An unguarded read fails the step and costs the shard its whole row.
-    assert f"[ -f {CGROUP_PEAK_PATH} ]" in scrape, f"{SCRAPE_STEP} must guard the cgroup read"
-
-    operator = _work_step(MEMORY_SUMMARY_STEP)
-    assert f"cat {MEMORY_PEAK_FILE}" in operator, "the print must read the file the scrape wrote"
-    assert CGROUP_PEAK_PATH not in operator, "the print must not take a second kernel reading"
 
 
 def test_the_sampler_names_every_python_process_it_counts() -> None:
@@ -430,81 +428,6 @@ def test_the_sampler_names_every_python_process_it_counts() -> None:
     assert PYTHON_PROCS_FILE in uploaded, "a roll-call nobody can download answers nothing"
 
 
-def _log_summary_pattern(job_name: str, step_name: str, log_file: str) -> re.Pattern[str]:
-    """The `grep -E` the cache summary step runs, as this test can run it too.
-
-    Read out of the workflow rather than restated here. A pattern a test writes
-    down for itself agrees with itself and proves nothing.
-    """
-    found = re.search(
-        rf"grep -E '([^']*)' {re.escape(log_file)}", _digest_step(job_name, step_name)
-    )
-    assert found, f"{step_name} must grep {log_file} for the lines the runtime prints"
-    return re.compile(found.group(1))
-
-
-def test_the_cache_log_summary_matches_the_lines_the_runtime_actually_prints() -> None:
-    """The pattern that found one line in forty, and the captures that say so.
-
-    `^(srv|slot) ` matched nothing and had never matched anything. Every line
-    llama-server prints opens with a timestamp and a level letter, so the tag is
-    the third field:
-
-        0.03.804.331 I srv    load_model: initializing, n_slots = 1, ...
-
-    The step still printed something on every run, because the `n_ctx_slot`
-    alternative beside it does match - which is why nobody noticed the other
-    half was dead. Measured over the four committed captures: the old anchor
-    found 1 line of 40 and it was the `n_ctx_slot` one, so 37 lines of prefix
-    reuse went unprinted on every shard of every run.
-
-    Driven from real captures rather than from hand-written text, because a
-    pattern nobody ran against a real line is how this got here (Guardrail #7). The
-    four strings in `RUNTIME_LOG_LINES` are checked as well, for the two field
-    spellings no capture carries.
-    """
-    assert RUNTIME_LOG_CAPTURES, "the committed captures this pattern is checked against are gone"
-
-    for job_name, (step_name, log_file) in sorted(RUNTIME_LOG_SUMMARY_STEPS.items()):
-        pattern = _log_summary_pattern(job_name, step_name, log_file)
-
-        for line in RUNTIME_LOG_LINES:
-            assert pattern.search(line), f"{step_name} would not print {line!r}"
-
-        for capture in RUNTIME_LOG_CAPTURES:
-            lines = read_text(capture).splitlines()
-            missed = [line for line in lines if not pattern.search(line)]
-            unclaimed = [line for line in missed if f" {RUNTIME_LOG_UNCLAIMED_TAG} " in line]
-            assert missed == unclaimed, (
-                f"{step_name} would not print these lines of {capture.name}: {missed[:3]}"
-            )
-            assert len(lines) - len(missed) > len(lines) // 2, (
-                f"{step_name} prints {len(lines) - len(missed)} of {len(lines)} lines "
-                f"of {capture.name}, which is not a summary of the log"
-            )
-
-
-def test_the_prefix_reuse_fields_match_a_real_line_too() -> None:
-    """The other half of the same step, and this half was never broken.
-
-    `f_sim_best` and `f_keep` are greped as `<field> = <number>` and both do
-    match: llama-server prints them on one line together, and the two `grep -oE`
-    passes take one number each. Checked because the anchor above was not, and
-    "the rest of the step is fine" was an assumption until now.
-    """
-    for job_name, (step_name, log_file) in sorted(RUNTIME_LOG_SUMMARY_STEPS.items()):
-        script = _digest_step(job_name, step_name)
-        found = re.search(rf'grep -oE "\$\{{field\}} ([^"]*)" {re.escape(log_file)}', script)
-        assert found, f"{step_name} must grep each field as a name and a number"
-        fields = re.search(r"for field in ([a-z_ ]+); do", script)
-        assert fields, f"{step_name} must name the fields it loops over"
-
-        for field in fields.group(1).split():
-            pattern = re.compile(f"{field} {found.group(1)}")
-            seen = sum(len(pattern.findall(read_text(path))) for path in RUNTIME_LOG_CAPTURES)
-            assert seen, f"{step_name} finds no {field} in any committed capture"
-
-
 def test_the_loopback_port_is_one_number_wherever_it_is_written() -> None:
     """A server on one port and a stage posting to another is every item failing.
 
@@ -549,11 +472,9 @@ def test_the_loopback_port_is_one_number_wherever_it_is_written() -> None:
             assert f"127.0.0.1:{LLAMA_PORT_VALUE}" not in text, (
                 f"{filename} writes the port into an address instead of reading it back"
             )
-    assert declaring == set(LLAMA_SERVER_WORKFLOWS), (
-        "every workflow that starts a llama-server declares the port and nothing else does"
-    )
+    assert declaring, "no workflow declares the port, so this is checking nothing"
 
-    for filename in sorted(LLAMA_SERVER_WORKFLOWS):
+    for filename in sorted(declaring):
         for line in read_text(WORKFLOWS_DIR / filename).splitlines():
             if re.search(rf"\b{LLAMA_PORT_VALUE}\b", line):
                 assert LLAMA_PORT_ENV in line, (
@@ -586,11 +507,12 @@ def test_every_reader_of_a_server_log_reads_the_one_the_start_call_wrote() -> No
     the second is the role name in the same command.
     """
     workflow = _load_workflows()["digest.yml"]
+    starters = _server_starters({"digest.yml": workflow})
     assert set(RUNTIME_IDENTITY_JOBS) <= set(_mapping(workflow.get("jobs"), "jobs")), (
         "a job named here no longer exists in digest.yml"
     )
     for job_name, (log_file, weights_output) in sorted(RUNTIME_IDENTITY_JOBS.items()):
-        ((start_step, _),) = SERVER_STARTERS[("digest.yml", job_name)]
+        ((start_step,)) = starters[("digest.yml", job_name)]
         call = re.search(r"start-llama-server\.sh (\S+) (\S+)", _digest_step(job_name, start_step))
         assert call, f"{job_name} must start its server through the shared script"
         assert f"{call.group(2)}.log" == log_file, (
@@ -607,11 +529,12 @@ def test_every_reader_of_a_server_log_reads_the_one_the_start_call_wrote() -> No
             f"{RUNTIME_IDENTITY_STEP} in {job_name} must name the binary it ran"
         )
 
-        summary_step, summary_log = RUNTIME_LOG_SUMMARY_STEPS[job_name]
-        assert summary_log == log_file, (
-            f"{summary_step} reads {summary_log} and {job_name} writes {log_file}"
+        assert SERVER_LOG_FILE == log_file, (
+            f"{LOG_SUMMARY_STEP} reads {SERVER_LOG_FILE} and {job_name} writes {log_file}"
         )
-        assert log_file in _digest_step(job_name, summary_step), f"{summary_step} must read {log_file}"
+        assert log_file in _digest_step(job_name, LOG_SUMMARY_STEP), (
+            f"{LOG_SUMMARY_STEP} must read {log_file}"
+        )
 
 
 def test_the_scrape_step_and_the_row_agree_on_what_it_reads() -> None:

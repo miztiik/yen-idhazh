@@ -83,7 +83,7 @@ const CHART_HEIGHT = (
 /** The active model, reached through the pointer and never by filename. */
 const MODELS = JSON.parse(
 	readFileSync(resolve(process.cwd(), '..', 'config', CONFIG.models_file), 'utf8')
-) as { summarize: { inference: { n_ctx: number } } };
+) as { summarize: { server: { '--ctx-size': number } } };
 
 const LIMITS: MachineLimits = {
 	contextWindow: MODELS.summarize.server['--ctx-size'],

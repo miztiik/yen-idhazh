@@ -99,6 +99,11 @@ class AppConfig(Contract):
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-22",
+            change="bench.repeats, additive, default 3 and at least 2.",
+            why="Both numbers the bench job's timeout is spent on now sit in one file.",
+        ),
+        ChangelogEntry(
             version="2026-09-21T15:00",
             change="council.first_night, repair_window_nights and repair_dates_a_night, additive.",
             why="A night plans the older dates its tenants are behind on, inside a bounded window.",
@@ -112,11 +117,6 @@ class AppConfig(Contract):
             version="2026-09-21T12:40",
             change="The judging-budget fit check left this contract for the tenant that owns it.",
             why="Reading config pulled one judge's measured pair cost into every reader.",
-        ),
-        ChangelogEntry(
-            version="2026-09-21T11:30",
-            change="council.tenants and council.shard_preamble_minutes, additive.",
-            why="The venue registers a tenant from config and knows what a job spends before it.",
         ),
         ChangelogEntry(
             version="2026-08-21",

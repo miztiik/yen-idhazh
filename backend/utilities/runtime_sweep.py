@@ -19,7 +19,7 @@ import time
 import urllib.request
 from collections import Counter
 from pathlib import Path
-from typing import Any, NamedTuple
+from typing import Any, Final, NamedTuple
 
 from pydantic import ValidationError
 
@@ -185,6 +185,38 @@ def corpus_items(config_root: Path | None, *, dispatch: str = "") -> int:
     return wanted
 
 
+def repeats(config_root: Path | None, *, dispatch: str = "") -> int:
+    """How many times each case runs, from `bench.repeats`.
+
+    The same shape `corpus_items` has, and for the same reason: the two numbers
+    multiply into the passes the job timeout is spent on, so an operator who
+    changes one sees the other in the file beside it (Guardrail #6).
+
+    It stops short of that one's write. `corpus_items` is written into the
+    scratch config because `freeze-corpus`, `work` and `collect` each read it
+    back; this number has one reader, and a copy nothing reads is a second
+    spelling waiting to disagree. The bound is still the contract's own - a
+    dispatched value is re-read through `AppConfig`, so anything below two is
+    refused here rather than after the first pass.
+    """
+    settings = config.load(config_root) if config_root is not None else config.load()
+    if not dispatch:
+        return settings.app.bench.repeats
+    if config_root is None:
+        raise SystemExit("--repeats needs a config root to validate against")
+    try:
+        wanted = int(dispatch)
+    except ValueError:
+        raise SystemExit(f"runtime_repeats must be a whole number, not {dispatch!r}") from None
+    payload = json.loads((config_root / "idhazh.json").read_text(encoding="utf-8"))
+    payload["bench"]["repeats"] = wanted
+    try:
+        AppConfig.from_json(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+    except ValidationError as error:
+        raise SystemExit(f"runtime_repeats {wanted} is refused: {error}") from error
+    return wanted
+
+
 def candidate_update(name: str, *, threads: int, threads_batch: int) -> tuple[dict[str, Any], int]:
     """What this candidate changes, and how many workers it runs."""
     if name == "threads":
@@ -286,6 +318,43 @@ def parse_server_facts(log_path: Path) -> dict[str, str]:
         if match:
             facts[key] = match.group(1)
     return facts
+
+
+#: How long a server gets to die before the health wait starts. A build that
+#: refuses one of its own flags is gone in well under a second, so two seconds
+#: separates that from a server still reading weights. It is the wait
+#: `start-llama-server.sh` already does before its own `kill -0`, written out
+#: again here because a sweep needs the process handle and so cannot call it.
+START_GRACE_SECONDS: Final = 2.0
+
+#: How much of the server log a start-up failure carries out with it. The same
+#: fifty lines the shell script tails, because the refused flag is named in the
+#: last few and the log itself dies with the runner.
+LOG_TAIL_LINES: Final = 50
+
+
+def refuse_a_server_that_died_at_startup(
+    server: subprocess.Popen[bytes], log_path: Path
+) -> None:
+    """Say the server is gone now, rather than after ten minutes of health polling.
+
+    `wait_for_health` asks a port for up to 600 seconds. That is the right
+    patience for weights still loading and the wrong answer entirely for a
+    process that has already exited: a dispatch once burned five hours on a
+    flag the build refused, and nothing between the start and the first item
+    said so.
+    """
+    try:
+        server.wait(timeout=START_GRACE_SECONDS)
+    except subprocess.TimeoutExpired:
+        return
+    tail = ""
+    if log_path.exists():
+        lines = log_path.read_text(encoding="utf-8", errors="replace").splitlines()
+        tail = "\n".join(lines[-LOG_TAIL_LINES:])
+    raise RuntimeError(
+        f"llama-server exited {server.returncode} before it could answer\n{tail}"
+    )
 
 
 def wait_for_health(port: int) -> None:
@@ -449,6 +518,7 @@ def run_once(
     rss_samples: list[dict[str, str]] = []
     with log_path.open("w", encoding="utf-8") as log:
         server = subprocess.Popen(argv, stdout=log, stderr=subprocess.STDOUT, env=env)
+        refuse_a_server_that_died_at_startup(server, log_path)
         stop = threading.Event()
 
         def sample_rss() -> None:
@@ -592,11 +662,15 @@ def server_port() -> int:
 
 def sweep(args: argparse.Namespace) -> int:
     candidate = args.candidate
+    repeat_count = repeats(CANDIDATE_CONFIG, dispatch=args.repeats)
     # Two, because a spread needs two readings and this stops a dispatch that
-    # cannot produce one. The ceiling is the job timeout rather than taste: a
-    # named candidate runs two cases, so the repeats multiply the corpus, and
-    # `bench.corpus_items` is the knob sized against that bound (Guardrail #2).
-    if args.repeats < sweep_verdict.MIN_AGREEING_REPEATS:
+    # cannot produce one. It is the sweep's own statement about what it can
+    # read, kept beside the contract's floor rather than deferred to it: the
+    # contract bounds what may be configured, this bounds what may be judged.
+    # The ceiling is the job timeout rather than taste: a named candidate runs
+    # two cases, so the repeats multiply the corpus, and `bench.corpus_items`
+    # is the knob sized against that same bound (Guardrail #2).
+    if repeat_count < sweep_verdict.MIN_AGREEING_REPEATS:
         raise SystemExit("runtime_repeats must be at least 2 - one reading has no spread")
     port = server_port()
     threads = _bounded("threads", args.threads)
@@ -607,7 +681,7 @@ def sweep(args: argparse.Namespace) -> int:
     labels = [label for label, _, _ in plan.cases]
 
     results = []
-    for repeat in range(1, args.repeats + 1):
+    for repeat in range(1, repeat_count + 1):
         for label, current, worker_count in plan.cases:
             result = run_once(
                 label,
@@ -644,7 +718,7 @@ def sweep(args: argparse.Namespace) -> int:
         # platform places each separately, so the processor beside a prefill rate
         # is not the processor beside these wall-clock figures.
         "cpu": silicon.host_cpu_model() or "unrecorded",
-        "repeats": args.repeats,
+        "repeats": repeat_count,
         # What the timing was actually taken over. It is not `repeats` whenever
         # a page moved mid-job, and a reader who assumed it was would be reading
         # a median over a denominator nobody told them about.
@@ -696,7 +770,11 @@ def main(argv: list[str] | None = None) -> int:
     run.add_argument("--candidate", required=True)
     run.add_argument("--candidate-file", required=True)
     run.add_argument("--candidate-id", required=True)
-    run.add_argument("--repeats", type=int, required=True)
+    run.add_argument(
+        "--repeats",
+        default="",
+        help="Overrule bench.repeats for this run. Empty follows the knob.",
+    )
     run.add_argument("--threads", type=int, required=True)
     run.add_argument("--threads-batch", type=int, required=True)
     run.add_argument("--gguf-cache-hit", default="false")
