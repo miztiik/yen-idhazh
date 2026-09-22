@@ -97,6 +97,8 @@ design.
 | Whether a system role exists, and where its text goes when it does not | Envelope, per model | A turn topology. The bytes do not change; their address does. `turns.system_role` is a closed choice of two, and `turns.system_joiner` is what separates the two blocks when they share a turn |
 | Which template keyword turns reasoning off | Envelope, per model | It is a variable name belonging to that model's template. `turns.thinking_kwarg` carries it, and null means the template reads none |
 | The window, the batch sizes, the budgets | Envelope, per model | Measured against those weights, and pinned to their digest |
+| **Which architecture the weights carry** | Envelope, per model | `arch` is the `general.architecture` key written inside the GGUF - `qwen35` for the configured weights, `gemma4` for a Gemma 4 entry. Required with no default: an entry that inherits the incumbent's architecture is claiming something nobody checked. Case 4 reads the key back out of the file the server was pointed at, a few kilobytes of header rather than a second download, and refuses when the two disagree - the one case where the digest, the alias and the filename all agree and only the words get worse |
+| **Which weights the settings were set for** | Envelope, per model | `declared_for` holds the entry's own `sha256`, and load refuses a mismatch. The failure it stops is five strings edited in place - repo, file, revision, digest and id - with the settings underneath them untouched. Not hypothetical: the summarizer moved from the 8B to the 9B on 2026-08-27 and the settings block did not move with it. The markers need no such pin since 2026-09-21, because the server derives them from the template the weights carry |
 | **Which control tokens the sanitizer strips** | **Content, global** | A forged turn is written in whatever syntax the attacker picks, so a pattern that knew only the model in use is a pattern an attacker walks around. See below |
 | **The instructions** | **Content, global** | See below |
 | **The output schema** | **Content, global** | It is the one control that survives an injection, and a per-model control is a per-model hole |
@@ -501,43 +503,24 @@ for 25 alternatives, and asking for the post-sampling numbers returns no window
 at all - [which probabilities the server
 returns](../../reference/benchmarks/which-probabilities-the-server-returns.md).
 
-## What is wrong with the boundary today
+## What the entry declares, and what refuses a declaration
 
-Both shims exist and both work, and the schema constrains the decode on both
-transports - measured on build b10444, 2026-09-12. The system placement and the
-thinking keyword stopped being source on 2026-09-14 and are entry fields now.
+Every value the entry carries about a file it names passes a closed grammar
+before a program is handed it: the repository, the commit, the filename, the
+digest, the alias, the quantisation, the declared size and any server flag. The
+rules and the refusal's four parts are in
+[ci-model-runtime.md](../../reference/ci-model-runtime.md#every-download-names-a-commit).
 
-The control-token pattern was the last thing still written for the family we
-happen to run, and it stopped being that on 2026-09-14. It knew three families
-and now knows seven, and an entry whose markers it would not strip is refused at
-config load with the marker named. What it still cannot do is anticipate a
-family nobody has shipped yet - which is why the refusal exists, and why the
-failure it produces is a config error rather than a summary that obeyed a page.
+**An entry may declare more than one companion file, and the run fetches every
+one of them.** The cache key is a digest over the whole declared set, so an
+entry that gains a second companion gets a different entry rather than restoring
+a complete-looking one with a file missing - which llama-server reports at load
+rather than at fetch, on a different machine, hours later.
 
-The turn envelope is no longer part of that list. It sits on the model entry,
-and since 2026-09-14 the five proofs above reconcile it against the running
-server before the first item - so a wrong marker now refuses the shard instead
-of yielding worse summaries with nothing red.
-
-**The entry declares its architecture, and case 4 is what makes that a fact.**
-`arch` is the `general.architecture` key written inside the GGUF - `qwen35` for
-the configured weights, `gemma4` for a Gemma 4 entry. It is required with no
-default, for the same reason `turns` is: an entry that inherits the incumbent's
-architecture is claiming something nobody checked. The probe reads the key back
-out of the file the server was pointed at, which costs a few kilobytes of header
-rather than a second download, and refuses the run when the two disagree. That
-is the one case where the digest, the alias and the filename all agree and only
-the words get worse - a repackaged GGUF under a familiar name.
-
-**The entry names the weights it was set for, and load refuses a mismatch.**
-`declared_for` holds the entry's own `sha256`. The failure this stops is five
-strings edited in place - repo, file, revision, digest and id - with the settings
-underneath them untouched,
-which used to raise nothing and then stand a server up on numbers derived for
-weights it never opened. It is not hypothetical: the summarizer moved from the
-8B to the 9B on 2026-08-27 and the settings block did not move with it. The
-markers need no such pin since 2026-09-21, because the server derives them from
-the template the weights themselves carry.
+**What is refused is an entry declaring two companions to a surface that can
+publish one.** The measurement arms still republish a single companion's four
+refs for their own inline downloads, and that projection names the count and the
+files rather than truncating in silence.
 
 **This page describes the boundary rather than tracking work**, so it changes
 when the shape changes. [Swap the Summarizer

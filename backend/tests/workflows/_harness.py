@@ -175,13 +175,9 @@ SHELLCHECK_COMMAND: Final = "shellcheck --severity=style .github/scripts/*.sh"
 #: neither a new file nor a forgotten name can pass.
 SHIPPED_SCRIPTS: Final = (
     "commit-and-push.sh",
-    "fetch-model-runtime.sh",
-    "install-llama-runtime.sh",
-    "llama-cpp-pin.sh",
     "push-rewritten-history.sh",
     "run-pipeline-test-case.sh",
     "sample-rss.sh",
-    "start-llama-server.sh",
     "take-state-from-the-tip.sh",
 )
 
@@ -196,40 +192,35 @@ CONTENT_REFRESH_SHARD_DEFAULT: Final = "4"
 # work job while `config/idhazh.json` declared different numbers that nothing
 # read, so config was a wrong answer with a schema behind it (Guardrail #6).
 WORK_BOUND_KEYS: Final = frozenset({"timeout-minutes", "max-parallel"})
-# The shared steps that install the build, the file that decides which build,
-# and the workflows converted onto them. A converted caller carries no copy of
-# the pin, so the two cannot disagree.
-LLAMA_RUNTIME_SCRIPT: Final = "fetch-model-runtime.sh"
-
-# The runtime half on its own. `fetch-model-runtime.sh` sources it.
-LLAMA_INSTALL_SCRIPT: Final = "install-llama-runtime.sh"
-
-LLAMA_SHARED_SCRIPTS: Final = (LLAMA_RUNTIME_SCRIPT, LLAMA_INSTALL_SCRIPT)
-
-LLAMA_PIN_SCRIPT: Final = "llama-cpp-pin.sh"
+# The file that decides which llama.cpp build a run installs, and the three keys
+# it holds. A converted caller carries no copy of them, so the two cannot
+# disagree about which binary decoded the bytes.
+LLAMA_PIN_FILE: Final = REPO_ROOT / "config" / "llama-cpp-pin.json"
 
 # What a converted caller may not spell for itself. The build is the one an
 # upgrade moves; the other two move with it and are what a half-done upgrade
-# leaves behind.
+# leaves behind. The names are the workflow `env` spellings, and the JSON holds
+# the same three values under shorter keys.
 LLAMA_PIN_NAMES: Final = ("LLAMA_CPP_BUILD", "LLAMA_CPP_ASSET", "LLAMA_CPP_SHA256")
+
+LLAMA_PIN_KEYS: Final = ("build", "asset", "sha256")
 
 
 def _read_the_pin() -> tuple[str, str, str]:
-    """The three pin values, read from the one script that holds them.
+    """The three pin values, read from the one file that holds them.
 
     They were written here as well until now, so a pin bump was three edits in
     two files and a stale copy here would have agreed with itself while the
     runners ran something else.
     """
-    text = (SCRIPTS_DIR / LLAMA_PIN_SCRIPT).read_text(encoding="utf-8")
-    values: dict[str, str] = {}
-    for name in LLAMA_PIN_NAMES:
-        found = re.search(rf"^{name}=(.+)$", text, re.MULTILINE)
-        assert found, f"{LLAMA_PIN_SCRIPT} no longer declares {name}"
-        values[name] = found.group(1).strip().strip('"')
-    build = values["LLAMA_CPP_BUILD"]
-    asset = values["LLAMA_CPP_ASSET"].replace("${LLAMA_CPP_BUILD}", build)
-    return build, asset, values["LLAMA_CPP_SHA256"]
+    declared = json.loads(LLAMA_PIN_FILE.read_text(encoding="utf-8"))
+    values = []
+    for key in LLAMA_PIN_KEYS:
+        value = declared.get(key)
+        assert isinstance(value, str) and value, f"{LLAMA_PIN_FILE.name} declares no {key}"
+        values.append(value)
+    build, asset, digest = values
+    return build, asset, digest
 
 
 # One llama.cpp build for the pipeline, the validation case and the measurement
@@ -259,10 +250,12 @@ LLAMA_RUNTIME_WORKFLOWS: Final = frozenset(
 LLAMA_PIN_VALUES: Final = (PINNED_LLAMA_BUILD, PINNED_LLAMA_ASSET, PINNED_LLAMA_SHA256)
 LLAMA_DIGEST_CHECK: Final = 'echo "${LLAMA_CPP_SHA256}  llama.tar.gz" | sha256sum --check'
 
-LLAMA_PINNED_ENDPOINT: Final = (
-    "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/${LLAMA_CPP_BUILD}"
-)
+#: Where a pinned llama.cpp release is asked for, by tag. The list endpoint
+#: hands back a different binary on every eviction, so nothing may ask it.
+LLAMA_RELEASE_TAGS: Final = "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags"
 
+#: The same address, as a workflow arm that still spells its own fetch writes it.
+LLAMA_PINNED_ENDPOINT: Final = f"{LLAMA_RELEASE_TAGS}/${{LLAMA_CPP_BUILD}}"
 # One spelling for every download in the repository, weights and runtime alike.
 # `-f` is the load-bearing letter: without it curl writes an HTTP error body
 # into the file and exits 0. For a `.gguf` that matters twice over, because
@@ -276,6 +269,10 @@ RELEASE_LOOKUP_FORM: Final = "curl -fsS -H"
 #: checks it and starts the server. A step calls a verb of this; it spells no
 #: part of what the verb does.
 MODEL_RUNTIME_MODULE: Final = "backend/utilities/model_runtime.py"
+
+#: The verb that puts the pinned build on a runner. A workflow that runs it has
+#: converted, and carries no copy of the pin.
+INSTALL_RUNTIME_CALL: Final = f"{MODEL_RUNTIME_MODULE} install-runtime"
 
 #: The verb that fetches. Discovery below matches it as well as the hub host,
 #: because a download written in Python names no host in the workflow at all.
@@ -292,12 +289,9 @@ VERIFY_MODEL_FILES: Final = f"{MODEL_RUNTIME_MODULE} verify-model-files"
 HUB_HOST: Final = "huggingface.co"
 
 #: What a step runs instead of writing a download of its own. A job whose fetch
-#: step is one call to one of these has converted; `measure.yml`'s four inline
-#: arms have not, and every rule scoped to the converted set skips them.
-SHARED_DOWNLOAD_CALLS: Final = (
-    ".github/scripts/fetch-model-runtime.sh",
-    DOWNLOAD_MODEL_FILES,
-)
+#: step is one call to this has converted; `measure.yml`'s four inline arms have
+#: not, and every rule scoped to the converted set skips them.
+SHARED_DOWNLOAD_CALLS: Final = (DOWNLOAD_MODEL_FILES,)
 
 #: How many jobs download a `.gguf`. The SET is asserted below and the COUNT is
 #: asserted beside it, because the two fail differently: the set catches a job
@@ -307,29 +301,14 @@ SHARED_DOWNLOAD_CALLS: Final = (
 #: which every check written over that search would have passed, quietly.
 WEIGHTS_FETCH_JOBS: Final = 8
 
-# Every job in the repository that downloads a `.gguf`: the step that fetches
-# it, the step that checks it, the first step that reads it, and the one place
-# the expected digest is written. Discovery is closed-world - a tenth workflow
-# that fetches weights fails the test until it appears here with a check.
+# Every job in the repository that downloads a `.gguf`, the step that checks it,
+# the first step that reads it, and the one place the expected digest is
+# written. Discovery is closed-world, and this table holds only the arms that
+# still spell a download for themselves - the four `measure.yml` inline ones.
+# Every converted job is derived where the table is compared, off the verb its
+# check step runs, because listing a job whose check is one shared call would
+# be a list of jobs rather than a check of anything.
 WEIGHTS_CHECKS: Final = {
-    ("digest.yml", "work"): (
-        "Fetch runtime and weights",
-        "Verify the weights",
-        "Start the model",
-        '["summarize"]["sha256"]',
-    ),
-    ("idhazh-pipeline-tests.yaml", "cases"): (
-        "Fetch runtime and weights",
-        "Verify the weights",
-        "Start the model",
-        '["summarize"]["sha256"]',
-    ),
-    ("llm-council.yml", "judge"): (
-        "Fetch runtime and weights",
-        "Verify the weights",
-        "Start the model",
-        '["summarize"]["sha256"]',
-    ),
     ("measure.yml", "runtime"): (
         "Fetch runtime and weights",
         "Verify the weights",
@@ -354,40 +333,23 @@ WEIGHTS_CHECKS: Final = {
         "Benchmark parallel decode",
         '["summarize"]["sha256"]',
     ),
+    # The one candidate whose digest is not a config field: the plan job decides
+    # it once, from the dispatch input or from config, and republishes it.
     ("measure.yml", "budgets"): (
         "Fetch runtime and weights",
         "Verify the weights",
         "Start the tokenizer",
         "${{ needs.models.outputs.candidate_sha256 }}",
     ),
-    # The one candidate whose digest is not a config field: the plan job decides
-    # it once, from the dispatch input or from config, and republishes it.
-    ("validate.yml", "qualify"): (
-        "Fetch the runtime and the candidate",
-        "Verify the candidate bytes",
-        "Start the candidate",
-        "${{ needs.plan.outputs.candidate_sha256 }}",
-    ),
 }
 
-# The refs the daily run needs and the one place they are written. The
-# `plan` job reads `config/idhazh.json` and republishes them, so the workflow
+# The refs the daily run needs and the one place they are written. The model
+# block reads `config/idhazh.json` where the model is used, so the workflow
 # holds no model repo, no weights filename and no upload of those weights.
 MODEL_REF_OUTPUTS: Final = (
     "summarize_repo",
     "summarize_revision",
     "summarize_file",
-)
-
-#: The draft head's refs, published beside the target's and empty where the
-#: entry declares none. Held apart from MODEL_REF_OUTPUTS because they are
-#: optional: a test that required them would fail on every day this repository
-#: has published.
-DRAFT_REF_OUTPUTS: Final = (
-    "draft_repo",
-    "draft_revision",
-    "draft_file",
-    "draft_sha256",
 )
 
 MODEL_REF_FIELDS: Final = ("repo", "revision", "file")
@@ -415,10 +377,10 @@ WEIGHTS_CACHE_ROLES: Final = {"work": "summarize"}
 #: construction and only this prefix carries one.
 SHARED_WEIGHTS_KEY_PREFIX: Final = "llm-"
 
-# Bumped from v3 when the weights half of the key moved off the workflow `env`
-# copy, so the first run after that lands refetches once instead of restoring an
-# entry nobody can attribute.
-WEIGHTS_CACHE_SUFFIX: Final = "v4"
+# Bumped from v4 when the model half of the key became a digest over every file
+# the entry declares, so the first run after that lands refetches once instead
+# of restoring an entry keyed on a smaller set than it holds.
+WEIGHTS_CACHE_SUFFIX: Final = "v5"
 
 # Where Playwright unpacks a browser, and so the one path a job caching one may
 # name. Two paths would be two entries against the 10 GB ceiling in Guardrail #2,
@@ -545,7 +507,7 @@ BUDGETS_EMIT_STEP: Final = "Retake the budgets a vocabulary sizes"
 # the host it drew, and a number that cannot name the bytes that produced it is
 # not a measurement (Guardrail #10).
 RUNTIME_IDENTITY_JOBS: Final = {
-    "work": ("llama-server.log", "summarize_file"),
+    "work": ("llama-server.log", "weights_path"),
 }
 
 RUNTIME_IDENTITY_STEP: Final = "What this runner is"
@@ -566,13 +528,13 @@ LLAMA_PORT_READ: Final = "http://127.0.0.1:${LLAMA_PORT}"
 #: list, and where that spelling lives does not change the rule.
 SERVER_STARTER_MODULES: Final = (
     "backend/utilities/runtime_sweep.py",
-    "backend/utilities/llama_argv.py",
+    MODEL_RUNTIME_MODULE,
 )
 
 #: What a step runs instead of rendering the flag list itself. A step that
 #: reaches `server_argv` through this is still a starter, and `_server_starters`
 #: counts it as one.
-ARGV_MODULE_CALL: Final = "backend/utilities/llama_argv.py"
+ARGV_MODULE_CALL: Final = f"{MODEL_RUNTIME_MODULE} start-server"
 RSS_SAMPLE_FILE: Final = "rss-samples.tsv"
 
 SERVER_LOG_FILE: Final = "llama-server.log"
@@ -1672,15 +1634,15 @@ def _llama_fetch_scripts(workflow: dict[str, object]) -> list[tuple[str, object,
 
 
 def _pin_output_name() -> str:
-    """The key the pin prints when it is run, read out of the pin rather than retyped.
+    """The key the pin verb prints, read out of the program rather than retyped.
 
     A converted caller that needs the build takes it from a step that published
     this key, so the two halves of that arrangement are held together by the
-    file itself instead of by two constants nobody diffs.
+    program itself instead of by two constants nobody diffs.
     """
-    printed = (SCRIPTS_DIR / LLAMA_PIN_SCRIPT).read_text(encoding="utf-8")
-    match = re.search(r'echo "([a-z_]+)=\$\{LLAMA_CPP_BUILD\}"', printed)
-    assert match is not None, f"{LLAMA_PIN_SCRIPT} must print the build as key=value"
+    printed = read_text(REPO_ROOT / MODEL_RUNTIME_MODULE)
+    match = re.search(r'PIN_OUTPUT_KEY: Final = "([a-z_]+)"', printed)
+    assert match is not None, f"{MODEL_RUNTIME_MODULE} must name the key it prints the build under"
     return match.group(1)
 
 
@@ -2369,10 +2331,10 @@ VALIDATE_DAYS_JOBS: Final = (
     ("backfill.yml", "backfill"),
 )
 
-#: The shared start sequence `digest.yml` delegates to. A step that calls it is
-#: still a server starter, and the shell it really runs is its own body plus
-#: this file's.
-START_SERVER_SCRIPT: Final = SCRIPTS_DIR / "start-llama-server.sh"
+#: The shared start sequence every launch step calls. A step that runs it is a
+#: server starter, and what it really executes is its own body plus that
+#: program's - so the oracle follows the call rather than stopping at the step.
+START_SERVER_MODULE: Final = REPO_ROOT / MODEL_RUNTIME_MODULE
 
 
 def _starter_shell(step: Mapping[str, object]) -> str:
@@ -2380,15 +2342,15 @@ def _starter_shell(step: Mapping[str, object]) -> str:
 
     `work` and `visuals` ran 31 lines of near-identical inline shell, 80.6 percent
     the same, differing in the config attribute and two filenames. They run one
-    script now. Reading the step alone would report that neither reaches
+    program now. Reading the step alone would report that neither reaches
     `server_argv` any more, which is the opposite of what happened.
     """
     body = step.get("run")
     if not isinstance(body, str):
         return ""
-    if START_SERVER_SCRIPT.name not in body:
+    if ARGV_MODULE_CALL not in body:
         return body
-    return body + "\n" + read_text(START_SERVER_SCRIPT)
+    return body + "\n" + read_text(START_SERVER_MODULE)
 
 
 def _model_server_callers(

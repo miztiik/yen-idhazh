@@ -83,7 +83,7 @@ Measured on `origin/main`, 2026-09-22, by reading the files.
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | The model file gets one reader, and the grammar closes | - | A | DONE | p44r1 | - | R1 |
 | 2 | The two CI-selection scripts go | - | A | DONE | p44r2 | - | R2 |
-| 3 | The model path becomes one Python program, and the verbs are renamed | 1 | B | PENDING | - | - | - |
+| 3 | The model path becomes one Python program, and the verbs are renamed | 1 | B | DONE | p44r3 | - | R3 |
 | 4 | The pipeline-test case runner becomes Python | 3 | C | PENDING | - | - | - |
 | 5 | The memory sampler joins the one that already exists | 3 | C | PENDING | - | - | - |
 | 6 | The last three scripts go | plan 46 all-DONE | D | BLOCKED | - | - | - |
@@ -474,7 +474,7 @@ outputs:
 | Clause | State when written |
 | --- | --- |
 | **discovery widens** - `_harness.py:1637` matches `"huggingface.co/" in script` **or** `"model_runtime.py download-model-files" in script`, **and the test asserts the discovered count is 8** | green, and it is the most important clause in the plan. **Without it, row 3 moves the hub URL into Python, discovery falls to 4, and `test_weights_and_model_refs.py:71`'s equality passes against a four-entry table** - the weights oracle for `digest.yml/work` silently leaves the closed world with nothing going red |
-| a second clause: the hub host appears in exactly one file repository-wide, and that file is `model_runtime.py` | red until row 3's second commit |
+| a second clause: **no file under `.github/` that reaches the shared download may spell the hub host.** `.github/workflows/measure.yml` is the one named exception, and the reason rides on the line that names it: *measure.yml's four inline download steps are plan 46's to convert; delete this exception when they go* | red until row 3's second commit |
 | **the paste rule** (C13) | **red: 8 sites** |
 | **every declared file reaches a digest check in a step with no `if:`** | red |
 | **the verify step's config root equals the download step's** | red |
