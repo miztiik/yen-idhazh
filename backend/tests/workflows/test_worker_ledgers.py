@@ -251,6 +251,13 @@ def test_a_ledger_that_will_not_push_cannot_cost_the_day_a_worker() -> None:
     # run with one host row missing, but not worse than a day that never
     # published - and this job runs `if: always()`, so it is the one that has to
     # survive a bad day.
+    #
+    # The plan job's commit is the one that reads like the publish step and is
+    # not. What that job owes the run is the plan artifact below it; the sight
+    # and health rows it pushes here are worth a run and are not worth the run.
+    # Run `35660521768` settled it: the push lost a race, this step failed, and
+    # the upload after it was skipped with the job - so a plan that was already
+    # computed never reached the shards and the day was lost to a ledger.
     tolerant = {
         (job_name, step.get("name") or step.get("uses"))
         for job_name in _mapping(workflow.get("jobs"), "jobs")
@@ -259,6 +266,7 @@ def test_a_ledger_that_will_not_push_cannot_cost_the_day_a_worker() -> None:
     }
     assert tolerant == {
         *(("work", name) for name in WORK_LEDGER_STEPS),
+        ("plan", COMMIT_STEPS["plan"]),
         ("assemble", "actions/download-artifact@v8"),
         ("assemble", FINGERPRINT_STEP),
         ("assemble", HARVEST_STEP),

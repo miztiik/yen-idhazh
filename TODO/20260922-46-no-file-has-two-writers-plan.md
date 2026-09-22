@@ -306,7 +306,7 @@ Measured 2026-09-22 from GitHub job step timestamps.
 
 | # | Row title | PR | Depends-on | Parallel-group | Status | Level | Worktree | PR link | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 3 | Every job that commits keeps its record when the push fails | Z | - | 0 | PENDING | 1 | - | - | - |
+| 3 | Every job that commits keeps its record when the push fails | Z | - | 0 | DONE | 1 | p46r3 | - | - |
 | 1 | The last state writer with no group gets one, and the failure stops lying | A | 3 | 1 | PENDING | 1 | - | - | - |
 | 2 | The rebase stops guessing that a drained directory was renamed | A | 3 | 1 | PENDING | 1 | - | - | - |
 | 4 | The push loop becomes a deadline and says what each attempt cost | A | 3 | 1 | PENDING | 2 | - | - | - |

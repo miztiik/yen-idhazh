@@ -414,7 +414,15 @@ jobs:
       # gone, so the next shape of that failure was a rebase nobody could
       # settle. A second attempt now reads the first attempt's rows before it
       # writes, and settles a feed's verdict against them.
+      #
+      # `continue-on-error` because the plan this job exists to produce is the
+      # artifact below, not this push. Run `35660521768` died here: the push lost
+      # a race, the step failed, and the upload after it was skipped - so a plan
+      # that had already been computed never reached the shards and the whole day
+      # was lost to a ledger commit. The rows this push carries are worth a run;
+      # they are not worth the run.
       - name: Commit what the plan saw
+        continue-on-error: true
         env:
           COMMIT_MESSAGE: "plan: ${{ steps.decide.outputs.date }}"
           NOTHING_STAGED_MESSAGE: "nothing new to record"
@@ -426,7 +434,12 @@ jobs:
       # `error` rather than the default: `assemble` downloads this by name and
       # cannot be built without it, so a plan job that finishes having written no
       # plan has to fail here, where the cause is, and not one job later.
+      #
+      # `always()` so that a step above failing cannot throw away a plan this job
+      # already wrote. The `error` setting is what keeps that honest: a job that
+      # reaches here with no plan.json still fails, and it fails naming the file.
       - uses: actions/upload-artifact@v7
+        if: always()
         with:
           name: plan
           path: backend/var/run/${{ steps.decide.outputs.date }}/plan.json
@@ -1310,7 +1323,13 @@ jobs:
       # `git add` records a removal only for a path it is given. The directory is
       # in every checkout - the day's own commit above stages it - so naming it
       # cannot abort the step.
+      # `always()` because `Commit the day` above deliberately carries no
+      # `continue-on-error` - marking a lost publish as success is worse than
+      # failing - and without this the whole tail of the job is skipped with it.
+      # The job stays red and the record is still kept, which is strictly
+      # better than choosing one.
       - name: Retire the ledger shards and the visuals nothing still reads
+        if: always()
         continue-on-error: true
         run: >-
           python -m idhazh prune-state
@@ -1320,8 +1339,11 @@ jobs:
       # The `id` is here for the same reason the day's commit carries one. This
       # step stages `frontend/public/telemetry`, which the console pages read,
       # so a rebase here moves the built site exactly as a rebase there does.
+      # `always()` for the reason the step above it carries one: a day's push
+      # that lost its race must not also cost the fold.
       - name: Commit the folded telemetry
         id: commit_fold
+        if: always()
         continue-on-error: true
         env:
           COMMIT_MESSAGE: "state: retire the shards past their reading window"
@@ -1406,7 +1428,12 @@ jobs:
       #
       # The tree lands under backend/var/, which .gitignore already covers, so
       # no commit step names it and no rebuild owns it.
+      # `always()` because the upload below already carries one, and an upload
+      # reachable on a failed day with nothing to upload records nothing. The
+      # decisions this reads came out of the `items-*` artifact, which a failed
+      # push does not touch.
       - name: Build the day's review tree
+        if: always()
         continue-on-error: true
         timeout-minutes: 5
         run: |
