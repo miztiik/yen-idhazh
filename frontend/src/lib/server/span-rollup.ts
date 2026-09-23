@@ -1,6 +1,6 @@
 /** The four sub-steps of a run's clock, read at build time from the span rollup.
  *
- * `state/span-rollup/<YYYY-MM>.csv` holds one row per `(date, run_id, shard,
+ * `state/span-rollup/<YYYY>/<MM>/<DD>/` holds one row per `(date, run_id, shard,
  * span_name)` for the five spans no ledger column already times - `item` and the
  * four sub-steps `robots`, `tag`, `render_prompt` and `parse_reply` that nest
  * inside it (`docs/concepts/telemetry.md`). The fold that writes it also files,
@@ -225,11 +225,11 @@ export function foldRollup(table: CsvTable): SpanRun[] {
  * the same switch every other `state/` reader is built on. A missing directory
  * is an empty read, never a throw.
  *
- * **It reads both grains and adds them together.** The rollup is sharded by
- * month today and moves to a day tree when more than one job writes it. Only
- * one of the two shapes is ever on disk, so the sum is exactly what is there -
- * and a reader that knew only the older one would draw an empty panel the day
- * the store moved.
+ * **It reads both grains and adds them together.** The rollup is a day tree
+ * now that more than one job writes it, and a month shard is what a tree still
+ * carrying pre-migration history holds. Only one of the two shapes is ever on
+ * disk, so the sum is exactly what is there - and a reader that knew only one
+ * of them would draw an empty panel against the other.
  *
  * `months` is the month grain's cover, and the caller wants the newest entry:
  * reading the newest few shards answers that and reading every one of them
