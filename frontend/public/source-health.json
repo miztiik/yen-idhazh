@@ -19,13 +19,13 @@
   ],
   "dwell_days": 14,
   "first_date": "2026-08-24",
-  "generated_at": "2026-09-23T10:59:04Z",
+  "generated_at": "2026-09-23T14:51:17Z",
   "headline_sentence": "10 of 156 feeds are discounted to the 50% floor, which is as far as the ranking takes one.",
   "last_date": "2026-09-22",
   "min_complete_days": 30,
   "reliability_floor": 0.5,
   "reliability_window_days": 30,
-  "run_id": "2026-09-23-35833646522",
+  "run_id": "2026-09-23-35856164695",
   "sources": [
     {
       "availability": "answering",
@@ -120,7 +120,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 136,
+      "reliability_reads": 137,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -222,7 +222,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 136,
+      "reliability_reads": 137,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -324,7 +324,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 115,
+      "reliability_reads": 116,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -426,7 +426,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 136,
+      "reliability_reads": 137,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -528,7 +528,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 136,
+      "reliability_reads": 137,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -630,7 +630,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 136,
+      "reliability_reads": 137,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -732,7 +732,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 136,
+      "reliability_reads": 137,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -834,7 +834,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 136,
+      "reliability_reads": 137,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -1140,7 +1140,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 136,
+      "reliability_reads": 137,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -1242,7 +1242,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 136,
+      "reliability_reads": 137,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -1343,8 +1343,8 @@
           "source_failures": 0
         }
       ],
-      "reliability": 0.9926470588235294,
-      "reliability_reads": 136,
+      "reliability": 0.9927007299270073,
+      "reliability_reads": 137,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -1446,7 +1446,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 136,
+      "reliability_reads": 137,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -1548,7 +1548,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 115,
+      "reliability_reads": 116,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -1650,7 +1650,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 60,
+      "reliability_reads": 61,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -1752,7 +1752,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 136,
+      "reliability_reads": 137,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -1854,7 +1854,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 136,
+      "reliability_reads": 137,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -1956,7 +1956,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 136,
+      "reliability_reads": 137,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -2160,7 +2160,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 42,
+      "reliability_reads": 43,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -2364,7 +2364,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 115,
+      "reliability_reads": 116,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -2466,7 +2466,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 136,
+      "reliability_reads": 137,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -2568,7 +2568,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 136,
+      "reliability_reads": 137,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -2670,7 +2670,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 136,
+      "reliability_reads": 137,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -2772,7 +2772,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 64,
+      "reliability_reads": 65,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -2874,7 +2874,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 64,
+      "reliability_reads": 65,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -2976,7 +2976,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 64,
+      "reliability_reads": 65,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -3078,7 +3078,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 64,
+      "reliability_reads": 65,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -3180,7 +3180,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 115,
+      "reliability_reads": 116,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -3282,7 +3282,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 136,
+      "reliability_reads": 137,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -3384,7 +3384,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 115,
+      "reliability_reads": 116,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -3486,7 +3486,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 136,
+      "reliability_reads": 137,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -3588,7 +3588,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 136,
+      "reliability_reads": 137,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -3690,7 +3690,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 115,
+      "reliability_reads": 116,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -3792,7 +3792,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 115,
+      "reliability_reads": 116,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -3894,7 +3894,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 115,
+      "reliability_reads": 116,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -3996,7 +3996,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 115,
+      "reliability_reads": 116,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -4098,7 +4098,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 60,
+      "reliability_reads": 61,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -4200,7 +4200,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 136,
+      "reliability_reads": 137,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -4302,7 +4302,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 110,
+      "reliability_reads": 111,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -4404,7 +4404,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 136,
+      "reliability_reads": 137,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -4506,7 +4506,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 115,
+      "reliability_reads": 116,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -4608,7 +4608,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 136,
+      "reliability_reads": 137,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -4710,7 +4710,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 115,
+      "reliability_reads": 116,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -4812,7 +4812,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 136,
+      "reliability_reads": 137,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -5016,7 +5016,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 136,
+      "reliability_reads": 137,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -5118,7 +5118,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 115,
+      "reliability_reads": 116,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -5220,7 +5220,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 136,
+      "reliability_reads": 137,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -5230,7 +5230,7 @@
       "vertical": "world"
     },
     {
-      "availability": "failing",
+      "availability": "resting",
       "days_under_the_mark": 0,
       "opportunities": 17,
       "permission": "allowed",
@@ -5322,7 +5322,7 @@
         }
       ],
       "reliability": 0.5,
-      "reliability_reads": 44,
+      "reliability_reads": 45,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -5424,7 +5424,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 136,
+      "reliability_reads": 137,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -5526,7 +5526,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 136,
+      "reliability_reads": 137,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -5628,7 +5628,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 115,
+      "reliability_reads": 116,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -5729,8 +5729,8 @@
           "source_failures": 0
         }
       ],
-      "reliability": 0.9852941176470589,
-      "reliability_reads": 136,
+      "reliability": 0.9854014598540146,
+      "reliability_reads": 137,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -5832,7 +5832,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 115,
+      "reliability_reads": 116,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -5933,8 +5933,8 @@
           "source_failures": 0
         }
       ],
-      "reliability": 0.9926470588235294,
-      "reliability_reads": 136,
+      "reliability": 0.9927007299270073,
+      "reliability_reads": 137,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -6036,7 +6036,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 136,
+      "reliability_reads": 137,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -6138,7 +6138,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 60,
+      "reliability_reads": 61,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -6240,7 +6240,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 60,
+      "reliability_reads": 61,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -6342,7 +6342,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 42,
+      "reliability_reads": 43,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -6443,8 +6443,8 @@
           "source_failures": 0
         }
       ],
-      "reliability": 0.9761904761904762,
-      "reliability_reads": 42,
+      "reliability": 0.9767441860465116,
+      "reliability_reads": 43,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -6546,7 +6546,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 115,
+      "reliability_reads": 116,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -6648,7 +6648,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 115,
+      "reliability_reads": 116,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -6750,7 +6750,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 136,
+      "reliability_reads": 137,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -6852,7 +6852,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 115,
+      "reliability_reads": 116,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -6954,7 +6954,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 74,
+      "reliability_reads": 75,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -7055,8 +7055,8 @@
           "source_failures": 0
         }
       ],
-      "reliability": 0.991304347826087,
-      "reliability_reads": 115,
+      "reliability": 0.9913793103448276,
+      "reliability_reads": 116,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -7158,7 +7158,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 136,
+      "reliability_reads": 137,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -7260,7 +7260,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 136,
+      "reliability_reads": 137,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -7362,7 +7362,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 115,
+      "reliability_reads": 116,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -7464,7 +7464,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 136,
+      "reliability_reads": 137,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -7566,7 +7566,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 136,
+      "reliability_reads": 137,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -7668,7 +7668,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 136,
+      "reliability_reads": 137,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -7770,7 +7770,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 115,
+      "reliability_reads": 116,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -7872,7 +7872,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 136,
+      "reliability_reads": 137,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -7974,7 +7974,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 136,
+      "reliability_reads": 137,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -8076,7 +8076,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 136,
+      "reliability_reads": 137,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -8178,7 +8178,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 136,
+      "reliability_reads": 137,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -8280,7 +8280,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 136,
+      "reliability_reads": 137,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -8290,7 +8290,7 @@
       "vertical": "ai"
     },
     {
-      "availability": "resting",
+      "availability": "failing",
       "days_under_the_mark": 0,
       "opportunities": 195,
       "permission": "allowed",
@@ -8484,7 +8484,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 136,
+      "reliability_reads": 137,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -8586,7 +8586,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 115,
+      "reliability_reads": 116,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -8688,7 +8688,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 136,
+      "reliability_reads": 137,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -8790,7 +8790,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 136,
+      "reliability_reads": 137,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -8892,7 +8892,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 136,
+      "reliability_reads": 137,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -8994,7 +8994,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 115,
+      "reliability_reads": 116,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -9096,7 +9096,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 115,
+      "reliability_reads": 116,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -9198,7 +9198,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 115,
+      "reliability_reads": 116,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -9300,7 +9300,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 136,
+      "reliability_reads": 137,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -9402,7 +9402,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 136,
+      "reliability_reads": 137,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -9412,7 +9412,7 @@
       "vertical": "business-economy"
     },
     {
-      "availability": "failing",
+      "availability": "answering",
       "days_under_the_mark": 1,
       "opportunities": 31,
       "permission": "allowed",
@@ -9503,8 +9503,8 @@
           "source_failures": 3
         }
       ],
-      "reliability": 0.6756756756756757,
-      "reliability_reads": 74,
+      "reliability": 0.68,
+      "reliability_reads": 75,
       "retired": false,
       "retired_on": null,
       "retires_on": "2026-10-05",
@@ -9606,7 +9606,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 136,
+      "reliability_reads": 137,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -9708,7 +9708,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 136,
+      "reliability_reads": 137,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -9810,7 +9810,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 136,
+      "reliability_reads": 137,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -9912,7 +9912,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 136,
+      "reliability_reads": 137,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -10014,7 +10014,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 136,
+      "reliability_reads": 137,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -10116,7 +10116,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 136,
+      "reliability_reads": 137,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -10218,7 +10218,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 115,
+      "reliability_reads": 116,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -10320,7 +10320,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 136,
+      "reliability_reads": 137,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -10432,7 +10432,7 @@
       "vertical": "ai"
     },
     {
-      "availability": "resting",
+      "availability": "failing",
       "days_under_the_mark": 0,
       "opportunities": 39,
       "permission": "denied",
@@ -10625,8 +10625,8 @@
           "source_failures": 0
         }
       ],
-      "reliability": 0.9926470588235294,
-      "reliability_reads": 136,
+      "reliability": 0.9927007299270073,
+      "reliability_reads": 137,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -10728,7 +10728,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 115,
+      "reliability_reads": 116,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -10830,7 +10830,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 136,
+      "reliability_reads": 137,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -10932,7 +10932,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 115,
+      "reliability_reads": 116,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -11033,8 +11033,8 @@
           "source_failures": 0
         }
       ],
-      "reliability": 0.9926470588235294,
-      "reliability_reads": 136,
+      "reliability": 0.9927007299270073,
+      "reliability_reads": 137,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -11135,8 +11135,8 @@
           "source_failures": 0
         }
       ],
-      "reliability": 0.9926470588235294,
-      "reliability_reads": 136,
+      "reliability": 0.9927007299270073,
+      "reliability_reads": 137,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -11238,7 +11238,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 136,
+      "reliability_reads": 137,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -11340,7 +11340,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 136,
+      "reliability_reads": 137,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -11442,7 +11442,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 136,
+      "reliability_reads": 137,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -11544,7 +11544,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 136,
+      "reliability_reads": 137,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -11646,7 +11646,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 95,
+      "reliability_reads": 96,
       "retired": false,
       "retired_on": null,
       "retires_on": "2026-09-24",
@@ -11748,7 +11748,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 136,
+      "reliability_reads": 137,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -12156,7 +12156,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 136,
+      "reliability_reads": 137,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -12258,7 +12258,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 136,
+      "reliability_reads": 137,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -12360,7 +12360,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 136,
+      "reliability_reads": 137,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -12370,7 +12370,7 @@
       "vertical": "ai"
     },
     {
-      "availability": "failing",
+      "availability": "answering",
       "days_under_the_mark": 0,
       "opportunities": 118,
       "permission": "allowed",
@@ -12461,8 +12461,8 @@
           "source_failures": 0
         }
       ],
-      "reliability": 0.8434782608695652,
-      "reliability_reads": 115,
+      "reliability": 0.8448275862068966,
+      "reliability_reads": 116,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -12564,7 +12564,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 115,
+      "reliability_reads": 116,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -12768,7 +12768,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 115,
+      "reliability_reads": 116,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -12870,7 +12870,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 115,
+      "reliability_reads": 116,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -12972,7 +12972,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 136,
+      "reliability_reads": 137,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -12982,7 +12982,7 @@
       "vertical": "ai"
     },
     {
-      "availability": "failing",
+      "availability": "answering",
       "days_under_the_mark": 0,
       "opportunities": 118,
       "permission": "allowed",
@@ -13073,8 +13073,8 @@
           "source_failures": 0
         }
       ],
-      "reliability": 0.9191176470588235,
-      "reliability_reads": 136,
+      "reliability": 0.9197080291970803,
+      "reliability_reads": 137,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -13176,7 +13176,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 65,
+      "reliability_reads": 66,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -13278,7 +13278,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 65,
+      "reliability_reads": 66,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -13482,7 +13482,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 115,
+      "reliability_reads": 116,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -13686,7 +13686,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 136,
+      "reliability_reads": 137,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -13788,7 +13788,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 65,
+      "reliability_reads": 66,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -13991,8 +13991,8 @@
           "source_failures": 1
         }
       ],
-      "reliability": 0.991304347826087,
-      "reliability_reads": 115,
+      "reliability": 0.9913793103448276,
+      "reliability_reads": 116,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -14094,7 +14094,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 115,
+      "reliability_reads": 116,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -14196,7 +14196,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 136,
+      "reliability_reads": 137,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -14297,8 +14297,8 @@
           "source_failures": 0
         }
       ],
-      "reliability": 0.7058823529411765,
-      "reliability_reads": 136,
+      "reliability": 0.708029197080292,
+      "reliability_reads": 137,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -14400,7 +14400,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 136,
+      "reliability_reads": 137,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -14502,7 +14502,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 136,
+      "reliability_reads": 137,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -14604,7 +14604,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 136,
+      "reliability_reads": 137,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -14706,7 +14706,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 136,
+      "reliability_reads": 137,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -14910,7 +14910,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 42,
+      "reliability_reads": 43,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -15012,7 +15012,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 136,
+      "reliability_reads": 137,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -15114,7 +15114,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 136,
+      "reliability_reads": 137,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -15216,7 +15216,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 115,
+      "reliability_reads": 116,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -15318,7 +15318,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 136,
+      "reliability_reads": 137,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -15420,7 +15420,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 136,
+      "reliability_reads": 137,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -15522,7 +15522,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 136,
+      "reliability_reads": 137,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -15726,7 +15726,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 136,
+      "reliability_reads": 137,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -15828,7 +15828,7 @@
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 115,
+      "reliability_reads": 116,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -15929,8 +15929,8 @@
           "source_failures": 0
         }
       ],
-      "reliability": 0.8148148148148148,
-      "reliability_reads": 81,
+      "reliability": 0.8170731707317073,
+      "reliability_reads": 82,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
