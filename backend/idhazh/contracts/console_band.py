@@ -180,6 +180,11 @@ class ConsoleBand(Contract):
     __schema_stem__: ClassVar[str] = "console-band"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-23",
+            change="The two lag readings are fixed at 0 and covers_through is the run's own day.",
+            why="Every writer files its own day, so no run finds a backlog to fold.",
+        ),
+        ChangelogEntry(
             version="2026-09-19",
             change="The band carries compaction_lag_days, rows_uncompacted and covers_through.",
             why="A page brought current by this run looked the same as one two days behind.",
@@ -220,23 +225,25 @@ class ConsoleBand(Contract):
         default=0,
         ge=0,
         description=(
-            "Whole days between the oldest segment the compaction found waiting and "
-            "the date it ran. 0 when it found none, which is every normal run."
+            "Always 0. Nothing waits to be compacted, because every writer files its "
+            "rows under the day those rows name. A payload written before that change "
+            "can still carry a higher reading."
         ),
     )
     rows_uncompacted: int = Field(
         default=0,
         ge=0,
         description=(
-            "Rows this run folded in from segments an earlier run left behind. It is "
-            "what the record was short by until this run, not what it is short by now."
+            "Always 0, for the reason compaction_lag_days is. A payload written before "
+            "that change can still carry a higher reading."
         ),
     )
     covers_through: DateStamp | None = Field(
         default=None,
         description=(
-            "The newest date every head is compacted through after this run. Null "
-            "when nothing waited, because then this run moved no head."
+            "The day this run assembled. That is the newest day the record can cover, "
+            "because this run is the one writing it. Null only on a payload written "
+            "before the field was always filled."
         ),
     )
 
