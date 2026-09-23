@@ -125,12 +125,13 @@ env:
   LLAMA_CPP_BUILD: b10598
   LLAMA_CPP_ASSET: llama-b10598-bin-ubuntu-x64.tar.gz
   LLAMA_CPP_SHA256: d77a09db4165f8850b513629ed0ffeaab7851bb03e7cc3870b74e721f894694c
-  # The one place this workflow says which port, the same declaration digest.yml
-  # and validate.yml make. The runtime job starts its own server from an inline
-  # python block rather than through the shared launcher, because it sweeps a
-  # setting and needs the process handle - but it reads the port from here, so
-  # no part of this repository spells the number twice (Guardrail #6).
-  LLAMA_PORT: '8080'
+  # Where this job's own probes ask, the same declaration digest.yml and
+  # validate.yml make. The runtime job starts its own server from a module
+  # rather than through the shared launcher, because it sweeps a setting and
+  # needs the process handle - and it reads its port out of the candidate
+  # root's `model_server.base_url`, so no part of this repository spells the
+  # number twice (Guardrail #6).
+  MODEL_SERVER_PROBE: 'http://127.0.0.1:8080'
 
 jobs:
   # The model refs, read once from config and published to every target that
@@ -972,10 +973,10 @@ jobs:
           python3 backend/utilities/model_runtime.py start-server \
             --config-root backend/var/candidate-config
           for _ in $(seq 1 180); do
-            curl -sf "http://127.0.0.1:${LLAMA_PORT}/health" > /dev/null && break
+            curl -sf "${MODEL_SERVER_PROBE}/health" > /dev/null && break
             sleep 5
           done
-          curl -sf "http://127.0.0.1:${LLAMA_PORT}/health" > /dev/null || {
+          curl -sf "${MODEL_SERVER_PROBE}/health" > /dev/null || {
             echo "the tokenizer never became healthy" >&2
             tail -50 llama-server.log >&2
             exit 1
@@ -983,7 +984,7 @@ jobs:
           # Healthy says a server replied. It does not say which weights
           # replied, and every budget below is filed under this alias
           # (Guardrail #10).
-          SERVED=$(curl -sf "http://127.0.0.1:${LLAMA_PORT}/v1/models" | jq -r '.data[0].id')
+          SERVED=$(curl -sf "${MODEL_SERVER_PROBE}/v1/models" | jq -r '.data[0].id')
           if [ "$SERVED" != "${CANDIDATE_ID}" ]; then
             echo "the server answers to ${SERVED}, not ${CANDIDATE_ID}" >&2
             exit 1
@@ -998,7 +999,7 @@ jobs:
           set -euo pipefail
           mkdir -p backend/var/budgets
           python backend/utilities/measure_budgets.py read \
-            --base "http://127.0.0.1:${LLAMA_PORT}" \
+            --base "${MODEL_SERVER_PROBE}" \
             --config backend/var/candidate-config \
             --subject "${CANDIDATE_SHA256}" \
             --samples "${BUDGET_SAMPLES}" \

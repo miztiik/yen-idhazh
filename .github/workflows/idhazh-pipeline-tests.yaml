@@ -73,7 +73,7 @@ concurrency:
 # fetch step sources and the step above reads, so this workflow cannot spell a
 # build the binary it unpacks disagrees with.
 env:
-  LLAMA_PORT: '8080'
+  MODEL_SERVER_PROBE: 'http://127.0.0.1:8080'
 
 jobs:
   cases:
@@ -255,12 +255,12 @@ jobs:
           python3 backend/utilities/model_runtime.py start-server \
             --config-root backend/var/cases/baseline/config
           for _ in $(seq 1 120); do
-            curl -sf "http://127.0.0.1:${LLAMA_PORT}/health" > /dev/null && break
+            curl -sf "${MODEL_SERVER_PROBE}/health" > /dev/null && break
             sleep 5
           done
           # Assert it, do not hope. Without this the loop simply ends, every
           # item fails as "model unreachable", and three cases agree on nothing.
-          curl -sf "http://127.0.0.1:${LLAMA_PORT}/health" > /dev/null || {
+          curl -sf "${MODEL_SERVER_PROBE}/health" > /dev/null || {
             echo "the model never became healthy" >&2
             tail -50 llama-server.log >&2
             exit 1
@@ -270,10 +270,10 @@ jobs:
           # alias whether or not the server agrees. The alias is read by name
           # rather than pasted into this program, and it comes from the entry
           # the case's own config points at.
-          curl -sf "http://127.0.0.1:${LLAMA_PORT}/v1/models" \
+          curl -sf "${MODEL_SERVER_PROBE}/v1/models" \
             | jq -e --arg alias "$MODEL_ALIAS" '[.data[].id] | index($alias) != null' > /dev/null || {
             echo "the server does not serve ${MODEL_ALIAS}" >&2
-            curl -s "http://127.0.0.1:${LLAMA_PORT}/v1/models" >&2 || true
+            curl -s "${MODEL_SERVER_PROBE}/v1/models" >&2 || true
             exit 1
           }
 
@@ -332,10 +332,10 @@ jobs:
           python3 backend/utilities/model_runtime.py start-server \
             --config-root backend/var/cases/parallel-2/config
           for _ in $(seq 1 120); do
-            curl -sf "http://127.0.0.1:${LLAMA_PORT}/health" > /dev/null && break
+            curl -sf "${MODEL_SERVER_PROBE}/health" > /dev/null && break
             sleep 5
           done
-          curl -sf "http://127.0.0.1:${LLAMA_PORT}/health" > /dev/null || {
+          curl -sf "${MODEL_SERVER_PROBE}/health" > /dev/null || {
             echo "the model never became healthy on the second start" >&2
             tail -50 llama-server.log >&2
             exit 1
@@ -343,10 +343,10 @@ jobs:
           # The same question the first start asks, and it matters more on a
           # restart: a second server can come up on stale flags or stale weights
           # and still answer 200.
-          curl -sf "http://127.0.0.1:${LLAMA_PORT}/v1/models" \
+          curl -sf "${MODEL_SERVER_PROBE}/v1/models" \
             | jq -e --arg alias "$MODEL_ALIAS" '[.data[].id] | index($alias) != null' > /dev/null || {
             echo "the server does not serve ${MODEL_ALIAS}" >&2
-            curl -s "http://127.0.0.1:${LLAMA_PORT}/v1/models" >&2 || true
+            curl -s "${MODEL_SERVER_PROBE}/v1/models" >&2 || true
             exit 1
           }
 

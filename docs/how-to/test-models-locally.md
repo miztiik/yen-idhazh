@@ -153,10 +153,13 @@ through config.
 
 `digest.yml`, `validate.yml` and `measure.yml` all start their servers from that
 same function, and a test fails if any of them renders the list a second way.
-The port is the same story: each workflow declares `LLAMA_PORT` once and the
-argv, every health probe and the client all read it. **`--no-warmup` is no longer
-passed** - the page fault is paid either way, so the workflow now pays it during
-`pip install` instead of inside the first request.
+The port is not the same story any more: it lives inside
+`model_server.base_url` in `config/idhazh.json`, the server command reads it
+back out of the config root it runs under, and each workflow declares only
+`MODEL_SERVER_PROBE` - the loopback address its own health probes ask.
+**`--no-warmup` is no longer passed** - the page fault is paid either way, so
+the workflow now pays it during `pip install` instead of inside the first
+request.
 
 **Use `--threads 4` when reproducing the current runner baseline.** GitHub gives
 the VM four scheduler-visible CPUs. That does not mean four physical cores plus

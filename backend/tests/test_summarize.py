@@ -15,6 +15,7 @@ from __future__ import annotations
 import ast
 import dataclasses
 import json
+import logging
 import re
 import socket
 import threading
@@ -358,7 +359,6 @@ def test_the_output_shape_is_enforced_by_the_decoder() -> None:
 def test_the_server_is_started_from_config_not_by_hand() -> None:
     """Four flags are written in code and the rest are the entry's, emitted in order."""
     from idhazh.contracts.knobs.models import ModelRef
-    from idhazh.llm.server import DEFAULT_PORT
 
     binary = Path("bin/llama-server")
     weights = Path("models/w.gguf")
@@ -367,6 +367,7 @@ def test_the_server_is_started_from_config_not_by_hand() -> None:
         weights=weights,
         model=ModelRef(id="m", repo="r", file="w.gguf", quantisation="Q4_K_M"),
         server=a_server(**{"--metrics": None}),
+        port=8181,
     )
     assert argv == [
         str(binary),
@@ -376,7 +377,7 @@ def test_the_server_is_started_from_config_not_by_hand() -> None:
         "m",
         "--no-context-shift",
         "--port",
-        str(DEFAULT_PORT),
+        "8181",
         "--ctx-size",
         "8192",
         "--batch-size",
@@ -402,6 +403,7 @@ def test_the_server_refuses_an_oversized_prompt_rather_than_shifting_it() -> Non
         weights=Path("models/w.gguf"),
         model=ModelRef(id="m", repo="r", file="w.gguf", quantisation="Q4_K_M"),
         server=a_server(**{"--metrics": None}),
+        port=8181,
     )
 
     assert "--no-context-shift" in argv
@@ -422,6 +424,7 @@ def test_no_speculative_flag_reaches_the_server() -> None:
         weights=Path("models/w.gguf"),
         model=ModelRef(id="m", repo="r", file="w.gguf", quantisation="Q4_K_M"),
         server=a_server(**{"--metrics": None}),
+        port=8181,
     )
 
     assert not [flag for flag in argv if flag.startswith(("--spec-", "--draft"))]
@@ -452,13 +455,12 @@ def test_an_entry_a_person_writes_is_refused_for_naming_a_draft_head() -> None:
 def test_server_argv_names_the_port_it_was_given() -> None:
     """The port a caller hands the builder is the port the flag carries.
 
-    `DEFAULT_PORT` is what `LLAMA_PORT` sets, and it is what the server binds
-    when nobody names one. Where the stage POSTS is no longer this number: it is
-    `model_server.base_url`, and `test_every_route_is_derived_from_the_one_address_
-    a_caller_was_given` holds the routes against an address of its own.
+    There is no default to fall back on. The one production caller reads the
+    port out of `model_server.base_url`, so a default here would be a second
+    answer to which port the run uses. The address itself is checked by
+    `test_every_route_is_derived_from_the_one_address_a_caller_was_given`.
     """
     from idhazh.contracts.knobs.models import ModelRef
-    from idhazh.llm.server import DEFAULT_PORT
 
     argv = server_argv(
         binary=Path("bin/llama-server"),
@@ -467,15 +469,16 @@ def test_server_argv_names_the_port_it_was_given() -> None:
         server=a_server(**{"--metrics": None}),
         port=8181,
     )
-    bound_by_default = server_argv(
+    elsewhere = server_argv(
         binary=Path("bin/llama-server"),
         weights=Path("models/w.gguf"),
         model=ModelRef(id="m", repo="r", file="w.gguf", quantisation="Q4_K_M"),
         server=a_server(**{"--metrics": None}),
+        port=9090,
     )
 
     assert argv[argv.index("--port") + 1] == "8181"
-    assert bound_by_default[bound_by_default.index("--port") + 1] == str(DEFAULT_PORT)
+    assert elsewhere[elsewhere.index("--port") + 1] == "9090"
 
 
 def test_every_route_is_derived_from_the_one_address_a_caller_was_given() -> None:
@@ -507,6 +510,138 @@ def test_every_route_is_derived_from_the_one_address_a_caller_was_given() -> Non
     # derived from either reaches the same place.
     assert completion_url("http://127.0.0.1:8181") == "http://127.0.0.1:8181/completions"
     assert props_url(completion_url(posts_to)) == props_url(posts_to)
+
+
+def test_a_program_that_started_its_own_server_probes_that_one() -> None:
+    """`loopback_url` takes a port and looks nothing up.
+
+    The three instruments that spawn a server measure the process they started.
+    Reading `model_server.base_url` there would point a measurement at whichever
+    server the config names, and a reading taken against a binary this process
+    did not start is a number about the wrong binary.
+
+    So the settings are handed in here and must make no difference. A config
+    naming another machine is the sharpest case, because that is the one where
+    a lookup would be visible.
+    """
+    from idhazh.contracts.knobs.model_server import ModelServerConfig
+    from idhazh.llm.server import loopback_url
+
+    elsewhere = ModelServerConfig(base_url="http://192.168.1.20:9090")
+
+    assert loopback_url(9090) == "http://127.0.0.1:9090"
+    assert elsewhere.base_url == "http://192.168.1.20:9090", "the config is unread, not rewritten"
+    assert loopback_url(8181).endswith(":8181"), "the port is the caller's and nothing else is"
+
+
+#: Every module allowed to write the loopback host, and what each one is. A set
+#: rather than a count, because a count falling by one names nothing and a count
+#: rising by one is read as "somebody added a test". Anything not here is a
+#: second address a config value cannot move, which is the state
+#: `model_server.base_url` exists to end.
+LOOPBACK_IS_WRITTEN_IN: Final = {
+    # The committed default, and the changelog line that quotes it.
+    "backend/idhazh/contracts/knobs/model_server.py",
+    "backend/idhazh/contracts/app_config.py",
+    # The body of `loopback_url`, which is the one home for the literal.
+    "backend/idhazh/llm/server.py",
+    # Two hand-run instruments whose `--base` default is a literal. Neither
+    # starts a server, so by this project's own rule both should read the
+    # address out of a config root - `slot_probe.py` was given one on
+    # 2026-09-23 and these two were missed. Listed rather than hidden.
+    "backend/utilities/measure_budgets.py",
+    "backend/utilities/measure_judge_call.py",
+}
+
+
+def test_the_loopback_host_is_written_in_five_named_places() -> None:
+    """Survivors, not zero. Zero is the wrong answer and an earlier draft claimed it.
+
+    `loopback_url` has to write the host somewhere, and the committed default
+    has to say it. What must not happen is a sixth module quietly spelling an
+    address again, which is what the three self-spawning instruments did until
+    2026-09-23 - six literals between them, each one a place a moved port could
+    be left behind.
+
+    A source census, so its cost is the size of the codebase and not the size of
+    anything a run appends to (Guardrail #12).
+    """
+    roots = (REPO_ROOT / "backend" / "idhazh", REPO_ROOT / "backend" / "utilities")
+    writing = {
+        path.relative_to(REPO_ROOT).as_posix()
+        for root in roots
+        for path in root.rglob("*.py")
+        if "127.0.0.1" in path.read_text(encoding="utf-8")
+    }
+
+    assert writing == LOOPBACK_IS_WRITTEN_IN, (
+        "these modules write the loopback host and are not on the list: "
+        f"{sorted(writing - LOOPBACK_IS_WRITTEN_IN)}; "
+        f"and these are listed and no longer write it: {sorted(LOOPBACK_IS_WRITTEN_IN - writing)}"
+    )
+
+
+def test_the_run_says_which_server_answered_and_never_says_a_credential(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """The one thing a finished run can be read for: which machine produced the output.
+
+    Scheme, host and port, because a URL's authority carries userinfo:
+    `http://user:token@box:8080` written whole would put a credential in a log
+    line, and a log line is the artefact somebody pastes into an issue
+    (Guardrail #11).
+
+    Nothing in this repository builds a credentialed address, and the point is
+    what happens if something one day does - so the URL is the test's own and it
+    goes to the function `post` reads an endpoint apart with. No socket opens.
+    """
+    from idhazh.llm.server import _note_origin, _origin_of
+
+    credentialed = "http://user:token@box:8080/v1/chat/completions"
+    assert _origin_of(credentialed) == "http://box:8080"
+
+    _note_origin.cache_clear()
+    with caplog.at_level(logging.INFO, logger="idhazh"):
+        _note_origin(_origin_of(credentialed))
+
+    said = caplog.text
+    assert "model server origin=http://box:8080" in said, said
+    assert "token" not in said and "user" not in said, f"a credential reached the log: {said}"
+
+
+def test_one_server_is_named_once_however_many_items_are_sent(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A day is thousands of items and this answers the same question once.
+
+    Driven through `post` rather than through `_note_origin`, because the record
+    existing and the record being written are two different claims and only the
+    second one is worth anything. `RecordedEndpoint` is a server, not a mock
+    (Guardrail #7): it binds a port the operating system picked this second, so
+    the address in the log can only have come from the endpoint `post` was
+    given.
+
+    The cache is keyed on the origin rather than the endpoint, because the
+    qualification process posts to two routes on one server and an endpoint key
+    would write the identical line twice. `lru_cache` is process-global, so the
+    clear is what makes this a statement about the code rather than about
+    whatever ran before it.
+    """
+    from idhazh.llm.server import _note_origin, completion_url
+
+    reply = read_text(RENDERED_REPLY).encode("utf-8")
+    _note_origin.cache_clear()
+    with caplog.at_level(logging.INFO, logger="idhazh"), RecordedEndpoint(
+        200, reply, reply
+    ) as served:
+        post({}, endpoint=served.endpoint, timeout=5.0)
+        post({}, endpoint=completion_url(served.endpoint), timeout=5.0)
+
+    origins = [line for line in caplog.text.splitlines() if "model server origin=" in line]
+    assert len(origins) == 1, f"two routes on one server wrote {len(origins)} records: {origins}"
+    assert served.endpoint.startswith(origins[0].split("origin=")[-1]), (
+        f"the record does not name the server that answered: {origins[0]}"
+    )
 
 
 class TestTheRenderedCompletionEnvelope:
@@ -910,6 +1045,7 @@ def test_runtime_sweep_flags_are_emitted_only_when_configured() -> None:
                 "--metrics": None,
             }
         ),
+        port=8181,
     )
 
     assert argv[-17:] == [
@@ -951,6 +1087,7 @@ def test_the_server_is_asked_to_describe_itself_only_when_configured() -> None:
         weights=Path("models/w.gguf"),
         model=model,
         server=a_server(),
+        port=8181,
     )
     assert "-lv" not in quiet
 
@@ -959,6 +1096,7 @@ def test_the_server_is_asked_to_describe_itself_only_when_configured() -> None:
         weights=Path("models/w.gguf"),
         model=model,
         server=a_server(**{"-lv": 4}),
+        port=8181,
     )
     assert loud[loud.index("-lv") + 1] == "4"
 
@@ -978,6 +1116,7 @@ def test_every_committed_role_starts_a_server_that_names_its_own_settings() -> N
             weights=Path(f"models/{entry.file}"),
             model=entry,
             server=entry.server,
+            port=8181,
         )
         assert argv[argv.index("-lv") + 1] == "4", f"{role} starts a server that says nothing"
 

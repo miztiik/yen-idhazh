@@ -57,10 +57,9 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  # The one place this workflow says which port, for the reason `digest.yml`
-  # gives: `server_argv` binds it and `idhazh.llm.server` reads it for the
-  # address a unit posts to.
-  LLAMA_PORT: '8080'
+  # Where this job's own probes ask, for the reason `digest.yml` gives: the
+  # server is on this runner, and where a unit posts is `model_server.base_url`.
+  MODEL_SERVER_PROBE: 'http://127.0.0.1:8080'
 
 jobs:
   draw:
@@ -291,12 +290,12 @@ jobs:
       # allowance; and the repository's own throughput reading transfers to this
       # workload, because it was taken on these weights.
       #
-      # The port is handed over rather than inherited: it has one home, the
-      # workflow `env` above, and this is the line that carries it in.
+      # The probe address is handed over rather than inherited: it has one home,
+      # the workflow `env` above, and this is the line that carries it in.
       - uses: ./.github/actions/model-server
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          port: ${{ env.LLAMA_PORT }}
+          probe_url: ${{ env.MODEL_SERVER_PROBE }}
           llama_cpp_build: ${{ needs.draw.outputs.llama_cpp_build }}
 
       # One cell is one tenant, so the in-process deadline the verb computes is

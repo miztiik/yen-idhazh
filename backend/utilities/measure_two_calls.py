@@ -84,6 +84,7 @@ from idhazh.llm.server import (
     TurnMarkers,
     completion_url,
     derive_turn_markers,
+    loopback_url,
     post,
     props,
     server_argv,
@@ -106,7 +107,7 @@ def wait_for_health(port: int, *, deadline_seconds: float) -> None:
     started = time.monotonic()
     while time.monotonic() - started < deadline_seconds:
         try:
-            with urllib.request.urlopen(f"http://127.0.0.1:{port}/health", timeout=2.0):
+            with urllib.request.urlopen(loopback_url(port) + "/health", timeout=2.0):
                 return
         except (urllib.error.URLError, OSError):
             time.sleep(1.0)
@@ -923,7 +924,7 @@ def main(argv: list[str] | None = None) -> int:
     system_tokens: int | None = None
     try:
         wait_for_health(args.server_port, deadline_seconds=args.startup_seconds)
-        base = f"http://127.0.0.1:{args.server_port}"
+        base = loopback_url(args.server_port)
         endpoint = completion_url(base)
         timeout = args.request_minutes * 60.0
         tokenizer = Tokenizer(base=base, timeout=60.0)
