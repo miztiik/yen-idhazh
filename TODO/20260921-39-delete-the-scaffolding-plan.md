@@ -1,6 +1,6 @@
 # Delete the scaffolding
 
-**Last Updated**: 2026-09-22
+**Last Updated**: 2026-09-23
 
 **Level**: 5 (the generated contract layer is deleted whole, the model configuration stops being a typed shape, the startup probe that gates every run keeps one check of five, and three clauses of the engineering contract are amended to match)
 
@@ -70,31 +70,35 @@ Twenty rows. Read this before the tables.
 
 **No row is executed from here, and every status below was read off `main` rather than off a plan.** Plans 41 and 42 were rewritten after this table first pointed at them and both files are now deleted, so a pointer of the form "plan 41 row 8" resolves to nothing. The `Where it went` column names the pull request that landed the work, or the plan file on disk that still carries it. The `Verified` column is what the tree says on 2026-09-22, with the line that proves it.
 
-| # | Row title | Where it went | Verified on `main`, 2026-09-22 | Proof |
+| # | Row title | Where it went | Verified on `main`, 2026-09-23 | Proof |
 | --- | --- | --- | --- | --- |
-| 1 | The generated contract layer goes | plan 43 row 5 | **OPEN** | `schemas/` holds 65 files; `frontend/src/contracts/`, `backend/idhazh/contracts/export.py` and `backend/tests/contracts/test_schema_drift.py` all present |
+| 1 | The generated contract layer goes | plan 43, "The generated contract layer goes, and the contract catches up" | **OPEN** | `schemas/` now holds **66** files, one more than when this row was written; `frontend/src/contracts/`, `backend/idhazh/contracts/export.py` and `backend/tests/contracts/test_schema_drift.py` all present |
 | 2 | The model file is plain JSON | PR #1036 | **LANDED** | `server: dict[str, Any]` at `backend/idhazh/contracts/knobs/models.py:147`; `schemas/models-config.schema.json` gone. Four fields stay typed - `arch`, `thinking_close`, `thinking_kwarg`, `declared_for` - which is what the amended Guardrail #3 asks for: declare what the file's own readers compute on |
 | 3 | The draft head goes | PR #1036, **reversed** | **NOT DONE, by decision** | Relocated rather than deleted: `CompanionFile` at `models.py:22`, `companion_files` in `config/models/gemma-4-e4b-qat.json`. Deleting it would have destroyed the only committed control for the A/B pair that measures what the head is worth |
 | 4 | The capability probe goes | PR #1035 | **LANDED** | `.github/workflows/probe.yml` deleted in `ff2f2842` |
-| 5 | The installer stops naming a repository | plan 40 row 1 | **OPEN** | `.github/scripts/install-llama-runtime.sh:27` still spells `repos/ggml-org/llama.cpp`; no model file carries a `runtime` block |
+| 5 | The installer stops naming a repository | plan 40, "The model entry, and whether it fits" | **OPEN** | `.github/scripts/install-llama-runtime.sh` is gone - plan 44 turned the shell path into Python - but the pin moved rather than left: `backend/utilities/model_runtime.py` names `ggml-org/llama.cpp` now, and no model file carries a `runtime` block |
 | 6 | The startup probe keeps one check, then none | PR #1039 | **LANDED IN PART** | `prove_the_entry` at `backend/idhazh/llm/server.py:1532` is now marker derivation, with the boundary check riding inside it, plus one decode under a one-document schema. Five checks to one. **The "then none" half is refused in the code's own docstring**: the derivation cannot say whether the generated schema has grown a construct the grammar converter drops |
-| 7 | Qualification asks each article once | plan 43 row 1 | **OPEN**; the one-pass cut refused | `--repeats` still on the dispatch surface at `backend/idhazh/cli.py:345`. Cutting three passes to one moves the measured side of the only gate reading Guardrail #2 without moving the bound - plan 43 scope-out |
-| 8 | Both test pipelines commit what they produce | plan 43 row 3 | **OPEN** | no `summaries` write anywhere in `backend/idhazh/stages/record.py` |
+| 7 | Qualification asks each article once | plan 43, "The replay count leaves the dispatch surface" | **LANDED**; the one-pass cut refused | The `repeats` dispatch input is gone from `.github/workflows/validate.yml`, and `qualification_repeats` is a config value in `config/idhazh.json` and `knobs/run.py`. `--repeats` stays on the command line by decision - a developer running one shard locally needs it. Cutting three passes to one stays refused: it moves the measured side of the only gate reading Guardrail #2 without moving the bound |
+| 8 | Both test pipelines commit what they produce | plan 43, "The pipeline test commits what it already wrote" | **LANDED**, by a different design | `.github/workflows/idhazh-pipeline-tests.yaml` now carries write permission and a commit step. **No new collection was minted** - plan 43 found that every value this row wanted copied into a CSV already sits in a declared shape, so the row commits what the run already wrote rather than a new ledger |
 | 9 | The benchmark workflow's closed-world tests go | PR #1037 | **LANDED** | `backend/tests/workflows/test_bench_input_drift.py` deleted |
 | 10 | The workflow censuses go | PR #1037 | **LANDED** | both censuses now discover: `test_model_server_jobs.py:116` and `test_script_invocation.py:55` each walk `SCRIPTS_DIR.glob("*.sh")` |
 | 11 | The server-log reader goes | PR #1036 | **LANDED** | the optimisation reader is gone from `backend/idhazh/llm/`. `model_load_ms` at `backend/idhazh/telemetry/silicon.py:473` reads the log for one telemetry number and was never in this row's scope |
-| 12 | The engineering contract and the pages catch up | PR #1036 and #1044, then plan 43 row 6 | **LANDED IN PART** | Guardrail #3 (`CLAUDE.md:90`) and section 11 (`:260`) carry the owner ruling of 2026-09-21. Section 1a (`:105` and `:110`), section 9 (`:221`) and section 13 (`:299`) still describe a generated layer that row 1 deletes |
-| 13 | The entry path is one action taking a model file | plan 44 row 2 | **OPEN** | `.github/actions/model-server/action.yml` still takes `weights_repo`, `weights_revision`, `weights_file`, `llama_cpp_build` and three `draft_*` inputs, and has no `models_file`. Two workflows call the action; two call `fetch-model-runtime.sh` themselves |
+| 12 | The engineering contract and the pages catch up | PR #1036 and #1044, then plan 43, "The generated contract layer goes, and the contract catches up" | **LANDED IN PART** | Guardrail #3 (`CLAUDE.md:90`) and section 11 carry the owner ruling of 2026-09-21. **Four clauses still describe a generated layer** that row 1 deletes; plan 43 lists all nine amendments it makes, so the remainder is scoped rather than merely open |
+| 13 | The entry path is one action taking a model file | plan 44, "The last three scripts go" | **OPEN** | `.github/actions/model-server/action.yml` is still there and still has no `models_file` input. Plan 44 has replaced the shell path with Python around it - its row is READY, gated on plan 46, which closed 2026-09-23 |
 | 14 | The image benchmark goes, and two heavy wheels with it | PR #1035 | **LANDED** | `backend/utilities/bench_image.py` deleted in `ff2f2842`. One wheel, not two |
-| 15 | The hosted span sink goes | plan 43 row 7 | **OPEN. The refusal is lifted** | The 2026-08-30 ruling at `docs/concepts/telemetry.md:553` was reversed by owner approval on 2026-09-22 (CLAUDE.md section 0). `langfuse_sink` at `backend/idhazh/telemetry/sinks.py:113` is still there |
+| 15 | The hosted span sink goes | plan 43, "The hosted span sink goes" | **LANDED** | `langfuse_sink` is gone from `backend/idhazh/telemetry/sinks.py`. The 2026-08-30 ruling at `docs/concepts/telemetry.md:553` was reversed by owner approval on 2026-09-22 (CLAUDE.md section 0), and the local trace file survives |
 | 16 | The thinking budget goes; the two-span call stays | PR #1036 | **LANDED** | `max_think_tokens` is gone from `backend/idhazh/` and `config/`; the only remaining mentions are the changelog assertions in `test_schema_drift.py` |
-| 17 | The utilities and evaluations nothing calls go | plan 43 row 2 | **OPEN** | 68 Python files in `backend/utilities/`; `plan_status.py`, `label_queue.py` and `probe_feeds.py` all present |
+| 17 | The utilities and evaluations nothing calls go | plan 43, "The spent utilities go, and the keep-rule is written down" | **LANDED**, and smaller than asked | All three spent utilities are gone - `backfill_day_metrics.py`, `migrate_item_health.py`, `measure_definition_placement.py`. The other seven stay under the keep-rule plan 43 wrote down: a utility a `docs/` page names as the instrument behind a reading is kept. **`label_queue.py` was not deleted but made runnable**, reversing the draft |
 | 18 | The model's own template renders the prompt | PR #1039 | **LANDED** | `derive_turn_markers` at `backend/idhazh/llm/server.py:1434`; no `turn_opening` key in any `config/models/*.json` |
-| 19 | One console route list, not nine | PR #1040, then plan 45 | **LANDED IN PART**; the single-list design refused | Five of nine lists were widened to all five routes. The refusal is recorded in the code at `frontend/src/lib/console/band.ts:131-133`. The two specs that still miss a route are plan 45 |
+| 19 | One console route list, not nine | PR #1040, then #1045, #1046 and #1049 | **LANDED**; the single-list design refused | Five of nine lists were widened to all five routes in #1040, and the readout rule reached every route across three more pull requests. The refusal stands, recorded in the code at `frontend/src/lib/console/band.ts:131-133`: the lists stay nine and stay hand-written |
 | 20 | One commit call in the workflow that has four | nowhere | **NOT DONE, by decision** | The premise was wrong: `.github/workflows/idhazh-pipeline-tests.yaml` has **zero** commit-and-push calls today, so there are no four to merge |
 | 21 | One request builder, and the pipeline stops naming a server | PR #1036 for the stamp; the rest is now plan 47 | **LANDED IN PART; most of the rest refused** | The stamp went in #1036. The four builders at `server.py:496`, `:554`, `:608`, `:783` stay - they are four shapes carrying four different Guardrail #11 controls. The move to the widely-supported route is refused by a measurement at `server.py:58-66` dated after this row was written. The three slot cells stay - `backend/utilities/slot_probe.py` is their named instrument. **What survives is the host**, and it is [`20260922-47-the-pipeline-stops-naming-a-server-plan.md`](20260922-47-the-pipeline-stops-naming-a-server-plan.md) |
 
-**Eight rows landed whole, four landed in part, seven are open and two are not being done.** That accounts for all twenty-one.
+**Thirteen rows landed whole, three landed in part, three are open and two are not being done.** That accounts for all twenty-one. **Every row has a home; none is unattributed.**
+
+**The three still open are rows 1, 5 and 13**, plus the open halves of rows 12 and 21. Rows 1 and 12 are one pull request in plan 43; row 5 is plan 40; row 13 is plan 44.
+
+**Why this table names a row title and not a row number.** It has rotted twice. Plans 41 and 42 were renumbered while they ran and then deleted; plans 43 and 44 were renumbered again between 2026-09-22 and 2026-09-23, and plan 45 closed and was deleted. A number points at whatever now sits in that position; a title survives a renumber and fails loudly when the row is gone.
 
 ### The last row to find a home, and what it turned out to be
 
@@ -112,13 +116,13 @@ That last line is [`20260922-47-the-pipeline-stops-naming-a-server-plan.md`](202
 
 ### Where the work is now
 
-| Plan on disk | Which of these rows it carries | State |
+| Plan on disk | Which of these rows it carries | State on 2026-09-23 |
 | --- | --- | --- |
 | [`20260921-40-bonsai-probe-plan.md`](20260921-40-bonsai-probe-plan.md) | 5 | all 7 rows PENDING |
-| [`20260921-43-the-ledgers-and-the-generated-layer-plan.md`](20260921-43-the-ledgers-and-the-generated-layer-plan.md) | 1, 7, 8, 12, 15, 17, and 19's residue | row 4 DONE, six PENDING |
-| [`20260922-44-the-model-file-is-the-fetch-interface-plan.md`](20260922-44-the-model-file-is-the-fetch-interface-plan.md) | 13 | row 4 DONE, four PENDING |
-| Plan 45, the readout over every console route | 19's residue | all 5 rows LANDED in #1045, #1046 and #1049; distilled to [`docs/architecture/publishing/console-charts.md`](../docs/architecture/publishing/console-charts.md) and deleted |
-| [`20260922-47-the-pipeline-stops-naming-a-server-plan.md`](20260922-47-the-pipeline-stops-naming-a-server-plan.md) | 21's remainder | all 11 rows PENDING |
+| [`20260921-43-the-ledgers-and-the-generated-layer-plan.md`](20260921-43-the-ledgers-and-the-generated-layer-plan.md) | 1 and 12, both in its last row; 7, 8, 15 and 17 delivered | rows 1 to 6 DONE, row 7 PENDING |
+| [`20260922-44-the-model-file-is-the-fetch-interface-plan.md`](20260922-44-the-model-file-is-the-fetch-interface-plan.md) | 13 | six DONE, one READY, one COLLAPSED |
+| [`20260922-47-the-pipeline-stops-naming-a-server-plan.md`](20260922-47-the-pipeline-stops-naming-a-server-plan.md) | 21's remainder | all rows PENDING |
+| Plan 45, the readout over every console route | 19 | **CLOSED.** All 5 rows landed in #1045, #1046 and #1049; distilled to [`docs/architecture/publishing/console-charts.md`](../docs/architecture/publishing/console-charts.md) and deleted |
 
 Lane A ran from `20260921-41-lane-a-model-file-plan.md`, delivered in PRs #1036 and #1039, and was deleted on close. Lane B ran from `20260921-42-lane-b-workflows-plan.md`, delivered in PRs #1034, #1035 and #1037, and was deleted on close. Both were renumbered while they ran, so their row numbers are not quoted here - the pull request is what a reader can still open.
 
