@@ -25,6 +25,7 @@ from pydantic import ValidationError
 
 from idhazh import config
 from idhazh.contracts.app_config import AppConfig
+from idhazh.contracts.knobs.model_server import port_of_base_url
 from idhazh.contracts.knobs.models import ModelsConfig
 from idhazh.contracts.run_plan import RunPlan
 from idhazh.llm.server import server_argv
@@ -138,12 +139,6 @@ class CasePlan(NamedTuple):
     cases: tuple[tuple[str, dict[str, Any], int], ...]
     reference: str
     between_cases: str
-
-#: The port every workflow that stands a llama-server up declares once at
-#: workflow level. Read back rather than passed as an argument, because an
-#: argument named `--port` is a second spelling of a llama-server flag and the
-#: whole rule is that the flag list has one spelling.
-PORT_ENV = "LLAMA_PORT"
 
 
 def corpus_items(config_root: Path | None, *, dispatch: str = "") -> int:
@@ -601,15 +596,16 @@ def _bounded(name: str, value: int) -> int:
     return value
 
 
-def server_port() -> int:
-    """The port the workflow declared. Never a literal, and never an argument.
+def server_port(config_root: Path) -> int:
+    """The port this sweep's own config root names. Never a literal, never an argument.
 
     A server on one port and a stage posting to another is every item failing,
-    so the number is declared once at workflow level and read back everywhere.
-    An argument named `--port` would also be a second spelling of a
-    llama-server flag, and the flag list has exactly one spelling.
+    so one value answers both: `model_server.base_url` says where the stage
+    posts, and the port inside it is what the server binds. An argument named
+    `--port` would also be a second spelling of a llama-server flag, and the
+    flag list has exactly one spelling.
     """
-    return int(os.environ[PORT_ENV])
+    return port_of_base_url(config.load(config_root).app.model_server.base_url)
 
 
 def sweep(args: argparse.Namespace) -> int:
@@ -624,7 +620,7 @@ def sweep(args: argparse.Namespace) -> int:
     # is the knob sized against that same bound (Guardrail #2).
     if repeat_count < sweep_verdict.MIN_AGREEING_REPEATS:
         raise SystemExit("runtime_repeats must be at least 2 - one reading has no spread")
-    port = server_port()
+    port = server_port(CANDIDATE_CONFIG)
     threads = _bounded("threads", args.threads)
     threads_batch = _bounded("threads_batch", args.threads_batch)
 

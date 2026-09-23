@@ -7,9 +7,9 @@ If they are the model's own distribution the signal is real and readable.
 
 It stands the server up through `idhazh.llm.server.server_argv` off the entry
 `config/` names, so the flags are the ones production uses and a reading cannot
-be taken against weights the config no longer declares. The port comes from
-`LLAMA_PORT`, read back through `idhazh.llm.server.DEFAULT_PORT` - this file
-spells no llama-server flag of its own (Guardrail #6).
+be taken against weights the config no longer declares. The port comes out of
+that same config root's `model_server.base_url` - this file spells no
+llama-server flag of its own (Guardrail #6).
 
 No fixture can answer this: what a build does with a request field is a property
 of that build, so it takes a server. The reading it prints belongs in
@@ -30,8 +30,8 @@ from pathlib import Path
 from typing import Any
 
 from idhazh import config
+from idhazh.contracts.knobs.model_server import port_of_base_url
 from idhazh.llm.server import (
-    DEFAULT_PORT,
     completion_url,
     derive_turn_markers,
     props_url,
@@ -150,7 +150,6 @@ def measure(
     weights: Path,
     config_root: Path,
     role: str,
-    port: int,
     runs: int,
     alternatives: int,
 ) -> dict[str, Any]:
@@ -162,6 +161,7 @@ def measure(
             f"config names {Path(entry.file).name} and the command line names {weights.name} - "
             "a reading taken against weights the config does not declare is not a reading"
         )
+    port = port_of_base_url(settings.app.model_server.base_url)
     argv = server_argv(
         binary=binary, weights=weights, model=entry, server=entry.server, port=port
     )
@@ -236,7 +236,6 @@ def main(argv: list[str] | None = None) -> int:
         weights=args.weights,
         config_root=args.config_root,
         role=args.role,
-        port=DEFAULT_PORT,
         runs=args.runs,
         alternatives=args.alternatives,
     )

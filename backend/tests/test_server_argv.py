@@ -84,6 +84,7 @@ def test_a_sampling_value_in_the_server_block_reaches_the_command_line() -> None
         weights=Path("var/models/weights.gguf"),
         model=strayed,
         server=strayed.server,
+        port=8080,
     )
     assert "temperature" in argv, "the builder emits the block verbatim, whatever is in it"
     assert "0.7" in argv
@@ -114,6 +115,7 @@ def test_a_flag_no_reader_of_ours_names_is_emitted_unchanged() -> None:
         weights=Path("var/models/weights.gguf"),
         model=unknown,
         server=unknown.server,
+        port=8080,
     )
     assert argv[argv.index("--top-k") + 1] == "40"
     assert "--mirostat" in argv, "a null value is a bare flag"

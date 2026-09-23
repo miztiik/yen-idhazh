@@ -519,15 +519,15 @@ RUNTIME_IDENTITY_JOBS: Final = {
 
 RUNTIME_IDENTITY_STEP: Final = "What this runner is"
 
-# One loopback port per workflow, declared once. `server_argv` binds it, every
-# probe reads it, and `idhazh.llm.server` reads it for the address the stage
-# posts to - so a moved port cannot leave a server on one and a client on
-# another (Guardrail #6).
-LLAMA_PORT_ENV: Final = "LLAMA_PORT"
+# One probe address per workflow, declared once and read by every probe in the
+# job. It is always loopback, because the server is on the runner the probe
+# runs on. Where the stage POSTS is `model_server.base_url`, and the server
+# command binds the port it reads back out of that - so a moved port cannot
+# leave a server on one and a client on another (Guardrail #6).
+PROBE_URL_ENV: Final = "MODEL_SERVER_PROBE"
 
-LLAMA_PORT_VALUE: Final = "8080"
+PROBE_URL_VALUE: Final = "http://127.0.0.1:8080"
 
-LLAMA_PORT_READ: Final = "http://127.0.0.1:${LLAMA_PORT}"
 #: The starters that are not steps. `measure.yml`'s runtime case starts a server
 #: too, but it does it inside a module rather than inside a heredoc - so the
 #: Oracle reads the module. It is held here, beside the steps, because the thing
@@ -580,7 +580,7 @@ PYTHON_PROCS_FILE: Final = "python-procs.jsonl"
 # ggml-org/llama.cpp on 2026-08-25.
 METRICS_FILE: Final = "llama-metrics.prom"
 
-METRICS_ENDPOINT: Final = "http://127.0.0.1:${LLAMA_PORT}/metrics"
+METRICS_ENDPOINT: Final = "${MODEL_SERVER_PROBE}/metrics"
 
 METRICS_SERIES: Final = ("llamacpp:n_busy_slots_per_decode", "llamacpp:n_tokens_max")
 # The one commit-and-push step both daily jobs run. They differ in what they

@@ -26,7 +26,6 @@ recorded (`docs/architecture/contracts/determinism.md`).
 from __future__ import annotations
 
 import json
-import os
 from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from enum import StrEnum
@@ -42,18 +41,10 @@ from idhazh.contracts.knobs.model_server import resolve_base_url
 from idhazh.contracts.knobs.models import CompanionFile, ModelEntry, ModelRef
 from idhazh.sanitize import why_a_forged_turn_would_survive
 
-# One port per job. A workflow declares it once as `LLAMA_PORT`, and both halves
-# read it here: the argv the server binds with, and the address the stage posts
-# to. Two answers would leave a server listening on one port and a summarizer
-# posting to another, and every item would fail as "model unreachable".
-# It is a process-boundary value, not a tunable, so it is not a config field and
-# `idhazh.fingerprint` has nothing to classify (Guardrail #6, `CLAUDE.md` section 11).
-DEFAULT_PORT: Final = int(os.environ.get("LLAMA_PORT") or 8080)
-
 # The route that takes a prompt string. It is a consequence of which builder
 # rendered the payload rather than a dial anybody turns - a chat body posted
-# here is broken, not differently tuned - so it sits beside the port for the
-# same reason the port does, and `idhazh.fingerprint` has nothing to classify
+# here is broken, not differently tuned - so it is a constant rather than a
+# config field, and `idhazh.fingerprint` has nothing to classify
 # (Guardrail #6, `CLAUDE.md` section 11).
 #
 # llama-server's own `/completions` rather than the OpenAI-compatible
@@ -451,7 +442,7 @@ def server_argv(
     weights: Path,
     model: ModelRef,
     server: Mapping[str, Any],
-    port: int = DEFAULT_PORT,
+    port: int,
 ) -> list[str]:
     """The exact process the run stands up.
 
@@ -471,6 +462,12 @@ def server_argv(
     it the server silently drops the middle of an oversized prompt and answers
     about a document it no longer holds, which scores as a hallucination and
     names the wrong cause.
+
+    **The port is required and has no default.** The one production caller reads
+    it out of `model_server.base_url`, so a default here would be a second
+    answer to which port the run uses, which is the fault the deleted port
+    variable had. A missing one is a type error rather than a server on the
+    wrong port.
 
     A companion file that declares a flag is emitted last, with the path it
     landed at - the one argument a config file cannot spell for itself.

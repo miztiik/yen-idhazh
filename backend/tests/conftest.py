@@ -255,6 +255,7 @@ def llama_server_flags() -> frozenset[str]:
                 weights=Path("models/w.gguf"),
                 model=entry,
                 server=entry.server,
+                port=8080,
             )
         )
     # llama-bench and the image bench take these two under the same spelling,

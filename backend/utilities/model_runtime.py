@@ -73,10 +73,6 @@ RELEASE_API: Final = "https://api.github.com/repos/ggml-org/llama.cpp/releases/t
 #: one could not be repeated.
 HUB_RESOLVE: Final = "https://huggingface.co/{repo}/resolve/{revision}/{file}?download=true"
 
-#: The loopback port, read back rather than written. A server on one port and a
-#: stage posting to another is every item of a shard failing (Guardrail #6).
-PORT_ENV: Final = "LLAMA_PORT"
-
 #: One blocking read. It is not a bound on the transfer, and the two clauses
 #: below exist because it is not: a connection handing back one byte every
 #: twenty seconds never trips this.
@@ -526,22 +522,26 @@ def start_server(config_root: Path, name: str) -> None:
     The weights are derived rather than handed over: the config root's own entry
     already names the file, and the flags come from that same entry - so the
     server this starts is the server that config describes, with no second
-    answer to which bytes it opened.
+    answer to which bytes it opened. The port is read back out of that same
+    root's `model_server.base_url`, so it cannot disagree with where the stage
+    posts either.
     """
     from idhazh import config
+    from idhazh.contracts.knobs.model_server import port_of_base_url
     from idhazh.llm.server import server_argv
 
     _raise_the_locked_memory_limit()
     SERVER_BINARY.chmod(0o755)
     Path("backend/var").mkdir(parents=True, exist_ok=True)
 
-    entry = config.load(config_root).models.summarize
+    settings = config.load(config_root)
+    entry = settings.models.summarize
     argv = server_argv(
         binary=SERVER_BINARY,
         weights=Path(_declared(config_root)[0].landed_path),
         model=entry,
         server=entry.server,
-        port=int(os.environ[PORT_ENV]),
+        port=port_of_base_url(settings.app.model_server.base_url),
     )
     _say(f"starting: {' '.join(argv)}")
 

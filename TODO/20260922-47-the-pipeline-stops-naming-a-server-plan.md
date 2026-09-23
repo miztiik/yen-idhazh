@@ -236,6 +236,8 @@ def loopback_url(port: int) -> str:
 
 All three instruments already import from `idhazh.llm.server`, so this adds no dependency.
 
+**The function lands in row 5's commit, not row 6's.** C5 calls it and C17 fixes the order at 4 then 5 then 6, so writing it in row 6 would put an import in row 5 pointing at a name that does not exist yet. Row 6 keeps the half that is its own: routing the six literals through it. Its one unit test - that `loopback_url` ignores `base_url` - travels with the function (`CLAUDE.md` Guardrail #9).
+
 ### C5 - the refusal, and where it must live
 
 The control that makes escalation trigger 1 enforceable: a job that starts a server on loopback while the stage posts elsewhere fails at start-up, not after the weights load.
@@ -516,7 +518,15 @@ One commit per row, in Reckoner order. A worker who follows it never writes an i
 
 ## 6. Row 4 - The port name disappears into the address
 
-**Scope.** Delete `LLAMA_PORT` and `DEFAULT_PORT`. `server_argv` reads the port back out of the base URL.
+**Scope.** Delete `LLAMA_PORT` and `DEFAULT_PORT`. The server command reads the port back out of the base URL.
+
+**Corrected 2026-09-23, `Fowler (Architecture and Engineering)` ruling.** Three clauses of this row as drafted were wrong and the code follows the ruling rather than the prose.
+
+| id | Drafted | Shipped | Why |
+| --- | --- | --- | --- |
+| 4a | `server_argv` takes the base URL and reads the port out | `server_argv` keeps `port: int`, required and with no default, and `port_of_base_url` joins `resolve_base_url` in `backend/idhazh/contracts/knobs/model_server.py` | `server_argv` spells no `--host` and nothing in the tree does, so a base URL argument would carry a host the function silently drops: `http://192.168.1.20:9090` would build a working argv binding loopback on 9090. A wrong answer, where the missing port is an error. Five of the six callers know only a port; the one that knows an address is `start_server`, which resolves it anyway for row 5 |
+| 4b | The sweep's port becomes its own `--port` argument | `server_port(config_root)` reads the port out of that root's resolved `base_url` and takes no argument | `runtime_sweep.server_port`'s own docstring already refuses a `--port` argument as a second spelling of a llama-server flag. The sweep loads a per-candidate root anyway |
+| 4c | The 22 `.github/` probes keep a loopback literal (Table B row B1) | Each workflow declares `env: MODEL_SERVER_PROBE: 'http://127.0.0.1:8080'` once and every probe reads it back | B1 holds - the probes read no config, because a probe asks a server that job just started and three of five workflows run against a scratch root. What B1 did not price is that spelling the address 22 times deletes the guard that stops a 23rd probe naming a different one: the next person writes `:8081`, nothing goes red, and the job dies ten minutes later on a readiness timeout that says nothing about a port. One declaration per workflow is the same shape the file had, and the guard survives as a string equality against the committed address |
 
 **Files.** `backend/idhazh/llm/server.py`, `backend/utilities/{model_runtime,runtime_sweep,measure_probability_mode,slot_probe}.py`, `.github/actions/model-server/action.yml`, the five workflow files, `backend/tests/{test_summarize.py,workflows/_harness.py,workflows/test_model_server_jobs.py}`, `docs/how-to/{run-the-pipeline,test-models-locally}.md`, `docs/reference/{ci-model-runtime,github-actions}.md`.
 
@@ -525,7 +535,7 @@ One commit per row, in Reckoner order. A worker who follows it never writes an i
 - `pytest backend/tests/workflows/` green.
 - `test_model_server_jobs.py` carries 19 of the 62 `LLAMA_PORT` lines, including an assertion that the literal `PORT_ENV = "LLAMA_PORT"` exists inside `runtime_sweep.py`; that assertion **moves with the name**, it is not deleted.
 - `backend/utilities/model_runtime.py` line 78 declares `PORT_ENV` and line 544 reads it into `server_argv`. Both move to the port read back out of `base_url`.
-- `runtime_sweep.py` and `measure_probability_mode.py` each read the environment value once. Both are hard failures after the delete. **The sweep's port afterwards is its own `--port` argument, defaulted from the resolved base URL.**
+- `runtime_sweep.py` and `measure_probability_mode.py` each read the environment value once. Both are hard failures after the delete. **Each reads the port out of the config root it already loads** (decision 4b).
 - `slot_probe.py` line 16's shell example moves off `LLAMA_PORT`.
 
 **Oracle.** `git grep -n LLAMA_PORT` returns nothing. `git grep -n DEFAULT_PORT -- backend` returns nothing.

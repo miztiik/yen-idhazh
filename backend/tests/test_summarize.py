@@ -358,7 +358,6 @@ def test_the_output_shape_is_enforced_by_the_decoder() -> None:
 def test_the_server_is_started_from_config_not_by_hand() -> None:
     """Four flags are written in code and the rest are the entry's, emitted in order."""
     from idhazh.contracts.knobs.models import ModelRef
-    from idhazh.llm.server import DEFAULT_PORT
 
     binary = Path("bin/llama-server")
     weights = Path("models/w.gguf")
@@ -367,6 +366,7 @@ def test_the_server_is_started_from_config_not_by_hand() -> None:
         weights=weights,
         model=ModelRef(id="m", repo="r", file="w.gguf", quantisation="Q4_K_M"),
         server=a_server(**{"--metrics": None}),
+        port=8181,
     )
     assert argv == [
         str(binary),
@@ -376,7 +376,7 @@ def test_the_server_is_started_from_config_not_by_hand() -> None:
         "m",
         "--no-context-shift",
         "--port",
-        str(DEFAULT_PORT),
+        "8181",
         "--ctx-size",
         "8192",
         "--batch-size",
@@ -402,6 +402,7 @@ def test_the_server_refuses_an_oversized_prompt_rather_than_shifting_it() -> Non
         weights=Path("models/w.gguf"),
         model=ModelRef(id="m", repo="r", file="w.gguf", quantisation="Q4_K_M"),
         server=a_server(**{"--metrics": None}),
+        port=8181,
     )
 
     assert "--no-context-shift" in argv
@@ -422,6 +423,7 @@ def test_no_speculative_flag_reaches_the_server() -> None:
         weights=Path("models/w.gguf"),
         model=ModelRef(id="m", repo="r", file="w.gguf", quantisation="Q4_K_M"),
         server=a_server(**{"--metrics": None}),
+        port=8181,
     )
 
     assert not [flag for flag in argv if flag.startswith(("--spec-", "--draft"))]
@@ -452,13 +454,12 @@ def test_an_entry_a_person_writes_is_refused_for_naming_a_draft_head() -> None:
 def test_server_argv_names_the_port_it_was_given() -> None:
     """The port a caller hands the builder is the port the flag carries.
 
-    `DEFAULT_PORT` is what `LLAMA_PORT` sets, and it is what the server binds
-    when nobody names one. Where the stage POSTS is no longer this number: it is
-    `model_server.base_url`, and `test_every_route_is_derived_from_the_one_address_
-    a_caller_was_given` holds the routes against an address of its own.
+    There is no default to fall back on. The one production caller reads the
+    port out of `model_server.base_url`, so a default here would be a second
+    answer to which port the run uses. The address itself is checked by
+    `test_every_route_is_derived_from_the_one_address_a_caller_was_given`.
     """
     from idhazh.contracts.knobs.models import ModelRef
-    from idhazh.llm.server import DEFAULT_PORT
 
     argv = server_argv(
         binary=Path("bin/llama-server"),
@@ -467,15 +468,16 @@ def test_server_argv_names_the_port_it_was_given() -> None:
         server=a_server(**{"--metrics": None}),
         port=8181,
     )
-    bound_by_default = server_argv(
+    elsewhere = server_argv(
         binary=Path("bin/llama-server"),
         weights=Path("models/w.gguf"),
         model=ModelRef(id="m", repo="r", file="w.gguf", quantisation="Q4_K_M"),
         server=a_server(**{"--metrics": None}),
+        port=9090,
     )
 
     assert argv[argv.index("--port") + 1] == "8181"
-    assert bound_by_default[bound_by_default.index("--port") + 1] == str(DEFAULT_PORT)
+    assert elsewhere[elsewhere.index("--port") + 1] == "9090"
 
 
 def test_every_route_is_derived_from_the_one_address_a_caller_was_given() -> None:
@@ -910,6 +912,7 @@ def test_runtime_sweep_flags_are_emitted_only_when_configured() -> None:
                 "--metrics": None,
             }
         ),
+        port=8181,
     )
 
     assert argv[-17:] == [
@@ -951,6 +954,7 @@ def test_the_server_is_asked_to_describe_itself_only_when_configured() -> None:
         weights=Path("models/w.gguf"),
         model=model,
         server=a_server(),
+        port=8181,
     )
     assert "-lv" not in quiet
 
@@ -959,6 +963,7 @@ def test_the_server_is_asked_to_describe_itself_only_when_configured() -> None:
         weights=Path("models/w.gguf"),
         model=model,
         server=a_server(**{"-lv": 4}),
+        port=8181,
     )
     assert loud[loud.index("-lv") + 1] == "4"
 
@@ -978,6 +983,7 @@ def test_every_committed_role_starts_a_server_that_names_its_own_settings() -> N
             weights=Path(f"models/{entry.file}"),
             model=entry,
             server=entry.server,
+            port=8181,
         )
         assert argv[argv.index("-lv") + 1] == "4", f"{role} starts a server that says nothing"
 

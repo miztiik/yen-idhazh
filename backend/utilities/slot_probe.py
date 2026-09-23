@@ -13,7 +13,10 @@ pure and `backend/tests/test_slot_probe.py` drives it from built payloads.
 
 Run it beside a server a run already started, from the repository root:
 
-    LLAMA_PORT=8080 python backend/utilities/slot_probe.py --repeats 3
+    python backend/utilities/slot_probe.py --repeats 3
+
+It asks the address `config/` names. Pass `--config-root` for a scratch root, or
+`--endpoint` to name a server by hand.
 
 **It prints field names and whole numbers, never field values.** `/slots`
 carries the slot's own prompt back when `LLAMA_SERVER_SLOTS_DEBUG` is set, and
