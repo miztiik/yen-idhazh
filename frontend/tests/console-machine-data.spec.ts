@@ -850,7 +850,7 @@ const SERVER_FLAGS = JSON.parse(
 		),
 		'utf8'
 	)
-).summarize.server as { '--ctx-size': number };
+).summarizer.server as { '--ctx-size': number };
 
 const WIDEST = Math.max(...CONSOLE.window_presets);
 
