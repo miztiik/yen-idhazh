@@ -1157,7 +1157,7 @@ def test_a_day_file_from_before_the_cap_counter_still_takes_todays_row(tmp_path:
     """
     date_ = plan().date
     state = tmp_path / "state"
-    target = ledger.item_health_path(state, date_)
+    target = ledger.item_health_path(state, date_) / day_shards.SETTLED_NAME
     earlier = telemetry.classify_item(
         planned=item(),
         article=article(),

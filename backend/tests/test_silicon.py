@@ -341,7 +341,9 @@ def test_the_stage_writes_this_job_its_own_segment_and_never_the_day_file(
     fold(tmp_path, FINGERPRINT_DAY)
     head = settled_fingerprint(tmp_path)
     assert head.exists(), "a fingerprint nobody stored answers nothing next month"
-    assert head.parts[-3:] == ("2026", "09", "16.csv"), "the tree has to be day sharded"
+    assert head.parts[-4:] == ("2026", "09", "16", day_shards.SETTLED_NAME), (
+        "the tree has to be day sharded"
+    )
     assert not writer_files(tmp_path), "a folded segment is removed, not left behind"
 
 
@@ -482,8 +484,8 @@ def test_a_day_file_written_before_the_two_prompt_cells_still_folds(tmp_path: Pa
 
 
 def _head_row(state_dir: Path, date: str = "2026-09-16") -> dict[str, str]:
-    """The one row of the compacted day file, by column name."""
-    path = ledger.host_fingerprint_path(state_dir, date)
+    """The one row of the day's settled file, by column name."""
+    path = ledger.host_fingerprint_path(state_dir, date) / day_shards.SETTLED_NAME
     header, *body = path.read_text(encoding="utf-8").splitlines()
     assert len(body) == 1, f"one machine, one row, and the head holds {len(body)}"
     return dict(zip(header.split(","), body[0].split(","), strict=True))
