@@ -110,7 +110,7 @@ this one has committed since the trigger, which is why the step below still
 runs.
 
 The answer is a current base rather than a merge rule. The job runs
-[`.github/scripts/take-state-from-the-tip.sh`](../../../.github/scripts/take-state-from-the-tip.sh)
+[`backend/utilities/take_state_from_the_tip.py`](../../../backend/utilities/take_state_from_the_tip.py)
 ahead of the fold: `state` is emptied and then taken from origin's tip, so a
 segment the run ahead drained is gone before the fold can read it. Restoring the
 tip's `state` on its own would not do it - git writes what the tip HAS and says

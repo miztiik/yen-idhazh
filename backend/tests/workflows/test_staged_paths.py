@@ -21,7 +21,7 @@ from ._harness import (
     CORPUS_SEED,
     HARVEST_COMMAND,
     HARVEST_STEP,
-    PRUNE_PUSH_SCRIPT,
+    PRUNE_PUSH_MODULE,
     RETIRE_COMMAND,
     RETIRE_DRY_RUN_FLAG,
     RETIRE_STEP,
@@ -50,6 +50,13 @@ pytestmark = pytest.mark.workflow
 #: `--force`, because the short spelling does the same thing and a check that
 #: only read the long one would be a rule about typing.
 FORCE_PUSH = re.compile(r"push\s+(--force|-f)\b")
+
+#: What separates two words in a command line, in either language a runner
+#: executes. A shell writes `git push --force`; Python writes the same command
+#: as a list, so the two words arrive quoted and comma-separated. Flattening the
+#: punctuation is what lets one rule read both, and it is why the rule survived
+#: the day the prune's push stopped being a shell script.
+ARGUMENT_PUNCTUATION = re.compile(r"[^\w./-]+")
 
 
 def test_the_harvest_runs_where_the_article_text_still_is() -> None:
@@ -329,12 +336,13 @@ def test_the_corpus_is_not_union_merged() -> None:
 def test_only_the_scheduled_prune_may_force_push() -> None:
     """The single exception in `CLAUDE.md` section 8, held closed-world.
 
-    Discovery is over every workflow body and every shipped script, so a second
-    force-push fails here whoever adds it and wherever they put it.
+    Discovery is over every source a runner executes - every workflow body,
+    every shipped script, and every Python program under `backend/` - so a
+    second forcing push fails here whoever adds it and wherever they put it.
 
-    One script is named rather than no script. The prune's push moved out of
+    One file is named rather than none. The prune's push moved out of
     `prune.yml` so a test could drive it against a real repository and watch it
-    refuse a tip that moved, and the `--force` moved with it.
+    refuse a tip that moved, and the forcing flag moved with it.
     """
     forcing: set[str] = set()
     for filename, workflow in _load_workflows().items():
@@ -343,11 +351,17 @@ def test_only_the_scheduled_prune_may_force_push() -> None:
                 script = step.get("run")
                 if isinstance(script, str) and FORCE_PUSH.search(script):
                     forcing.add(f"{filename} step {step.get('name')}")
-    for path in sorted(SCRIPTS_DIR.glob("*.sh")):
-        if FORCE_PUSH.search(read_text(path)):
+    executable = (
+        *SCRIPTS_DIR.glob("*.sh"),
+        *(REPO_ROOT / "backend" / "utilities").glob("*.py"),
+        *(REPO_ROOT / "backend" / "idhazh").rglob("*.py"),
+    )
+    assert executable, "nothing was read, so this is checking nothing"
+    for path in sorted(executable):
+        if FORCE_PUSH.search(ARGUMENT_PUNCTUATION.sub(" ", read_text(path))):
             forcing.add(path.name)
 
-    assert forcing == {PRUNE_PUSH_SCRIPT.name}
+    assert forcing == {PRUNE_PUSH_MODULE.name}
 
 
 def test_the_prune_reads_both_its_numbers_from_config() -> None:
