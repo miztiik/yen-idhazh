@@ -92,7 +92,6 @@ from typing import Final
 
 from idhazh import day_partition, day_shards, month_partition
 from idhazh.assemble import write_atomic
-from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
 from idhazh.day_partition import day_files
 from idhazh.ledger import BEFORE_PARTITION_NAME
 from idhazh.telemetry.traces import TRACE_SUFFIX, trace_date
@@ -419,20 +418,61 @@ def _swap(directory: Path, staged: Path, parked: Path, check: Callable[[], None]
         raise
 
 
+def _recorded_shards(root: Path) -> list[Path]:
+    """Every file of every recorded day, in whichever of the two shapes holds it.
+
+    This is the one module that has to see both, because it is what turns one
+    into the other: the count before the move is taken over `<DD>.csv` day files
+    and the count after it over `<DD>/` day directories. Every pipeline reader
+    dropped the day-file branch once the last committed store had moved, so the
+    walk cannot be borrowed from `day_shards` any more.
+
+    A day directory is read through `day_shards.one_day`, so a stray inside one
+    refuses here exactly as it does at every pipeline read. A name at the day
+    level that is neither a day file nor a day directory refuses too: a stray
+    carried through the move would land in a directory named after it.
+    """
+    found: list[Path] = []
+    for year in _years(root):
+        for month in sorted(year.iterdir()):
+            for entry in sorted(month.iterdir()):
+                if not day_partition.is_segment(entry.stem, day_partition.SEGMENT_WIDTH):
+                    raise ValueError(
+                        f"{root.name} holds {entry.relative_to(root).as_posix()}, which is "
+                        "neither a <DD>.csv day file nor a <DD>/ day directory"
+                    )
+                if entry.is_dir():
+                    found.extend(
+                        day_shards.one_day(root, f"{year.name}-{month.name}-{entry.name}")
+                    )
+                else:
+                    found.append(entry)
+    return found
+
+
+def _recorded_date(root: Path, shard: Path) -> str:
+    """The `<YYYY-MM-DD>` a shard is filed under, whichever shape it is in.
+
+    Three path segments is a day file and four is a writer's file inside a day
+    directory, and the first two name the year and the month either way.
+    """
+    parts = shard.relative_to(root).parts
+    return f"{parts[0]}-{parts[1]}-{parts[2][:2]}"
+
+
 def _rows_by_day(root: Path) -> Counter[tuple[str, str]]:
-    """Every data line the pipeline's own day-shard walk finds, keyed by its day.
+    """Every data line of the store, keyed by the day it is filed under.
 
     Keyed rather than pooled, because a partition that filed every row under one
-    day would pass a check over the lines alone. `day_shards.shard_files` is the
-    reader every stage uses, so a tree it refuses is a tree this refuses.
+    day would pass a check over the lines alone.
     """
     found: Counter[tuple[str, str]] = Counter()
-    for shard in day_shards.shard_files(root, days=UNBOUNDED_WINDOW):
+    for shard in _recorded_shards(root):
         where = shard.relative_to(root).as_posix()
         parts = _text(shard).split("\n")
         if parts == [""] or parts[-1] != "":
             raise ValueError(f"{where} is empty or does not end with a newline")
-        recorded = day_shards.date_of(shard)
+        recorded = _recorded_date(root, shard)
         found.update((recorded, line) for line in parts[1:-1])
     return found
 
@@ -442,11 +482,11 @@ def _day_file_paths(root: Path) -> list[Path]:
 
     Three path segments is a day file and four is a writer's file inside a day
     directory, which is the rule `telemetry.trace_date` reads a trace by. Taken
-    off `shard_files`, so a name no reader can place stops this here.
+    off `_recorded_shards`, so a name no reader can place stops this here.
     """
     return [
         shard
-        for shard in day_shards.shard_files(root, days=UNBOUNDED_WINDOW)
+        for shard in _recorded_shards(root)
         if len(shard.relative_to(root).parts) == 3
     ]
 

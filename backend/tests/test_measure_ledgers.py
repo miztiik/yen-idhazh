@@ -25,6 +25,7 @@ from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.extract import TOKENS_PER_WORD
+from idhazh.ledger import BEFORE_PARTITION_NAME
 from utilities.measure_ledgers import (
     UPPER_PERCENTILE,
     Residual,
@@ -52,7 +53,7 @@ def clock_for(scope: str) -> ShardClock:
 
 def fixture_rows() -> list[list[str]]:
     """The item ledger re-read positionally, which shares no code with `read_items`."""
-    with (LEDGERS / "item-health" / "2026" / "01" / "01.csv").open(
+    with (LEDGERS / "item-health" / "2026" / "01" / "01" / BEFORE_PARTITION_NAME).open(
         encoding="utf-8", newline=""
     ) as handle:
         return list(csv.reader(handle))[1:]
@@ -79,8 +80,8 @@ def naive_percentile(values: Sequence[int], share: float) -> int:
 
 def test_the_fixture_only_names_columns_the_real_ledgers_have() -> None:
     pairs = (
-        ("item-health/2026/01/01.csv", ItemHealthRow.csv_columns()),
-        ("host-fingerprint/2026/01/01.csv", HostFingerprintRow.csv_columns()),
+        (f"item-health/2026/01/01/{BEFORE_PARTITION_NAME}", ItemHealthRow.csv_columns()),
+        (f"host-fingerprint/2026/01/01/{BEFORE_PARTITION_NAME}", HostFingerprintRow.csv_columns()),
         ("scores/2026-01.csv", EvalRow.csv_columns()),
     )
     for relpath, columns in pairs:

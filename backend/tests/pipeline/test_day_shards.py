@@ -1,21 +1,21 @@
-"""A day directory of writer-owned files reads back as the rows a head holds.
+"""A day directory of writer-owned files reads back as one row per record.
 
 Two claims, and they answer different questions.
 
 **Parity.** `day_shards.settled_rows` over a day directory returns exactly what
-`stages.compact` writes into a head for the same bytes. The fixture files are
-the same files in both runs, so a difference is a difference in the fold rather
-than in the input. That is the whole of what moving the settlement out of the
-writer is allowed to change: nothing.
+`stages.compact` writes into that day's `settled.csv` for the same bytes. The
+fixture files are the same files in both runs, so a difference is a difference
+in the fold rather than in the input. That is the whole of what moving the
+settlement out of the writer is allowed to change: nothing.
 
 **The move.** Parity cannot say whether every production reader was moved onto
-the walker that reads both shapes, so the second half of this module reads the
-modules decision 5.2 of the no-file-has-two-writers plan enumerates and checks
-each one by name. The list is fixed and written out here, so this test costs the
-same however much the repository grows (`CLAUDE.md` section 13).
+the walker, so the second half of this module reads the modules decision 5.2 of
+the no-file-has-two-writers plan enumerates and checks each one by name. The
+list is fixed and written out here, so this test costs the same however much the
+repository grows (`CLAUDE.md` section 13).
 
-Nothing writes a day directory yet, so every reader below answers today exactly
-as it answered before.
+A day is a directory and nothing else, so a `<DD>.csv` beside one is a name no
+writer spells and the walk refuses it with every other stray.
 """
 
 from __future__ import annotations
@@ -34,7 +34,7 @@ from idhazh.stages import compact
 
 pytestmark = pytest.mark.contract
 
-#: The committed tree holding one ledger root in both shapes at once. A fixture
+#: The committed tree holding one ledger root of writer-owned files. A fixture
 #: rather than the archive, so this costs one directory whatever `state/` grows
 #: to (Guardrail #12).
 FIXTURE: Final = Path(__file__).resolve().parents[3] / "tests" / "fixtures" / "day-shards"
@@ -53,7 +53,7 @@ def _root() -> Path:
     Never at module scope: a fixture opened while the module loads fails before
     any test owns the failure, and takes every test in the file with it.
     """
-    root = FIXTURE / "both-shapes" / "span-rollup"
+    root = FIXTURE / "writer-files" / "span-rollup"
     assert root.is_dir(), f"the day-shards fixture is missing at {root}"
     return root
 
@@ -94,29 +94,49 @@ def test_a_day_directory_settles_to_what_the_fold_writes_into_its_settled_file(
     assert settled[0]["total_ms"] == "5000"
 
 
-def test_the_walk_reads_a_day_file_and_a_day_directory_as_one_ledger() -> None:
-    """Both shapes, one root, and a day is a day whichever shape it is in."""
+def test_the_walk_reads_every_writer_file_of_a_day_and_nothing_else() -> None:
+    """One day directory, three writers, one recorded day."""
     root = _root()
 
     every = list(day_shards.shard_files(root, days=UNBOUNDED_WINDOW))
-    assert [path.name for path in every] == ["17.csv", *WRITERS]
-    assert [day_shards.date_of(path) for path in every] == [
-        "2026-09-17",
-        "2026-09-18",
-        "2026-09-18",
-        "2026-09-18",
-    ]
+    assert [path.name for path in every] == list(WRITERS)
+    assert [day_shards.date_of(path) for path in every] == ["2026-09-18"] * len(WRITERS)
 
-    # The cover counts recorded days, never files: the newest day is three files
-    # and it is still one day.
-    assert [path.name for path in day_shards.shard_files(root, days=1)] == list(WRITERS)
-    assert [path.name for path in day_shards.shard_files(root, days=2)] == [
-        "17.csv",
-        *WRITERS,
-    ]
-
-    assert len(day_shards.settled_rows(root, ledger.SPAN_ROLLUP_KEY, SpanRollupRow, days=2)) == 5
+    assert len(day_shards.settled_rows(root, ledger.SPAN_ROLLUP_KEY, SpanRollupRow, days=1)) == 3
     assert list(day_shards.shard_files(root.parent / "never-written", days=1)) == []
+
+
+def test_the_cover_counts_recorded_days_and_never_the_files_inside_them(
+    tmp_path: Path,
+) -> None:
+    """A day of three writers is one day, so a cover of 1 takes all three."""
+    source = _root() / "2026" / "09" / "18"
+    for date in ("17", "18"):
+        day = tmp_path / "2026" / "09" / date
+        day.mkdir(parents=True)
+        for name in WRITERS:
+            shutil.copy(source / name, day / name.replace("2026-09-18", f"2026-09-{date}"))
+
+    newest = day_shards.shard_files(tmp_path, days=1)
+    assert [day_shards.date_of(path) for path in newest] == ["2026-09-18"] * len(WRITERS)
+    assert len(list(day_shards.shard_files(tmp_path, days=2))) == 2 * len(WRITERS)
+
+
+def test_a_day_file_beside_the_day_directories_stops_the_read(tmp_path: Path) -> None:
+    """There is no head above a day, so `<DD>.csv` is a name no writer spells.
+
+    It used to be a shape of its own and the walk read it as one recorded day.
+    A reader that still took it would fold a day twice - once from the file and
+    once from the directory beside it - and report the total as an answer.
+    """
+    day = tmp_path / "2026" / "09" / "18"
+    day.mkdir(parents=True)
+    shutil.copy(_root() / "2026" / "09" / "18" / WRITERS[0], day / WRITERS[0])
+    shutil.copy(_root() / "2026" / "09" / "18" / WRITERS[0], tmp_path / "2026" / "09" / "17.csv")
+
+    with pytest.raises(ValueError, match=r"17\.csv"):
+        list(day_shards.shard_files(tmp_path, days=UNBOUNDED_WINDOW))
+    assert day_shards.one_day(tmp_path, "2026-09-17") == []
 
 
 def test_settled_sorts_below_every_writer_file(tmp_path: Path) -> None:

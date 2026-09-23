@@ -77,7 +77,7 @@ CONSOLE_PAYLOADS: Final[tuple[ConsolePayload, ...]] = (
         why="One planned item per run: the stage that failed, and what each stage cost.",
     ),
     ConsolePayload(
-        reader="payload.ts itemHealthRows() and itemHealthForDay()",
+        reader="payload.ts itemHealthRows()",
         published_to="frontend/public/telemetry/<YYYY-MM>.csv",
         contract=PublicTelemetryRow,
         forbidden=public_telemetry.FORBIDDEN_COLUMNS,
