@@ -175,7 +175,6 @@ SHELLCHECK_COMMAND: Final = "shellcheck --severity=style .github/scripts/*.sh"
 SHIPPED_SCRIPTS: Final = (
     "commit-and-push.sh",
     "push-rewritten-history.sh",
-    "run-pipeline-test-case.sh",
     "take-state-from-the-tip.sh",
 )
 
