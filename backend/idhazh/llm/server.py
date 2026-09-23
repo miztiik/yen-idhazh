@@ -494,8 +494,7 @@ def server_argv(
     return argv
 
 
-def request_payload(
-    *,
+def request_payload(    *,
     model_id: str,
     system: str,
     user: str,

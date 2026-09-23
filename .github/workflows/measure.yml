@@ -127,10 +127,9 @@ env:
   LLAMA_CPP_SHA256: d77a09db4165f8850b513629ed0ffeaab7851bb03e7cc3870b74e721f894694c
   # The one place this workflow says which port, the same declaration digest.yml
   # and validate.yml make. The runtime job starts its own server from an inline
-  # python block rather than through `.github/scripts/start-llama-server.sh`,
-  # because it sweeps a setting and needs the process handle - but it reads the
-  # port from here, so no part of this repository spells the number twice
-  # (Guardrail #6).
+  # python block rather than through the shared launcher, because it sweeps a
+  # setting and needs the process handle - but it reads the port from here, so
+  # no part of this repository spells the number twice (Guardrail #6).
   LLAMA_PORT: '8080'
 
 jobs:
@@ -202,9 +201,9 @@ jobs:
           CANDIDATE_MODELS_FILE: ${{ inputs.candidate_models_file }}
         run: |
           set -euo pipefail
-          python3 backend/utilities/model_refs.py candidate \
+          python3 backend/utilities/model_refs.py describe-trial-model \
             --prefix candidate_ \
-            --also-configured \
+            --also-pinned \
             --models-file "$CANDIDATE_MODELS_FILE" >> "$GITHUB_OUTPUT"
 
       # Config decides, the dispatch may overrule, and the module holds the
@@ -962,31 +961,14 @@ jobs:
           models_file: ${{ needs.models.outputs.candidate_models_file }}
 
       - name: Start the tokenizer
-        env:
-          LLAMA_WEIGHTS: backend/models/${{ needs.models.outputs.candidate_file }}
         run: |
           set -euo pipefail
-          mkdir -p backend/var
-          # Every flag comes from the scratch config, so the server this counts
-          # with is the server the run would start (Guardrail #6).
-          python3 backend/utilities/llama_argv.py \
-            --config-root backend/var/candidate-config > backend/var/llama-argv
-          mapfile -d '' LLAMA_ARGV < backend/var/llama-argv
-          echo "starting: ${LLAMA_ARGV[*]}"
-          LD_LIBRARY_PATH=backend/bin nohup "${LLAMA_ARGV[@]}" > llama-server.log 2>&1 &
-          echo "$!" > llama-server.pid
-          # A build that refuses one of these flags is gone in under a second,
-          # and the wait below would then spend 900 of them asking a closed
-          # port. Two seconds separates a dead start-up from a slow one. It is
-          # the same check the shared start script does, written out here
-          # because this job cannot call that script - it starts its server
-          # against a scratch config the script does not know about.
-          sleep 2
-          kill -0 "$(cat llama-server.pid)" || {
-            echo "the tokenizer exited before it could answer" >&2
-            tail -50 llama-server.log >&2
-            exit 1
-          }
+          # Every flag, the alias and the weights come from the scratch config,
+          # so the server this counts with is the server the run would start
+          # (Guardrail #6). The launcher refuses a server that died at start-up
+          # before the wait below asks a closed port for fifteen minutes.
+          python3 backend/utilities/model_runtime.py start-server \
+            --config-root backend/var/candidate-config
           for _ in $(seq 1 180); do
             curl -sf "http://127.0.0.1:${LLAMA_PORT}/health" > /dev/null && break
             sleep 5

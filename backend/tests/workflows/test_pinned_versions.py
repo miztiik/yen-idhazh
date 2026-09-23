@@ -9,13 +9,15 @@ import pytest
 from conftest import REPO_ROOT, read_text
 
 from ._harness import (
+    INSTALL_RUNTIME_CALL,
     LLAMA_DIGEST_CHECK,
+    LLAMA_PIN_FILE,
+    LLAMA_PIN_KEYS,
     LLAMA_PIN_NAMES,
-    LLAMA_PIN_SCRIPT,
     LLAMA_PIN_VALUES,
     LLAMA_PINNED_ENDPOINT,
-    LLAMA_RUNTIME_SCRIPT,
-    LLAMA_SHARED_SCRIPTS,
+    LLAMA_RELEASE_TAGS,
+    MODEL_RUNTIME_MODULE,
     PINNED_LLAMA_ASSET,
     PINNED_LLAMA_BUILD,
     PINNED_LLAMA_SHA256,
@@ -30,28 +32,34 @@ from ._harness import (
     _mapping,
     _pin_output_name,
     _run_bodies,
-    _script_closure,
     _setup_python_versions,
     _strings,
 )
 
 pytestmark = pytest.mark.workflow
 
+#: The one file that still carries a second copy of the pin, and why it may. Its
+#: three values sit in a workflow-level `env:` block, which cannot read a file at
+#: all, and its four consumers are the inline download arms plan 46 converts.
+#: Delete this and the test below when those arms go.
+PIN_SECOND_COPY = "measure.yml"
 
-def _fetch_script_callers(workflows: dict[str, dict[str, object]]) -> dict[str, dict[str, object]]:
-    """Every workflow whose steps reach the shared runtime fetch, found by reading.
+
+def _install_callers(workflows: dict[str, dict[str, object]]) -> dict[str, dict[str, object]]:
+    """Every workflow whose steps reach the shared install, found by reading.
 
     This was a written list, so converting a caller was an edit to a test file
-    before it was a change to a workflow.
+    before it was a change to a workflow. A caller that reaches the install
+    through a composite action counts: `_run_bodies` resolves one in place.
     """
     return {
         filename: workflow
         for filename, workflow in sorted(workflows.items())
-        if any(shared in body for body in _run_bodies(workflow) for shared in LLAMA_SHARED_SCRIPTS)
+        if any(INSTALL_RUNTIME_CALL in body for body in _run_bodies(workflow))
     }
 
 
-def test_the_shared_fetch_script_is_the_one_home_of_the_pin_for_every_caller_on_it() -> None:
+def test_the_pin_file_is_the_one_home_of_the_build_for_every_caller_on_it() -> None:
     """One home per converted caller, and the callers are read rather than listed.
 
     The pin used to live in eleven places that had to change together - four
@@ -60,9 +68,9 @@ def test_the_shared_fetch_script_is_the_one_home_of_the_pin_for_every_caller_on_
     does not run, which is a measurement about a binary nobody ships
     (Guardrail #10).
 
-    The three values are read off the pin script now rather than repeated in the
-    harness, so a bump is one edit instead of three and a stale copy cannot
-    agree with itself while the runners run something else.
+    The three values are read off `config/llama-cpp-pin.json` now rather than
+    repeated in the harness, so a bump is one edit instead of three and a stale
+    copy cannot agree with itself while the runners run something else.
 
     What a converted caller is refused is the VALUE, not the name. A job whose
     stage records which build decoded the bytes has to put `LLAMA_CPP_BUILD` in
@@ -74,48 +82,48 @@ def test_the_shared_fetch_script_is_the_one_home_of_the_pin_for_every_caller_on_
     its own name.
 
     Two one-line rules are folded in rather than kept as tests of their own:
-    nobody asks for whichever release is newest, and a fetch names a tag and
+    nobody asks for whichever release is newest, and the install names a tag and
     checks a digest.
     """
-    assert all(LLAMA_PIN_VALUES), f"{LLAMA_PIN_SCRIPT} declares an empty pin"
+    assert all(LLAMA_PIN_VALUES), f"{LLAMA_PIN_FILE.name} declares an empty pin"
     assert re.fullmatch(r"[0-9a-f]{64}", PINNED_LLAMA_SHA256), "the pin's digest is not a sha256"
     assert PINNED_LLAMA_BUILD in PINNED_LLAMA_ASSET, "the asset does not name the build it holds"
 
     # The list endpoint hands back a different binary on every cache eviction.
-    # The scripts as well as the workflows, because a fetch that was extracted
-    # into a script is still a fetch.
+    # The scripts and the install program as well as the workflows, because a
+    # fetch that was extracted is still a fetch.
+    installer = read_text(REPO_ROOT / MODEL_RUNTIME_MODULE)
     named = (
         *WORKFLOWS_DIR.glob("*.yml"),
         *WORKFLOWS_DIR.glob("*.yaml"),
         *SCRIPTS_DIR.glob("*.sh"),
+        REPO_ROOT / MODEL_RUNTIME_MODULE,
     )
-    assert named, "neither directory ships anything, so this is checking nothing"
+    assert named, "nothing ships here, so this is checking nothing"
     for path in sorted(named):
         assert "releases?per_page" not in read_text(path), path.name
 
-    # Every shipped script, not just the fetch: the runtime install moved into a
-    # second file, and a check that named one file would stop covering the pin
-    # the moment a third appeared.
-    scripts = sorted(SCRIPTS_DIR.glob("*.sh"))
-    assert scripts, f"{SCRIPTS_DIR} ships nothing, so nothing here can spell a pin"
-    for script in scripts:
-        if script.name == LLAMA_PIN_SCRIPT:
-            continue
+    # No shipped script spells a pin for itself. The install moved into Python
+    # and the scripts that carried it are gone, so what this guards now is a
+    # shell file bringing one back.
+    for script in sorted(SCRIPTS_DIR.glob("*.sh")):
         text = read_text(script)
         for name in LLAMA_PIN_NAMES:
             assert f"{name}=" not in text, f"{script.name} spells {name} for itself"
 
-    reachable = _script_closure(f"bash .github/scripts/{LLAMA_RUNTIME_SCRIPT}")
-    assert f".github/scripts/{LLAMA_PIN_SCRIPT}" in reachable, (
-        "the fetch reads the pin rather than repeating it"
+    # The install reads the pin rather than repeating it, asks for one tag, and
+    # checks the archive it got against the digest that file declares.
+    assert LLAMA_PIN_FILE.relative_to(REPO_ROOT).as_posix() in installer, (
+        "the install must read the pin rather than carry one"
     )
-    assert LLAMA_PINNED_ENDPOINT in reachable, "the shared fetch must ask for one tag"
-    assert LLAMA_DIGEST_CHECK in reachable, "the shared fetch must check the archive digest"
+    assert LLAMA_RELEASE_TAGS in installer, "the install must ask for one tag"
+    for key in LLAMA_PIN_KEYS:
+        assert f'pin["{key}"]' in installer, f"the install must read {key} out of the pin"
 
     workflows = _load_workflows()
 
     # Every fetch a workflow still spells for itself, discovered rather than
-    # listed. That set empties as callers convert, and the closure above is what
+    # listed. That set empties as callers convert, and the install above is what
     # covers them once it has.
     for filename, workflow in sorted(workflows.items()):
         for job_name, step_name, script_body in _llama_fetch_scripts(workflow):
@@ -125,8 +133,8 @@ def test_the_shared_fetch_script_is_the_one_home_of_the_pin_for_every_caller_on_
             assert RELEASE_LOOKUP_FORM in script_body, f"{where} must fail on an HTTP error"
             assert WEIGHTS_FETCH_FORM in script_body, f"{where} must fail on an HTTP error"
 
-    converted = _fetch_script_callers(workflows)
-    assert converted, "no workflow reaches the shared fetch, so this is checking nothing"
+    converted = _install_callers(workflows)
+    assert converted, "no workflow reaches the shared install, so this is checking nothing"
 
     published = f".outputs.{_pin_output_name()} }}}}"
     for filename, workflow in converted.items():
@@ -135,7 +143,7 @@ def test_the_shared_fetch_script_is_the_one_home_of_the_pin_for_every_caller_on_
         )
         assert not copied, (
             f"{filename} is converted, so the pin lives only in "
-            f"{LLAMA_PIN_SCRIPT}: it still writes {copied}"
+            f"{LLAMA_PIN_FILE.name}: it still writes {copied}"
         )
 
         for scope, env in _every_env(workflow):
@@ -146,6 +154,25 @@ def test_the_shared_fetch_script_is_the_one_home_of_the_pin_for_every_caller_on_
                     f"{filename}: {scope} writes {name} as {value!r}; a converted "
                     f"caller reads it from the step that published the pin"
                 )
+
+
+def test_the_one_second_copy_of_the_pin_says_what_the_one_home_says() -> None:
+    """A copy that may stay is a copy that has to be held equal.
+
+    Every other caller reads the pin from the file that decides it. This one
+    cannot: its three values are a workflow-level `env:` block, and a block at
+    that scope runs before any step, so there is nothing to read a file with.
+    Two of the jobs that consume it have no Python set up at all.
+
+    So the copy stays and the drift goes. A bump that moves one and not the
+    other leaves this workflow benchmarking a binary nobody ships, and a number
+    about a binary nobody ships is a number about nothing (Guardrail #10).
+    """
+    env = _mapping(_load_workflows()[PIN_SECOND_COPY].get("env"), f"{PIN_SECOND_COPY} env")
+    copied = [str(env.get(name, "")) for name in LLAMA_PIN_NAMES]
+    assert copied == list(LLAMA_PIN_VALUES), (
+        f"{PIN_SECOND_COPY} pins {copied} and the one home pins {list(LLAMA_PIN_VALUES)}"
+    )
 
 
 def test_every_action_a_workflow_calls_is_pinned() -> None:

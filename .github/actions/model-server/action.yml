@@ -15,41 +15,25 @@ inputs:
       what carries it across the boundary, where an inherited value would be a
       dependency nothing declares.
     required: true
-  weights_repo:
-    description: 'The hub repository holding the weights, as the plan job published it.'
-    required: true
-  weights_revision:
-    description: 'The commit the weights are fetched at, never a branch name.'
-    required: true
-  weights_file:
-    description: 'The weights filename. It names the cache entry, the digest check and the loaded path.'
-    required: true
   llama_cpp_build:
-    description: 'The llama.cpp build tag, as `llama-cpp-pin.sh` published it. It names the cache entry.'
+    description: >-
+      The llama.cpp build tag, as the pin step published it. It names the cache
+      entry here and the runtime the run manifest stamps in the caller, so the
+      two cannot name different binaries.
     required: true
-  draft_repo:
-    description: 'The draft head''s repository, or empty where the model entry declares none.'
+  config_root:
+    description: >-
+      The directory holding the pointer file and the model it names. The default
+      is the committed one; a dispatch measuring a candidate hands over the
+      scratch copy it cut.
     required: false
-    default: ''
-  draft_revision:
-    description: 'The draft head''s commit, or empty.'
-    required: false
-    default: ''
-  draft_file:
-    description: 'The draft head''s filename, or empty. Empty skips the second digest check.'
-    required: false
-    default: ''
-  draft_sha256:
-    description: 'The draft head''s recorded digest, or empty.'
-    required: false
-    default: ''
+    default: 'config'
 
-# Five steps, and the two workflows that run all five ran them as two copies.
-# They were the same steps in the same order, differing only in the job each
-# read its refs from - which is a copy that drifts the day one of them is
-# edited, and this pair has already drifted once: one caller put the weights
-# revision into its cache key and the other got the same edit by hand
-# afterwards.
+# Six steps, and the two workflows that run them ran them as two copies. They
+# were the same steps in the same order, differing only in the job each read its
+# refs from - which is a copy that drifts the day one of them is edited, and
+# this pair has already drifted once: one caller put the weights revision into
+# its cache key and the other got the same edit by hand afterwards.
 #
 # This file names no caller, on purpose. A block that knows who called it is a
 # block one caller cannot be built or tested without.
@@ -59,26 +43,67 @@ inputs:
 # moves here is the block itself, so a change to how a model is served is made
 # once.
 #
+# It holds four inputs where it held ten. The six that went were the model's own
+# facts - its repository, its commit, its filename, and its draft head's three -
+# travelling from a job that had read them out of config to a step that pasted
+# them into a download. The reader is called here now, so those facts never
+# leave the file that holds them.
+#
 # This action names one model role, `summarize`, and no caller chooses it. That
 # is not an oversight. The two callers share ONE cache entry because they open
 # the same bytes, and a caller serving a different model needs a different key,
 # a different digest and a different alias to assert - which is a design change
 # rather than a parameter.
+outputs:
+  weights_path:
+    description: 'The landed relative path of the weights, as the reader composed it.'
+    value: ${{ steps.model.outputs.summarize_weights_path }}
+  model_id:
+    description: 'The alias the served model answers under.'
+    value: ${{ steps.model.outputs.summarize_id }}
+  weights_file:
+    description: 'The bare weights filename, for a loaded-path assertion.'
+    value: ${{ steps.model.outputs.summarize_file }}
+
 runs:
   using: composite
   steps:
+    # What the model declares, read once, here. It used to be read in a plan job
+    # and relayed through seven job outputs and ten action inputs to reach the
+    # step that downloaded it; every hop was a place a value could be pasted
+    # into a command, and the cache key was composed from two of them.
+    #
+    # Captured and then appended, never appended straight: a reader that died
+    # part way through writing would leave half its keys in `$GITHUB_OUTPUT`,
+    # and a half-filled key names a cache entry nobody can attribute. The key is
+    # asserted to be a digest before any of it is published.
+    - name: Read what the model declares
+      id: model
+      shell: bash
+      env:
+        CONFIG_ROOT: ${{ inputs.config_root }}
+      run: |
+        set -euo pipefail
+        PUBLISHED=$(python3 backend/utilities/model_refs.py describe-pinned-model \
+          --config-root "$CONFIG_ROOT")
+        echo "$PUBLISHED" | grep -Eq '^summarize_cache_key=[0-9a-f]{64}$' || {
+          echo "the reader published no 64-character cache key" >&2
+          echo "$PUBLISHED" >&2
+          exit 1
+        }
+        echo "$PUBLISHED" >> "$GITHUB_OUTPUT"
+
     # Restored once per JOB. It is the single largest fixed cost in the
     # pipeline, and every shard shares this one key - so raising the shard count
     # adds restores, never cache bytes.
     #
     # The key names every part of what it holds. The fetch below only runs on a
-    # miss, so a key that omits one of them turns a fetch step into dead code
-    # and serves the old bytes: without the build a cached binary stays frozen
-    # until the entry is evicted, without the weights a config change to
-    # `models.summarize` restores the previous model under the new alias, and
-    # without the revision two uploads of one filename share an entry - which
-    # would leave a repinned config stuck on a hit whose bytes fail the check
-    # below on every run until the entry expires.
+    # miss, so a key that omits one of them turns that step into dead code and
+    # serves the old bytes. The model half is a digest over every file the entry
+    # declares - repository, commit, filename and digest, per file - which is
+    # exactly what the download reads, so the key and the fetch cannot describe
+    # different sets. The build half sits beside it because a cached binary
+    # would otherwise stay frozen until the entry is evicted.
     #
     # `id` is load-bearing: the fetch reads `cache-hit` off it, and without the
     # id that condition is an expression resolving to nothing, which reads as
@@ -90,58 +115,51 @@ runs:
         path: |
           backend/models
           backend/bin
-        key: llm-${{ inputs.weights_file }}-${{ inputs.weights_revision }}-${{ inputs.llama_cpp_build }}-v4
+        key: llm-${{ steps.model.outputs.summarize_cache_key }}-${{ inputs.llama_cpp_build }}-v5
 
-    # One shared script. It sources the runtime install, which sources the pin,
-    # so nothing here spells any part of either - and every value it reads
-    # arrives through `env` rather than pasted into it (Guardrail #11).
+    # Two calls to one program, and neither is handed a URL, a filename or a
+    # digest. It reads what the model declares and fetches every file of it -
+    # the weights and every companion - proving each one before it counts.
     #
-    # The lookup is authenticated, because every shard asks at once and
-    # anonymous api.github.com allows 60 requests an hour.
-    #
-    # Why the script names an immutable revision and why `-f` is load-bearing
-    # are written in the script, once.
+    # The lookup that finds the pinned release is authenticated, because every
+    # shard asks at once and anonymous api.github.com allows sixty requests an
+    # hour. Why the byte download carries no header at all, and why an immutable
+    # revision is named, are written in the program, once.
     - name: Fetch runtime and weights
       if: steps.weights.outputs.cache-hit != 'true'
       shell: bash
       env:
         GITHUB_TOKEN: ${{ inputs.github_token }}
-        WEIGHTS_REPO: ${{ inputs.weights_repo }}
-        WEIGHTS_REVISION: ${{ inputs.weights_revision }}
-        WEIGHTS_FILE: ${{ inputs.weights_file }}
-        DRAFT_REPO: ${{ inputs.draft_repo }}
-        DRAFT_REVISION: ${{ inputs.draft_revision }}
-        DRAFT_FILE: ${{ inputs.draft_file }}
-      run: bash .github/scripts/fetch-model-runtime.sh
+        CONFIG_ROOT: ${{ inputs.config_root }}
+      run: |
+        set -euo pipefail
+        python3 backend/utilities/model_runtime.py install-runtime
+        python3 backend/utilities/model_runtime.py download-model-files \
+          --config-root "$CONFIG_ROOT"
 
     # No `if:`. This runs on a cache hit as well as a miss, because a restored
     # entry is the one case where nobody watched the bytes arrive. It sits
     # before the server starts, so wrong weights cost one step instead of a
     # shard of output filed under a model that never ran (Guardrail #10).
     #
-    # The draft head, where the entry declares one, is checked in the same step
-    # and to the same standard. A draft that fails its digest would be a second
+    # It reads the declaration rather than being handed a filename, so it covers
+    # every file the key digested. A companion is checked to the same standard
+    # in the same pass: a draft head that failed its digest would be a second
     # set of weights nobody verified proposing tokens to the one we did - and
     # because the target verifies every draft, the run would produce correct
     # text and no error while paying for a guess that never lands. Silent and
     # expensive is the worst pair.
+    #
+    # `env:` again rather than inherited. This is a separate step and inherits
+    # nothing from the one above it.
     - name: Verify the weights
       shell: bash
       env:
-        WEIGHTS_FILE: ${{ inputs.weights_file }}
-        DRAFT_FILE: ${{ inputs.draft_file }}
-        DRAFT_SHA256: ${{ inputs.draft_sha256 }}
+        CONFIG_ROOT: ${{ inputs.config_root }}
       run: |
         set -euo pipefail
-        EXPECTED=$(python -c 'import json, pathlib; config = json.load(open("config/idhazh.json", encoding="utf-8")); models = json.load(open(pathlib.Path("config") / config["models_file"], encoding="utf-8")); print(models["summarize"]["sha256"] or "")')
-        if [ -z "$EXPECTED" ]; then
-          echo "config records no sha256 for models.summarize" >&2
-          exit 1
-        fi
-        echo "${EXPECTED}  backend/models/${WEIGHTS_FILE}" | sha256sum --check
-        if [ -n "${DRAFT_FILE}" ]; then
-          echo "${DRAFT_SHA256}  backend/models/${DRAFT_FILE}" | sha256sum --check
-        fi
+        python3 backend/utilities/model_runtime.py verify-model-files \
+          --config-root "$CONFIG_ROOT"
 
     # One server a job, and one job a runner. Four servers on four logical CPUs
     # is an experiment this repository has already run: `llama-server` at 8
@@ -150,19 +168,26 @@ runs:
     # measured over four captures of run 2026-08-29-3 on 2026-09-08, one server
     # peaks at 12.57 to 13.16 GiB and reaches 14.31 GiB with the job's python,
     # 96.0 percent of the 16 GB runner.
+    #
+    # The weights are not named here. The config root's own entry says which
+    # file, and the flags come from that same entry, so the server this starts
+    # is the one that config describes.
     - name: Start the model
       shell: bash
       env:
-        LLAMA_WEIGHTS: backend/models/${{ inputs.weights_file }}
+        CONFIG_ROOT: ${{ inputs.config_root }}
         LLAMA_PORT: ${{ inputs.port }}
       run: |
-        .github/scripts/start-llama-server.sh summarize llama-server
+        set -euo pipefail
+        python3 backend/utilities/model_runtime.py start-server \
+          --config-root "$CONFIG_ROOT"
 
     - name: Check model health
       shell: bash
       env:
         LLAMA_PORT: ${{ inputs.port }}
-        WEIGHTS_FILE: ${{ inputs.weights_file }}
+        MODEL_ALIAS: ${{ steps.model.outputs.summarize_id }}
+        WEIGHTS_FILE: ${{ steps.model.outputs.summarize_file }}
       run: |
         set -euo pipefail
         for _ in $(seq 1 120); do
@@ -180,7 +205,6 @@ runs:
         # Healthy says a server answers. It does not say which weights it
         # answers for, and every row downstream is filed under the config alias
         # whether or not the server agrees.
-        MODEL_ALIAS=$(python -c 'import json, pathlib; config = json.load(open("config/idhazh.json", encoding="utf-8")); models = json.load(open(pathlib.Path("config") / config["models_file"], encoding="utf-8")); print(models["summarize"]["id"])')
         curl -sf "http://127.0.0.1:${LLAMA_PORT}/v1/models" \
           | jq -e --arg alias "$MODEL_ALIAS" '[.data[].id] | index($alias) != null' > /dev/null || {
           echo "the server does not serve ${MODEL_ALIAS}" >&2
