@@ -12,6 +12,7 @@ this config refuses a bad address and the rule has one home. Nothing in
 
 from __future__ import annotations
 
+import ipaddress
 from typing import Final, Self
 from urllib.parse import urlsplit, urlunsplit
 
@@ -49,6 +50,31 @@ def resolve_base_url(declared: str) -> str:
     if port is None:
         raise ValueError(f"model_server.base_url must name a port, not {declared!r}")
     return urlunsplit((parts.scheme, parts.netloc, "", "", ""))
+
+
+def is_loopback(base_url: str) -> bool:
+    """Is the model server on the machine this process is running on?
+
+    A loopback IP literal - `127.0.0.0/8` or `::1` - or the name `localhost`,
+    which RFC 6761 reserves to mean this host. Nothing else, and never a name
+    lookup: a resolver answer would make a caller's reading depend on something
+    nobody wrote down, and a hosts entry can point `127.0.0.1` at a tunnel to a
+    second machine, so the lookup buys false confidence rather than truth.
+
+    This is not `fetch.py`'s inward-address check and must not share its set.
+    That one errs wide, because a wrong yes lets a stranger's feed reach inside
+    the runner. This one errs narrow, because its caller writes what it answers
+    into a run record. An address this cannot place answers no rather than
+    raising: `resolve_base_url` already refuses a malformed address at config
+    load, where a person reads the error against the file they just edited.
+    """
+    host = (urlsplit(base_url).hostname or "").lower()
+    if host == "localhost":
+        return True
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return False
 
 
 class ModelServerConfig(Model):

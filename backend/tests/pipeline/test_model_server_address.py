@@ -12,43 +12,23 @@ value. A resolver test passes on a tree where nothing calls the resolver.
 
 from __future__ import annotations
 
-import json
-import shutil
 from pathlib import Path
 
 import pytest
-from conftest import CONFIG_DIR, RecordedEndpoint, read_text
+from conftest import RecordedEndpoint
 from pytest import MonkeyPatch
 
-from idhazh import config
-from idhazh.contracts.base import canonical_json
 from idhazh.stages.work import stage_work
 
 from ._builders import (
     REFUSED_COMPLETION,
+    a_config_pointing_at,
     captured_article_fetch,
     isolate_ledgers,
     plan,
 )
 
 pytestmark = pytest.mark.slow
-
-
-def a_config_pointing_at(root: Path, base_url: str) -> config.Settings:
-    """A whole `config/` of the test's own, naming one server.
-
-    The whole tree, because `config.load` reads five files and cross-checks two
-    of them. The committed file is the starting point rather than the subject:
-    what is asserted is the value written here, so this keeps testing the wiring
-    on the day an operator points the run at their own server (`CLAUDE.md`
-    section 13).
-    """
-    target = root / "config"
-    shutil.copytree(CONFIG_DIR, target)
-    payload = json.loads(read_text(target / "idhazh.json"))
-    payload["model_server"]["base_url"] = base_url
-    (target / "idhazh.json").write_text(canonical_json(payload), encoding="utf-8", newline="\n")
-    return config.load(target)
 
 
 def test_a_stage_nobody_gave_an_address_posts_where_the_config_says(
