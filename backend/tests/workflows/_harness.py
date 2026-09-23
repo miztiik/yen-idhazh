@@ -683,16 +683,15 @@ COMMIT_STAGED_PATHS: Final = {
     # thrown away with the runner. `state/traces` is the raw evidence the fold is
     # taken from and was missed the same way.
     #
-    # `state/segments` replaced `state/host-fingerprint` on 2026-09-17, and
-    # `state/item-health`, `state/scores`, `state/score-index` and
-    # `state/span-rollup` followed it on 2026-09-18. Each of those heads used to
-    # be appended to by up to eight work
-    # shards and by assemble; every writer now writes its own segment and
-    # `assemble` folds them in, so this job stages the segment store and no
-    # longer stages a head it does not write.
+    # `state` whole since 2026-09-22, where this was `state/traces` and
+    # `state/segments` named one at a time. Every tree a shard writes now names
+    # its file for the one writer that wrote it, so the shard commits into the
+    # day directory of whichever tree its own rows belong to - and that set is
+    # not knowable when a list is written. Naming the directory also answers the
+    # fresh-checkout rule: `state` is in every checkout and a tree inside it need
+    # not be.
     "work": [
-        "state/traces",
-        "state/segments",
+        "state",
     ],
     "assemble": [
         "frontend/public/digest",
@@ -728,16 +727,22 @@ COMMIT_STAGED_PATHS: Final = {
 # The step that folds an out-of-window month before the step above commits it.
 # It runs after the day's own commit, so a retirement that loses its push costs
 # one run's bytes and never a published day.
-FOLD_STEP: Final = "Retire the ledger shards and the visuals nothing still reads"
+RETIRE_STEP: Final = "Retire the ledger shards and the visuals nothing still reads"
 
-FOLD_COMMAND: Final = "python -m idhazh prune-state"
+# The step that replaces a closed day's writer files with the one file they
+# settle to. It runs after the day's own commit for the same reason the
+# retirement does: it deletes committed files, so a fold that loses its push may
+# never cost a published day.
+CLOSED_DAY_FOLD_STEP: Final = "Fold the days that can gain no more rows"
+
+RETIRE_COMMAND: Final = "python -m idhazh prune-state"
 
 # Set on purpose. `prune.yml` force-pushes main on a schedule, so a state file
 # this step deletes stops being recoverable from history once the prune passes
 # over it (CLAUDE.md section 8). The step logs every file a live run would remove
 # and removes nothing; turning the deletion on is a one-line commit of its own,
 # taken after a scheduled run has printed that list.
-FOLD_DRY_RUN_FLAG: Final = "--dry-run"
+RETIRE_DRY_RUN_FLAG: Final = "--dry-run"
 
 # The step that fills the two ledgers the step above commits, and the two things
 # that decide which items are this shard's.
