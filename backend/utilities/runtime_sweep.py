@@ -28,7 +28,7 @@ from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.knobs.model_server import port_of_base_url
 from idhazh.contracts.knobs.models import ModelsConfig
 from idhazh.contracts.run_plan import RunPlan
-from idhazh.llm.server import server_argv
+from idhazh.llm.server import loopback_url, server_argv
 from idhazh.stages.common import CAPTURES_DIRNAME
 from idhazh.telemetry import silicon
 from utilities import sweep_verdict
@@ -307,7 +307,7 @@ def parse_server_facts(log_path: Path) -> dict[str, str]:
 def wait_for_health(port: int) -> None:
     for _ in range(120):
         try:
-            with urllib.request.urlopen(f"http://127.0.0.1:{port}/health", timeout=2) as response:
+            with urllib.request.urlopen(loopback_url(port) + "/health", timeout=2) as response:
                 if response.status < 500:
                     return
         except OSError:
@@ -323,7 +323,7 @@ def assert_the_candidate_is_serving(port: int, candidate_id: str) -> None:
     answering under any other alias makes the whole run a measurement of
     something else with the candidate's name on it (Guardrail #10).
     """
-    with urllib.request.urlopen(f"http://127.0.0.1:{port}/v1/models", timeout=5) as response:
+    with urllib.request.urlopen(loopback_url(port) + "/v1/models", timeout=5) as response:
         served = json.load(response)["data"][0]["id"]
     if served != candidate_id:
         raise RuntimeError(f"the server answers to {served}, not {candidate_id}")

@@ -574,7 +574,20 @@ One commit per row, in Reckoner order. A worker who follows it never writes an i
 
 **Gates.** `ruff check .` clean. Each instrument still starts its own server and probes that one. A unit test that `loopback_url` ignores `base_url`.
 
-**Oracle.** `git grep -n '127\.0\.0\.1' -- backend/idhazh backend/utilities config` returns exactly two lines: the body of `loopback_url` and the committed default. Scoped deliberately - `backend/tests/` holds about 32 more that are about URL sanitisation and nothing to do with the model server.
+**Oracle.** `git grep -n '127\.0\.0\.1' -- backend/idhazh backend/utilities config` returns **six** lines, named below. Scoped deliberately - `backend/tests/` holds about 32 more that are about URL sanitisation and nothing to do with the model server.
+
+**Corrected 2026-09-23.** This row said two, and two was never the answer. Two of the six arrived with row 2, after this was written, and two were always there and were not counted. A grep is also not a guard - it goes quiet once and says nothing about the seventh literal somebody adds next week - so the survivors are now a named set in `backend/tests/test_summarize.py` and a module that starts writing the host turns it red.
+
+| The survivor | Why it survives |
+| --- | --- |
+| `backend/idhazh/llm/server.py` | The body of `loopback_url`. The one home for the literal |
+| `backend/idhazh/contracts/knobs/model_server.py` | `DEFAULT_BASE_URL`, the address this repository ships. Row 2 |
+| `backend/idhazh/contracts/app_config.py` | A `__changelog__` line quoting that default. Prose, not an address. Row 2 |
+| `config/idhazh.json` | The committed value itself |
+| `backend/utilities/measure_budgets.py` | A `--base` argparse default. **A finding, not a survivor on merit** - see below |
+| `backend/utilities/measure_judge_call.py` | The same `--base` default. The same finding |
+
+**The finding.** Those last two are hand-run instruments that talk to a server an operator already started. Neither spawns one, so decision 6.1 does not cover them: by this plan's own rule - a program that talks to a server it did not start reads the address from the settings it holds - both should read a config root. Row 3 gave `slot_probe.py` exactly that and its file list missed these two. **Price to fix: two lines each plus a `--config-root` argument each, following `slot_probe.py`'s shape.** Price to leave: an operator who moves `base_url` gets two instruments still asking loopback, and finds out when the request is refused. Left out here because reopening a closed row is a wider change than this row's intent needs; listed by name in the test so it cannot be forgotten.
 
 **What it cannot settle.** Nothing outstanding. It is stated as survivors rather than as zero, because zero is not the correct answer and an earlier draft claimed it was.
 

@@ -34,8 +34,10 @@ from idhazh.contracts.knobs.model_server import port_of_base_url
 from idhazh.llm.server import (
     completion_url,
     derive_turn_markers,
+    loopback_url,
     props_url,
     render_prompt,
+    resolve_endpoint,
     server_argv,
 )
 
@@ -166,10 +168,11 @@ def measure(
         binary=binary, weights=weights, model=entry, server=entry.server, port=port
     )
     # Both routes are derived from one address, so the port the server was
-    # started on and the port a request goes to cannot disagree.
-    base = f"http://127.0.0.1:{port}/v1/chat/completions"
+    # started on and the port a request goes to cannot disagree. Loopback, not
+    # `model_server.base_url`: this process started that server.
+    base = resolve_endpoint(loopback_url(port))
     endpoint = completion_url(base)
-    health = f"http://127.0.0.1:{port}/health"
+    health = loopback_url(port) + "/health"
     record: dict[str, Any] = {
         "weights": weights.name,
         "sha256": entry.sha256,

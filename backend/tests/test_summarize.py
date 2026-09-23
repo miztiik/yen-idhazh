@@ -511,6 +511,75 @@ def test_every_route_is_derived_from_the_one_address_a_caller_was_given() -> Non
     assert props_url(completion_url(posts_to)) == props_url(posts_to)
 
 
+def test_a_program_that_started_its_own_server_probes_that_one() -> None:
+    """`loopback_url` takes a port and looks nothing up.
+
+    The three instruments that spawn a server measure the process they started.
+    Reading `model_server.base_url` there would point a measurement at whichever
+    server the config names, and a reading taken against a binary this process
+    did not start is a number about the wrong binary.
+
+    So the settings are handed in here and must make no difference. A config
+    naming another machine is the sharpest case, because that is the one where
+    a lookup would be visible.
+    """
+    from idhazh.contracts.knobs.model_server import ModelServerConfig
+    from idhazh.llm.server import loopback_url
+
+    elsewhere = ModelServerConfig(base_url="http://192.168.1.20:9090")
+
+    assert loopback_url(9090) == "http://127.0.0.1:9090"
+    assert elsewhere.base_url == "http://192.168.1.20:9090", "the config is unread, not rewritten"
+    assert loopback_url(8181).endswith(":8181"), "the port is the caller's and nothing else is"
+
+
+#: Every module allowed to write the loopback host, and what each one is. A set
+#: rather than a count, because a count falling by one names nothing and a count
+#: rising by one is read as "somebody added a test". Anything not here is a
+#: second address a config value cannot move, which is the state
+#: `model_server.base_url` exists to end.
+LOOPBACK_IS_WRITTEN_IN: Final = {
+    # The committed default, and the changelog line that quotes it.
+    "backend/idhazh/contracts/knobs/model_server.py",
+    "backend/idhazh/contracts/app_config.py",
+    # The body of `loopback_url`, which is the one home for the literal.
+    "backend/idhazh/llm/server.py",
+    # Two hand-run instruments whose `--base` default is a literal. Neither
+    # starts a server, so by this project's own rule both should read the
+    # address out of a config root - `slot_probe.py` was given one on
+    # 2026-09-23 and these two were missed. Listed rather than hidden.
+    "backend/utilities/measure_budgets.py",
+    "backend/utilities/measure_judge_call.py",
+}
+
+
+def test_the_loopback_host_is_written_in_five_named_places() -> None:
+    """Survivors, not zero. Zero is the wrong answer and an earlier draft claimed it.
+
+    `loopback_url` has to write the host somewhere, and the committed default
+    has to say it. What must not happen is a sixth module quietly spelling an
+    address again, which is what the three self-spawning instruments did until
+    2026-09-23 - six literals between them, each one a place a moved port could
+    be left behind.
+
+    A source census, so its cost is the size of the codebase and not the size of
+    anything a run appends to (Guardrail #12).
+    """
+    roots = (REPO_ROOT / "backend" / "idhazh", REPO_ROOT / "backend" / "utilities")
+    writing = {
+        path.relative_to(REPO_ROOT).as_posix()
+        for root in roots
+        for path in root.rglob("*.py")
+        if "127.0.0.1" in path.read_text(encoding="utf-8")
+    }
+
+    assert writing == LOOPBACK_IS_WRITTEN_IN, (
+        "these modules write the loopback host and are not on the list: "
+        f"{sorted(writing - LOOPBACK_IS_WRITTEN_IN)}; "
+        f"and these are listed and no longer write it: {sorted(LOOPBACK_IS_WRITTEN_IN - writing)}"
+    )
+
+
 class TestTheRenderedCompletionEnvelope:
     """The second shape `parse_completion` reads, from a reply a server really sent.
 
