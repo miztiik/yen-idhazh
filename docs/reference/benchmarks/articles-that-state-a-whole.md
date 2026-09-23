@@ -224,6 +224,6 @@ thing a person runs while waiting, not a thing that needs a job.
 ## See also
 
 - [`../pipeline-cost.md`](../pipeline-cost.md) - the instrument log, which carries the figure now in force and links here.
-- [`../../architecture/publishing/visuals.md`](../../architecture/publishing/visuals.md) - the declared-whole rule this count sizes, and `share_of_declared_whole`.
+- [`../../architecture/publishing/where-every-drawn-figure-came-from.md`](../../architecture/publishing/where-every-drawn-figure-came-from.md) - the declared-whole rule this count sizes, and `share_of_declared_whole`.
 - [`../../concepts/growing-reads.md`](../../concepts/growing-reads.md) - what a read over a growing collection declares.
 - [`../../../TODO/20260905-16-composition-vocabulary-plan.md`](../../../TODO/20260905-16-composition-vocabulary-plan.md) - the plan this row belongs to, and the owner decision that `pie` ships either way.

@@ -562,7 +562,7 @@ Source is [Lucide](https://lucide.dev) under the ISC licence; only the icons in 
 
 ## Charts are static first, enhanced only when interaction earns it
 
-An item's chart is compiled at build time into data and its shape, and **the reader's browser draws it** - owner ruling 2026-09-13, [../architecture/publishing/visuals.md](../architecture/publishing/visuals.md). Nothing is rendered in the pipeline and no drawing is committed. Every chart on the dashboard is hand-written markup over a committed CSV or the published telemetry projection.
+An item's chart is compiled at build time into data and its shape, and **the reader's browser draws it** - owner ruling 2026-09-13, [../architecture/publishing/where-a-drawing-becomes-pixels.md](../architecture/publishing/where-a-drawing-becomes-pixels.md). Nothing is rendered in the pipeline and no drawing is committed. Every chart on the dashboard is hand-written markup over a committed CSV or the published telemetry projection.
 
 **No chart ENGINE on a reader's route, and that half is settled.** The arithmetic is a different question and is answered below: `d3-scale` and `d3-array` reach the reader and nothing else does.
 
