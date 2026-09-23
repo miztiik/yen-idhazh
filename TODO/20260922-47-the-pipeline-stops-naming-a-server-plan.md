@@ -112,7 +112,7 @@ Statuses: PENDING, IN PROGRESS, BLOCKED, DONE. A row's status is stamped by the 
 | 8 | The run says which server answered | 3 | A | PENDING | - | - | - |
 | 9 | Sampling settings pass through, unmapped | 8 | B | PENDING | - | - | - |
 | 10 | Model slots get nouns | 9 | B | PENDING | - | - | - |
-| 11 | The run record stops claiming a build it cannot see | 9 | C | PENDING | - | - | - |
+| 11 | The run record stops claiming a build it cannot see | 2 | C | DONE | p47w4 | - | W4 |
 
 ### 1a. The three pull requests
 
