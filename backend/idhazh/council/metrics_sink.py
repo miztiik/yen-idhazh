@@ -32,21 +32,30 @@ _SLUG: Final = re.compile(SLUG_PATTERN)
 SHIPPED_SUFFIX: Final = ".csv"
 
 
+def checked_slug(judge_id: str) -> str:
+    """The slug back, refused unless a path may be built out of it.
+
+    The value arrives from a tenant's own module constant and never from fetched
+    text, and a path built from an unchecked string is a hole whether or not
+    anything is coming through it today. Public because every directory and
+    every filename inside the carried root takes the slug, so one check has to
+    cover all of them.
+    """
+    if not _SLUG.match(judge_id):
+        raise ValueError(
+            f"a judge id becomes a path component here, and {judge_id!r} is not a slug"
+        )
+    return judge_id
+
+
 def _shipped_dir(root: Path, judge_id: str) -> Path:
     """Where one tenant's shipped files sit under a run directory.
 
     The slug is a directory level rather than part of a filename, so two tenants'
     shard 0 do not collide when the collecting job merges every artifact into one
-    tree. It is checked because it becomes a path component: the value arrives
-    from a tenant's own module constant and never from fetched text, and a path
-    built from an unchecked string is a hole whether or not anything is coming
-    through it today.
+    tree.
     """
-    if not _SLUG.match(judge_id):
-        raise ValueError(
-            f"a judge id becomes a directory name here, and {judge_id!r} is not a slug"
-        )
-    return root / judge_id
+    return root / checked_slug(judge_id)
 
 
 def ship_judge_metrics(row: JudgeRow, *, judge_id: str, shard: int, out_dir: Path) -> Path:

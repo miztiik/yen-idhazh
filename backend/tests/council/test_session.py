@@ -266,6 +266,60 @@ def test_the_scratch_root_the_workflow_carries_is_the_one_the_council_names() ->
     assert not Path(session.COUNCIL_ROOT_RELPATH).is_absolute()
 
 
+def test_a_units_file_names_the_date_the_tenant_and_the_unit_that_wrote_it() -> None:
+    """Every element of the writer's identity is in the name, not only in the tree.
+
+    A file read anywhere but where it was written - merged out of eight artifacts,
+    copied out for a person to look at - still says who wrote it. A name carrying
+    only the date is the defect this grammar exists to close.
+    """
+    named = session.unit_file(
+        A_DATE, slot=session.SELECTION_DIRNAME, judge_id=A_SLUG, shard=7
+    )
+
+    assert named.name == f"{A_DATE}-{A_SLUG}-07.csv"
+    assert named.parent == session.unit_dir(
+        A_DATE, slot=session.SELECTION_DIRNAME, judge_id=A_SLUG
+    )
+
+
+def test_eight_units_of_one_date_write_eight_paths() -> None:
+    """Sharding works because the names differ, and it works up to any width."""
+    written_paths = {
+        session.unit_file(A_DATE, slot="verdicts", judge_id=A_SLUG, shard=unit)
+        for unit in range(8)
+    }
+
+    assert len(written_paths) == 8
+    assert all("-0" in path.name for path in written_paths), "a shard is two digits wide"
+
+
+def test_two_tenants_of_one_date_never_share_a_unit_file() -> None:
+    """The slug is in the path twice, and either copy of it is enough to keep them apart."""
+    mine = session.unit_file(A_DATE, slot="verdicts", judge_id=A_SLUG, shard=0)
+    theirs = session.unit_file(A_DATE, slot="verdicts", judge_id=ANOTHER_SLUG, shard=0)
+
+    assert mine != theirs
+    assert mine.parent != theirs.parent
+    assert mine.name != theirs.name
+
+
+def test_the_unit_that_picks_the_work_names_no_shard() -> None:
+    """A date has one draw, so a number in its name would claim a writer that never ran."""
+    drawn = session.unit_file(A_DATE, slot=session.SELECTION_DIRNAME, judge_id=A_SLUG)
+
+    assert drawn.name == f"{A_DATE}-{A_SLUG}.csv"
+
+
+def test_a_judge_id_no_path_can_hold_is_refused_before_it_becomes_one() -> None:
+    """The slug reaches a directory level and a filename, so one check covers both."""
+    for spelled in ("../escape", "two words", ""):
+        with pytest.raises(ValueError, match="not a slug"):
+            session.unit_file(A_DATE, slot="verdicts", judge_id=spelled, shard=0)
+        with pytest.raises(ValueError, match="not a slug"):
+            session.unit_dir(A_DATE, slot="verdicts", judge_id=spelled)
+
+
 def test_a_unit_that_died_leaves_a_gap_the_recorded_width_makes_readable(
     venue: Path, tmp_path: Path
 ) -> None:
