@@ -1,0 +1,1 @@
+version,date,run_id,shard,pair_key,left_url_key,right_url_key,composite_score,cosine,key_point,headline,scorer_model,cosine_weight,key_point_weight,verdict,verdict_swapped,usable,first_token_margin,judge_model,prompt_digest,grammar_digest,decode_seconds,judge_id,judge_temperature,grammar_applied,first_token_probabilities,thinking_spans,judged_by_run_id
