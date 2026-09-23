@@ -417,6 +417,11 @@ jobs:
       # `state/`. An artifact's internal root is the common ancestor of what
       # matched, so a glob would unpack one case's store at the depth three
       # cases' stores sit at the moment two of them died.
+      # No `tee` into the log. This program prints what a person reads on
+      # stderr, which the log already shows, and keeps stdout for the one
+      # `key=value` line the step output takes. A `tee` here would copy the
+      # progress lines into `$GITHUB_OUTPUT` as well, and one line that is not
+      # `key=value` fails the step and loses the push.
       - name: Gather the ledgers the cases wrote
         id: ledgers
         if: always()
@@ -424,7 +429,7 @@ jobs:
           set -euo pipefail
           python3 backend/utilities/pipeline_test_ledgers.py gather \
             --tree backend/var/trial-ledgers \
-            | tee /dev/stderr >> "$GITHUB_OUTPUT"
+            >> "$GITHUB_OUTPUT"
 
       - name: Upload the ledgers the cases wrote
         if: always()

@@ -579,6 +579,57 @@ def test_the_check_refuses_what_no_case_producer_wrote(
     assert refused, f"the check let through {because}"
 
 
+@pytest.mark.parametrize("wrote", [True, False])
+def test_the_gather_verb_writes_nothing_to_stdout_that_is_not_a_step_output(
+    tmp_path: Path, wrote: bool
+) -> None:
+    """The step appends this stdout to `$GITHUB_OUTPUT`, which takes `key=value` only.
+
+    One other line there fails the step, and the step that fails is the one
+    holding every ledger three cases just spent an hour producing - so the
+    dispatch measures what it was dispatched to measure and pushes none of it.
+
+    Both arms, because the progress lines only appear when a case did write:
+    a dispatch that lost every case was the one shape that passed before.
+    """
+    case = _settings().cases[0]
+    state = tmp_path / "state"
+    if wrote:
+        _a_downloaded_tree(state, case=case.trial_state_dirname)
+    else:
+        state.mkdir(parents=True)
+
+    done = subprocess.run(
+        [
+            sys.executable,
+            str(REPO_ROOT / LEDGER_MODULE),
+            "gather",
+            "--tree",
+            str(tmp_path / "trial-ledgers"),
+            "--state",
+            str(state),
+            "--config-root",
+            str(CONFIG_DIR),
+        ],
+        cwd=tmp_path,
+        env={**os.environ, "PYTHONPATH": str(REPO_ROOT / "backend")},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert done.returncode == 0, done.stderr
+    for line in done.stdout.splitlines():
+        assert re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*=.*", line), (
+            f"{line!r} is not a step output, and `$GITHUB_OUTPUT` takes nothing else"
+        )
+    assert f"{pipeline_test_ledgers.FOUND_KEY}={'true' if wrote else 'false'}" in done.stdout
+    if wrote:
+        assert case.trial_state_dirname in done.stderr, "a person still reads what arrived"
+    else:
+        assert "nothing to push" in done.stderr, "a dispatch that gathered nothing says so"
+
+
 def test_every_declared_case_is_placed_whether_or_not_it_wrote_anything(tmp_path: Path) -> None:
     """`git add` aborts on a path the checkout does not hold, and takes the step with it.
 
