@@ -108,7 +108,7 @@ Statuses: PENDING, IN PROGRESS, BLOCKED, DONE. A row's status is stamped by the 
 | 4 | The port name disappears into the address | 3 | A | PENDING | - | - | - |
 | 5 | A job refuses to start a server nobody will talk to | 4 | A | PENDING | - | - | - |
 | 6 | The loopback literals outside the workflows become one function | 4 | A | PENDING | - | - | - |
-| 7 | The model file, and the value nothing reads | 4 | A | PENDING | - | - | - |
+| 7 | The model file, and the value nothing reads | 4 | A | DONE | p47w2 | - | W2 |
 | 8 | The run says which server answered | 3 | A | PENDING | - | - | - |
 | 9 | Sampling settings pass through, unmapped | 8 | B | PENDING | - | - | - |
 | 10 | Model slots get nouns | 9 | B | PENDING | - | - | - |
