@@ -9,7 +9,7 @@ a run whose shards disagree, a day that published nothing.
 
 from __future__ import annotations
 
-import csv
+import itertools
 import json
 import sys
 from collections.abc import Iterator
@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any, Final
 
 import pytest
+from conftest import seed_feed_health, seed_scores, seed_span_rollup
 
 from idhazh import config, ledger
 from idhazh.contracts.base import ServerJob, derive_url_key
@@ -46,7 +47,6 @@ from idhazh.contracts.source_health_view import (
 )
 from idhazh.contracts.span_rollup import RollupSpan, SpanRollupRow
 from idhazh.contracts.visual_decision import VisualKind, VisualState
-from idhazh.evals import writer as score_writer
 from idhazh.stages.compact import stage_compact
 from idhazh.telemetry.publish import (
     console_band,
@@ -108,12 +108,6 @@ def _eval_row(month: str) -> EvalRow:
         scorer_version="hhem-2.1",
         scored_at=f"{month}-01T06:10:00Z",
     )
-
-
-def _ledger_cells(row: EvalRow) -> dict[str, str]:
-    """The eval ledger's own serialisation: every cell a string, absent is blank."""
-    payload = row.model_dump(mode="json")
-    return {name: "" if payload[name] is None else str(payload[name]) for name in payload}
 
 
 def _feed_row(month: str, *, feed_id: str, outcome: FetchOutcome, items: int) -> FeedHealthRow:
@@ -277,14 +271,6 @@ def _record(stamp: str) -> DayMetrics:
     )
 
 
-def _write_csv(path: Path, columns: tuple[str, ...], rows: list[dict[str, str]]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=list(columns), lineterminator="\n")
-        writer.writeheader()
-        writer.writerows(rows)
-
-
 @pytest.fixture
 def tree(tmp_path: Path) -> tuple[Path, Path]:
     """Twenty months of state and twenty published days, one a month."""
@@ -292,37 +278,31 @@ def tree(tmp_path: Path) -> tuple[Path, Path]:
     digest = tmp_path / "frontend" / "public" / "digest"
     for index, month in enumerate(MONTHS):
         stamp = f"{month}-01"
-        _write_csv(
-            score_writer.ledger_path(state, stamp),
-            EvalRow.csv_columns(),
-            [_ledger_cells(_eval_row(month))],
-        )
-        _write_csv(
-            state / "feed-health" / month[:4] / month[5:7] / "01.csv",
-            FeedHealthRow.csv_columns(),
+        run_id = f"{stamp}-1"
+        seed_scores(state, [_eval_row(month)], run_id=run_id)
+        seed_feed_health(
+            state,
+            stamp,
             [
-                _feed_row(month, feed_id="grid-news", outcome=FetchOutcome.OK, items=4).csv_row(),
-                _feed_row(
-                    month, feed_id="wire-co", outcome=FetchOutcome.PERMANENT, items=0
-                ).csv_row(),
+                _feed_row(month, feed_id="grid-news", outcome=FetchOutcome.OK, items=4),
+                _feed_row(month, feed_id="wire-co", outcome=FetchOutcome.PERMANENT, items=0),
             ],
         )
-        _write_csv(
-            state / "span-rollup" / f"{month}.csv",
-            SpanRollupRow.csv_columns(),
-            [_span_row(month).csv_row()],
-        )
+        seed_span_rollup(state, stamp, [_span_row(month)])
         # Two work jobs a run, reading 100 and 50 tokens a second, so the band's
         # spread has two hosts to spread between. The manifest above says the
-        # plan asked for two, which is the other half of that check.
-        _write_csv(
-            ledger.host_fingerprint_path(state, f"{month}-01"),
-            HostFingerprintRow.csv_columns(),
-            [
-                _host_row(month, shard=0, prompt=1000, seconds=10.0).csv_row(),
-                _host_row(month, shard=1, prompt=1000, seconds=20.0).csv_row(),
-            ],
-        )
+        # plan asked for two, which is the other half of that check. Each shard
+        # files its own row, which is how a run leaves them.
+        for shard, seconds in ((0, 10.0), (1, 20.0)):
+            ledger.write_segment(
+                state,
+                ledger.SegmentLedger.HOST_FINGERPRINT,
+                [_host_row(month, shard=shard, prompt=1000, seconds=seconds)],
+                run_id=run_id,
+                attempt=1,
+                job=ServerJob.WORK,
+                shard=shard,
+            )
         record = state / "day-metrics" / month[:4] / month[5:7] / "01.json"
         record.parent.mkdir(parents=True, exist_ok=True)
         record.write_text(_record(stamp).to_json(), encoding="utf-8")
@@ -397,6 +377,23 @@ def _publish_all(state: Path, digest: Path, *, months: set[str] | None) -> None:
     )
 
 
+def _month_read(path: str) -> str | None:
+    """The month a read names, whichever shape the file it opened is in.
+
+    A published target is one file a month, so its stem is the month. A source
+    is a writer's file inside a `<YYYY>/<MM>/<DD>/` day directory, so its month
+    is two directories up. A path that names neither is not a month read.
+    """
+    parts = Path(path).parts
+    stem = Path(path).stem
+    if len(stem) == 7 and stem[4] == "-" and stem[:4].isdigit() and stem[5:].isdigit():
+        return stem
+    for year, month in itertools.pairwise(parts):
+        if len(year) == 4 and year.isdigit() and len(month) == 2 and month.isdigit():
+            return f"{year}-{month}"
+    return None
+
+
 def test_the_second_run_opens_one_month_not_twenty(
     tree: tuple[Path, Path], opened: list[str]
 ) -> None:
@@ -404,7 +401,7 @@ def test_the_second_run_opens_one_month_not_twenty(
 
     The first run backfills - every month's target is missing, so every month is
     read. The second names the one month it appended to and reads that one,
-    which is decision 4: the run knows which month it just wrote.
+    because the run knows which month it just wrote.
     """
     state, digest = tree
     _publish_all(state, digest, months=None)
@@ -413,12 +410,7 @@ def test_the_second_run_opens_one_month_not_twenty(
     _publish_all(state, digest, months={NEWEST})
 
     read = [path for path in _OPENED if str(state) in path or str(digest) in path]
-    source_months = {
-        part
-        for path in read
-        for part in [Path(path).stem]
-        if len(part) == 7 and part[4] == "-"
-    }
+    source_months = {month for path in read for month in [_month_read(path)] if month}
     assert source_months == {NEWEST}, sorted(source_months)
 
 
@@ -581,22 +573,39 @@ def test_the_band_names_the_newest_day_in_every_sentence(tree: tuple[Path, Path]
     assert band.months == list(MONTHS[-14:])
 
 
-def test_a_run_worth_a_look_outranks_a_feed_at_the_same_severity(
+def test_a_failed_run_outranks_a_resting_feed_at_the_same_severity(
     tree: tuple[Path, Path],
 ) -> None:
     """The runs are listed before the feeds and the order is load-bearing.
 
-    `worst_of` sorts stably, so a tie goes to whichever candidate was built
-    first. A rest clears itself after `availability_strikes_before_rest` skips
-    where a failed run does not, so listing the feeds first would hand every tie
-    to the state that fixes itself.
+    A failed run and a resting feed both rank BROKEN. `worst_of` sorts stably,
+    so a tie goes to whichever candidate was built first. A rest clears itself
+    after `availability_strikes_before_rest` skips where a failed run does not,
+    so listing the feeds first would hand every tie to the state that fixes
+    itself.
+
+    Both states have to be on the board or the tie is never asked. The newest
+    run fails here, and the fixture's second feed has answered PERMANENT long
+    enough to be resting - which the first assertion proves before the second
+    one reads anything.
     """
     state, digest = tree
+    manifest = _manifest(NEWEST_DAY, planned=4, succeeded=3, failed=1, site_bytes=1_000_000)
+    stopped = manifest.model_copy(
+        update={"runs": [manifest.runs[0].model_copy(update={"status": RunStatus.FAILED})]}
+    )
+    (digest / NEWEST[:4] / NEWEST[5:7] / "01" / "run.json").write_text(
+        stopped.to_json(), encoding="utf-8"
+    )
+
+    feeds = ledger.load_health(state, today=NEWEST_DAY, within_days=max(CONSOLE.window_presets))
+    resting = console_band.feed_trouble(feeds, COLLECT.availability_strikes_before_rest).rested
+    assert resting == 1, "no feed is resting, so the tie this names was never put"
 
     band = _band(state, digest)
 
     pipelines = next(route for route in band.routes if route.id is RouteId.PIPELINES)
-    assert pipelines.worst == "1 run worth a look"
+    assert pipelines.worst == "1 run failed"
     assert band.worst is not None
     assert band.worst.id is RouteId.PIPELINES
 
@@ -904,11 +913,18 @@ def test_a_run_whose_shards_disagree_is_refused_whole(tree: tuple[Path, Path]) -
     A page that prints half a reconcilable run is worse than one that says which
     run it cannot read."""
     state, digest = tree
-    source = ledger.host_fingerprint_path(state, NEWEST_DAY)
-    rows = list(csv.DictReader(source.read_text(encoding="utf-8").splitlines()))
-    doubled = dict(rows[-1])
-    doubled["cpu_model"] = "INTEL(R) XEON(R) PLATINUM 8573C"
-    _write_csv(source, HostFingerprintRow.csv_columns(), [*rows, doubled])
+    moved = _host_row(NEWEST, shard=1, prompt=1000, seconds=20.0).model_copy(
+        update={"cpu_model": "INTEL(R) XEON(R) PLATINUM 8573C"}
+    )
+    ledger.write_segment(
+        state,
+        ledger.SegmentLedger.HOST_FINGERPRINT,
+        [moved],
+        run_id=f"{NEWEST_DAY}-1",
+        attempt=2,
+        job=ServerJob.WORK,
+        shard=1,
+    )
 
     band = _band(state, digest)
 
@@ -927,11 +943,15 @@ def test_more_hosts_than_the_plan_asked_for_refuses_the_run(tree: tuple[Path, Pa
     nobody dispatched, and the run is refused rather than published half-read.
     """
     state, digest = tree
-    source = ledger.host_fingerprint_path(state, NEWEST_DAY)
-    rows = list(csv.DictReader(source.read_text(encoding="utf-8").splitlines()))
-    stray = dict(rows[-1])
-    stray["shard"] = "2"
-    _write_csv(source, HostFingerprintRow.csv_columns(), [*rows, stray])
+    ledger.write_segment(
+        state,
+        ledger.SegmentLedger.HOST_FINGERPRINT,
+        [_host_row(NEWEST, shard=2, prompt=1000, seconds=20.0)],
+        run_id=f"{NEWEST_DAY}-1",
+        attempt=1,
+        job=ServerJob.WORK,
+        shard=2,
+    )
 
     band = _band(state, digest)
 
@@ -968,9 +988,15 @@ def test_a_shard_that_filed_no_host_row_is_counted_against_the_plan(
     did not, and the run's totals are short by whatever it did.
     """
     state, digest = tree
-    source = ledger.host_fingerprint_path(state, NEWEST_DAY)
-    rows = list(csv.DictReader(source.read_text(encoding="utf-8").splitlines()))
-    _write_csv(source, HostFingerprintRow.csv_columns(), rows[:1])
+    ledger.day_shard_path(
+        state,
+        ledger.SegmentLedger.HOST_FINGERPRINT,
+        date=NEWEST_DAY,
+        run_id=f"{NEWEST_DAY}-1",
+        attempt=1,
+        job=ServerJob.WORK,
+        shard=1,
+    ).unlink()
 
     band = _band(state, digest)
 
