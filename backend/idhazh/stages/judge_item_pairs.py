@@ -24,7 +24,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from functools import partial
 from pathlib import Path
-from typing import Any, Final
+from typing import Any
 
 from idhazh import assemble, config
 from idhazh.contracts.base import derive_url_key
@@ -43,13 +43,6 @@ from idhazh.llm.server import (
 from idhazh.similarity import judge, prompt, stamps
 from idhazh.stages.assemble import _earlier_days
 from idhazh.stages.common import LOG, _load_day
-
-#: What the scoring stage leaves behind, and what a shard reads.
-DRAW_FILENAME: Final = "draw.csv"
-
-#: One file a shard, named for the shard. Four shards writing four paths is what makes
-#: a merge driver unnecessary here: no two processes ever write one file.
-VERDICTS_DIRNAME: Final = "verdicts"
 
 
 @dataclass(frozen=True, slots=True)
@@ -106,7 +99,8 @@ def stage_judge_item_pairs(
     shards: int,
     settings: config.Settings,
     digest_root: Path,
-    run_dir: Path,
+    draw_path: Path,
+    verdict_path: Path,
     deadline: float,
     base_url: str = DEFAULT_ENDPOINT,
 ) -> ShardReport:
@@ -131,12 +125,17 @@ def stage_judge_item_pairs(
     `digest_root` and the window days resolve against the same tree: the earlier
     days come through `_earlier_days`, which reads `common.PUBLIC_ROOT`. A caller
     pointing one somewhere else has to move the other with it.
+
+    **Both paths are handed in and this stage names no root.** The draw has to
+    reach this runner from the job that wrote it and the verdicts have to reach
+    the job that counts them, so where each one sits is the council's answer
+    rather than this stage's.
     """
     entry = judge.entry_of(settings)
     timeout = request_timeout_seconds(entry.request)
     stamp = stamps.judge_inputs(settings)
     flush_every = settings.app.assemble.same_story.judging_knobs().flush_every_pairs
-    drawn = _rows_this_shard_owns(run_dir / DRAW_FILENAME, shard=shard, shards=shards)
+    drawn = _rows_this_shard_owns(draw_path, shard=shard, shards=shards)
     # Asked once a shard, before any pair is judged. A verdict every returned token
     # could belong to another verdict too can never take any of the window's
     # mass, so `first_token_margin` reports a gap between the other two as though
@@ -152,7 +151,7 @@ def stage_judge_item_pairs(
         window_hours=settings.app.assemble.same_story_window_hours,
     )
 
-    path = run_dir / VERDICTS_DIRNAME / f"{shard}.csv"
+    path = verdict_path
     judged: list[StorySimilarityPair] = []
     readings: list[judge.Judged] = []
     unreadable = 0
@@ -317,8 +316,10 @@ def _rows_this_shard_owns(
     """
     if not path.exists():
         raise FileNotFoundError(
-            f"{path} does not exist, so this shard has nothing to judge. The scoring "
-            "stage writes it, and a shard that ran before it has nothing to read"
+            f"{path} does not exist, so this shard has nothing to judge. The unit that "
+            "picked the work wrote it on a different runner, so it reaches this one only "
+            "inside the artifact the council carries between jobs - a draw written "
+            "outside that root is gone by the time a shard looks for it"
         )
     with path.open("r", encoding="utf-8", newline="") as handle:
         rows = [StorySimilarityPair.from_csv_row(cells) for cells in csv.DictReader(handle)]

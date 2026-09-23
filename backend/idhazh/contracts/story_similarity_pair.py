@@ -10,8 +10,9 @@ Nothing here decides what publishes. A verdict is a label on a pair, and the
 line it eventually moves is fitted deterministically off counts (CLAUDE.md
 section 0a).
 
-The row is persisted twice on the way through: `backend/var/judge/<date>/draw.csv`
-holds the day's draw before a judging shard reads it, and
+The row is persisted twice on the way through: the draw the council leaves under
+`backend/var/council/<date>/selection/<judge>/` holds the day's pairs before a
+judging unit reads them, and
 `state/content-similarity-judge/scored-pairs/<YYYY>/<MM>/<DD>.csv` holds what came back.
 One shape for both, because the second file is the first one with the judge's
 columns filled in.

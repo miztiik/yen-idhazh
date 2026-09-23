@@ -54,7 +54,7 @@ from idhazh.similarity.selection import (
 )
 from idhazh.similarity.stamps import ScorerStamp, scorer_inputs
 from idhazh.stages import common
-from idhazh.stages.pick_item_pairs import DRAW_FILENAME, stage_pick_item_pairs
+from idhazh.stages.pick_item_pairs import stage_pick_item_pairs
 
 #: The date the committed run-manifest fixture is addressed by. The manifest is
 #: what makes the day a real published one; the run a drawn row names is the
@@ -378,17 +378,17 @@ def test_the_draw_round_trips_through_the_contract(
     digest_root = tmp_path / "digest"
     a_published_day(digest_root)
     monkeypatch.setattr(common, "PUBLIC_ROOT", digest_root)
-    out_dir = tmp_path / "judge"
+    draw_path = tmp_path / "selection" / "draw.csv"
 
     drawn = stage_pick_item_pairs(
         DATE,
         run_id=COUNCIL_RUN,
         settings=config.load(CONFIG_DIR),
         digest_root=digest_root,
-        out_dir=out_dir,
+        draw_path=draw_path,
     )
 
-    written = (out_dir / DATE / DRAW_FILENAME).read_text(encoding="utf-8")
+    written = draw_path.read_text(encoding="utf-8")
     rows = [
         StorySimilarityPair.from_csv_row(row) for row in csv.DictReader(written.splitlines())
     ]
@@ -440,7 +440,7 @@ def test_the_draw_samples_the_config_band_and_never_the_line_a_fit_applied(
             run_id=COUNCIL_RUN,
             settings=driven,
             digest_root=digest_root,
-            out_dir=tmp_path / out,
+            draw_path=tmp_path / out / "draw.csv",
         )
 
     at_the_bottom = drawn_with(tuning.band_low, "bottom")
@@ -467,10 +467,10 @@ def test_a_day_that_is_not_on_disk_writes_an_empty_draw(tmp_path: Path) -> None:
         run_id=COUNCIL_RUN,
         settings=config.load(CONFIG_DIR),
         digest_root=tmp_path / "nothing-here",
-        out_dir=out_dir,
+        draw_path=out_dir / "draw.csv",
     )
 
-    written = (out_dir / DATE / DRAW_FILENAME).read_text(encoding="utf-8")
+    written = (out_dir / "draw.csv").read_text(encoding="utf-8")
     assert drawn == Draw(taken=[], pairs_in_band=0)
     assert written.splitlines() == [",".join(StorySimilarityPair.csv_columns())]
 

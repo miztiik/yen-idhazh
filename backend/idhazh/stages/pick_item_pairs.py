@@ -22,17 +22,8 @@ from idhazh.contracts.digest_day import DigestItem
 from idhazh.contracts.story_similarity_pair import StorySimilarityPair
 from idhazh.similarity import selection
 from idhazh.similarity.stamps import ScorerStamp, scorer_inputs
-from idhazh.stages import common
 from idhazh.stages.assemble import _earlier_days
 from idhazh.stages.common import LOG, _load_day
-
-#: What the shards read. One name per day, because a day has one draw.
-DRAW_FILENAME = "draw.csv"
-
-
-def draw_relpath(date: str) -> str:
-    """`backend/var/judge/<date>/draw.csv` - POSIX, for a log line."""
-    return f"{common.JUDGE_ROOT_RELPATH}/{date}/{DRAW_FILENAME}"
 
 
 def _drawn_row(
@@ -95,8 +86,8 @@ def stage_pick_item_pairs(
     *,
     run_id: str,
     settings: config.Settings,
-    digest_root: Path = common.PUBLIC_ROOT,
-    out_dir: Path = common.JUDGE_ROOT,
+    draw_path: Path,
+    digest_root: Path,
 ) -> selection.Draw:
     """Score one day's cross-source pairs, keep the borderline ones, deal the shards.
 
@@ -126,22 +117,31 @@ def stage_pick_item_pairs(
 
     A day that is not on disk writes an empty draw and says why. A missing day
     is nothing to judge rather than a run to fail.
+
+    **`draw_path` is handed in and this stage names no root.** Where the draw
+    lands decides whether the units that judge it can read it at all, and that is
+    the council's answer rather than this stage's: a path outside the root the
+    venue carries between jobs dies with the runner that wrote it.
+
+    **`digest_root` is handed in for the same reason it is on the judging stage.**
+    A default bound here would be read when this module imported, so a caller
+    that moved `common.PUBLIC_ROOT` afterwards would still be served the tree the
+    import saw.
     """
     same_story = settings.app.assemble.same_story
     tuning = same_story.judging_knobs()
     shards = settings.app.council.shards
     window_hours = settings.app.assemble.same_story_window_hours
     stamp = scorer_inputs(settings)
-    path = out_dir / date / DRAW_FILENAME
 
     day = _load_day(assemble.day_dir(digest_root, date) / "digest.json")
     if day is None:
         LOG.warning(
             "pick-item-pairs found no published day to read date=%s out=%s",
             date,
-            draw_relpath(date),
+            draw_path.name,
         )
-        assemble.write_atomic(path, _as_csv([]))
+        assemble.write_atomic(draw_path, _as_csv([]))
         return selection.Draw(taken=[], pairs_in_band=0)
 
     earlier = _earlier_days(date, window_hours=window_hours)
@@ -172,7 +172,7 @@ def stage_pick_item_pairs(
         _drawn_row(pair, shard=shard, date=date, run_id=run_id, by_id=by_id, stamp=stamp)
         for shard, pair in selection.assign_shards(drawn.taken, shards=shards)
     ]
-    assemble.write_atomic(path, _as_csv(rows))
+    assemble.write_atomic(draw_path, _as_csv(rows))
     LOG.info(
         "pick-item-pairs date=%s run=%s in_band=%s drawn=%s budget=%s shards=%s out=%s",
         date,
@@ -181,6 +181,6 @@ def stage_pick_item_pairs(
         len(rows),
         tuning.pair_budget,
         shards,
-        draw_relpath(date),
+        draw_path.name,
     )
     return drawn

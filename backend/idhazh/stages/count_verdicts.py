@@ -23,9 +23,7 @@ from idhazh.contracts.story_similarity_pair import StorySimilarityPair
 from idhazh.council import metrics_sink
 from idhazh.similarity import counting
 from idhazh.similarity.stamps import judge_inputs, scorer_inputs
-from idhazh.stages import common
 from idhazh.stages.common import LOG
-from idhazh.stages.judge_item_pairs import VERDICTS_DIRNAME
 
 
 @dataclass(frozen=True, slots=True)
@@ -66,9 +64,9 @@ def stage_count_verdicts(
     run_id: str,
     judge_id: str,
     shipped_root: Path,
+    verdicts_dir: Path,
     settings: config.Settings,
     state_dir: Path | None = None,
-    judge_root: Path | None = None,
 ) -> CountReport:
     """Append the day's verdicts, then count them into the record if every shard reported.
 
@@ -91,10 +89,12 @@ def stage_count_verdicts(
     outstanding the first time somebody changes the model, which is a week of
     runners re-judging days this judge has already read.
 
-    **`shipped_root` and `judge_id` are handed in rather than resolved here.**
-    The directory the units uploaded into belongs to the venue and the slug
-    belongs to the tenant, so a stage that spelled either would be a stage that
-    only runs inside one venue under one name.
+    **`shipped_root`, `verdicts_dir` and `judge_id` are handed in rather than
+    resolved here.** The two directories the units uploaded into belong to the
+    venue and the slug belongs to the tenant, so a stage that spelled any of them
+    would be a stage that only runs inside one venue under one name. Both
+    directories hold one tenant's files, so what this counts is never a second
+    tenant's work.
 
     **`run_id` is the council's own, and this verb writes it into no cell.** The
     rows it appends were stamped by the draw and the record carries no run at
@@ -105,10 +105,8 @@ def stage_count_verdicts(
     knobs = settings.app.assemble.same_story.judging_knobs()
     shards = settings.app.council.shards
     state = state_dir if state_dir is not None else config.REPO_ROOT / ledger.STATE_DIRNAME
-    root = judge_root if judge_root is not None else common.JUDGE_ROOT
-    verdicts = root / date / VERDICTS_DIRNAME
 
-    present = sorted(path for path in verdicts.glob("*.csv") if path.is_file())
+    present = sorted(path for path in verdicts_dir.glob("*.csv") if path.is_file())
     rows = [row for path in present for row in _verdict_rows(path)]
     appended = ledger.append_story_similarity_pairs(state, date, rows)
     metrics = _collect_metrics(date, state=state, shipped_root=shipped_root, judge_id=judge_id)

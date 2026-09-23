@@ -47,9 +47,11 @@ COUNCIL_ROOT_RELPATH: Final = "backend/var/council"
 
 COUNCIL_ROOT: Final = config.REPO_ROOT / COUNCIL_ROOT_RELPATH
 
-#: The three things the venue moves between jobs: what a date's work was picked
-#: from, what the units measured on their way out, and the venue's own record of
-#: how each of those units ended.
+#: The three slots the venue names inside the root it carries: what a date's
+#: work was picked from, what the units measured on their way out, and the
+#: venue's own record of how each of those units ended. A tenant may name a slot
+#: of its own beside them - what the venue guarantees is the carrying, not the
+#: list of names.
 SELECTION_DIRNAME: Final = "selection"
 
 METRICS_DIRNAME: Final = "metrics"
@@ -74,6 +76,47 @@ def outcomes_dir(date: DateStamp) -> Path:
     live under a directory a tenant owns.
     """
     return scratch_root(date) / OUTCOMES_DIRNAME
+
+
+def unit_dir(date: DateStamp, *, slot: str, judge_id: str) -> Path:
+    """The one directory a tenant's files for a later job sit in.
+
+    Under the root the council carries, because a path outside it reaches no
+    other job at all: the runner that wrote it is thrown away when its job ends.
+    The slug is a directory level for the reason `metrics_sink` makes it one - a
+    reader lists a directory holding one tenant's files and can never take a
+    second tenant's for its own.
+    """
+    return scratch_root(date) / slot / metrics_sink.checked_slug(judge_id)
+
+
+def unit_file(
+    date: DateStamp,
+    *,
+    slot: str,
+    judge_id: str,
+    shard: int | None = None,
+    suffix: str = ".csv",
+) -> Path:
+    """What one unit calls the file it leaves inside that directory.
+
+    `ledger.segment_name`'s grammar carrying the council's own identity: the
+    elements hyphen-joined, the shard last and two digits wide, so the name says
+    which date, which tenant and which unit wrote it wherever the file is read.
+    Spelled here rather than taken from that helper, which asks for a run attempt
+    the council never reads and a `ServerJob` none of this workflow's jobs is a
+    member of - a name carrying an invented cell names nothing.
+
+    Eight units of one date write eight names, so nothing they do concurrently
+    can land on one path.
+
+    **`shard` is None for the unit that picks the work.** A date has one draw and
+    every unit of that date reads it, so a number there would claim a writer that
+    never existed.
+    """
+    unit = "" if shard is None else f"-{shard:02d}"
+    name = f"{date}-{metrics_sink.checked_slug(judge_id)}{unit}{suffix}"
+    return unit_dir(date, slot=slot, judge_id=judge_id) / name
 
 
 def shard_width(council: CouncilConfig, host: Tenant) -> int:

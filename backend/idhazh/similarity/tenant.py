@@ -45,6 +45,13 @@ JUDGE_ID: Final[ContentSimilarityJudgeId] = "content-similarity-judge"
 #: staged the day it is written rather than the day somebody remembers this list.
 COMMITTED_PATHS: Final = (f"{ledger.STATE_DIRNAME}/{ledger.CONTENT_SIMILARITY_JUDGE_DIRNAME}",)
 
+#: The slot this judge's units leave their verdicts in, beside the slots the
+#: venue names for itself. A slot of its own rather than the venue's selection
+#: one: the workflow uploads the selection once from the job that picked the
+#: work and excludes it from every unit's own upload, so a verdict written there
+#: would never reach the job that counts it.
+VERDICTS_DIRNAME: Final = "verdicts"
+
 __all__ = ["JUDGE_ID", "TENANT", "refuse_a_night_this_tenant_cannot_finish"]
 
 
@@ -123,7 +130,11 @@ class ContentSimilarityJudge:
         nothing.
         """
         drawn = pick_item_pairs.stage_pick_item_pairs(
-            date, run_id=run_id, settings=config.load()
+            date,
+            run_id=run_id,
+            settings=config.load(),
+            draw_path=_draw_path(date),
+            digest_root=common.PUBLIC_ROOT,
         )
         return ShardResult(
             outcome=ShardOutcome.COMPLETED if drawn.taken else ShardOutcome.NOTHING_TO_DO
@@ -152,7 +163,8 @@ class ContentSimilarityJudge:
             shards=shards,
             settings=config.load(),
             digest_root=common.PUBLIC_ROOT,
-            run_dir=common.JUDGE_ROOT / date,
+            draw_path=_draw_path(date),
+            verdict_path=_verdict_path(date, shard=shard),
             deadline=deadline,
         )
         shipped = metrics_sink.ship_judge_metrics(
@@ -185,12 +197,40 @@ class ContentSimilarityJudge:
             run_id=run_id,
             judge_id=JUDGE_ID,
             shipped_root=_shipping_dir(date),
+            verdicts_dir=_verdicts_dir(date),
             settings=settings,
         )
         set_merge_line.stage_set_merge_line(date, run_id=run_id, settings=settings)
         return ShardResult(
             outcome=ShardOutcome.COMPLETED if counted.counted else ShardOutcome.NOTHING_TO_DO
         )
+
+
+def _draw_path(date: DateStamp) -> Path:
+    """The one file this judge's selection unit writes and every judging unit reads.
+
+    Asked of the venue rather than spelled here, because the draw crosses two
+    jobs: it is written on the runner that picks the work and read on eight
+    others that never met it. Only a path inside the root the council carries
+    makes that trip.
+    """
+    return session.unit_file(date, slot=session.SELECTION_DIRNAME, judge_id=JUDGE_ID)
+
+
+def _verdict_path(date: DateStamp, *, shard: int) -> Path:
+    """Where one judging unit writes what it judged, for the job that counts it."""
+    return session.unit_file(date, slot=VERDICTS_DIRNAME, judge_id=JUDGE_ID, shard=shard)
+
+
+def _verdicts_dir(date: DateStamp) -> Path:
+    """Where the settling unit looks for what every judging unit left.
+
+    The parent of what `_verdict_path` writes, derived rather than spelled again:
+    a reader and a writer that each name a directory are a reader and a writer
+    that can end up in different ones, which is how a night comes back counting
+    nothing and reporting success.
+    """
+    return session.unit_dir(date, slot=VERDICTS_DIRNAME, judge_id=JUDGE_ID)
 
 
 def _shipping_dir(date: DateStamp) -> Path:
