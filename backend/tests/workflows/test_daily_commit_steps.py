@@ -221,6 +221,76 @@ def test_no_rebase_in_the_daily_run_starts_on_a_dirty_tree() -> None:
             )
 
 
+def _subprocess_calls(tree: ast.AST) -> list[tuple[str, ast.Call]]:
+    """Every call spelled `subprocess.<verb>`, with the verb it names."""
+    return [
+        (node.func.attr, node)
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and isinstance(node.func.value, ast.Name)
+        and node.func.value.id == "subprocess"
+    ]
+
+
+def _runs_a_command(func: ast.expr) -> bool:
+    """Whether this call runs a command: the git wrapper, or `subprocess` itself."""
+    if isinstance(func, ast.Name):
+        return func.id == "_git"
+    return (
+        isinstance(func, ast.Attribute)
+        and isinstance(func.value, ast.Name)
+        and func.value.id == "subprocess"
+    )
+
+
+def test_no_command_in_the_retry_loop_can_raise_or_go_unread() -> None:
+    """`check=True` is the Python spelling of the defect that cost a day.
+
+    Run `32671663130` lost a finished day to one unguarded `git pull --rebase`
+    under `bash -e`. The run ended inside attempt 1: no attempt 2, no failure
+    message, and a checkout left mid-rebase. An exception raised out of a
+    subprocess call leaves this loop in exactly that state, so the hazard
+    changed spelling rather than going away, and `check=False` is what has to
+    be spelled at every call. `subprocess.check_call` and `check_output` raise
+    by definition, so the closed set of verbs is asserted rather than the flag
+    alone.
+
+    The second half is the other way the same failure arrives. With
+    `check=False`, a command nobody reads fails silently and the loop carries
+    on as though it worked - which is how a rebase reaches `--continue` over an
+    index that was never settled. Every command has to be read by somebody, so
+    none of them may stand as a statement on its own.
+
+    Read over the whole module rather than over the `while` body. The loop's
+    work is in the functions it calls - the noise discard, the hand-back, the
+    conflict resolver - so a rule scoped to the `while` alone would walk past
+    every command in the program and pass on an empty set.
+    """
+    tree = ast.parse(read_text(COMMIT_PROGRAM))
+
+    calls = _subprocess_calls(tree)
+    assert calls, "no subprocess call was read, so this test would pass on nothing"
+    verbs = {verb for verb, _ in calls}
+    assert verbs == {"run"}, (
+        f"subprocess.{sorted(verbs - {'run'})} raises where `run` hands back a return code"
+    )
+    for _, node in calls:
+        asked = [word.value for word in node.keywords if word.arg == "check"]
+        assert asked and isinstance(asked[0], ast.Constant) and asked[0].value is False, (
+            f"line {node.lineno} must pass check=False, spelled where a reader can see it"
+        )
+
+    unread = [
+        node.lineno
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Expr)
+        and isinstance(node.value, ast.Call)
+        and _runs_a_command(node.value.func)
+    ]
+    assert not unread, f"line(s) {unread} run a command and read nothing back"
+
+
 def test_the_loop_is_bounded_by_a_clock_and_not_by_a_count() -> None:
     """A fixed number of attempts is spent at once however high the number is.
 
