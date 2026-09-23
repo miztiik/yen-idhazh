@@ -265,7 +265,7 @@ jobs:
       # Ahead of everything else in this job that writes under `state/` - which
       # is everything after it.
       - name: Take the run state from the tip, not from the trigger commit
-        run: bash .github/scripts/take-state-from-the-tip.sh state
+        run: python3 backend/utilities/take_state_from_the_tip.py state
 
       # No weights load here. The plan job is feed reads and arithmetic, and it
       # finishes in seconds - which is what makes fanning out afterwards cheap.

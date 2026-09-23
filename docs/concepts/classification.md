@@ -1,6 +1,6 @@
 # Classification
 
-**Last Updated**: 2026-09-13
+**Last Updated**: 2026-09-23
 
 Every label this project puts on an article: what the word means, who decided
 it, and whether a reader ever sees it.
@@ -165,6 +165,14 @@ to a day payload. The label vectors are 4,224 bytes committed once, and the item
 vectors were going to be written anyway. Rebuild the file with
 `python backend/utilities/build_taxonomy_vectors.py` after any edit to an active
 vertical or lens, and after the encoder weights move.
+
+**Nothing rebuilds it for you, and the day a fit moves a word that becomes a
+bug.** The tie between the vocabulary and the file is a refusal, not a build
+step: the run stops and names the file, and a person goes and types the command.
+That works while a person is the only thing that edits the vocabulary. An
+autotuned desk or lens has nobody to tell.
+[../architecture/publishing/autotune-desk-assignment.md](../architecture/publishing/autotune-desk-assignment.md)
+owns what a rebuild would have to become, and it is open there.
 
 **There is no knob, and that is deliberate rather than an omission.** The
 vocabulary is already config, so editing `config/taxonomy.json` and rebuilding

@@ -11,6 +11,7 @@ is not a lock.
 from __future__ import annotations
 
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -18,11 +19,10 @@ import pytest
 from ._harness import (
     PRUNE_BASE_ENV,
     PRUNE_PUSH_CALL,
-    PRUNE_PUSH_SCRIPT,
+    PRUNE_PUSH_MODULE,
     PRUNE_PUSH_STEP,
     PRUNE_REMEMBER_STEP,
     PRUNE_SQUASH_STEP,
-    _bash,
     _git,
     _isolated_env,
     _load_workflows,
@@ -32,7 +32,6 @@ from ._harness import (
     _step,
     _steps,
     _write,
-    requires_bash,
 )
 
 pytestmark = [pytest.mark.workflow, pytest.mark.slow]
@@ -50,10 +49,8 @@ RACED_FILE = "docs/unrelated.md"
 def _push_the_rewritten_history(
     runner: Path, env: dict[str, str], base: str, squashed: str
 ) -> subprocess.CompletedProcess[str]:
-    bash = _bash()
-    assert bash is not None
     return subprocess.run(
-        [bash, PRUNE_PUSH_SCRIPT.as_posix()],
+        [sys.executable, str(PRUNE_PUSH_MODULE)],
         cwd=runner,
         env={**env, PRUNE_BASE_ENV: base, "SQUASHED": squashed},
         capture_output=True,
@@ -91,7 +88,6 @@ def _a_squashed_checkout(tmp_path: Path, env: dict[str, str]) -> tuple[Path, Pat
     return origin, runner, base
 
 
-@requires_bash
 def test_the_prune_refuses_to_force_over_a_commit_that_landed_while_it_ran(
     tmp_path: Path,
 ) -> None:
@@ -119,7 +115,6 @@ def test_the_prune_refuses_to_force_over_a_commit_that_landed_while_it_ran(
     assert "prune was rewriting" in _git(origin, env, "show", f"{raced}:{RACED_FILE}")
 
 
-@requires_bash
 def test_the_prune_lands_the_rewritten_history_when_nothing_moved(tmp_path: Path) -> None:
     """The other half: a refusal that refused everything would bound nothing.
 
@@ -140,7 +135,6 @@ def test_the_prune_lands_the_rewritten_history_when_nothing_moved(tmp_path: Path
     assert base not in _git(origin, env, "log", "--format=%H", "main")
 
 
-@requires_bash
 def test_a_prune_that_squashed_nothing_still_refuses_a_tip_that_moved(tmp_path: Path) -> None:
     """The stamp-only wake takes the same answer, and it costs nothing to give it.
 
