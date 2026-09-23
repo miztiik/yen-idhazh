@@ -198,6 +198,18 @@ says the vocabulary moved; it does not say the number moved *because* it moved.
 B4 is the same move `assist.eval_corpus_through` already makes for the stories:
 pin the comparison, report the live figure beside it.
 
+**A moving vocabulary also leaves the index itself behind, and that is a second
+problem wearing the same coat.** The metric above survives a vocabulary change
+by holding its denominator still. The month shards do not: the daily run
+rebuilds only the month it is publishing into, nothing records which vocabulary a
+shard was built under, and walking every shard to find out is a read that grows
+with the archive. `config/taxonomy-vectors.bin` has the matching gap on the
+classification side, where a person has to run a rebuild by hand.
+[autotune-desk-assignment.md](autotune-desk-assignment.md) owns both and says
+what a delta update would have to carry. Nothing here waits on it - a reading
+taken today is still a reading - but a plan that autotunes the floor and a plan
+that keeps the shards current share one record of which vocabulary wrote what.
+
 ## The persisted metric
 
 Nothing records a reading today. Two things break because of that. Retention
@@ -319,11 +331,17 @@ story published**.
    summarises.
 6. **What happens to a name with no stories behind it?** A person may add one
    before any article mentions it. It must not read as a search failure.
+7. **Who brings a past month's shard back in step with the vocabulary?** Named
+   in [autotune-desk-assignment.md](autotune-desk-assignment.md) and unanswered
+   there too. It matters here because a reading is taken over the window a
+   reader searches, so a shard built under an older vocabulary is inside the
+   number.
 
 ## See also
 
 - [llm-council.md](llm-council.md) - the venue a judge for this would be a tenant of.
 - [autotune-content-similarity.md](autotune-content-similarity.md) - the working precedent: a judged line that fits itself nightly.
+- [autotune-desk-assignment.md](autotune-desk-assignment.md) - who rebuilds the index and the label vectors when the vocabulary moves, and why neither is rebuilt today.
 - [../../concepts/search-quality.md](../../concepts/search-quality.md) - the measured baseline, the bar, and why the number is a lower bound.
 - [../../concepts/growing-reads.md](../../concepts/growing-reads.md) - what a read over a growing collection has to declare.
 - [retention.md](retention.md) - why a reading not taken on the day cannot be recomputed.
