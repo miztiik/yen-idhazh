@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 import shutil
 import subprocess
@@ -12,10 +13,12 @@ from urllib.parse import urlsplit
 
 import pytest
 from conftest import CONFIG_DIR, REPO_ROOT, llama_server_flags, read_text
+from pytest import MonkeyPatch
 
 from idhazh.contracts.app_config import AppConfig
+from idhazh.contracts.base import canonical_json
 from idhazh.telemetry import silicon
-from utilities import candidate_pointer, model_refs, pipeline_case_config
+from utilities import candidate_pointer, model_refs, model_runtime, pipeline_case_config
 
 from ._harness import (
     ACTIONS_DIR,
@@ -453,6 +456,73 @@ def test_the_loopback_port_is_one_number_wherever_it_is_written() -> None:
                     f"{filename} spells an address at `{line.strip()}` rather than "
                     f"reading {PROBE_URL_ENV} back"
                 )
+
+
+def _a_config_root_posting_to(root: Path, base_url: str) -> Path:
+    """A whole `config/` of the test's own, naming one server.
+
+    The whole tree, because `config.load` reads five files and cross-checks two
+    of them. The committed file is the starting point rather than the subject:
+    what is asserted is the value written here, so this keeps testing the
+    refusal on the day an operator points the run at their own server
+    (`CLAUDE.md` section 13). `backend/tests/pipeline/test_model_server_address.py`
+    builds its own the same way, for the stage side of the same question.
+    """
+    target = root / "config"
+    shutil.copytree(CONFIG_DIR, target)
+    payload = json.loads(read_text(target / "idhazh.json"))
+    payload["model_server"]["base_url"] = base_url
+    (target / "idhazh.json").write_text(canonical_json(payload), encoding="utf-8", newline="\n")
+    return target
+
+
+def test_a_job_refuses_to_start_a_server_the_stage_will_never_reach(tmp_path: Path) -> None:
+    """The control behind escalation trigger 1 of the plan this row comes from.
+
+    Point `model_server.base_url` at another machine and leave a job starting a
+    server here, and every probe passes: a healthy server answers on loopback
+    while every item goes somewhere else and fails as unreachable. The readiness
+    check cannot catch it - it asks the server this job just started, which is
+    exactly the one that is fine.
+
+    So the refusal reads the config root the job was GIVEN, because three of the
+    five workflows run a production stage against a scratch root and a
+    zero-argument load would read the wrong file.
+    """
+    elsewhere = _a_config_root_posting_to(tmp_path, "http://192.168.1.20:9090")
+
+    with pytest.raises(SystemExit) as refused:
+        model_runtime.start_server(elsewhere, "llama-server")
+
+    said = str(refused.value)
+    assert "http://127.0.0.1:9090" in said, f"the refusal does not say what this job binds: {said}"
+    assert "http://192.168.1.20:9090" in said, (
+        f"the refusal does not say where the stage posts: {said}"
+    )
+    assert elsewhere.as_posix() in said, f"the refusal does not name the root to edit: {said}"
+
+
+def test_the_refusal_runs_before_the_server_is_built(
+    tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    """Proved by call order, not by a clock.
+
+    A root that agrees about the address gets past the refusal and stops at the
+    next thing `start_server` does, which is to make the llama-server binary
+    executable. Run from a directory that holds no `backend/bin`, that is a
+    `FileNotFoundError` on every machine - so the two cases differ only in the
+    address, and which exception comes back says which line read it.
+
+    The point is what a real job is spared: the weights path is resolved, the
+    5.68 GB file is opened and the process is spawned after this line, and on a
+    dispatch that is a cache restore and a load on every shard at once before
+    anything says the address was wrong.
+    """
+    agreeing = _a_config_root_posting_to(tmp_path, PROBE_URL_VALUE)
+    monkeypatch.chdir(tmp_path)
+
+    with pytest.raises(FileNotFoundError):
+        model_runtime.start_server(agreeing, "llama-server")
 
     # Both starters read the port back out of the address rather than holding
     # one. The launcher is how every workflow starts a production server; the

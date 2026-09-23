@@ -985,6 +985,21 @@ def resolve_endpoint(base_url: str) -> str:
     return resolve_base_url(base_url) + _CHAT_PATH
 
 
+def loopback_url(port: int) -> str:
+    """The address of a server started on this machine.
+
+    Deliberately ignores `model_server.base_url`: the caller started this server
+    and must probe that one, not whichever one the config names. An instrument
+    measuring a server it is not running reports a number about the wrong
+    binary.
+
+    This is where the loopback host is written. One home for the literal, with
+    the reason beside it, is not a hardcoded value; thirty copies are
+    (Guardrail #6).
+    """
+    return f"http://127.0.0.1:{port}"
+
+
 def props_url(endpoint: str) -> str:
     """The `/props` address on the server a chat-completions endpoint names."""
     return _sibling(endpoint, _PROPS_PATH)
