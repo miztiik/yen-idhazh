@@ -246,7 +246,7 @@ file. One verb reads it - `score-merge-line-holdout`, above, which reports how
 the line stands against the marks and changes nothing. The console's holdout
 panel draws the marks, scores each one against the published days it names, and
 reports the gap between the highest two-story mark and the line in force
-([../concepts/console-design.md](../concepts/console-design.md#the-holdout-margin-is-drawn-at-the-scale-of-the-margin-not-of-the-score)).
+([../concepts/console-design/the-rules-every-console-chart-obeys.md](../concepts/console-design/the-rules-every-console-chart-obeys.md#the-holdout-margin-is-drawn-at-the-scale-of-the-margin-not-of-the-score)).
 
 **It is not a rate over a day.** The sheet is band-stratified by construction, so
 a share taken off it describes the sheet. The committed 200 are 50 well-below,
