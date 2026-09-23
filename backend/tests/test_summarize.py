@@ -450,22 +450,15 @@ def test_an_entry_a_person_writes_is_refused_for_naming_a_draft_head() -> None:
 
 
 def test_server_argv_names_the_port_it_was_given() -> None:
-    """One declaration reaches the flag, both client addresses and the probes.
+    """The port a caller hands the builder is the port the flag carries.
 
-    `DEFAULT_PORT` is what `LLAMA_PORT` sets, so the test reads it rather than
-    restating 8080 - a second literal here is the defect this row removed. Both
-    routes are checked: one server answers the chat shape and the rendered shape
-    on the same port, and an address that drifted would fail every item as
-    "model unreachable".
+    `DEFAULT_PORT` is what `LLAMA_PORT` sets, and it is what the server binds
+    when nobody names one. Where the stage POSTS is no longer this number: it is
+    `model_server.base_url`, and `test_every_route_is_derived_from_the_one_address_
+    a_caller_was_given` holds the routes against an address of its own.
     """
     from idhazh.contracts.knobs.models import ModelRef
-    from idhazh.llm.server import (
-        DEFAULT_COMPLETION_ENDPOINT,
-        DEFAULT_ENDPOINT,
-        DEFAULT_PORT,
-        completion_url,
-        props_url,
-    )
+    from idhazh.llm.server import DEFAULT_PORT
 
     argv = server_argv(
         binary=Path("bin/llama-server"),
@@ -474,13 +467,15 @@ def test_server_argv_names_the_port_it_was_given() -> None:
         server=a_server(**{"--metrics": None}),
         port=8181,
     )
+    bound_by_default = server_argv(
+        binary=Path("bin/llama-server"),
+        weights=Path("models/w.gguf"),
+        model=ModelRef(id="m", repo="r", file="w.gguf", quantisation="Q4_K_M"),
+        server=a_server(**{"--metrics": None}),
+    )
 
     assert argv[argv.index("--port") + 1] == "8181"
-    assert f":{DEFAULT_PORT}/" in DEFAULT_ENDPOINT
-    assert f":{DEFAULT_PORT}/" in DEFAULT_COMPLETION_ENDPOINT
-    assert completion_url(DEFAULT_ENDPOINT) == DEFAULT_COMPLETION_ENDPOINT
-    assert completion_url("http://127.0.0.1:8181") == "http://127.0.0.1:8181/completions"
-    assert props_url(DEFAULT_COMPLETION_ENDPOINT) == props_url(DEFAULT_ENDPOINT)
+    assert bound_by_default[bound_by_default.index("--port") + 1] == str(DEFAULT_PORT)
 
 
 def test_every_route_is_derived_from_the_one_address_a_caller_was_given() -> None:
@@ -508,6 +503,10 @@ def test_every_route_is_derived_from_the_one_address_a_caller_was_given() -> Non
         assert route(posts_to).startswith(f"{elsewhere}/"), (
             f"{route.__name__} left the server the caller named"
         )
+    # One server answers the chat shape and the rendered shape, so a route
+    # derived from either reaches the same place.
+    assert completion_url("http://127.0.0.1:8181") == "http://127.0.0.1:8181/completions"
+    assert props_url(completion_url(posts_to)) == props_url(posts_to)
 
 
 class TestTheRenderedCompletionEnvelope:

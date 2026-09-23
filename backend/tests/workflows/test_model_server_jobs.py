@@ -13,7 +13,8 @@ from typing import Final
 import pytest
 from conftest import CONFIG_DIR, REPO_ROOT, llama_server_flags, read_text
 
-from idhazh.llm.server import DEFAULT_ENDPOINT, DEFAULT_PORT
+from idhazh.contracts.app_config import AppConfig
+from idhazh.llm.server import DEFAULT_PORT
 from idhazh.telemetry import silicon
 from utilities import candidate_pointer, model_refs, pipeline_case_config
 
@@ -425,14 +426,20 @@ def test_the_loopback_port_is_one_number_wherever_it_is_written() -> None:
     by hand, and that literal is the one a port move would leave behind: the
     workflows set the variable, so nothing in CI would ever reach the fallback
     and nothing would say it had gone stale.
+
+    Where the stage POSTS is `model_server.base_url` since 2026-09-23, so the
+    second half of this reads the committed config rather than a python
+    constant. It is a statement about two committed files, and it going red
+    means somebody committed a server nobody will talk to.
     """
     expected = os.environ.get(LLAMA_PORT_ENV) or LLAMA_PORT_VALUE
     assert str(DEFAULT_PORT) == expected, (
         f"{LLAMA_PORT_ENV} is {expected} and idhazh.llm.server answers {DEFAULT_PORT}"
     )
     address = LLAMA_PORT_READ.replace("${" + LLAMA_PORT_ENV + "}", expected)
-    assert DEFAULT_ENDPOINT.startswith(f"{address}/"), (
-        f"the stage posts to {DEFAULT_ENDPOINT} and the workflow probes {address}"
+    posts_to = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json")).model_server.base_url
+    assert posts_to == address, (
+        f"the stage posts to {posts_to} and the workflow probes {address}"
     )
 
     declaring = set()

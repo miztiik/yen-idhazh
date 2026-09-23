@@ -494,6 +494,16 @@ class RecordedEndpoint:
     def endpoint(self) -> str:
         return f"http://127.0.0.1:{self._server.server_port}/v1/chat/completions"
 
+    @property
+    def base_url(self) -> str:
+        """The origin, in the shape `model_server.base_url` takes.
+
+        The port is whichever one the operating system handed out this second,
+        so a test that writes this into a config proves the address reached the
+        wire from there - no constant in the tree could name it.
+        """
+        return f"http://127.0.0.1:{self._server.server_port}"
+
     def __enter__(self) -> RecordedEndpoint:
         self._thread.start()
         return self

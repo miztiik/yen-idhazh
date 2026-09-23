@@ -69,9 +69,6 @@ _COMPLETION_PATH: Final = "/completions"
 # The route an item is posted to, written once so nothing spells it twice.
 _CHAT_PATH: Final = "/v1/chat/completions"
 
-DEFAULT_ENDPOINT: Final = f"http://127.0.0.1:{DEFAULT_PORT}{_CHAT_PATH}"
-DEFAULT_COMPLETION_ENDPOINT: Final = f"http://127.0.0.1:{DEFAULT_PORT}{_COMPLETION_PATH}"
-
 # The four read-only routes the start-up probe asks, beside the one it posts
 # completions to. Paths rather than addresses, because every one of them is
 # derived from whichever endpoint the caller was given - one server answers all
@@ -961,7 +958,7 @@ def parse_completion(body: str, *, answer_at: int = 0) -> Completion:
 def post(
     payload: dict[str, Any],
     *,
-    endpoint: str = DEFAULT_ENDPOINT,
+    endpoint: str,
     timeout: float,
     answer_at: int = 0,
 ) -> Completion:
@@ -991,27 +988,27 @@ def resolve_endpoint(base_url: str) -> str:
     return resolve_base_url(base_url) + _CHAT_PATH
 
 
-def props_url(endpoint: str = DEFAULT_ENDPOINT) -> str:
+def props_url(endpoint: str) -> str:
     """The `/props` address on the server a chat-completions endpoint names."""
     return _sibling(endpoint, _PROPS_PATH)
 
 
-def completion_url(endpoint: str = DEFAULT_ENDPOINT) -> str:
+def completion_url(endpoint: str) -> str:
     """The rendered-completion address on the server an endpoint names."""
     return _sibling(endpoint, _COMPLETION_PATH)
 
 
-def apply_template_url(endpoint: str = DEFAULT_ENDPOINT) -> str:
+def apply_template_url(endpoint: str) -> str:
     """Where the server renders a conversation with the model's own chat template."""
     return _sibling(endpoint, _APPLY_TEMPLATE_PATH)
 
 
-def tokenize_url(endpoint: str = DEFAULT_ENDPOINT) -> str:
+def tokenize_url(endpoint: str) -> str:
     """Where the server turns a string into the token ids it would really read."""
     return _sibling(endpoint, _TOKENIZE_PATH)
 
 
-def props(endpoint: str = DEFAULT_ENDPOINT, *, timeout: float) -> dict[str, Any]:
+def props(endpoint: str, *, timeout: float) -> dict[str, Any]:
     """What the running server says about itself, including its chat template.
 
     The template is the model's own Jinja source, which the server applies to
@@ -1443,7 +1440,7 @@ _DERIVED: Final[dict[tuple[str, str, str | None, str | None], TurnMarkers]] = {}
 
 
 def derive_turn_markers(
-    endpoint: str = DEFAULT_ENDPOINT,
+    endpoint: str,
     *,
     entry: ModelEntry,
     timeout: float,
@@ -1544,7 +1541,7 @@ def prove_the_entry(
     *,
     model: ModelEntry,
     output_schema: Mapping[str, Any],
-    endpoint: str = DEFAULT_ENDPOINT,
+    endpoint: str,
     timeout: float,
 ) -> None:
     """Read this model's markers off its own template, then prove the decoder is bound.

@@ -20,7 +20,7 @@ from idhazh.contracts.qualification import (
 )
 from idhazh.evals import qualify
 from idhazh.llm.server import (
-    DEFAULT_ENDPOINT,
+    resolve_endpoint,
 )
 from idhazh.stages import common
 from idhazh.stages.common import LOG, _run_canaries
@@ -46,7 +46,7 @@ def _canary_report(
 
 
 def stage_qualify_canaries(
-    *, settings: config.Settings, date: str, model_endpoint: str = DEFAULT_ENDPOINT
+    *, settings: config.Settings, date: str, model_endpoint: str | None = None
 ) -> int:
     """Every planted attack alone, against the configured model.
 
@@ -55,6 +55,7 @@ def stage_qualify_canaries(
     section 4). The fixtures are the file in, `canaries.json` is the file out,
     and the exit code is the gate.
     """
+    model_endpoint = model_endpoint or resolve_endpoint(settings.app.model_server.base_url)
     observations = _run_canaries(settings, endpoint=model_endpoint)
     return _canary_report(
         observations,
