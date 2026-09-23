@@ -176,7 +176,7 @@ the browser needs the rows the seed deliberately does not carry. The two offered
 options were refused for measured reasons - seeding buys back the 176,753 bytes
 above, and dropping the seeded months puts a 244 KB fetch behind the first click
 of the window control and leaves the section blank until it lands
-([console.md](console.md#it-follows-the-windows-length-not-a-pan)).
+([what-the-pipelines-route-draws.md](what-the-pipelines-route-draws.md#it-follows-the-windows-length-not-a-pan)).
 
 The two options remain open for a panel that genuinely needs a panned answer.
 Nothing on the page needs one today.
