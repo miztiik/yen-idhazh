@@ -21,7 +21,6 @@ emptied exactly, and a delete that fails on the third file of four.
 
 from __future__ import annotations
 
-import csv
 import hashlib
 from collections.abc import Callable, Iterable
 from datetime import date as date_type
@@ -32,9 +31,11 @@ from typing import Final
 import pytest
 from conftest import seed_item_health
 
-from idhazh import day_partition, ledger
+from idhazh import day_shards, ledger
+from idhazh.contracts.base import ServerJob
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.item_health import ItemStage
+from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
 from idhazh.evals import writer as score_writer
 from idhazh.telemetry import prune
 
@@ -91,7 +92,7 @@ DAYS: Final = tuple(
 
 
 def a_census(state_root: Path, days: Iterable[str] = DAYS) -> Path:
-    """One item-health day file per day, written through the real appender.
+    """One item-health day per day, written through the real appender.
 
     Real rows rather than invented text: the prune walks a store the pipeline
     writes, and a tree assembled by hand could be a shape no run produces.
@@ -105,21 +106,40 @@ def a_census(state_root: Path, days: Iterable[str] = DAYS) -> Path:
     return state_root
 
 
-def _write_host_day(path: Path, day: str) -> None:
-    """One day of machine rows, through the contract the compaction writes."""
-    row = HostFingerprintRow(
-        version=HostFingerprintRow.schema_version(),
-        date=day,
+def the_census_file(day: str) -> str:
+    """The one file `a_census` leaves in a day directory, POSIX and relative.
+
+    A day is a directory of writer-owned files and the prune removes files, so a
+    test that named the directory would name something the prune never reports.
+    """
+    return f"{ledger.item_health_relpath(day)}/{day_shards.SETTLED_NAME}"
+
+
+def the_machine_file(state_root: Path, day: str) -> Path:
+    """The one file `_write_host_day` leaves in a day directory."""
+    name = ledger.segment_name(run_id=f"{day}-1", attempt=1, job=ServerJob.PLAN, shard=0)
+    return ledger.host_fingerprint_path(state_root, day) / name
+
+
+def _write_host_day(state_root: Path, day: str) -> None:
+    """One day of machine rows, through the producer that writes them."""
+    ledger.write_segment(
+        state_root,
+        ledger.SegmentLedger.HOST_FINGERPRINT,
+        [
+            HostFingerprintRow(
+                version=HostFingerprintRow.schema_version(),
+                date=day,
+                run_id=f"{day}-1",
+                shard=0,
+                cpu_model="AMD EPYC 7763 64-Core Processor",
+            )
+        ],
         run_id=f"{day}-1",
+        attempt=1,
+        job=ServerJob.PLAN,
         shard=0,
-        cpu_model="AMD EPYC 7763 64-Core Processor",
     )
-    with path.open("w", encoding="utf-8", newline="") as handle:
-        writer = csv.DictWriter(
-            handle, fieldnames=list(HostFingerprintRow.csv_columns()), lineterminator="\n"
-        )
-        writer.writeheader()
-        writer.writerow(row.csv_row())
 
 
 def fingerprints(root: Path) -> dict[str, str]:
@@ -136,12 +156,36 @@ def fingerprints(root: Path) -> dict[str, str]:
     }
 
 
+def a_day_on_disk(day_path: Callable[[Path, str], Path], state_root: Path, day: str) -> Path:
+    """Put one file where a store's own helper says the day goes, and name it.
+
+    A helper that answers with a `<DD>.csv` names the file itself. A helper that
+    answers with a directory names a day whose files each carry a writer's name,
+    so the file goes inside it under the identity grammar.
+    """
+    where = day_path(state_root, day)
+    if where.suffix == day_shards.SUFFIX:
+        where.parent.mkdir(parents=True, exist_ok=True)
+        where.write_text("version\n", encoding="utf-8", newline="\n")
+        return where
+    where.mkdir(parents=True, exist_ok=True)
+    inside = where / ledger.segment_name(run_id=f"{day}-1", attempt=1, job=ServerJob.PLAN, shard=0)
+    inside.write_text("version\n", encoding="utf-8", newline="\n")
+    return inside
+
+
 def dates_on_disk(state_root: Path, target: str) -> list[str]:
-    """Which days the store still holds, through the pipeline's own walk."""
-    return [
-        day_partition.date_of(day)
-        for day in day_partition.day_files(state_root / target)
-    ]
+    """Which days the store still holds, through the pipeline's own walk.
+
+    One entry a day, however many writers reached it, because the question here
+    is which days survived and not how many files each one holds.
+    """
+    seen: list[str] = []
+    for shard in day_shards.shard_files(state_root / target, days=UNBOUNDED_WINDOW):
+        recorded = day_shards.date_of(shard)
+        if not seen or seen[-1] != recorded:
+            seen.append(recorded)
+    return seen
 
 
 # --- The range -----------------------------------------------------------------
@@ -166,7 +210,7 @@ def test_both_ends_of_the_range_are_named(tmp_path: Path) -> None:
     )
 
     assert [
-        ledger.item_health_relpath(day) for day in (DAYS[2], DAYS[3], DAYS[4])
+        the_census_file(day) for day in (DAYS[2], DAYS[3], DAYS[4])
     ] == sorted(outcome.removed), (
         "the removed list is not exactly the three days the range names: "
         f"{outcome.removed}"
@@ -192,7 +236,7 @@ def test_one_day_is_a_range_of_itself(tmp_path: Path) -> None:
         dry_run=False,
     )
 
-    assert outcome.removed == (ledger.item_health_relpath(DAYS[3]),)
+    assert outcome.removed == (the_census_file(DAYS[3]),)
     assert DAYS[3] not in dates_on_disk(state, ledger.ITEM_HEALTH_DIRNAME)
     assert len(dates_on_disk(state, ledger.ITEM_HEALTH_DIRNAME)) == len(DAYS) - 1
 
@@ -289,9 +333,7 @@ def test_every_target_names_a_store_that_files_by_day(tmp_path: Path) -> None:
 
     for target, day_path in DAY_PATHS.items():
         state = tmp_path / target
-        path = day_path(state, DAYS[3])
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text("version\n", encoding="utf-8", newline="\n")
+        path = a_day_on_disk(day_path, state, DAYS[3])
 
         outcome = prune.prune_range(
             state, target=target, since=DAYS[3], until=DAYS[3], dry_run=False
@@ -318,10 +360,8 @@ def test_a_day_taken_back_loses_the_machine_rows_that_produced_it(tmp_path: Path
     state = tmp_path / "state"
     a_census(state)
     for day in DAYS:
-        path = ledger.host_fingerprint_path(state, day)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        _write_host_day(path, day)
-    kept = ledger.host_fingerprint_path(state, DAYS[4]).read_bytes()
+        _write_host_day(state, day)
+    kept = the_machine_file(state, DAYS[4]).read_bytes()
 
     outcome = prune.prune_range(
         state,
@@ -331,9 +371,12 @@ def test_a_day_taken_back_loses_the_machine_rows_that_produced_it(tmp_path: Path
         dry_run=False,
     )
 
-    assert outcome.removed == (ledger.host_fingerprint_relpath(DAYS[3]),)
+    assert outcome.removed == (
+        f"{ledger.STATE_DIRNAME}/"
+        f"{the_machine_file(state, DAYS[3]).relative_to(state).as_posix()}",
+    )
     assert not ledger.host_fingerprint_path(state, DAYS[3]).exists()
-    assert ledger.host_fingerprint_path(state, DAYS[4]).read_bytes() == kept
+    assert the_machine_file(state, DAYS[4]).read_bytes() == kept
     assert dates_on_disk(state, ledger.HOST_FINGERPRINT_DIRNAME) == [
         day for day in DAYS if day != DAYS[3]
     ]
@@ -464,10 +507,10 @@ def test_a_delete_that_fails_part_way_keeps_what_it_already_removed(
 
     assert deletes == 3, "the prune kept deleting after a failure"
     assert stop.value.so_far.taken == (
-        ledger.item_health_relpath(DAYS[1]),
-        ledger.item_health_relpath(DAYS[2]),
+        the_census_file(DAYS[1]),
+        the_census_file(DAYS[2]),
     )
-    assert stop.value.so_far.resume_from == ledger.item_health_relpath(DAYS[3]), (
+    assert stop.value.so_far.resume_from == the_census_file(DAYS[3]), (
         "the next pass has to retry the day that failed"
     )
     assert dates_on_disk(state, ledger.ITEM_HEALTH_DIRNAME) == [
@@ -498,11 +541,11 @@ def test_a_ceiling_stops_a_pass_and_names_the_day_to_resume_at(tmp_path: Path) -
     )
 
     assert outcome.removed == (
-        ledger.item_health_relpath(DAYS[0]),
-        ledger.item_health_relpath(DAYS[1]),
+        the_census_file(DAYS[0]),
+        the_census_file(DAYS[1]),
     )
     assert outcome.more_to_do
-    assert outcome.resume_from == ledger.item_health_relpath(DAYS[2])
+    assert outcome.resume_from == the_census_file(DAYS[2])
     assert dates_on_disk(state, ledger.ITEM_HEALTH_DIRNAME) == list(DAYS[2:])
     assert any("run it again" in line for line in prune.report(outcome))
 

@@ -56,11 +56,10 @@ def stage_record(
     is `HOST_FINGERPRINT_KEY` minus the date and the run, so it is what takes an
     item to the `state/host-fingerprint/` row for the machine that read it.
 
-    **Both ledgers go to this shard's own segments, never to the day file.** Up
-    to eight work shards and assemble all record the same day, so nine writers
-    would be appending to one path; each writes
-    `state/segments/<ledger>/<run>-<attempt>-work-<shard>.csv` instead, and
-    `assemble` folds them in. The attempt is in the name, so a re-run corrects
+    **Both ledgers go to this shard's own files, never to a day file others
+    open.** Up to eight work shards and assemble all record the same day, so
+    nine writers would be appending to one path; each writes its own file inside
+    the day directory instead. The attempt is in the name, so a re-run corrects
     its first try rather than colliding with it.
 
     Returns the item-health rows and the eval rows that landed.

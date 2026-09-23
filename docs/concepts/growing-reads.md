@@ -712,6 +712,45 @@ Both are worth more on this page than a clean sweep would have been. A rule whos
 inventory only records the reads that bent to it teaches nothing about the ones
 that will not.
 
+## The closed-day fold is Guardrail #12 applied to a write (2026-09-22)
+
+Every entry above is a READ whose cost grows with what the pipeline has piled
+up. This one is a write, and it is here because the guardrail's sentence does
+not say "read": a step is suspect when its cost rises because the repository
+accumulated more data, without any change to the question being answered. A
+ledger that files one file per writer per day is exactly that step.
+
+**The day directory ends two writers on one file, and it buys that with file
+count.** `state/<ledger>/<YYYY>/<MM>/<DD>/` holds one file per writer, so 99
+writers a day over a 14-month retention window is about 33,800 files at today's
+five runs a day, and about 169,000 at twenty-five. Nothing reads all of them -
+every reader carries a cover - but `git add`, a clone and a checkout all rise
+roughly linearly with the file count, and that cost lands on every job.
+
+**So a day past the live window folds once into `settled.csv`, and the writer
+files it read are deleted.** The knob is `run.settled_fold_after_days`, default
+7: a day older than that has no run still writing to it, so folding it cannot
+race a writer. With the fold, `state/` settles at **about 3,200 files at today's
+five runs a day and about 6,000 at twenty-five**, against 33,800 and 169,000
+with no fold. Read that as a ratio: the fold takes about 96 percent of the files
+off the tree in both cases.
+
+**The floor is about 2,550 settled files and it does not move with the run rate
+at all.** One `settled.csv` per ledger per retained day is a function of the
+calendar and the ledger count, not of how many runs happen at once. Only the
+live window scales with the run rate - seven days of unfolded writer files - so
+the difference between 3,200 and 6,000 is that window and nothing else. **That
+is what makes this a bounded step rather than a growing one**: the steady state
+is set by a knob and a retention period, both of which a person chose, and a
+busier day raises the window rather than the archive.
+
+**The fold is itself a bounded read.** It opens one day, reads the files in it,
+writes one file and deletes the rest. It never walks the tree to find work: the
+day it folds is computed from the run's own date minus the knob, so its cost is
+one day's writers however many days the archive holds.
+
+Authority: Fowler and Carmack, converged, 2026-09-22.
+
 ## What a walk over the archive costs a test
 
 `CLAUDE.md` section 13 says a test's cost belongs to the code it checks, never

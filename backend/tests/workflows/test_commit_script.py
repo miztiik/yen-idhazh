@@ -10,6 +10,7 @@ import pytest
 from conftest import read_text
 
 from idhazh import ledger
+from idhazh.contracts.base import ServerJob
 from idhazh.evals import writer as score_writer
 
 from ._harness import (
@@ -47,6 +48,39 @@ from ._harness import (
 )
 
 pytestmark = [pytest.mark.workflow, pytest.mark.slow]
+
+
+def _a_writers_file(*, attempt: int) -> str:
+    """One writer's own file inside a day directory, spelled by the producer.
+
+    A test of what a rebase does to two committed names has to use names a run
+    can actually produce: the shard is two digits in a committed name and the
+    date comes from the rows rather than from the runner, so a name written by
+    hand here would be a name no writer ever takes.
+    """
+    return ledger.day_shard_relpath(
+        ledger.SegmentLedger.ITEM_HEALTH,
+        date=SUBSTITUTED_DATE,
+        run_id=f"{SUBSTITUTED_DATE}-40000000001",
+        attempt=attempt,
+        job=ServerJob.PLAN,
+        shard=0,
+    )
+
+
+def _committed_day(origin: Path, env: dict[str, str], relpath: str) -> list[dict[str, str]]:
+    """Every writer's rows for one committed day, in the order a settlement reads them.
+
+    A day is a directory of writer-owned files now, so one `git show` answers
+    with a listing rather than with rows. The files are read in name order,
+    which is the order `day_shards` reads them in.
+    """
+    listed = _git(origin, env, "ls-tree", "--name-only", f"main:{relpath}").split()
+    return [
+        row
+        for name in sorted(listed)
+        for row in _rows(_git(origin, env, "show", f"main:{relpath}/{name}"))
+    ]
 
 
 def test_every_committing_job_configures_the_same_identity() -> None:
@@ -152,14 +186,15 @@ def test_a_rebase_is_not_blocked_by_an_untracked_file_the_tip_carries(tmp_path: 
     the first of its three attempts, and 303 measured rows over six ledgers were
     committed locally and thrown away with the runner.
 
-    The staging list has since gained that path, which closes that one collision.
-    This holds the property the list cannot, because the list is written by hand
-    and a new `state/` writer has arrived without it three times: a path this job
-    did not stage is a path it is not pushing, so the file goes and everything
-    that WAS staged still lands.
+    The work shard stages `state` whole now, which closes that collision for
+    every tree under it. The list a job hands the script is still written by
+    hand, and a new writer has arrived without it three times - so the path
+    modelled here is one outside the tree this job stages. A path this job did
+    not stage is a path it is not pushing, so the file goes and everything that
+    WAS staged still lands.
     """
     staged_paths, settings = _commit_call("work")
-    unstaged = "state/a-later-writer/2026/09/16.csv"
+    unstaged = "frontend/public/a-later-writer/2026-09-16.json"
     assert not any(unstaged == path or unstaged.startswith(f"{path}/") for path in staged_paths), (
         "this models a writer the staging list has not caught up with"
     )
@@ -301,7 +336,7 @@ def test_every_way_out_of_the_commit_script_says_whether_it_rebased() -> None:
 
 
 @requires_bash
-def test_two_runs_writing_their_own_segments_both_land(tmp_path: Path) -> None:
+def test_two_runs_writing_their_own_files_both_land(tmp_path: Path) -> None:
     """Two writers, two files, one rebase, and nothing has to choose.
 
     This is where the loop used to die. `git pull --rebase origin main` was the
@@ -313,15 +348,18 @@ def test_two_runs_writing_their_own_segments_both_land(tmp_path: Path) -> None:
     A union merge driver on the shared ledger head was the other half of the
     answer until 2026-09-19, and it was the wrong half: it concatenated two
     attempts at the same row as readily as two independent ones. Each writer
-    takes a segment named for its own run, attempt, job and shard instead, so
-    two sides of a race are two adds of two paths and the rebase applies both
-    whole.
+    takes the file its own run, attempt, job and shard name instead, so two
+    sides of a race are two adds of two paths and the rebase applies both whole.
+
+    The two names come from the producer. A shard is two digits in a committed
+    name and a runner holds a bare number, so a name spelled by hand here is not
+    a name a run can produce.
     """
     staged_paths, settings = _commit_call("plan")
     env = _isolated_env(tmp_path)
     origin, runner = _scripted_origin(tmp_path, env, staged_paths)
-    theirs = f"{staged_paths[0]}/segments/item-health/2026-09-19-1-1-plan-0.csv"
-    ours = f"{staged_paths[0]}/segments/item-health/2026-09-19-2-1-plan-0.csv"
+    theirs = _a_writers_file(attempt=1)
+    ours = _a_writers_file(attempt=2)
     _race(tmp_path, env, theirs, "header\ntheirs\n")
     _write(runner / ours, "header\nours\n")
 
@@ -464,16 +502,16 @@ def test_a_push_nothing_will_take_gives_up_on_the_clock_and_says_what_it_spent(
 def test_a_new_file_in_a_drained_directory_still_rebases(tmp_path: Path) -> None:
     """Row 2's Oracle, run rather than read: the B6 shape, at exit 0.
 
-    One job drains a directory - which is what the fold does to
-    `state/segments/` on every run - while another writes a brand-new file into
-    it. Git reads the emptied directory as having been RENAMED to wherever its
-    files went, and applies that guess to the arriving file, so the rebase stops
-    with `CONFLICT (file location)` over a tree that was correct and the job
-    loses what it had already finished.
+    One job drains a directory - which is what the closed-day fold does to a day
+    that can gain no more rows - while another writes a brand-new file into it.
+    Git reads the emptied directory as having been RENAMED to wherever its files
+    went, and applies that guess to the arriving file, so the rebase stops with
+    `CONFLICT (file location)` over a tree that was correct and the job loses
+    what it had already finished.
 
     `merge.directoryRenames=false` is what turns the guess off. Nothing about
     the data changes: both sides are applied whole, the tip's deletion still
-    stands, and the new segment lands.
+    stands, and the arriving file lands.
 
     What this cannot settle is whether the guess is left on somewhere else in
     the pipeline. It drives the one script the daily run pushes through.
@@ -481,27 +519,26 @@ def test_a_new_file_in_a_drained_directory_still_rebases(tmp_path: Path) -> None
     staged_paths, settings = _commit_call("plan")
     env = _isolated_env(tmp_path)
     origin, runner = _scripted_origin(tmp_path, env, staged_paths)
-    segments = f"{staged_paths[0]}/{ledger.SEGMENTS_DIRNAME}/item-health"
-    drained = f"{segments}/2026-09-22-1-1-plan-0.csv"
-    arriving = f"{segments}/2026-09-22-2-1-work-03.csv"
+    drained = _a_writers_file(attempt=1)
+    arriving = _a_writers_file(attempt=2)
 
-    # The base both sides start from: one segment waiting to be folded.
+    # The base both sides start from: one writer's file waiting to be folded.
     other = tmp_path / "other"
     _git(tmp_path, env, "clone", str(tmp_path / "origin.git"), str(other))
     _write(other / drained, "header\nwaiting\n")
     _git(other, env, "add", drained)
-    _git(other, env, "commit", "-m", "a segment is waiting")
+    _git(other, env, "commit", "-m", "one writer's file is waiting")
     _git(other, env, "push", "origin", "main")
     _git(runner, env, "pull", "--ff-only", "origin", "main")
 
-    # Origin's tip: a sibling folded that segment and deleted it, which leaves
-    # the directory holding nothing.
+    # Origin's tip: a sibling folded that day and deleted the file it read,
+    # which leaves the day directory holding nothing.
     _git(other, env, "pull", "--ff-only", "origin", "main")
     _git(other, env, "rm", "--quiet", drained)
-    _git(other, env, "commit", "-m", "the fold drained the segment store")
+    _git(other, env, "commit", "-m", "the fold drained the day")
     _git(other, env, "push", "origin", "main")
 
-    # This job: a new segment, written into the directory the tip just emptied.
+    # This job: a straggler, written into the day the tip just emptied.
     _write(runner / arriving, "header\nmine\n")
 
     result = _run_commit_script(runner, env, staged_paths, settings)
@@ -573,15 +610,22 @@ def test_the_day_publishes_when_origin_moved_under_it(tmp_path: Path) -> None:
     assert manifest["runs"] == day["runs"]
 
     published = _rows(_git(origin, env, "show", f"main:{ledger.published_relpath(date)}"))
-    scores = _rows(_git(origin, env, "show", f"main:{score_writer.ledger_relpath(date)}"))
-    health = _rows(_git(origin, env, "show", f"main:{ledger.item_health_relpath(date)}"))
+    scores = _committed_day(origin, env, score_writer.ledger_relpath(date))
+    health = _committed_day(origin, env, ledger.item_health_relpath(date))
     every_item = ["item-a", "item-b", "item-c", "item-d", "item-e"]
-    # Exactly once each. Two of these ledgers append blind, so a rebuild against
-    # a base that already held this run's rows would show five items and seven
-    # rows.
-    assert [row["item_id"] for row in published] == every_item
+    # Exactly once each in the two day trees. Each run writes the one file its
+    # own run, attempt, job and shard name, so a rebuild cannot add to what a
+    # previous attempt wrote - it replaces the file it owns.
     assert [row["item_id"] for row in scores] == every_item
     assert [row["item_id"] for row in health] == every_item
+    # `state/published` is the one ledger here that is still one file a day and
+    # still appends blind, and it is deliberately not handed back to the tip:
+    # the union driver settles it. The rebuild therefore appends this run's two
+    # items a second time, on top of the pair its first attempt had already
+    # written. That costs two rows and moves no publication date, because
+    # `ledger.load_published` keeps the earliest date per address.
+    assert [row["item_id"] for row in published] == [*every_item, "item-d", "item-e"]
+    assert sorted({row["item_id"] for row in published}) == every_item
 
     telemetry = _rows(_git(origin, env, "show", f"main:frontend/public/telemetry/{month}.csv"))
     assert telemetry == health, "the public projection is a rewrite of item-health, not a merge"

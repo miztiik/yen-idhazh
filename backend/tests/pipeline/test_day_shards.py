@@ -63,23 +63,24 @@ def _rows_of(path: Path) -> list[dict[str, str]]:
         return list(csv.DictReader(handle))
 
 
-def test_a_day_directory_settles_to_what_the_compaction_writes_into_a_head(
+def test_a_day_directory_settles_to_what_the_fold_writes_into_its_settled_file(
     tmp_path: Path,
 ) -> None:
-    """The oracle. Same bytes, two folds, one answer, row for row."""
+    """The oracle. Same bytes, two settlements, one answer, row for row."""
     root = _root()
 
-    segments = tmp_path / ledger.STATE_DIRNAME / ledger.SEGMENTS_DIRNAME / "span-rollup"
-    segments.mkdir(parents=True)
+    day = tmp_path / ledger.STATE_DIRNAME / ledger.SPAN_ROLLUP_DIRNAME / "2026" / "09" / "18"
+    day.mkdir(parents=True)
     for name in WRITERS:
-        shutil.copy(root / "2026" / "09" / "18" / name, segments / name)
-    report = compact.stage_compact(tmp_path / ledger.STATE_DIRNAME)
-    assert report.segments_read == len(WRITERS)
-    head = ledger.span_rollup_path(tmp_path / ledger.STATE_DIRNAME, "2026-09")
-    folded = _rows_of(head)
+        shutil.copy(root / "2026" / "09" / "18" / name, day / name)
+    report = compact.stage_compact(
+        tmp_path / ledger.STATE_DIRNAME, date="2026-09-30", after_days=7
+    )
+    assert report.files_replaced == len(WRITERS)
+    folded = _rows_of(day / day_shards.SETTLED_NAME)
 
     # `days=1` is the newest recorded day, which is the day directory alone -
-    # the same rows the three segments above carried.
+    # the same rows the three writer files above carried.
     settled = day_shards.settled_rows(root, ledger.SPAN_ROLLUP_KEY, SpanRollupRow, days=1)
 
     assert settled == folded
@@ -145,6 +146,44 @@ def test_settled_sorts_below_every_writer_file(tmp_path: Path) -> None:
     assert [row["count"] for row in rows] == ["14", "12"]
 
 
+def test_every_name_no_writer_owns_reads_and_reads_before_every_writer_file() -> None:
+    """A migrated day, read back whole: the reserved names first, the straggler last.
+
+    `before-partition.csv` is what the migration wrote for the bytes a committed
+    head already held, and nothing read one back until the first real read of a
+    migrated tree stopped on it. Three names are reserved and all three sort at
+    attempt 0, so a writer file always corrects them rather than the other way
+    round.
+
+    Held against a fixture day and never `state/`, so it costs one directory
+    whatever the archive grows to (Guardrail #12).
+    """
+    root = FIXTURE / "migrated-day" / "span-rollup"
+    assert root.is_dir(), f"the migrated-day fixture is missing at {root}"
+
+    # Listing order is alphabetical and reading order is not: the writer file
+    # lists first and reads last, because its attempt is 2 and theirs is 0.
+    assert [path.name for path in day_shards.shard_files(root, days=UNBOUNDED_WINDOW)] == [
+        "2026-09-19-1-2-work-00.csv",
+        ledger.BEFORE_PARTITION_NAME,
+        day_shards.SETTLED_NAME,
+    ]
+
+    rows = day_shards.settled_rows(root, ledger.SPAN_ROLLUP_KEY, SpanRollupRow, days=1)
+    # First seen first, so the pre-identity bytes open the answer and the fold's
+    # own row follows them.
+    assert [(row["shard"], row["span_name"]) for row in rows] == [
+        ("0", "item"),
+        ("0", "robots"),
+        ("1", "item"),
+    ]
+    # The straggler corrects the pre-identity row rather than repeating it: 11
+    # items where the migrated bytes said 9, and nothing else moved.
+    assert [row["count"] for row in rows] == ["11", "4", "6"]
+    assert rows[0]["total_ms"] == "3600"
+    assert rows[0]["unattributed_ms"] == "310"
+
+
 def test_a_day_directory_with_no_readable_file_stops_the_read(tmp_path: Path) -> None:
     """An empty day is not a quiet day, and the walk says so rather than yielding."""
     (tmp_path / "2026" / "09" / "18").mkdir(parents=True)
@@ -163,35 +202,81 @@ def test_a_stray_inside_a_day_tree_stops_the_read(tmp_path: Path) -> None:
 def test_a_name_inside_a_day_directory_that_is_not_a_writers_stops_the_read(
     tmp_path: Path,
 ) -> None:
-    """`parse_segment_name` is not touched, so an unknown name still raises."""
+    """An unknown name inside a day directory is refused rather than skipped."""
     day = tmp_path / "2026" / "09" / "18"
     day.mkdir(parents=True)
     shutil.copy(
         _root() / "2026" / "09" / "18" / "2026-09-18-1-1-work-01.csv",
         day / "nobody-declared-this.csv",
     )
-    with pytest.raises(ValueError, match="is not a segment name"):
+    with pytest.raises(ValueError, match="is not a writer's name"):
         day_shards.settled_rows(tmp_path, ledger.SPAN_ROLLUP_KEY, SpanRollupRow, days=1)
 
 
-#: The readers decision 5.2 moves: the module, and the exact call each one used
-#: to make. A module keeps its other day-file walks - `state/seen/`,
-#: `state/counterfactual-scores/` and the judge trees are not moving - so the
-#: claim is about the named call and never about the file.
+def test_a_row_the_contract_cannot_read_stops_the_read(tmp_path: Path) -> None:
+    """The one ledger read that does not degrade, asked from the side that loses rows.
+
+    Each file is written whole by one writer from the contract's own columns, so
+    a row that will not read means the writer and this reader disagree about the
+    shape. Skipping it would lose a column quietly, and quietly is the part that
+    costs: the count taken off the day would still look like an answer.
+    """
+    day = tmp_path / "2026" / "09" / "18"
+    day.mkdir(parents=True)
+    shard = day / "2026-09-18-1-1-work-01.csv"
+    shutil.copy(_root() / "2026" / "09" / "18" / "2026-09-18-1-1-work-01.csv", shard)
+    with shard.open("a", encoding="utf-8", newline="") as handle:
+        handle.write("1999-01-01,not-a-date,,,,,,\n")
+
+    with pytest.raises(ValueError, match="does not read as a SpanRollupRow"):
+        day_shards.settled_rows(tmp_path, ledger.SPAN_ROLLUP_KEY, SpanRollupRow, days=1)
+
+
+#: Every reader that left the day-file walk: the module, the exact call it used
+#: to make, and the `day_shards` call it makes instead. A module keeps its other
+#: day-file walks - `state/seen/`, `state/counterfactual-scores/` and the judge
+#: trees are not moving - so the claim is about the named call and never about
+#: the file.
+#:
+#: The entry point differs by what the reader wants. `shard_files` hands back
+#: every file, which is what a prune and a census need. `settled_rows`,
+#: `settled_day` and `one_day` settle a day's shards into one answer first,
+#: which is what a published number needs.
+#:
+#: `ledger.py` keeps the item-health reader and lost the host-fingerprint one:
+#: `load_item_health` settles the window itself, while the host records are read
+#: by the two panels that show them.
 #:
 #: Written out rather than discovered. A discovered list passes on a module
 #: nobody checked, and it would grow with the repository (Guardrail #12).
 MOVED: Final = (
-    ("backend/idhazh/ledger.py", "day_files(state_dir / ITEM_HEALTH_DIRNAME)"),
-    ("backend/idhazh/ledger.py", "day_files(state_dir / HOST_FINGERPRINT_DIRNAME)"),
-    ("backend/idhazh/retention.py", "day_files(ledger_root)"),
-    ("backend/idhazh/evals/writer.py", "day_files(state_dir / LEDGER_DIRNAME)"),
-    ("backend/idhazh/evals/writer.py", "day_files(state_dir / INDEX_DIRNAME)"),
-    ("backend/idhazh/telemetry/prune.py", "day_files(state_root / store)"),
-    ("backend/utilities/measure_ledgers.py", "day_files(directory)"),
-    ("backend/utilities/item_health_provenance.py", "day_files(root / LEDGER_ROOT)"),
-    ("backend/utilities/server_memory_mark.py", "day_files(root / LEDGER_ROOT)"),
-    ("backend/utilities/empty_column_census.py", "day_files(root / store.root)"),
+    (
+        "backend/idhazh/ledger.py",
+        "day_files(state_dir / ITEM_HEALTH_DIRNAME)",
+        "settled_rows(",
+    ),
+    (
+        "backend/idhazh/telemetry/publish/console_band.py",
+        "day_files(state_dir / HOST_FINGERPRINT_DIRNAME)",
+        "one_day(",
+    ),
+    (
+        "backend/idhazh/telemetry/publish/machine.py",
+        "day_files(state_dir / HOST_FINGERPRINT_DIRNAME)",
+        "dates_by_month(",
+    ),
+    ("backend/idhazh/retention.py", "day_files(ledger_root)", "shard_files("),
+    ("backend/idhazh/evals/writer.py", "day_files(state_dir / LEDGER_DIRNAME)", "shard_files("),
+    ("backend/idhazh/evals/writer.py", "day_files(state_dir / INDEX_DIRNAME)", "shard_files("),
+    ("backend/idhazh/telemetry/prune.py", "day_files(state_root / store)", "shard_files("),
+    ("backend/utilities/measure_ledgers.py", "day_files(directory)", "shard_files("),
+    (
+        "backend/utilities/item_health_provenance.py",
+        "day_files(root / LEDGER_ROOT)",
+        "shard_files(",
+    ),
+    ("backend/utilities/server_memory_mark.py", "day_files(root / LEDGER_ROOT)", "shard_files("),
+    ("backend/utilities/empty_column_census.py", "day_files(root / store.root)", "shard_files("),
 )
 
 #: The two stores that keep the day-file walk. `state/published/` and
@@ -213,16 +298,20 @@ def _squeezed(relpath: str) -> str:
     return " ".join(source.split())
 
 
-@pytest.mark.parametrize(("relpath", "was"), MOVED)
+@pytest.mark.parametrize(("relpath", "was", "reaches"), MOVED)
 def test_every_named_reader_walks_the_shards_and_not_the_day_files(
-    relpath: str, was: str
+    relpath: str, was: str, reaches: str
 ) -> None:
-    """The enumeration parity cannot settle: each named call moved."""
+    """The enumeration parity cannot settle: each named call moved.
+
+    The call is matched unqualified, because a module may import the entry point
+    by name or reach it through `day_shards`, and both are the same read.
+    """
     source = _squeezed(relpath)
-    assert "shard_files(" in source, f"{relpath} does not reach day_shards.shard_files at all"
+    assert reaches in source, f"{relpath} does not reach day_shards.{reaches[:-1]} at all"
     assert was not in source, (
-        f"{relpath} still walks day files at `{was}`. Decision 5.2 moves that reader onto "
-        "day_shards.shard_files, which reads a day directory too."
+        f"{relpath} still walks day files at `{was}`. A store sharded by run identity "
+        f"is read through day_shards.{reaches[:-1]}, which reads a day directory too."
     )
 
 

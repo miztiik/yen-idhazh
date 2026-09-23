@@ -234,21 +234,21 @@ def _cohort(rows: Sequence[Mapping[str, str]]) -> ScoreCohort:
 def summarise(days: Sequence[Path], *, month: str, observation_key: Sequence[str]) -> ScoreArchive:
     """One month of the ledger as the shape that outlives it.
 
-    A month is a directory of `<YYYY>/<MM>/<DD>.csv` files since 2026-09-13, so
-    the caller hands the days and the month they belong to rather than one path
-    whose stem said both. `retention.prune_scores` groups them with
-    `day_partition.days_by_month` and folds a month whole or not at all.
+    A month is a tree of `<YYYY>/<MM>/<DD>` days since 2026-09-13, so the caller
+    hands the files and the month they belong to rather than one path whose stem
+    said both. `retention.prune_scores` groups them with
+    `day_shards.shards_by_month` and folds a month whole or not at all.
 
     `observation_key` is `evals.writer.OBSERVATION_KEY`, passed in rather than
     imported so this module stays below the writer that unions its digests back
     in. A wrong key would build a wrong index, which is why the caller that
     passes it is the same module that owns the dedupe.
 
-    The source hash is over the day files' bytes in day order, not over their
+    The source hash is over the files' bytes in path order, not over their
     parsed rows: what a reconcile has to prove is that this summary describes the
     files about to be unlinked, and two different files can parse to the same
-    rows. Ordering by the path is what makes it reproducible - `days_by_month`
-    hands them oldest first and `reconcile` reads the same tree again.
+    rows. Ordering by the path is what makes it reproducible - the walk hands
+    them oldest first and `reconcile` reads the same tree again.
     """
     ordered = sorted(days)
     rows = [row for day in ordered for row in read_rows(day)]

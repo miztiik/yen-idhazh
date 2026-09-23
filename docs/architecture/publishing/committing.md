@@ -71,33 +71,38 @@ and the memory samples are untracked, and later steps upload them.
 **Staging a path ten jobs share is a repair, not a fix, and the machine record is
 where that was settled.** A head that ten jobs of one run stage, commit and push
 is a head no rebase loop can give a single writer. Each job writes
-`state/segments/host-fingerprint/<run>-<attempt>-<job>-<shard>.csv` instead - a
-name no second writer can take - the work job stages `state/segments` rather than
-the head, and `idhazh compact` inside `assemble` folds the segments into the day.
-The head has one writer per run, which is what the rebase loop was never able to
-give it. Ledger by ledger, so one revert takes one ledger.
+`state/host-fingerprint/<YYYY>/<MM>/<DD>/<run>-<attempt>-<job>-<shard>.csv`
+instead - a name no second writer can take - and the work job stages the day
+directory. Ledger by ledger, so one revert takes one ledger.
+
+**Since 2026-09-22 there is no head above it.** The day directory used to be a
+staging area called `state/segments/` that a later fold read into a `<DD>.csv`
+head, which left every ledger with one path two runs of one day both computed
+bytes for. The day directory is now the ledger itself, and `state/segments/` is
+gone.
 
 **There are two ways to lose the push race, and they need different answers.**
 
 The plan job only records what it saw, and so does a work shard. Every row they
 append has one writer: a shard's rows go to
-`state/segments/<ledger>/<run>-<attempt>-<job>-<shard>.csv`, which names the one
-writer that can take it. Two sides of a lost race are therefore two different
-paths, and the rebase applies both whole.
+`state/<ledger>/<YYYY>/<MM>/<DD>/<run>-<attempt>-<job>-<shard>.csv`, which names
+the one writer that can take it. Two sides of a lost race are therefore two
+different paths, and the rebase applies both whole.
 
-**One path in the plan job is not an append, and that one is the exception.** A
-day head is DERIVED from the segment store by the catch-up fold, so two jobs
-that fold the same segments write the same head from different bases - and two
-derived versions of one file is the shape no rebase can settle and no merge rule
-should. The gap that makes it possible is not a race at all:
-`actions/checkout` restores the commit the run was TRIGGERED at, the `digest`
-concurrency group then holds a queued run until the run ahead of it has
-finished, and nothing bounds the distance between those two moments. Run
-`35660521768` is the record. It was created at 22:02 and started here at 22:48,
-five commits behind, and one of those five was the run ahead's own fold. It
-re-folded segments that run had already folded and deleted, rewrote the five
-heads it had already written, and the rebase then held two versions of each with
-no way to choose. The whole day went at the push.
+**No path in the plan job is a derived `state/` ledger any more, and that closes
+the exception this section used to carry.** A day head was derived from the
+segment store by a catch-up fold, so two jobs that folded the same segments
+wrote the same head from different bases - two derived versions of one file,
+which is the shape no rebase can settle and no merge rule should. The gap that
+made it possible is not a race at all: `actions/checkout` restores the commit
+the run was TRIGGERED at, the `digest` concurrency group then holds a queued run
+until the run ahead of it has finished, and nothing bounds the distance between
+those two moments. Run `35660521768` is the record. It was created at 22:02 and
+started here at 22:48, five commits behind, and one of those five was the run
+ahead's own fold. It re-folded segments that run had already folded and deleted,
+rewrote the five heads it had already written, and the rebase then held two
+versions of each with no way to choose. The whole day went at the push. **The
+head is what made that possible, and the head is gone.**
 
 The answer is a current base rather than a merge rule. The job runs
 [`.github/scripts/take-state-from-the-tip.sh`](../../../.github/scripts/take-state-from-the-tip.sh)
@@ -143,9 +148,10 @@ is the conflict resolver; it was being run once against a stale base and then
 thrown at `git merge-file`. A text merge of two digests produces a payload no
 producer would ever write.
 
-`REFRESH_PATHS` names what the rebuild owns: the day's `digest.json` and
-`run.json`, `frontend/public/telemetry/`, and the ledgers the workers and
-assemble append to. The list lives in
+**`DERIVED` names what the rebuild owns, and after 2026-09-22 that is almost
+nothing under `state/`.** It carries the day's `digest.json` and `run.json`, the
+published projections under `frontend/public/`, `state/day-metrics` and the
+closed-day fold. The list lives in
 [`backend/idhazh/paths.py`](../../../backend/idhazh/paths.py) and the
 `Say which committed paths a rebuild owns` step prints it into `$GITHUB_OUTPUT`;
 it was a space-split string in the workflow, under a header warning that no path
@@ -157,12 +163,31 @@ time. `frontend/public/telemetry/` is a full rewrite of `state/item-health/`,
 which is why it is regenerated and not unioned: a union of two rewrites is a file
 with every row twice.
 
+**Eight `state/` paths left this list on 2026-09-22 and the reason is the same
+for all of them.** Seven are written once - item-health, host-fingerprint,
+scores, score-index, span-rollup, traces and segments, which is gone - so each
+now names its file for the single writer that wrote it, two runs never compute
+different bytes for one path, and there is nothing to hand back.
+`state/published` left beside them for a different reason: it is union-safe, and
+the hand-back was discarding this run's appended rows before the union driver
+could ever fire, leaving the publication record dependent on a rebuild
+succeeding. **What the eight buy is correctness, not time**: against a 5-second
+rebuild in an 11-second step there is no time to win.
+
+**`state/day-metrics` is the one that stays**, and it is the reason `hand_back`
+still touches a `state/` path at all. It is one whole-file-per-day JSON that
+assemble rewrites from the day's rows, so two runs of one day do land on one
+path, a text merge of two JSON objects is not JSON, and the rebuild answers the
+race in milliseconds. The closed-day fold stays for the same reason and is the
+one entry the rebuild command leaves out: `idhazh assemble` re-emits no fold, so
+a job that handed it back would delete it rather than rebuild it.
+
 **The charts in that directory are the other way to lose the day, and they get
 their own answer.** A chart used to be filed as `<vertical>-<NN>.svg`, numbered
 from the day's directory, and two runs of one day overlap by hours - so both read
 the same highest number and both wrote `energy-03.svg` for different items. Git
 cannot rebase two adds of one path, so that run died at this step on
-`CONFLICT (add/add)`. `REFRESH_PATHS` cannot help: hand-back would delete this
+`CONFLICT (add/add)`. The rebuild list cannot help: hand-back would delete this
 run's charts while the rebuilt `digest.json` still names them.
 
 A chart is now filed under its item's own id, so two stories can no
@@ -197,9 +222,9 @@ progress, and ends on the caller's own message plus the attempt it reached.
 Git's own names for the two sides of a conflict invert between a rebase and a
 merge, so a design that reasons in them is a design nobody can check. The
 writer's identity is already in the filename instead.
-`state/segments/<ledger>/<run>-<attempt>-<job>-<shard>.csv` names the run, the
-try at that run, the job and the shard inside it, and GitHub allocates the
-execution number inside the run id, so no second writer can take that name.
+`state/<ledger>/<YYYY>/<MM>/<DD>/<run>-<attempt>-<job>-<shard>.csv` names the
+run, the try at that run, the job and the shard inside it, and GitHub allocates
+the execution number inside the run id, so no second writer can take that name.
 
 **The script looks for that identity anywhere in the name, not only at the
 front.** A run id is `<date>-<execution>`, and the date is the plan job's to
@@ -217,7 +242,7 @@ the push and names the path and this job.** There is no third answer. Retrying
 cannot make another writer's file this job's, and taking the tip's copy instead
 would delete that writer's rows and exit 0 - a loss no gate can see. A path the
 job rebuilds cannot reach the resolver at all, because it was handed back to the
-tip before the rebase, so one that does is a gap in `REFRESH_PATHS` and the same
+tip before the rebase, so one that does is a gap in `DERIVED` and the same
 refusal names it.
 
 **The rule should never fire**, and it is bought anyway. Two writers cannot name
@@ -283,10 +308,11 @@ exist until after the push.
 
 Git reads a directory whose files all moved away as having been RENAMED to
 wherever they went, and applies that guess to a file the other side added into
-the emptied directory. The fold already drains `state/segments/` on every run, so
-a sibling writing a brand-new segment into it is read as writing into a directory
-that no longer exists, and the rebase stops with `CONFLICT (file location)` over
-a tree that was correct.
+the emptied directory. The closed-day fold drains a day directory every time it
+runs, so a sibling writing a brand-new file into that day is read as writing
+into a directory that no longer exists, and the rebase stops with
+`CONFLICT (file location)` over a tree that was correct. The segment store was
+the first place this bit; deleting it moved the drain rather than removing it.
 
 So every rebase in the script runs with `-c merge.directoryRenames=false`. Proved
 in a scratch repository on 2026-09-22: the same replay conflicts with the guess

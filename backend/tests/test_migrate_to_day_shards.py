@@ -27,6 +27,7 @@ is fixed in size (Guardrail #12).
 
 from __future__ import annotations
 
+import csv
 import re
 import shutil
 from collections import Counter
@@ -36,7 +37,11 @@ from typing import Final
 import pytest
 from conftest import FIXTURES_DIR, read_text
 
+from idhazh import day_partition, day_shards
+from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
 from idhazh.day_partition import day_files
+from idhazh.ledger import BEFORE_PARTITION_NAME
+from idhazh.telemetry.traces import trace_date
 from utilities import migrate_to_day_shards as migrate
 
 FIXTURE: Final = FIXTURES_DIR / "day-shard-migration"
@@ -250,3 +255,269 @@ def test_every_path_it_reports_is_a_posix_relative_path(tmp_path: Path) -> None:
         assert "\\" not in name
         assert ":" not in name
         assert not name.startswith("/")
+
+
+# --- the day file becomes a day directory -----------------------------------
+#
+# The three shapes below share the fixture above rather than adding one, and
+# each reads its own "before" side with a DIFFERENT reader from the one the
+# utility uses. A day file is read by `day_partition.day_files` and the result
+# by `day_shards.shard_files`; a flat ledger is parsed by `csv` here and read
+# back by `day_shards`; a trace is built from a dict here and read back by
+# `telemetry.trace_date`. Two readers agreeing is a read-back. One reader
+# agreeing with itself is a restatement.
+
+
+def _day_file_rows(root: Path) -> Counter[tuple[str, str]]:
+    """Every data line the month-to-day reader finds, keyed by the day it is under."""
+    found: Counter[tuple[str, str]] = Counter()
+    for path in day_files(root):
+        recorded = day_partition.date_of(path)
+        found.update((recorded, line) for line in read_text(path).split("\n")[1:-1])
+    return found
+
+
+def _day_shard_rows(root: Path) -> Counter[tuple[str, str]]:
+    """Every data line the pipeline's day-shard reader finds, keyed by its day."""
+    found: Counter[tuple[str, str]] = Counter()
+    for shard in day_shards.shard_files(root, days=UNBOUNDED_WINDOW):
+        recorded = day_shards.date_of(shard)
+        found.update((recorded, line) for line in read_text(shard).split("\n")[1:-1])
+    return found
+
+
+def _partitioned(tmp_path: Path) -> Path:
+    """The `clean` fixture taken all the way to day files, by the real producer."""
+    store = _store(tmp_path, "clean")
+    migrate.run(store, DATE_COLUMN)
+    return store
+
+
+def test_every_row_of_a_day_file_comes_out_in_the_day_directory_its_path_named(
+    tmp_path: Path,
+) -> None:
+    """The Oracle for the second half of the move, and it is keyed by day.
+
+    A multiset of `(day, line)`, so a partition that filed every row under one
+    day fails it where a check over the lines alone would pass. The two sides
+    are read by two different readers, which is what makes it a read-back.
+    """
+    store = _partitioned(tmp_path)
+    before = _day_file_rows(store)
+    assert sum(before.values()) == 6
+
+    report = migrate.partition(store)
+
+    assert _day_shard_rows(store) == before
+    assert report.rows_in == report.rows_out == 6
+    assert report.shards == CLEAN_DAYS
+    assert report.paths == [f"{name[:-4]}/{BEFORE_PARTITION_NAME}" for name in CLEAN_DAYS]
+
+
+def test_a_partitioned_day_keeps_the_bytes_the_day_file_held(tmp_path: Path) -> None:
+    """Only the path moves, so the `version` cell still travels with its own row."""
+    store = _partitioned(tmp_path)
+    held = {
+        day_partition.date_of(path): path.read_bytes() for path in sorted(day_files(store))
+    }
+
+    migrate.partition(store)
+
+    for recorded, expected in held.items():
+        day = store / recorded[:4] / recorded[5:7] / recorded[8:10]
+        assert sorted(entry.name for entry in day.iterdir()) == [BEFORE_PARTITION_NAME]
+        assert (day / BEFORE_PARTITION_NAME).read_bytes() == expected
+
+
+def test_a_second_partition_over_the_day_directories_changes_no_byte(
+    tmp_path: Path,
+) -> None:
+    """Idempotence, and it is the store's own shape that gives it, not a marker."""
+    store = _partitioned(tmp_path)
+    migrate.partition(store)
+    once = _bytes(store)
+
+    report = migrate.partition(store)
+
+    assert report.shards == []
+    assert _bytes(store) == once
+
+
+def test_a_partition_that_loses_a_row_leaves_every_day_file_where_it_was(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The refusal, which is the load-bearing half of this shape too.
+
+    The staged tree is neutered rather than the store, so this proves the check
+    fires before the first rename: every byte of the day-file store is still
+    there afterwards and nothing has been opened into a directory.
+    """
+    store = _partitioned(tmp_path)
+    before = _bytes(store)
+    real = migrate._open_the_day_files
+
+    def drop_a_row(staged: Path) -> list[str]:
+        written = real(staged)
+        first = sorted(staged.rglob(BEFORE_PARTITION_NAME))[0]
+        lines = read_text(first).split("\n")
+        first.write_text("\n".join(lines[:-2]) + "\n", encoding="utf-8", newline="")
+        return written
+
+    monkeypatch.setattr(migrate, "_open_the_day_files", drop_a_row)
+    with pytest.raises(ValueError, match="the staged day tree"):
+        migrate.partition(store)
+
+    assert _bytes(store) == before
+
+
+# --- one flat ledger becomes a day directory a day ---------------------------
+
+
+def _flat(tmp_path: Path) -> Path:
+    """The `clean` fixture as one file, which is the shape `day-validations` had.
+
+    Built from the committed shards rather than committed again, so the six rows
+    and the two month boundaries are the same ones every other test here drives.
+    """
+    store = tmp_path / "state" / "day-validations"
+    store.parent.mkdir(parents=True, exist_ok=True)
+    shards = sorted((FIXTURE / "clean").glob("*.csv"))
+    header = read_text(shards[0]).split("\n")[0]
+    rows = [line for shard in shards for line in read_text(shard).split("\n")[1:-1]]
+    flat = store.with_name(f"{store.name}.csv")
+    flat.write_text("\n".join([header, *rows]) + "\n", encoding="utf-8", newline="")
+    return store
+
+
+def _rows_the_file_holds(flat: Path) -> Counter[tuple[str, str]]:
+    """Every row of the flat ledger, keyed by its own date cell, parsed here."""
+    lines = read_text(flat).split("\n")[1:-1]
+    with flat.open(encoding="utf-8", newline="") as handle:
+        cells = list(csv.DictReader(handle))
+    return Counter(
+        (row[DATE_COLUMN], line) for row, line in zip(cells, lines, strict=True)
+    )
+
+
+def test_every_row_of_a_flat_ledger_lands_in_the_day_its_own_cell_names(
+    tmp_path: Path,
+) -> None:
+    """The Oracle for the flat shape. A row it filed by the file's name fails it."""
+    store = _flat(tmp_path)
+    flat = store.with_name(f"{store.name}.csv")
+    before = _rows_the_file_holds(flat)
+    assert sum(before.values()) == 6
+
+    report = migrate.split_flat(store, DATE_COLUMN)
+
+    assert _day_shard_rows(store) == before
+    assert report.rows_in == report.rows_out == 6
+    assert report.shards == ["day-validations.csv"]
+    assert report.paths == [f"{name[:-4]}/{BEFORE_PARTITION_NAME}" for name in CLEAN_DAYS]
+    assert not flat.exists()
+
+
+def test_a_flat_row_it_cannot_place_stops_the_run_with_the_file_intact(
+    tmp_path: Path,
+) -> None:
+    """The same refusal as the month shards, over a store that was one file."""
+    store = _flat(tmp_path)
+    flat = store.with_name(f"{store.name}.csv")
+    rows = read_text(flat).split("\n")
+    cells = rows[1].split(",")
+    cells[rows[0].split(",").index(DATE_COLUMN)] = "pending"
+    flat.write_text(
+        "\n".join([*rows[:-1], ",".join(cells), ""]), encoding="utf-8", newline=""
+    )
+    before = flat.read_bytes()
+
+    with pytest.raises(ValueError, match=re.escape("day-validations.csv line 8")):
+        migrate.split_flat(store, DATE_COLUMN)
+
+    assert flat.read_bytes() == before
+    assert not store.exists()
+
+
+def test_a_flat_ledger_beside_its_own_directory_is_refused(tmp_path: Path) -> None:
+    """Both shapes at once is a half-applied migration, and a second pass cannot fix it."""
+    store = _flat(tmp_path)
+    flat = store.with_name(f"{store.name}.csv")
+    (store / "2026" / "08").mkdir(parents=True)
+    before = _bytes(store.parent)
+
+    with pytest.raises(ValueError, match="half applied"):
+        migrate.split_flat(store, DATE_COLUMN)
+
+    assert _bytes(store.parent) == before
+    assert flat.is_file()
+
+
+# --- a trace keeps its name and gains a day directory ------------------------
+
+#: The legacy trace tree, by `<YYYY>/<MM>/<DD>-<name>` and the bytes it holds.
+#: Two days, two writers on one of them, and a name carrying the eleven-digit
+#: ordinal and the two-digit shard `ledger.PRE_IDENTITY_TRACE` spells.
+LEGACY_TRACES: Final = {
+    ("2026/09", "15-35025756093-00"): b'{"name":"item","span_id":"a1"}\n',
+    ("2026/09", "15-35025756093-01"): b'{"name":"item","span_id":"b2"}\n',
+    ("2026/10", "01-35743751882-03"): b'{"name":"run","span_id":"c3"}\n',
+}
+
+
+def _traces(tmp_path: Path) -> Path:
+    """A trace tree in the shape the archive holds, plus the store's placeholder."""
+    root = tmp_path / "state" / "traces"
+    root.mkdir(parents=True)
+    (root / ".gitkeep").write_bytes(b"")
+    for (month, name), body in LEGACY_TRACES.items():
+        path = root / month / f"{name}.jsonl"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(body)
+    return root
+
+
+def test_a_trace_keeps_its_name_under_the_day_its_old_path_named(tmp_path: Path) -> None:
+    """The Oracle for the trace shape: the day prefix becomes a directory, nothing else.
+
+    A trace line carries no job and no attempt, so the name cannot be widened
+    into the identity grammar and this asserts it was not tried. Read back
+    through `telemetry.trace_date`, which is the reader the prune uses.
+    """
+    root = _traces(tmp_path)
+
+    report = migrate.split_traces(root)
+
+    found = {}
+    for path in sorted(root.rglob("*.jsonl")):
+        recorded = trace_date(path, root)
+        assert recorded is not None
+        found[(recorded.isoformat(), path.name)] = path.read_bytes()
+    assert found == {
+        (f"{month.replace('/', '-')}-{name[:2]}", f"{name[3:]}.jsonl"): body
+        for (month, name), body in LEGACY_TRACES.items()
+    }
+    assert report.rows_in == report.rows_out == len(LEGACY_TRACES)
+    assert report.shards == ["2026/09/15-35025756093-00.jsonl",
+                             "2026/09/15-35025756093-01.jsonl",
+                             "2026/10/01-35743751882-03.jsonl"]
+
+
+def test_a_trace_tree_keeps_the_placeholder_at_its_root(tmp_path: Path) -> None:
+    """The store's `.gitkeep` is not a trace and is neither staged nor parked."""
+    root = _traces(tmp_path)
+
+    migrate.split_traces(root)
+
+    assert (root / ".gitkeep").is_file()
+
+
+def test_a_second_split_over_the_migrated_traces_changes_no_byte(tmp_path: Path) -> None:
+    """Idempotence: a tree already in the new shape has no legacy name to move."""
+    root = _traces(tmp_path)
+    migrate.split_traces(root)
+    once = _bytes(root)
+
+    report = migrate.split_traces(root)
+
+    assert report.shards == []
+    assert _bytes(root) == once

@@ -1,9 +1,13 @@
 """Publish the span rollup a month at a time.
 
-`state/span-rollup/<YYYY-MM>.csv` holds one row per shard per span - five span
-names we chose, a count and two durations. Every cell on it is a measurement of
-our own work, so the row is published whole rather than projected: a projection
-field-for-field identical to its source is two schemas for one row.
+`state/span-rollup/` holds one row per shard per span - five span names we
+chose, a count and two durations - filed under the day each row names, one file
+per writer. Every cell on it is a measurement of our own work, so the row is
+published whole rather than projected: a projection field-for-field identical to
+its source is two schemas for one row.
+
+The browser's copy stays a month, because its grain follows what a browser
+fetches rather than what a writer writes (`docs/concepts/partitions.md`).
 
 The shape is `SpanRollupRow`, and `FORBIDDEN_COLUMNS` on it is empty for that
 structural reason rather than by omission - no cell here can hold anything
@@ -18,7 +22,8 @@ from datetime import date
 from pathlib import Path
 from typing import Final
 
-from idhazh import ledger, month_partition
+from idhazh import day_shards, ledger
+from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
 from idhazh.contracts.span_rollup import SpanRollupRow
 from idhazh.telemetry.publish import series
 
@@ -83,18 +88,36 @@ def publish(
     months: Collection[str] | None = None,
     ensure_month: str | None = None,
 ) -> list[Path]:
-    """Write a published span-rollup shard for each ledger month that changed."""
+    """Write a published span-rollup shard for each ledger month that changed.
+
+    The ledger files by day and one writer, so a month is the days under it and
+    each day is settled before it is published: two writers of one day each hold
+    their own file, and a reader that took whichever the walk named last would
+    publish one shard's spans as the day's.
+    """
     source_dir = state_root / ledger.SPAN_ROLLUP_DIRNAME
+    days_of: dict[str, list[str]] = {}
+    for shard in day_shards.shard_files(source_dir, days=UNBOUNDED_WINDOW):
+        recorded = day_shards.date_of(shard)
+        held = days_of.setdefault(recorded[:7], [])
+        if recorded not in held:
+            held.append(recorded)
 
     def encode(month: str) -> bytes:
-        rows = project(source_dir / f"{month}{SUFFIX}")
+        rows = [
+            SpanRollupRow.from_csv_row(cells)
+            for recorded in sorted(days_of.get(month, ()))
+            for cells in day_shards.settled_day(
+                source_dir, recorded, ledger.SPAN_ROLLUP_KEY, SpanRollupRow
+            )
+        ]
         return series.encode_csv(PUBLIC_COLUMNS, (row.csv_row() for row in rows))
 
     return series.publish_series(
         digest_root=digest_root,
         dirname=DIRNAME,
         suffix=SUFFIX,
-        available=[path.stem for path in month_partition.month_files(source_dir, SUFFIX)],
+        available=sorted(days_of),
         encode=encode,
         keep_months=keep_months,
         today=today,

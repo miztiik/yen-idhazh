@@ -125,4 +125,9 @@ def test_the_stage_stops_the_publish_rather_than_logging_and_passing(tmp_path: P
     """A rule that only writes a log line is not a gate."""
     written(tmp_path, a_day_publishing_nothing(planned=80, failed=0))
 
-    assert stage_validate_days(tmp_path / "digest", state_dir=tmp_path / "state") == 1
+    assert (
+        stage_validate_days(
+            tmp_path / "digest", state_dir=tmp_path / "state", run_id="2026-08-21-1"
+        )
+        == 1
+    )

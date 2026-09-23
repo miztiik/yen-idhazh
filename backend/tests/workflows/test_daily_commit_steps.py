@@ -22,7 +22,6 @@ from ._harness import (
     COMMIT_STAGED_PATHS,
     COMMIT_STEPS,
     COMMIT_WORKFLOWS,
-    COMPACT_STEP,
     DROP_ENTRY_POINT,
     FINGERPRINT_STEP,
     PLAN_STEP,
@@ -78,7 +77,7 @@ ANOTHER_EXECUTION: Final = "40000000002"
 #: name rather than only at the front.
 THE_DAY: Final = "2026-09-22"
 
-#: What `ledger.segment_path` is given, as opposed to what GitHub allocates.
+#: What `ledger.day_shard_path` is given, as opposed to what GitHub allocates.
 THIS_RUN: Final = f"{THE_DAY}-{THIS_EXECUTION}"
 ANOTHER_RUN: Final = f"{THE_DAY}-{ANOTHER_EXECUTION}"
 
@@ -109,15 +108,16 @@ def _as_this_job(settings: dict[str, str]) -> dict[str, str]:
     }
 
 
-def _segment(run_id: str) -> str:
+def _writer_file(run_id: str) -> str:
     """One writer's own file, from the grammar the writer itself uses.
 
-    Built through `ledger.segment_relpath` rather than spelled here, so a test
+    Built through `ledger.day_shard_relpath` rather than spelled here, so a test
     of the predicate that reads a filename cannot pass against a filename no
     writer produces.
     """
-    return ledger.segment_relpath(
+    return ledger.day_shard_relpath(
         ledger.SegmentLedger.ITEM_HEALTH,
+        date=THE_DAY,
         run_id=run_id,
         attempt=THIS_ATTEMPT,
         job=THIS_JOB,
@@ -328,57 +328,21 @@ def test_both_daily_commit_steps_run_the_one_shared_script() -> None:
     assert _commit_call("fold")[1]["COMMIT_MESSAGE"] != assemble["COMMIT_MESSAGE"]
 
 
-def test_the_catch_up_compaction_runs_before_the_plan_job_commits() -> None:
-    """A segment folded after the commit is a segment the runner throws away.
-
-    `assemble` drains the store on every run that reaches it. This job is the
-    only other caller, so a run whose assemble never happened has exactly one
-    chance to have its rows folded into a head - and that chance is over the
-    moment this job has pushed.
-
-    It is also why the job stages `state` whole: the compaction writes into
-    whichever head a waiting segment's own rows name, which no hand-written list
-    can know.
-
-    And it runs before this job's OWN probe, which is what keeps a head down to
-    one writer a run. The probe writes a segment; a fold placed after it would
-    find that segment, write the day file here, and leave `assemble` writing the
-    same file again. Nothing would be lost - the fold is idempotent - but two
-    head writers in one run is the shape this design removes, and the third
-    arrives by looking like the second.
-
-    It runs before the PLAN as well, and that one is about what a refusal costs.
-    The fold is the one step here that does not degrade: a row it cannot read
-    ends the job. Placed after the feed reads, a refusal throws away every read
-    the job had already paid for. Nothing in the fold needs the day the plan
-    writes - a waiting row is filed under the date in its own cells.
-    """
-    workflow = _load_workflows()["digest.yml"]
-    names = [step.get("name") for step in _steps(workflow, "plan")]
-    assert names.index(COMPACT_STEP) < names.index(PLAN_STEP)
-    assert names.index(COMPACT_STEP) < names.index(COMMIT_STEPS["plan"])
-    assert names.index(COMPACT_STEP) < names.index(FINGERPRINT_STEP)
-    assert COMMIT_STAGED_PATHS["plan"] == ["state"]
-
-
-def test_the_fold_reads_a_store_taken_from_the_tip() -> None:
-    """The fold derives a day head, so the store it reads has to be the current one.
+def test_the_plan_job_takes_the_tips_state_before_anything_writes_into_it() -> None:
+    """A run reads a state root that is 46 minutes stale unless it asks for a fresh one.
 
     `actions/checkout` restores the commit the run was triggered at, and the
     `digest` concurrency group holds a queued run until the run ahead of it has
     finished - an unbounded gap, and every commit in it writes `state/`. Run
-    35660521768 sat in that gap for 46 minutes, folded segments the run ahead
-    had already folded and deleted, and wrote five day heads that run had
-    already written. The rebase then held two derived versions of one file and
-    no way to choose between them, and the day was lost at the push.
+    35660521768 sat in that gap for 46 minutes and planned against what the run
+    ahead had already superseded.
 
-    The order is the whole of the fix. Taken after the fold it changes nothing;
-    taken after anything else in this job, it discards what that step wrote -
-    which is why it runs ahead of the probe, the plan and the commit as well.
+    The order is the whole of the fix. Taken after any step that writes into
+    `state/`, it discards what that step wrote - which is why it runs ahead of
+    the probe, the plan and the commit.
     """
     workflow = _load_workflows()["digest.yml"]
     names = [step.get("name") for step in _steps(workflow, "plan")]
-    assert names.index(TAKE_STATE_STEP) < names.index(COMPACT_STEP)
     assert names.index(TAKE_STATE_STEP) < names.index(FINGERPRINT_STEP)
     assert names.index(TAKE_STATE_STEP) < names.index(PLAN_STEP)
     assert names.index(TAKE_STATE_STEP) < names.index(COMMIT_STEPS["plan"])
@@ -387,17 +351,6 @@ def test_the_fold_reads_a_store_taken_from_the_tip() -> None:
     taken = shlex.split(_script(step, f"digest.yml/plan/{TAKE_STATE_STEP}"))
     assert tuple(taken) == TAKE_STATE_CALL
     assert taken[-1] == ledger.STATE_DIRNAME
-
-
-def test_the_segment_store_is_handed_back_to_the_tip_with_the_heads() -> None:
-    """A lost push refreshes the store as well as what the compaction wrote.
-
-    Without it the rebuild would fold this attempt's already-drained store onto
-    the tip's heads and miss every segment a sibling pushed while this run was
-    working - the rows would sit in the tree with nothing left to read them.
-    """
-    refreshed = _commit_call("assemble")[1]["REFRESH_PATHS"].split()
-    assert f"{ledger.STATE_DIRNAME}/{ledger.SEGMENTS_DIRNAME}" in refreshed
 
 
 def test_only_assemble_rebuilds_and_it_rebuilds_with_its_own_publish_command() -> None:
@@ -451,23 +404,21 @@ def test_only_assemble_rebuilds_and_it_rebuilds_with_its_own_publish_command() -
     assert "DROP_RACED_ASSETS_COMMAND" not in _commit_call("plan")[1]
 
 
-def test_only_the_named_single_writer_day_trees_union() -> None:
-    """A union merge keeps both sides, which is right for three of these and wrong for the rest.
+def test_only_the_collections_this_repository_declares_union() -> None:
+    """A union merge keeps both sides, which is right for nine of these and wrong for the rest.
 
     Every file under `state/` carried this driver until 2026-09-19. It kept two
     attempts at one row as readily as two independent rows, and a lost push race
-    is exactly how a second attempt arrives. Each writer owns its own segment
-    now, so there is nothing for a merge to settle.
+    is exactly how a second attempt arrives. Each writer owns the file its run,
+    attempt, job and shard name now, so there is nothing for a merge to settle.
 
-    Three day trees keep it, each with one writing job and each saying why in
-    its own line. `state/seen/` is the newest, and it is the one that never
-    moved to a segment: two runs of one day that both met a new address
-    conflicted at the push over a file neither of them disagreed about, and
-    `ledger.load_seen` keeps the earliest stamp per address, so a row the union
-    brings twice moves no age. `frontend/public/telemetry/` never had the driver
-    at all: that file is a full rewrite of `state/item-health/`, so a union of
-    two rewrites is a file with every row twice, and assemble regenerates it
-    instead.
+    What is left is held against `idhazh.paths.UNION_SAFE`, which is this
+    repository's own list of the collections two writers may both append to. The
+    list is one hand-written set rather than two: a line added to
+    `.gitattributes` and not to the list fails here, and so does a list entry
+    with no line behind it. `frontend/public/telemetry/` is in neither - that
+    file is a full rewrite of a day's rows, so a union of two rewrites is a file
+    with every row twice, and assemble regenerates it instead.
 
     The set is closed rather than a membership check, because what this guards is
     the pattern nobody chose. A collection that picks up a merge rule in silence
@@ -482,9 +433,7 @@ def test_only_the_named_single_writer_day_trees_union() -> None:
     }
 
     assert unioned == {
-        "state/published/**/*.csv",
-        "state/seen/**/*.csv",
-        "state/visual-prunes/**/*.csv",
+        entry if entry.endswith(".csv") else f"{entry}/**/*.csv" for entry in paths.UNION_SAFE
     }
 
 
@@ -571,7 +520,7 @@ def test_two_runs_that_conflict_each_keep_the_file_they_wrote(tmp_path: Path) ->
     origin, runner = _scripted_origin(tmp_path, env, staged_paths)
     this_run = read_text(RESOLVER_ROWS / "this-run.csv")
     another_run = read_text(RESOLVER_ROWS / "another-run.csv")
-    ours, theirs = _segment(THIS_RUN), _segment(ANOTHER_RUN)
+    ours, theirs = _writer_file(THIS_RUN), _writer_file(ANOTHER_RUN)
     _race(tmp_path, env, theirs, another_run)
     _race(tmp_path, env, ours, read_text(RESOLVER_ROWS / "an-earlier-push.csv"))
     _write(runner / ours, this_run)
@@ -604,7 +553,7 @@ def test_a_conflicted_path_this_job_did_not_write_stops_the_push(tmp_path: Path)
     env = _isolated_env(tmp_path)
     origin, runner = _scripted_origin(tmp_path, env, staged_paths)
     another_run = read_text(RESOLVER_ROWS / "another-run.csv")
-    unowned = _segment(ANOTHER_RUN)
+    unowned = _writer_file(ANOTHER_RUN)
     _race(tmp_path, env, unowned, another_run)
     _write(runner / unowned, read_text(RESOLVER_ROWS / "this-run.csv"))
 
@@ -637,7 +586,7 @@ def test_a_file_this_job_wrote_that_the_tip_deleted_stops_the_push(tmp_path: Pat
     settings = _as_this_job(settings)
     env = _isolated_env(tmp_path)
     origin, runner = _scripted_origin(tmp_path, env, staged_paths)
-    ours = _segment(THIS_RUN)
+    ours = _writer_file(THIS_RUN)
     _race(tmp_path, env, ours, read_text(RESOLVER_ROWS / "an-earlier-push.csv"))
     # The checkout this job started from carried the file, or the tip taking it
     # away would be an add rather than a modify against a delete.

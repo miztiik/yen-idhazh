@@ -10,6 +10,7 @@
  */
 
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
@@ -42,13 +43,14 @@ function newestDirectory(at) {
  * time in JavaScript: two derivations of one key is how the fixture would come
  * to disagree with the contract it stands in for.
  *
- * An item the scores do not name keeps its own id, which is what every row
- * here carried before. Those rows are the cut fixtures, which nothing scored.
+ * An item the scores do not name takes a stand-in key instead - see
+ * `standInKey`. Those rows are the cut fixtures and the timed tails, which
+ * nothing scored.
  *
- * The ledger files `<YYYY>/<MM>/<DD>.csv` since 2026-09-13, so this walks the
- * tree. A `readdir` of `*.csv` over the root now finds nothing, and finding
- * nothing here is silent: every row would keep its own id and the join the
- * console draws would quietly stop matching.
+ * The ledger files one CSV a writer under `<YYYY>/<MM>/<DD>/`, so this walks
+ * the tree. A `readdir` of `*.csv` over the root, or over a month, finds
+ * nothing, and finding nothing here is silent: every row would keep its own id
+ * and the join the console draws would quietly stop matching.
  */
 function scoredKeys() {
 	const dir = join(STATE, 'scores');
@@ -68,19 +70,53 @@ function scoredKeys() {
 	return found;
 }
 
-/** Every `<YYYY>/<MM>/<DD>.csv` under a day-filed store, oldest first. */
+/** A url key for a fixture item the score ledger never named.
+ *
+ * `UrlKey` is 64 hex characters and the reader parses every row through the
+ * contract, so an item's own id cannot be the cell. A digest of that id is one
+ * value per item and the same value on both runs that carry one article, which
+ * is what the repeated-article row is there to prove. It stands in for a key
+ * and never re-derives one: an item the scores DO name takes the key off the
+ * ledger they wrote.
+ */
+function standInKey(id) {
+	return createHash('sha256').update(id).digest('hex');
+}
+
+/** Every writer's file under a day-filed store, oldest first. */
 function dayFiles(root) {
 	const found = [];
 	for (const year of readdirSync(root, { withFileTypes: true })) {
 		if (!year.isDirectory()) continue;
 		for (const month of readdirSync(join(root, year.name), { withFileTypes: true })) {
 			if (!month.isDirectory()) continue;
-			for (const day of readdirSync(join(root, year.name, month.name))) {
-				if (day.endsWith('.csv')) found.push(join(root, year.name, month.name, day));
+			const at = join(root, year.name, month.name);
+			for (const day of readdirSync(at, { withFileTypes: true })) {
+				if (!day.isDirectory()) continue;
+				for (const name of readdirSync(join(at, day.name))) {
+					if (name.endsWith('.csv')) found.push(join(at, day.name, name));
+				}
 			}
 		}
 	}
 	return found.sort();
+}
+
+/** Write one writer's rows into a day-filed store.
+ *
+ * The name is `<run_id>-<attempt>-<job>-<shard>.csv` and the reader parses it,
+ * so the shard is two digits or the file is refused. One process builds the
+ * whole fixture, so it is one attempt and one shard - and `assemble` is the job
+ * that measures a whole published day in production, which is why the Python
+ * half of this fixture names it too.
+ */
+function writeDayShard(root, day, runId, columns, rows) {
+	const at = join(root, day.slice(0, 4), day.slice(5, 7), day.slice(8, 10));
+	mkdirSync(at, { recursive: true });
+	writeFileSync(
+		join(at, `${runId}-1-assemble-00.csv`),
+		[columns.join(','), ...rows].join('\n') + '\n'
+	);
 }
 
 function writeItemHealthCanary() {
@@ -284,7 +320,7 @@ function writeItemHealthCanary() {
 		date: rowDate,
 		run_id: `${rowDate}-${run}`,
 		item_id: id,
-		url_key: keyOf.get(id) ?? id,
+		url_key: keyOf.get(id) ?? standInKey(id),
 		canonical_url: `https://canary.example/${id}`,
 		vertical: 'ai',
 		source_id: 'canary'
@@ -741,14 +777,17 @@ function writeItemHealthCanary() {
 	 * zero: a source whose lengths are all empty publishes articles nobody
 	 * measured, not articles of no length.
 	 */
-	const article = (rowDate, run, source, index, before, after, summaryWords = 60) =>
-		line({
+	const article = (rowDate, run, source, index, before, after, summaryWords = 60) => {
+		// Two digits, for the reason `tailRows` gives below: `ItemId` refuses an id
+		// that ends in a single digit, and the reader parses every row through it.
+		const id = `${source}-${String(index).padStart(2, '0')}`;
+		return line({
 			version: '2026-08-29T09:00',
 			date: rowDate,
 			run_id: `${rowDate}-${run}`,
-			item_id: `${source}-${index}`,
-			url_key: `${source}-${index}`,
-			canonical_url: `https://canary.example/${source}-${index}`,
+			item_id: id,
+			url_key: standInKey(id),
+			canonical_url: `https://canary.example/${id}`,
 			vertical: 'ai',
 			source_id: source,
 			stage: 'publish',
@@ -758,6 +797,7 @@ function writeItemHealthCanary() {
 			summary_words: summaryWords,
 			source_words_before_cap: before
 		});
+	};
 
 	/** Every row of the source-cut day, plus the two rows that must be excluded.
 	 *
@@ -927,22 +967,24 @@ function writeItemHealthCanary() {
 		...tailRows(longAgo, 1, [520, 640, 700, 810, 1100, 4300]),
 		...tailRows(longAgo, 2, [560, 690, 760, 880, 1250, 4900])
 	];
-	// The ledger files one CSV a day (`docs/concepts/partitions.md`), so each row
-	// goes where its own date cell sends it. The index is read off `COLUMNS` rather
-	// than written down, and only `version` precedes it - a schema date, which
+	// The ledger files one CSV a writer inside a day directory
+	// (`docs/concepts/partitions.md`), so each row goes where its own date cell
+	// and its own run id send it. Both indexes are read off `COLUMNS` rather than
+	// written down, and only `version` precedes them - a schema date, which
 	// carries no comma.
 	const dateAt = COLUMNS.indexOf('date');
-	const byDay = new Map();
+	const runAt = COLUMNS.indexOf('run_id');
+	const byWriter = new Map();
 	for (const row of [...currentRows, ...longAgoRows]) {
-		const day = row.split(',')[dateAt];
-		const held = byDay.get(day);
-		if (held === undefined) byDay.set(day, [row]);
-		else held.push(row);
+		const cells = row.split(',');
+		const at = `${cells[dateAt]}/${cells[runAt]}`;
+		const held = byWriter.get(at);
+		if (held === undefined) {
+			byWriter.set(at, { day: cells[dateAt], runId: cells[runAt], rows: [row] });
+		} else held.rows.push(row);
 	}
-	for (const [day, dayRows] of byDay) {
-		const target = join(dir, day.slice(0, 4), day.slice(5, 7), `${day.slice(8, 10)}.csv`);
-		mkdirSync(join(dir, day.slice(0, 4), day.slice(5, 7)), { recursive: true });
-		writeFileSync(target, [COLUMNS.join(','), ...dayRows].join('\n') + '\n');
+	for (const writer of byWriter.values()) {
+		writeDayShard(dir, writer.day, writer.runId, COLUMNS, writer.rows);
 	}
 }
 
@@ -963,43 +1005,41 @@ function writeSpanRollupCanary() {
 	const COLUMNS = [
 		'version', 'date', 'run_id', 'shard', 'span_name', 'count', 'total_ms', 'unattributed_ms'
 	];
+	// Spelled once, because the day and the run id name the file the rows land in
+	// as well as the cells inside it.
+	const DAY = '2026-09-06';
+	const RUN = `${DAY}-1`;
 	const line = (cells) => COLUMNS.map((name) => cells[name] ?? '').join(',');
 	// The residual is a cell on the item row alone; empty on the four sub-steps,
 	// the way the contract writes it.
 	const row = (shard, span_name, count, total_ms, unattributed_ms) =>
 		line({
 			version: '2026-09-06T15:00',
-			date: '2026-09-06',
-			run_id: '2026-09-06-1',
+			date: DAY,
+			run_id: RUN,
 			shard,
 			span_name,
 			count,
 			total_ms,
 			unattributed_ms: unattributed_ms ?? ''
 		});
-	const dir = join(STATE, 'span-rollup');
-	mkdirSync(dir, { recursive: true });
-	writeFileSync(
-		join(dir, '2026-09.csv'),
-		[
-			COLUMNS.join(','),
-			// Shard 0: 6 items, 46.0 s inside them and 6.0 s of overhead - a 52.0 s
-			// clock. The four sub-steps sum to 6.6 s, well inside the item time.
-			row(0, 'item', 6, 46000, 6000),
-			row(0, 'robots', 6, 1800),
-			row(0, 'tag', 6, 2400),
-			row(0, 'render_prompt', 6, 900),
-			row(0, 'parse_reply', 6, 1500),
-			// Shard 1: 5 items, 39.0 s inside them and 12.0 s of overhead - a 51.0 s
-			// clock, so nearly a quarter of it fell outside every item. That gap
-			// between the two shards is what the panel exists to show.
-			row(1, 'item', 5, 39000, 12000),
-			row(1, 'robots', 5, 1500),
-			row(1, 'tag', 5, 2000),
-			row(1, 'render_prompt', 5, 800),
-			row(1, 'parse_reply', 5, 1300)
-		].join('\n') + '\n'
-	);
+	writeDayShard(join(STATE, 'span-rollup'), DAY, RUN, COLUMNS, [
+		// Shard 0: 6 items, 46.0 s inside them and 6.0 s of overhead - a 52.0 s
+		// clock. The four sub-steps sum to 6.6 s, well inside the item time.
+		row(0, 'item', 6, 46000, 6000),
+		row(0, 'robots', 6, 1800),
+		row(0, 'tag', 6, 2400),
+		row(0, 'render_prompt', 6, 900),
+		row(0, 'parse_reply', 6, 1500),
+		// Shard 1: 5 items, 39.0 s inside them and 12.0 s of overhead - a 51.0 s
+		// clock, so nearly a quarter of it fell outside every item. That gap
+		// between the two shards is what the panel exists to show.
+		row(1, 'item', 5, 39000, 12000),
+		row(1, 'robots', 5, 1500),
+		row(1, 'tag', 5, 2000),
+		row(1, 'render_prompt', 5, 800),
+		row(1, 'parse_reply', 5, 1300)
+	]);
 }
 
 /** The machines the canary's jobs drew, so the machine panels have cards to draw.
@@ -1160,26 +1200,32 @@ function writeHostFingerprintCanary() {
 		probe(longAgo, 2, 'work', 1, XEON, { model_load_ms: 2588.1, job_seconds: 829 })
 	];
 
-	// A day tree, the shape a bounded window reads.
-	const byDay = new Map();
+	// A day tree, one file a writer, the shape a bounded window reads.
+	const dateAt = COLUMNS.indexOf('date');
+	const runAt = COLUMNS.indexOf('run_id');
+	const byWriter = new Map();
 	for (const row of rows) {
-		const rowDate = row.split(',')[1];
-		const held = byDay.get(rowDate);
-		if (held === undefined) byDay.set(rowDate, [row]);
-		else held.push(row);
+		const cells = row.split(',');
+		const at = `${cells[dateAt]}/${cells[runAt]}`;
+		const held = byWriter.get(at);
+		if (held === undefined) {
+			byWriter.set(at, { day: cells[dateAt], runId: cells[runAt], rows: [row] });
+		} else held.rows.push(row);
 	}
 	// A day the record opened a file for and kept no row of, on a day that
 	// published nothing. It is the control for the loss state: the page may say
 	// a day lost its machine record only where that day published articles, and
 	// a quiet day with an empty file must not read as an incident.
-	if (!byDay.has(back(2))) byDay.set(back(2), []);
-	for (const [rowDate, dayRows] of byDay) {
-		const at = join(STATE, 'host-fingerprint', rowDate.slice(0, 4), rowDate.slice(5, 7));
-		mkdirSync(at, { recursive: true });
-		writeFileSync(
-			join(at, `${rowDate.slice(8, 10)}.csv`),
-			[COLUMNS.join(','), ...dayRows].join('\n') + '\n'
-		);
+	//
+	// It holds no row, so it carries no run id to be named for. The day's first
+	// run is the identity, because that is the one a reader can check against the
+	// directory the file sits in.
+	const quiet = back(2);
+	if (![...byWriter.values()].some((writer) => writer.day === quiet)) {
+		byWriter.set(`${quiet}/${quiet}-1`, { day: quiet, runId: `${quiet}-1`, rows: [] });
+	}
+	for (const writer of byWriter.values()) {
+		writeDayShard(join(STATE, 'host-fingerprint'), writer.day, writer.runId, COLUMNS, writer.rows);
 	}
 }
 

@@ -2,14 +2,14 @@
 
 `state/<ledger>/<YYYY>/<MM>/<DD>/` is where a writer leaves its rows when more
 than one job writes one ledger and there is no head file to fold them into. Two
-writers never share a filename there - `ledger.segment_path` spells the identity
+writers never share a filename there - `ledger.segment_name` spells the identity
 `<run_id>-<attempt>-<job>-<shard>` - so the directory is the ledger, and the
 settlement is something a reader does rather than something a writer leaves
 behind.
 
 **The walk reads both shapes.** A `<DD>.csv` day file and a `<DD>/` day
-directory are each one recorded day, so a caller that moves here reads exactly
-what it read before until something writes a directory. Nothing writes one yet.
+directory are each one recorded day, so a store whose committed history still
+holds the flat file reads back beside one that has moved.
 
 **The fold is the compaction's, moved rather than copied.** `settle` runs the
 identical three cases `stages.compact` ran into a head - join, supersede, repeat
@@ -17,11 +17,13 @@ identical three cases `stages.compact` ran into a head - join, supersede, repeat
 would be six answers to one question, and a reader that forgot to call one would
 read double-counted rows.
 
-**`settled.csv` is the one name here that is not a writer's.** It is what a
-closed-day fold leaves behind, and it sorts below every writer file: a writer's
-attempt is the run's own `GITHUB_RUN_ATTEMPT` and that starts at 1, so attempt 0
-is a place no writer can take. It is also the right place - every row in it has
-already won its settlement, and a straggler beside it is later.
+**Three names here are reserved rather than a writer's.** `settled.csv` is what
+a closed-day fold leaves behind, `before-partition.csv` is what a committed head
+already held before writes carried identity, and `repair-<stamp>.csv` is an
+operator's one add. All three sort below every writer file: a writer's attempt
+is the run's own `GITHUB_RUN_ATTEMPT` and that starts at 1, so attempt 0 is a
+place no writer can take. It is also the right place - a straggler beside any of
+them is later, and its rows are the ones the settlement must let win.
 
 **The sort key is the path relative to the ledger root, never the bare
 filename.** `settled.csv` has the same basename in every day directory, so a
@@ -45,7 +47,7 @@ without a plan.
 from __future__ import annotations
 
 import csv
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, field
 from datetime import date as date_type
 from pathlib import Path
@@ -182,6 +184,44 @@ def shard_files(root: Path, *, days: int) -> Iterator[Path]:
         yield from shards
 
 
+def shards_by_month(root: Path, *, days: int) -> dict[str, list[Path]]:
+    """Every shard under `root`, grouped by its month, oldest month first.
+
+    The peer of `day_partition.days_by_month` for a day tree of writer-owned
+    files, and it exists for that helper's reason: a knob counted in months over
+    a store filed by day is a bridge four prunes and one repair all need, and a
+    bridge written once cannot be written two ways.
+
+    A month here holds every writer's file for every day in it, so a caller that
+    deletes a month deletes all of them - which is what makes a month go whole.
+
+    `days` has no default for the reason `shard_files` gives.
+    """
+    months: dict[str, list[Path]] = {}
+    for shard in shard_files(root, days=days):
+        months.setdefault(date_of(shard)[:7], []).append(shard)
+    return months
+
+
+def dates_by_month(root: Path, *, days: int) -> dict[str, list[str]]:
+    """Every recorded date under `root`, grouped by its month, oldest month first.
+
+    `shards_by_month` for a caller that wants rows rather than files. A day is a
+    directory of writer-owned files and a re-run leaves a second attempt beside
+    the first, so a reader asks for dates and settles each one; only a caller
+    that deletes needs the files themselves.
+
+    `days` has no default for the reason `shard_files` gives.
+    """
+    months: dict[str, list[str]] = {}
+    for shard in shard_files(root, days=days):
+        recorded = date_of(shard)
+        held = months.setdefault(recorded[:7], [])
+        if not held or held[-1] != recorded:
+            held.append(recorded)
+    return months
+
+
 def _is_day_file(shard: Path) -> bool:
     """Whether a shard is a `<DD>.csv` day file rather than a writer's file.
 
@@ -204,20 +244,41 @@ def date_of(shard: Path) -> str:
     return f"{day.parent.parent.name}-{day.parent.name}-{day.name}"
 
 
+def _carries_no_identity(shard: Path) -> bool:
+    """Whether this shard's name is a reserved one rather than a writer's identity.
+
+    Three names are reserved, and each is declared where it is minted with its
+    own removal condition beside it: `settled.csv` here for a closed day's fold,
+    `ledger.BEFORE_PARTITION_NAME` for the bytes a committed head already held,
+    and `ledger.repair_name` for an operator's one add. A `<DD>.csv` day file is
+    a fourth shape with the same property - a fold somebody already settled.
+    """
+    return (
+        shard.name in (SETTLED_NAME, ledger.BEFORE_PARTITION_NAME)
+        or ledger.is_repair(shard.name)
+        or _is_day_file(shard)
+    )
+
+
 def _order(shard: Path, root: Path) -> tuple[int, str]:
     """Reading order inside one ledger: ascending attempt, then relative path.
 
     Ascending attempt, so a correction always arrives after what it corrects and
-    the settlement never has to look backwards. `settled.csv` takes attempt 0,
-    which is the place no writer can take and the place its rows belong.
+    the settlement never has to look backwards. Every reserved name takes
+    attempt 0, which is the place no writer can take: a run's
+    `GITHUB_RUN_ATTEMPT` starts at 1.
 
-    A `<DD>.csv` day file carries no identity either, so it takes the same
-    place: its rows are a fold somebody already settled. `parse_segment_name` is
-    what reads every other name, and it is not touched - it keeps raising on a
-    name that is neither a writer's nor one of these two.
+    Within attempt 0 the name decides, and the alphabet already answers it -
+    `before-partition.csv`, then `repair-<stamp>.csv`, then `settled.csv`. So
+    the merged history a repair corrects is read before the repair, and the
+    bytes a fold read are read before the fold's own answer.
+
+    `parse_segment_name` is what reads every other name, and it is not touched -
+    it keeps raising on a name no producer here spells, which is what catches a
+    writer that invented one.
     """
     where = shard.relative_to(root).as_posix()
-    if shard.name == SETTLED_NAME or _is_day_file(shard):
+    if _carries_no_identity(shard):
         return (SETTLED_ATTEMPT, where)
     return (ledger.parse_segment_name(shard).attempt, where)
 
@@ -285,17 +346,25 @@ def settle(
     a ledger reaches when its non-key cells are all optional rather than one any
     of them reaches now.
 
-    **Supersede** - something is filled in both and the attempts differ. The
-    higher attempt wins each contested cell, because attempt 2 exists precisely
-    because attempt 1 did not finish. A cell only the lower attempt filled is
-    kept: a longer-lived first attempt can have recorded something the second
-    never reached.
+    **The key decides** - something is filled in both and the key declares a
+    preference. The preference picks the winner whatever attempt each row came
+    from. It has to: a feed read that carried entries beats one that carried
+    none however late the empty one ran, and a retry that came back with nothing
+    describes the retry rather than the feed.
+    `contracts.feed_health.supersedes` says so, and `ledger.drop_repeated_rows`,
+    `discover.settled` and the page all apply it with no notion of attempts at
+    all. Attempt order here would be a fourth answer to a question three other
+    modules have already settled.
 
-    **Repeat** - something is filled in both at the same attempt. The incumbent
-    keeps every cell it filled and the arriving row keeps every cell the
-    incumbent left empty, unless the key declares a preference. That per-cell
-    answer is what lets two steps of one job write one record, and it is what
-    makes a second settlement free.
+    **Attempt order** - something is filled in both and the key declares
+    nothing. The higher attempt wins each contested cell, because attempt 2
+    exists precisely because attempt 1 did not finish. Two rows at one attempt
+    leave the incumbent in place, which is what lets two steps of one job write
+    one record.
+
+    The loser is not discarded either way: a cell only the loser filled is kept,
+    because a longer-lived first attempt can have recorded something the second
+    never reached.
     """
     if not contested(held.cells, arriving.cells, key):
         held.attempt = max(held.attempt, arriving.attempt)
@@ -303,8 +372,8 @@ def settle(
             if value and not held.cells.get(name):
                 held.cells[name] = value
         return False
-    if arriving.attempt == held.attempt:
-        arriving_wins = prefers is not None and prefers(arriving.cells, held.cells)
+    if prefers is not None:
+        arriving_wins = prefers(arriving.cells, held.cells)
     else:
         arriving_wins = arriving.attempt > held.attempt
     winner, loser = (arriving.cells, held.cells) if arriving_wins else (held.cells, arriving.cells)
@@ -315,23 +384,49 @@ def settle(
     return True
 
 
-def settled_rows(
+def one_day(root: Path, date: str) -> list[Path]:
+    """Every shard of one named day, in reading order. Nothing else is opened.
+
+    The peer of `shard_files` for a caller that already knows which day it is
+    asking about. It costs one directory listing whatever the ledger has
+    accumulated, so it needs no cover to declare (Guardrail #12).
+
+    A day nothing recorded has no entry and yields nothing, which is not a
+    fault: a run that planned nothing that day wrote nothing that day.
+    """
+    month = root / date[:4] / date[5:7]
+    if not month.is_dir():
+        return []
+    entry = month / date[8:10]
+    if entry.is_dir():
+        return _one_day(entry, root, date[:4], date[5:7])
+    day_file = month / f"{date[8:10]}{SUFFIX}"
+    return [day_file] if day_file.is_file() else []
+
+
+def settled_day(
     root: Path,
+    date: str,
     key: tuple[str, ...],
     model: type[CsvContract],
-    *,
-    days: int,
 ) -> list[dict[str, str]]:
-    """One row per record the ledger holds, settled, in the order they were first seen.
+    """One row per record one named day holds, settled, first seen first.
 
-    The same answer `stages.compact` writes into a head, taken at read time
-    instead. A caller gets rows it can hand straight to `ledger.render_file` or
-    to a contract, with no repeat and no half-written record.
-
-    `days` has no default for the reason `shard_files` gives.
+    `settled_rows` for a caller that names its day instead of a cover. Same
+    settlement, same order, one directory listing.
     """
+    return _settled(root, one_day(root, date), key, model)
+
+
+def _settled(
+    root: Path,
+    shards: Iterable[Path],
+    key: tuple[str, ...],
+    model: type[CsvContract],
+) -> list[dict[str, str]]:
+    """The settlement itself, over shards somebody else chose."""
     arriving: list[tuple[tuple[int, str], int, Waiting]] = []
-    for shard in shard_files(root, days=days):
+    for shard in shards:
         attempt, where = _order(shard, root)
         for lineno, raw in rows_of(shard):
             cells = parsed(shard, lineno, raw, model)
@@ -346,3 +441,21 @@ def settled_rows(
         else:
             settle(held[record], row, key, prefers)
     return [entry.cells for entry in held.values()]
+
+
+def settled_rows(
+    root: Path,
+    key: tuple[str, ...],
+    model: type[CsvContract],
+    *,
+    days: int,
+) -> list[dict[str, str]]:
+    """One row per record the ledger holds, settled, in the order they were first seen.
+
+    The same answer a fold writes into `settled.csv`, taken at read time
+    instead. A caller gets rows it can hand straight to `ledger.render_file` or
+    to a contract, with no repeat and no half-written record.
+
+    `days` has no default for the reason `shard_files` gives.
+    """
+    return _settled(root, shard_files(root, days=days), key, model)

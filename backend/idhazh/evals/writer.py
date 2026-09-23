@@ -30,9 +30,9 @@ file it describes. Over the same 7,636 measurements that is 566.8 KB against
 **Both file by day, and they file by the same day.** A run writes one day, two
 runs collide on a file only when they are the same day, and taking a day back is
 one `rm` rather than an edit inside a shared shard - which an append-only ledger
-cannot express. The index follows the ledger rather than keeping a grain of its own,
-because `refresh_index` fills a partition with no index from the rows beside it
-and two grains in one relationship is a mapping somebody has to maintain
+cannot express. The index follows the ledger rather than keeping a grain of its
+own, because an index row is the record of the row beside it and two grains in
+one relationship is a mapping somebody has to maintain
 (`docs/concepts/partitions.md`).
 
 Nothing is forgotten and there is no clock. `OBSERVATION_KEY` carries no date on
@@ -45,10 +45,11 @@ from __future__ import annotations
 
 import csv
 from collections.abc import Iterable, Iterator, Mapping, Sequence
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Final, NamedTuple
 
-from idhazh import day_partition, day_shards, ledger
+from idhazh import day_shards, ledger
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
@@ -160,7 +161,6 @@ def recorded_observations(state_dir: Path) -> set[str]:
     A missing directory on either side is a ledger with no history, which is
     what a fresh clone has.
     """
-    refresh_index(state_dir)
     return indexed_observations(state_dir) | archive.archived_observations(state_dir)
 
 
@@ -205,59 +205,6 @@ def indexed_observations(state_dir: Path) -> set[str]:
     return held
 
 
-def refresh_index(state_dir: Path) -> int:
-    """Fill a day with no index, drop one the archive replaced. Returns digests written.
-
-    Two jobs, and both are about a partition the index does not describe at all.
-
-    **A day with no index is filled from its rows, once.** That is the
-    read-side migration: the first run after this landed meets a ledger written
-    before the index existed, and it has to refuse exactly what it refuses
-    today. It pays one read of the rows to never read them again.
-
-    **An index whose month became an archive is dropped.** The archive carries
-    those digests for ever, so a live copy beside it is a second record of one
-    month and would double what this index costs. The boundary is a month
-    because the archive's is; the files it takes are days, the same arithmetic
-    `retention.prune_scores` does on the ledger. The guard is the one that
-    matters: the drop happens only when the archive is on disk, so nothing here
-    can remove the last record of a measurement. A day that went without an
-    archive - deleted by hand, or by a prune whose archive would not reconcile -
-    leaves the index standing as the only thing that remembers it.
-
-    **A day whose index exists is never compared against its rows, and that
-    is the trade rather than an omission.** Asking whether an index is behind
-    the rows beside it means reading those rows, which is the bill this index
-    exists to remove. So the two files are kept in step by the writer instead:
-    `append` writes the rows and the digests it minted in one call, and every
-    writer of `state/scores/` in this repository goes through it. A day file that
-    grew behind the index's back - rows appended by something that never knew
-    the index existed, which is what a long-lived branch meets when it merges a
-    `main` older than this file - is repaired by `rebuild_index`, which an
-    operator runs against the days it names and which checks its own result.
-
-    A partial fill is safe in the direction that matters. It under-reports, so a
-    measurement lands twice and the compaction settles the two against
-    `OBSERVATION_KEY` when it folds them. Over-reporting is the one that cannot be
-    repaired, and nothing here can produce it.
-    """
-    live = _by_day(ledger_days(state_dir))
-    written = 0
-    for date, shards in sorted(live.items()):
-        path = index_path(state_dir, date)
-        if path.exists():
-            continue
-        written += _fill_index(shards, path)
-
-    archived = {path.stem for path in archive.archive_files(state_dir)}
-    for path in index_days(state_dir):
-        date = day_shards.date_of(path)
-        if date not in live and date[:7] in archived:
-            path.unlink()
-            day_partition.drop_empty_day_dirs(path)
-    return written
-
-
 class IndexDrift(NamedTuple):
     """What one day's index and the rows beside it disagree about, both ways.
 
@@ -273,31 +220,29 @@ class IndexDrift(NamedTuple):
 
 
 def rebuild_index(state_dir: Path, days: Iterable[str]) -> dict[str, IndexDrift]:
-    """Drop each named day's index, write it again from the rows, and name what was wrong.
+    """Add what each named day's rows produce and its index does not hold, and say what was wrong.
 
-    The repair `refresh_index` has no path to. That function fills a partition
-    with **no** index and never compares one that exists against the rows beside
-    it, because comparing means reading the rows and reading the rows is the bill
-    the index exists to remove. So an index that drifted - a fill a crash cut
-    short, a day file that grew behind its back - stands for ever, and
-    the next dedupe silently admits a measurement the ledger already holds.
+    The repair for an index that stopped describing the rows beside it - a write
+    a crash cut short, or a day whose rows grew behind its back when a
+    long-lived branch merged an older `main`. Nothing on the write path compares
+    an index against its rows, because comparing means reading the rows and
+    reading the rows is the bill the index exists to remove.
 
-    Dropping the file is the recipe `refresh_index` has always described. What
-    this adds is the assertion: the rewritten index is read back and compared
-    against the rows in **both** directions, and a disagreement raises instead
-    of returning a count. One direction passes on an index that only ever grows.
+    **One add, never a rewrite.** The repair goes into the day directory as
+    `repair-<YYYYMMDDTHHMMSSZ>.csv`, which is a name no run can take
+    (`idhazh.paths.is_written_once`), so it collides with no writer's file and
+    needs no merge. Rewriting a committed day would lose the race it is in:
+    rebased onto a tip that appended, a commit that removed rows is a rebase git
+    cannot apply, so the removal stops the push rather than landing half-done.
 
-    **It writes the file the partition rule names today, and it removes no
-    other.** A file at a grain no reader recognises is ignored rather than
-    refused (`day_partition.day_files`), so it is invisible to the comparison as
-    well - which is the whole of why a grain change has to take its old files
-    away itself. That is the path this ledger took on 2026-09-13: the two month
-    indexes were deleted by the commit that moved the grain, and this rebuilt
-    every day beside the migrated rows.
+    **A digest the index holds that the rows cannot produce is reported and
+    kept.** The index is a set of identities and a dedupe reads it as one, so an
+    extra digest costs one measurement that is never re-taken - which is what
+    the day's rows already say happened. Taking it out would mean a rewrite.
 
-    Returns what each named day had wrong **before** it was rewritten, so a
-    repair reports the drift rather than hiding it. Two empty sets for a day
-    is an answer, not a no-op: it says that index was telling the truth.
+    Returns what each named day had wrong **before** the add, so a repair
+    reports the drift rather than hiding it. Two empty sets for a day is an
+    answer, not a no-op: it says that index was telling the truth.
 
     **An operator command, and no stage calls it.** It opens every row of every
     day it is given - the read the index exists to avoid - so the cover is the
@@ -314,21 +259,35 @@ def rebuild_index(state_dir: Path, days: Iterable[str]) -> dict[str, IndexDrift]
     if absent:
         raise FileNotFoundError(f"{LEDGER_RELDIR} holds no rows for {absent}")
 
+    # One stamp for the whole pass, so every day this command repaired carries
+    # the same name and an operator can see one repair rather than twenty.
+    name = ledger.repair_name(datetime.now(UTC))
     found: dict[str, IndexDrift] = {}
     for date in named:
-        path = index_path(state_dir, date)
         produced = _digests_of_day(live[date])
-        found[date] = _drift(_digests_of_index(path), produced)
-        path.unlink(missing_ok=True)
-        _fill_index(live[date], path)
-        after = _drift(_digests_of_index(path), produced)
-        if after.extra or after.missing:
+        found[date] = _drift(_indexed_on(state_dir, date), produced)
+        if found[date].missing:
+            _append_index(index_path(state_dir, date) / name, sorted(found[date].missing))
+        after = _drift(_indexed_on(state_dir, date), produced)
+        if after.missing:
             raise RuntimeError(
-                f"{index_relpath(date)} still disagrees with the rows beside it after a "
-                f"rebuild: {len(after.extra)} digests it holds that the rows cannot produce, "
-                f"{len(after.missing)} the rows produce that it does not hold"
+                f"{index_relpath(date)} still does not hold {len(after.missing)} digests the "
+                "rows beside it produce, after a repair that was meant to add them"
             )
     return found
+
+
+def _indexed_on(state_dir: Path, date: str) -> frozenset[str]:
+    """Every digest one day's index holds, across every file in that day.
+
+    A day is a directory of writer-owned files, so the answer is the union of
+    them - and a caller that read whichever file the walk named last would call
+    a measurement new because another writer's file already held it.
+    """
+    held: set[str] = set()
+    for path in day_shards.one_day(state_dir / INDEX_DIRNAME, date):
+        held.update(_digests_of_index(path))
+    return frozenset(held)
 
 
 def _drift(held: frozenset[str], produced: frozenset[str]) -> IndexDrift:
@@ -347,16 +306,6 @@ def _by_day(shards: Iterable[Path]) -> dict[str, list[Path]]:
     for shard in shards:
         by_day.setdefault(day_shards.date_of(shard), []).append(shard)
     return by_day
-
-
-def _fill_index(shards: Sequence[Path], path: Path) -> int:
-    """Write one day's index from the rows beside it. The one place that does.
-
-    Both callers come here: `refresh_index` for a day that has no index, and
-    `rebuild_index` for one it has just dropped. A second implementation is how
-    the two would come to disagree about what a digest is.
-    """
-    return _append_index(path, _distinct(_observations_of(shards)))
 
 
 def _observations_of(shards: Sequence[Path]) -> Iterator[str]:
@@ -392,23 +341,6 @@ def _digests_of_day(shards: Sequence[Path]) -> frozenset[str]:
     return frozenset(_observations_of(shards))
 
 
-def _distinct(digests: Iterable[str]) -> list[str]:
-    """The digests in the order they were first seen, each one once.
-
-    A day file can hold the same observation twice between the two segments that
-    carried it and the compaction that folds them. The index is a set, so it
-    records the identity once and the repeat costs nothing.
-    """
-    seen: set[str] = set()
-    ordered: list[str] = []
-    for digest in digests:
-        if digest in seen:
-            continue
-        seen.add(digest)
-        ordered.append(digest)
-    return ordered
-
-
 def _append_index(path: Path, digests: Iterable[str]) -> int:
     """Append digests to one day's index, writing the header once."""
     pending = list(digests)
@@ -431,84 +363,10 @@ def _append_index(path: Path, digests: Iterable[str]) -> int:
     return len(pending)
 
 
-def append(state_dir: Path, rows: Iterable[EvalRow]) -> int:
-    """Append the measurements this run made, writing each day file's header once.
-
-    Returns how many landed, so a caller can log the count rather than re-read
-    the files to find out. A row the ledger already holds is not one of them.
-
-    Rows are filed by their own `date`, so a run that publishes either side of
-    midnight writes two day files and neither is wrong. Within one call the
-    header check and the write happen per day.
-
-    A header that no longer matches the contract stops the run. A day file is
-    append-only and its header is written once, so a new column would otherwise
-    put more cells on a row than the header names, and every reader that maps by
-    position would silently read one column under another column's name. Failing
-    here is what makes adding a column a migration instead of a corruption.
-    """
-    pending = list(rows)
-    if not pending:
-        return 0
-
-    # Before the dedupe, not after it. A day file whose header no longer matches
-    # the contract is corrupt whatever this call had to say, and the dedupe would
-    # otherwise return 0 and never reach the check - which is how a stale header
-    # survives a run that appeared to do nothing wrong.
-    #
-    # The cover is the days this call writes, which is one or two, and not every
-    # committed day. It used to be every one, and that was affordable while the
-    # ledger filed by month and held two files; at day grain it would have been a
-    # read that costs one more open every day the pipeline runs, on the hot path
-    # of every append (Guardrail #12). The narrower cover is also the exact one:
-    # a file this call does not append to is a file this call cannot corrupt, and
-    # a back-dated run is covered because the rows' own dates are what name the
-    # files. What it gives up is noticing a stale header on a day nothing is
-    # writing to - which no run can create and which the first reader of that day
-    # refuses through its own contract.
-    for date in sorted({str(row.date)[:10] for row in pending}):
-        day = ledger_path(state_dir, date)
-        if day.exists():
-            require_matching_header(day, columns())
-
-    already = recorded_observations(state_dir)
-    fresh: dict[str, list[dict[str, object]]] = {}
-    minted: dict[str, list[str]] = {}
-    for row, digest in _unrecorded(pending, already):
-        payload = row.model_dump(mode="json")
-        date = str(payload["date"])[:10]
-        fresh.setdefault(date, []).append(payload)
-        minted.setdefault(date, []).append(digest)
-    if not fresh:
-        return 0
-
-    landed = 0
-    for date, payloads in sorted(fresh.items()):
-        path = ledger_path(state_dir, date)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        exists = path.exists()
-        with path.open("a", encoding="utf-8", newline="") as handle:
-            writer = csv.DictWriter(handle, fieldnames=columns(), lineterminator="\n")
-            if not exists:
-                writer.writeheader()
-            for payload in payloads:
-                writer.writerow({name: payload[name] for name in columns()})
-        # The rows first, then the index, and the order is the whole argument. A
-        # crash between the two leaves a measurement recorded and not indexed,
-        # which the next run appends a second time and the compaction settles
-        # against `OBSERVATION_KEY`. The other order leaves a digest whose row
-        # was never written - a measurement nothing will ever take again, and
-        # nothing on disk that says it is missing.
-        _append_index(index_path(state_dir, date), minted[date])
-        landed += len(payloads)
-    return landed
-
-
 def _unrecorded(rows: Sequence[EvalRow], already: set[str]) -> list[tuple[EvalRow, str]]:
     """The measurements the ledger does not already hold, each with its digest.
 
-    One filter for both writers, so the head and the segment admit exactly the
-    same rows. `already` is added to as it goes, because a run can hand the same
+    `already` is added to as it goes, because a run can hand the same
     measurement in twice and the second one is not new either.
     """
     fresh: list[tuple[EvalRow, str]] = []
@@ -534,23 +392,22 @@ def append_segment(
 
     Two jobs of one run measure items - a work shard as each item settles, and
     assemble over the whole day afterwards - so neither may open the day file.
-    Each writes `state/segments/scores/<run>-<attempt>-<job>-<shard>.csv` and the
-    index beside it, and `stage_compact` folds both into the heads. Two writers
-    never share a path, so a lost push race costs a merge rather than the rows,
-    and a re-run's second attempt corrects its first try instead of colliding
-    with it.
+    Each writes its own file inside the day directory, named for the writer, and
+    the index beside it. Two writers never share a path, so a lost push race
+    costs a merge rather than the rows, and a re-run's second attempt corrects
+    its first try instead of colliding with it.
 
-    **The dedupe still reads the heads, and what it cannot see is settled later.**
-    A measurement already in a committed day is skipped here exactly as it is on
-    the head path. A measurement this run's other writer put in a segment
-    minutes ago is invisible - the segment is not a head and nothing reads one
-    but the compaction - so both writers mint it, and the fold settles the pair
-    against `OBSERVATION_KEY`. That is the same answer by a later route, which is
-    what makes it safe to run a second time.
+    **The dedupe reads the committed days, and what it cannot see is settled
+    later.** A measurement already in a committed day is skipped here. A
+    measurement this run's other writer left in the day directory minutes ago is
+    invisible - the dedupe reads the index and this run's index files are not in
+    it yet - so both writers mint it, and the fold settles the pair against
+    `OBSERVATION_KEY`. That is the same answer by a later route, which is what
+    makes it safe to run a second time.
 
-    **Nothing here checks a head's header.** The head path fails early on a
-    header the contract no longer names, because it is about to append under it.
-    This writes no head; the compaction reads one, and it re-files a stale header
+    **Nothing here checks a header.** Each file is this writer's alone and is
+    written whole from the contract's own columns, so there is no earlier header
+    to agree with. The fold reads the day, and it re-files a stale header
     through `ledger.settle_header` before it merges a row into it.
 
     Returns how many measurements went into the segment, so a caller can log the
@@ -572,10 +429,15 @@ def append_segment(
         job=job,
         shard=shard,
     )
-    # The rows first, then the index, for the reason `append` gives: a crash
-    # between the two leaves a measurement recorded and not indexed, which the
-    # next run mints again and the fold settles. The other order leaves a digest
-    # whose row was never written.
+    # The rows first, then the index, and the order is the whole argument. A
+    # crash between the two leaves a measurement recorded and not indexed, which
+    # the next run mints again and the fold settles. The other order leaves a
+    # digest whose row was never written - a measurement nothing will ever take
+    # again, and nothing on disk that says it is missing.
+    #
+    # `date=` because an index row is a stamp and a digest and carries no date
+    # cell to be filed by. The day is the run's own, which is the day the eval
+    # rows beside it carry.
     ledger.write_segment(
         state_dir,
         ledger.SegmentLedger.SCORE_INDEX,
@@ -587,5 +449,6 @@ def append_segment(
         attempt=attempt,
         job=job,
         shard=shard,
+        date=run_id[:10],
     )
     return written

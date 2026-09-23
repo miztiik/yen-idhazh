@@ -13,6 +13,22 @@ from idhazh.contracts.knobs.removed import refuse_a_removed_knob
 
 
 class RunConfig(Model):
+    settled_fold_after_days: int = Field(
+        default=7,
+        ge=1,
+        description=(
+            "How many days behind the run's own date a day has to be before its "
+            "writer files are folded into one settled file. Every job writes its "
+            "own file under the day its rows name, which is what stops two jobs "
+            "conflicting - and it leaves about a hundred small files in a busy "
+            "day. Folding a day nobody will write again costs nothing and changes "
+            "no answer, because a reader settles the rows either way. Seven days "
+            "rather than one, because a day can still gain rows: a re-run reaches "
+            "back, and a shard that died can be re-dispatched. Raise it if a late "
+            "writer is ever seen landing in a folded day; lower it only to save "
+            "files, and it saves none the day after it is lowered."
+        ),
+    )
     safety_ceiling_per_run: int = Field(
         default=80,
         ge=1,

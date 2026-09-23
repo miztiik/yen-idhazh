@@ -7,7 +7,9 @@ from pathlib import Path
 
 import pytest
 
-from idhazh import day_partition, ledger
+from idhazh import day_shards, ledger
+from idhazh.contracts.base import ServerJob
+from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
 from idhazh.contracts.knobs.observability import ObservabilityConfig
 from idhazh.retention import oldest_month_kept, prune_feed_health
 
@@ -21,8 +23,19 @@ from ._trees import (
 
 
 def feed_health_days(state_dir: Path) -> list[Path]:
-    """Every feed-health day file, oldest first, through the pipeline's own walk."""
-    return list(day_partition.day_files(state_dir / ledger.HEALTH_DIRNAME))
+    """Every feed-health file, oldest first, through the pipeline's own walk."""
+    return list(day_shards.shard_files(state_dir / ledger.HEALTH_DIRNAME, days=UNBOUNDED_WINDOW))
+
+
+def the_file_the_fixture_wrote(date: str) -> str:
+    """Where the fixture's one plan job filed its verdicts for `date`.
+
+    Built from the identity grammar rather than typed, so a change to how a
+    writer names its file fails here with the grammar rather than passing on a
+    string this test froze.
+    """
+    name = ledger.segment_name(run_id=f"{date}-1", attempt=1, job=ServerJob.PLAN, shard=0)
+    return f"{ledger.health_relpath(date)}/{name}"
 
 
 def test_the_feed_health_prune_takes_the_expired_day_and_keeps_the_day_beside_it(
@@ -57,10 +70,10 @@ def test_the_feed_health_prune_takes_the_expired_day_and_keeps_the_day_beside_it
     assert not expired_path.exists(), "the expired day is still there, so nothing was pruned"
     assert kept_path.exists(), "the day inside the window was deleted"
     assert list(result.deleted) == [expired_day[:7]]
-    assert list(result.days_removed) == [ledger.health_relpath(expired_day)]
+    assert list(result.days_removed) == [the_file_the_fixture_wrote(expired_day)]
     assert feed_health_months(state) == [kept_day[:7]]
-    # The emptied month and year directories go with their files, for the reason
-    # the item-health prune gives: `day_files` walks every directory it finds.
+    # The emptied month and day directories go with their files, for the reason
+    # the item-health prune gives: the walk reads every directory it finds.
     assert not expired_path.parent.exists()
 
 
@@ -124,7 +137,7 @@ def test_a_feed_health_name_the_walk_cannot_place_stops_the_prune(tmp_path: Path
     feed_health_history(state, ["2024-01"])
     (state / ledger.HEALTH_DIRNAME / "2024-01.csv").write_text("header\n", encoding="utf-8")
 
-    with pytest.raises(ValueError, match="not a YYYY/MM/DD day file"):
+    with pytest.raises(ValueError, match="neither a YYYY/MM/DD day file"):
         prune_feed_health(state, ObservabilityConfig(), TODAY)
 
     assert ledger.health_path(state, "2024-01-11").exists(), "a refused read deleted a day"
@@ -137,10 +150,10 @@ def test_a_feed_health_dry_run_names_the_day_and_leaves_it(tmp_path: Path) -> No
     result = prune_feed_health(state, ObservabilityConfig(), TODAY, dry_run=True)
 
     assert result.deleted == ("2024-01",)
-    # The day file itself, never a `<month>-01` the ledger may never have held:
+    # The writer's own file, never a `<month>-01` the ledger may never have held:
     # the dry run's whole deliverable is that its list equals what a live run
     # removes, file for file.
-    assert result.days_removed == ("state/feed-health/2024/01/11.csv",)
+    assert result.days_removed == (the_file_the_fixture_wrote("2024-01-11"),)
     assert result.dry_run
     assert ledger.health_path(state, "2024-01-11").exists()
 

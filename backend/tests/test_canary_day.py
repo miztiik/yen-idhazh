@@ -19,7 +19,7 @@ from typing import Final
 
 from conftest import FIXTURES_DIR
 
-from idhazh import config
+from idhazh import config, ledger
 from idhazh.contracts.eval_row import ConfidenceBand, EvalRow
 from idhazh.contracts.sources import SourceForm
 from idhazh.evals import writer
@@ -178,11 +178,24 @@ def test_one_published_item_is_both_an_abstract_and_cut() -> None:
     )
 
 
+def scored_day(state: Path) -> Path:
+    """The file the builder's own scoring run leaves in the day directory."""
+    return ledger.day_shard_path(
+        state,
+        ledger.SegmentLedger.SCORES,
+        date=build_canary_day.DATE,
+        run_id=build_canary_day.SCORE_RUN_ID,
+        attempt=build_canary_day.SCORE_ATTEMPT,
+        job=build_canary_day.SCORE_JOB,
+        shard=build_canary_day.SCORE_SHARD,
+    )
+
+
 def test_the_ledger_header_is_the_contract(tmp_path: Path) -> None:
     """Written by the pipeline's writer, so the column order cannot be invented here."""
     build_canary_day.append_scores(tmp_path, ITEMS, EVALUATION)
 
-    assert writer.read_header(writer.ledger_path(tmp_path, build_canary_day.DATE)) == EvalRow.csv_columns()
+    assert writer.read_header(scored_day(tmp_path)) == EvalRow.csv_columns()
 
 
 def test_a_fresh_run_writes_the_same_ledger_every_time(tmp_path: Path) -> None:
@@ -191,7 +204,7 @@ def test_a_fresh_run_writes_the_same_ledger_every_time(tmp_path: Path) -> None:
     for index in range(3):
         state = tmp_path / f"run-{index}"
         assert build_canary_day.append_scores(state, ITEMS, EVALUATION) == len(ITEMS)
-        written.append(writer.ledger_path(state, build_canary_day.DATE).read_bytes())
+        written.append(scored_day(state).read_bytes())
 
     assert written[0] == written[1] == written[2]
 
@@ -202,9 +215,9 @@ def test_appending_the_same_day_twice_adds_nothing(tmp_path: Path) -> None:
     The builder clears its state directory before writing, so this is the belt
     behind that brace: a ledger that survived the clear still cannot double.
     """
-    ledger = writer.ledger_path(tmp_path, build_canary_day.DATE)
+    scored = scored_day(tmp_path)
     assert build_canary_day.append_scores(tmp_path, ITEMS, EVALUATION) == len(ITEMS)
-    once = ledger.read_bytes()
+    once = scored.read_bytes()
 
     assert build_canary_day.append_scores(tmp_path, ITEMS, EVALUATION) == 0
-    assert ledger.read_bytes() == once
+    assert scored.read_bytes() == once

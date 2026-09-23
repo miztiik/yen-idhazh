@@ -23,7 +23,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from conftest import seed_item_health
+from conftest import seed_item_health, seed_scores
 
 from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.day_metrics import DayInstrument, DayMetrics, DayStageTiming
@@ -50,7 +50,6 @@ from idhazh.contracts.run_manifest import (
     RunStatus,
 )
 from idhazh.contracts.visual_decision import VisualKind, VisualState
-from idhazh.evals import writer as eval_writer
 from idhazh.telemetry.publish import day_metrics
 
 DATE = "2026-08-20"
@@ -317,7 +316,7 @@ def _instrument(metrics: DayMetrics, column: str) -> DayInstrument:
 
 def test_the_producer_writes_the_whole_day_record(tmp_path: Path) -> None:
     state_root = tmp_path / "state"
-    eval_writer.append(state_root, _scores())
+    seed_scores(state_root, _scores(), run_id=f"{DATE}-1")
     seed_item_health(state_root, DATE, _timed_health())
 
     path = day_metrics.day_metrics_path(state_root, DATE)
@@ -381,7 +380,7 @@ def test_the_producer_writes_the_whole_day_record(tmp_path: Path) -> None:
 
 def test_throughput_sums_only_the_timed_items(tmp_path: Path) -> None:
     state_root = tmp_path / "state"
-    eval_writer.append(state_root, _scores())
+    seed_scores(state_root, _scores(), run_id=f"{DATE}-1")
     seed_item_health(state_root, DATE, _timed_health())
 
     metrics = DayMetrics.read(
@@ -403,7 +402,7 @@ def test_throughput_sums_only_the_timed_items(tmp_path: Path) -> None:
 
 def test_stage_timing_counts_the_failed_fetch(tmp_path: Path) -> None:
     state_root = tmp_path / "state"
-    eval_writer.append(state_root, _scores())
+    seed_scores(state_root, _scores(), run_id=f"{DATE}-1")
     seed_item_health(state_root, DATE, _timed_health())
 
     metrics = DayMetrics.read(
@@ -430,7 +429,7 @@ def test_stage_timing_counts_the_failed_fetch(tmp_path: Path) -> None:
 
 def test_instruments_are_nearest_rank_quartiles(tmp_path: Path) -> None:
     state_root = tmp_path / "state"
-    eval_writer.append(state_root, _scores())
+    seed_scores(state_root, _scores(), run_id=f"{DATE}-1")
     seed_item_health(state_root, DATE, _timed_health())
 
     metrics = DayMetrics.read(
@@ -459,7 +458,7 @@ def test_instruments_are_nearest_rank_quartiles(tmp_path: Path) -> None:
 
 def test_a_correction_rewrites_the_record_whole(tmp_path: Path) -> None:
     state_root = tmp_path / "state"
-    eval_writer.append(state_root, _scores())
+    seed_scores(state_root, _scores(), run_id=f"{DATE}-1")
     seed_item_health(state_root, DATE, _timed_health())
 
     day_metrics.publish(
@@ -489,7 +488,7 @@ def test_a_correction_rewrites_the_record_whole(tmp_path: Path) -> None:
 
 def test_a_day_that_timed_nothing_has_no_throughput(tmp_path: Path) -> None:
     state_root = tmp_path / "state"
-    eval_writer.append(state_root, _scores())
+    seed_scores(state_root, _scores(), run_id=f"{DATE}-1")
     # No item-health ledger at all, as on the injection canary day.
 
     metrics = DayMetrics.read(
@@ -530,7 +529,7 @@ def test_scored_counts_distinct_published_items_not_ledger_rows(tmp_path: Path) 
         date=DATE,
         runs=[_run(1, planned=2, succeeded=2, failed=0, skipped=0)],
     )
-    eval_writer.append(
+    seed_scores(
         state_root,
         [
             # energy-01 scored twice, drifting once - two rows, one published item.
@@ -549,6 +548,7 @@ def test_scored_counts_distinct_published_items_not_ledger_rows(tmp_path: Path) 
             # A row for an item this day did not publish.
             _score("energy-99", "ghost", ConfidenceBand.HIGH, 0.7, 0.7, 0.3),
         ],
+        run_id=f"{DATE}-1",
     )
 
     metrics = DayMetrics.read(

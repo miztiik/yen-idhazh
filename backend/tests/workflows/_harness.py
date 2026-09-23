@@ -24,6 +24,7 @@ import yaml  # type: ignore[import-untyped]
 from conftest import CONFIG_DIR, REPO_ROOT, read_text
 
 from idhazh import ledger, paths
+from idhazh.contracts.base import ServerJob
 from idhazh.contracts.visual_decision import PAYLOAD_SUFFIX, VisualDecision, VisualKind, VisualState
 from idhazh.telemetry.publish import series
 
@@ -483,6 +484,10 @@ BENCH_COMPACT_STEP: Final = "Fold the machine record into its day"
 
 BENCH_COMPACT_COMMAND: Final = "python -m idhazh compact"
 
+#: The fold takes the run's own date and folds the days closed behind it. A call
+#: that names no date has no cover to fold against and refuses.
+COMPACT_DATE_FLAG: Final = "--date"
+
 #: The one composite action in this repository. The step above was byte-identical
 #: in two workflows apart from the job it read the models file from, and a step
 #: duplicated across two files is a step that drifts the day one of them is
@@ -619,15 +624,10 @@ COMMIT_STEPS: Final = {
     "bench": "Commit the machine this bench drew",
 }
 
-#: The catch-up for a run whose assemble never drained the segment store. The
-#: `plan` job is its only caller, and `prune.yml` may never be: that workflow
-#: ends in a force push and commits nothing on 29 of 30 wakes.
-COMPACT_STEP: Final = "Fold any segments an earlier run left behind"
-
-#: The step that gives the fold above a current store to read. `actions/checkout`
+#: The step that gives this job a current state root to read. `actions/checkout`
 #: restores the commit the run was triggered at, and the `digest` concurrency
-#: group can hold a queued run for hours after that, so without this the fold
-#: derives a day head from a store another run has already drained.
+#: group can hold a queued run for hours after that, so without this the plan is
+#: made against rows another run has already superseded.
 TAKE_STATE_STEP: Final = "Take the run state from the tip, not from the trigger commit"
 
 TAKE_STATE_SCRIPT: Final = SCRIPTS_DIR / "take-state-from-the-tip.sh"
@@ -700,16 +700,15 @@ COMMIT_STAGED_PATHS: Final = {
     # thrown away with the runner. `state/traces` is the raw evidence the fold is
     # taken from and was missed the same way.
     #
-    # `state/segments` replaced `state/host-fingerprint` on 2026-09-17, and
-    # `state/item-health`, `state/scores`, `state/score-index` and
-    # `state/span-rollup` followed it on 2026-09-18. Each of those heads used to
-    # be appended to by up to eight work
-    # shards and by assemble; every writer now writes its own segment and
-    # `assemble` folds them in, so this job stages the segment store and no
-    # longer stages a head it does not write.
+    # `state` whole since 2026-09-22, where this was `state/traces` and
+    # `state/segments` named one at a time. Every tree a shard writes now names
+    # its file for the one writer that wrote it, so the shard commits into the
+    # day directory of whichever tree its own rows belong to - and that set is
+    # not knowable when a list is written. Naming the directory also answers the
+    # fresh-checkout rule: `state` is in every checkout and a tree inside it need
+    # not be.
     "work": [
-        "state/traces",
-        "state/segments",
+        "state",
     ],
     "assemble": [
         "frontend/public/digest",
@@ -745,16 +744,22 @@ COMMIT_STAGED_PATHS: Final = {
 # The step that folds an out-of-window month before the step above commits it.
 # It runs after the day's own commit, so a retirement that loses its push costs
 # one run's bytes and never a published day.
-FOLD_STEP: Final = "Retire the ledger shards and the visuals nothing still reads"
+RETIRE_STEP: Final = "Retire the ledger shards and the visuals nothing still reads"
 
-FOLD_COMMAND: Final = "python -m idhazh prune-state"
+# The step that replaces a closed day's writer files with the one file they
+# settle to. It runs after the day's own commit for the same reason the
+# retirement does: it deletes committed files, so a fold that loses its push may
+# never cost a published day.
+CLOSED_DAY_FOLD_STEP: Final = "Fold the days that can gain no more rows"
+
+RETIRE_COMMAND: Final = "python -m idhazh prune-state"
 
 # Set on purpose. `prune.yml` force-pushes main on a schedule, so a state file
 # this step deletes stops being recoverable from history once the prune passes
 # over it (CLAUDE.md section 8). The step logs every file a live run would remove
 # and removes nothing; turning the deletion on is a one-line commit of its own,
 # taken after a scheduled run has printed that list.
-FOLD_DRY_RUN_FLAG: Final = "--dry-run"
+RETIRE_DRY_RUN_FLAG: Final = "--dry-run"
 
 # The step that fills the two ledgers the step above commits, and the two things
 # that decide which items are this shard's.
@@ -2108,9 +2113,35 @@ def _scripted_origin(
     return origin, runner
 
 
-def _rebuild_command(date: str) -> str:
+def _a_writer(execution: str) -> str:
+    """The filename one assemble job owns inside a day directory.
+
+    Built through `ledger.segment_name` rather than spelled here, so a race
+    between two of these is a race between two names a run can produce. The
+    execution number is what tells the three writers of a scripted race apart:
+    the seed, the run that beat this one to origin, and this one.
+    """
+    return ledger.segment_name(
+        run_id=f"{SUBSTITUTED_DATE}-{execution}",
+        attempt=1,
+        job=ServerJob.ASSEMBLE,
+        shard=0,
+    )
+
+
+#: The three writers a scripted digest race models. GitHub allocates an
+#: execution number of eleven digits, so these are eleven digits.
+SEED_WRITER: Final = _a_writer("40000000001")
+RACING_WRITER: Final = _a_writer("40000000002")
+THIS_WRITER: Final = _a_writer("40000000003")
+
+
+def _rebuild_command(date: str, writer: str = THIS_WRITER) -> str:
     """The producer the harness puts through the loop, as the loop word-splits it."""
-    return f"{Path(sys.executable).as_posix()} {REBUILD_STAND_IN.as_posix()} --date {date}"
+    return (
+        f"{Path(sys.executable).as_posix()} {REBUILD_STAND_IN.as_posix()} "
+        f"--date {date} --writer {writer}"
+    )
 
 
 def _drop_command(date: str) -> str:
@@ -2141,14 +2172,16 @@ def _chart(repo: Path, date: str, item_id: str, relpath: str, body: str | None =
     _write(repo / RUN_ARTIFACTS / date / "items" / f"{item_id}{PAYLOAD_SUFFIX}", decision.to_json())
 
 
-def _rebuild(repo: Path, env: dict[str, str], date: str, items: Sequence[str]) -> None:
+def _rebuild(
+    repo: Path, env: dict[str, str], date: str, items: Sequence[str], writer: str = THIS_WRITER
+) -> None:
     """One assemble run: write this run's artifacts, then publish them."""
     _write(
         repo / RUN_ARTIFACTS / date / "items.json",
         json.dumps({"items": list(items)}) + "\n",
     )
     subprocess.run(
-        [sys.executable, str(REBUILD_STAND_IN), "--date", date],
+        [sys.executable, str(REBUILD_STAND_IN), "--date", date, "--writer", writer],
         cwd=repo,
         env=env,
         capture_output=True,
@@ -2175,7 +2208,7 @@ def _seed_digest_origin(root: Path, date: str) -> None:
     # without them fails at `git add` rather than at the payload.
     for relative in CONSOLE_SEED:
         _write(seed / relative, read_text(REPO_ROOT / relative))
-    _rebuild(seed, env, date, ["item-a", "item-b"])
+    _rebuild(seed, env, date, ["item-a", "item-b"], SEED_WRITER)
     _git(seed, env, "add", ".gitattributes", "docs", *COMMIT_STAGED_PATHS["assemble"])
     _git(seed, env, "commit", "-m", f"digest: {date}")
     _git(seed, env, "push", "-u", "origin", "main")
@@ -2211,7 +2244,7 @@ def _race_the_day(
     _git(tmp_path, env, "clone", str(tmp_path / "origin.git"), str(other))
     for item_id, relpath in (charts or {}).items():
         _chart(other, date, item_id, relpath)
-    _rebuild(other, env, date, items)
+    _rebuild(other, env, date, items, RACING_WRITER)
     _git(other, env, "add", *COMMIT_STAGED_PATHS["assemble"])
     _git(other, env, "commit", "-m", f"digest: {date}")
     _write(other / "docs" / "unrelated.md", "merged by a pull request\n")

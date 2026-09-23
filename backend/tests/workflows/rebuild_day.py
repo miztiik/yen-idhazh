@@ -11,15 +11,17 @@ repository - and it would put the pipeline under test rather than the git loop.
 So this is a real program doing real file I/O with `stage_assemble`'s shape:
 read the previous day, drop the items it already carries, replace this run's
 entry in the run list, copy each decision's asset path into the day the way
-`to_digest_visual` does, blind-append the two ledgers that blind-append,
-deduplicate the one that deduplicates, rewrite the telemetry projection whole,
-and rebuild the month search index from the days on disk. It decides nothing -
-no model, no scorer, no contracts - because the thing under test is the loop,
-not the digest.
+`to_digest_visual` does, blind-append the one ledger that blind-appends, write
+the two day trees one file per writer, and rebuild the month search index from
+the days on disk. It decides nothing - no model, no scorer, no contracts -
+because the thing under test is the loop, not the digest.
 
-Usage: rebuild_day.py --date YYYY-MM-DD, from the root of a checkout. This run's
-artifacts are read from `backend/var/run/<date>/items.json`, which stands in for
-the worker artifacts the assemble job downloads.
+Usage: rebuild_day.py --date YYYY-MM-DD --writer NAME, from the root of a
+checkout. This run's artifacts are read from `backend/var/run/<date>/items.json`,
+which stands in for the worker artifacts the assemble job downloads. `--writer`
+is the filename this run owns inside a day directory. The harness builds it
+through `ledger.segment_name`, so a name spelled here could not drift from the
+name a run produces.
 """
 
 from __future__ import annotations
@@ -40,6 +42,18 @@ def _read_rows(path: Path) -> list[dict[str, str]]:
         return []
     with path.open("r", encoding="utf-8", newline="") as handle:
         return list(csv.DictReader(handle))
+
+
+def _read_day(day_dir: Path, *, without: str = "") -> list[dict[str, str]]:
+    """Every writer's rows for one day, in the order a settlement reads them."""
+    if not day_dir.is_dir():
+        return []
+    return [
+        row
+        for path in sorted(day_dir.glob("*.csv"))
+        if path.name != without
+        for row in _read_rows(path)
+    ]
 
 
 def _write_rows(path: Path, columns: tuple[str, ...], rows: list[dict[str, str]]) -> None:
@@ -77,7 +91,7 @@ def _read_visuals(root: Path, date: str) -> dict[str, str]:
     return found
 
 
-def rebuild(root: Path, date: str) -> None:
+def rebuild(root: Path, date: str, writer: str) -> None:
     """Publish this run's items into whatever day the checkout already holds."""
     day_dir = root / "frontend" / "public" / "digest" / date[:4] / date[5:7] / date[8:10]
     month = date[:7]
@@ -111,36 +125,46 @@ def rebuild(root: Path, date: str) -> None:
     )
     _write_json(day_dir / "run.json", {"date": date, "runs": runs})
 
-    # Two of the three ledgers append blind, as `ledger.extend_ledger_file` does: a row is
-    # a fact about a run, and a run that runs twice records twice. The published
-    # one and the item-health one are filed under the day they name, as
-    # `ledger.append_published` and `ledger.append_item_health` do.
+    # `state/published` appends blind, as `ledger.extend_ledger_file` does: a row
+    # is a fact about a run, and a run that runs twice records twice. It is one
+    # day file that two runs can both append to, and a union merge driver is
+    # what settles them.
     published_path = root / "state" / "published" / date[:4] / date[5:7] / f"{date[8:10]}.csv"
     published = _read_rows(published_path)
     published += [{"item_id": item, "published_on": date} for item in mine]
     _write_rows(published_path, PUBLISHED_COLUMNS, published)
 
-    health_path = root / "state" / "item-health" / date[:4] / date[5:7] / f"{date[8:10]}.csv"
-    health = _read_rows(health_path)
-    health += [{"date": date, "item_id": item, "outcome": "published"} for item in mine]
-    _write_rows(health_path, HEALTH_COLUMNS, health)
+    # The other two are day directories, and this run writes the one file it
+    # owns inside each. Two runs of one day write two names, so there is nothing
+    # for a merge to settle and nothing a rebase has to choose between.
+    health_day = root / "state" / "item-health" / date[:4] / date[5:7] / date[8:10]
+    _write_rows(
+        health_day / writer,
+        HEALTH_COLUMNS,
+        [{"date": date, "item_id": item, "outcome": "published"} for item in mine],
+    )
 
-    # The eval ledger refuses an observation it already holds, as
-    # `idhazh.evals.writer.append` does, and files by the day it names, as that
-    # function has done since 2026-09-13.
-    scores_path = root / "state" / "scores" / date[:4] / date[5:7] / f"{date[8:10]}.csv"
-    scores = _read_rows(scores_path)
-    already = {row["item_id"] for row in scores}
-    scores += [{"item_id": item, "hhem": "0.900"} for item in mine if item not in already]
-    _write_rows(scores_path, SCORE_COLUMNS, scores)
+    # The eval ledger refuses an observation another writer already recorded, as
+    # `idhazh.evals.writer.append_segment` does. Its own file is excluded from
+    # that read: a rerun replaces the file this writer owns rather than adding
+    # to it, so counting its own rows as already recorded would empty it.
+    scores_day = root / "state" / "scores" / date[:4] / date[5:7] / date[8:10]
+    already = {
+        row["item_id"] for row in _read_day(scores_day, without=writer)
+    }
+    _write_rows(
+        scores_day / writer,
+        SCORE_COLUMNS,
+        [{"item_id": item, "hhem": "0.900"} for item in mine if item not in already],
+    )
 
     # The public projection is a full rewrite of the month the day falls in,
-    # folded from that month's day files, never a merge of two of them.
-    month_days = sorted((root / "state" / "item-health" / date[:4] / date[5:7]).glob("*.csv"))
+    # folded from that month's days, never a merge of two of them.
+    health_month = root / "state" / "item-health" / date[:4] / date[5:7]
     _write_rows(
         root / "frontend" / "public" / "telemetry" / f"{month}.csv",
         HEALTH_COLUMNS,
-        [row for day in month_days for row in _read_rows(day)],
+        [row for day in sorted(health_month.glob("*")) if day.is_dir() for row in _read_day(day)],
     )
 
     # The month search index is derived from the days on disk, so it is rebuilt
@@ -161,15 +185,16 @@ def rebuild(root: Path, date: str) -> None:
     # what `_seed_ledger` in the harness has to know about it.
     _write_json(
         root / "frontend" / "public" / "source-health.json",
-        {"date": date, "sources": sorted({row["item_id"] for row in health})},
+        {"date": date, "sources": sorted({row["item_id"] for row in _read_day(health_day)})},
     )
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Rebuild one day of the scripted digest.")
     parser.add_argument("--date", required=True)
+    parser.add_argument("--writer", required=True)
     args = parser.parse_args()
-    rebuild(Path.cwd(), args.date)
+    rebuild(Path.cwd(), args.date, args.writer)
 
 
 if __name__ == "__main__":

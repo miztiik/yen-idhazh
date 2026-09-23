@@ -24,20 +24,39 @@ config/*.json text eol=lf
 # what a lost push race used to stack. A job's checkout is pinned to the commit
 # that triggered its run, so a second attempt could not see the rows the first
 # attempt pushed, appended them again, and the union kept both - a key twice in
-# a file every reader of it assumes holds each key once. Each writer now writes
-# its own segment below and `idhazh compact` folds them by key, so there is
-# nothing for a union to settle and nothing to sweep up after one.
+# a file every reader of it assumes holds each key once. Each writer now takes
+# its own file inside the day directory, named for its run, attempt, job and
+# shard, so there is nothing for a union to settle and nothing to sweep up
+# after one.
 #
-# `state/seen/` is the one that never moved to a segment and took the driver
-# back instead. Its own line below says why the repeat it lets through changes
-# no answer.
+# `state/feed-health/` is the one that deliberately takes NO union driver. Two
+# plan jobs of one night each hold a verdict on every feed, and those two
+# verdicts can disagree - so a union there would keep both and make the conflict
+# quiet rather than remove it. The written-once name removes it.
 #
-# A segment has one writer, so a union driver it never asked for would silently
-# stack two copies where a conflict should stop the push. `-merge` says more
-# than saying nothing would: a path no rule names still gets git's ordinary text
-# merge, and `-merge` refuses to merge at all, so two writers on one segment
-# stop the push rather than leave a file neither of them wrote.
-state/segments/**/*.csv -merge
+# `state/seen/` is the one that never moved to a per-writer name and took the
+# driver back instead. Its own line below says why the repeat it lets through
+# changes no answer.
+
+# The retirement record. One row is one address a server said was gone, keyed
+# `(source_id, retired_on)` and true of that day whoever wrote it, so two runs
+# that both met a dead address are not in disagreement and the union of both
+# sides is the answer.
+state/feed-retirements.csv text eol=lf merge=union
+
+# One council shard's outcome. A row is one shard of one run and says nothing
+# about another shard or another run, so two writers appending are independent
+# and a repeat the union brings is dropped by `COUNCIL_SHARD_OUTCOME_KEY`.
+state/llm-council/shard-outcomes/**/*.csv text eol=lf merge=union
+
+# The four judge trees. A row is one measurement of one pair on one day, the
+# reader keys on the pair and takes the newest, so two runs that both judged
+# that day are not in disagreement and a repeat the union brings costs bytes
+# and moves no verdict.
+state/content-similarity-judge/metrics/**/*.csv text eol=lf merge=union
+state/content-similarity-judge/merge-line-holdout-scores/**/*.csv text eol=lf merge=union
+state/content-similarity-judge/scored-pairs/**/*.csv text eol=lf merge=union
+state/content-similarity-judge/fitted-thresholds/**/*.csv text eol=lf merge=union
 
 # The published day tree. It is one of the three collections that take a union
 # driver, and it says so in its own words rather than inheriting one from a
@@ -78,8 +97,8 @@ state/seen/**/*.csv text eol=lf merge=union
 
 # The hand-marked holdout pairs. `merge=text` is what an unnamed path would get
 # anyway, and it is written down because the reason is worth reading next to the
-# two union lines above. A person edits this file, so two edits of it are two
-# people disagreeing about the same rows rather than two runs appending
+# union lines above and below. A person edits this file, so two edits of it are
+# two people disagreeing about the same rows rather than two runs appending
 # independent ones - and a union driver on a disagreement silently keeps both
 # marks, which is a pair marked same-story and different-story at once. A text
 # merge stops the push and asks, which is the right answer when the writer is a

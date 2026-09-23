@@ -58,6 +58,19 @@ class RetentionConfig(Model):
         ),
     )
     dry_run: bool = True
+    day_validation_keep_months: int = Field(
+        default=14,
+        ge=1,
+        description=(
+            "How many months of day-validation receipts are kept under "
+            "state/day-validations/. A receipt says one published day passed the "
+            "rules as they stood, and it is consulted only to skip re-reading that "
+            "day - so a receipt for a day the published archive no longer holds "
+            "cannot be read and answers nothing. Fourteen matches the published "
+            "windows the console reads, so the receipts outlive the days by a "
+            "month rather than going first and costing a full re-validation."
+        ),
+    )
     max_deletes_per_run: int = Field(
         default=200,
         ge=0,

@@ -37,11 +37,13 @@ def test_no_derived_entry_carries_a_second_placeholder_or_a_space() -> None:
         assert "\\" not in entry, f"{entry} must use POSIX separators (CLAUDE.md section 2)"
 
 
-def test_the_rendered_line_is_the_set_in_one_order_with_single_spaces() -> None:
-    """The step output is one line, and the script splits it back into the tuple."""
+def test_the_rendered_line_is_every_derived_path_in_one_order_with_single_spaces() -> None:
+    """The step output is one line, and the script splits it back into the paths."""
     rendered = paths.refresh_paths(day_dir=A_DAY_DIR)
 
-    assert rendered.split(" ") == [entry.format(day_dir=A_DAY_DIR) for entry in paths.DERIVED]
+    assert rendered.split(" ") == [
+        entry.format(day_dir=A_DAY_DIR) for entry in paths.DERIVED if "/" in entry
+    ]
     assert "  " not in rendered, "two spaces is an empty path the script would try to stage"
     assert f"{A_DAY_DIR}/digest.json" in rendered.split()
     assert f"{A_DAY_DIR}/run.json" in rendered.split()
@@ -49,6 +51,26 @@ def test_the_rendered_line_is_the_set_in_one_order_with_single_spaces() -> None:
     # rendered charts into it and no producer in the assemble job can make them
     # again, so handing the directory back would delete them.
     assert A_DAY_DIR not in rendered.split()
+
+
+def test_a_derived_filename_is_never_handed_back_because_no_step_can_rebuild_it() -> None:
+    """A bare name in the list is derived, and it is the one kind left out.
+
+    `settled.csv` is the fold of a closed day. It is derived - two runs that
+    fold one day compute the same bytes - but it names a file in many
+    directories rather than one path, and `idhazh assemble` re-emits no fold. A
+    job that handed one back would delete it instead of rebuilding it.
+
+    A conflicted fold refuses the push rather than merging, which is the
+    mechanism working: the name carries no writer identity, so the resolver
+    answers "not mine" and stops.
+    """
+    names = [entry for entry in paths.DERIVED if "/" not in entry]
+
+    assert names, "the class holds a name, and dropping the last one would pass this by accident"
+    handed_back = paths.refresh_paths(day_dir=A_DAY_DIR).split(" ")
+    for name in names:
+        assert name not in handed_back
 
 
 def test_a_path_that_carries_a_space_is_refused_where_it_is_written() -> None:

@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 from conftest import REPO_ROOT, read_text
 
-from idhazh import cli, config, ledger
+from idhazh import cli, config, day_shards, ledger
 from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.run_plan import RunPlan
@@ -57,6 +57,7 @@ from ._harness import (
     BUDGETS_JOB,
     COMMIT_SCRIPT,
     COMMIT_STAGED_PATHS,
+    COMPACT_DATE_FLAG,
     FINGERPRINT_BENCH_JOB,
     FINGERPRINT_COMMAND,
     FINGERPRINT_JOB_FLAG,
@@ -81,6 +82,11 @@ from ._harness import (
 #: The step that stands the tokenizer up for the budgets job. Named here rather
 #: than in the shared harness because one module reads it.
 BUDGETS_START_STEP = "Start the tokenizer"
+
+#: The cover the bench-tree test folds with. A fold takes the days closed behind
+#: its date, so the date has to be the cover past the day the probe wrote.
+A_DAY_AFTER_THE_PROBE = "2026-10-01"
+FOLD_AFTER_DAYS = 7
 
 pytestmark = pytest.mark.workflow
 
@@ -379,20 +385,22 @@ def test_a_bench_machine_row_cannot_land_where_the_console_reads(tmp_path: Path)
     # are how that is asked rather than assumed - the bench root is INSIDE the
     # production root, so a store built one directory higher would fold the
     # bench's row into the ledger the console reads.
-    compact_stage.stage_compact(bench_root)
-    compact_stage.stage_compact(production_root)
+    compact_stage.stage_compact(bench_root, date=A_DAY_AFTER_THE_PROBE, after_days=FOLD_AFTER_DAYS)
+    compact_stage.stage_compact(
+        production_root, date=A_DAY_AFTER_THE_PROBE, after_days=FOLD_AFTER_DAYS
+    )
 
     written = {
         path.relative_to(tmp_path).as_posix()
         for path in tmp_path.rglob("*.csv")
         if ledger.HOST_FINGERPRINT_DIRNAME in path.parts
     }
+    bench_day = f"{BENCH_LEDGER_ROOT}/{ledger.HOST_FINGERPRINT_DIRNAME}/2026/09/17"
+    production_day = f"{ledger.STATE_DIRNAME}/{ledger.HOST_FINGERPRINT_DIRNAME}/2026/09/17"
     assert written == {
-        f"{BENCH_LEDGER_ROOT}/{ledger.HOST_FINGERPRINT_DIRNAME}/2026/09/17.csv",
-        f"{ledger.STATE_DIRNAME}/{ledger.HOST_FINGERPRINT_DIRNAME}/2026/09/17.csv",
-    }
-    assert not ledger.segment_files(bench_root), "the bench's own compaction drained it"
-    assert not ledger.segment_files(production_root)
+        f"{bench_day}/{day_shards.SETTLED_NAME}",
+        f"{production_day}/{day_shards.SETTLED_NAME}",
+    }, "one fold reached the other root, or a probe row landed off its own day"
 
     staged = COMMIT_STAGED_PATHS["bench"]
     assert staged == [f"{BENCH_LEDGER_ROOT}/{ledger.HOST_FINGERPRINT_DIRNAME}"]
@@ -471,6 +479,9 @@ def test_the_bench_folds_its_own_segment_before_it_commits_the_row() -> None:
     assert words[words.index(BENCH_CONFIG_FLAG) + 1] == BENCH_CANDIDATE_CONFIG, (
         "without the candidate config the fold reads the production state root, so it "
         "drains segments the daily run is still waiting to commit"
+    )
+    assert COMPACT_DATE_FLAG in words and words[words.index(COMPACT_DATE_FLAG) + 1], (
+        "the fold names no date, so it has no cover and folds nothing"
     )
 
 

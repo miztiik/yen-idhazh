@@ -27,13 +27,15 @@ from __future__ import annotations
 
 import argparse
 import csv
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
 
+from idhazh import day_shards, ledger
 from idhazh.contracts.base import WORK_JOB
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
-from idhazh.ledger import host_fingerprint_path, item_health_path, load_host_fingerprint_shard
+from idhazh.ledger import load_host_fingerprint_shard
 
 #: How far apart the two instruments may be before one of them is wrong.
 #:
@@ -84,27 +86,30 @@ def pool_counters(rows: list[HostFingerprintRow]) -> Pooled:
     )
 
 
-def pool_ledger(path: Path, *, run_id: str) -> Pooled:
+def pool_ledger(shards: Sequence[Path], *, run_id: str) -> Pooled:
     """One run's item-health rows, summed over `input_tokens - cached_tokens`.
 
     That subtraction is the definition: `cached_tokens` is what the runtime
     reused instead of reading, so leaving it in reports a rate the machine never
     ran at. The console and the throughput doc use the same one.
+
+    Every work shard of the run left its own file in the day directory, so the
+    pool is over all of them - a pool over one would report a fraction of the
+    tokens against the whole server's seconds.
     """
     tokens = 0
     milliseconds = 0
     parts = 0
-    if not path.exists():
-        return Pooled(tokens=0, seconds=0.0, parts=0)
-    with path.open("r", encoding="utf-8", newline="") as handle:
-        for row in csv.DictReader(handle):
-            if row["run_id"] != run_id:
-                continue
-            if any(not row[cell] for cell in _REQUIRED):
-                continue
-            tokens += int(row["input_tokens"]) - int(row["cached_tokens"] or 0)
-            milliseconds += int(row["prefill_ms"])
-            parts += 1
+    for path in shards:
+        with path.open("r", encoding="utf-8", newline="") as handle:
+            for row in csv.DictReader(handle):
+                if row["run_id"] != run_id:
+                    continue
+                if any(not row[cell] for cell in _REQUIRED):
+                    continue
+                tokens += int(row["input_tokens"]) - int(row["cached_tokens"] or 0)
+                milliseconds += int(row["prefill_ms"])
+                parts += 1
     return Pooled(tokens=tokens, seconds=milliseconds / 1000.0, parts=parts)
 
 
@@ -165,7 +170,8 @@ def reconcile(state_dir: Path, *, run_id: str) -> Reconciliation:
     """Both sides of one run, pooled the same way.
 
     Both sides file by day and a run id opens with its date, so each side reads
-    one day file however long the ledgers get.
+    one day however long the ledgers get. A day is a directory of writer-owned
+    files and every file in it is read.
 
     The `work` rows only. The other side of this comparison is
     `state/item-health/`, which is one row per summarized item, so the visual
@@ -175,11 +181,16 @@ def reconcile(state_dir: Path, *, run_id: str) -> Reconciliation:
     date = run_id[:10]
     return Reconciliation(
         run_id=run_id,
-        ledger=pool_ledger(item_health_path(state_dir, date), run_id=run_id),
+        ledger=pool_ledger(
+            day_shards.one_day(state_dir / ledger.ITEM_HEALTH_DIRNAME, date), run_id=run_id
+        ),
         server=pool_counters(
             [
                 row
-                for row in load_host_fingerprint_shard(host_fingerprint_path(state_dir, date))
+                for shard in day_shards.one_day(
+                    state_dir / ledger.HOST_FINGERPRINT_DIRNAME, date
+                )
+                for row in load_host_fingerprint_shard(shard)
                 if row.run_id == run_id and row.job == WORK_JOB
             ]
         ),

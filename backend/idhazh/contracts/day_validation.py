@@ -58,7 +58,7 @@ from idhazh.contracts.base import ChangelogEntry, Contract, DateStamp, Sha256
 
 
 class DayValidationReceipt(Contract):
-    """One row of `state/day-validations.csv`: one frozen day, one validator."""
+    """One row of `state/day-validations/`: one frozen day, one validator."""
 
     __schema_stem__: ClassVar[str] = "day-validation-receipt"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (

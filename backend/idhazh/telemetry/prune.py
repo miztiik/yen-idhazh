@@ -83,12 +83,10 @@ PruneInterruptedError = one_at_a_time.PruneInterruptedError
 #: The rule that decides membership is one line: a store files
 #: `<YYYY>/<MM>/<DD>.csv` day files, and is not one of the two stores below.
 #: `state/day-metrics/` and `state/traces/` are day-shaped and are deliberately
-#: absent - they file `.json` and `<DD>-<run>-<shard>.jsonl`, which
+#: absent - they file `.json` and `.jsonl`, which
 #: `day_shards.shard_files` refuses, and a second walker here would be a second
 #: answer to what a day file is. Bringing either in means teaching that one
-#: walker its suffix, which is where the question belongs. `state/span-rollup/`
-#: files by month and `state/segments/` is scratch the compaction drains, so
-#: neither is a day store at all.
+#: walker its suffix, which is where the question belongs.
 #:
 #: **`host-fingerprint` is what a day taken off the site owes its machine rows.**
 #: It filed by day from 2026-09-16 and was missing from this list until

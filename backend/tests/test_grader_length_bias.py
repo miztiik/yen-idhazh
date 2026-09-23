@@ -26,12 +26,12 @@ from pathlib import Path
 import pytest
 from conftest import CONTRACT_FIXTURES_DIR, read_text
 
-from idhazh.contracts.base import derive_text_digest
+from idhazh import ledger
+from idhazh.contracts.base import ServerJob, derive_text_digest
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.evidence import EvidenceItem
 from idhazh.contracts.knobs.evaluation import EvaluationConfig
 from idhazh.evals import evidence as evidence_writer
-from idhazh.evals import writer as score_writer
 from utilities import grader_length_bias as bias
 
 EVIDENCE_FIXTURE = CONTRACT_FIXTURES_DIR / "evidence-item" / "premise-recorded.json"
@@ -73,10 +73,10 @@ def a_package(directory: Path, items: list[EvidenceItem]) -> Path:
 def a_ledger(state: Path, rows: list[dict[str, object]]) -> Path:
     """The real ledger shape and the real layout: a state directory of day files.
 
-    Filed by each row's own `date` through `evals.writer.ledger_path`, which is
-    what the pipeline files by - a fixture that spelled the layout itself would
-    be a second writer, and the two could disagree without either being wrong.
-    An empty ledger still writes one day file, so the no-rows case reads a store
+    Filed by each row's own `date`, under the name the assemble job that scored
+    the day would take - a fixture that spelled the layout itself would be a
+    second writer, and the two could disagree without either being wrong. An
+    empty ledger still writes one day file, so the no-rows case reads a store
     that exists and holds nothing rather than a store that is not there.
     """
     names = EvalRow.csv_columns()
@@ -84,7 +84,15 @@ def a_ledger(state: Path, rows: list[dict[str, object]]) -> Path:
     for row in rows:
         by_day.setdefault(str(row["date"])[:10], []).append(row)
     for day, kept in sorted(by_day.items()):
-        path = score_writer.ledger_path(state, day)
+        path = ledger.day_shard_path(
+            state,
+            ledger.SegmentLedger.SCORES,
+            date=day,
+            run_id=f"{day}-1",
+            attempt=1,
+            job=ServerJob.ASSEMBLE,
+            shard=0,
+        )
         path.parent.mkdir(parents=True, exist_ok=True)
         with path.open("w", encoding="utf-8", newline="") as handle:
             writer = csv.DictWriter(handle, fieldnames=names, lineterminator="\n")

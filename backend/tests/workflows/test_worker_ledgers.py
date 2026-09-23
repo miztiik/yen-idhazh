@@ -12,21 +12,23 @@ from conftest import REPO_ROOT
 from idhazh import ledger, paths, telemetry
 from idhazh.contracts.base import ServerJob
 from idhazh.evals import writer as score_writer
+from idhazh.telemetry.publish import day_metrics
 
 from ._harness import (
+    CLOSED_DAY_FOLD_STEP,
     COMMIT_STAGED_PATHS,
     COMMIT_STEPS,
     FINGERPRINT_COMMAND,
     FINGERPRINT_JOB_FLAG,
     FINGERPRINT_JOBS,
     FINGERPRINT_STEP,
-    FOLD_STEP,
     HARVEST_STEP,
     JOB_CLOCK_COMMAND,
     JOB_CLOCK_STEP,
     METRICS_FILE,
     RECORD_COMMAND,
     RECORD_STEP,
+    RETIRE_STEP,
     REVIEW_STEP,
     RUN_ARTIFACTS,
     SUBSTITUTED_DATE,
@@ -55,6 +57,11 @@ from ._harness import (
 )
 
 pytestmark = [pytest.mark.workflow, pytest.mark.slow]
+
+
+def _under(relpath: str, named: str) -> bool:
+    """Whether handing `named` back would carry this path with it."""
+    return relpath == named or relpath.startswith(f"{named}/")
 
 
 def test_a_worker_commits_its_rows_before_the_run_can_throw_them_away() -> None:
@@ -269,62 +276,11 @@ def test_a_ledger_that_will_not_push_cannot_cost_the_day_a_worker() -> None:
         ("assemble", "actions/download-artifact@v8"),
         ("assemble", FINGERPRINT_STEP),
         ("assemble", HARVEST_STEP),
-        ("assemble", FOLD_STEP),
+        ("assemble", RETIRE_STEP),
+        ("assemble", CLOSED_DAY_FOLD_STEP),
         ("assemble", REVIEW_STEP),
         ("assemble", COMMIT_STEPS["fold"]),
     }
-
-
-def test_every_path_the_work_shard_stages_carries_the_driver_it_asked_for() -> None:
-    """Eight shards push to one branch, so what settles a shared file has to be right.
-
-    Asked of git rather than of a pattern matcher written here: `.gitattributes`
-    is the file that decides, and a second implementation of its globbing could
-    agree with this test and disagree with the merge.
-
-    No staged path is union-merged any more, and that is the property rather
-    than an omission. A shard writes no ledger head: the last one moved to a
-    segment on 2026-09-18. Each remaining path is asserted to be outside the
-    driver in its own words. A trace file is named for one shard of one run and
-    inherits nothing, so git answers `unspecified`. A segment is named for one
-    attempt at one shard of one run and is refused the driver by name, so git
-    answers `unset` - the difference matters, because `state/**/*.csv` would
-    otherwise reach it and a union of two segments stacks two copies of a file
-    meant to have exactly one writer.
-    """
-    inherits_nothing = {
-        "state/traces": telemetry.committed_trace_relpath(f"{SUBSTITUTED_DATE}-1", 1),
-    }
-    refuses_the_driver = {
-        "state/segments": ledger.segment_relpath(
-            ledger.SegmentLedger.HOST_FINGERPRINT,
-            run_id=f"{SUBSTITUTED_DATE}-1",
-            attempt=1,
-            job=ServerJob.WORK,
-            shard=1,
-        ),
-    }
-    assert set(inherits_nothing) | set(refuses_the_driver) == set(COMMIT_STAGED_PATHS["work"])
-
-    answered = subprocess.run(
-        [
-            "git",
-            "check-attr",
-            "merge",
-            "--",
-            *inherits_nothing.values(),
-            *refuses_the_driver.values(),
-        ],
-        cwd=REPO_ROOT,
-        capture_output=True,
-        text=True,
-        check=True,
-    ).stdout.splitlines()
-
-    assert answered == [
-        *(f"{path}: merge: unspecified" for path in inherits_nothing.values()),
-        *(f"{path}: merge: unset" for path in refuses_the_driver.values()),
-    ]
 
 
 def test_every_job_that_records_a_machine_says_which_job_it_is() -> None:
@@ -399,66 +355,90 @@ def test_the_observation_index_travels_with_the_rows_it_describes() -> None:
     measurement past that point new, and record each one a second time - the one
     promise the eval ledger makes about itself.
 
-    **The two now travel as one segment pair rather than as two staged heads.**
-    A work shard writes `state/segments/scores/<name>.csv` and
-    `state/segments/score-index/<name>.csv`, and both are inside the one path the
-    shard stages, so there is no order in which one is committed and the other is
-    not. The fold writes the two heads together.
+    **The two now travel as one commit rather than as two staged heads.** A work
+    shard writes its rows into `state/scores/<day>/` and its digests into
+    `state/score-index/<day>/`, both named for that shard of that run, and both
+    are inside the one path the shard stages - so there is no order in which one
+    is committed and the other is not.
 
-    The assemble job refreshes the index for the mirror-image reason. A retry
-    hands the rows back to origin's tip and runs the producer again; an index
-    left holding the first attempt's digests would make the producer refuse the
-    day it just rebuilt, and the day's measurements would be lost rather than
-    doubled.
+    Neither is handed back any more. A file named for one writer is computed by
+    nothing else, so restoring the tip's copy would delete this shard's own and
+    the producer would not write it again. That is why both trees left the
+    derived set on 2026-09-22.
 
-    The directory is named rather than derived, and `git add` on a path that is
-    not there aborts the whole step, so a fresh checkout has to carry it.
+    Both directories are in a fresh checkout, because `git add` on a path that is
+    not there aborts the whole step.
     """
     staged = COMMIT_STAGED_PATHS["work"]
-    segments = f"{ledger.STATE_DIRNAME}/{ledger.SEGMENTS_DIRNAME}"
-    assert segments in staged, "the shard stages the store both segments go to"
-    assert score_writer.INDEX_RELDIR not in staged, "the shard no longer writes the head"
-    assert score_writer.LEDGER_RELDIR not in staged
-    assert score_writer.INDEX_RELDIR in paths.DERIVED
-    assert (REPO_ROOT / score_writer.INDEX_RELDIR).is_dir()
-    tracked = subprocess.run(
-        ["git", "ls-files", score_writer.INDEX_RELDIR],
-        cwd=REPO_ROOT,
-        capture_output=True,
-        text=True,
-        check=True,
-    ).stdout.split()
-    assert tracked, f"{score_writer.INDEX_RELDIR} must be in a fresh checkout"
+    refreshed = _commit_call("assemble")[1]["REFRESH_PATHS"].split()
+    for tree in (score_writer.LEDGER_RELDIR, score_writer.INDEX_RELDIR):
+        assert any(_under(tree, path) for path in staged), (
+            f"{tree} is written by this shard and no path in {staged} carries it"
+        )
+        assert not any(_under(tree, path) for path in refreshed), (
+            f"{tree} holds a file named for one writer, so handing it back deletes it"
+        )
+        assert (REPO_ROOT / tree).is_dir()
+        tracked = subprocess.run(
+            ["git", "ls-files", tree],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.split()
+        assert tracked, f"{tree} must be in a fresh checkout"
 
 
-def test_no_ledger_head_carries_a_merge_driver_and_a_segment_refuses_one() -> None:
+def test_a_file_one_writer_owns_takes_no_merge_driver_and_a_shared_one_takes_a_union() -> None:
     """Asked of git rather than of a pattern matcher written here.
 
     `.gitattributes` is the file that decides, so the question goes to the tool
-    that reads it. The two answers are different words and they mean different
-    things: `unspecified` is git's ordinary text merge, which stops the push when
-    two sides changed one file, and `unset` is `-merge`, which refuses to merge
-    the file at all.
+    that reads it. A second implementation of its globbing could agree with this
+    test and disagree with the merge.
 
-    Neither path has to exist. `check-attr` matches a name against the rules and
+    Two classes and two answers. A file named for one run, attempt, job and
+    shard has exactly one writer, so there is nothing for a driver to settle and
+    git answers `unspecified` - its ordinary text merge, which stops the push if
+    two sides ever did change one of them. A collection two jobs append
+    independent rows to takes `merge=union`, and `idhazh.paths.UNION_SAFE` is
+    this repository's own list of those. The list is read here rather than
+    copied, so a collection that joins it without a line in `.gitattributes`
+    fails in the same commit.
+
+    Every tree under `state/` carried a union driver until 2026-09-19, which is
+    what let a second attempt at one job stack a row the first attempt had
+    already pushed. `state/feed-health` is the tree that shows why the
+    written-once name replaced it: two plan jobs of one night can hold different
+    verdicts on one feed, and a union there keeps both and makes the
+    disagreement quiet.
+
+    No path has to exist. `check-attr` matches a name against the rules and
     never opens a file, and a committed date literal in a test is a date that
     stops being interesting.
-
-    Every head under `state/` carried a union merge driver until 2026-09-19,
-    which is what let a second attempt at one job stack a row the first attempt
-    had already pushed. The two day trees that keep one keep it in their
-    own named lines, and they have one writing job each.
     """
-    paths = [
-        "state/item-health/2026/01/01.csv",
-        ledger.feed_retirements_relpath(),
-        "state/segments/item-health/x.csv",
-        "state/published/2026/01/01.csv",
-        "state/visual-prunes/2026/01/01.csv",
+    one_writer = [
+        ledger.day_shard_relpath(
+            which,
+            date=SUBSTITUTED_DATE,
+            run_id=f"{SUBSTITUTED_DATE}-1",
+            attempt=1,
+            job=ServerJob.WORK,
+            shard=1,
+        )
+        for which in ledger.SegmentLedger
+    ]
+    one_writer.append(
+        telemetry.committed_trace_relpath(
+            run_id=f"{SUBSTITUTED_DATE}-1", attempt=1, job=ServerJob.WORK, shard=1
+        )
+    )
+    shared = [
+        entry if entry.endswith(".csv") else f"{entry}/2026/01/01/a.csv"
+        for entry in paths.UNION_SAFE
     ]
 
     answered = subprocess.run(
-        ["git", "check-attr", "merge", "--", *paths],
+        ["git", "check-attr", "merge", "--", *one_writer, *shared],
         cwd=REPO_ROOT,
         capture_output=True,
         text=True,
@@ -466,11 +446,8 @@ def test_no_ledger_head_carries_a_merge_driver_and_a_segment_refuses_one() -> No
     ).stdout.splitlines()
 
     assert answered == [
-        f"{paths[0]}: merge: unspecified",
-        f"{paths[1]}: merge: unspecified",
-        f"{paths[2]}: merge: unset",
-        f"{paths[3]}: merge: union",
-        f"{paths[4]}: merge: union",
+        *(f"{path}: merge: unspecified" for path in one_writer),
+        *(f"{path}: merge: union" for path in shared),
     ]
 
 
@@ -486,66 +463,100 @@ def test_every_shard_of_a_full_fan_out_lands_its_rows(tmp_path: Path) -> None:
     eight truly concurrent pushes cannot be made deterministic in a test.
 
     They wrote one shared file until 2026-09-18 and a union merge driver is what
-    made that survive a race. Each shard writes the segment its own run, attempt,
-    job and shard index name now, so the eight sides of the race are eight adds
-    of eight paths and no merge driver is asked to settle anything.
+    made that survive a race. Each shard writes into the day directory under the
+    name its own run, attempt, job and shard index spell now, so the eight sides
+    of the race are eight adds of eight paths and no merge driver is asked to
+    settle anything.
+
+    The names come from the producer rather than being spelled here. A shard is
+    two digits in a committed name and the workflow hands the job a bare number,
+    so a name written by hand here would not be a name a run can produce.
     """
     staged_paths, settings = _commit_call("work")
     env = _isolated_env(tmp_path)
     origin, _ = _scripted_origin(tmp_path, env, staged_paths)
     shards = range(8)
-    segments = {
-        shard: f"state/segments/item-health/2026-09-19-1-1-work-{shard}.csv" for shard in shards
+    written = {
+        shard: ledger.day_shard_relpath(
+            ledger.SegmentLedger.ITEM_HEALTH,
+            date=SUBSTITUTED_DATE,
+            run_id=f"{SUBSTITUTED_DATE}-1",
+            attempt=1,
+            job=ServerJob.WORK,
+            shard=shard,
+        )
+        for shard in shards
     }
+    assert len(set(written.values())) == len(shards), "two shards were given one name"
     runners = []
     for shard in shards:
         runner = tmp_path / f"shard-{shard}"
         _git(tmp_path, env, "clone", str(origin), str(runner))
-        _write(runner / segments[shard], f"header\nshard-{shard}\n")
+        _write(runner / written[shard], f"header\nshard-{shard}\n")
         runners.append(runner)
 
     results = [_run_commit_script(runner, env, staged_paths, settings) for runner in runners]
 
     assert [result.returncode for result in results] == [0] * len(runners)
     for shard in shards:
-        assert _git(origin, env, "show", f"main:{segments[shard]}").splitlines() == [
+        assert _git(origin, env, "show", f"main:{written[shard]}").splitlines() == [
             "header",
             f"shard-{shard}",
         ]
     assert not any(_mid_rebase(runner) for runner in runners)
 
 
-def test_assemble_hands_back_every_ledger_a_worker_committed() -> None:
-    """Why assemble cannot append a row a shard already pushed.
+def test_assemble_hands_back_no_tree_a_worker_wrote_into() -> None:
+    """Handing a day tree back would delete the rows this job is about to commit.
 
-    Assemble checks out main as it was when the run was queued, so its copy of
-    these two ledgers predates the shards' pushes and its own push always loses
-    the race. The loop answers a lost race by restoring the rebuilt paths from
-    the tip it wants and running the producer again - so the assemble that
-    finally commits reads the file the workers wrote and files against it. A
-    staged path missing from that refresh set would be rebased instead, and a
-    rebase of two appends to one file stops the push.
+    A lost race is answered by restoring the refreshed paths from the tip and
+    running the producer again. That is right for a file two runs rebuild to
+    different bytes, and it is destructive for a day tree: the restore takes the
+    tip's copy of the whole directory, so this attempt's own file in it - named
+    for this run and written by nothing else - goes with it and the producer does
+    not write it again.
+
+    Asked of every declared tree rather than of the ones a shard happens to fill
+    today, so a tree that joins the set is covered the day it is declared.
     """
     refreshed = _commit_call("assemble")[1]["REFRESH_PATHS"].split()
 
-    assert set(COMMIT_STAGED_PATHS["work"]) <= set(refreshed)
+    for which in ledger.SegmentLedger:
+        tree = f"{ledger.STATE_DIRNAME}/{which.value}"
+        covered = [path for path in refreshed if tree == path or tree.startswith(f"{path}/")]
+        assert not covered, (
+            f"{covered} hands back {tree}, and a writer's own file in it is deleted by "
+            "the restore rather than rebuilt by the producer"
+        )
 
 
-def test_assemble_hands_back_the_published_ledger_it_appends_to() -> None:
-    """The refresh set covers the day file this stage writes, and asks it where.
+def test_the_day_the_console_reads_is_handed_back_and_the_published_rows_are_not() -> None:
+    """Two answers to one race, and each path takes the one that fits it.
 
-    Assemble appends published rows blind, so a second attempt that rebuilt on
-    top of its own first attempt would file every item twice. The day is handed
-    back to origin's tip before the producer runs again, which is what makes the
-    rebuilt append land on the file origin holds rather than on this attempt's.
+    `state/day-metrics` is one whole JSON a day that assemble rewrites from the
+    day's rows, so two attempts at one day really do land on one path with
+    different bytes. Handing it back and rebuilding it is the answer, and it
+    costs milliseconds.
 
-    The path is read from the writer's own helper rather than spelled here, so
-    moving the ledger again fails this instead of leaving a refresh set naming a
+    `state/published` is the opposite case and left the handed-back set on
+    2026-09-22. A row there is one item on one day at one address, so two runs
+    that both append are not in disagreement: the union driver keeps both sides
+    and `ledger.load_published` keeps the earliest date per address, which makes
+    a row that arrives twice cost bytes and move no publication date. Handing it
+    back instead would restore the tip's copy over rows this attempt appended.
+
+    The paths are read from the writer's own helpers rather than spelled here,
+    so moving either ledger fails this instead of leaving a refresh set naming a
     directory nothing writes (Guardrail #6).
     """
     refreshed = _commit_call("assemble")[1]["REFRESH_PATHS"].split()
-    day = ledger.published_relpath(SUBSTITUTED_DATE)
+    rebuilt = day_metrics.day_metrics_relpath(SUBSTITUTED_DATE)
+    unioned = ledger.published_relpath(SUBSTITUTED_DATE)
 
-    assert any(day == path or day.startswith(f"{path}/") for path in refreshed), (
-        f"{day} is written by this job and no entry of {refreshed} hands it back"
+    assert any(_under(rebuilt, path) for path in refreshed), (
+        f"{rebuilt} is rewritten whole by this job and no entry of {refreshed} hands it back"
+    )
+    assert not any(_under(unioned, path) for path in refreshed), (
+        f"{unioned} is settled by a union driver, so handing it back would restore the "
+        "tip's copy over rows this attempt appended"
     )

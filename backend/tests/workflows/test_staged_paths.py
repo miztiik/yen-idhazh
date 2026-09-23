@@ -19,12 +19,12 @@ from ._harness import (
     COMMIT_STAGED_PATHS,
     COMMIT_STEPS,
     CORPUS_SEED,
-    FOLD_COMMAND,
-    FOLD_DRY_RUN_FLAG,
-    FOLD_STEP,
     HARVEST_COMMAND,
     HARVEST_STEP,
     PRUNE_PUSH_SCRIPT,
+    RETIRE_COMMAND,
+    RETIRE_DRY_RUN_FLAG,
+    RETIRE_STEP,
     REVIEW_ARTIFACT,
     REVIEW_COMMAND,
     REVIEW_STEP,
@@ -124,12 +124,12 @@ def test_the_telemetry_fold_runs_only_once_the_day_is_committed() -> None:
     """
     workflow = _load_workflows()["digest.yml"]
     names = [step.get("name") for step in _steps(workflow, "assemble")]
-    fold = _step(workflow, "assemble", "name", FOLD_STEP)
+    fold = _step(workflow, "assemble", "name", RETIRE_STEP)
 
-    assert FOLD_COMMAND in _script(fold, "assemble fold step")
-    assert names.index(COMMIT_STEPS["assemble"]) < names.index(FOLD_STEP)
-    assert names.index(FOLD_STEP) < names.index(COMMIT_STEPS["fold"])
-    for step_name in (FOLD_STEP, COMMIT_STEPS["fold"]):
+    assert RETIRE_COMMAND in _script(fold, "assemble fold step")
+    assert names.index(COMMIT_STEPS["assemble"]) < names.index(RETIRE_STEP)
+    assert names.index(RETIRE_STEP) < names.index(COMMIT_STEPS["fold"])
+    for step_name in (RETIRE_STEP, COMMIT_STEPS["fold"]):
         step = _step(workflow, "assemble", "name", step_name)
         assert step.get("continue-on-error") == TOLERATED, (
             f"{step_name} must never be what costs a reader the day"
@@ -149,9 +149,9 @@ def test_the_fold_ships_in_dry_run_because_the_history_it_deletes_from_is_rewrit
     is deliberately a commit somebody has to write and this test has to be
     changed for.
     """
-    fold = _step(_load_workflows()["digest.yml"], "assemble", "name", FOLD_STEP)
+    fold = _step(_load_workflows()["digest.yml"], "assemble", "name", RETIRE_STEP)
 
-    assert FOLD_DRY_RUN_FLAG in _script(fold, "assemble fold step")
+    assert RETIRE_DRY_RUN_FLAG in _script(fold, "assemble fold step")
 
 
 def test_the_fold_stages_the_browser_copy_it_deletes() -> None:
@@ -217,7 +217,7 @@ def test_the_cleanup_is_filed_under_the_run_that_published_the_day() -> None:
     same answer from - so a row would join to the wrong run, or to a run that
     never happened.
     """
-    fold = _step(_load_workflows()["digest.yml"], "assemble", "name", FOLD_STEP)
+    fold = _step(_load_workflows()["digest.yml"], "assemble", "name", RETIRE_STEP)
 
     assert "--execution \"${{ github.run_id }}\"" in _script(fold, "assemble fold step")
 
@@ -289,10 +289,6 @@ def test_every_path_the_plan_stages_exists_in_a_fresh_checkout() -> None:
     heads behind. Naming the directory answers this test's own rule at the same
     time: `state` is in every checkout, and a collection inside it need not be.
 
-    `state/segments/` is named separately because it is the one collection here
-    that is empty by design. It ships with a `.gitkeep`, or a fresh clone would
-    not carry the directory that `REFRESH_PATHS` hands back to the tip.
-
     `state/feed-retirements.csv` is named for a reason of its own that outlived
     the staging list: almost no run writes a row and every run reads the file,
     so it ships with its header rather than appearing the day a retirement
@@ -302,18 +298,14 @@ def test_every_path_the_plan_stages_exists_in_a_fresh_checkout() -> None:
     assert named == [ledger.STATE_DIRNAME]
     for relative in named:
         assert (REPO_ROOT / relative).exists(), f"{relative} must be in a fresh checkout"
-    for relative in (
-        ledger.feed_retirements_relpath(),
-        f"{ledger.STATE_DIRNAME}/{ledger.SEGMENTS_DIRNAME}/.gitkeep",
-    ):
-        tracked = subprocess.run(
-            ["git", "ls-files", "--error-unmatch", relative],
-            cwd=REPO_ROOT,
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        assert tracked.returncode == 0, tracked.stderr.strip()
+    tracked = subprocess.run(
+        ["git", "ls-files", "--error-unmatch", ledger.feed_retirements_relpath()],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert tracked.returncode == 0, tracked.stderr.strip()
 
 
 def test_the_corpus_is_not_union_merged() -> None:

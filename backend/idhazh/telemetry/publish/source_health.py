@@ -31,10 +31,10 @@ from datetime import date as date_type
 from pathlib import Path
 from typing import Final
 
-from idhazh import config, day_partition, ledger
+from idhazh import config, day_partition, day_shards, ledger
 from idhazh.contracts.feed_health import FeedHealthRow, RobotsOutcome, derive_endpoint_key
 from idhazh.contracts.item_health import ItemHealthRow, ItemOutcome
-from idhazh.contracts.knobs.collect import CollectConfig
+from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW, CollectConfig
 from idhazh.contracts.source_health_view import (
     DayYield,
     SourceAvailability,
@@ -483,23 +483,37 @@ def _recent_item_health(state_root: Path, *, today: str, keep: int) -> list[Item
     short, and widening it until it is long enough reads back to the first run the
     project ever made. Calendar subtraction is not an equivalent query for it.
 
-    So the ledger's own day files are the index: each name IS a recorded date, the
-    newest is taken first, and the walk stops the moment `keep` of them are in
-    hand. Nothing behind them is opened, so this costs the same on a run whether
-    the project has published for a fortnight or a decade (CLAUDE.md Guardrail #12)
-    - and it opens exactly `keep` files where the month shards it replaced opened
-    whole months to find them. Every date it returns is strictly before `today`,
-    because a run still working on today has opportunities nobody has attempted.
+    So the ledger's own days are the index: each directory name IS a recorded
+    date, the newest is taken first, and the walk stops the moment `keep` of them
+    are in hand. Nothing behind them is opened, so this costs the same on a run
+    whether the project has published for a fortnight or a decade (CLAUDE.md
+    Guardrail #12) - and it opens the files of exactly `keep` days where the month
+    shards it replaced opened whole months to find them. Every date it returns is
+    strictly before `today`, because a run still working on today has
+    opportunities nobody has attempted.
+
+    A day is a directory of writer-owned files, so the days are counted rather
+    than the files - counting files would give a day with four work shards in it
+    four times the weight of a day with one - and each day taken is settled, so a
+    re-run's second attempt corrects its first instead of being counted beside
+    it.
     """
     if keep <= 0:
         return []
     directory = state_root / ledger.ITEM_HEALTH_DIRNAME
     recorded = [
-        day
-        for day in day_partition.day_files(directory)
-        if f"{day_partition.month_of(day)}-{day.stem}" < today
+        date
+        for dates in day_shards.dates_by_month(directory, days=UNBOUNDED_WINDOW).values()
+        for date in dates
+        if date < today
     ]
-    return [row for day in recorded[-keep:] for row in ledger.load_item_health_shard(day)]
+    return [
+        ItemHealthRow.from_csv_row(cells)
+        for date in sorted(recorded)[-keep:]
+        for cells in day_shards.settled_day(
+            directory, date, ledger.ITEM_HEALTH_KEY, ItemHealthRow
+        )
+    ]
 
 
 def publish(

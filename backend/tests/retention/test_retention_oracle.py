@@ -9,7 +9,8 @@ from pathlib import Path
 import pytest
 from conftest import seed_item_health
 
-from idhazh import day_partition, ledger
+from idhazh import ledger
+from idhazh.contracts.base import ServerJob
 from idhazh.contracts.item_health import ItemStage
 from idhazh.contracts.knobs.collect import CollectConfig
 from idhazh.contracts.knobs.observability import ObservabilityConfig
@@ -29,6 +30,7 @@ from ._trees import (
     item_health_days,
     item_health_history,
     item_health_months,
+    month_holding,
     months_back,
     totals_from_aggregate,
     totals_from_shard,
@@ -63,7 +65,7 @@ def test_the_oracle_fifteen_months_leave_fourteen_of_each_and_one_verified_summa
     doomed_texts = [
         day.read_text(encoding="utf-8")
         for day in item_health_days(state)
-        if day_partition.month_of(day) == expired
+        if month_holding(day) == expired
     ]
 
     first = stage_prune_state(
@@ -177,13 +179,16 @@ def test_the_stage_names_every_file_a_live_run_would_remove(
     expired_days = [
         day.relative_to(state.parent).as_posix()
         for day in item_health_days(state)
-        if day_partition.month_of(day) == expired
+        if month_holding(day) == expired
     ]
     assert len(expired_days) == 2, "the fixture writes two days a month"
+    feed_health_file = ledger.segment_name(
+        run_id=f"{expired}-11-1", attempt=1, job=ServerJob.PLAN, shard=0
+    )
     assert named == sorted(
         [
             *expired_days,
-            ledger.health_relpath(f"{expired}-11"),
+            f"{ledger.health_relpath(f'{expired}-11')}/{feed_health_file}",
             f"frontend/public/telemetry/{expired}.csv",
         ]
     )

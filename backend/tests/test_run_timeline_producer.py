@@ -17,7 +17,7 @@ from typing import Final
 import pytest
 from conftest import seed_item_health
 
-from idhazh import ledger
+from idhazh import day_shards, ledger
 from idhazh.contracts.item_health import ItemHealthRow, ItemOutcome, ItemStage
 from idhazh.contracts.run_timeline import STEP_COLUMNS, RunTimelineRow
 from idhazh.telemetry.publish import dispatch, run_timeline, series
@@ -119,7 +119,11 @@ def census(tmp_path: Path) -> Path:
 
 
 def project(census: Path) -> list[RunTimelineRow]:
-    return run_timeline.project(ledger.item_health_path(census, DAY))
+    return run_timeline.project(
+        day_shards.settled_day(
+            census / ledger.ITEM_HEALTH_DIRNAME, DAY, ledger.ITEM_HEALTH_KEY, ItemHealthRow
+        )
+    )
 
 
 def test_an_item_no_shard_picked_up_has_no_bar(census: Path) -> None:

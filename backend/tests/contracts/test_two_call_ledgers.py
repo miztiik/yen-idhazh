@@ -10,10 +10,11 @@ import pytest
 from conftest import CONTRACT_FIXTURES_DIR, read_text
 from pydantic import ValidationError
 
-from idhazh import day_partition, ledger
+from idhazh import day_shards, ledger
 from idhazh.contracts.call_cost import CallCost, CallKind
 from idhazh.contracts.feed_health import FeedHealthRow
 from idhazh.contracts.item_health import CALL_SLOTS, RETIRED_CELLS, ItemHealthRow
+from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
 from idhazh.contracts.public_telemetry import PublicTelemetryRow
 from idhazh.contracts.summary import Summary
 from utilities import build_canary_day
@@ -239,11 +240,13 @@ def test_the_canary_writes_every_column_the_feed_health_ledger_defines(tmp_path:
     is a console state that suite cannot reach - which is how the five columns
     added on 2026-09-02 would ship drawn only in their empty state.
 
-    The walk is over a tree this call just built - two day files - rather than
-    over anything a run appends to (`CLAUDE.md` section 13).
+    The walk is over a tree this call just built - two day directories - rather
+    than over anything a run appends to (`CLAUDE.md` section 13).
     """
     build_canary_day.health(tmp_path)
-    days = list(day_partition.day_files(tmp_path / ledger.HEALTH_DIRNAME))
+    days = list(
+        day_shards.shard_files(tmp_path / ledger.HEALTH_DIRNAME, days=UNBOUNDED_WINDOW)
+    )
     assert days, "the canary wrote no feed-health day file"
     rows: list[dict[str, str]] = []
     for path in days:

@@ -1,0 +1,2 @@
+version,date,run_id,job,shard,fingerprint,cpu_model,cpu_vendor,cpu_family,cpu_model_number,cpu_stepping,microcode,cores,threads,l3_cache_bytes,mhz_max,mhz_at_probe,flags,boot_seconds,memcpy_gib_s,memcpy_probe_mib,vm_size,vm_location,vm_zone,vm_fault_domain,runner_name,measured_at,model_load_ms,job_seconds,server_prompt_tokens,server_prompt_seconds
+2026-09-20,2026-09-06,2026-09-06-900000001,work,0,0123456789abcdef,work-0 on 2026-09-06,,,,,,,,,,,,,,,,,,,,2026-09-06T00:00:00Z,,,,

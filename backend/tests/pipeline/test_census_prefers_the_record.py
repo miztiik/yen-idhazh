@@ -21,22 +21,21 @@ does not move when the archive grows (Guardrail #12).
 
 from __future__ import annotations
 
-import csv
+import shutil
 from pathlib import Path
 from typing import Final
 
 import pytest
-from conftest import CONFIG_DIR, FIXTURES_DIR, read_text
+from conftest import CONFIG_DIR, FIXTURES_DIR, fold, read_text
 from pytest import MonkeyPatch
 
-from idhazh import config, ledger, telemetry
+from idhazh import config, day_shards, ledger, telemetry
 from idhazh.contracts.article import Article
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.run_plan import PlannedItem, RunPlan
 from idhazh.contracts.summary import Summary
 from idhazh.stages.assemble import stage_assemble
-from idhazh.stages.compact import stage_compact
 from idhazh.stages.record import stage_record
 from idhazh.telemetry.census import EXTRACTION_CELLS
 from idhazh.telemetry.record import HEALTH_SUFFIX
@@ -80,10 +79,11 @@ def sealed(items_dir: Path) -> dict[str, ItemHealthRow]:
 
 
 def committed(state_dir: Path, date: str) -> dict[str, ItemHealthRow]:
-    """The row the day's ledger kept for each item."""
-    path = ledger.item_health_path(state_dir, date)
-    with path.open(encoding="utf-8", newline="") as handle:
-        rows = [ItemHealthRow.from_csv_row(record) for record in csv.DictReader(handle)]
+    """The row the day's ledger kept for each item, settled across its files."""
+    settled = day_shards.settled_day(
+        state_dir / ledger.ITEM_HEALTH_DIRNAME, date, ledger.ITEM_HEALTH_KEY, ItemHealthRow
+    )
+    rows = [ItemHealthRow.from_csv_row(record) for record in settled]
     return {row.item_id: row for row in rows}
 
 
@@ -134,7 +134,7 @@ def test_every_cell_the_shard_sealed_reaches_the_days_ledger(
     state = tmp_path / "state"
 
     stage_record(run_plan, settings=config.load(CONFIG_DIR))
-    stage_compact(state)
+    fold(state, run_plan.date)
 
     kept = committed(state, run_plan.date)
     on_disk = sealed(items_dir)
@@ -163,7 +163,7 @@ def test_the_ledger_row_says_more_than_the_payloads_could(
     state = tmp_path / "state"
 
     stage_record(run_plan, settings=config.load(CONFIG_DIR))
-    stage_compact(state)
+    fold(state, run_plan.date)
 
     kept = committed(state, run_plan.date)
     for planned in run_plan.items:
@@ -192,10 +192,10 @@ def test_which_writer_reaches_the_ledger_first_does_not_change_the_row(
     state = tmp_path / "state"
 
     stage_record(run_plan, settings=settings)
-    stage_compact(state)
+    fold(state, run_plan.date)
     after_the_worker = committed(state, run_plan.date)
 
-    ledger.item_health_path(state, run_plan.date).unlink()
+    shutil.rmtree(ledger.item_health_path(state, run_plan.date))
     stage_assemble(run_plan, settings=settings, commit_sha="a" * 40, runner="fixture")
     after_assemble = committed(state, run_plan.date)
 
@@ -221,7 +221,7 @@ def test_an_item_whose_shard_sealed_nothing_still_gets_a_census_line(
     (items_dir / f"{orphan.item_id}{HEALTH_SUFFIX}").unlink()
 
     stage_record(run_plan, settings=config.load(CONFIG_DIR))
-    stage_compact(state)
+    fold(state, run_plan.date)
 
     kept = committed(state, run_plan.date)
     # `stage_record` runs as shard 0 of 1 in the `work` job here and stamps both
@@ -252,10 +252,10 @@ def test_work_then_assemble_leaves_one_settled_head_and_no_waiting_segments(
     ledger - a feed's share of the day, the day's own metrics - would read
     double.
 
-    **Nothing left waiting.** A fold that wrote the head and did not clear
-    `state/segments/` would re-fold the same rows on the next run, and the store
-    would grow with the archive rather than with what is waiting (Guardrail
-    #12).
+    **Nothing left waiting.** A fold that wrote the settled file and did not
+    take the writer files it read would re-fold the same rows on the next run,
+    and the day would grow with the archive rather than with what is waiting
+    (Guardrail #12).
 
     **One header line.** The head is what every reader of this ledger opens, and
     a second header block inside it is the shape a stacked append makes and no
@@ -270,19 +270,25 @@ def test_work_then_assemble_leaves_one_settled_head_and_no_waiting_segments(
     state = tmp_path / "state"
 
     stage_record(run_plan, settings=settings)
-    assert ledger.segment_files(state, ledger.SegmentLedger.ITEM_HEALTH), (
-        "the work stage wrote no segment, so the rest of this proves nothing"
+    health_root = state / ledger.ITEM_HEALTH_DIRNAME
+    assert day_shards.one_day(health_root, run_plan.date), (
+        "the work stage wrote no file, so the rest of this proves nothing"
     )
     stage_assemble(run_plan, settings=settings, commit_sha="a" * 40, runner="fixture")
+    # The fold is a step of the assemble job rather than of the stage, because a
+    # day a shard could still be writing is not one to fold.
+    fold(state, run_plan.date)
 
-    head = ledger.item_health_path(state, run_plan.date)
-    lines = head.read_text(encoding="utf-8").splitlines()
+    settled = ledger.item_health_path(state, run_plan.date) / day_shards.SETTLED_NAME
+    lines = settled.read_text(encoding="utf-8").splitlines()
     header = list(ItemHealthRow.csv_columns())
     assert [line for line in lines if line.split(",")[:3] == header[:3]] == [",".join(header)], (
-        "the head carries more than one header block"
+        "the fold carries more than one header block"
     )
 
     kept = committed(state, run_plan.date)
     assert sorted(kept) == sorted(item.item_id for item in run_plan.items)
     assert len(lines) == PLANNED_ITEMS + 1, f"{len(lines) - 1} rows for {PLANNED_ITEMS} items"
-    assert ledger.segment_files(state) == [], "the fold left segments waiting"
+    assert [path.name for path in day_shards.one_day(health_root, run_plan.date)] == [
+        day_shards.SETTLED_NAME
+    ], "the fold left a writer file behind"

@@ -36,6 +36,10 @@ DAY: dict[str, Any] = json.loads(read_text(FIXTURE))
 DATE: str = DAY["date"]
 TEMPLATE: dict[str, Any] = DAY["items"][0]
 
+#: The run the gate files its receipt under. These cases ask what the gate says
+#: about a picture, never who ran it, so one identity serves them all.
+A_RUN = f"{DATE}-1"
+
 
 def story_id(index: int) -> str:
     """The fixture's own story at that position."""
@@ -130,7 +134,7 @@ def test_the_stage_stops_the_publish_rather_than_logging_and_passing(tmp_path: P
     a_day_naming(tmp_path, [picture(0), picture(0)])
     draw(tmp_path, picture(0))
 
-    assert stage_validate_days(tmp_path / "digest") == 1
+    assert stage_validate_days(tmp_path / "digest", run_id=A_RUN) == 1
 
 
 def test_naming_a_day_opens_that_day_and_leaves_the_rest_shut(tmp_path: Path) -> None:
@@ -147,8 +151,8 @@ def test_naming_a_day_opens_that_day_and_leaves_the_rest_shut(tmp_path: Path) ->
         json.dumps({**json.loads(read_text(FIXTURE)), "date": "2026-08-22"}), encoding="utf-8"
     )
 
-    assert stage_validate_days(tmp_path / "digest", ["2026-08-22"]) == 0
-    assert stage_validate_days(tmp_path / "digest") == 1
+    assert stage_validate_days(tmp_path / "digest", ["2026-08-22"], run_id=A_RUN) == 0
+    assert stage_validate_days(tmp_path / "digest", run_id=A_RUN) == 1
 
 
 def test_a_day_that_is_not_committed_fails_rather_than_checking_nothing(tmp_path: Path) -> None:
@@ -156,4 +160,4 @@ def test_a_day_that_is_not_committed_fails_rather_than_checking_nothing(tmp_path
     a_day_naming(tmp_path, [picture(0)])
     draw(tmp_path, picture(0))
 
-    assert stage_validate_days(tmp_path / "digest", ["1999-01-01"]) == 1
+    assert stage_validate_days(tmp_path / "digest", ["1999-01-01"], run_id=A_RUN) == 1

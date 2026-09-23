@@ -6,7 +6,6 @@ body of its own (CLAUDE.md section 1a, "A router is the sharpest case").
 
 from __future__ import annotations
 
-import csv
 import hashlib
 import inspect
 import json
@@ -17,11 +16,12 @@ from typing import Final
 
 from pydantic import ValidationError
 
-from idhazh import ledger
-from idhazh.contracts.base import canonical_json
+from idhazh import day_shards, ledger, run_context
+from idhazh.contracts.base import ServerJob, canonical_json
 from idhazh.contracts.day_validation import DayValidationReceipt
 from idhazh.contracts.digest_day import DigestDay
 from idhazh.contracts.digest_view import DigestView
+from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
 from idhazh.render.write import assets_in_day
 from idhazh.stages.common import LOG, published_days
 from idhazh.telemetry.publish import (
@@ -163,12 +163,14 @@ def _day_faults(path: Path, public_root: Path, *, payload: bytes | None = None) 
     return faults
 
 
-DAY_VALIDATIONS_FILENAME: Final = "day-validations.csv"
+#: This stage runs once over the whole archive, so there is no fan-out and no
+#: shard element to carry. Zero is what one writer of one job spells.
+VALIDATE_SHARD: Final = 0
 
 
-def day_validations_path(state_dir: Path) -> Path:
-    """`state/day-validations.csv`: which days have passed, and against what."""
-    return state_dir / DAY_VALIDATIONS_FILENAME
+def _receipts_root(state_dir: Path) -> Path:
+    """`state/day-validations/`: which days have passed, and against what."""
+    return state_dir / ledger.DAY_VALIDATIONS_DIRNAME
 
 
 def _validator_identity() -> str:
@@ -203,98 +205,84 @@ def _validator_identity() -> str:
     return hashlib.sha256(material.encode("utf-8")).hexdigest()
 
 
-def _receipts_for(state_dir: Path, identity: str) -> dict[str, tuple[DayValidationReceipt, ...]]:
-    """Every receipt each day carries under this validator.
+def _receipts_for(state_dir: Path, identity: str) -> dict[str, DayValidationReceipt]:
+    """The receipt each day carries under this validator, one row a day.
 
     Only rows written under `identity` are kept: a row about an older validator
     says nothing about the rules in force, and dropping it here is what makes a
     rule change re-validate everything rather than nothing.
 
-    A day can carry more than one row and both readings are legitimate. A closed
-    day that `backfill.yml` re-encoded leaves a truthful new row beside a row
-    about the payload that used to be there, and nothing removes the old row, so
-    two branches that each validated one day leave two rows as well. The file
-    cannot tell those apart and does not try - `_proved` asks the only question
-    that settles it, which is what is on disk now.
+    **One row a day, because the store settles them.** A day is a directory of
+    writer-owned files and every run that validated that day left one, so a
+    closed day that `backfill.yml` re-encoded carries a truthful new row beside
+    a row about the payload that used to be there. `DAY_VALIDATION_RULE` takes
+    the newest, which is the answer under the rules in force, and `_proved` asks
+    the only question that settles it - what is on disk now.
 
-    A row that will not parse is counted and skipped rather than raised on. The
-    worst it can cost is the validation this record exists to avoid, and a
-    publication must not be stopped by a bookkeeping file.
+    A row that will not read as a receipt stops the read rather than being
+    counted and skipped. It is written by this stage from a validated model one
+    step earlier, so a row this cannot place means the writer and this reader
+    disagree about the shape - the rule every other day tree here keeps.
+
+    The cover is every recorded day, which the store bounds:
+    `retention.day_validation_keep_months` deletes a receipt for a day the
+    archive no longer holds, and a receipt for a day that is gone answers
+    nothing (Guardrail #12).
     """
-    path = day_validations_path(state_dir)
-    if not path.is_file():
-        return {}
-    held: dict[str, list[DayValidationReceipt]] = {}
-    unreadable = 0
-    with path.open("r", encoding="utf-8", newline="") as handle:
-        for record in csv.DictReader(handle):
-            try:
-                receipt = DayValidationReceipt.from_csv_row(record)
-            except (ValidationError, KeyError):
-                unreadable += 1
-                continue
-            if receipt.validator_version == identity:
-                held.setdefault(receipt.date, []).append(receipt)
-    if unreadable:
-        LOG.warning(
-            "%s holds %s rows this build cannot read - those days will be opened again",
-            path.name,
-            unreadable,
-        )
-    return {date: tuple(rows) for date, rows in held.items()}
+    held: dict[str, DayValidationReceipt] = {}
+    for cells in day_shards.settled_rows(
+        _receipts_root(state_dir),
+        ledger.DAY_VALIDATION_KEY,
+        DayValidationReceipt,
+        days=UNBOUNDED_WINDOW,
+    ):
+        receipt = DayValidationReceipt.from_csv_row(cells)
+        if receipt.validator_version == identity:
+            held[receipt.date] = receipt
+    return held
 
 
-def _proved(held: Sequence[DayValidationReceipt], payload_bytes: int) -> bool:
-    """Whether these receipts settle what is on disk at this length.
+def _proved(held: DayValidationReceipt | None, payload_bytes: int) -> bool:
+    """Whether this receipt settles what is on disk at this length.
 
     The length comes from `os.stat`, which answers without opening the file -
     that is the whole saving, so the digest a receipt carries cannot be the
-    thing consulted here. What the digest does is make a real contradiction
-    visible: two rows claiming the same length and different bytes cannot both
-    be about the payload that is there, so the day is read rather than trusted.
+    thing consulted here.
 
-    A row whose length does not match is about a payload that is no longer
-    there. It is ignored rather than held against the day, which is what lets a
+    A receipt whose length does not match is about a payload that is no longer
+    there. It settles nothing and the day is read, which is what lets a
     re-encoded day settle down again instead of being read for ever.
     """
-    matching = {row.payload_digest for row in held if row.payload_bytes == payload_bytes}
-    return len(matching) == 1
+    return held is not None and held.payload_bytes == payload_bytes
 
 
-def _record_receipts(state_dir: Path, earned: list[DayValidationReceipt]) -> int:
-    """Append what this run proved, skipping any row the file already carries.
+def _record_receipts(state_dir: Path, earned: list[DayValidationReceipt], *, run_id: str) -> int:
+    """Put what this run proved into this writer's own file, one a day.
 
-    Append-only because a rewrite of a committed ledger loses the race it is in:
-    rebased onto a tip that appended, a commit that removed rows is a rebase git
-    cannot apply, so the removal stops the push rather than landing half-done.
+    Each receipt lands under the day it is about, in a file named for the run,
+    the attempt and the job that wrote it - so two runs that validated one day
+    never open one path and a lost push race costs a merge rather than the rows.
+
+    Written whole rather than appended for the same reason: the file is this
+    writer's alone, so there is no earlier row in it to keep.
     """
-    if not earned:
-        return 0
-    path = day_validations_path(state_dir)
-    columns = DayValidationReceipt.csv_columns()
-    already: set[tuple[str, ...]] = set()
-    exists = path.is_file()
-    if exists:
-        ledger.require_matching_header(path, columns)
-        with path.open("r", encoding="utf-8", newline="") as handle:
-            already = {
-                tuple(record.get(name, "") for name in columns) for record in csv.DictReader(handle)
-            }
-    rows = [receipt.csv_row() for receipt in earned]
-    fresh = [row for row in rows if tuple(row[name] for name in columns) not in already]
-    if not fresh:
-        return 0
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a", encoding="utf-8", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=columns, lineterminator="\n")
-        if not exists:
-            writer.writeheader()
-        writer.writerows(fresh)
-    return len(fresh)
+    return ledger.write_segment(
+        state_dir,
+        ledger.SegmentLedger.DAY_VALIDATIONS,
+        earned,
+        run_id=run_id,
+        attempt=run_context.run_attempt(),
+        job=ServerJob.ASSEMBLE,
+        shard=VALIDATE_SHARD,
+    )
 
 
 def stage_validate_days(
-    root: Path, only: Sequence[str] = (), *, state_dir: Path | None = None
+    root: Path,
+    only: Sequence[str] = (),
+    *,
+    state_dir: Path | None = None,
+    run_id: str,
 ) -> int:
     """Committed days against the two contracts their readers hold.
 
@@ -314,12 +302,13 @@ def stage_validate_days(
     **A frozen day is not re-validated, and that is a receipt rather than a
     clock.** A published day cannot stop matching a contract on its own - the
     only thing that can happen to it is deletion - so what invalidates a pass is
-    a move in the rules, not the passage of time. `state/day-validations.csv`
+    a move in the rules, not the passage of time. `state/day-validations/`
     records the day, the length and digest of the payload that passed, and
     `_validator_identity`. A later run skips a day whose receipt names this
     validator and whose recorded length still matches `os.stat`, and never opens
     the payload. `state_dir` is where those receipts live; pass nothing and every
     day named is validated, which is what this did before the receipt existed.
+    `run_id` is what this run's receipts are filed under.
 
     **On the first run against a tree with no receipts every day is validated**,
     exactly as before, and every day that passes earns a receipt. Nothing is
@@ -363,7 +352,7 @@ def stage_validate_days(
     earned: list[DayValidationReceipt] = []
     for path in days:
         date = _day_of(path)
-        if _proved(held.get(date, ()), path.stat().st_size):
+        if _proved(held.get(date), path.stat().st_size):
             skipped += 1
             continue
         try:
@@ -407,7 +396,10 @@ def stage_validate_days(
         return 1
 
     if state_dir is not None:
-        LOG.info("validate-days: recorded %s receipts", _record_receipts(state_dir, earned))
+        LOG.info(
+            "validate-days: recorded %s receipts",
+            _record_receipts(state_dir, earned, run_id=run_id),
+        )
     LOG.info(
         "validate-days: %s committed days match both contracts, %s of them opened",
         len(days),

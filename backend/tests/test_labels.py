@@ -34,6 +34,7 @@ from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, REPO_ROOT, read_text
 from pydantic import ValidationError
 
 from idhazh import config
+from idhazh.contracts.base import ServerJob
 from idhazh.contracts.eval_row import ConfidenceBand, EvalRow
 from idhazh.contracts.evidence import EvidenceItem
 from idhazh.contracts.label_row import LabelRow, LabelTag, LabelVerdict
@@ -154,7 +155,14 @@ def _the_built_world(tmp_path_factory: pytest.TempPathFactory) -> Iterator[None]
     global _WORLD
     root = tmp_path_factory.mktemp("label-world")
     shutil.copytree(CONFIG_DIR, root / "config")
-    landed = writer.append(root / "state", _built_rows())
+    landed = writer.append_segment(
+        root / "state",
+        _built_rows(),
+        run_id="2026-09-03-1",
+        attempt=1,
+        job=ServerJob.ASSEMBLE,
+        shard=0,
+    )
     assert landed == 80, f"the built ledger deduped down to {landed} rows"
     _WORLD = root
     yield
@@ -456,7 +464,17 @@ def _a_sitting_world(root: Path, *, rows: int = 2) -> None:
         )
         for seq in range(rows)
     ]
-    assert writer.append(root / "state", built) == rows
+    assert (
+        writer.append_segment(
+            root / "state",
+            built,
+            run_id="2026-09-02-1",
+            attempt=1,
+            job=ServerJob.ASSEMBLE,
+            shard=0,
+        )
+        == rows
+    )
 
     package = root / evidence.EVIDENCE_ROOT_RELPATH
     package.mkdir(parents=True, exist_ok=True)
