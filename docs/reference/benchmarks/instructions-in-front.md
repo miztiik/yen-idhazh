@@ -99,7 +99,8 @@ call least able to absorb instructions it cannot act on - and it now carries the
 summariser's and the planner's.
 
 **Every number below is a deterministic count over the model's own output.** No
-model grades anything (`CLAUDE.md` section 0a). Anchoring is span equality
+model grades anything here, which is what makes the numbers reproducible rather
+than a matter of a judge's mood. Anchoring is span equality
 against the article's own bytes; the own-words rate is a set membership test.
 
 **Method.** Six real corpus articles were selected, 154 to 354 words, taken as

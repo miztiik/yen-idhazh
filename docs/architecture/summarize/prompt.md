@@ -293,8 +293,8 @@ and both apply unchanged to the single rung at 4000 they collapsed into.
 and count **distinct findings**: a fact a reader could act on that the other
 summary does not contain. If the longer summary names no more findings on two
 thirds of them, the rung buys padding and it should be withdrawn. It is a count,
-not a score, so it needs no labels and no grader (`CLAUDE.md` section 0a forbids
-a model grading a model). Second observation to take at the same time: if the
+not a score, so it needs no labels and no grader at all - cheaper and steadier
+than asking a model, whatever `CLAUDE.md` section 1a now permits. Second observation to take at the same time: if the
 still-cut pieces draw every fact from the first 40 percent of what the model
 read, the extra words went into elaborating the opening, and those items belong
 a rung lower.
@@ -952,10 +952,10 @@ loses to a better-worded one.
 
 **A copy.** `verbatim_run` measures the longest unbroken stretch our summary
 lifted from the article. Above `evaluation.verbatim_reject_ceiling` the item is
-refused with `copied_source`. Republishing an article body is a non-goal
-(`CLAUDE.md` section 0a), so this is a rule and not a score: the levers that make
+refused with `copied_source`. An article body is never republished to a reader,
+so this is a rule and not a score: the levers that make
 a copy less likely - a longer target, a higher source floor - only change the
-odds, and a non-goal is not a tuning target.
+odds, and a rule is not a tuning target.
 
 The check reads `article.text`, which is the text the model was shown. For a
 brief that is the whole article. On a truncated item it is less, so a run

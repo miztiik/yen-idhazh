@@ -21,7 +21,7 @@ re-read findings stand and are not touched here.
 | Server flags | From `server_argv` and `config/` alone: `--ctx-size <case> --no-context-shift --batch-size 512 --ubatch-size 512 --threads 4 -np 1 -fa on -lv 4 --metrics` |
 | Instrument | The server's own `POST /tokenize`. No decode ran in this session at all |
 | Hardware | A developer laptop: i7-1265U, 12 logical CPUs, 32 GiB, Windows, with four other agents live and 2.0 to 3.1 GB free at each case's start |
-| Prose | The 1,444 rows of `corpus/corpus.jsonl`, which is the only committed source text (`CLAUDE.md` section 0a) |
+| Prose | The 1,444 rows of `corpus/corpus.jsonl`, the one place in this repository that commits source text |
 | Config read | `extract.truncation_cap_tokens` 10,000, `elements.max_per_article` 256, `--ctx-size` on the summarize entry 16,384 at the start |
 
 **Why the hardware bounds nothing here.** A tokenizer reading is not a timing.
