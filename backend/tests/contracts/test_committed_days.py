@@ -16,8 +16,10 @@ from typing import Any, Final
 import pytest
 from conftest import CONTRACT_FIXTURES_DIR, REPO_ROOT, read_text
 
+from idhazh import day_shards, ledger
 from idhazh.cli import main
 from idhazh.contracts.digest_day import DigestDay, DigestVerticalRef
+from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
 from idhazh.contracts.knobs.ui import UiConfig
 from idhazh.stages import common
 from idhazh.stages.validate_days import stage_validate_days
@@ -195,11 +197,10 @@ def test_a_tree_that_is_not_the_committed_one_has_to_name_its_own_receipts(
     refused. `frontend/tests/malformed-day.spec.ts` was making exactly that
     call, so the control case that exists because a guard which only ever refuses
     proves nothing was passing on a receipt about a different file - and the
-    receipts it filed about its scratch trees landed in the tracked
-    `state/day-validations.csv`, which `frontend/scripts/build-state.ts`
-    fingerprints, so the `publishing` group changed one of its own build's
-    inputs while it ran. That was defect 20, and this is what stops the next
-    caller repeating it.
+    receipts it filed about its scratch trees landed in the tracked receipt
+    store, which `frontend/scripts/build-state.ts` fingerprints, so the
+    `publishing` group changed one of its own build's inputs while it ran. That
+    was defect 20, and this is what stops the next caller repeating it.
 
     Bounded by construction: one fabricated day under `tmp_path`, no archive
     walk, and nothing here can age out.
@@ -221,7 +222,12 @@ def test_a_tree_that_is_not_the_committed_one_has_to_name_its_own_receipts(
 
     store = tmp_path / "receipts"
     assert main(["validate-days", "--digest-root", str(copy), "--state-root", str(store)]) == 0
-    assert (store / "day-validations.csv").is_file(), "the receipt belongs beside the tree it is about"
+    filed = list(
+        day_shards.shard_files(
+            store / ledger.DAY_VALIDATIONS_DIRNAME, days=UNBOUNDED_WINDOW
+        )
+    )
+    assert filed, "the receipt belongs beside the tree it is about"
 
 
 def test_a_committed_day_reads_an_absent_ranking_field_as_unknown() -> None:

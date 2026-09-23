@@ -10,14 +10,14 @@ from __future__ import annotations
 
 import json
 from collections import defaultdict
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
 from pathlib import Path
 
 import pytest
 from conftest import seed_feed_health, seed_item_health
 from pydantic import ValidationError
 
-from idhazh import config, day_partition, ledger
+from idhazh import config, day_partition, day_shards, ledger
 from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.feed_health import (
     FeedHealthRow,
@@ -26,7 +26,7 @@ from idhazh.contracts.feed_health import (
     derive_endpoint_key,
 )
 from idhazh.contracts.item_health import FailureCode, ItemHealthRow, ItemOutcome, ItemStage
-from idhazh.contracts.knobs.collect import CollectConfig
+from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW, CollectConfig
 from idhazh.contracts.source_health_view import (
     FORBIDDEN_FIELDS,
     SourceAvailability,
@@ -851,8 +851,8 @@ _GAP_SHORT = COLLECT.model_copy(update={"source_yield_min_complete_days": _GAP_K
 
 
 def _day_relpath(date: str) -> str:
-    """`<YYYY>/<MM>/<DD>.csv`, relative to the store - what the ledger files by."""
-    return f"{date[:4]}/{date[5:7]}/{date[8:10]}.csv"
+    """The settled file of one day, relative to the store - what a folded day holds."""
+    return f"{date[:4]}/{date[5:7]}/{date[8:10]}/{day_shards.SETTLED_NAME}"
 
 
 def _gap_items() -> list[ItemHealthRow]:
@@ -944,14 +944,15 @@ def test_publish_opens_only_the_shards_that_hold_the_selected_dates(
     state = tmp_path / "state"
     _write_item_health(state, _gap_items())
     opened: list[str] = []
-    real = ledger.load_item_health_shard
+    real = day_shards.rows_of
     root = state / ledger.ITEM_HEALTH_DIRNAME
 
-    def spy(shard: Path) -> list[ItemHealthRow]:
-        opened.append(shard.relative_to(root).as_posix())
+    def spy(shard: Path) -> Iterator[tuple[int, dict[str, str]]]:
+        if root in shard.parents:
+            opened.append(shard.relative_to(root).as_posix())
         return real(shard)
 
-    monkeypatch.setattr(ledger, "load_item_health_shard", spy)
+    monkeypatch.setattr(day_shards, "rows_of", spy)
     settings = config.load()
     source_health.publish(
         sources=settings.sources,
@@ -980,13 +981,24 @@ def test_a_calendar_window_undercounts_the_census_a_recorded_selection_restores(
     dates, so the census it drove was short and its per-source counts with it.
     Selecting the dates the ledger holds preserves both, and calendar subtraction
     is not an equivalent query for them (Fowler).
+
+    The short side is built by calendar subtraction here rather than read out of
+    the ledger, because the ledger's own cover counts recorded days now and can
+    no longer produce the defect.
     """
     state = tmp_path / "state"
     _write_item_health(state, _gap_items())
     run_id = f"{_GAP_TODAY}-1"
     generated_at = f"{_GAP_TODAY}T06:20:00Z"
 
-    windowed = ledger.load_item_health(state, today=_GAP_TODAY, within_days=_GAP_KEEP)
+    named = set(day_partition.days_in_window(_GAP_TODAY, _GAP_KEEP))
+    windowed = [
+        row
+        for row in ledger.load_item_health(
+            state, today=_GAP_TODAY, within_days=UNBOUNDED_WINDOW
+        )
+        if row.date in named
+    ]
     short = source_health.build(
         feeds=[feed("wire")],
         collect=_GAP_SHORT,
