@@ -1113,19 +1113,22 @@ jobs:
             sha256sum "$BIN/llama-batched-bench"
           } | tee -a backend/var/batched-bench/hardware.txt
 
-      - name: Read the production inference settings
+      - name: Read the production server settings
         # The bench has to run the shape production runs, so the four context
         # and threading knobs come from config rather than from a literal
         # copied into this file (CLAUDE.md Guardrail #6). Change config and the next
-        # reading follows it.
+        # reading follows it. The block spells them as llama-server does, so
+        # each of our names is paired with the flag it is read under.
         run: |
           set -euo pipefail
           MODELS_FILE="config/$(jq -er '.models_file' config/idhazh.json)"
-          for key in n_ctx n_batch n_ubatch n_threads; do
-            value=$(jq -er ".summarize.inference.${key}" "$MODELS_FILE")
+          for pair in n_ctx:--ctx-size n_batch:--batch-size n_ubatch:--ubatch-size n_threads:--threads; do
+            key="${pair%%:*}"
+            flag="${pair#*:}"
+            value=$(jq -er --arg flag "$flag" '.summarizer.server[$flag]' "$MODELS_FILE")
             case "$value" in
               ''|*[!0-9]*)
-                echo "${MODELS_FILE} summarize.inference.${key} must be a positive integer, got '${value}'" >&2
+                echo "${MODELS_FILE} summarizer.server ${flag} must be a positive integer, got '${value}'" >&2
                 exit 2
                 ;;
             esac
