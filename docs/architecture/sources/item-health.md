@@ -17,10 +17,12 @@ growing its own store.
 
 ## Every item, every run, one row
 
-`state/item-health/<YYYY>/<MM>/<DD>.csv`. One row is written for each planned
+`state/item-health/<YYYY>/<MM>/<DD>/`. One row is written for each planned
 item on each run, whether the item succeeds or fails. Two stages write it: a
 worker commits the rows for its own items as each one settles, and Assemble
-writes the whole day's census afterwards. A worker also leaves its own copy of
+writes the whole day's census afterwards. Each writer gets its own file inside
+the day - `<run_id>-<attempt>-<job>-<shard>.csv`, through `ledger.write_segment`
+- and nothing else ever opens that path. A worker also leaves its own copy of
 the row beside the item's other payloads, which is
 [the file below](#the-row-on-the-shard-before-the-ledger-has-it).
 
@@ -48,16 +50,17 @@ had no value": the columns landed with the instrument that measures them, and
 the producer wiring that carries the same value into the ledger row did not
 land with them.
 
-The file is append-only inside its own day. It is not kept for ever: a month
+The ledger is append-only: a writer adds a file to the day and nothing edits a
+file that is already there. It is not kept for ever: a month
 older than `observability.item_health_full_grain_months` (14) is folded to one
 row per `(date, stage)` in `state/telemetry-aggregate/<YYYY-MM>.csv` and that
-month's day files are deleted, by `idhazh prune-state` after the day is
+month's day directories are deleted, by `idhazh prune-state` after the day is
 committed. The browser's copy of that same month under
 `frontend/public/telemetry/` goes in the same step.
 
-**The boundary is still a month and only the files below it are days.** The fold
-is where the two grains meet: it reads a month's day files - at most 31 - writes
-one aggregate, reads it back, and only then unlinks them.
+**The boundary is still a month and only the directories below it are days.** The
+fold is where the two grains meet: it reads a month's day directories - at most
+31 - writes one aggregate, reads it back, and only then unlinks them.
 
 **The step ships in dry run.** It logs every file a live run would remove and
 removes none of them, because `.github/workflows/prune.yml` force-pushes `main`
@@ -83,17 +86,19 @@ Three files carry one item-health row, and each owns one thing:
 | --- | --- |
 | `backend/idhazh/contracts/item_health.py` | the shape: field order, types, enums, the validator, and `csv_columns` |
 | `schemas/item-health-row.schema.json` | the generated schema. Never hand-edited (Guardrail #3) |
-| `backend/idhazh/ledger.py` | the append, the header guard, and the day file path |
+| `backend/idhazh/ledger.py` | the header guard, `write_segment`, and the writer file path |
+| `backend/idhazh/day_shards.py` | the walk over a day, and the settlement a reader gets |
 
 **One definition of the column list.** `ItemHealthRow.csv_columns` returns
 `tuple(model_fields)`, so the CSV header IS the contract's field order. A writer
 and a reader cannot disagree, and there is no second list to forget.
 
-**The file layout.** One file per calendar day of the `date` column, nested
-`<YYYY>/<MM>/<DD>.csv`. A row is placed by the digest date it describes, not by
+**The file layout.** One directory per calendar day of the `date` column, nested
+`<YYYY>/<MM>/<DD>/`, and one file inside it per writer. A row is placed by the
+digest date it describes, not by
 the clock when it was written, so a run that publishes just after midnight UTC
 still files under the day it published. Header on line 1, `\n` endings, `utf-8`,
-no quoting beyond what `csv` needs. `day_partition.day_files` is the walk, and it
+no quoting beyond what `csv` needs. `day_shards.shard_files` is the walk, and it
 refuses a name it cannot place rather than skipping it - a file the reader cannot
 place is how it starts missing rows.
 
@@ -176,8 +181,9 @@ is no second call to account for.
 because a rate needs its denominator beside its numerator.
 
 **A row is one planned item on one run.** `(date, run_id, item_id)` is the
-identity, and the fold settles the day on it. That is what lets two stages
-record the same item: each writes its own segment, and `stage_compact` keeps one
+identity, and a read settles the day on it. That is what lets two stages
+record the same item: each writes its own file under the day, and
+`day_shards.settled_rows` keeps one
 row for the key. Where the two rows disagree the one that names a job wins, for
 the reason the next section gives - `assemble` runs once for the whole day and
 cannot say which machine an item was for.
@@ -323,7 +329,7 @@ once for the whole day on a machine that read none of these items.
 
 **With `shard` it is the whole of `ledger.HOST_FINGERPRINT_KEY`**, which is
 `date`, `run_id`, `job`, `shard` - the key
-`state/host-fingerprint/<YYYY>/<MM>/<DD>.csv` files one row a job under
+`state/host-fingerprint/<YYYY>/<MM>/<DD>/` files one row a job under
 ([../../reference/host-metrics.md](../../reference/host-metrics.md)). So the
 question "which processor summarized this item, and what could it do" is one
 equality:
@@ -349,8 +355,9 @@ rows back through `from_csv_row` - so a two-directional rule would refuse the
 whole archive on the first run after the column landed.
 
 **The pair is also what settles a contested row.** The key has no `job` cell, so
-a work shard and `assemble` recording one item are the same record to the fold.
-Segments are read in filename order and `assemble` sorts before `work`, so
+a work shard and `assemble` recording one item are the same record to a reader.
+The day's writer files are read in filename order and `assemble` sorts before
+`work`, so
 without a rule the row that knows neither cell would win. `ledger.ITEM_HEALTH_RULE`
 is that rule: a row naming a job beats a row that does not.
 
@@ -378,7 +385,7 @@ read `/sys/fs/cgroup/memory.peak`, the count the runner would kill a job over,
 and that file is absent on every GitHub-hosted runner this project has probed -
 so the column was empty on all 13,797 committed rows and on every row of the
 published machine series. The heading is in `DROPPED_CELLS`, which is what lets
-the day files an earlier run wrote re-file rather than raise.
+a file an earlier run wrote widen rather than raise.
 
 Six `os_` columns are the kernel's own account instead, read from
 `/proc/meminfo` by the same watch that fills `cpu_busy_max`:
@@ -660,15 +667,17 @@ Three things follow, and the first is the one most often got wrong:
  and leave it byte-identical. `runner_name` and `cgroup_peak_bytes` are in that
  set for exactly this reason.
 
-**The committed day files are not rewritten by the pull request.** Each one is
-re-filed by the first run that appends to it. A branch that rewrote a day file
-whole would be rebasing that rewrite onto the lines the pipeline wrote while the
-branch was open, which is a conflict somebody has to resolve by hand over
-machine output nobody should be editing.
+**The committed files are not rewritten by the pull request, and no run will
+rewrite them either.** Nothing appends to a file a writer already closed, so
+the only thing that widens a committed heading is
+`backend/utilities/widen_ledger_header.py`, run by a person. A branch that
+rewrote the tree whole would be rebasing that rewrite onto the files the
+pipeline wrote while the branch was open, which is a conflict somebody has to
+resolve by hand over machine output nobody should be editing.
 
-**A check on the migration reads rows, never day files.** A day file the
-pipeline opens after the migration holds no pre-migration row at all, and it
-opens a new one every day. Two tests asked every committed file for a row older
+**A check on the migration reads rows, never files.** A file the
+pipeline writes after the migration holds no pre-migration row at all, and every
+writer opens a new one. Two tests asked every committed file for a row older
 than the column and went red on 2026-09-01, when a fresh file arrived with 63
 rows and none of them older than either column. The population a migration check
 is about is the rows, and the way to get one that cannot age out is to build the
@@ -726,7 +735,7 @@ it, so the two are indistinguishable in this ledger by design. What the planner
 spent lives in the run manifest (`items_routed`, `items_prefiltered`,
 `route_ms`) and in the digest payload's per-item `visual`.
 
-**A row can never be corrected.** The file is append-only, so a row written with
+**A row can never be corrected.** The ledger is append-only, so a row written with
 a wrong code stays. A reclassification is a new row under a later `run_id`, and
 a reader that wants "the latest verdict per item" has to say so. Nothing in the
 pipeline does that today.
@@ -755,10 +764,12 @@ before calling anything a source's fault.
 signal still matters. `WHERE code IS NOT NULL` is not the same query as `WHERE
 outcome = 'failed'`.
 
-**A merge conflict on the shard is normal.** The pipeline appends to it several
-times an hour, so any branch open for more than a run will conflict. Resolve by
-taking the upstream file whole and re-applying your change - never by keeping
-your copy, which drops the rows the pipeline wrote while the branch was open.
+**A merge conflict on this ledger is no longer normal.** It was, while every
+run of a day appended to one shared file: a branch open for more than a run
+always conflicted. Since 2026-09-22 each writer files its own path inside the
+day, so two writers never touch one file and a merge brings both sides in. A
+conflict here now means two writers claimed one identity, which is a defect
+rather than housekeeping - report it instead of resolving it.
 
 ## Scaling
 
@@ -960,8 +971,8 @@ it - and a bad day is exactly the day worth measuring. The race the old rule
 avoided is answered instead by the two things that already existed for it: a
 union merge driver on `state/**/*.csv` at the time, and the
 rebase loop in `.github/scripts/commit-and-push.sh` that the plan job has always
-used for the same reason. The driver went on 2026-09-19 and the segment store
-took its place, so the shard and assemble no longer write one path at all. The
+used for the same reason. The driver went on 2026-09-19 and the writer file took
+its place, so the shard and assemble no longer write one path at all. The
 double-write the old rule also avoided is answered
 by the row identity above. Authority: Fowler, over Carmack's original ruling.
 

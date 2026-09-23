@@ -261,7 +261,7 @@ summaries the checker doubted, the three doubt signals apart, summaries outside
 the length the prompt asked for, and the two token rates.
 
 **A measure only one side recorded is named, never drawn.** Both token rates
-arrived on `state/item-health/<YYYY>/<MM>/<DD>.csv` part way through its life, so a
+arrived on `state/item-health/<YYYY>/<MM>/<DD>/` part way through its life, so a
 boundary older than that has nothing on the left. Drawing a track from an absent
 value would be a claim about a run nobody instrumented, so those rows print as a
 sentence under the plot saying which side is missing. Zero and absent are not

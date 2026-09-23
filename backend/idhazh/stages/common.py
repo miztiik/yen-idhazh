@@ -661,8 +661,8 @@ def _extraction_health(
 
     Both writers of the item-health ledger call it, and they have to: the `work`
     job records a row the moment an item settles, hours before the `visuals` job
-    runs, and `append_item_health` keeps the first row for a key. A cell only
-    assemble could fill would be empty for every item a shard had already
+    runs, and `ledger.ITEM_HEALTH_RULE` keeps the row that names its job. A cell
+    only assemble could fill would be empty for every item a shard had already
     recorded.
 
     One article in, three cells out, so the cost is the item and not the archive

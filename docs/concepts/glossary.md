@@ -5,8 +5,9 @@
 The words this project uses for its own machinery, and where each one is defined.
 
 > A **run** turns the pipeline once. It plans **items**, splits them into
-> **shards**, and each shard writes a **segment**. Compaction **folds** every
-> segment into a **ledger**, which is the only memory the next run has. A
+> **shards**, and each shard writes a **segment** into the day it records.
+> Segments are what a **ledger** is made of, and a ledger is the only memory the
+> next run has. A
 > **trial run** does all of that with its ledgers off to one side.
 
 That paragraph is the whole machine in four sentences. The table below is for
@@ -35,11 +36,11 @@ a doc is a fine change to make; moving it into *this* page is not.
 | **bench** | One `measure.yml` dispatch that measures a model's raw speed and latency, before any question about its quality | [../how-to/evaluate-new-summarizer-model.md](../how-to/evaluate-new-summarizer-model.md); the knobs are the `bench` block in [config.md](config.md) |
 | **canary** | One of five planted prompt-injection attacks, run against the model to prove the sanitizer holds. The **canary day** is a published day built from them, so the browser suite can attack a real page instead of a fixture | `backend/idhazh/stages/qualify_canaries.py`, `backend/utilities/build_canary_day.py` |
 | **candidate** | A model being judged before it may replace the one in use | [qualification.md](qualification.md) |
-| **compaction** | The `compact` stage. It folds every waiting segment into its ledger head and deletes the segment | `backend/idhazh/stages/compact.py` |
+| **compaction** | The `compact` stage. Once a day is closed it folds that day's segments into one `settled.csv` and deletes them, which saves files and changes no answer | `backend/idhazh/stages/compact.py` |
 | **council** | The nightly workflow where models judge borderline same-story pairs and fit the merge line | [../architecture/publishing/llm-council.md](../architecture/publishing/llm-council.md) |
 | **dispatch** | A workflow run somebody started by hand, rather than one the schedule started | [../reference/github-actions.md](../reference/github-actions.md) |
 | **drift gate** | The check that regenerates the schemas and the frontend types from the Pydantic models and fails if what is committed differs | [../architecture/contracts/schemas.md](../architecture/contracts/schemas.md) |
-| **fold** | One of the four retention policies: keep the durable total, drop the per-item grain. Compaction uses the same word for what it does to a segment | [adaptive-pruning.md](adaptive-pruning.md) |
+| **fold** | One of the four retention policies: keep the durable total, drop the per-item grain. Compaction uses the same word for what it does to a closed day | [adaptive-pruning.md](adaptive-pruning.md) |
 | **holdout** | Labelled pairs kept out of fitting, so a fitted threshold is scored against something it has never seen | [../how-to/label-the-similarity-holdout.md](../how-to/label-the-similarity-holdout.md) |
 | **item** | One source URL and everything derived from it. The atom of the whole system | [pipeline-loop.md](pipeline-loop.md) |
 | **ledger** | A committed file under `state/` that one run writes so a later run can read a fact it found. The pipeline has no memory of its own: every run starts on a fresh machine with a fresh checkout | `backend/idhazh/ledger.py` |
@@ -48,7 +49,7 @@ a doc is a fine change to make; moving it into *this* page is not.
 | **run** | One turn of the pipeline. The schedule turns it five times a day | [pipeline-loop.md](pipeline-loop.md) |
 | **scratch config** | A copy of `config/` with the model pointer moved, so a candidate can be measured without editing the committed tree. Two keys may differ and no third | `backend/utilities/candidate_pointer.py` |
 | **seen store** | The ledger that answers "how old is this?" for an article whose feed carried no date | [pipeline-loop.md](pipeline-loop.md) |
-| **segment** | The rows one worker writes when several jobs write one ledger, at `state/segments/<ledger>/<run_id>-<attempt>-<job>-<shard>.csv`. Two writers never share a filename there, so a lost push race cannot stack two copies of a row | `backend/idhazh/ledger.py`, `backend/idhazh/stages/compact.py` |
+| **segment** | The rows one writer commits, at `state/<ledger>/<YYYY>/<MM>/<DD>/<run_id>-<attempt>-<job>-<shard>.csv`. Two writers never share a filename there, so a lost push race cannot stack two copies of a row | `backend/idhazh/ledger.py`, `backend/idhazh/day_shards.py` |
 | **shard** | The batch of items handed to one worker, so a day's work runs in parallel. `run.shard_size` is URLs per worker | `backend/idhazh/contracts/knobs/run.py` |
 | **span** | One timed operation in the telemetry tree | [telemetry.md](telemetry.md) |
 | **span rollup** | A month of spans folded to one row per date, run, shard and span name | [telemetry.md](telemetry.md) |

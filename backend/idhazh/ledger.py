@@ -445,7 +445,7 @@ def _item_health_rule(later: dict[str, str], kept: dict[str, str]) -> bool:
     machine that read none of the items.
 
     Until 2026-09-18 that was settled by arrival order: the work job committed
-    first and `append_item_health` kept the first row for a key. The compaction
+    first and the append kept the first row for a key. `day_shards.settled_rows`
     reads filenames in sorted order, where `assemble` comes before `work`, so
     the order would have silently reversed. The preference says out loud what
     the order used to decide.
@@ -1115,7 +1115,7 @@ def extend_ledger_file(path: Path, columns: tuple[str, ...], rows: Sequence[CsvR
     writer off - and rewriting the append beside that caller would give one
     ledger two shapes.
 
-    `evals.writer.append` does, against its `OBSERVATION_KEY`, and the reason the
+    `evals.writer.append_segment` does, against its `OBSERVATION_KEY`, and the reason the
     two differ is what a row means. There a row is a measurement, so re-measuring
     an item nothing changed about has nothing new to say. Here a row is a fact
     about a run - this feed answered at this hour, this item finished - and a run
@@ -1144,7 +1144,9 @@ def extend_ledger_file(path: Path, columns: tuple[str, ...], rows: Sequence[CsvR
       in `contracts.feed_health.supersedes` rather than by which line landed
       first.
     - **item-health** - two stages write it, so it cannot rely on a caller's own
-      guarantee. `append_item_health` filters against `ITEM_HEALTH_KEY` instead.
+      guarantee. Each writes its own file under the day, and
+      `day_shards.settled_rows` settles the day against `ITEM_HEALTH_KEY` at
+      read time.
 
     Both filters read the file the job checked out, which is frozen at the
     commit its run was triggered at, so neither can see a row a second attempt

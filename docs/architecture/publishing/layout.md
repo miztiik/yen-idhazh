@@ -23,8 +23,8 @@ frontend/public/digest/<YYYY>/<MM>/<DD>/<item_id>.json  optional visual, drawn i
 frontend/public/digest/<YYYY>/<MM>/<DD>/<item_id>.json that visual's data, for a browser to draw
 frontend/public/assist/index/<YYYY-MM>.json one month of items, for browsing and search
 frontend/public/assist/index/<YYYY-MM>.bin that month's vectors, raw int8
-state/scores/<YYYY>/<MM>/<DD>.csv the ledger - one row per measurement, never published twice
-state/score-index/<YYYY>/<MM>/<DD>.csv the identity of every measurement that day holds, 76 bytes each
+state/scores/<YYYY>/<MM>/<DD>/ the ledger - one row per measurement, never published twice
+state/score-index/<YYYY>/<MM>/<DD>/ the identity of every measurement that day holds, 76 bytes each
 state/score-archive/<YYYY-MM>.json a score month past its full-grain window, as totals plus a dedupe index
 ```
 
@@ -600,7 +600,7 @@ So (b) is a persisted-contract change that buys a cleaner diagram and zero bytes
 
 ### Two append paths, and only one of them deduplicates
 
-`idhazh.ledger.extend_ledger_file` writes every row it is handed. `idhazh.evals.writer.append` refuses a row whose address, inputs, words and scorer version it already holds. That looked like one of them being wrong, and it is not: **the two write different kinds of row.** An eval row is a measurement, so re-measuring an item nothing changed about has nothing new to say. A state row is a fact about a run - this feed answered at this hour, this item finished - and a run that runs twice did happen twice. Collapsing those would turn a count of runs into a count of days.
+`idhazh.ledger.extend_ledger_file` writes every row it is handed. `idhazh.evals.writer.append_segment` refuses a row whose address, inputs, words and scorer version it already holds. That looked like one of them being wrong, and it is not: **the two write different kinds of row.** An eval row is a measurement, so re-measuring an item nothing changed about has nothing new to say. A state row is a fact about a run - this feed answered at this hour, this item finished - and a run that runs twice did happen twice. Collapsing those would turn a count of runs into a count of days.
 
 So the blind path stays blind, and each caller that owns a repeat is now named next to it. Two of the four ledgers absorb a repeat at read time: `load_seen` and `load_published` keep the earliest of two rows, so a duplicate costs bytes and never moves a date. The health pair does not, and that is stated rather than guarded: `discover.resting` counts failures to decide a quarantine, so a duplicated failure counts twice. Measured on this checkout 2026-08-27, the published ledger held 2,097 rows and 2,097 distinct addresses in the flat file it has since moved off.
 

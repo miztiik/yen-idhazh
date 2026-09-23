@@ -3,7 +3,6 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { gzipSync } from 'node:zlib';
 import { PAGES_CAP_BYTES, siteCost, siteRunway } from '../src/lib/charts/glance';
-import { compactionSentence, readBand } from '../src/lib/console/band';
 import type { RunSummary } from '../src/lib/server/payload';
 
 /**
@@ -414,45 +413,6 @@ test('THE ORACLE: the band is the same three facts on every route, and no window
 	);
 	const after = (await page.locator('[data-console-band]').innerText()).replace(/\s+/g, ' ').trim();
 	expect(after, 'moving a route window control moved the standing band').toBe(before);
-});
-
-test('THE ORACLE: a run that cleared a backlog says so, in the past tense', () => {
-	// The three numbers as the producer writes them, read back through the same
-	// mapper the layout uses. Driven from a payload rather than a page because
-	// the fold that produces a non-zero lag is a pipeline state, and the canary
-	// is a tree nothing has ever left a segment in.
-	const shell = readBand({
-		...JSON.parse(readFileSync(BAND_PAYLOAD, 'utf8')),
-		compaction_lag_days: 2,
-		rows_uncompacted: 303,
-		covers_through: '2026-09-17'
-	});
-
-	expect(shell.band.compaction).toEqual({ days: 2, rows: 303, coversThrough: '2026-09-17' });
-	// Past tense is the rule, not a preference: the page it stands on was brought
-	// current by the run that wrote it, so a present-tense claim would be false on
-	// the one page able to make it.
-	expect(compactionSentence(shell.band.compaction)).toBe(
-		'This run merged 303 rows that had been waiting 2 days. ' +
-			'The Hardware page now reaches 17 September.'
-	);
-});
-
-test('THE ORACLE: nothing waiting puts no line on the band at all', async ({ page }) => {
-	// The other half, on a real page. Zero is the state of every normal run, so
-	// silence is what the console has to render - a line reading `0 days behind`
-	// on every clean day teaches an operator to read past it on the day it is not
-	// zero.
-	const silent = readBand(JSON.parse(readFileSync(BAND_PAYLOAD, 'utf8')));
-	expect(silent.band.compaction, 'the served payload carries a backlog').toBeNull();
-	expect(compactionSentence(silent.band.compaction)).toBeNull();
-
-	await page.goto('/console/');
-
-	// Both counts, because an absent element proves nothing on a page that failed
-	// to render: the band is there and the line inside it is not.
-	await expect(page.locator('[data-console-band]')).toHaveCount(1);
-	await expect(page.locator('[data-band-compaction]')).toHaveCount(0);
 });
 
 /** The payload the pipeline publishes, which is the one a reader is served. */

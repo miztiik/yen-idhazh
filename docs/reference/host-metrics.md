@@ -27,9 +27,9 @@ set is still operator-only: the console reads it at build time under
 | --- | --- |
 | Contract | [`backend/idhazh/contracts/host_fingerprint.py`](../../backend/idhazh/contracts/host_fingerprint.py) |
 | Generated schema | [`schemas/host-fingerprint-row.schema.json`](../../schemas/host-fingerprint-row.schema.json) |
-| Store | `state/host-fingerprint/<YYYY>/<MM>/<DD>.csv` for the daily run; `state/pipeline-tests/host-fingerprint/<YYYY>/<MM>/<DD>.csv` for a bench dispatch |
-| In transit | `state/segments/host-fingerprint/<run>-<attempt>-<job>-<shard>.csv` - one file a job, folded into the store above and deleted |
-| Producer | `idhazh fingerprint` and `idhazh job-clock`, through [`backend/idhazh/telemetry/silicon.py`](../../backend/idhazh/telemetry/silicon.py). The store above is written by `idhazh compact` and by nothing else |
+| Store | `state/host-fingerprint/<YYYY>/<MM>/<DD>/` for the daily run; `state/pipeline-tests/host-fingerprint/<YYYY>/<MM>/<DD>/` for a bench dispatch |
+| One file per writer | `<run_id>-<attempt>-<job>-<shard>.csv` inside the day directory - nothing else ever opens that path |
+| Producer | `idhazh fingerprint` and `idhazh job-clock`, through [`backend/idhazh/telemetry/silicon.py`](../../backend/idhazh/telemetry/silicon.py). Each job writes its own file through `ledger.write_segment` and `ledger.extend_segment`, and nothing else writes the store |
 | Read by | `/console/machine/`, at build time through `frontend/src/lib/server/host-fingerprint.ts` |
 | Key | `date`, `run_id`, `job`, `shard` - one row a job |
 | Switch | `observability.host_fingerprint` |
@@ -42,8 +42,8 @@ not say what the other two cost. The `work` shards had the record from the start
 because they hold the model server; the two jobs either side of them spent time
 nobody could attribute to a processor.
 
-**No job writes the day file, from 2026-09-17.** Each writes its own segment and
-the fold in `assemble` is the one writer of the day. Ten writers on one path is
+**No job writes a shared day file, from 2026-09-17.** Each writes its own segment
+and nothing else opens it. Ten writers on one path is
 what emptied 2026-09-16; the design rationale below says what it cost and why a
 merge driver was never going to settle it.
 
@@ -52,8 +52,8 @@ The probe runs before the job's heaviest step, because the bandwidth reading
 wants a gigabyte and an idle machine. What the job cost - its wall clock, and
 what opening the weights cost before the first item - is only knowable once the
 job is over. So `idhazh job-clock` writes a second row of the same shape into the
-same segment, carrying those two cells and repeating nothing, and the fold takes
-the union. **A job that dies between the two leaves a usable half-row with two
+same segment, carrying those two cells and repeating nothing, and
+`day_shards.settled_rows` takes the union at read time. **A job that dies between the two leaves a usable half-row with two
 empty cells**, which is the degrade path rather than a failure - and an empty
 cell is what says the reading was not taken, where a zero would claim a job that
 cost nothing.
@@ -71,7 +71,7 @@ earns its keep when somebody counts across many days, and a day tree is the
 shape a bounded window can read (Guardrail #12).
 
 **Two tables join on the key, and no column is duplicated to make that work.**
-This table and `state/item-health/<YYYY>/<MM>/<DD>.csv` both carry `date`,
+This table and `state/item-health/<YYYY>/<MM>/<DD>/` both carry `date`,
 `run_id`, `job` and `shard`, and a job runs on one machine, so the key is the
 join. There is deliberately no `host_fingerprint` column on the item row: it
 would be a second copy of a value this table already holds, and a second copy is
@@ -485,31 +485,32 @@ appends could not help: a rebase hands a job the tip, the job replays its own
 append, and the last writer to win a race carries whatever its checkout held.
 **A shared path is the defect; a settlement rule on top of it is a repair.**
 
-So from 2026-09-17 no job opens the day file. Each writes
-`state/segments/host-fingerprint/<run>-<attempt>-<job>-<shard>.csv`, which names
+So from 2026-09-17 no job opens a shared day file. Each writes
+`state/host-fingerprint/<YYYY>/<MM>/<DD>/<run>-<attempt>-<job>-<shard>.csv`, which names
 the run, the try at it, the job and the shard - four cells that make a filename
-one writer's alone - and `idhazh compact` inside `assemble` folds them into the
-day and deletes them. The `plan` job of the next run folds anything an `assemble`
-that died left behind, so a segment waits at most one run.
+one writer's alone. Since 2026-09-22 that file is the ledger rather than a copy
+waiting to be folded, so a run that died leaves its rows in the day they belong
+to and nothing has to catch up.
 
 **The attempt is in the name and in no column.** GitHub keeps the run id stable
 across a re-run and increments the attempt, so without it a second try takes the
 path its first try already wrote - in exactly the case where the two disagree,
-because the first is the one that died. With it, both files reach the fold and
+because the first is the one that died. With it, both files reach the reader and
 the higher attempt wins each cell the two fill differently.
 
-**The row's shape did not change and neither did the day file's.** A segment
-carries the head's own columns and the head's own contract, so there is no
-version stamp, no migration and no second schema. A reader opens the same file it
-opened before. Authority: Fowler, 2026-09-17.
+**The row's shape did not change.** Every file in the day
+carries the tree's own columns and the tree's own contract, so there is no
+version stamp, no migration and no second schema. A reader gets the same rows it
+got before. Authority: Fowler, 2026-09-17.
 
-**A bench dispatch folds its own segment.** `measure.yml` has no `assemble` job,
-so the step after its probe runs `idhazh compact --config
-backend/var/candidate-config` and the commit stages the day file as it always
-did. When this was decided it was the one state writer with no concurrency group
-at all, which is why it gets the segment rather than being left on the shared
-path. It groups per target now, and a day file is still shared by every dispatch
-of one target. Authority: Carmack, 2026-09-17.
+**A bench dispatch writes the same way.** `measure.yml` has no `assemble` job,
+and it needs none: its probe writes its own file under the day and the commit
+stages the day directory. When this was decided it was the one state writer with
+no concurrency group
+at all, which is why it got its own file rather than being left on the shared
+path. It groups per target now, and a day is still shared by every dispatch
+of one target - shared as a directory, which is the whole point. Authority:
+Carmack, 2026-09-17.
 
 ## See also
 

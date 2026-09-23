@@ -100,9 +100,9 @@ def test_a_job_on_an_item_row_names_a_worker_as_well() -> None:
 def test_a_shard_with_no_job_is_the_shape_every_committed_row_holds() -> None:
     """The converse is deliberately not a rule, and it is the half that had to be got right.
 
-    `ledger.append_item_health` re-files an older day file through
-    `from_csv_row` before it appends, so a two-directional rule would refuse
-    every row written before this column on the first run after it landed.
+    Every read of a committed day parses each row back through `from_csv_row`
+    (`day_shards.parsed`), so a two-directional rule would refuse every row
+    written before this column on the first run after it landed.
     """
     assert an_item(shard=0).job is None
 

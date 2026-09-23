@@ -472,7 +472,7 @@ writers racing into one union-merged day file. That premise died on 2026-09-19
 when `merge=union` left the judged-pairs store, and quoting it today invites a
 reader to retire the guard along with it. The conflict that segments exist to
 solve - more than one job committing into one ledger file - is priced in
-[its own rationale below](#design-rationale-the-councils-own-path-not-the-segment-store),
+[its own rationale below](#design-rationale-the-councils-own-path-not-a-segment-per-writer),
 and the council has one committing writer either way.
 
 **What would change the answer**, as a condition rather than a preference: a
@@ -543,24 +543,24 @@ the digest pipeline, and the bandwidth probe that would fingerprint it wants
 memory in 16 GB. The council's data is discardable, so the reading is not worth
 the only memory risk in the design. Carmack, 2026-09-21.
 
-## Design rationale: the council's own path, not the segment store
+## Design rationale: the council's own path, not a segment per writer
 
-The digest pipeline files rows through `state/segments/` and a compaction verb
-folds them into a head. The council does not, for two reasons.
+The digest pipeline gives every writer its own segment inside the day, at
+`state/<ledger>/<YYYY>/<MM>/<DD>/<run_id>-<attempt>-<job>-<shard>.csv`. The
+council does not, and one reason survives.
 
-**Segments solve a conflict this workflow does not have.** They exist for the
+**A segment solves a conflict this workflow does not have.** It exists for the
 case where more than one job commits into one ledger file - the digest pipeline
-has four to eight committing units on one day file. The council has one
+has four to eight committing units on one day. The council has one
 committing writer, and its day file is already settled on every write by a key
-carrying the run id, which is the property segments exist to provide.
+carrying the run id, which is the property a segment exists to provide.
 
-**And the compaction verb takes no filter.** It folds every waiting segment,
-whatever ledger it belongs to, and then deletes the files it read. The digest
-run's own segments are often still waiting when the council starts - 21 files
-across five ledgers, measured on `origin/main` on 2026-09-20 - so a council run
-that compacted and then committed only its own folders would delete the digest
-pipeline's transit copies while leaving the files they were folded into
-uncommitted.
+**The second reason went with the staging store on 2026-09-22.** A compaction
+verb used to fold every waiting segment of every ledger and delete what it read,
+so a council run that compacted and then committed only its own folders would
+have deleted the digest pipeline's transit copies while leaving the files they
+were folded into uncommitted. There is no transit copy now - a segment is the
+ledger - so a council run cannot damage a digest run this way whatever it folds.
 
 **What would change the answer**, stated as a condition rather than a
 preference: a unit whose output is too large for an artifact, or which must

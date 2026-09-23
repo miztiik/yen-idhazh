@@ -370,7 +370,7 @@ row is a judgement.
 
 **The source is a join, and the join is printed when it fails.** The eval ledger
 records the address and the title and never the feed, so a summary reaches a
-source through `url_key` on `state/item-health/<YYYY>/<MM>/<DD>.csv`. Measured
+source through `url_key` on `state/item-health/<YYYY>/<MM>/<DD>/`. Measured
 2026-09-01 over the committed ledgers, 3,959 of 4,110 scored rows join, and every
 day from 2026-08-24 joins at 100 percent - the 151 that do not are the two oldest
 scored days, written before item-health carried them. Rows that do not join are
@@ -968,7 +968,7 @@ nothing skips
 ### The dedupe is answered by an index, and an index can be wrong
 
 The writer does not read the score rows to answer *do we already hold this
-measurement*. It reads `state/score-index/<YYYY>/<MM>/<DD>.csv`, which keeps one
+measurement*. It reads `state/score-index/<YYYY>/<MM>/<DD>/`, which keeps one
 fixed-width digest a measurement beside the day file it describes - a read an order
 of magnitude smaller than the rows, exact, with nothing forgotten
 ([growing-reads.md](growing-reads.md)). **It files by the ledger's own day since
