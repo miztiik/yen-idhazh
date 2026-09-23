@@ -15,12 +15,11 @@ where the value came from and what happens to it.**
 Everything on this page says something about the **article**. Nothing on it
 ranks a publisher, scores a summary or decides what publishes.
 
-That line is not a preference, it is
-[`../../CLAUDE.md`](../../CLAUDE.md) section 0a. A model verdict that reaches no
-reader and selects nothing to publish is not a deviation from it. Two things
-stay refused whatever else is true: a model may not grade a published summary or
-a published visual, and a model may not select what publishes. **A label says
-what a story is about; it never decides whether the story runs.**
+That line is this page's own scope, not a contract rule.
+[`../../CLAUDE.md`](../../CLAUDE.md) section 1a now makes LLM-as-judge primary
+evaluation: a model verdict may run in a production workflow, may score live
+content, and may determine publication. None of that happens here. **A label
+says what a story is about; it never decides whether the story runs.**
 
 Where a label does reach a reader it reaches them as a word about the article,
 never as a judgement of the newsroom. The practical test is the `announcement`
@@ -114,15 +113,15 @@ choose against. Once a day, the run asks each item's vector how close it sits to
 the closest of those label vectors, and writes the day's spread of that answer
 onto `state/day-metrics/<YYYY>/<MM>/<DD>.json`.
 
-**It is allowed under [`../../CLAUDE.md`](../../CLAUDE.md) section 0a, and here
-is the reason written down so nobody has to work it out again.** The number
+**Here is what it touches and what it does not, written down so nobody has to
+work it out again.** The number
 reaches no reader: it lands on an operator record and never on a page a reader
 opens. It selects nothing: no item is ordered by it, held back by it or
 published because of it. It picks no label - the closest label is worked out and
-thrown away, and nothing anywhere records what one item scored. That is a model
-verdict that reaches no reader and selects nothing to publish, which section 0a
-permits. **The day it starts choosing anything, it is a classifier and it needs
-everything a classifier needs.**
+thrown away, and nothing anywhere records what one item scored. So it measures
+the day's spread and nothing else, whatever section 1a would now let a model
+verdict decide. **The day it starts choosing anything, it is a classifier and it
+needs everything a classifier needs.**
 
 **Neither end of the number is better than the other.** A day at 0.34 is not a
 better day than one at 0.31, and nobody can say which way is good. The cosine
@@ -231,4 +230,4 @@ label side is "name. definition", so a change to either is a change to both.
 - [../architecture/sources/trust-boundary.md](../architecture/sources/trust-boundary.md) - why fetched text is data and never instruction.
 - [digest.md](digest.md) - what a published day holds.
 - [../how-to/measure-a-classifier.md](../how-to/measure-a-classifier.md) - how the reference dataset behind an accuracy figure is built, and what makes that figure still mean something a month later.
-- [../../CLAUDE.md](../../CLAUDE.md) - section 0a (what a model verdict may decide) and Guardrail #11 (fetched text is data).
+- [../../CLAUDE.md](../../CLAUDE.md) - section 1a (what a model verdict may decide) and Guardrail #11 (fetched text is data).

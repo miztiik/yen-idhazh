@@ -89,7 +89,7 @@ The zone is named once, in one line above the stream: `Times shown in UTC.` Not 
 - Ask the reader for anything - no cookie banner, no signup, no notification permission, no rating widget. Every interruption is a reason to close the tab.
 - Recompute a score, re-rank items, or derive anything the pipeline already decided. The page renders; it does not think.
 - Hide a low-confidence item to make the page look better.
-- **Call `Notification` or `PushManager`. Ever.** The reader decides when to read (CLAUDE.md section 0a). This is written down rather than implied because installability makes the temptation concrete: an installed app is exactly the context in which "just a gentle daily reminder" starts to sound reasonable. It is not. Since 2026-09-02 background sync is on the same list, and for the same reason - work on the reader's device that they did not ask for, on a schedule we chose. `frontend/tests/manifest.spec.ts` greps the source, the worker included, and fails on any of those names.
+- **Call `Notification` or `PushManager`. Ever.** The reader decides when to read, and a feature that depends on a push notification is one of the named anti-patterns (CLAUDE.md section 10). This is written down rather than implied because installability makes the temptation concrete: an installed app is exactly the context in which "just a gentle daily reminder" starts to sound reasonable. It is not. Since 2026-09-02 background sync is on the same list, and for the same reason - work on the reader's device that they did not ask for, on a schedule we chose. `frontend/tests/manifest.spec.ts` greps the source, the worker included, and fails on any of those names.
 
 ## Installable, and readable with no network
 

@@ -60,7 +60,7 @@ A surface that fails one ships only with a `## Design rationale` entry saying wh
 - DO NOT overrule **Carmack** on bytes, the runner budget or the 1 GB Pages cap. If your proposal does not fit, it is your proposal that changes.
 - DO NOT overrule **Reader** on whether copy is plain, or **Editor** on what the digest covers and at what length.
 - DO NOT overrule **Andre** on model or eval questions, or **Fowler** on a contract.
-- DO NOT propose a service we run, an account, a notification, or a third-party script that phones home (Guardrail #1, section 0a). A static asset fetched at read time is allowed, and is judged on bytes, licence and privacy behaviour rather than on hostname.
+- DO NOT propose a service we run, an account, a notification, or a third-party script that phones home (Guardrail #1). A static asset fetched at read time is allowed, and is judged on bytes, licence and privacy behaviour rather than on hostname.
 - DO NOT propose accessibility audit tooling, WCAG gating or contrast-ratio gates as required work - project-level non-goal, `CLAUDE.md` section 0a. Labelled controls, visible focus and semantic landmarks are simply good building and are in scope.
 - DO NOT put semantic colour on a page without a second signal, and never borrow the confidence ramp's three hues for anything categorical.
 - DO NOT add a feature. You rule on how a surface is made, not on what it does; a gap that needs a new capability goes to Jony or Editor.

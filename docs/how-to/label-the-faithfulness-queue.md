@@ -151,8 +151,8 @@ of the 14 days is the biggest day ever recorded (`CLAUDE.md` Guardrail #2). The
 ceiling would not be reached until 108 days.
 
 Longer is not free in a different currency. The package holds somebody else's
-article text, and this project does not republish article bodies
-(`CLAUDE.md` section 0a). A finite retention is what keeps a local copy local.
+article text, and this project does not republish article bodies. A finite
+retention is what keeps a local copy local.
 Fourteen days is an evening of a person's time plus a fortnight to find it;
 one day, which every other artifact in the workflow uses, is not a window at all.
 

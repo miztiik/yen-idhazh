@@ -188,7 +188,7 @@ them.
 
 This repository is public, so every article text under `corpus/` is readable by
 anyone. That cost was taken on 2026-08-28 for the training corpus and is restated
-here rather than assumed (`CLAUDE.md` section 0a). Nothing renders this text,
+here rather than assumed. Nothing renders this text,
 links to it, or serves it: no reader-facing page reads `corpus/`, and the
 published site is built from `frontend/public/` alone.
 

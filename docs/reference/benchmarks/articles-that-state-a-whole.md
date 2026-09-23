@@ -62,7 +62,7 @@ screen, which is the finding below rather than an aside.
 question.** The question is about the **article**, and the article's own text is
 in `corpus/corpus.jsonl` and nowhere else a reader can reach: a published day
 under `frontend/public/digest/` carries our summary and a link, never the source
-body ([`../../../CLAUDE.md`](../../../CLAUDE.md) section 0a). The visual planner
+body. The visual planner
 reads the article too, so this is also the text the `pie` gate would see.
 
 **Two things the population is not.** It is not every article the pipeline
@@ -163,9 +163,11 @@ IPO premiums, a man's body weight.
 **That three-of-twelve is an agent observation and not a measurement.** An agent
 read twelve printed excerpts on 2026-09-13 and judged them: n is 12, the sample
 is the first twelve rather than a random twelve, there was one rater, the rater
-was not blind, and the rater is a model. It satisfies
-[`../../../CLAUDE.md`](../../../CLAUDE.md) section 0a - it grades no published
-summary, grades no published visual, and selects nothing to publish - but two
+was not blind, and the rater is a model.
+[`../../../CLAUDE.md`](../../../CLAUDE.md) section 1a permits a model verdict to
+score live content and decide publication; this one does neither - it grades no
+published summary, grades no published visual, and selects nothing to publish -
+and two
 things follow from the label and bind: **no threshold, config value or template
 decision may rest on it**, and it may never be re-run as a scorer over the hit
 list, because the moment it decides which hits count it has started selecting.

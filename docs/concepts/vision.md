@@ -58,9 +58,12 @@ reasons to weaken the product contract
 - **Not a republisher.** The pipeline publishes a link and our own summary. The article body is never committed and never served.
 - **Not a service.** There is no backend in production. `backend/` is a producer that runs in CI and on a developer machine.
 - **Not model-agnostic by accident.** The model is chosen against a measured budget and a measured quality bar, and swapping it is a contract-level decision.
-- **Not a place where the model grades itself.** A judge that shares the failure modes of the thing judged is not a measurement.
 
-The full non-goal list is [`CLAUDE.md`](../../CLAUDE.md) section 0a.
+"Not a place where the model grades itself" was on this list until
+[`CLAUDE.md`](../../CLAUDE.md) section 1a replaced it. LLM-as-judge is primary
+evaluation here now: a model verdict may run in a production workflow, may score
+live content, and may determine publication
+([evaluation.md](evaluation.md)).
 
 ## The constraints that shape everything
 

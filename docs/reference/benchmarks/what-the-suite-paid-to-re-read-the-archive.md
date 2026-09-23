@@ -73,7 +73,7 @@ rows than the draw asks for, and a second pipeline at the live scorer.
 The frozen oracle keeps only the four fields the grouping reads - `item_id`,
 `source_id`, `rank_score`, `introduced_by_run` - and every vector: 431 stories
 over 64 sources. No title and no summary, so no article text enters the
-repository for a page that will never render it (section 0a).
+repository for a page that will never render it.
 
 ### Eight walks carried a fuse, and the fuse had a date on it
 

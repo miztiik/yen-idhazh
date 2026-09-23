@@ -109,7 +109,9 @@ them all.
 `backend/idhazh/visual_validator.py` reads one plan and one article's element table and returns the
 checks that did not hold. An empty answer means the plan may be drawn. Nine checks, all of them
 deterministic code over committed data - **no check calls a model, and a test reads the module's own
-imports so none can start to** (`CLAUDE.md` section 0a). It reads the same test against
+imports so none can start to**. `CLAUDE.md` section 1a now permits a model verdict to decide what
+publishes; this validator still refuses to be one, because every check it needs is a comparison
+against committed data. It reads the same test against
 `visual_vocabulary.py`, or moving a table out of the validator would move it out from under the
 guard.
 
@@ -330,8 +332,9 @@ depth, and the only per-plan number in the contract is `confidence` - which the 
 "recorded, and it gates nothing". Three reasons, and the cheapest one comes first: gating on it
 breaks the shape's own written guarantee. It is also the one free number the model writes, so
 prohibition 2 - "the worst a prompt injection can do is pick the wrong bars; it cannot draw the
-wrong number" - would stop being true of publish decisions (Guardrail #11). And a model may not select
-what publishes (`CLAUDE.md` section 0a). The mark count is code's own count over code's own
+wrong number" - would stop being true of publish decisions (Guardrail #11). `CLAUDE.md` section 1a now
+lets a model verdict decide what publishes, so this is a ruling this subsystem keeps rather than a
+contract ban: the mark count is code's own count over code's own
 elements, and it is the quantity `enough_data` already rules on. Authority: Andre and Fowler, ruled
 independently and agreeing, 2026-09-11.
 
@@ -356,13 +359,13 @@ and the invariance rules into the same commit as the ledger, where a review has 
 
 | Option | Why rejected |
 | --- | --- |
-| A model checks the plan | A judge that shares the failure modes of the thing judged is not a measurement (`CLAUDE.md` section 0a). Every check the plan needs is a comparison against the article's own element table, which is committed data - so the model buys nothing and costs the only guarantee the subsystem sells. |
+| A model checks the plan | A judge that shares the failure modes of the thing judged is not a measurement. `CLAUDE.md` section 1a would now permit one and this subsystem still refuses: every check the plan needs is a comparison against the article's own element table, which is committed data - so the model buys nothing and costs the only guarantee the subsystem sells. |
 | Return one refusal string from the validator | Cheaper to write and it makes every rule unfalsifiable at once. Nothing can then say which check fired, so no check can be retired, tuned or shown to work - and a fixture that trips three rules proves none of them. |
 | Compare unit strings for equality in the validator | Cheaper, and wrong in the direction that matters: it refuses `4,200 tonnes` beside `4.2 kt`, which is the pair a reader most needs joined, while accepting `tonnes` beside `t` only by accident of spelling. |
 | Put the per-type role table in `config/` | It is a relation between two Python enums, and a JSON file can reference neither - so the copy there would be a second spelling that drifts from both. It is also not a knob: a config edit that let a `bar` draw `bins` would publish a plan no compiler has a template for. |
 | An eighteen-branch union, one per type, instead of one encodings object | The decoder would have to pick a branch before it has picked a type. |
 | A `label` encoding role beside the `labels` field | It asks the model the same question twice inside one reply, and a model that answers it twice can answer it two ways with nothing to settle which. |
-| `confidence` as the ladder's escalating floor | The contract says it gates nothing, it is the one free number the model writes, and a model may not select what publishes (`CLAUDE.md` section 0a). Gating it would also destroy it as a diagnostic. |
+| `confidence` as the ladder's escalating floor | The contract says it gates nothing, and it is the one free number the model writes - so gating it would let the model decide its own publication on its own say-so. `CLAUDE.md` section 1a permits a model verdict to decide publication; it does not make this number worth trusting, and gating it would also destroy it as a diagnostic. |
 | Waive the floor when no depth-0 visuals have been published | Depth 1 would publish on the validator alone, which is depth 1 quietly becoming the default path - the failure the escalating floor exists to prevent. |
 | A separate on-off flag beside the ladder's rungs | Two knobs that can disagree about one thing. Zero rungs is already an unambiguous no, and the rung count is already the maximum depth. |
 | A `line` to `bar` downgrade edge | The source document allows it "if the time axis is safely categorical", and nothing in this build can decide that. A condition nobody can evaluate is a condition nobody should encode. |

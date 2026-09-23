@@ -389,7 +389,7 @@ green for weeks.
 **Robots permission and training permission are different questions.** A
 publisher can allow every ordinary crawler and name a list of AI training bots it
 refuses. We are none of those user agents, so the fetch is allowed - but `corpus/`
-commits article text as training samples (`CLAUDE.md` section 0a), so the
+commits article text as training samples, so the
 publisher's stated intent and one of our uses point in opposite directions. This
 is recorded rather than resolved: the owner takes that call, and if it goes the
 other way the fix is one `retired_on`.

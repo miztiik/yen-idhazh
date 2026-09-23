@@ -2,7 +2,7 @@
 
 **Last Updated**: 2026-09-22
 
-The structured-event vocabulary: the envelope every event carries, the event names that are emitted, the two shapes those names take, the span tree a developer can switch on, and the rule that there is no network sink. "Telemetry" here means a **local, structured log**; it is not a runtime analytics SDK, which is a project non-goal ([principles.md](principles.md), [../../CLAUDE.md](../../CLAUDE.md) section 0a).
+The structured-event vocabulary: the envelope every event carries, the event names that are emitted, the two shapes those names take, the span tree a developer can switch on, and the rule that there is no network sink. "Telemetry" here means a **local, structured log**; it is not a runtime analytics SDK, and this project ships none ([principles.md](principles.md), [../../CLAUDE.md](../../CLAUDE.md) section 1b).
 
 This page is the concept-tier statement of the logging doctrine in `CLAUDE.md` section 1b.
 
@@ -579,7 +579,7 @@ Treating the Actions run log as the log store, rather than shipping logs anywher
 | Scraping item failures back out of logs | The workers already hand Assemble typed payloads. A log scraper would make evidence pretend to be the record. | Fowler |
 | The OpenTelemetry SDK, taken directly | What it sells is a wire protocol to a collector, and Guardrail #1 forbids the collector. Its span attributes also carry the prompt by default, and this repository is public, so a default left alone is a Guardrail #11 breach with no undo. It was taken instead inside a hosted tracing client built on it - one dependency rather than two for one span tree - and that client went on 2026-09-22, leaving the standard-library file sink and no wire protocol at all. | Andre, Carmack and Fowler, 2026-08-30 |
 | Writing an emitter for each of a 19-name event vocabulary | Every fact they would report is already in the item-health ledger, the eval ledger or the run manifest, and a CI log expires in two days. It is 19 emitters written into a store that forgets, beside a record that does not. | Fowler, 2026-08-30 |
-| Sending `input` and `output` as the hosted client intends | They are free text, its own decorator fills them with the prompt and the completion, and this repository is public - so a default left alone republishes article bodies, which section 0a forbids outside `corpus/`. Both fields were passed explicitly as null and the client's own mask hook was wired to refuse whatever it was handed; the sink went on 2026-09-22 and took both with it. | Andre, 2026-08-30 |
+| Sending `input` and `output` as the hosted client intends | They are free text, its own decorator fills them with the prompt and the completion, and this repository is public - so a default left alone republishes article bodies, which this project does not do outside `corpus/`. Both fields were passed explicitly as null and the client's own mask hook was wired to refuse whatever it was handed; the sink went on 2026-09-22 and took both with it. | Andre, 2026-08-30 |
 | Tracing on by default, or on in CI (2026-08-30) | Rejected then as a publish job that could fail on a third party's availability, for a view nothing in the job reads. Reversed 2026-09-06: the hazard was the host, and CI has no host - the sink there is the committed file, no key, no third party (see Design rationale). The host itself went on 2026-09-22. | Carmack 2026-08-30; owner 2026-09-06 |
 | Sampling the span collection | The committed rollup is folded from every span to reconcile the shard's wall clock, so dropping any span breaks that reconciliation. The collection cost is negligible in any case - Carmack measured it at about one part in 128,000 of a shard. | owner, 2026-09-06 |
 | Committing a raw span as a record | A fourth account of the same run, free to disagree with the other three. A *derived* fold that restates nothing is the committed rollup above; a raw span stays evidence under `backend/var/`. | Fowler, 2026-08-30 |
@@ -598,4 +598,4 @@ Treating the Actions run log as the log store, rather than shipping logs anywher
 - [../architecture/sources/item-health.md](../architecture/sources/item-health.md) - the item-level census ledger.
 - [../architecture/publishing/llm-council.md](../architecture/publishing/llm-council.md) - the judging workflow, and why its own readings and a judge's are two records.
 - [principles.md](principles.md) - principle 9, logging is local by construction.
-- [../../CLAUDE.md](../../CLAUDE.md) - section 1b (logging) and the no-telemetry-SDK non-goal (section 0a).
+- [../../CLAUDE.md](../../CLAUDE.md) - section 1b (logging is local by construction) and Guardrail #1 (no runtime call home).

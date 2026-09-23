@@ -53,7 +53,7 @@ These exist on a developer machine and in CI. None is ever committed.
 | `backend/models/` | GGUF weights. 2.4 GB and 4.8 GB, against a 100 MB per-file ceiling |
 | `backend/bin/` | llama.cpp binaries, ~45 MB. Downloaded, not authored |
 | `backend/var/` | Run intermediates and caches. The committed record of a run is the digest plus the `state/` rows, never the workings |
-| `backend/var/evidence/` | Inside `backend/var/`, and named here because a person has to find it. One file per scored item, holding the article text and the summary a human labeller must read. Article bodies are not ours to republish (`CLAUDE.md` section 0a), so this one is uncommittable on principle rather than on size |
+| `backend/var/evidence/` | Inside `backend/var/`, and named here because a person has to find it. One file per scored item, holding the article text and the summary a human labeller must read. Article bodies are not ours to republish, so this one is uncommittable on principle rather than on size |
 | `backend/var/council/` | Inside `backend/var/`, and named here for the same reason. **Everything one judging night carries between its jobs, and the only thing it carries**: the workflow uploads this directory and nothing else, so a file a tenant writes outside it is thrown away with the runner. One date a directory, and inside it a slot each for what was picked, what was judged, what the units measured and how each unit ended. A file is named `<date>-<tenant>-<unit>`, so eight units cannot land on one path and a file merged out of eight artifacts still says who wrote it. Nothing here is ever committed - a drawn row carries no verdict yet and the units rewrite it, while a row reaches `state/content-similarity-judge/scored-pairs/` once, already judged, and is never edited afterwards |
 | `frontend/build/` | The built bundle. Pages rebuilds it from source on every deploy |
 | `frontend/static/digest/` | Staged from `frontend/public/digest/` at build time. A copy is not a source |
@@ -80,7 +80,7 @@ time by `backend/utilities/label_queue.py`. It sits with the other ledgers
 because it is read the same way - joined to `state/scores.csv` on
 `output_digest`, never served, and it must survive a fresh checkout. It is the
 one exception to "written by a machine", and it is deliberate: the point of the
-file is that no machine wrote it (`CLAUDE.md` section 0a). See
+file is that no machine wrote it. See
 [../concepts/evaluation.md](../concepts/evaluation.md).
 
 `state/content-similarity-judge/holdout-pairs.csv` is the second, and it is the same
@@ -102,9 +102,9 @@ none of it - which is the intended cost. See
 [../how-to/label-the-faithfulness-queue.md](../how-to/label-the-faithfulness-queue.md).
 
 **`corpus/` holds that same article text, committed, and it is the one place in
-this repository that does.** `CLAUDE.md` section 0a permits it by name, on an
-owner decision taken 2026-08-28: what the non-goal protects is the published
-surface, and nothing renders the corpus, links to it, or serves it. Two
+this repository that does.** That is an owner decision taken 2026-08-28: what
+the rule protects is the published surface, and nothing renders the corpus,
+links to it, or serves it. Two
 consequences follow and neither is hidden. This repository is public, so those
 bytes are readable by anyone. And because git history is append-only, bounding
 the repository means rewriting history - which is what

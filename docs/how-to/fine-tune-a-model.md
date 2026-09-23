@@ -4,9 +4,9 @@
 
 How the training corpus is built, what maintains it, and what a person does with
 it. Training itself does not happen here: the runner has no GPU, 4 vCPU and a
-6-hour job ceiling, so a training step in a workflow is a project-level non-goal
-(`CLAUDE.md` section 0a). Using a fine-tuned model is not - it enters through the
-same qualification as any other candidate.
+6-hour job ceiling, so a training step in a workflow does not fit the machine
+(`CLAUDE.md` Guardrail #2). Using a fine-tuned model does fit - it enters through
+the same qualification as any other candidate.
 
 ## What exists today
 
@@ -536,7 +536,7 @@ Adopting a tuned model is a Level-5 change and needs explicit approval
 
 ## See also
 
-- [`../../CLAUDE.md`](../../CLAUDE.md) - section 0a for the corpus carve-out, section 8 for the force-push exception.
+- [`../../CLAUDE.md`](../../CLAUDE.md) - section 8 for the force-push exception, Guardrail #2 for the runner budget that keeps training off the runner.
 - [`../concepts/config.md`](../concepts/config.md) - the tunable surface.
 - [`../concepts/evaluation.md`](../concepts/evaluation.md) - what the counterweights measure and why the faithfulness score may only veto.
 - [`run-the-gates.md`](run-the-gates.md) - the commands behind the Definition of Done.
