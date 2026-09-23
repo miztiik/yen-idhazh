@@ -108,5 +108,5 @@ Which stores this may be pointed at, which two are refused by name, and why
 
 - [../concepts/atomic-deletes.md](../concepts/atomic-deletes.md) - what atomic means here, and why a range is not one.
 - [../architecture/publishing/retention.md](../architecture/publishing/retention.md) - what bounds each tree, and which store carries which window.
-- [../concepts/config.md](../concepts/config.md) - every knob, including the `prune` block.
+- [../concepts/config/retention-ages.md](../concepts/config/retention-ages.md) - the ages the `prune` block spends.
 - [run-the-gates.md](run-the-gates.md) - the checks to run after a change to either command.

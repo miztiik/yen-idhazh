@@ -234,5 +234,5 @@ movement count.
 - [../archive/measurements-2026-08.md](../archive/measurements-2026-08.md) - finished experiments and superseded levels.
 - [../architecture/sources/health.md](../architecture/sources/health.md) - the feed ledger and the quarantine rule these figures feed.
 - [../architecture/sources/trust-boundary.md](../architecture/sources/trust-boundary.md) - the robots rule the parser enforces.
-- [../concepts/config.md](../concepts/config.md) - the source list and its floors.
+- [../concepts/config/source-lifecycle.md](../concepts/config/source-lifecycle.md) - the source list and its floors.
 - [../../CLAUDE.md](../../CLAUDE.md) - Guardrail #8 (a dependency names its cost) and Guardrail #10 (measured, not estimated).

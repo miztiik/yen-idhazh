@@ -154,7 +154,7 @@ no file is not a mistake; a file with no row is.**
 **Every full-grain window in the `state/` table below is 14 months today, and
 every aggregate age is null, meaning never.** The knob is what governs rather
 than that sentence, and
-[config.md](config.md#every-store-names-its-own-cleanup-age) is where each number
+[config/retention-ages.md](config/retention-ages.md#every-store-names-its-own-cleanup-age) is where each number
 is set and argued. It is stated once here so that reading a row does not cost a
 second page. **`retention.image_months` is 13 and is not one of them** - 14 there
 is the count of month shards a console read opens, and no read opens a visual
@@ -320,7 +320,7 @@ now derived rather than asserted. Carmack, 2026-09-13.
 
 **14 was available and was refused, because its reason does not travel.**
 Fourteen is the count of month shards a console read can open
-([config.md](config.md#why-14-and-not-13)), and no console read opens a visual -
+([config/retention-ages.md](config/retention-ages.md#why-14-and-not-13)), and no console read opens a visual -
 so copying it here would be the number with its reason left behind. There is no
 read cover on a visual at all: every published day is kept for ever and a reader
 can open any of them, which is why this row's licence comes from the other
@@ -380,7 +380,7 @@ measurement, and evidence does not expire.
   else, while three other stores had no age at all - so a number that said
   nothing about them was read as if it did. Replaced 2026-09-02 by one knob per
   store, and a config still spelling the old name is refused by name rather than
-  ignored ([config.md](config.md#every-store-names-its-own-cleanup-age)).
+  ignored ([config/retention-ages.md](config/retention-ages.md#every-store-names-its-own-cleanup-age)).
 - **Deleting a day payload to defend the Pages ceiling.** Rejected because the
   payload is the archive, not because it is small - and the measurement says it
   is not small. On this checkout, 2026-09-13: 24,543,254 bytes of day payload
@@ -396,7 +396,7 @@ measurement, and evidence does not expire.
 
 ## See also
 
-- [config.md](config.md#every-store-names-its-own-cleanup-age) - where every age
+- [config/retention-ages.md](config/retention-ages.md#every-store-names-its-own-cleanup-age) - where every age
   in the register is set, and the argument for each number.
 - [growing-reads.md](growing-reads.md) - the companion question: what a read may
   open, where this page is what a write may keep.
