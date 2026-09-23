@@ -1,6 +1,6 @@
 # The shell scripts become Python
 
-**Last Updated**: 2026-09-22
+**Last Updated**: 2026-09-23
 
 **The filename keeps its old slug.** Three live plans and `TODO/STATUS.md` link this file by name, and one of them is in flight; renaming costs four edits in other agents' files to change an address nobody reads for meaning.
 
@@ -28,9 +28,9 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 
 | What is out | What it costs to leave out | What would bring it in |
 | --- | --- | --- |
-| **`measure.yml`'s four inline weights downloads, its four `candidate_draft_*` job outputs, and its copy of the pin at `:125-127`** | The reader keeps a one-companion projection - four `draft_*` keys - and the pin has two homes. `measure.yml:596` and `:923` keep their own declared-size cross-check and their own paste sites | The four arms reach neither the composite action nor the shared download; the `batched` arm spells `MODEL_*` and is a different shape; the `llama-bench` arm unpacks its own tarball. **And `:125-127` is a workflow-level `env:` block, which cannot read a file** - moving it means adding a pin-reading step to jobs that have no `setup-python` at all (`llama-bench` at `:235`, `batched` at `:1043`). `measure.yml` is plan 46's file in two of its rows. **It becomes a row in plan 46**, which owns the file. **Row 3 adds a test that the three `env:` literals equal the JSON's three**, so the seventh copy cannot drift from the first. Carmack |
-| **Refusing `needs.*.outputs.*` inside any `run:` body, repository-wide** | **28** job-output expressions keep reaching a shell through textual substitution rather than `env:` | **It is plan 46's row.** Plan 46 already owns `test_triggers.py`, `digest.yml`, `measure.yml` and `validate.yml` in its group A. Counted by parsing each workflow and matching `needs.<job>.outputs.<key>` inside every step's `run` string, all scalar forms. **What this plan takes free instead**, inside row 3: the same rule scoped to jobs reaching the shared download, which fails today on 8 of the 13. Andre proposed it; Fowler ruled on where it lands |
-| **Cutting `backend/tests/workflows/_harness.py` to names more than one module reads** | The module stays 2,248 lines with 241 top-level names, and **a one-file change still has to touch 143 of them** | Plan 46 all-DONE **and** this plan's row 3 merged. Re-run the census - never read a recorded table - and run it as its own plan. An earlier draft's "nine of 45 orphans are internal" was wrong: it is 35 of 45 |
+| **`measure.yml`'s four inline weights downloads, its four `candidate_draft_*` job outputs, and its copy of the pin at `:125-127`** | The reader keeps a one-companion projection - four `draft_*` keys - and the pin has two homes. `measure.yml:596` and `:923` keep their own declared-size cross-check and their own paste sites | The four arms reach neither the composite action nor the shared download; the `batched` arm spells `MODEL_*` and is a different shape; the `llama-bench` arm unpacks its own tarball. **And `:125-127` is a workflow-level `env:` block, which cannot read a file** - moving it means adding a pin-reading step to jobs that have no `setup-python` at all (`llama-bench` at `:235`, `batched` at `:1043`). `measure.yml` is plan 46's file in two of its rows. **It becomes a row in plan 46**, which owns the file. **Plan 46 closed on 2026-09-23 without taking it, so this line is unowned - section 1c.** **Row 3 adds a test that the three `env:` literals equal the JSON's three**, so the seventh copy cannot drift from the first. Carmack |
+| **Refusing `needs.*.outputs.*` inside any `run:` body, repository-wide** | **28** job-output expressions keep reaching a shell through textual substitution rather than `env:` | **It is plan 46's row.** Plan 46 already owns `test_triggers.py`, `digest.yml`, `measure.yml` and `validate.yml` in its group A. **Plan 46 closed on 2026-09-23 without taking it, so this line is unowned - section 1c.** Counted by parsing each workflow and matching `needs.<job>.outputs.<key>` inside every step's `run` string, all scalar forms. **What this plan takes free instead**, inside row 3: the same rule scoped to jobs reaching the shared download, which fails today on 8 of the 13. Andre proposed it; Fowler ruled on where it lands |
+| **Cutting `backend/tests/workflows/_harness.py` to names more than one module reads** | The module stays 2,248 lines with 241 top-level names, and **a one-file change still has to touch 143 of them** | Plan 46 all-DONE - **true since 2026-09-23** - **and** this plan's row 3 merged. Re-run the census - never read a recorded table - and run it as its own plan. An earlier draft's "nine of 45 orphans are internal" was wrong: it is 35 of 45 |
 | **Every `run:` body in every workflow** | Workflow steps still contain shell, and some of it is long | Out of reach: a composite action and a workflow step run a shell by definition. What this plan changes is that a step's body becomes **one call to a program**, not a program |
 | **A third-party HTTP library** | The downloads use `urllib.request` plus the retry rule in C8 | Guardrail #8 asks for a mature library and prices the dependency. Neither `httpx` nor `requests` is declared in `pyproject.toml`, and neither streams better than a 1 MiB loop. **What brings it in:** the transport failing on the first eight-shard cold fan-out (section 9) |
 | **A transport probe comparing `urllib` against `curl` on a real runner** | No head-to-head number | **Refused on Guardrail #10's first clause: the number cannot change what gets built.** The owner ruled the transport, and a probe finding `curl` faster does not reverse it. It also could not see what it would measure: a cold fetch is 57 to 338 s, a 5.9x spread, so three samples an arm is a coin toss with a decimal point, and a paired design with power costs about 68 GB of hub egress. **What replaces it at zero extra runner time:** C8's per-file `INFO` line, one 4.28 GB sample from D1, one 5.68 GB sample from D2, and eight production samples from the first cold fan-out - written into `docs/reference/benchmarks/what-a-bench-dispatch-costs.md` with hardware and date. Carmack |
@@ -86,7 +86,7 @@ Measured on `origin/main`, 2026-09-22, by reading the files.
 | 3 | The model path becomes one Python program, and the verbs are renamed | 1 | B | DONE | p44r3 | - | R3 |
 | 4 | The pipeline-test case runner becomes Python | 3 | C | DONE | p44r4 | - | R4 |
 | 5 | The memory sampler joins the one that already exists | 3 | C | DONE | p44r5 | - | R5 |
-| 6 | The last three scripts go | plan 46 all-DONE | D | BLOCKED | - | - | - |
+| 6 | The last three scripts go | plan 46 all-DONE, met 2026-09-23 | D | READY | - | - | - |
 | 7 | The benchmark arms learn the server died, and the repeat count is config | - | E | DONE | p42p5 | - | P5 |
 | 8 | The harness keeps only what more than one module reads | - | F | COLLAPSED | - | - | - |
 
@@ -94,7 +94,7 @@ Measured on `origin/main`, 2026-09-22, by reading the files.
 
 **The cache key has no row of its own.** `action.yml:93` spells `inputs.weights_file` and `inputs.weights_revision`, and row 3 deletes both; a composite action resolves a deleted input to the empty string, so a separate cache row would leave `llm---<build>-v4` - one key every model shares - for the length of one commit.
 
-**Row 6 is BLOCKED, not out.** It carries `commit-and-push.sh` (556), `take-state-from-the-tip.sh` (47) and `push-rewritten-history.sh` (50) - **653 lines across three files** - and it is the row that deletes `.github/scripts/`. It is a row rather than a scope-out line so this plan cannot close while those lines survive. Its gates are written now, in section 6, not deferred to unblock. **ESCALATE trigger 7 stops any other row reaching into those three files early.**
+**Row 6 was BLOCKED and is now READY, 2026-09-23.** It carries `commit-and-push.sh` (556), `take-state-from-the-tip.sh` (47) and `push-rewritten-history.sh` (50) - **653 lines across three files** - and it is the row that deletes `.github/scripts/`. It is a row rather than a scope-out line so this plan cannot close while those lines survive. Its gates are written now, in section 6, not deferred to unblock. **ESCALATE trigger 7 stops any other row reaching into those three files early.** **Port the three files as they stand on `main`, not as this plan first read them**: plan 46 rewrote all three, so the line counts above are the old ones and the push loop, the conflict resolver and the prune's tip check are all new behaviour to carry across.
 
 **Row 7 landed ahead of the earlier sequence and nothing is owed for it.** `runtime_sweep.py:328` carries `START_GRACE_SECONDS: Final = 2.0`; `backend/idhazh/contracts/knobs/bench.py:47` carries `repeats`.
 
@@ -122,17 +122,21 @@ Measured on `origin/main`, 2026-09-22, by reading the files.
 | now | **rows 1 and 2** | **2** | genuinely disjoint - PR-A touches no workflow and no `_harness.py`; PR-C touches `ci.yml` and the new constant only |
 | row 1 merged | **row 3**, and row 2 if still in flight | **1 for row 3** | PR-B owns every workflow the model touches. PR-C and PR-B share nothing |
 | row 3 merged | **rows 4 and 5** | **2, with one known conflict** | the `SHIPPED_SCRIPTS` constant, resolved by the shrink rule above |
-| plan 46 all-DONE | **row 6** | **1** | - |
+| plan 46 all-DONE - **true since 2026-09-23** | **row 6** | **1** | - |
 
 **Peak workers: 2**, in waves 1 and 3.
 
-### Section 1c - The interlock with plan 46
+### Section 1c - The interlock with plan 46, and what it left behind
 
-Plan 46 is in flight with 9 of 17 rows PENDING across waves 3 to 7. PR-B shares `digest.yml`, `validate.yml`, `measure.yml` and `_harness.py` with it; PR-E shares `digest.yml` and `_harness.py`.
+**Plan 46 landed on 2026-09-23 and its plan-doc is deleted; git holds it.** Nothing here waits on it any more, and the ruling below is kept because it is what the rebases were run under.
 
-**Ruling: land them when ready and let plan 46's branches merge `main` in.** A small branch rebasing under a large one is the cheap direction. **The owner tells plan 46's owner the file list at each dispatch**, so a rebase is expected rather than discovered. **PR-B's `_harness.py` hunk is 18 sites, not the "four entries and a constant" an earlier draft claimed** (section 4's table). That does not change the ruling, but it must be stated at its real size.
+**What it delivered that this plan needed.** All three files row 6 ports are on their final shape: `commit-and-push.sh` carries the deadline-driven push loop and the conflict resolver, `push-rewritten-history.sh` carries the prune's tip re-check, and `take-state-from-the-tip.sh` hands back only what a rebuild owns. `digest.yml`, `validate.yml`, `measure.yml` and `_harness.py` are settled, so PR-B and PR-E have nobody to rebase under. Its one surviving row is the corpus ref move, now [`20260923-48-the-corpus-ref-move-plan.md`](20260923-48-the-corpus-ref-move-plan.md), which is not scheduled and shares none of these files.
 
-**Row 6 is the exception and it does not rebase - it waits**, because a 653-line port cannot be reconciled with edits to the same files in flight.
+**Two scope-out lines in Table B were handed to plan 46 and it closed without taking them**, so both are unowned rather than deferred: `measure.yml`'s three `env:` pin literals at `:125-127`, and the repository-wide refusal of `needs.*.outputs.*` inside a `run:` body, counted at 28 sites. Neither is this plan's to take - the reason each was pushed out still holds - and neither has a plan naming it today. Say so when one is next raised rather than citing a plan that is gone.
+
+**The ruling that was run under: land them when ready and let plan 46's branches merge `main` in.** A small branch rebasing under a large one is the cheap direction. **PR-B's `_harness.py` hunk is 18 sites, not the "four entries and a constant" an earlier draft claimed** (section 4's table). That did not change the ruling, but it had to be stated at its real size.
+
+**Row 6 was the exception and did not rebase - it waited**, because a 653-line port cannot be reconciled with edits to the same files in flight. That wait is over.
 
 ## Section 1d - The contracts, declared before any code
 
@@ -830,7 +834,7 @@ Four things a dispatch must prove that nothing cheaper can: the download fetches
 ## See also
 
 - [`20260921-42-lane-b-workflows-plan.md`](20260921-42-lane-b-workflows-plan.md) - the parent, whose rows 1 to 6 landed and whose rows 7 to 11 this plan carries.
-- [`20260922-46-no-file-has-two-writers-plan.md`](20260922-46-no-file-has-two-writers-plan.md) - in flight. Section 1c is the interlock; row 6 waits on it and writes its trigger into that plan's row 14; three of this plan's scope-out lines become rows there.
+- [`20260923-48-the-corpus-ref-move-plan.md`](20260923-48-the-corpus-ref-move-plan.md) - plan 46's one surviving row, priced and not scheduled. It shares none of row 6's three files.
 - [`20260922-47-the-pipeline-stops-naming-a-server-plan.md`](20260922-47-the-pipeline-stops-naming-a-server-plan.md) - shares one docstring in `backend/idhazh/llm/server.py`. Whoever lands second rebases one hunk.
 - [`../docs/reference/ci-model-runtime.md`](../docs/reference/ci-model-runtime.md) - the page that owns the model path and the cache key.
 - [`../docs/architecture/summarize/model-boundary.md`](../docs/architecture/summarize/model-boundary.md) - the page that owns what the model file declares.

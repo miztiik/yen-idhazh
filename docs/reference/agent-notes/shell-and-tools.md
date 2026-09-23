@@ -1,6 +1,6 @@
 # Agent Notes - Shell and Tools
 
-**Last Updated**: 2026-09-21
+**Last Updated**: 2026-09-23
 Traps in PowerShell, MSYS, the editor's own file and search tools, the Python
 environment, npm and the libraries that lie about what they returned. Index and
 scope: [../agent-notes.md](../agent-notes.md).
@@ -63,6 +63,12 @@ Get-CimInstance Win32_Process -Filter "Name='python.exe'" |
 **A killed command is indeterminate in BOTH directions** - the same kill left `gh pr create` having done nothing and left `git push -u` having pushed the branch and skipped only the upstream write. Verify by side effect (the file it writes, the remote ref it pushes), never by exit code.
 
 **`Set-Location` does not move .NET's idea of the current directory, so a `[IO.File]` call on a relative path reads another worktree.** The shell was at `...p23-r6`, `Get-Content .\tests\fixtures\...` worked, and `[IO.File]::ReadAllBytes('tests\fixtures\...')` failed naming `...p23-r3\frontend\tests\fixtures\...` - a path in a different agent's checkout that this run had never touched. The shell's location and `[Environment]::CurrentDirectory` are two variables, and only cmdlets read the first. Worse than the error is the success: the same call on a path that happens to exist in the stale directory returns another worktree's bytes and reads like your own file. **Pass `[IO.File]` an absolute path, always** - `[IO.File]::ReadAllText("$w\backend\tests\test_rank.py")`.
+
+**A missing command leaves `$LASTEXITCODE` at whatever the previous command left, so an absent linter reads as a pass.** Command-not-found is a PowerShell error rather than a process exit, so nothing writes a code - and a run that reports `shellcheck 0` after a shell-only change is reporting the last successful command, not a clean lint. **`shellcheck` is not installed on this machine.** Guard every external tool before trusting its code, and tell a worker which tools the box does not have:
+
+```powershell
+if (-not (Get-Command shellcheck -ErrorAction SilentlyContinue)) { 'shellcheck ABSENT - not checked' }
+```
 
 ## The terminal tool itself
 

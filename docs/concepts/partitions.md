@@ -1,6 +1,6 @@
 # Partitions
 
-**Last Updated**: 2026-09-22
+**Last Updated**: 2026-09-23
 A **partition** is one file holding one period of a collection that grows. The
 directory is the collection and the name says the period - `<YYYY-MM>` for a month,
 `<YYYY>/<MM>/<DD>` for a day. A reader opens the periods its window names and skips
@@ -103,6 +103,49 @@ as `test_the_month_readers_all_agree_on_what_a_month_is` does one grain over.
 
 Authority: Guardrail #5, 2026-09-11. `day_partition` is a **peer** of `month_partition`
 rather than a replacement: both grains are live, so both modules are.
+
+## Every committed path is one of three classes, and no path is in two
+
+A partition says which period a file holds. **A class says who may write it, and
+how two runs writing at once end.** Both are properties of the layout, so both
+are on this page, and the classes are declared in
+[`backend/idhazh/paths.py`](../../backend/idhazh/paths.py) rather than in a
+workflow string - a list a workflow carries is a list the tests keep a second
+copy of.
+
+| Class | What the name means | How a race on it ends |
+| --- | --- | --- |
+| **written-once** | the filename carries `<run_id>-<attempt>-<job>-<shard>`, so it names exactly one writer. Nothing rewrites it or deletes it except retention and the closed-day fold | two writers cannot name one file, so there is no race to settle |
+| **derived** | the content is a function of other jobs' output. It is handed back to the tip before the rebase and rebuilt against it | the rebuild wins. It is never text-merged and never settled by who wrote it |
+| **union-safe** | append-only rows, `merge=union`, **and a named read-side property that makes a repeat change no answer** | both sides land whole, and the reader settles them |
+
+**A union-safe store with no such property is a derived store written badly**, so
+the property is named rather than assumed. `state/seen` qualifies because
+`load_seen` keeps the earliest stamp per address; `state/published` because
+`load_published` keeps the earliest publication date; a council or judge row
+because one row is one measurement of one thing on one day, and says nothing
+about any other row. The merge driver concatenates whatever it is handed, so a
+store that cannot name the sentence does not get the driver.
+
+**The three classes are closed, and that is what makes the layout survive the
+repository growing.** A store that appears after this page was written gets a
+class, not a redesign: it either names its writer, or it is rebuilt from the tip,
+or its repeat changes no answer. There is no fourth thing a committed file can
+be, so a new store is one line in `idhazh.paths` and at most one migration.
+
+**A derived path may never be declared owned**, and that rule is what keeps the
+other two honest. Settling one in favour of a single writer deletes the other
+writer's rows and exits 0 - three written-once inputs all land intact while the
+file derived from them quietly loses half its content, and no gate can see it.
+What the push does with each class is
+[in committing.md](../architecture/publishing/committing.md#a-conflicted-path-is-settled-by-who-wrote-it-never-by-which-side-it-came-from).
+
+`backend/tests/contracts/test_path_classes.py` holds the three sets pairwise
+disjoint and covering every path a production stage writes. It enumerates the
+writers from `idhazh.paths` itself and never from the tree, so its cost does not
+rise with what the pipeline has piled up (`CLAUDE.md` Guardrail #12).
+
+Authority: Fowler and Carmack, converged, 2026-09-22.
 
 ## The day directory is the ledger, and the settlement moves to the reader
 

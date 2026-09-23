@@ -1,6 +1,6 @@
 # The ledgers, the evaluations, and the generated layer
 
-**Last Updated**: 2026-09-22
+**Last Updated**: 2026-09-23
 
 **Level**: 5. Rows 5 and 7 each delete or amend a persisted contract and stop before their pull request opens. Rows 1, 2, 3, 4 and 6 are Level 2 or 3 and run AUTO once the user authorizes.
 
@@ -35,7 +35,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | 4 | The retrieval loaders take their bounds | - | A | DONE | p43r4 | - | worker |
 | 5 | The label queue becomes runnable | - | A | DONE | p43r5 | - | worker |
 | 6 | The pipeline test commits what it already wrote | 2, 3 | B | DONE | p43r6 | - | worker |
-| 7 | The generated contract layer goes, and the contract catches up | all of plan 46 | C | PENDING | - | - | - |
+| 7 | The generated contract layer goes, and the contract catches up | plan 46, landed 2026-09-23 | C | PENDING | - | - | - |
 
 ### Section 1a - Six pull requests, three waves
 
@@ -395,9 +395,9 @@ Restore the `if run is None or not run.trial_state_dirname: return []` early ret
 
 ## Section 8 - Row 7: the generated contract layer goes, and the contract catches up
 
-**PAUSE before the pull request opens** (section 1b). **Level 5.** Waits on all of plan 46.
+**PAUSE before the pull request opens** (section 1b). **Level 5.** Waited on all of plan 46, which landed on 2026-09-23.
 
-**Why it waits.** Plan 46 mints contracts under the rule this row deletes, and it has rows still writing into both directories this row removes whole - including a new `schemas/digest-run-fragment.schema.json`. Both plans also edit `frontend/src/lib/server/host-fingerprint.ts`. **The checkable gate: `git grep -c 'PENDING' TODO/20260922-46-no-file-has-two-writers-plan.md` on `origin/main` returns 0.** Until then this row does not start.
+**What it waited for, and what arrived.** Plan 46 minted contracts under the rule this row deletes and had rows still writing into both directories this row removes whole. All of that is settled on `main`: `schemas/digest-run-fragment.schema.json` and its generated frontend twin are committed and nothing further is being minted, and `frontend/src/lib/server/host-fingerprint.ts` is on its final shape. Plan 46's plan-doc is deleted and git holds it. **The checkable gate is spent** - it named a file that no longer exists, and nothing replaces it. Its one surviving row is the corpus ref move, now [`20260923-48-the-corpus-ref-move-plan.md`](20260923-48-the-corpus-ref-move-plan.md), which mints no contract, touches no schema, and is not scheduled. **Re-read the generated layer against the tree before starting**: the schema count below was taken before plan 46 added to it.
 
 **Why.** A full generator runs on every contract change to serve six names in two frontend files. Sixty-five schemas are generated and sixty-one are read by nothing but the gate that checks they were generated.
 
