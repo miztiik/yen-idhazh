@@ -179,7 +179,7 @@ SHELLCHECK_COMMAND: Final = "shellcheck --severity=style .github/scripts/*.sh"
 #: no owner while this list was being written. The list only ever shrinks: a row that deletes
 #: a script deletes its name in the same commit, and the test reads both directions, so
 #: neither a new file nor a forgotten name can pass.
-SHIPPED_SCRIPTS: Final = ()
+SHIPPED_SCRIPTS: Final[tuple[str, ...]] = ()
 
 # The ceiling, not the dispatch rule. Guardrail #2 allows 20 concurrent jobs; a regex
 # held the fan-out at four. The empty-input default below stays at four, because
@@ -1978,7 +1978,7 @@ def _bash() -> str | None:
 
 requires_bash: Final = pytest.mark.skipif(
     _bash() is None,
-    reason=f"no bash on this host to execute .github/scripts/{SHIPPED_SCRIPTS[0]}",
+    reason="no bash on this host to execute the shell a workflow inlines",
 )
 
 # The loop word-splits `REGENERATE_COMMAND` on spaces, exactly as the workflow's
