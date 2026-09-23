@@ -38,6 +38,7 @@ from urllib import request
 from urllib.parse import urlsplit, urlunsplit
 
 from idhazh.contracts.base import derive_text_digest
+from idhazh.contracts.knobs.model_server import resolve_base_url
 from idhazh.contracts.knobs.models import CompanionFile, ModelEntry, ModelRef
 from idhazh.sanitize import why_a_forged_turn_would_survive
 
@@ -48,8 +49,6 @@ from idhazh.sanitize import why_a_forged_turn_would_survive
 # It is a process-boundary value, not a tunable, so it is not a config field and
 # `idhazh.fingerprint` has nothing to classify (Guardrail #6, `CLAUDE.md` section 11).
 DEFAULT_PORT: Final = int(os.environ.get("LLAMA_PORT") or 8080)
-DEFAULT_ENDPOINT: Final = f"http://127.0.0.1:{DEFAULT_PORT}/v1/chat/completions"
-DEFAULT_HEALTH: Final = f"http://127.0.0.1:{DEFAULT_PORT}/health"
 
 # The route that takes a prompt string. It is a consequence of which builder
 # rendered the payload rather than a dial anybody turns - a chat body posted
@@ -66,6 +65,11 @@ DEFAULT_HEALTH: Final = f"http://127.0.0.1:{DEFAULT_PORT}/health"
 # workflow pins a llama.cpp build, so a build that started stripping it would
 # turn constrained decoding off for every item at once.
 _COMPLETION_PATH: Final = "/completions"
+
+# The route an item is posted to, written once so nothing spells it twice.
+_CHAT_PATH: Final = "/v1/chat/completions"
+
+DEFAULT_ENDPOINT: Final = f"http://127.0.0.1:{DEFAULT_PORT}{_CHAT_PATH}"
 DEFAULT_COMPLETION_ENDPOINT: Final = f"http://127.0.0.1:{DEFAULT_PORT}{_COMPLETION_PATH}"
 
 # The four read-only routes the start-up probe asks, beside the one it posts
@@ -980,6 +984,11 @@ def _sibling(endpoint: str, path: str) -> str:
     """
     parts = urlsplit(endpoint)
     return urlunsplit((parts.scheme, parts.netloc, path, "", ""))
+
+
+def resolve_endpoint(base_url: str) -> str:
+    """Where an item is posted, on the server a base URL names."""
+    return resolve_base_url(base_url) + _CHAT_PATH
 
 
 def props_url(endpoint: str = DEFAULT_ENDPOINT) -> str:

@@ -664,6 +664,12 @@ export interface LoggingConfig {
 	capture_replies?: boolean;
 }
 
+/** The one address every stage posts an article to. */
+export interface ModelServerConfig {
+	/** Scheme, host and port of the model server, and nothing else. A trailing slash is accepted and dropped; a path, a query or a fragment is refused, because the other four routes are derived by replacing the whole path and a prefix would survive on one of them and vanish from the rest. The port is required: the server command binds the port it reads back out of this value. Committed rather than set from the environment, so moving where article text goes is a diff a person reads (CLAUDE.md Guardrail #11). */
+	base_url?: string;
+}
+
 /**
  * What the pipeline records about itself, and what an operator may switch off.
  *
@@ -1429,6 +1435,8 @@ export interface AppConfig {
 	reference_dataset?: ReferenceDatasetConfig;
 
 	logging?: LoggingConfig;
+
+	model_server?: ModelServerConfig;
 
 	observability?: ObservabilityConfig;
 }

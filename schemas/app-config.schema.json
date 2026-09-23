@@ -1372,6 +1372,20 @@
       "title": "LoggingConfig",
       "type": "object"
     },
+    "ModelServerConfig": {
+      "additionalProperties": false,
+      "description": "The one address every stage posts an article to.",
+      "properties": {
+        "base_url": {
+          "default": "http://127.0.0.1:8080",
+          "description": "Scheme, host and port of the model server, and nothing else. A trailing slash is accepted and dropped; a path, a query or a fragment is refused, because the other four routes are derived by replacing the whole path and a prefix would survive on one of them and vanish from the rest. The port is required: the server command binds the port it reads back out of this value. Committed rather than set from the environment, so moving where article text goes is a diff a person reads (CLAUDE.md Guardrail #11).",
+          "title": "Base Url",
+          "type": "string"
+        }
+      },
+      "title": "ModelServerConfig",
+      "type": "object"
+    },
     "ObservabilityConfig": {
       "additionalProperties": false,
       "description": "What the pipeline records about itself, and what an operator may switch off.\n\nFour switches rather than one master switch. Collection, scoring, publishing\nand tracing fail in different ways and a reader has to behave differently\nfor each of them, so one switch would leave nobody able to say which\ninstrument went dark.\n\n**The item-health census is not on this list and must never be added to it.**\nEvery rate this project publishes divides by that census, so switching it off\nwould not thin a measurement - it would make every other measurement\nunreadable. A rate printed without its denominator beside it is the exact\ndefect the census exists to prevent.\n\nAn instrument that did not run writes an EMPTY cell, never a zero. A switch\nhere decides whether a row is written at all; it never changes the shape of a\nrow, so a month file stays readable across a day somebody turned something\noff.\n\n**Every store names its own cleanup age.** One age covered\n`state/item-health/` while `state/feed-health/`, `state/scores/` and\n`frontend/public/telemetry/` had none, so three of the four grew with nothing\nto stop them and the fourth was tuned by a number that said nothing about\nthem. The four full-grain windows are checked against the shards a console\nread can still select, and a summary that replaces a full-grain window must\noutlive it.",
@@ -2655,6 +2669,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "model_server.base_url, additive, default http://127.0.0.1:8080.",
+      "version": "2026-09-23",
+      "why": "The address a stage posts to was three python constants and no config value."
+    },
+    {
       "change": "run.qualification_repeats, additive, default 3, floor 3, ceiling 10.",
       "version": "2026-09-22T16:00",
       "why": "The replay count is a knob with a floor, not a dispatch input that could be 1."
@@ -2668,11 +2687,6 @@
       "change": "run.push_deadline_seconds, additive, default 300.",
       "version": "2026-09-22T12:00",
       "why": "The push loop is bounded by a clock now, not by three attempts."
-    },
-    {
-      "change": "bench.repeats, additive, default 3 and at least 2.",
-      "version": "2026-09-22",
-      "why": "Both numbers the bench job's timeout is spent on now sit in one file."
     },
     {
       "change": "Earlier changes are in this file's git history.",
@@ -2721,6 +2735,9 @@
     "logging": {
       "$ref": "#/$defs/LoggingConfig"
     },
+    "model_server": {
+      "$ref": "#/$defs/ModelServerConfig"
+    },
     "models_file": {
       "default": "models/qwen3.5-9b-q4km.json",
       "description": "Which file under config/models/ holds the active model. The whole swap: every fact about a set of weights - the repository, the digest, the window they were measured in, the markers their server renders - lives in the file this names, so pointing at another committed file swaps the model and pointing back reverts it, with the previous model's measured numbers still on disk rather than in git history. It carries a default naming the committed file so a fresh clone runs unconfigured (Guardrail #6).",
@@ -2756,7 +2773,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-09-22T16:00",
+      "default": "2026-09-23",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -2767,5 +2784,5 @@
   },
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-09-22T16:00"
+  "version": "2026-09-23"
 }

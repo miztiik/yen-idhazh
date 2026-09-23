@@ -283,6 +283,9 @@
     "stage_lines": false,
     "waiting_heartbeat_seconds": 5
   },
+  "model_server": {
+    "base_url": "http://10.0.0.5:9001"
+  },
   "models_file": "models/qwen3-8b-q4km.json",
   "observability": {
     "cost_currency": "EUR",

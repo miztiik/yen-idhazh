@@ -483,6 +483,33 @@ def test_server_argv_names_the_port_it_was_given() -> None:
     assert props_url(DEFAULT_COMPLETION_ENDPOINT) == props_url(DEFAULT_ENDPOINT)
 
 
+def test_every_route_is_derived_from_the_one_address_a_caller_was_given() -> None:
+    """One server answers all five routes, or the run is reconciling two processes.
+
+    The address is the test's own string rather than the committed value, so
+    this keeps checking the derivation on the day an operator points the run
+    somewhere else (`CLAUDE.md` section 13). The host is one no committed file
+    names, which is what makes a route that ignored its argument visible.
+    """
+    from idhazh.llm.server import (
+        apply_template_url,
+        completion_url,
+        props_url,
+        resolve_endpoint,
+        tokenize_url,
+    )
+
+    elsewhere = "http://192.168.1.20:9090"
+    posts_to = resolve_endpoint(elsewhere)
+
+    assert posts_to == f"{elsewhere}/v1/chat/completions"
+    assert resolve_endpoint(f"{elsewhere}/") == posts_to, "a trailing slash is not a second server"
+    for route in (props_url, completion_url, apply_template_url, tokenize_url):
+        assert route(posts_to).startswith(f"{elsewhere}/"), (
+            f"{route.__name__} left the server the caller named"
+        )
+
+
 class TestTheRenderedCompletionEnvelope:
     """The second shape `parse_completion` reads, from a reply a server really sent.
 
