@@ -52,6 +52,7 @@ The plan is a tabular instrument for parallel dispatch, not a narrative. It cont
  - `Depends-on` lists `#` values that must be DONE before this row can start; `-` means no predecessor.
  - `Parallel-group` is a letter recording which rows the author believed were independent. It is a hint, not the dispatcher's input: a row is ready when its `Depends-on` are `DONE` and its `Files touched` list is disjoint from every row in flight ([execute-a-plan.md](execute-a-plan.md#parallel-fan-out)).
  - `Status` starts `PENDING`, flips through `IN-FLIGHT` to `DONE` or `COLLAPSED` (with cited rationale). Write `DONE #<pr>` when the row shipped on a pull request of its own.
+ - **A pointer at another plan names that plan's row TITLE, never its row number.** A number points at whatever now occupies that position, so it goes wrong silently when the other plan is renumbered - and a plan is renumbered whenever a row collapses, splits or lands. A title survives a renumber and fails loudly when the row is gone. The same holds for a row that shipped: cite the pull request, which outlives the plan-doc. This has broken three times in this repository's history, each time only noticed when somebody re-read the pointer against the tree.
  - `Worktree` is the isolated absolute path the row was carried on, or `-` when it was carried in its owner's own checkout.
  - `Subagent` names the agent the row was delegated to, or `-` when its owner carried it directly.
 

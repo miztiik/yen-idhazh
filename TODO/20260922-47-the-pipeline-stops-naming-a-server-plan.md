@@ -39,7 +39,7 @@
 | **What changes in production** | Nothing, if `config/idhazh.json` and `config/models/*.json` are left as committed. The thirteen sampling values are the values llama.cpp is already applying. |
 | **Hard scope - in** | `model_server.base_url` as a config field; the two resolvers; the 18 default-argument sites resolved by their callers; `LLAMA_PORT` deleted; a refusal when a job starts a server on one address while the stage posts to another; the loopback literals outside `.github/` reduced to one function; `MODEL_PATH`; the dead role value deleted; one log record naming the server that answered; **the `request` block renamed to `sampling` and passed through whole; `models.<verb>` renamed to `models.<noun>`**; the run record stamping an unrecorded build when the address is not loopback; four sentences citing a rule that does not exist. |
 | **Hard scope - out** | Table B. Four rows, each priced. |
-| **Supersedes** | The surviving half of row 21 of [`20260921-39-delete-the-scaffolding-plan.md`](20260921-39-delete-the-scaffolding-plan.md). Table C records what that row asked for and what happened to each part. |
+| **Supersedes** | The surviving half of the scaffolding plan's row "One request builder, and the pipeline stops naming a server", closed and deleted on 2026-09-23. Table C records what that row asked for and what happened to each part. |
 | **Depends on** | Nothing. [`20260922-44-the-model-file-is-the-fetch-interface-plan.md`](20260922-44-the-model-file-is-the-fetch-interface-plan.md) line 34 hands every process-boundary value to this plan by name. Its rows 1 to 5 have landed; **its one remaining row, row 6, replaces `commit-and-push.sh`, `take-state-from-the-tip.sh` and `push-rewritten-history.sh`, and this plan touches none of the three.** The two plans edit the same five workflow files and `_harness.py` on different lines, which git resolves and whoever lands second rebases. [`20260922-46-one-writer-for-the-corpus-plan.md`](20260922-46-one-writer-for-the-corpus-plan.md) is closed. |
 | **ESCALATE triggers** | Seven, below Table D. |
 | **Execution** | Three pull requests, serial. **Peak one worker.** `server.py` is the hub of eight of the eleven rows, so the parallelism is not there to find and manufacturing it would buy a scheduling bug. |
@@ -63,7 +63,7 @@
 | B3 | Changing what any sampler does, and pinning the sampler **chain order** | Two things left open. `top_k` at 40 and `min_p` at 0.05 are llama.cpp's choices, not measured ones for this corpus. And `samplers` is a request key carrying the chain order, so pinning thirteen values with the order free does **not** mean a build upgrade cannot move the distribution - row 9 pins the values and says so rather than claiming more. | A holdout quality measurement. After row 9 both are config edits with no code change, which is the point. |
 | B4 | Reconciling the server's `/props` against the fingerprint | Partly paid. Row 11 makes the run stamp an unrecorded build rather than a false one. What stays out is reading the server's own answer and recording what actually replied. | A run that needs to prove which build answered rather than only to avoid claiming the wrong one. Gating measurement: one `/props` read against the pinned build, seconds. |
 
-### Table C - What plan 39 row 21 asked for, and what happened to each part
+### Table C - What "one request builder, and the pipeline stops naming a server" asked for, and what happened to each part
 
 | id | Asked for | Outcome |
 | --- | --- | --- |
@@ -703,7 +703,7 @@ One commit per row, in Reckoner order. A worker who follows it never writes an i
 ## See also
 
 - **`8305c986`** - the anchor commit. `git show 8305c986:TODO/20260922-47-the-pipeline-stops-naming-a-server-plan.md` is the owner-approved scope this plan restores. Section 0a records what was removed on 2026-09-23 and why that was wrong.
-- [`20260921-39-delete-the-scaffolding-plan.md`](20260921-39-delete-the-scaffolding-plan.md) - row 21, whose surviving half is this plan. Table C records the rest.
+- The scaffolding plan, `20260921-39-delete-the-scaffolding-plan.md` - carried the row "One request builder, and the pipeline stops naming a server", whose surviving half is this plan. Closed and deleted 2026-09-23; Table C above records the rest, so nothing is owed to it.
 - [`20260922-44-the-model-file-is-the-fetch-interface-plan.md`](20260922-44-the-model-file-is-the-fetch-interface-plan.md) - hands every process-boundary value to this plan at its line 34, and shares the workflow files with PR A. Escalation trigger 6 keeps them apart.
 - [`../docs/how-to/run-the-pipeline.md`](../docs/how-to/run-the-pipeline.md) - where the change is recorded.
 - [`../docs/architecture/contracts/determinism.md`](../docs/architecture/contracts/determinism.md) - owns the run record that rows 9 and 11 touch.
