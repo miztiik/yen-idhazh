@@ -52,7 +52,7 @@ function limits(): MachineLimits {
 	) as { run: { shard_timeout_minutes: number }; models_file: string };
 	const models = JSON.parse(
 		readFileSync(join(REPO, 'config', idhazh.models_file), 'utf8')
-	) as { summarize: { server: { '--ctx-size': number } } };
+	) as { summarizer: { server: { '--ctx-size': number } } };
 	return {
 		contextWindow: models.summarizer.server['--ctx-size'],
 		jobTimeoutSeconds: idhazh.run.shard_timeout_minutes * 60

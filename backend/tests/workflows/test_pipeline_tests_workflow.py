@@ -1008,7 +1008,7 @@ def test_a_dispatch_that_names_nothing_runs_the_model_config_already_names() -> 
     pointer = json.loads(read_text(CONFIG_DIR / "idhazh.json"))["models_file"]
     assert empty["candidate_models_file"] == pointer
     for field in model_refs.CONFIGURED_FIELDS:
-        assert empty[f"candidate_{field}"] == configured[f"summarize_{field}"], field
+        assert empty[f"candidate_{field}"] == configured[f"summarizer_{field}"], field
 
 
 def test_a_named_candidate_moves_one_line_and_leaves_the_committed_config_alone(
