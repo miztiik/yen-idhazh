@@ -55,6 +55,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
 import subprocess
 import sys
 import time
@@ -260,9 +261,14 @@ def _write(stream: IO[str], record: Mapping[str, Any]) -> None:
 def sample(pid: int, *, every: float = SAMPLE_EVERY_SECONDS) -> int:
     """Write one record a wake until the process this was given goes away.
 
+    The first line names this process, because the pid file the parent wrote is
+    a claim about which process is sampling and the log is where that claim can
+    be checked.
+
     Both files are flushed a record at a time, because the step that reads them
     runs in the same job while this is still running.
     """
+    LOG.info("sampling pid %d every %.1fs, as pid %d", pid, every, os.getpid())
     taken = 0
     with (
         RSS_SAMPLE_FILE.open("w", encoding="utf-8") as samples,
@@ -325,9 +331,10 @@ def start_sampler(pid: int, name: str, every: float) -> None:
             start_new_session=True,
             close_fds=True,
         )
-    Path(f"{name}.pid").write_text(str(child.pid), encoding="utf-8")
+    pid_path = Path(f"{name}.pid")
+    pid_path.write_text(str(child.pid), encoding="utf-8")
     _refuse_a_sampler_that_died_at_startup(child, log_path)
-    LOG.info("sampling pid %d every %.1fs, as pid %d", pid, every, child.pid)
+    LOG.info("watching pid %d; %s names the loop", pid, pid_path.as_posix())
 
 
 def _records(path: Path) -> list[dict[str, Any]] | None:

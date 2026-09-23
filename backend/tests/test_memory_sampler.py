@@ -154,6 +154,18 @@ def _ran(tmp_path: Path, *argv: str) -> subprocess.CompletedProcess[str]:
     )
 
 
+def _waited_for(path: Path, wanted: str) -> str:
+    """The first line of a file that holds `wanted`, once the file holds one."""
+    deadline = time.monotonic() + PATIENCE_SECONDS
+    while time.monotonic() < deadline:
+        if path.exists():
+            for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+                if wanted in line:
+                    return line
+        time.sleep(0.1)
+    raise AssertionError(f"{path.name} never said {wanted!r}")
+
+
 def test_the_summary_prints_the_five_figures_off_the_records(tmp_path: Path) -> None:
     """The `awk` program this replaced named its columns and read them by position.
 
@@ -232,31 +244,67 @@ def test_the_summary_says_a_file_is_missing_and_does_not_fail_the_step(tmp_path:
     assert "python-procs.jsonl not found" in completed.stderr
 
 
-def test_the_launch_refuses_when_the_loop_it_started_is_already_gone(tmp_path: Path) -> None:
+@posix_only
+def test_the_pid_file_names_the_loop_and_not_the_process_that_launched_it(
+    tmp_path: Path,
+) -> None:
     """The bug this shape removes: a pid file naming something that never sampled.
 
     The shell backgrounded itself with `&` and wrote `$!`, which is the pid of
-    the backgrounded *shell*. A sampler that exited at once left that file
-    naming a live shell, the step passed, and the run learned nothing about its
-    own memory until somebody opened an empty artifact.
+    the backgrounded *shell* rather than of the sampling loop. A sampler that
+    died at once left that file naming a live shell, the step passed, and the
+    run learned nothing about its own memory until somebody opened an empty
+    artifact.
 
-    Handed a pid nothing owns, the loop exits immediately. The parent waits out
-    a short grace, sees it gone, and says so - and the pid it wrote is the
-    loop's, not its own.
+    The file is checked against the loop's own account of itself in the log,
+    rather than against the pid the launcher was started under. That is what
+    makes this POSIX and not a portability wart: a Windows venv runs the
+    interpreter through a trampoline, so the two are different numbers there and
+    the parent's `Popen.pid` names neither the sampler nor anything else useful.
+    On the runner `python3` is the interpreter itself, and this program cannot
+    run anywhere without a `/proc` in any case.
+
+    Nothing here waits on a clock. The target is a process that has already been
+    reaped, so the loop writes its first line and stops.
     """
-    parent = subprocess.Popen(
-        [sys.executable, str(MODULE), "start-sampler", "--pid", "0", "--every", "0.1"],
+    reaped = subprocess.Popen([sys.executable, "-c", ""])
+    reaped.wait()
+
+    launcher = subprocess.Popen(
+        [sys.executable, str(MODULE), "start-sampler", "--pid", str(reaped.pid)],
         cwd=tmp_path,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
     )
-    _, complained = parent.communicate(timeout=PATIENCE_SECONDS)
+    launcher.communicate(timeout=PATIENCE_SECONDS)
 
-    assert parent.returncode != 0, complained
-    assert "before it took a sample" in complained, complained
+    said = _waited_for(tmp_path / "memory-sampler.log", "as pid ")
+    claimed = int(said.rsplit("as pid ", 1)[1].split()[0])
     recorded = int((tmp_path / "memory-sampler.pid").read_text(encoding="utf-8"))
-    assert recorded != parent.pid, "the pid file names the launching process, not the loop"
+
+    assert recorded == claimed, "the pid file names a process that is not the sampling loop"
+    assert recorded != reaped.pid, "the pid file names the process being watched"
+
+
+def test_a_loop_that_is_already_gone_is_refused_rather_than_recorded(tmp_path: Path) -> None:
+    """A green step with a pid file naming a dead process is the failure to beat.
+
+    The parent gives the loop a short grace and then says whether it is still
+    there. This drives that check with a process that really has exited, so the
+    answer turns on the check rather than on how long a Python interpreter takes
+    to start on the host running the suite.
+    """
+    already = subprocess.Popen([sys.executable, "-c", "raise SystemExit(3)"])
+    already.wait()
+    log = tmp_path / "memory-sampler.log"
+    log.write_text("what it said before it went\n", encoding="utf-8")
+
+    with pytest.raises(SystemExit) as refused:
+        memory_sampler._refuse_a_sampler_that_died_at_startup(already, log)
+
+    assert "before it took a sample" in str(refused.value)
+    assert "what it said before it went" in str(refused.value), "the log tail is the diagnosis"
 
 
 @posix_only
