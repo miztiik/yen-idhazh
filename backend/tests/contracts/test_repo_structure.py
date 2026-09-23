@@ -557,13 +557,19 @@ def test_no_reader_resolves_a_path_under_the_retired_store_name() -> None:
     )
 
 
-#: The identifiers the judging council spelled with a borrowed word. Each letter
-#: class keeps this file from matching its own definition.
+#: The identifiers the judging council spelled with a borrowed word, refused
+#: wherever they appear. Each letter class keeps this file from matching its own
+#: definition.
+#:
+#: `fold_day` is deliberately not here. It is also how the telemetry compaction
+#: verb spells one day of its own work, and that verb is allowed outside the
+#: council, so a repository-wide refusal of it would catch a name that is right.
+#: Inside the council the loose pattern below catches it.
 BORROWED_JUDGE_WORD = re.compile(
     r"[l]egs?_(missing|expected|present)"
     r"|LEGS[_]MISSING"
     r"|[f]olded_dates|days[F]olded|data-[f]old-|[f]oldDays"
-    r"|similarity[./][f]old\b|test_similarity_[f]old|[f]old_day|[F]oldReport"
+    r"|similarity[./][f]old\b|test_similarity_[f]old|[F]oldReport"
     r"|judging [l]egs?\b"
 )
 
@@ -623,6 +629,10 @@ def test_the_judging_council_spells_its_shard_and_its_count_plainly() -> None:
     quotes or backticks is being named rather than used, which is what a
     migration, its test and a changelog entry all have to do; a field
     declaration, an attribute read or a bare identifier is still caught.
+
+    The loose word breaks on a letter rather than on a word, because an
+    underscore is a word character: `_fold_day` reads as one word to a word
+    boundary and would walk straight through the council's own files.
     """
     listed = subprocess.run(
         ["git", "ls-files", "--", *RETIRED_STORE_SWEEP],
@@ -633,7 +643,7 @@ def test_the_judging_council_spells_its_shard_and_its_count_plainly() -> None:
     ).stdout.split()
     assert len(listed) > 500, "the sweep found almost nothing, so it would pass on nothing"
 
-    loose = re.compile(r"\b[l]egs?\b|\b[f]old(s|ed|ing)?\b")
+    loose = re.compile(r"(?<![A-Za-z])([l]egs?|[f]old(s|ed|ing)?)(?![A-Za-z])")
     offenders: list[str] = []
     for relative in listed:
         inside = relative.startswith(JUDGE_SUBSYSTEM)

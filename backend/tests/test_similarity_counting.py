@@ -205,7 +205,7 @@ def test_an_unclear_verdict_is_counted_only_as_unclear() -> None:
     assert (slot.same_count, slot.different_count, slot.unclear_count) == (0, 0, 1)
 
 
-def test_folding_a_date_the_record_already_holds_raises() -> None:
+def test_counting_a_date_the_record_already_holds_raises() -> None:
     """A re-run of the count is free rather than a day counted twice."""
     record = counting.count_day(a_record(), [a_row(score=0.55)], date=DATE)
 

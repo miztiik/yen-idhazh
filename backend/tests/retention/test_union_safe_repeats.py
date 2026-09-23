@@ -30,6 +30,8 @@ from idhazh.contracts.seen import PublishedRow, SeenRow
 from idhazh.contracts.story_similarity_pair import StorySimilarityPair
 from idhazh.contracts.visual_prune import VisualPruneRow
 
+pytestmark = pytest.mark.contract
+
 A_DATE = "2026-08-20"
 A_RUN = "2026-08-20-1"
 AN_ADDRESS = "a" * 64

@@ -175,24 +175,51 @@ def test_a_name_inside_a_day_directory_that_is_not_a_writers_stops_the_read(
         day_shards.settled_rows(tmp_path, ledger.SPAN_ROLLUP_KEY, SpanRollupRow, days=1)
 
 
-#: The readers decision 5.2 moves: the module, and the exact call each one used
-#: to make. A module keeps its other day-file walks - `state/seen/`,
-#: `state/counterfactual-scores/` and the judge trees are not moving - so the
-#: claim is about the named call and never about the file.
+#: Every reader that left the day-file walk: the module, the exact call it used
+#: to make, and the `day_shards` call it makes instead. A module keeps its other
+#: day-file walks - `state/seen/`, `state/counterfactual-scores/` and the judge
+#: trees are not moving - so the claim is about the named call and never about
+#: the file.
+#:
+#: The entry point differs by what the reader wants. `shard_files` hands back
+#: every file, which is what a prune and a census need. `settled_rows`,
+#: `settled_day` and `one_day` settle a day's shards into one answer first,
+#: which is what a published number needs.
+#:
+#: `ledger.py` keeps the item-health reader and lost the host-fingerprint one:
+#: `load_item_health` settles the window itself, while the host records are read
+#: by the two panels that show them.
 #:
 #: Written out rather than discovered. A discovered list passes on a module
 #: nobody checked, and it would grow with the repository (Guardrail #12).
 MOVED: Final = (
-    ("backend/idhazh/ledger.py", "day_files(state_dir / ITEM_HEALTH_DIRNAME)"),
-    ("backend/idhazh/ledger.py", "day_files(state_dir / HOST_FINGERPRINT_DIRNAME)"),
-    ("backend/idhazh/retention.py", "day_files(ledger_root)"),
-    ("backend/idhazh/evals/writer.py", "day_files(state_dir / LEDGER_DIRNAME)"),
-    ("backend/idhazh/evals/writer.py", "day_files(state_dir / INDEX_DIRNAME)"),
-    ("backend/idhazh/telemetry/prune.py", "day_files(state_root / store)"),
-    ("backend/utilities/measure_ledgers.py", "day_files(directory)"),
-    ("backend/utilities/item_health_provenance.py", "day_files(root / LEDGER_ROOT)"),
-    ("backend/utilities/server_memory_mark.py", "day_files(root / LEDGER_ROOT)"),
-    ("backend/utilities/empty_column_census.py", "day_files(root / store.root)"),
+    (
+        "backend/idhazh/ledger.py",
+        "day_files(state_dir / ITEM_HEALTH_DIRNAME)",
+        "settled_rows(",
+    ),
+    (
+        "backend/idhazh/telemetry/publish/console_band.py",
+        "day_files(state_dir / HOST_FINGERPRINT_DIRNAME)",
+        "one_day(",
+    ),
+    (
+        "backend/idhazh/telemetry/publish/machine.py",
+        "day_files(state_dir / HOST_FINGERPRINT_DIRNAME)",
+        "dates_by_month(",
+    ),
+    ("backend/idhazh/retention.py", "day_files(ledger_root)", "shard_files("),
+    ("backend/idhazh/evals/writer.py", "day_files(state_dir / LEDGER_DIRNAME)", "shard_files("),
+    ("backend/idhazh/evals/writer.py", "day_files(state_dir / INDEX_DIRNAME)", "shard_files("),
+    ("backend/idhazh/telemetry/prune.py", "day_files(state_root / store)", "shard_files("),
+    ("backend/utilities/measure_ledgers.py", "day_files(directory)", "shard_files("),
+    (
+        "backend/utilities/item_health_provenance.py",
+        "day_files(root / LEDGER_ROOT)",
+        "shard_files(",
+    ),
+    ("backend/utilities/server_memory_mark.py", "day_files(root / LEDGER_ROOT)", "shard_files("),
+    ("backend/utilities/empty_column_census.py", "day_files(root / store.root)", "shard_files("),
 )
 
 #: The two stores that keep the day-file walk. `state/published/` and
@@ -214,16 +241,20 @@ def _squeezed(relpath: str) -> str:
     return " ".join(source.split())
 
 
-@pytest.mark.parametrize(("relpath", "was"), MOVED)
+@pytest.mark.parametrize(("relpath", "was", "reaches"), MOVED)
 def test_every_named_reader_walks_the_shards_and_not_the_day_files(
-    relpath: str, was: str
+    relpath: str, was: str, reaches: str
 ) -> None:
-    """The enumeration parity cannot settle: each named call moved."""
+    """The enumeration parity cannot settle: each named call moved.
+
+    The call is matched unqualified, because a module may import the entry point
+    by name or reach it through `day_shards`, and both are the same read.
+    """
     source = _squeezed(relpath)
-    assert "shard_files(" in source, f"{relpath} does not reach day_shards.shard_files at all"
+    assert reaches in source, f"{relpath} does not reach day_shards.{reaches[:-1]} at all"
     assert was not in source, (
-        f"{relpath} still walks day files at `{was}`. Decision 5.2 moves that reader onto "
-        "day_shards.shard_files, which reads a day directory too."
+        f"{relpath} still walks day files at `{was}`. A store sharded by run identity "
+        f"is read through day_shards.{reaches[:-1]}, which reads a day directory too."
     )
 
 
