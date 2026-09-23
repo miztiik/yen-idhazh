@@ -1,6 +1,6 @@
 # Agent Notes - Git and GitHub
 
-**Last Updated**: 2026-09-22
+**Last Updated**: 2026-09-23
 
 Traps in `git`, worktrees, merges and the `gh` CLI. Index and scope:
 [../agent-notes.md](../agent-notes.md).
@@ -92,6 +92,13 @@ gh pr view <n> --repo <owner/repo> --json files --jq '[.files[].path]'
 ```
 
 Run the `gh pr view` one before every merge. To recover without a force push (`CLAUDE.md` section 8): branch again off `origin/main` in a fresh worktree, `git cherry-pick` your own commit, confirm the diff lists only your files, push, open a new pull request, close the old one, then `git push origin --delete <old-branch>`.
+
+**`git grep` for a conflict marker MISSES one sitting in a working file mid-merge.** It reads the index and the stage entries, not the unmerged file on disk, so `git grep "^<<<<<<<"` reports nothing while a file still carries a marker - and the first thing to notice it is a linter, complaining about a syntax error on a line nobody wrote. Scan the filesystem instead, re-count after every edit pass because a truncated dump of a file hides a hunk, and let the linter be the second opinion rather than the first:
+
+```powershell
+Get-ChildItem -Recurse -File -Path backend,config,frontend/src |
+  Select-String -Pattern '^<<<<<<< |^>>>>>>> ' -List
+```
 
 **Safe pattern when the shared checkout is dirty with work that is not yours.** `.tmp_*` is gitignored, so the patch never lands in a commit:
 
@@ -304,6 +311,8 @@ if ($checks.Count -gt 0 -and $pending.Count -eq 0) {... }
 ## The plan queue
 
 **A status an agent is told to write is a status that does not get written.** Thirteen rows had been dispatched and merged and no cell anywhere read `IN-FLIGHT`, so for a whole session the only record of what was being worked was a chat log no later agent can read. The same failure happens at the other end: the first row executed under the execution contract merged in a pull request that touched no Reckoner line, and hours later the row still read `PENDING` with an empty `PR` column while the work was on the trunk. **The instruction to flip it had been written down and read by the agent that did not do it** - which is the finding worth keeping. Wording alone does not hold, so the update moved inside the diff that is reviewed, and the plan-queue reader fails when a merged pull request names a row that never learned it landed.
+
+**A long-lived status table in one plan-doc conflicts on EVERY parallel branch of that plan.** This is the single-plan version of the generated-page failure above, and giving the page one writer does not touch it. Six pull requests of one plan each stamped their own row in one markdown table; adjacent rows sit one to three lines apart, so every merge after the first read `CONFLICTING`. The resolution is always the same and always mechanical - keep each side's own rows - but it is a cycle each: merge `origin/main`, resolve, push, re-poll. **Budget one such cycle per pull request after the first, and merge them one at a time.** Ask `gh pr view <n> --json mergeable` right after any sibling merges, because a `CONFLICTING` pull request registers no check runs and reads exactly like a stuck queue.
 
 **A plan asserting its parallel rows touch different files is making a claim, not stating a fact.** A 33-row plan stated the rule outright and was wrong on its first wave: three rows shared one stylesheet and three components, two more shared one config file, and a sixth needed a component that a row in a later group had not created yet. The evidence was in the plan the whole time, because the rows' own `Files touched` lists disagreed with the sentence above them. Diff the lists; never trust the sentence.
 
