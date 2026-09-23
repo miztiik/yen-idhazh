@@ -34,7 +34,8 @@ The sheet is built from **drawn pairs**, not from the published days directly. A
 drawn pair carries the two articles' address keys and the score the pass gave
 them, which is what lets the sheet sort by distance from the line.
 
-`idhazh council-prepare` writes one `backend/var/judge/<date>/draw.csv` a day
+`idhazh council-prepare` writes one draw a day, under
+`backend/var/council/<date>/selection/<judge>/`
 ([run-the-pipeline.md](run-the-pipeline.md)). It runs the selection step of every
 tenant registered in `council.tenants`, so it writes nothing until the
 content-similarity judge's slug is in that list. That tree is not committed, so
@@ -45,11 +46,13 @@ python -m idhazh council-prepare --date 2026-09-18 --run-id 2026-09-19-1
 ```
 
 Any tree of CSVs carrying `date`, `pair_key`, `left_url_key`, `right_url_key`
-and `composite_score` will do - the tool reads every `*.csv` under
-`--draw-root`, so pointing it at `backend/var/judge` covers every day drawn so
-far. **Point it at all of them, not at one day.** The harvest joins on the whole
-population it can resolve, and a mark whose pair is not in the draw you hand it
-is a mark that does not reach the file.
+and `composite_score` will do - the tool reads every `*.csv` in a `selection`
+slot under `--draw-root`, so pointing it at `backend/var/council` covers every
+day drawn so far. It reads the selection slot and nothing else because a night
+leaves its verdicts and its instrument rows in the same tree, and those carry no
+score. **Point it at all of them, not at one day.** The harvest joins on the
+whole population it can resolve, and a mark whose pair is not in the draw you
+hand it is a mark that does not reach the file.
 
 ## Draw a sheet
 
@@ -57,7 +60,7 @@ Read-only apart from the two files it writes. It calls no model and opens no
 socket:
 
 ```powershell
-python backend/utilities/sample_sheet.py --draw-root backend/var/judge --line 0.94
+python backend/utilities/sample_sheet.py --draw-root backend/var/council --line 0.94
 ```
 
 | Flag | Default | What it is |
@@ -158,7 +161,7 @@ with a guess.
 ## Harvest them back
 
 ```powershell
-python backend/utilities/sample_sheet.py --draw-root backend/var/judge --line 0.94 `
+python backend/utilities/sample_sheet.py --draw-root backend/var/council --line 0.94 `
   --harvest state/content-similarity-judge/holdout-pairs.csv `
   --labeller claude-opus-4.6 --labelled-on 2026-09-19
 ```

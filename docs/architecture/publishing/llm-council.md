@@ -453,6 +453,52 @@ them unreachable.
 The tenant's own slug is a directory level inside each upload, so two tenants'
 first unit land beside each other rather than on top of each other.
 
+### Design rationale: one carried root, and every tenant writes inside it
+
+**`backend/var/council/` is the whole of what a night carries between its jobs.**
+The planning job uploads that directory, each unit downloads it, each unit
+uploads it again, and the collecting job downloads every copy merged into one
+tree. Nothing else crosses. Every job runs on a runner that is thrown away when
+the job ends, so **a file a tenant writes anywhere else is not slow or wasteful -
+it is gone**, and the job that needed it fails on a file nobody ever uploaded.
+
+That is not a hypothetical. Every scheduled night from 2026-09-22 lost all eight
+of its units at once. The unit that picks the work wrote the draw to
+`backend/var/judge/`, so the file existed on the runner that made it and on no
+other runner ever; the verdicts had the same address one job further on. The
+planning job passed, the collecting job passed - the instrument rows did travel,
+because the shipping path already wrote inside the carried root - and the eight
+jobs in between all died on a missing file.
+
+**So a tenant spells no path of its own.** It asks
+[../../../backend/idhazh/council/session.py](../../../backend/idhazh/council/session.py)
+for a directory and a filename, and the venue answers with something under the
+root it carries. A tenant that spells its own is a tenant that can spell one the
+workflow does not upload, and nothing about that failure is visible until the
+night runs.
+
+**A unit's filename carries its writer's identity**, the way every committed
+writer file does: `<date>-<tenant>-<unit>`, the unit two digits wide. Eight units
+writing eight names cannot land on one path, and a file merged out of eight
+artifacts still says which night, which tenant and which unit produced it. The
+grammar is spelled in the council rather than taken from
+[../../../backend/idhazh/ledger.py](../../../backend/idhazh/ledger.py)'s
+`segment_name`, which asks for a run attempt the council never reads and a job
+name none of this workflow's jobs is a member of - a name carrying an invented
+cell names nothing.
+
+**The selection slot is the one exception to "upload everything".** A unit
+downloads the draw and would otherwise upload it again, once a shard, so the
+unit's upload excludes `*/selection`. That exclusion is why the draw needs a slot
+of its own and cannot simply sit at the top of the date's directory.
+
+**What holds it shut.** `backend/tests/test_similarity_handoff.py` runs the
+selection unit against a bare directory standing in for a runner, then reads back
+every file that directory holds afterwards - so a tenant that finds a second way
+to spell a path fails there as readily as one that never asked the venue. It then
+copies only the carried root to a second bare directory and reads the draw the
+way a unit reads it.
+
 ### Design rationale: the upload, and what would make a commit the better answer
 
 **The pinned checkout is the whole reason, and it cannot be edited away.** A
