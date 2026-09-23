@@ -1,6 +1,6 @@
 # Search Quality
 
-**Last Updated**: 2026-09-22
+**Last Updated**: 2026-09-23
 Whether the archive's on-device search finds the right story: the metric, the
 label set, the bar it has to clear, and what it costs to keep that bar honest as
 the archive grows.
@@ -44,10 +44,16 @@ real `entity_queries` over items the matcher had tagged: **0 queries becomes
 25**, covering **616 of 2,237 items**, from `entity-asml` at 3 items to
 `entity-google` at 105.
 
-**That is what the corpus supports, not what the tier reports today.** The
-tagger only touches items published from now on; no committed payload was
-rewritten, so the tier stays at zero and climbs as new days land. Read the 25 as
-the instrument being live rather than as a score.
+**It no longer stays at zero, and 2026-09-23 says where it reached.** The tagger
+only touches items published from the day it landed - no committed payload was
+rewritten - so the tier filled as new days landed rather than all at once. Over
+the 21 September days a reader searches, **2,874 of 7,044 stories carry at least
+one entity tag, across 30 distinct names, and every one of the 30 reaches three
+or more stories** - smallest 14, largest `openai` at 680. Archive-wide it is
+3,584 of 11,130. Read those counts as the instrument being live rather than as a
+score. The research behind them, and the two traps in using this tier as the
+live instrument, are in
+[../architecture/publishing/autotune-search-quality.md](../architecture/publishing/autotune-search-quality.md).
 
 Two properties of the tier survive the change and are worth restating, because
 they are why it was built before it could fire: the relevant set is exactly the
@@ -405,11 +411,24 @@ is bounded and is what a reader's tab fetches. It is bounded, and it holds no
 labelled answer: the labels close on 2026-08-26 and the window reaches the
 newest month, so the reading came out at recall 0.000 with all 60 queries
 unanswerable over 7,044 items. That is a fact about the window, not about
-search. The live line therefore stays on every published day and is declared
-under Guardrail #12's escape hatch in
-[growing-reads.md](growing-reads.md), because the question it answers - how far
-the frozen labels have drifted from the archive - is about the items outside any
-window. Authority: Andre, Guardrail #10.
+search. Authority: Andre, Guardrail #10.
+
+**So the live reading went entirely, rather than moving (2026-09-23).** It was
+never asserted - it was printed - and it was a parameter of the gate, so a
+malformed day payload could turn `test_the_ranking_clears_its_bar` red for
+something no merge candidate caused (`CLAUDE.md` section 13). It also scored the
+day payloads while a reader searches the month file, so it measured a collection
+nobody queries. Its stated question - how far the frozen key has drifted from the
+archive - is answered now from the committed month file names and the key's own
+dates, at fixed cost, and the module asserts what nothing asserted before: that
+no judged answer falls past the pin. **What the project gives up is the
+whole-archive number as a watchable level**: 0.602 on 2026-09-04, falling at
+0.0000479 per story published, about 0.031 a day. Nobody acted on it, because the
+gate is pinned and the decline is a fitted line rather than a regression. What
+genuinely goes is noticing a change in that rate if the publishing mix shifts,
+and re-fitting recovers it. The full picture is in
+[../architecture/publishing/autotune-search-quality.md](../architecture/publishing/autotune-search-quality.md).
+Authority: owner, `CLAUDE.md` section 13.
 
 ## Rejected alternatives
 
@@ -433,7 +452,7 @@ window. Authority: Andre, Guardrail #10.
 | Stop the gate reading days published after the labels closed | It would hold the number still, and it would measure a 2,237-item archive nobody has searched since 2026-08-26 - so a ranking change that only hurt recent stories would pass. The gate exists to notice the archive. What has to change is the labels, not the corpus. | Andre |
 | Gate on the gap between case A' and case A instead of on a level | It is the right instrument for "did the ranking regress" and it needs two committed corpora to compare, which the repository does not keep. Building that is a bigger change than this row, and it does not remove the need for the labels. | Andre, Fowler |
 | Score the live line over the trailing window `assist.search_months` names | Measured 2026-09-22: that window holds 7,044 items and not one labelled answer, so the reading is recall 0.000 with every query unanswerable. It would replace a number that says how stale the labels are with a number that says the labels are not in September. | Andre, Guardrail #10 |
-| Move the live line to `backend/utilities/measure_retrieval.py` beside the membership check | It is the only measurement of live search quality in the project, and a utility with no scheduled caller is an instrument deleted on a delay. Keeping it gated costs the whole-archive read, which is declared rather than hidden. | Andre |
+| Move the live line to `backend/utilities/measure_retrieval.py` beside the membership check | It was the only measurement of live search quality in the project, and a utility with no scheduled caller is an instrument deleted on a delay. **Superseded 2026-09-23**: the line was deleted outright, so there is nothing left to move. The design rationale above says what that cost. | Andre, owner |
 
 ## See also
 

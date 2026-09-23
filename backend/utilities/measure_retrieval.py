@@ -9,7 +9,7 @@ So it lives here, where pytest does not collect it.
 
 It was `test_the_index_names_every_published_item` until 2026-09-22. Everything
 else that test module asks is bounded - the gate is pinned to
-`assist.eval_corpus_through`, and the live reading is the trailing window
+`assist.eval_corpus_through`, and the knob check reads the trailing window
 `assist.search_months` names - so this was the one question that had to move
 rather than take a cover.
 
