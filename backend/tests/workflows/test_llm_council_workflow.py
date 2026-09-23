@@ -505,10 +505,9 @@ def test_no_shard_commits() -> None:
     - a row pushed at 22:40 is not in it. The artifact is the only way across,
     and no config edit can retire that.
 
-    Read through the shell CLOSURE rather than off the `run:` body. `_steps`
-    resolves the composite action the model block moved into, and
-    `_effective_shell` follows the shipped scripts that action calls, so a commit
-    issued one delegation away is still seen.
+    Read through every step the job really runs rather than off the workflow
+    file. `_steps` resolves the composite action the model block moved into, so
+    a commit issued one delegation away is still seen.
     """
     shells = [_effective_shell(step) for step in _steps(_judges(), "judge")]
 

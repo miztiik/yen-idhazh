@@ -5,19 +5,14 @@ from __future__ import annotations
 import shutil
 import subprocess
 import sys
-import tomllib
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Final
 
 import pytest
-from conftest import REPO_ROOT, read_text
+from conftest import REPO_ROOT
 
 from ._harness import (
-    SCRIPTS_DIR,
-    SHELLCHECK_COMMAND,
-    SHELLCHECK_STEP,
-    SHIPPED_SCRIPTS,
     _git,
     _isolated_env,
     _load_workflows,
@@ -43,51 +38,6 @@ SELECTOR: Final = REPO_ROOT / "frontend" / "scripts" / "test-scope.ts"
 
 #: What the `docs` job runs.
 CHANGED_DOCS: Final = REPO_ROOT / "backend" / "utilities" / "changed_docs.py"
-
-
-def test_the_gates_job_lints_the_shell_it_ships() -> None:
-    """`ruff` and `mypy` stop at Python. The one script under .github/scripts/
-    is the retry loop both daily commit steps run, and a bug in it costs a whole
-    day's digest - so it gets a linter of its own, from the same manifest that
-    pins the other two.
-    """
-    steps = _steps(_load_workflows()["ci.yml"], "gates")
-    step = _step(_load_workflows()["ci.yml"], "gates", "name", SHELLCHECK_STEP)
-    assert _script(step, f"ci.yml/gates/{SHELLCHECK_STEP}").strip() == SHELLCHECK_COMMAND
-
-    names = [item.get("name") for item in steps]
-    assert names.index("Install") < names.index(SHELLCHECK_STEP), (
-        "shellcheck arrives as a dev dependency, so the install has to run first"
-    )
-    manifest = tomllib.loads(read_text(REPO_ROOT / "pyproject.toml"))
-    dev = manifest["project"]["optional-dependencies"]["dev"]
-    assert any(requirement.startswith("shellcheck-py") for requirement in dev), (
-        "the linter is pinned by the manifest, not fetched by the step"
-    )
-    assert list(SCRIPTS_DIR.glob("*.sh")), "the gate reads a glob, so it needs something to read"
-
-
-def test_the_shell_the_gate_lints_is_the_shell_this_repository_declared() -> None:
-    """Nothing lands a shell script here without somebody choosing to.
-
-    The linter above reads a glob, so a `.sh` file that arrives with no owner is
-    linted, shipped and invisible - which is how one arrived. The inventory is
-    read both ways: a file nobody declared is the new script, and a declared
-    name with no file is a deletion somebody half finished. Only a person
-    editing this tree can turn either red.
-    """
-    present = {path.name for path in SCRIPTS_DIR.glob("*.sh")}
-    declared = set(SHIPPED_SCRIPTS)
-    undeclared = sorted(present - declared)
-    missing = sorted(declared - present)
-    assert not undeclared, (
-        "a new .sh file under .github/scripts/ is a Level 3 design question, not a "
-        f"convenience. Nothing declares: {', '.join(undeclared)}"
-    )
-    assert not missing, (
-        "SHIPPED_SCRIPTS names a script that is gone, so the deletion left the list "
-        f"behind: {', '.join(missing)}"
-    )
 
 
 def test_the_two_selection_steps_run_what_this_module_drives() -> None:

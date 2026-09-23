@@ -28,7 +28,6 @@ from ._harness import (
     REVIEW_ARTIFACT,
     REVIEW_COMMAND,
     REVIEW_STEP,
-    SCRIPTS_DIR,
     SUBSTITUTED_DATE,
     SUBSTITUTED_DAY_DIR,
     TOLERATED,
@@ -352,7 +351,6 @@ def test_only_the_scheduled_prune_may_force_push() -> None:
                 if isinstance(script, str) and FORCE_PUSH.search(script):
                     forcing.add(f"{filename} step {step.get('name')}")
     executable = (
-        *SCRIPTS_DIR.glob("*.sh"),
         *(REPO_ROOT / "backend" / "utilities").glob("*.py"),
         *(REPO_ROOT / "backend" / "idhazh").rglob("*.py"),
     )

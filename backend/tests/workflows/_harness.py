@@ -30,13 +30,11 @@ from idhazh.telemetry.publish import series
 from utilities.commit_and_push import PUSH_ATTEMPT_LABEL
 
 #: Everything the platform runs. A rule about what a runner may execute is
-#: stated over this rather than over the three directories below, so a file
+#: stated over this rather than over the two directories below, so a file
 #: added beside them is inside it from the moment it lands.
 GITHUB_DIR: Final = REPO_ROOT / ".github"
 
 WORKFLOWS_DIR: Final = GITHUB_DIR / "workflows"
-
-SCRIPTS_DIR: Final = GITHUB_DIR / "scripts"
 
 ACTIONS_DIR: Final = GITHUB_DIR / "actions"
 
@@ -166,20 +164,6 @@ UNPUBLISHABLE_DATES: Final = (
     "2026-13-45",
     "yesterday",
 )
-
-# The shell linter and the one directory it reads. It cannot see a `run:` body,
-# so the shell written inline in a workflow is held by the tests in this file
-# instead.
-SHELLCHECK_STEP: Final = "Lint the shell"
-
-SHELLCHECK_COMMAND: Final = "shellcheck --severity=style .github/scripts/*.sh"
-
-#: Every shell script `.github/scripts/` is expected to hold. A `.sh` file here that this
-#: tuple does not name is a Level 3 design question, not a convenience, and one appeared with
-#: no owner while this list was being written. The list only ever shrinks: a row that deletes
-#: a script deletes its name in the same commit, and the test reads both directions, so
-#: neither a new file nor a forgotten name can pass.
-SHIPPED_SCRIPTS: Final[tuple[str, ...]] = ()
 
 # The ceiling, not the dispatch rule. Guardrail #2 allows 20 concurrent jobs; a regex
 # held the fan-out at four. The empty-input default below stays at four, because
@@ -1358,8 +1342,8 @@ def _steps(workflow: dict[str, object], job_name: str) -> list[dict[str, object]
     reader stopping at the workflow file would report that a converted job no
     longer caches its weights, no longer checks a digest and no longer starts a
     server - which is the opposite of what happened. This file already follows
-    one level of delegation into a shipped `.sh` (`_effective_shell`,
-    `_starter_shell`); this is the same rule for the other kind of extraction,
+    one level of delegation into the launcher a step backgrounds
+    (`_starter_shell`); this is the same rule for the other kind of extraction,
     and it is what lets a step move without every oracle over it going quiet.
 
     The reference itself is kept, so a caller can still ask which action a job
@@ -1572,60 +1556,15 @@ def _normalize_condition(value: object, description: str) -> str:
     return " ".join(condition.split())
 
 
-#: A shipped script named inside a `run:` body. A name is letters, digits and
-#: the punctuation a filename here uses, so the shellcheck step's
-#: `.github/scripts/*.sh` glob is not read as a call to anything.
-SCRIPT_CALL: Final = re.compile(r"\.github/scripts/(?P<name>[A-Za-z0-9._-]+\.sh)")
-
-
-def _called_scripts(body: str) -> list[str]:
-    """Every shipped script a shell body names outside a comment."""
-    called: list[str] = []
-    for line in body.splitlines():
-        if line.lstrip().startswith("#"):
-            continue
-        called.extend(match.group("name") for match in SCRIPT_CALL.finditer(line))
-    return called
-
-
-def _script_closure(body: str) -> str:
-    """A shell body plus every shipped script reachable from it, at any depth.
-
-    One level of following was enough while every shipped script was a leaf. It
-    stopped being enough the moment one script sourced another: a check written
-    over the one-level text goes quietly green on a fetch that moved one file
-    further away, which is the same hole the following was added to close. The
-    visited set is what keeps two scripts that name each other from recursing.
-    """
-    bodies = [body]
-    seen: set[str] = set()
-    pending = _called_scripts(body)
-    while pending:
-        name = pending.pop()
-        if name in seen:
-            continue
-        seen.add(name)
-        called = SCRIPTS_DIR / name
-        if not called.is_file():
-            continue
-        text = called.read_text(encoding="utf-8")
-        bodies.append(text)
-        pending.extend(_called_scripts(text))
-    return "\n".join(bodies)
-
-
 def _effective_shell(step: Mapping[str, object]) -> str:
-    """A step's own shell, plus the text of every shipped script it reaches.
+    """A step's own shell, or an empty string where the step runs no shell.
 
-    A step that calls a script runs that script's shell, so a search over `run:`
-    bodies alone stops seeing a fetch the moment the fetch is extracted - and
-    every check written over that search silently passes on nothing. Following
-    the call is what lets extraction be a refactor rather than a hole.
+    Every step that runs shell now writes it inline, so this is the whole text a
+    search has to read. It followed a call into `.github/scripts/` until that
+    directory went on 2026-09-23.
     """
     script = step.get("run")
-    if not isinstance(script, str):
-        return ""
-    return _script_closure(script)
+    return script if isinstance(script, str) else ""
 
 
 def _llama_fetch_scripts(workflow: dict[str, object]) -> list[tuple[str, object, str]]:

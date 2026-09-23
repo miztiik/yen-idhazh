@@ -27,7 +27,6 @@ from ._harness import (
     DROP_ENTRY_POINT,
     FINGERPRINT_STEP,
     PLAN_STEP,
-    SCRIPTS_DIR,
     SUBSTITUTED_DATE,
     SUBSTITUTED_DAY_DIR,
     TAKE_STATE_CALL,
@@ -155,10 +154,6 @@ def test_no_rebase_in_the_daily_run_starts_on_a_dirty_tree() -> None:
         for job_name in jobs
         for step in _steps(workflow, job_name)
         if isinstance(script := step.get("run"), str)
-    ]
-    bodies += [
-        (path.relative_to(REPO_ROOT).as_posix(), read_text(path))
-        for path in sorted(SCRIPTS_DIR.glob("*.sh"))
     ]
     bodies.append(
         (
