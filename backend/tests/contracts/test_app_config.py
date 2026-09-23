@@ -24,7 +24,7 @@ from idhazh.contracts.knobs.collect import CollectConfig
 from idhazh.contracts.knobs.console import ConsoleConfig
 from idhazh.contracts.knobs.council import CouncilConfig
 from idhazh.contracts.knobs.evaluation import EvaluationConfig
-from idhazh.contracts.knobs.model_server import ModelServerConfig, resolve_base_url
+from idhazh.contracts.knobs.model_server import ModelServerConfig, is_loopback, resolve_base_url
 from idhazh.contracts.knobs.models import ModelsConfig
 from idhazh.contracts.knobs.observability import LoggingConfig, LogLevel, ObservabilityConfig
 from idhazh.contracts.knobs.placement import (
@@ -258,6 +258,37 @@ def test_an_address_a_run_can_use_is_taken_and_tidied() -> None:
     )
     assert ModelServerConfig(base_url="http://10.0.0.5:9001/").base_url == "http://10.0.0.5:9001"
     assert ModelServerConfig(base_url="https://a-box:8443").base_url == "https://a-box:8443"
+
+
+@pytest.mark.parametrize(
+    ("declared", "this_machine"),
+    [
+        ("http://127.0.0.1:8080", True),
+        ("http://127.0.0.5:8080", True),
+        ("http://[::1]:8080", True),
+        ("http://localhost:8080", True),
+        ("http://LocalHost:8080", True),
+        ("http://192.168.1.20:9090", False),
+        ("http://a-box:8080", False),
+        ("http://ip6-localhost:8080", False),
+    ],
+)
+def test_only_a_loopback_literal_or_localhost_answers_for_this_machine(
+    declared: str, this_machine: bool
+) -> None:
+    """Who may answer for this machine, settled without asking a resolver.
+
+    A name lookup would make the answer depend on something nobody wrote down,
+    and a hosts entry can point `127.0.0.1` at a tunnel to a second machine - so
+    `a-box` is not this machine even on a host where it resolves to one, and
+    `ip6-localhost` is a Debian hosts convention rather than a reserved name.
+    `localhost` is in because RFC 6761 reserves it, and the mixed-case spelling
+    is here because the host is read as a host rather than off the authority.
+
+    The reader is `runtime_build`, which writes what this answers into the run
+    record, so a wrong yes is a published falsehood rather than a failed call.
+    """
+    assert is_loopback(ModelServerConfig(base_url=declared).base_url) is this_machine
 
 
 def test_the_model_server_publishes_its_counters_without_being_asked_for() -> None:
