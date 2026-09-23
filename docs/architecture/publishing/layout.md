@@ -1,6 +1,6 @@
 # Published Layout
 
-**Last Updated**: 2026-09-22
+**Last Updated**: 2026-09-23
 Where the pipeline writes what a reader reads and what a reader's URL looks like. Assemble is the stage that produces all of it ([../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md)); this page owns the shape it writes into and the promises that shape makes.
 
 What happens to any of it afterwards is the other half, and it is [retention.md](retention.md): unpublishing a day, what bounds the committed state tree, and the score shards that turn into summaries once they age out.
@@ -64,12 +64,71 @@ never depend on who has read what.
 - **Read-state is a client-side mark and nothing more.** It may change how an item looks. It may never change where an item sits, whether it appears, or how it ranks. The only exception is a filter the reader switches on themselves, and it is off by default.
 - **"New" is a property of the item, not of the reader.** An item is new because a later run introduced it, which is true for everybody and needs no storage to assert. It is never a diff against a remembered last-visit time, which would be a claim that evaporates the moment a browser is cleared.
 - **Membership only grows.** The runs of a day append to one day payload rather than replacing it, so the day grows through the day. That is only safe because an item's id comes from its address: run 2 recognises what run 1 already published instead of renumbering it. There is no daily item cap - what a day carries is what supply and the ranking produced ([../sources/freshness.md](../sources/freshness.md)).
-- **A run can come back as itself, and that is one run.** Assemble writes `digest.json`, then builds the manifest, then writes `run.json`. A run that dies between those two writes leaves a day holding its items and a manifest that never heard of it, so the next run reads the same number off the manifest. The day therefore replaces the reference for a number it already has rather than adding a second one, and the count on that reference is every item the number introduced. The manifest appends instead, and does not need the same replace: its contract refuses a `runs` list in which two runs share an ordinal, so the next number cannot already be taken. A guard there would be a branch nothing can reach.
+- **A run can come back as itself, and that is one run.** A run files one block named for itself, so a run that comes back rewrites its own block rather than adding a second one. `n` is a position the fold assigns by counting down the blocks it can see, and anything else needing that number reads it off the day - so the day and the manifest cannot disagree about how many times the day was built. The manifest's contract still refuses a `runs` list in which two runs share an ordinal, and after the fold that clause checks the fold's own arithmetic rather than a writer's claim.
 - **The day's vectors grow with it.** A run encodes only the items it summarized, so it merges its block into the one the day already carried instead of replacing it. Replacing left a day searchable over its last run alone: the committed 2026-08-24 day held 145 vectors for 731 items, which is 19.8 percent of them. A newer vector wins a collision, because it was encoded from the newer text. A block that names another model, width or dtype replaces the old one whole rather than joining it.
 - **An item's words are written once, by the run that introduced it.** No run revises. Three gates hold that, and all three are load-bearing for something else: `rank.plan_vertical` drops a candidate whose address is already in `state/published/`, `cli` supplies that set, and `assemble.build_day` drops an item the day already holds. The published item carries `updated_at` and `updated_by_run` for a revision that cannot happen yet, and both are null in every committed payload. **If a revision is ever built, it must be visible.** Silently improving wording under someone who already read it makes them doubt their own memory, and their trust in the summaries is the entire product.
 - **No run identifier appears in any data path or any reader URL.** It lives in the run manifest and in the day notice, on the pages that render a day.
 
 The returning reader is protected by the read mark and by the run-scoped "new" grouping - both of which work identically for everyone - rather than by freezing an order, which cannot be done in a shared artifact without rendering a different page per person.
+
+## The day is folded from one block per run
+
+**No run writes `digest.json`.** A run writes its own block -
+`state/digest-fragments/<YYYY>/<MM>/<DD>/<run_id>.json`, a `DigestRunFragment` -
+and the published day is folded from every block that is there. That is the
+whole reason the shape exists: a file with one writer cannot carry two runs'
+disagreement, and `digest.json` had been exactly that.
+
+**The blocks are not under `frontend/public/`, and absence is what keeps them
+out.** Everything in that tree is copied verbatim into the deploy, so blocks
+filed there would be served, crawlable, and a second whole copy of every story
+on a site Pages refuses over 1 GB. There is no URL, so there is nothing to index
+and nothing for a reader to land on. A `robots.txt` line would be a request to a
+crawler rather than a control, and it would leave the bytes in the deploy.
+
+**Whole blocks, in landing order, never interleaved.** The sort is
+`("completed_at", "run_id")` and both are required: `completed_at` is when the
+run finished, and `run_id` breaks a same-second tie and is unique by
+construction. A block keeps the position it landed in, which is what lets a
+reader come back and find what they were part-way through where they left it
+([../../concepts/placement.md](../../concepts/placement.md#one-order-inside-what-a-run-added)).
+
+**A fold that sees fewer blocks is not an error and needs no special case.** It
+emits a valid prefix of the day and the next fold appends the rest, because the
+fold inherits position rather than recomputing a key. Two folds over the same
+set of blocks emit identical bytes, and git merges two identical adds with no
+conflict at all - which is what makes re-folding free.
+
+**`generated_at` is the newest block's completion, not the fold's own clock.** A
+wall clock would make two folds of one set of blocks emit different bytes, which
+puts an add/add conflict back on the one file every reader opens - the defect
+this shape exists to remove, re-introduced on the published side. A maximum over
+the set is monotonic and deterministic instead. **What the rule costs**: a
+rewrite that adds no run - a retention pass deleting an old drawing, say -
+changes the payload and leaves the stamp where it was, so a browser already
+holding that day can draw a path that has just gone, until it reloads. That is
+one broken drawing in one open tab, against a conflict on every re-fold, which
+costs the day for every reader.
+
+**A day written before runs filed their own blocks is left exactly as it is.** A
+recorded run carrying no `run_id` is a block no fragment can reproduce, so
+folding that day would publish only what the blocks hold and delete every story
+the reader has already been shown. `assemble.predates_fragments` is that one
+branch, and it retires itself: once a date's runs all name themselves it is
+false forever after.
+
+**`items_failed` and `partial` are two readings of one set**, so the fold
+derives both from it: the union of every block's failed item ids, less the items
+that did publish. Reading `partial` off the blocks instead - true if any block
+said so - is monotonic, so an article that failed at 02:20 and landed at 06:20
+would report `partial` true beside `items_failed` zero, which the contract
+refuses.
+
+What the push does with a block, and why a `digest.json` two runs both computed
+used to lose the day, is
+[in committing.md](committing.md#two-runs-of-one-day-work-at-the-same-time-and-nothing-queues-them).
+
+Authority: Jony and Fowler, converged, 2026-09-22.
 
 ## One file per day
 

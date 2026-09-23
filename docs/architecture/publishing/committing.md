@@ -265,6 +265,18 @@ named for this job, so putting it back is not a resolution this script may make.
 The message prints one identity, because one is all there is: a second field
 would always be empty.
 
+**A conflicted closed-day fold is refused whole, and the refusal is the
+mechanism rather than a gap in it.** `settled.csv` carries no writer's name, so
+the rule above answers no and the push stops. Settling it per path is what loses
+rows: taking the tip's copy leaves this job's *deletion* of a straggler file
+standing - a deletion is not a conflict, so git keeps it - and the straggler's
+rows then exist in no file at all, at exit 0. Refusing means the whole fold
+commit dies with the runner, the tip keeps both its `settled.csv` and the
+straggler, and the next run folds that day again. The step is
+`continue-on-error: true`, so the job carries on. What a refused fold costs is
+the telemetry month fold that shares the step, and that month is folded on the
+next run.
+
 Two things were considered and neither is taken. A file listing what each job
 owns restates the identity the filename already carries and gives it somewhere
 to drift. A lock taken before the push is not a lock at all - two jobs both read
@@ -439,6 +451,7 @@ it is collected over time.
 ## See also
 
 - [../../reference/github-actions.md](../../reference/github-actions.md) - which workflows exist, when each runs, and what each does.
+- [../../concepts/partitions.md](../../concepts/partitions.md) - the three classes every committed path is one of, and the layout each one obliges its writer to keep.
 - [visuals.md](visuals.md) - why a raced chart is dropped rather than merged, refreshed or renamed.
 - [../contracts/schemas.md](../contracts/schemas.md) - the row contracts under `state/`, and the rule that decides when a ledger shards.
 - [retention.md](retention.md) - what the committed record keeps once the artifacts are gone.
