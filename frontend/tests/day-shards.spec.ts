@@ -3,13 +3,21 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { machineRecordDays } from '../src/lib/server/host-fingerprint';
-import { dayShardFiles, readDayShards, settledCensus } from '../src/lib/server/payload';
+import {
+	dayShardFiles,
+	ITEM_HEALTH_KEY,
+	ITEM_HEALTH_RULE,
+	OBSERVATION_KEY,
+	readDayShards,
+	settledDayShards,
+	settleRows
+} from '../src/lib/server/payload';
 
 /**
  * The server-side day walk: a day is a `<DD>/` directory of writer-owned files,
  * the cover counts days rather than files, and a name the walk cannot place is
- * skipped rather than thrown over. Plus the settlement the census read applies
- * to what that walk hands back, because two writers describe every item.
+ * skipped rather than thrown over. Plus the settlement the keyed reads apply to
+ * what that walk hands back, because two writers describe every record.
  *
  * All in plain Node against fixtures, so nothing depends on the committed
  * archive (`CLAUDE.md` section 13). The claim the cover carries is Guardrail #12:
@@ -126,17 +134,19 @@ test('a day directory with no readable file stops the read rather than drawing n
 });
 
 /**
- * The settlement `itemHealthRows` applies to what the walk above hands back.
+ * The settlement `itemHealthRows` and `evalRows` apply to what the walk above
+ * hands back.
  *
  * A day directory holds one file per writer, and two writers describe every
- * item: the work shard as the item settles, and assemble over the whole day
+ * record: the work shard as the item settles, and assemble over the whole day
  * afterwards. Both files are the same day to the walk, so both accounts of one
- * item reach a reader that does not settle them - which is a doubled count on
+ * record reach a reader that does not settle them - which is a doubled count on
  * every console panel and a repeated key in every list drawn per item.
  *
- * `ledger.ITEM_HEALTH_KEY` and `ledger.ITEM_HEALTH_RULE` are the backend twins.
- * Rows are built here rather than read from the archive, so the cost of this
- * cannot follow what the pipeline has piled up (`CLAUDE.md` section 13).
+ * `ledger.ITEM_HEALTH_KEY`, `ledger.ITEM_HEALTH_RULE` and
+ * `ledger.OBSERVATION_KEY` are the backend twins. Rows are built here rather
+ * than read from the archive, so the cost of this cannot follow what the
+ * pipeline has piled up (`CLAUDE.md` section 13).
  */
 function census(cells: Record<string, string> = {}): Record<string, string> {
 	return {
@@ -149,6 +159,9 @@ function census(cells: Record<string, string> = {}): Record<string, string> {
 		...cells
 	};
 }
+
+const settledCensus = (rows: readonly Record<string, string>[]) =>
+	settleRows(rows, ITEM_HEALTH_KEY, ITEM_HEALTH_RULE);
 
 test('two jobs describing one item settle to one row', () => {
 	// The shape the committed ledger holds on the day a run is publishing:
@@ -193,24 +206,111 @@ test('the settlement reads the day the walk built, not a list somebody handed it
 		const dir = join(root, 'item-health', '2026', '09', '23');
 		mkdirSync(dir, { recursive: true });
 		const columns = 'date,run_id,item_id,job,shard,outcome';
-		const settledBy = (job: string, shard: string) =>
-			`${date},${date}-1,ai-one,${job},${shard},ok`;
-		// Sorted by name, so `assemble` is read before `work` - the order the
+		const entry = (itemId: string, job: string, shard: string) =>
+			`${date},${date}-1,${itemId},${job},${shard},ok`;
+		// Both shapes the two writers really produce, taken from the committed
+		// ledger. For an item a shard sealed a record for, assemble re-states that
+		// row cell for cell - `job` says `work` in assemble's own file, and no row
+		// in the tree has ever said `assemble`. For an item no shard sealed one,
+		// assemble has no job or shard to name and leaves both empty.
+		//
+		// Sorted by name, so assemble is read first either way - the order the
 		// arrival of the two files used to decide by.
 		writeFileSync(
-			join(dir, `${date}-1-assemble-00.csv`),
-			[columns, settledBy('assemble', '0')].join('\n'),
+			join(dir, `${date}-35833646522-1-assemble-00.csv`),
+			[columns, entry('ai-sealed', 'work', '3'), entry('ai-unsealed', '', '')].join('\n'),
 			'utf8'
 		);
 		writeFileSync(
-			join(dir, `${date}-1-work-03.csv`),
-			[columns, settledBy('work', '3')].join('\n'),
+			join(dir, `${date}-35833646522-1-work-03.csv`),
+			[columns, entry('ai-sealed', 'work', '3'), entry('ai-unsealed', 'work', '3')].join('\n'),
 			'utf8'
 		);
 
-		const table = readDayShards(join(root, 'item-health'), -1);
-		expect(table.rows, 'the day really does hold both writers').toHaveLength(2);
-		expect(settledCensus(table.rows)).toHaveLength(1);
+		const walked = join(root, 'item-health');
+		expect(readDayShards(walked, -1).rows, 'the day really does hold both writers').toHaveLength(
+			4
+		);
+		const settled = settledDayShards(walked, ITEM_HEALTH_KEY, ITEM_HEALTH_RULE, -1);
+		expect(settled.rows.map((row) => row.item_id)).toEqual(['ai-sealed', 'ai-unsealed']);
+		// The rule earns its keep on the unsealed item: assemble's row arrived
+		// first and names no job, so keeping the first would have lost the shard.
+		expect(settled.rows.map((row) => row.shard)).toEqual(['3', '3']);
+		// The header survives the settlement: a panel reads columns from the table
+		// it was handed, and an empty header draws an empty panel.
+		expect(settled.columns).toEqual(columns.split(','));
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+/**
+ * `state/scores/` is the same shape with a different key and no preference.
+ *
+ * `ledger.OBSERVATION_KEY` is the address, the digest of the words that came
+ * out, and the version of the instrument that read them. It carries no date, so
+ * the day a key is filed under is not part of what makes two rows one record -
+ * which is exactly why the settlement is per day and not over the whole cover.
+ */
+const SCORE_COLUMNS = 'date,url_key,output_digest,scorer_version,faithfulness';
+
+function scoreDay(root: string, date: string, files: Record<string, string[]>): void {
+	const dir = join(root, 'scores', date.slice(0, 4), date.slice(5, 7), date.slice(8, 10));
+	mkdirSync(dir, { recursive: true });
+	for (const [name, rows] of Object.entries(files)) {
+		writeFileSync(join(dir, name), [SCORE_COLUMNS, ...rows].join('\n'), 'utf8');
+	}
+}
+
+function score(date: string, urlKey: string, faithfulness: string): string {
+	return `${date},${urlKey},d33c,hhem-2.1@1,${faithfulness}`;
+}
+
+test('two jobs scoring one observation settle to one row', () => {
+	const root = mkdtempSync(join(tmpdir(), 'scores-'));
+	try {
+		const date = '2026-09-23';
+		scoreDay(root, date, {
+			[`${date}-1-assemble-00.csv`]: [score(date, 'an-article', '0.91')],
+			[`${date}-1-work-03.csv`]: [score(date, 'an-article', '0.91')]
+		});
+		const dir = join(root, 'scores');
+
+		expect(readDayShards(dir, -1).rows, 'the day really does hold both writers').toHaveLength(2);
+		expect(settledDayShards(dir, OBSERVATION_KEY, undefined, -1).rows).toHaveLength(1);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+test('a key with no preference keeps the first row it saw', () => {
+	// The backend reads an absent preference as keep-first, because a repeat
+	// under this key is one attempt written twice and the two rows agree. The
+	// committed ledger bears that out: measured 2026-09-23, all 204 repeated
+	// keys of the publishing day agreed cell for cell.
+	const first = { url_key: 'a', output_digest: 'd', scorer_version: 'v', faithfulness: '0.91' };
+	const second = { ...first, faithfulness: '0.42' };
+
+	expect(settleRows([first, second], OBSERVATION_KEY)).toEqual([first]);
+	expect(settleRows([second, first], OBSERVATION_KEY)).toEqual([second]);
+});
+
+test('one key on two days is two measurements, not a repeat', () => {
+	const root = mkdtempSync(join(tmpdir(), 'scores-'));
+	try {
+		// The same article, the same words, the same instrument, measured on two
+		// days. `OBSERVATION_KEY` carries no date, so a settlement over the
+		// flattened walk would delete the second - and the committed ledger holds
+		// exactly one of these, measured 2026-09-23 across 12,463 keys.
+		scoreDay(root, '2026-09-19', { '2026-09-19-1-work-00.csv': [score('2026-09-19', 'a', '0.9')] });
+		scoreDay(root, '2026-09-20', { '2026-09-20-1-work-00.csv': [score('2026-09-20', 'a', '0.9')] });
+		const dir = join(root, 'scores');
+
+		const settled = settledDayShards(dir, OBSERVATION_KEY, undefined, -1);
+		expect(settled.rows.map((entry) => entry.date)).toEqual(['2026-09-19', '2026-09-20']);
+		// And the cover still bounds it, so neither the settlement nor the walk
+		// grows with the archive (Guardrail #12).
+		expect(settledDayShards(dir, OBSERVATION_KEY, undefined, 1).rows).toHaveLength(1);
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}
