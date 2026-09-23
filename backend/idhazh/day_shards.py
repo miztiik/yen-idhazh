@@ -17,11 +17,13 @@ identical three cases `stages.compact` ran into a head - join, supersede, repeat
 would be six answers to one question, and a reader that forgot to call one would
 read double-counted rows.
 
-**`settled.csv` is the one name here that is not a writer's.** It is what a
-closed-day fold leaves behind, and it sorts below every writer file: a writer's
-attempt is the run's own `GITHUB_RUN_ATTEMPT` and that starts at 1, so attempt 0
-is a place no writer can take. It is also the right place - every row in it has
-already won its settlement, and a straggler beside it is later.
+**Three names here are reserved rather than a writer's.** `settled.csv` is what
+a closed-day fold leaves behind, `before-partition.csv` is what a committed head
+already held before writes carried identity, and `repair-<stamp>.csv` is an
+operator's one add. All three sort below every writer file: a writer's attempt
+is the run's own `GITHUB_RUN_ATTEMPT` and that starts at 1, so attempt 0 is a
+place no writer can take. It is also the right place - a straggler beside any of
+them is later, and its rows are the ones the settlement must let win.
 
 **The sort key is the path relative to the ledger root, never the bare
 filename.** `settled.csv` has the same basename in every day directory, so a
@@ -242,22 +244,41 @@ def date_of(shard: Path) -> str:
     return f"{day.parent.parent.name}-{day.parent.name}-{day.name}"
 
 
+def _carries_no_identity(shard: Path) -> bool:
+    """Whether this shard's name is a reserved one rather than a writer's identity.
+
+    Three names are reserved, and each is declared where it is minted with its
+    own removal condition beside it: `settled.csv` here for a closed day's fold,
+    `ledger.BEFORE_PARTITION_NAME` for the bytes a committed head already held,
+    and `ledger.repair_name` for an operator's one add. A `<DD>.csv` day file is
+    a fourth shape with the same property - a fold somebody already settled.
+    """
+    return (
+        shard.name in (SETTLED_NAME, ledger.BEFORE_PARTITION_NAME)
+        or ledger.is_repair(shard.name)
+        or _is_day_file(shard)
+    )
+
+
 def _order(shard: Path, root: Path) -> tuple[int, str]:
     """Reading order inside one ledger: ascending attempt, then relative path.
 
     Ascending attempt, so a correction always arrives after what it corrects and
-    the settlement never has to look backwards. `settled.csv` takes attempt 0,
-    which is the place no writer can take and the place its rows belong.
+    the settlement never has to look backwards. Every reserved name takes
+    attempt 0, which is the place no writer can take: a run's
+    `GITHUB_RUN_ATTEMPT` starts at 1.
 
-    A `<DD>.csv` day file carries no identity either, so it takes the same
-    place: its rows are a fold somebody already settled. An operator's
-    `repair-<stamp>.csv` takes it too - a repair adds rows the day's own files
-    already produced, so it corrects no writer and must displace none.
+    Within attempt 0 the name decides, and the alphabet already answers it -
+    `before-partition.csv`, then `repair-<stamp>.csv`, then `settled.csv`. So
+    the merged history a repair corrects is read before the repair, and the
+    bytes a fold read are read before the fold's own answer.
+
     `parse_segment_name` is what reads every other name, and it is not touched -
-    it keeps raising on a name that is none of these three.
+    it keeps raising on a name no producer here spells, which is what catches a
+    writer that invented one.
     """
     where = shard.relative_to(root).as_posix()
-    if shard.name == SETTLED_NAME or ledger.is_repair(shard.name) or _is_day_file(shard):
+    if _carries_no_identity(shard):
         return (SETTLED_ATTEMPT, where)
     return (ledger.parse_segment_name(shard).attempt, where)
 

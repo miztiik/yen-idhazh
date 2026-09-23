@@ -146,6 +146,44 @@ def test_settled_sorts_below_every_writer_file(tmp_path: Path) -> None:
     assert [row["count"] for row in rows] == ["14", "12"]
 
 
+def test_every_name_no_writer_owns_reads_and_reads_before_every_writer_file() -> None:
+    """A migrated day, read back whole: the reserved names first, the straggler last.
+
+    `before-partition.csv` is what the migration wrote for the bytes a committed
+    head already held, and nothing read one back until the first real read of a
+    migrated tree stopped on it. Three names are reserved and all three sort at
+    attempt 0, so a writer file always corrects them rather than the other way
+    round.
+
+    Held against a fixture day and never `state/`, so it costs one directory
+    whatever the archive grows to (Guardrail #12).
+    """
+    root = FIXTURE / "migrated-day" / "span-rollup"
+    assert root.is_dir(), f"the migrated-day fixture is missing at {root}"
+
+    # Listing order is alphabetical and reading order is not: the writer file
+    # lists first and reads last, because its attempt is 2 and theirs is 0.
+    assert [path.name for path in day_shards.shard_files(root, days=UNBOUNDED_WINDOW)] == [
+        "2026-09-19-1-2-work-00.csv",
+        ledger.BEFORE_PARTITION_NAME,
+        day_shards.SETTLED_NAME,
+    ]
+
+    rows = day_shards.settled_rows(root, ledger.SPAN_ROLLUP_KEY, SpanRollupRow, days=1)
+    # First seen first, so the pre-identity bytes open the answer and the fold's
+    # own row follows them.
+    assert [(row["shard"], row["span_name"]) for row in rows] == [
+        ("0", "item"),
+        ("0", "robots"),
+        ("1", "item"),
+    ]
+    # The straggler corrects the pre-identity row rather than repeating it: 11
+    # items where the migrated bytes said 9, and nothing else moved.
+    assert [row["count"] for row in rows] == ["11", "4", "6"]
+    assert rows[0]["total_ms"] == "3600"
+    assert rows[0]["unattributed_ms"] == "310"
+
+
 def test_a_day_directory_with_no_readable_file_stops_the_read(tmp_path: Path) -> None:
     """An empty day is not a quiet day, and the walk says so rather than yielding."""
     (tmp_path / "2026" / "09" / "18").mkdir(parents=True)
