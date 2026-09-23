@@ -16,11 +16,13 @@ The store is named from the prune verb's own word list, so one set of words mean
 one set of stores wherever an operator types one - and that list is taken whole,
 including the two words the prune verb refuses by name. Those two are refused
 there because a store that forgets cannot be the guard it exists to be, and
-re-filing a header forgets nothing. The contract that reads a row comes off
-`ledger.keyed_paths`, the registry that already pairs a committed file with its
-reader. Neither list is restated here, so neither can drift from this one. A word
-outside the vocabulary and a store no reader is registered for are two different
-refusals, and each says which it is.
+re-filing a header forgets nothing. The contract that reads a row comes off the
+two registries that already pair a committed file with its reader -
+`ledger._TREE_SHAPES` through `segment_contract` for a day tree, and
+`ledger.keyed_paths` for a store the post-merge settlement still covers. No list
+is restated here, so none can drift from this one. A word outside the vocabulary
+and a store neither registry names a reader for are two different refusals, and
+each says which it is.
 
 **The dry run is the default, as it is for the prune verb.** Writing takes a word
 nobody types by accident. Both modes migrate a copy in a temporary directory and
@@ -119,10 +121,10 @@ def _refile(
     live run wants the answer it is about to commit to - taking both off one pass
     is what stops the printed report and the written file being two claims.
 
-    `carried` is the store's own retired-heading set, read off `keyed_paths` with
-    the reader. Without it this door only ever WIDENS: `migrate_header` refuses a
-    heading it cannot place, so a store that lost a column would be unappendable
-    and unrepairable at the same time.
+    `carried` is the store's own retired-heading set, read off the same registry
+    as the reader. Without it this door only ever WIDENS: `migrate_header`
+    refuses a heading it cannot place, so a store that lost a column would be
+    unappendable and unrepairable at the same time.
     """
     columns = model.csv_columns()
     before = path.read_bytes()
@@ -154,30 +156,50 @@ def _refile(
 def _reader_for(root: Path, state_dir: Path) -> tuple[type[CsvContract], frozenset[str]]:
     """The contract that reads one row of this store, and the headings it carries.
 
-    Taken from `ledger.keyed_paths`, which is where a committed file is already
-    paired with the contract that can read it - so the pairing is never written
-    down a second time here. The carried set travels with the reader for the same
-    reason: a store whose retired headings were looked up separately is a store
-    where the two lists can disagree. A store whose files that registry names no
-    reader for is refused with the reason rather than skipped: an operator who
-    typed it is holding a real question, and "nothing happened" is not the answer
-    to it.
+    **Two registries, asked in turn, and neither one restated here.** A day tree
+    declares its reader in `ledger._TREE_SHAPES`, reached through
+    `segment_contract` and `segment_carried`; every other store declares it in
+    `ledger.keyed_paths`, where a committed file is paired with the contract the
+    post-merge settlement reads it with. A store is in one or the other, so the
+    order only decides which answer arrives first.
 
-    **Asked for one day rather than for every file** (Guardrail #12). This wants
-    a SHAPE, and a shape is the same on every day of a store, so the cover that
-    lists the whole tree costs a walk that grows with the archive to answer a
-    question that does not. The day it names need not exist: the dated cover
-    joins one path per store rather than opening anything, and only the parents
-    of that path are read here.
+    Asking both is the whole point. Five day trees left `keyed_paths` on
+    2026-09-22 when each became a day directory whose writers cannot collide, and
+    a door that knew only that registry refused them from that morning on -
+    silently, because refusing a store that has no reader is also the correct
+    answer for a store that genuinely has none.
+
+    The carried set travels with the reader, from whichever registry answered: a
+    store whose retired headings were looked up separately is a store where the
+    two lists can disagree.
+
+    A store neither registry names a reader for is refused with the reason rather
+    than skipped: an operator who typed it is holding a real question, and
+    "nothing happened" is not the answer to it.
+
+    **The `keyed_paths` cover is asked for one day rather than for every file**
+    (Guardrail #12). This wants a SHAPE, and a shape is the same on every day of
+    a store, so the cover that lists the whole tree costs a walk that grows with
+    the archive to answer a question that does not. The day it names need not
+    exist: the dated cover joins one path per store rather than opening anything,
+    and only the parents of that path are read here.
     """
+    try:
+        tree = ledger.SegmentLedger(root.relative_to(state_dir).as_posix())
+    except ValueError:
+        pass
+    else:
+        return ledger.segment_contract(tree), ledger.segment_carried(tree)
+
     today = datetime.now(UTC).date().isoformat()
     for entry in ledger.keyed_paths(state_dir, date=today):
         if root == entry.path.parent or root in entry.path.parents:
             return entry.model, entry.carried
     raise ValueError(
-        f"{root.name} holds files that `ledger.keyed_paths` names no reader for, so "
-        "nothing here knows which contract writes its header. Register the shape "
-        "there, or re-file the store from the code that owns it."
+        f"{root.name} holds files that neither `ledger.SegmentLedger` nor "
+        "`ledger.keyed_paths` names a reader for, so nothing here knows which "
+        "contract writes its header. Register the shape in one of them, or re-file "
+        "the store from the code that owns it."
     )
 
 
