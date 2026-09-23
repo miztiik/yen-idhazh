@@ -241,8 +241,8 @@ def test_every_workflow_that_commits_a_ledger_says_which_of_its_runs_may_overlap
 
     What this settles is that none is missing. It cannot settle that a group is
     the right one: whether two dispatches are one question is a judgement about
-    what the dispatch means, and the test above is where that is argued for the
-    one workflow it matters most in.
+    what the dispatch means, and the candidate test below is where that is
+    argued for the one workflow it matters most in.
 
     `cancel-in-progress` is checked as well, because the cancelling kind is not
     a queue - it throws the running job away, and a job that was about to
