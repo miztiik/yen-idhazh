@@ -13,22 +13,20 @@
 	 * that moved when a control on one route moved would read as three different
 	 * sites.
 	 *
-	 * One line can appear under the three, and it is not a fourth member: it is
-	 * absent on every run that found no segment waiting, which is every normal
-	 * run. A member stands on every day; this reports a state that had to be
-	 * cleared, and on the day it appears the three figures above it were stale
-	 * until a moment before the page was written.
+	 * A fourth line stood under the three until 2026-09-23 and reported how far
+	 * behind the record had been before the run folded it in. Every writer files
+	 * its own day now, so no run finds a backlog and the reading is always 0.
+	 * What the reader gives up is a "nothing is waiting to be folded"
+	 * reassurance - one that was always going to say the same thing, so it told
+	 * an operator nothing they could act on.
 	 */
 	import { base } from '$app/paths';
 	import { PAGES_CAP_BYTES } from '$lib/charts/glance';
-	import { compactionSentence, type ConsoleBandFacts, type Health } from '$lib/console/band';
+	import { type ConsoleBandFacts, type Health } from '$lib/console/band';
 
 	let { band }: { band: ConsoleBandFacts } = $props();
 
 	const capPct = $derived(band.size.capFraction === null ? null : band.size.capFraction * 100);
-
-	/** Null on every run that found nothing waiting, which is every normal run. */
-	const lag = $derived(compactionSentence(band.compaction));
 
 	/** The fill ramp, not the band ramp: the band tokens are text colours and a
 	 * 10px solid is not text. These are the three fills the run strip 800px down
@@ -112,20 +110,6 @@
 			<p class="fact-body" data-band-size>{band.size.sentence}</p>
 		</div>
 	</div>
-
-	{#if lag && band.compaction}
-		<!-- Not a fourth fact. The three above stand on every route every day; this
-		     line is absent on every run that found nothing waiting, and it says what
-		     the three above cannot - that the figures were stale until a moment ago. -->
-		<p
-			class="lag"
-			data-band-compaction={band.compaction.days}
-			data-band-compaction-rows={band.compaction.rows}
-			data-band-compaction-covers={band.compaction.coversThrough ?? ''}
-		>
-			{lag}
-		</p>
-	{/if}
 </section>
 
 <style>
@@ -172,21 +156,6 @@
 
 	.fact-link:hover {
 		text-decoration: underline;
-	}
-
-	/* Under the three, not beside them: it is about all three at once and it is
-	   gone on a normal day, so a fourth column would leave a hole the rest of the
-	   time. The rule carries the tint, which is what separates it from a fact
-	   without giving a housekeeping note the weight of a verdict. */
-	.lag {
-		margin: var(--space-4) 0 0;
-		padding: var(--space-2) var(--space-3);
-		border-inline-start: 3px solid var(--chart-3);
-		border-radius: var(--radius-sm);
-		background: var(--tint-neutral);
-		font-size: var(--text-sm);
-		line-height: var(--leading-sm);
-		color: var(--color-text-secondary);
 	}
 
 	.runs {
