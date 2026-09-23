@@ -78,7 +78,7 @@ Every field is read from the thing it describes, not from a literal beside the c
 | Field | Read from | When that source is silent |
 | --- | --- | --- |
 | `model_sha256` | `models.summarize.sha256` in the active model file, which is not yet the observation the contract asks for - see the gap below | Raises. A run without a recorded weights digest stops rather than stamping one that validates and says nothing. |
-| `runtime_build` | `LLAMA_CPP_BUILD`, handed to the work step by the `plan` job that read `config/llama-cpp-pin.json` - the same file the install reads, so the build stamped and the build installed are one answer | `build-not-recorded`. It is not a llama.cpp release tag and cannot be read as one. |
+| `runtime_build` | `LLAMA_CPP_BUILD`, handed to the work step by the `plan` job that read `config/llama-cpp-pin.json` - the same file the install reads, so the build stamped and the build installed are one answer | `build-not-recorded`, and the same when `model_server.base_url` is not loopback, because the environment names a build on this machine and that is not where the weights decoded. It is not a llama.cpp release tag and cannot be read as one. |
 | `chat_template_sha256` | the Jinja source `llama-server` returns from `GET /props` - the template it will apply to every request | a digest of `chat-template-not-recorded`. |
 | `runner_class` | `RUNNER_ENVIRONMENT` / `RUNNER_OS` / `RUNNER_ARCH` | `local/<system>/<machine>` from `platform`. A machine that publishes none of the three is a developer machine and says so. |
 | `host_cpu` (not digested) | the `model name` line of `/proc/cpuinfo` | `platform.processor`, then the architecture. |
@@ -96,7 +96,21 @@ observed one. `/props` names the file the server opened; it does not digest it,
 and digesting five gigabytes in every shard is a cost nobody has measured against
 the gate it would replace. The qualification path does digest the file it is
 about to run (`_candidate_identity`), so the observation exists and production
-has not adopted it.
+has not adopted it. When `model_server.base_url` is not loopback the run cannot
+see which build answered either, so `runtime_build` records `build-not-recorded`
+rather than this machine's; reconciling the record against the server's own
+`/props` is not done.
+
+**A build recorded for a server on another machine would be borrowed, so it is
+not recorded at all.** Every other field of the manifest is read from the process
+that ran the pipeline, and `LLAMA_CPP_BUILD` names the build installed there - so
+against a second machine the tag is well formed, validates, and is false. That
+costs one reading. Two runs against two different builds elsewhere record the
+same value, so a build change reads as no change, and `prose_changed_alone`
+compares the machine inputs first - it will call a prompt change a lone one on a
+day the build moved as well. This was already true of a developer machine that
+pins nothing. It is now true of a configuration this project supports, and what
+would settle it is reading the server's own `/props`.
 
 **Fetch policy is outside the record, and that one is an omission rather than a
 decision.** `FETCHER_VERSION` in `backend/idhazh/fetch.py` is bumped when fetch

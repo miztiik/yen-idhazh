@@ -222,7 +222,7 @@ def _candidate_identity(settings: config.Settings, args: argparse.Namespace) -> 
         sha256_observed=file_digest(weights),
         bytes_expected=model.byte_count or weights.stat().st_size,
         bytes_observed=weights.stat().st_size,
-        runtime_build=runtime_build(),
+        runtime_build=runtime_build(base_url=settings.app.model_server.base_url),
     )
 
 

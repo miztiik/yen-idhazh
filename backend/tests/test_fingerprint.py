@@ -35,6 +35,7 @@ from idhazh import config
 from idhazh.classify import calls
 from idhazh.contracts.base import Contract
 from idhazh.contracts.fingerprint import PipelineInputs
+from idhazh.contracts.knobs.model_server import ModelServerConfig
 from idhazh.contracts.knobs.models import ModelRef, ModelsConfig
 from idhazh.corpus import read_rows, scored_from_items
 from idhazh.fingerprint import (
@@ -58,6 +59,12 @@ pytestmark = pytest.mark.contract
 
 FIXTURE_MODEL_SHA256: Final = "b" * 64
 HEX64 = re.compile(r"[0-9a-f]{64}")
+
+#: Two addresses of the test's own, never the committed one: a case read out of
+#: `config/idhazh.json` would stop testing the rule on the day an operator points
+#: the run at their own server (`CLAUDE.md` section 13).
+A_SERVER_ON_THIS_MACHINE: Final = "http://127.0.0.1:8080"
+A_SERVER_ON_ANOTHER_MACHINE: Final = "http://192.168.1.20:9090"
 
 #: Ruled on 2026-08-25: these five change the arithmetic, so leaving them out
 #: of the stamp was a blind spot. Row #10 digested them on 2026-08-26, folded
@@ -488,7 +495,9 @@ def test_the_prompt_and_the_schema_are_digested_not_stored() -> None:
 
 def test_the_runtime_build_is_the_one_the_job_pinned() -> None:
     """`digest.yml` sets it beside the download it checks against a sha256."""
-    assert runtime_build({"LLAMA_CPP_BUILD": "b10598"}) == "b10598"
+    assert (
+        runtime_build({"LLAMA_CPP_BUILD": "b10598"}, base_url=A_SERVER_ON_THIS_MACHINE) == "b10598"
+    )
 
 
 @pytest.mark.parametrize("environ", [{}, {"LLAMA_CPP_BUILD": ""}, {"LLAMA_CPP_BUILD": "   "}])
@@ -496,7 +505,29 @@ def test_an_unpinned_build_records_the_absence_rather_than_inventing_a_tag(
     environ: dict[str, str],
 ) -> None:
     """The literal this replaced named a build nobody checked (Guardrail #10)."""
-    assert runtime_build(environ) == UNRECORDED_BUILD
+    assert runtime_build(environ, base_url=A_SERVER_ON_THIS_MACHINE) == UNRECORDED_BUILD
+
+
+def test_a_server_on_this_machine_stamps_the_build_this_machine_installed() -> None:
+    """The committed address, so every job under `.github/` keeps its real tag.
+
+    The address arrives through `ModelServerConfig` rather than as a string
+    spelled here, so what reaches the stamp is the shape config hands a caller.
+    """
+    here = ModelServerConfig(base_url=A_SERVER_ON_THIS_MACHINE)
+    assert runtime_build({"LLAMA_CPP_BUILD": "b10598"}, base_url=here.base_url) == "b10598"
+
+
+def test_a_server_on_another_machine_records_no_build_however_pinned_this_one_is() -> None:
+    """`LLAMA_CPP_BUILD` names the build installed here, and here is not where it ran.
+
+    The environment answers, and its answer is about the wrong machine. Recorded,
+    it would be well formed, would validate, and would be false about the one
+    thing the field exists to say (Guardrail #10).
+    """
+    elsewhere = ModelServerConfig(base_url=A_SERVER_ON_ANOTHER_MACHINE)
+    stamped = runtime_build({"LLAMA_CPP_BUILD": "b10598"}, base_url=elsewhere.base_url)
+    assert stamped == UNRECORDED_BUILD
 
 
 def test_an_unpinned_build_stamps_apart_from_a_pinned_one() -> None:

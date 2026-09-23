@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 import threading
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
@@ -22,6 +23,7 @@ from pytest import MonkeyPatch
 
 from idhazh import assemble, config
 from idhazh.contracts.article import Article
+from idhazh.contracts.base import canonical_json
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.feed_health import FetchOutcome
 from idhazh.contracts.knobs.evaluation import EvaluationConfig
@@ -239,6 +241,23 @@ def isolate_ledgers(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
     monkeypatch.setattr(common, "VAR_ROOT", tmp_path / "run")
     monkeypatch.setattr(common, "PUBLIC_ROOT", tmp_path / "public" / "digest")
     monkeypatch.setattr(common, "STATE_ROOT", tmp_path / "state")
+
+
+def a_config_pointing_at(root: Path, base_url: str) -> config.Settings:
+    """A whole `config/` of the test's own, naming one server.
+
+    The whole tree, because `config.load` reads five files and cross-checks two
+    of them. The committed file is the starting point rather than the subject:
+    what is asserted is the value written here, so this keeps testing the wiring
+    on the day an operator points the run at their own server (`CLAUDE.md`
+    section 13).
+    """
+    target = root / "config"
+    shutil.copytree(CONFIG_DIR, target)
+    payload = json.loads(read_text(target / "idhazh.json"))
+    payload["model_server"]["base_url"] = base_url
+    (target / "idhazh.json").write_text(canonical_json(payload), encoding="utf-8", newline="\n")
+    return config.load(target)
 
 
 def work_then_assemble(run_plan: RunPlan, settings: config.Settings) -> None:

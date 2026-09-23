@@ -319,7 +319,7 @@ def stage_work(
         server=model.server,
         request=model.request,
         truncation_cap_tokens=settings.app.extract.truncation_cap_tokens,
-        runtime_build=runtime_build(),
+        runtime_build=runtime_build(base_url=settings.app.model_server.base_url),
         chat_template=str(observed.get("chat_template") or UNRECORDED_TEMPLATE),
         # The two calls render their own bytes, so the chat template above no
         # longer reaches what the model reads and the markers the server derived

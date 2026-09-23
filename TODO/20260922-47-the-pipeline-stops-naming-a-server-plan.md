@@ -112,7 +112,7 @@ Statuses: PENDING, IN PROGRESS, BLOCKED, DONE. A row's status is stamped by the 
 | 8 | The run says which server answered | 3 | A | DONE | p47w3 | - | W3 |
 | 9 | Sampling settings pass through, unmapped | 8 | B | PENDING | - | - | - |
 | 10 | Model slots get nouns | 9 | B | PENDING | - | - | - |
-| 11 | The run record stops claiming a build it cannot see | 9 | C | PENDING | - | - | - |
+| 11 | The run record stops claiming a build it cannot see | 2 | C | DONE | p47w4 | - | W4 |
 
 ### 1a. The three pull requests
 
@@ -128,7 +128,7 @@ Statuses: PENDING, IN PROGRESS, BLOCKED, DONE. A row's status is stamped by the 
 
 - **PR A**: `backend/idhazh/llm/__init__.py`, `backend/idhazh/llm/server.py`, `backend/idhazh/cli.py`, `backend/idhazh/contracts/app_config.py`, `backend/idhazh/contracts/knobs/model_server.py` (new), `config/idhazh.json`, `schemas/app-config.schema.json`, `frontend/src/contracts/app-config.ts`, `backend/idhazh/stages/{judge_item_pairs,qualify,qualify_canaries,two_calls,validate,work}.py`, `backend/utilities/{model_runtime,slot_probe,prompt_loop,prove_the_entry,runtime_sweep,measure_probability_mode,measure_two_calls,measure_budgets,measure_judge_call}.py`, all five `.github/` workflow files plus `actions/model-server/action.yml`, `backend/tests/{test_summarize.py,workflows/_harness.py,workflows/test_model_server_jobs.py}`, `docs/how-to/{run-the-pipeline,test-models-locally}.md`, `docs/reference/{ci-model-runtime,github-actions}.md`.
 - **PR B**: the full lists are C7 and C12, because they are the two rows whose size was previously guessed at rather than counted.
-- **PR C**: `backend/idhazh/fingerprint.py`, `backend/idhazh/cli.py`, `backend/idhazh/stages/{work,qualify}.py`, `backend/tests/test_fingerprint.py`, `docs/architecture/contracts/determinism.md`.
+- **PR C**: `backend/idhazh/contracts/knobs/model_server.py`, `backend/idhazh/fingerprint.py`, `backend/idhazh/cli.py`, `backend/idhazh/stages/work.py`, `backend/tests/test_fingerprint.py`, `backend/tests/contracts/test_app_config.py`, `backend/tests/pipeline/{_builders,test_model_server_address,test_recorded_inputs}.py`, `docs/architecture/contracts/determinism.md`.
 
 ---
 
@@ -433,7 +433,7 @@ Every field of `PipelineInputs` is read from this process. Point the pipeline at
 
 > `runtime_build()` gains a second argument, the resolved base URL, and returns `UNRECORDED_BUILD` when that address is not loopback.
 
-Its three callers pass it: `cli.py:212`, `stages/work.py:324`, `stages/qualify.py:434`. All three hold settings. No version stamp, no changelog, no migration - and if the row needs any of the three, that is a finding and the row stops.
+Its **two** callers pass it, and both hold settings: `_candidate_identity` in `cli.py` and `stage_work` in `stages/work.py`. `stages/qualify.py` was listed as a third and is not one - it reads `candidate.runtime_build` off the identity `cli.py` already built, so the correction reaches it with no edit there. No version stamp, no changelog, no migration - and if the row needs any of the three, that is a finding and the row stops.
 
 **One consequence written down rather than discovered.** `runtime_build` is in `MACHINE_INPUTS`, so two runs against two different foreign builds both stamp the sentinel and the determinism guard sees no move. Pre-existing for a developer machine that pins nothing; this row widens it to the configuration the plan creates. C15 names it in `determinism.md` and Table B row B4 carries the fix.
 
@@ -709,13 +709,13 @@ One commit per row, in Reckoner order. A worker who follows it never writes an i
 
 **Scope.** C16, C15.
 
-**Files.** `backend/idhazh/fingerprint.py`, `backend/idhazh/cli.py`, `backend/idhazh/stages/{work,qualify}.py`, `backend/tests/test_fingerprint.py`, `docs/architecture/contracts/determinism.md`.
+**Files.** `backend/idhazh/contracts/knobs/model_server.py`, `backend/idhazh/fingerprint.py`, `backend/idhazh/cli.py`, `backend/idhazh/stages/work.py`, `backend/tests/test_fingerprint.py`, `backend/tests/contracts/test_app_config.py`, `backend/tests/pipeline/{_builders,test_model_server_address,test_recorded_inputs}.py`, `docs/architecture/contracts/determinism.md`.
 
 **Gates.** `pytest backend/tests` green. Two unit tests from a fixture: a loopback address leaves the stamp unchanged, a non-loopback address stamps `UNRECORDED_BUILD`. Neither reads `config/idhazh.json`. **No version stamp, no changelog entry, no migration** - and if the row needs any of the three, that is a finding and the row stops. `doc_load.py` before and after.
 
 **Oracle.** A run configured against a second machine writes a record whose `runtime_build` says it was not recorded, and every other field still validates.
 
-**What it cannot settle.** What the build actually was. Table B row B4.
+**What it cannot settle.** What the build actually was. Table B row B4. And `model_sha256`, which is the second field that describes this machine: `_candidate_identity` digests the weights file on this disk, which against a second machine is not necessarily what the remote server opened. Decision 11.3 names `runner_class` and `host_cpu` as deliberately left alone and was silent on this one. It is out of this row and it is the same fix - read the server's own `/props` - so it rides with B4.
 
 **Decisions.** 11.1 Degrade rather than refuse - a run against a second machine is the feature. 11.2 Reuse `UNRECORDED_BUILD`; it exists, validates, and already means this. 11.3 `runner_class` and `host_cpu` are left alone; both describe the machine that ran the pipeline, which is this one. 11.4 The determinism-guard consequence is written down, not fixed.
 

@@ -32,6 +32,7 @@ from typing import Any, Final
 
 from idhazh.contracts.base import derive_text_digest
 from idhazh.contracts.fingerprint import PipelineInputs
+from idhazh.contracts.knobs.model_server import is_loopback
 from idhazh.contracts.knobs.models import ModelRef
 from idhazh.llm.server import SETTING_KEYS, TurnMarkers, setting, turn_markers_digest, window
 
@@ -87,7 +88,7 @@ def file_digest(path: Path) -> str:
     return digest.hexdigest()
 
 
-def runtime_build(environ: Mapping[str, str] | None = None) -> str:
+def runtime_build(environ: Mapping[str, str] | None = None, *, base_url: str) -> str:
     """The llama.cpp release that decoded the weights, as the job pinned it.
 
     `config/llama-cpp-pin.json` decides the build, the job that installs
@@ -99,7 +100,18 @@ def runtime_build(environ: Mapping[str, str] | None = None) -> str:
     rather than inventing a tag: the whole reason this argument stopped being the
     literal `llama-server-local` is that a stamp naming a build nobody checked
     validates and lies (Guardrail #10).
+
+    **The address is here because the environment cannot answer for a server
+    this process is not running.** `LLAMA_CPP_BUILD` names the build installed
+    on this machine, and every other field of the manifest describes this
+    machine too - so pointed at a second one, the whole record is well formed,
+    validates, and is false about the only thing it exists to say. A server off
+    loopback degrades to `UNRECORDED_BUILD` rather than borrowing this machine's
+    answer. It is keyword-only with no default, because a default address bound
+    here would answer for a server no caller named.
     """
+    if not is_loopback(base_url):
+        return UNRECORDED_BUILD
     env = os.environ if environ is None else environ
     return env.get("LLAMA_CPP_BUILD", "").strip() or UNRECORDED_BUILD
 
