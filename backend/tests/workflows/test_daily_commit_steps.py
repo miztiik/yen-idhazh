@@ -329,13 +329,12 @@ def test_both_daily_commit_steps_run_the_one_shared_script() -> None:
 
 
 def test_the_plan_job_takes_the_tips_state_before_anything_writes_into_it() -> None:
-    """A run reads a state root that is 46 minutes stale unless it asks for a fresh one.
+    """A run reads a state root as old as its trigger commit unless it asks for a fresh one.
 
-    `actions/checkout` restores the commit the run was triggered at, and the
-    `digest` concurrency group holds a queued run until the run ahead of it has
-    finished - an unbounded gap, and every commit in it writes `state/`. Run
-    35660521768 sat in that gap for 46 minutes and planned against what the run
-    ahead had already superseded.
+    `actions/checkout` restores the commit the run was triggered at. A run waits
+    for a runner after that, and another run may be committing under `state/`
+    the whole time. Run 35660521768 started 46 minutes behind its trigger and
+    planned against what the run ahead had already superseded.
 
     The order is the whole of the fix. Taken after any step that writes into
     `state/`, it discards what that step wrote - which is why it runs ahead of

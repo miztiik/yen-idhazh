@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # Replace this checkout's run state with the one origin's tip carries.
 #
-# `actions/checkout` restores the commit a run was TRIGGERED at, and the
-# `digest` concurrency group holds a queued run until the run ahead of it has
-# finished. The distance between those two moments is unbounded. Run
-# 35660521768 was created at 22:02 and its plan job started at 22:48, five
-# commits behind, and every one of those commits wrote `state/`.
+# `actions/checkout` restores the commit a run was TRIGGERED at. The run then
+# waits for a runner, and another run of the same workflow may be committing
+# under `state/` the whole time, so nothing bounds the distance between those
+# two moments. Run 35660521768 was created at 22:02 and its plan job started at
+# 22:48, five commits behind, and every one of those commits wrote `state/`.
 #
 # For most of the pipeline a stale base costs nothing: a work shard writes a
 # segment named for one shard of one run, so a rebase applies both sides whole.

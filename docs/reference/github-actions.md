@@ -1,6 +1,6 @@
 # GitHub Actions Workflows
 
-**Last Updated**: 2026-09-22
+**Last Updated**: 2026-09-23
 The exact workflow display names, files, and trigger classes. All scheduled
 times are UTC.
 
@@ -75,8 +75,10 @@ digest window nearly every day.
 load, so a run later than the recorded normal still reaches 23:37 - the section
 below is why that cannot be relied on either way. Closing it needs a lock across
 two workflows, which GitHub does not offer. `concurrency` governs one group, and
-putting `prune` in the `digest` group would let a waiting prune be deleted, which
-is a prune that never bounds the repository.
+a group shared with `Content refresh` would let a waiting prune be deleted,
+which is a prune that never bounds the repository - and `Content refresh` has no
+group to share. What keeps a clash from costing another run its commits is the
+tip check the prune's push makes, not this hour.
 
 ## The schedule asks for five runs a day and gets fewer
 
@@ -114,10 +116,14 @@ Nothing reads it to make a decision - it annotates the run summary and stops
 there.
 
 **What was not done.** No retry, no self-dispatch, no extra cron slots to absorb
-the losses. A workflow that re-fires itself on a schedule it cannot observe is a
-way to run two pipelines at once, and the `digest` concurrency group cancels a
-queued run rather than holding two. The honest position is that the platform
-decides how many runs happen, and this page is where that is written down.
+the losses. A workflow that re-fires itself on a schedule it cannot observe
+cannot tell a dropped slot from one that ran, so it would fire against its own
+successes with nothing bounding how many runs it creates - and since runs of
+this workflow may now overlap
+([committing.md](../architecture/publishing/committing.md#two-runs-of-one-day-work-at-the-same-time-and-nothing-queues-them)),
+nothing outside it would hold that number down either. The honest position is
+that the platform decides how many runs happen, and this page is where that is
+written down.
 
 ```mermaid
 %%{init: {"theme": "base", "themeVariables": {"background": "#0f1117", "primaryColor": "#222834", "primaryTextColor": "#e6e9f0", "primaryBorderColor": "#4b5468", "lineColor": "#8b93a7", "textColor": "#e6e9f0", "clusterBkg": "#1a1e27", "clusterBorder": "#3a4254", "titleColor": "#e6e9f0", "edgeLabelBackground": "#1a1e27", "fontSize": "14px"}}}%%
@@ -167,21 +173,24 @@ by then the feeds have been read, and a config the guard disagrees with must
 cost the tail of the fan-out rather than the whole day. Only a dispatched value
 is a hard failure.
 
-**A queued dispatch can be cancelled by the next scheduled run, silently.** The
-workflow sets `concurrency: group: digest` with `cancel-in-progress: false`, so a
-dispatch fired while a run is going does not interrupt it - it waits. GitHub
-keeps only **one** pending run per concurrency group, and a newer pending run
-cancels the older one. So a dispatch parked behind an in-flight run is cancelled
-the moment a cron creates the next one, and the operator sees a cancelled run
-rather than an error. Fire a dispatch within minutes of a run completing, not
-while one is going - and read `gh run list --workflow digest.yml` for what
-actually exists rather than working from the cron, because the schedule is
-best-effort ([above](#the-schedule-asks-for-five-runs-a-day-and-gets-fewer)).
+**A dispatch fired during a run starts straight away, and two runs of one day
+work side by side.** This workflow declares no `concurrency` group. Every
+committed path a job writes carries that run's own identity, so two runs name
+two files rather than one and the read settles them
+([committing.md](../architecture/publishing/committing.md#two-runs-of-one-day-work-at-the-same-time-and-nothing-queues-them)).
+Until 2026-09-23 the workflow set `concurrency: group: digest` with
+`cancel-in-progress: false`, and that queue cost more than it bought: GitHub
+keeps only **one** pending run per group and a newer pending run cancels the
+older, so a dispatch parked behind an in-flight run vanished the moment a cron
+created the next one, and the operator saw a cancelled run rather than an error.
+Read `gh run list --workflow digest.yml` for what actually exists rather than
+working from the cron, because the schedule is best-effort
+([above](#the-schedule-asks-for-five-runs-a-day-and-gets-fewer)).
 
-Guardrail #2 allows 20 concurrent jobs. Eight workers is eight, so the ceiling
-is nowhere near
-the platform limit. Every shard restores the same cache key, so more shards buy
-more restores and never more cache bytes.
+Guardrail #2 allows 20 concurrent jobs. Eight workers is eight, so one run is
+nowhere near the platform limit and two overlapping runs are sixteen. Every
+shard restores the same cache key, so more shards buy more restores and never
+more cache bytes.
 
 The derivation runs in its own `fanout` step after `Plan the day`, because there
 is no planned item count before the plan exists. `jobs.plan.outputs.shards` and
@@ -465,9 +474,10 @@ it is what names the group. Two dispatches of one candidate still queue, which
 is right. An empty field means the configured model, and it is named rather than
 left as a bare trailing dash for every empty dispatch to collide on. `inputs` is
 a legal context on a `concurrency` key and this workflow is dispatch-only, so it
-is always populated. `measure.yml` has no `concurrency` block at all, so a bench
-is never affected. The same cancellation applies to `digest.yml`, which
-has one group on purpose - a day has one digest.
+is always populated. `measure.yml` groups per target, so a bench dispatch is
+never affected by one aimed at another target. `digest.yml` declares no group at
+all, so nothing there is cancelled or queued
+([committing.md](../architecture/publishing/committing.md#two-runs-of-one-day-work-at-the-same-time-and-nothing-queues-them)).
 
 What a swap costs the cache is a reading, and it lives in the instrument log:
 [The cache transition](pipeline-cost.md#the-cache-transition-measured-2026-08-27).
