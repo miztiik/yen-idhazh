@@ -541,6 +541,22 @@ def test_the_roll_keeps_the_original_row_for_an_article_it_already_holds() -> No
     assert kept == [first]
 
 
+def test_one_article_twice_in_one_harvest_is_one_row() -> None:
+    """The window it is joining is not the only place a repeat can come from.
+
+    Two feeds carrying one article, or one feed listing it twice, hands the roll
+    two rows for one address in a single call. Nothing before this point settles
+    them: the harvest reads what the day published, and a corpus that holds an
+    article twice trains on it twice.
+    """
+    first = row_at("2026-08-01", "a", vertical="ai")
+    again = row_at("2026-08-01", "a", vertical="energy")
+
+    kept = corpus.roll([], [first, again], window=10)
+
+    assert kept == [first]
+
+
 def test_the_roll_orders_by_date_then_address_not_by_arrival() -> None:
     """Two runs that harvest the same items in a different order write one file."""
     rows = [row_at("2026-08-02", "b"), row_at("2026-08-01", "a"), row_at("2026-08-01", "c")]
