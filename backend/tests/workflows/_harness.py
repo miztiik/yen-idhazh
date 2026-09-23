@@ -460,6 +460,10 @@ BENCH_COMPACT_STEP: Final = "Fold the machine record into its day"
 
 BENCH_COMPACT_COMMAND: Final = "python -m idhazh compact"
 
+#: The fold takes the run's own date and folds the days closed behind it. A call
+#: that names no date has no cover to fold against and refuses.
+COMPACT_DATE_FLAG: Final = "--date"
+
 #: The one composite action in this repository. The step above was byte-identical
 #: in two workflows apart from the job it read the models file from, and a step
 #: duplicated across two files is a step that drifts the day one of them is

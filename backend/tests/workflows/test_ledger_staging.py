@@ -40,7 +40,7 @@ from typing import Any, Final
 
 import pytest
 
-from idhazh import cli, ledger
+from idhazh import cli, day_shards, ledger
 from idhazh.contracts.base import ServerJob
 from idhazh.stages import compact as compact_stage
 from idhazh.telemetry import sinks, traces
@@ -201,8 +201,8 @@ def _helper_arguments(date: str) -> dict[str, object]:
     value follows the parameter's name rather than the helper's.
 
     `ledger` picks one member of the declared set and any member would do: what the
-    staging check asks is whether the job that writes a segment stages the store, and
-    `state/segments` covers every ledger inside it.
+    staging check asks is whether the job that writes a day shard stages the store,
+    and every member reduces to its own tree directory under `state/`.
     """
     return {
         "date": date,
@@ -235,6 +235,16 @@ def _relpath_for(name: str, helper: Callable[..., Any], date: str) -> str:
     return produced
 
 
+def _shared_prefix(first: str, second: str) -> str:
+    """The longest directory prefix two paths share, which is what a job stages."""
+    shared: list[str] = []
+    for left, right in zip(first.split("/"), second.split("/"), strict=False):
+        if left != right:
+            break
+        shared.append(left)
+    return "/".join(shared)
+
+
 def _stores() -> dict[str, str]:
     """Every store the store modules declare: helper name -> the path a job stages.
 
@@ -243,15 +253,12 @@ def _stores() -> dict[str, str]:
     """
     found: dict[str, str] = {}
     for name, helper in _store_publics(suffix="_relpath").items():
-        first = _relpath_for(name, helper, SUBSTITUTED_DATE).split("/")
-        second = _relpath_for(name, helper, OTHER_DATE).split("/")
-        shared: list[str] = []
-        for left, right in zip(first, second, strict=False):
-            if left != right:
-                break
-            shared.append(left)
+        shared = _shared_prefix(
+            _relpath_for(name, helper, SUBSTITUTED_DATE),
+            _relpath_for(name, helper, OTHER_DATE),
+        )
         assert shared, f"{helper.__module__}.{name} returns two paths with nothing in common"
-        found[name] = "/".join(shared)
+        found[name] = shared
     return found
 
 
@@ -509,26 +516,44 @@ def _covers(staged: str, store: str) -> bool:
     return store == staged or store.startswith(f"{staged}/")
 
 
-def _compacted_stores() -> dict[str, str]:
-    """Every head the compaction fills, and the ledger whose segments drain into it.
+def _folded_day(which: ledger.SegmentLedger, date: str) -> str:
+    """Where the fold of one tree's day lands, spelled by the producer.
 
-    The compaction writes a head generically - one function, one declared head table,
-    and no `append_*` name for `_writer_stores` to find - so it is read out of
-    `SegmentLedger` rather than named here. That is what keeps a ledger joining the
-    set from leaving its head charged to no job, which is the loss this whole file
-    exists to catch.
+    A settled file sits beside the writer files it replaced, so the day-shard helper
+    names the directory and the fold names the file inside it.
     """
-    stores = set(_stores().values())
+    written = ledger.day_shard_relpath(
+        which,
+        date=date,
+        run_id=f"{date}-1",
+        attempt=1,
+        job=ServerJob.WORK,
+        shard=0,
+    )
+    return f"{written.rsplit('/', 1)[0]}/{day_shards.SETTLED_NAME}"
+
+
+def _compacted_stores() -> dict[str, str]:
+    """Every tree the fold writes into, and the store a job has to stage for it.
+
+    The fold writes generically - one function over every declared tree, and no
+    `append_*` name for `_writer_stores` to find - so it is read out of
+    `SegmentLedger` rather than named here. That is what keeps a ledger joining the
+    set from leaving its folded day charged to no job, which is the loss this whole
+    file exists to catch.
+
+    The store is the prefix two dates share, taken from the one helper that names a
+    day shard for any tree. Reading it per tree from `day_shard_relpath` is what
+    reaches all nine: a tree also has a `*_relpath` helper of its own only where a
+    reader outside the fold asks for one day of it by date.
+    """
     found: dict[str, str] = {}
     for which in ledger.SegmentLedger:
-        head = ledger.segment_head(Path(ledger.STATE_DIRNAME), which, SUBSTITUTED_DATE).relpath
-        store = next((name for name in stores if _covers(name, head)), None)
-        assert store is not None, (
-            f"{which.value} segments compact into {head}, and no store module exports a "
-            "path helper that covers it. Add one beside the head's own path helper, so "
-            "this test can say which job has to stage what the compaction writes."
+        shared = _shared_prefix(
+            _folded_day(which, SUBSTITUTED_DATE), _folded_day(which, OTHER_DATE)
         )
-        found[store] = which.value
+        assert shared, f"{which.value} folds two dates to paths with nothing in common"
+        found[shared] = which.value
     return found
 
 

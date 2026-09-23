@@ -289,10 +289,6 @@ def test_every_path_the_plan_stages_exists_in_a_fresh_checkout() -> None:
     heads behind. Naming the directory answers this test's own rule at the same
     time: `state` is in every checkout, and a collection inside it need not be.
 
-    `state/segments/` is named separately because it is the one collection here
-    that is empty by design. It ships with a `.gitkeep`, or a fresh clone would
-    not carry the directory that `REFRESH_PATHS` hands back to the tip.
-
     `state/feed-retirements.csv` is named for a reason of its own that outlived
     the staging list: almost no run writes a row and every run reads the file,
     so it ships with its header rather than appearing the day a retirement
@@ -302,18 +298,14 @@ def test_every_path_the_plan_stages_exists_in_a_fresh_checkout() -> None:
     assert named == [ledger.STATE_DIRNAME]
     for relative in named:
         assert (REPO_ROOT / relative).exists(), f"{relative} must be in a fresh checkout"
-    for relative in (
-        ledger.feed_retirements_relpath(),
-        f"{ledger.STATE_DIRNAME}/{ledger.SEGMENTS_DIRNAME}/.gitkeep",
-    ):
-        tracked = subprocess.run(
-            ["git", "ls-files", "--error-unmatch", relative],
-            cwd=REPO_ROOT,
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        assert tracked.returncode == 0, tracked.stderr.strip()
+    tracked = subprocess.run(
+        ["git", "ls-files", "--error-unmatch", ledger.feed_retirements_relpath()],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert tracked.returncode == 0, tracked.stderr.strip()
 
 
 def test_the_corpus_is_not_union_merged() -> None:
