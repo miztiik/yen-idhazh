@@ -456,7 +456,7 @@ Authority: Fowler.
 - [one-visual-one-file-and-the-race-between-two-runs.md](one-visual-one-file-and-the-race-between-two-runs.md) - the file's name, and the race it ended.
 - [what-drawing-costs-and-what-has-been-retired-for-it.md](what-drawing-costs-and-what-has-been-retired-for-it.md) - what drawing has cost, and what was retired for it.
 - [`../../concepts/digest.md`](../../concepts/digest.md) - the visual rule this serves.
-- [`../contracts/schemas.md`](../contracts/schemas.md) - where a persisted shape lives, and the drift gate over it.
+- [`../contracts/schemas.md`](../contracts/schemas.md) - where a persisted shape lives, and what binds the frontend's copy of one.
 - [`../../reference/github-actions.md`](../../reference/github-actions.md) - the commit loop that drops a raced chart.
 - [`../sources/trust-boundary.md`](../sources/trust-boundary.md) - why article text is data.
 - [`../contracts/determinism.md`](../contracts/determinism.md) - why decoding is pinned in one place.

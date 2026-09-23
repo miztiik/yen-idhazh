@@ -205,18 +205,6 @@ test.describe('what a chart draws from it', () => {
 });
 
 test.describe('the words, against the contract', () => {
-	test('every recorded input has words, and every word has an input', () => {
-		const schema = JSON.parse(
-			readFileSync(join(ROOT, 'schemas', 'run-manifest.schema.json'), 'utf8')
-		) as { $defs?: Record<string, { properties?: Record<string, unknown> }> };
-		const declared = Object.keys(schema.$defs?.PipelineInputs?.properties ?? {});
-		expect(declared.length, 'the generated schema declares no recorded inputs').toBeGreaterThan(0);
-		expect(
-			declared.sort(),
-			'a recorded input with no words, or words with no recorded input'
-		).toEqual(Object.keys(SETTING_WORDS).sort());
-	});
-
 	test('no words are a field name with its bars swapped for spaces', () => {
 		// `n_ctx` is what the runtime calls it and "the context size" is what it
 		// is. A term from a subsystem is not a term for a user. Containing the

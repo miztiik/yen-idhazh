@@ -720,7 +720,7 @@ export function itemHealthRows(days: number = LEDGER_WINDOW_DAYS): CsvTable {
  * run may score an item it then drops (`backend/idhazh/telemetry/publish/day_metrics.py`).
  * The measurement distributions the console draws still read every row - only
  * these per-item counts join the published set, so only these are read here. The
- * whole record shape is `schemas/day-metrics.schema.json`; this is the slice the
+ * whole record shape is `DayMetrics`; this is the slice the
  * console reduces from.
  */
 export interface DayMetrics {
@@ -743,7 +743,7 @@ export interface DayMetrics {
 	extraction: DayExtraction | null;
 }
 
-/** One day's extraction block, exactly as `schemas/day-metrics.schema.json`
+/** One day's extraction block, exactly as `DayMetrics`
  * holds it. Every count is additive across days, so a window is a sum.
  *
  * The two rates are not stored and are not read: a rate is not additive, so the

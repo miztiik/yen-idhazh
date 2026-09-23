@@ -68,7 +68,7 @@ assigns every measured column of `state/scores/` to exactly one panel, and
 `NOT_A_MEASUREMENT` says of every remaining column why it is not one - fifteen
 identity and provenance columns, each with a sentence. Between them the two must
 name every property of
-[../../../schemas/eval-row.schema.json](../../../schemas/eval-row.schema.json),
+`EvalRow`,
 once, and name nothing else.
 [../../../frontend/tests/console-model-instruments.spec.ts](../../../frontend/tests/console-model-instruments.spec.ts)
 compares the two sets in the ninety-second gate. So a column added to `EvalRow`

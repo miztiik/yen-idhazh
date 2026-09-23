@@ -376,6 +376,6 @@ and the invariance rules into the same commit as the ledger, where a review has 
 - [visuals.md](visuals.md) - who decides a picture at all, and where the pass runs.
 - [where-every-drawn-figure-came-from.md](where-every-drawn-figure-came-from.md) - what the checks above are protecting: every figure's origin.
 - [where-a-drawing-becomes-pixels.md](where-a-drawing-becomes-pixels.md) - what a plan that clears these checks is compiled into.
-- [../contracts/schemas.md](../contracts/schemas.md) - `VisualPlan` and the drift gate over it.
+- [../contracts/schemas.md](../contracts/schemas.md) - `VisualPlan`, and where a persisted shape lives.
 - [../extraction/elements.md](../extraction/elements.md) - the element table every check reads against.
 - [../sources/trust-boundary.md](../sources/trust-boundary.md) - why article text is data and never instruction.
