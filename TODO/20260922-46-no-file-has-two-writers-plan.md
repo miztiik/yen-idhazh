@@ -850,6 +850,8 @@ This divider had already shipped once, and was deleted on 2026-09-01 "for naming
 | 14.R1 | Keep the group and raise its queue depth | GitHub does not offer a queue depth. One pending run is the whole of the feature. | Nothing to build, because there is nothing to build | Carmack |
 | 14.R2 | Replace it with a narrower group, per date | Two runs of one day are exactly the case the owner wants parallel | One line, against the intent | Carmack |
 
+When this row lands, plan 46 is all-DONE. Stamp plan 44 row 6 READY in plan 44's Reckoner - it is the last three shell scripts and this plan's rows are what block it.
+
 ### Row 15 - The plan job's own ledgers stop being shared files
 
 - **Scope:** the four committed stores the `plan` and council jobs write that no earlier row reaches - `feed-health`, `counterfactual-scores`, `feed-retirements` and the council and judge trees - get a class each, and the two that need one get a merge driver.

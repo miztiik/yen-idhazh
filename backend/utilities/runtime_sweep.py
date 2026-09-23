@@ -31,6 +31,7 @@ from idhazh.llm.server import server_argv
 from idhazh.stages.common import CAPTURES_DIRNAME
 from idhazh.telemetry import silicon
 from utilities import sweep_verdict
+from utilities.memory_sampler import read_status
 from utilities.model_runtime import refuse_a_server_that_died_at_startup
 
 ROOT = Path("backend/var/runtime-sweep")
@@ -290,19 +291,6 @@ def write_config(label: str, update: dict[str, Any]) -> Path:
         }
     path.write_text(ModelsConfig.model_validate(payload).to_json(), encoding="utf-8")
     return dst
-
-
-def read_status(pid: int) -> dict[str, str]:
-    """The server's resident set, as the kernel reports it this second."""
-    status = Path("/proc") / str(pid) / "status"
-    values: dict[str, str] = {}
-    if not status.exists():
-        return values
-    for line in status.read_text(encoding="utf-8", errors="replace").splitlines():
-        if line.startswith(("VmRSS:", "VmHWM:")):
-            key, value = line.split(":", 1)
-            values[key] = value.strip()
-    return values
 
 
 def cgroup_peak() -> str | None:
