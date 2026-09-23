@@ -1604,6 +1604,6 @@ wrong trade.
 - [design-system.md](design-system.md) - the tokens, ramps, motion set and sufficiency gate this page draws on.
 - [../architecture/publishing/frontend.md](../architecture/publishing/frontend.md) - what each console panel is, and where its data comes from.
 - [../architecture/publishing/telemetry-series.md](../architecture/publishing/telemetry-series.md) - the published projection and the grain of every figure.
-- [config.md](config.md) - the knobs these rules read.
+- [config/appearance.md](config/appearance.md) - the knobs these rules read.
 - [../reference/pipeline-cost.md](../reference/pipeline-cost.md) - the instrument log the console never quotes from.
 - [../../CLAUDE.md](../../CLAUDE.md) - section 0b (voice) and Guardrail #10 (every number carries its conditions).

@@ -1,6 +1,6 @@
 # What decides that a mention is a known entity
 
-**Last Updated**: 2026-09-20
+**Last Updated**: 2026-09-23
 
 When a name in an article is the entity we already know about, when two entities
 are related, and what would make those thresholds fit themselves instead of being
@@ -35,6 +35,7 @@ so any work here starts as an operator surface rather than a reader-facing one.
 - A written definition of a relationship, and of what a reader would be told by one.
 - A judged sample of matches and non-matches, including the aliases and the near-misses a term list cannot see.
 - A rule for what a false match costs, because a wrong entity on a story is a claim we made about a person.
+- A home for the rebuild the registry sets off, because the registry is vocabulary and it moves the same derived files a desk or a lens moves. `config/watchlist.json` is not encoded into `config/taxonomy-vectors.bin` - only active verticals and lenses are - but a new alias does add a question to the self-hydrating search key, and the published month index carries no entity tag at all, so nothing in the archive changes when a name is added. [autotune-desk-assignment.md](autotune-desk-assignment.md) owns that question and it is open there too.
 
 ## See also
 
@@ -42,4 +43,5 @@ so any work here starts as an operator surface rather than a reader-facing one.
 - [../../concepts/taxonomy.md](../../concepts/taxonomy.md) - what an entity is, and how it differs from a desk and a lens.
 - [../../concepts/classification.md](../../concepts/classification.md) - what is labelled today, and which fields never reach a reader.
 - [llm-council.md](llm-council.md) - the room a fitted threshold would be judged in.
-- [autotune-desk-assignment.md](autotune-desk-assignment.md) - the sibling question: which desk an article belongs on.
+- [autotune-desk-assignment.md](autotune-desk-assignment.md) - the sibling question: which desk an article belongs on, and who rebuilds the derived files when the vocabulary moves.
+- [autotune-search-quality.md](autotune-search-quality.md) - the self-hydrating answer key a new alias adds a question to.
