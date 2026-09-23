@@ -43,7 +43,10 @@ class RunStatus(StrEnum):
 
 
 class ModelRole(StrEnum):
-    SUMMARIZE = "summarize"
+    #: The value stays `summarize` because 127 places across 35 published run
+    #: records carry it and this plan migrates no committed day (CLAUDE.md
+    #: section 11). Only the python name and the config key moved.
+    SUMMARIZER = "summarize"
     #: The value stays `route` because a published manifest may carry it and this
     #: plan migrates no committed day (CLAUDE.md section 11).
     VISUAL_PLANNER = "route"
@@ -310,6 +313,11 @@ class RunManifest(Contract):
     __schema_stem__: ClassVar[str] = "run-manifest"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-23",
+            change="The recorded sampling block is every key sent, not the three read by name.",
+            why="Ten keys could move the decode with the record unchanged.",
+        ),
+        ChangelogEntry(
             version="2026-09-22T12:00",
             change="Runs may be numbered with gaps, and two runs may not share an ordinal.",
             why="Runs land in parallel, so no writer can know what the next number is.",
@@ -323,11 +331,6 @@ class RunManifest(Contract):
             version="2026-09-21T03:00",
             change="The embedded settings become plain mappings, and two blocks replace one.",
             why="A record carrying a retired option name has to keep reading.",
-        ),
-        ChangelogEntry(
-            version="2026-09-21T02:00",
-            change="The embedded inference block loses both decode caps; an old run reads.",
-            why="Neither number bounded anything the window and the timeout did not.",
         ),
         ChangelogEntry(
             version="2026-09-20",

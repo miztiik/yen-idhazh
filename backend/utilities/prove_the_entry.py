@@ -16,12 +16,12 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     settings = config.load(args.config_root)
-    entry = settings.models.summarize
+    entry = settings.models.summarizer
     prove_the_entry(
         model=entry,
         output_schema=summarize_and_plan_schema(),
         endpoint=resolve_endpoint(settings.app.model_server.base_url),
-        timeout=request_timeout_seconds(entry.request),
+        timeout=request_timeout_seconds(entry),
     )
     print("the markers came off this server's own template and the decoder is still bound")
     return 0

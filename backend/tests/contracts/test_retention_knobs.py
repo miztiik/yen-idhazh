@@ -267,7 +267,7 @@ def test_a_config_still_spelling_a_retired_knob_is_refused_by_name(block: str, k
     if block == "models":
         payload = committed_models_raw()
         assert knob not in payload, "the committed file must not spell the retired knob"
-        payload[knob] = payload["summarize"]
+        payload[knob] = payload["summarizer"]
         with pytest.raises(ValidationError, match=re.escape(f"{block}.{knob}")):
             ModelsConfig.model_validate(payload)
         return

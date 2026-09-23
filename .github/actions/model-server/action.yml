@@ -58,13 +58,13 @@ inputs:
 outputs:
   weights_path:
     description: 'The landed relative path of the weights, as the reader composed it.'
-    value: ${{ steps.model.outputs.summarize_weights_path }}
+    value: ${{ steps.model.outputs.summarizer_weights_path }}
   model_id:
     description: 'The alias the served model answers under.'
-    value: ${{ steps.model.outputs.summarize_id }}
+    value: ${{ steps.model.outputs.summarizer_id }}
   weights_file:
     description: 'The bare weights filename, for a loaded-path assertion.'
-    value: ${{ steps.model.outputs.summarize_file }}
+    value: ${{ steps.model.outputs.summarizer_file }}
 
 runs:
   using: composite
@@ -87,7 +87,7 @@ runs:
         set -euo pipefail
         PUBLISHED=$(python3 backend/utilities/model_refs.py describe-pinned-model \
           --config-root "$CONFIG_ROOT")
-        echo "$PUBLISHED" | grep -Eq '^summarize_cache_key=[0-9a-f]{64}$' || {
+        echo "$PUBLISHED" | grep -Eq '^summarizer_cache_key=[0-9a-f]{64}$' || {
           echo "the reader published no 64-character cache key" >&2
           echo "$PUBLISHED" >&2
           exit 1
@@ -116,7 +116,7 @@ runs:
         path: |
           backend/models
           backend/bin
-        key: llm-${{ steps.model.outputs.summarize_cache_key }}-${{ inputs.llama_cpp_build }}-v5
+        key: llm-${{ steps.model.outputs.summarizer_cache_key }}-${{ inputs.llama_cpp_build }}-v5
 
     # Two calls to one program, and neither is handed a URL, a filename or a
     # digest. It reads what the model declares and fetches every file of it -
@@ -187,8 +187,8 @@ runs:
       shell: bash
       env:
         PROBE_URL: ${{ inputs.probe_url }}
-        MODEL_ALIAS: ${{ steps.model.outputs.summarize_id }}
-        WEIGHTS_FILE: ${{ steps.model.outputs.summarize_file }}
+        MODEL_ALIAS: ${{ steps.model.outputs.summarizer_id }}
+        WEIGHTS_FILE: ${{ steps.model.outputs.summarizer_file }}
       run: |
         set -euo pipefail
         for _ in $(seq 1 120); do

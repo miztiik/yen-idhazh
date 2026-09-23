@@ -10,7 +10,7 @@ only a pointer. What a knob is, and what is not one, is [../config.md](../config
 
 ## `config/models/<name>.json` - one file per model, and a pointer
 
-Everything that is a fact about one set of weights lives in one file of its own: the repository, the revision, the digest, the flags its server is started with, the four values that go in a request body, and the two turn-envelope strings no template can answer. `config/idhazh.json` carries `models_file` and nothing else about the model.
+Everything that is a fact about one set of weights lives in one file of its own: the repository, the revision, the digest, the flags its server is started with, the sampling values that go in a request body, how long one request may wait, and the two turn-envelope strings no template can answer. `config/idhazh.json` carries `models_file` and nothing else about the model.
 
 **The swap is that one line, and so is the revert.** Point `models_file` at another committed file and the run opens another model; point it back and the incumbent's measured numbers are still on disk rather than in git history. Before 2026-09-14 a swap was eleven lines edited in place in the file every other knob lives in, and a revert had to reconstruct the previous model's numbers out of a diff.
 
@@ -26,9 +26,19 @@ The alternative was to leave the block where it was and make the swap a careful 
 
 The second alternative was one file holding every model, keyed by name, with the pointer naming a key rather than a file. It was rejected because a candidate is then an edit to a file the incumbent is also in, so a bad candidate can break the model that is running - and because two models in one file is exactly the shape that let one measured `inference` block be applied to weights it was never measured on. Ruled by Fowler, 2026-09-14.
 
+**The `sampling` block is sent whole, and the file is the only place a sampler is named.** Three keys were wired one at a time until 2026-09-23 - `temperature`, `top_p`, `seed` - through a table whose rows for those three mapped each name to itself. A fourth key validated and was dropped in silence, and the request the server really answered carried thirteen: the other ten were llama.cpp's own choices and no diff of ours could move them. The block is now splatted into the request body, so naming one more sampler is a key in this file and no code edit, and a key this runtime does not accept is refused at request time with the key named.
+
+The alternative was to add the ten missing keys to the table. It was rejected because the table is the cost: it would be paid ten more times now and again for every parameter llama.cpp, vLLM or Ollama adds on their own schedules, while buying nothing a schema does not already give. A translation table across those three runtimes was rejected for the same reason one level up - a per-key map maintained against three projects that each change their parameters without telling us.
+
+What the splat may not do is reach a decode control. `response_format`, `json_schema` and `grammar` are how an injection is stopped from changing the shape of a reply, so each route refuses a sampling key that re-spells or disables its own control, and the set of refused keys is declared beside the control rather than in one list somebody has to remember. The refusal runs when the config loads as well as when a body is built, so an operator reads a message about the file they just edited rather than one about a request body, four hundred seconds into a run.
+
+**What this pins and what it does not.** The thirteen committed values are the ones the pinned build already applies, so nothing about today's output moves. The sampler chain ORDER is a separate request key, `samplers`, and it is not pinned: a build that reorders the chain can still move the distribution with all thirteen values held.
+
+**The slot is named for what fills it.** `models.summarizer` became `models.summarizer` on 2026-09-23: a slot holds a model, so its key is a noun (`CLAUDE.md` section 1a), and the verb named the job the model does, which is the one thing the key beside it already said. The role string a run records did not move - `summarize` sits in 127 places across 35 published run records - so what moved is the config key and the python name beside it, exactly as the retired visual planner's did.
+
 ## The model references are the only values in `config/` with no default
 
-There is no honest default for "which weights" - a wrong guess would silently run the wrong model rather than failing. A reference names the repository, the file, and the `revision` those bytes were uploaded in; the revision is what makes the recorded `sha256` mean anything, because a download that named a branch would get whatever was uploaded last. No workflow keeps a copy of any of it: `digest.yml`, `measure.yml` and `validate.yml` each follow `models_file` to the active model file, read `summarize` out of it, and republish it as job outputs, including into the weights cache key ([../../reference/github-actions.md](../../reference/github-actions.md)).
+There is no honest default for "which weights" - a wrong guess would silently run the wrong model rather than failing. A reference names the repository, the file, and the `revision` those bytes were uploaded in; the revision is what makes the recorded `sha256` mean anything, because a download that named a branch would get whatever was uploaded last. No workflow keeps a copy of any of it: `digest.yml`, `measure.yml` and `validate.yml` each follow `models_file` to the active model file, read `summarizer` out of it, and republish it as job outputs, including into the weights cache key ([../../reference/github-actions.md](../../reference/github-actions.md)).
 
 **Six spellings were retired on 2026-09-13, and a file still carrying one is
 refused by name.** Plan 11 row #6 deleted `models.visual_planner`,
@@ -45,9 +55,10 @@ operator's block, file it under a key nothing reads, and raise nothing. Every
 one of the six is now refused with its own name and the sentence "is gone and
 nothing replaces it" - because nothing does, and pointing a lost operator at a
 successor that is also missing is the same defect one level down.
-`finetune.teacher` is the one role left and stays `summarize`; a teacher still
-naming `visual_planner` or `route` is answered by name rather than by a list of
-legal keys, because the model is gone and that is not a typo.
+`finetune.teacher` is the one role left and reads `summarizer`; a teacher still
+naming the older `summarize`, `visual_planner` or `route` is answered by where
+that key went rather than by a list of legal keys, because none of the three is
+a typo - one moved and two name a model that is gone.
 
 **The refusal only covers a reader that goes through the contract.** A
 workflow step reading the raw JSON, or resolving a `models` key by attribute
@@ -80,8 +91,9 @@ a time through config, not through workflow literals:
 - `checkpoint_min_step`, `ctx_checkpoints`, `cache_ram`
 - `cache_prompt`, `slot_prompt_similarity`
 - `jinja`, `reasoning_preserve`
-- `temperature`, `top_p`, `seed`
-- `request_timeout_minutes`
+- `temperature`, `top_p`, `seed` and every other key the `sampling` block holds
+- `request_timeout_minutes`, which is a field of the entry rather than a key in
+  that block: it is how long the client waits, so it never goes on the wire
 - `declared_for`
 
 Optional launch settings default to `null`, which omits their flags. Numeric
@@ -161,7 +173,7 @@ provenance here:
 
 | Entry | `declared_for` | Where the numbers came from |
 | --- | --- | --- |
-| `models.summarize` (`qwen3-5-9b-q4-k-m`) | `03b74727...b7e8` | The owner selected the explicit runtime settings on 2026-09-20 and approved the 65,536-token window on 2026-09-21. Both caches use q8_0 and the answer budget is 2,000 tokens. The article and candidate limits are unchanged. This combination has not been benchmarked. Earlier measurements used different settings and do not establish this combination's speed, memory use or output quality. The committed model file is the complete list of selected values. |
+| `models.summarizer` (`qwen3-5-9b-q4-k-m`) | `03b74727...b7e8` | The owner selected the explicit runtime settings on 2026-09-20 and approved the 65,536-token window on 2026-09-21. Both caches use q8_0 and the answer budget is 2,000 tokens. The article and candidate limits are unchanged. This combination has not been benchmarked. Earlier measurements used different settings and do not establish this combination's speed, memory use or output quality. The committed model file is the complete list of selected values. |
 
 The row says the uncomfortable thing, which is the point of writing it
 down: the file now states a pairing where before it implied one. `declared_for`
@@ -194,7 +206,7 @@ the run finished with 6.8 times the bar
 ### A model swap can no longer inherit settings nothing declared for it
 
 Until 2026-09-09 there was one `models.inference` block and both roles were
-served on it. Editing `models.summarize` to name a different repository, file,
+served on it. Editing `models.summarizer` to name a different repository, file,
 revision and digest raised nothing at all: the config loaded, `llama-server`
 started on the old numbers, and the run published a whole
 plausible day. **It is not hypothetical.** The summarizer moved from the 8B to

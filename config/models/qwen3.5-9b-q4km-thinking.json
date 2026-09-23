@@ -1,5 +1,5 @@
 {
-  "summarize": {
+  "summarizer": {
     "arch": "qwen35",
     "byte_count": 5680522464,
     "declared_for": "03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8",
@@ -8,13 +8,23 @@
     "id": "qwen3-5-9b-q4-k-m-thinking",
     "quantisation": "Q4_K_M",
     "repo": "unsloth/Qwen3.5-9B-GGUF",
-    "request": {
+    "request_timeout_minutes": 22.1,
+    "revision": "3885219b6810b007914f3a7950a8d1b469d598a5",
+    "sampling": {
       "temperature": 0.2,
       "top_p": 1.0,
-      "seed": 0,
-      "request_timeout_minutes": 22.1
+      "top_k": 40,
+      "min_p": 0.05,
+      "typical_p": 1.0,
+      "repeat_penalty": 1.0,
+      "repeat_last_n": 64,
+      "presence_penalty": 0.0,
+      "frequency_penalty": 0.0,
+      "dry_multiplier": 0.0,
+      "xtc_probability": 0.0,
+      "mirostat": 0,
+      "seed": 0
     },
-    "revision": "3885219b6810b007914f3a7950a8d1b469d598a5",
     "server": {
       "--batch-size": 512,
       "--ctx-size": 65536,
@@ -29,5 +39,5 @@
     "thinking_close": "\n</think>\n\n",
     "thinking_kwarg": "enable_thinking"
   },
-  "version": "2026-09-21T06:00"
+  "version": "2026-09-23"
 }

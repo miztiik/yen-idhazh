@@ -29,7 +29,7 @@ from string import Template
 from typing import Final
 
 import pytest
-from conftest import CONFIG_DIR, a_request, a_server
+from conftest import CONFIG_DIR, a_sampling, a_server
 
 from idhazh import config
 from idhazh.classify import calls
@@ -110,7 +110,7 @@ def stamp_with(
         model=CONFIGURED_MODEL,
         model_sha256=model_sha256,
         server=a_server(),
-        request=a_request(),
+        sampling=a_sampling(),
         truncation_cap_tokens=2500,
         runtime_build="llama.cpp-b4200",
         chat_template="{{ messages }}",
@@ -263,9 +263,9 @@ def test_a_flag_the_file_leaves_out_spells_apart_from_a_pinned_one() -> None:
 
 
 def test_a_moved_sampling_value_moves_the_sampling_spelling() -> None:
-    assert sampling_spelling(a_request()) == sampling_spelling(a_request())
-    assert sampling_spelling(a_request(temperature=0.7)) != sampling_spelling(a_request())
-    assert sampling_spelling(a_request(seed=7)) != sampling_spelling(a_request())
+    assert sampling_spelling(a_sampling()) == sampling_spelling(a_sampling())
+    assert sampling_spelling(a_sampling(temperature=0.7)) != sampling_spelling(a_sampling())
+    assert sampling_spelling(a_sampling(seed=7)) != sampling_spelling(a_sampling())
 
 
 def test_a_temperature_inside_the_recorded_tolerance_records_as_unmoved() -> None:
@@ -276,19 +276,42 @@ def test_a_temperature_inside_the_recorded_tolerance_records_as_unmoved() -> Non
     move of 1e-3 records a different one. Asserting both sides is what makes
     this the tolerance rather than a description of a format string.
     """
-    base = sampling_spelling(a_request(temperature=0.2))
+    base = sampling_spelling(a_sampling(temperature=0.2))
 
-    assert sampling_spelling(a_request(temperature=0.20001)) == base
-    assert sampling_spelling(a_request(temperature=0.201)) != base
+    assert sampling_spelling(a_sampling(temperature=0.20001)) == base
+    assert sampling_spelling(a_sampling(temperature=0.201)) != base
 
 
-def test_a_request_that_pins_nothing_records_the_runtime_default() -> None:
-    """A model file may stay silent on a sampler, and the stamp says so."""
-    assert sampling_spelling({}) == {
-        "seed": "runtime-default",
-        "temperature": "runtime-default",
-        "top_p": "runtime-default",
+def test_a_sampler_no_reader_of_ours_names_is_recorded_under_its_own_name() -> None:
+    """The row's oracle. The record is the block, not a list of names in code.
+
+    Three keys were read by name while the request carried thirteen, so ten
+    could move the decode with the record unchanged. A key nothing in this
+    repository mentions has to reach the stamp, and a whole number has to stay
+    a whole number: a count of tokens with four decimals behind it reads as a
+    quantity somebody tuned.
+    """
+    spelled = sampling_spelling(a_sampling(top_k=40, min_p=0.05, mirostat=0))
+
+    assert spelled["top_k"] == "40"
+    assert spelled["mirostat"] == "0"
+    assert spelled["min_p"] == "0.0500"
+    assert list(spelled) == sorted(spelled), "one order, so two records compare key by key"
+
+
+def test_a_sampler_the_file_leaves_out_is_absent_rather_than_guessed_at() -> None:
+    """A model file may stay silent on a sampler, and the stamp stays silent too.
+
+    Writing this project's guess at the server's default in its place would
+    record a guess as a measurement, and there is no list of every sampler to
+    guess from - that list is the thing this row deleted.
+    """
+    assert sampling_spelling(a_sampling()) == {
+        "seed": "0",
+        "temperature": "0.0000",
+        "top_p": "1.0000",
     }
+    assert sampling_spelling({}) == {}
 
 
 def test_a_day_written_under_the_joined_spelling_still_reads() -> None:

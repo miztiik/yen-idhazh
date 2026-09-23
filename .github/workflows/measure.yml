@@ -156,9 +156,9 @@ jobs:
     timeout-minutes: 10
     outputs:
       model_speed_case: ${{ steps.speed.outputs.model_speed_case }}
-      summarize_repo: ${{ steps.models.outputs.summarize_repo }}
-      summarize_revision: ${{ steps.models.outputs.summarize_revision }}
-      summarize_file: ${{ steps.models.outputs.summarize_file }}
+      summarizer_repo: ${{ steps.models.outputs.summarizer_repo }}
+      summarizer_revision: ${{ steps.models.outputs.summarizer_revision }}
+      summarizer_file: ${{ steps.models.outputs.summarizer_file }}
       candidate_repo: ${{ steps.models.outputs.candidate_repo }}
       candidate_revision: ${{ steps.models.outputs.candidate_revision }}
       candidate_file: ${{ steps.models.outputs.candidate_file }}
@@ -1042,9 +1042,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 180
     env:
-      MODEL_REPO: ${{ needs.models.outputs.summarize_repo }}
-      MODEL_REVISION: ${{ needs.models.outputs.summarize_revision }}
-      MODEL_FILE: ${{ needs.models.outputs.summarize_file }}
+      MODEL_REPO: ${{ needs.models.outputs.summarizer_repo }}
+      MODEL_REVISION: ${{ needs.models.outputs.summarizer_revision }}
+      MODEL_FILE: ${{ needs.models.outputs.summarizer_file }}
       # Fixed here rather than dispatchable, so a later reading stays
       # comparable to the recorded one. The lengths round the medians of the
       # 293 requests behind docs/reference/pipeline-cost.md's one-slot
@@ -1122,10 +1122,10 @@ jobs:
           set -euo pipefail
           MODELS_FILE="config/$(jq -er '.models_file' config/idhazh.json)"
           for key in n_ctx n_batch n_ubatch n_threads; do
-            value=$(jq -er ".summarize.inference.${key}" "$MODELS_FILE")
+            value=$(jq -er ".summarizer.inference.${key}" "$MODELS_FILE")
             case "$value" in
               ''|*[!0-9]*)
-                echo "${MODELS_FILE} summarize.inference.${key} must be a positive integer, got '${value}'" >&2
+                echo "${MODELS_FILE} summarizer.inference.${key} must be a positive integer, got '${value}'" >&2
                 exit 2
                 ;;
             esac
@@ -1154,9 +1154,9 @@ jobs:
       - name: Verify the weights
         run: |
           set -euo pipefail
-          EXPECTED=$(python3 -c 'import json, pathlib; config = json.load(open("config/idhazh.json", encoding="utf-8")); models = json.load(open(pathlib.Path("config") / config["models_file"], encoding="utf-8")); print(models["summarize"]["sha256"] or "")')
+          EXPECTED=$(python3 -c 'import json, pathlib; config = json.load(open("config/idhazh.json", encoding="utf-8")); models = json.load(open(pathlib.Path("config") / config["models_file"], encoding="utf-8")); print(models["summarizer"]["sha256"] or "")')
           if [ -z "$EXPECTED" ]; then
-            echo "config records no sha256 for models.summarize" >&2
+            echo "config records no sha256 for models.summarizer" >&2
             exit 1
           fi
           echo "${EXPECTED}  backend/models/${MODEL_FILE}" | sha256sum --check

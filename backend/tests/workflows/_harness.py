@@ -330,7 +330,7 @@ WEIGHTS_CHECKS: Final = {
         "Download the summarizer weights",
         "Verify the weights",
         "Benchmark parallel decode",
-        '["summarize"]["sha256"]',
+        '["summarizer"]["sha256"]',
     ),
     # The one candidate whose digest is not a config field: the plan job decides
     # it once, from the dispatch input or from config, and republishes it.
@@ -346,9 +346,9 @@ WEIGHTS_CHECKS: Final = {
 # block reads `config/idhazh.json` where the model is used, so the workflow
 # holds no model repo, no weights filename and no upload of those weights.
 MODEL_REF_OUTPUTS: Final = (
-    "summarize_repo",
-    "summarize_revision",
-    "summarize_file",
+    "summarizer_repo",
+    "summarizer_revision",
+    "summarizer_file",
 )
 
 MODEL_REF_FIELDS: Final = ("repo", "revision", "file")
@@ -367,7 +367,7 @@ MODEL_ENV_NAMES: Final = frozenset(
 )
 
 # The weights cache jobs, and the config role each one serves.
-WEIGHTS_CACHE_ROLES: Final = {"work": "summarize"}
+WEIGHTS_CACHE_ROLES: Final = {"work": "summarizer"}
 
 #: The one cache-key format written in two places, so the two have to resolve to
 #: one string. `qualify-` in `validate.yml` and `bench-` in `measure.yml` are

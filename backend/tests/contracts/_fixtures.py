@@ -163,7 +163,7 @@ def entry_with(**fields: Any) -> dict[str, Any]:
     rather than leaving them asserting against a shape nothing declares.
     """
     payload = committed_models_raw()
-    payload["summarize"] |= fields
+    payload["summarizer"] |= fields
     return payload
 
 
@@ -177,7 +177,7 @@ def swapped_summarizer() -> dict[str, Any]:
     fast in the file they already have open.
     """
     raw = committed_models_raw()
-    raw["summarize"] |= {
+    raw["summarizer"] |= {
         "id": "some-other-model-q4-k-m",
         "repo": "someone/Other-GGUF",
         "file": "Other-Q4_K_M.gguf",

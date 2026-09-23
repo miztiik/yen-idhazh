@@ -31,7 +31,7 @@ correction from that run: on build 10598 the named state is
 2026-09-09 between 01:42 and 01:50 local. Eleven server starts: one at the
 default verbosity, one at `-lv 9`, and three each at `-lv 4` with no flag, with
 `-fa on` and with `-fa off`. The argv is built by
-`idhazh.llm.server.server_argv` from the committed `models.summarize` block, the
+`idhazh.llm.server.server_argv` from the committed `models.summarizer` block, the
 way `backend/utilities/model_runtime.py` builds it, so what ran is the
 process the pipeline starts and not a hand-written command line. Absolute paths
 below are rewritten to their repository-relative form.
@@ -41,7 +41,7 @@ The build is llama.cpp `b10444`, commit `5f754ea0e`, and `digest.yml` pins
 `b10598` - 154 builds away, so a line this build prints is evidence about a
 neighbour of the pinned build rather than about the pinned build itself. And the
 weights are `Qwen3-8B-Q4_K_M.gguf`, 5,027,783,488 bytes: the 8B, where the
-active model file names a 9B for `models.summarize`. The 9B is not on this
+active model file names a 9B for `models.summarizer`. The 9B is not on this
 machine. Every megabyte below is therefore the 8B's and none of them may be
 quoted as the 9B's. What does carry across is which lines the binary prints and
 what those lines are called, because that is a property of the binary - and the
@@ -192,7 +192,7 @@ size.
 
 ### What landed from this, and what one server start now costs
 
-**The flag is committed.** `models.summarize.inference.log_verbosity` is `4` in
+**The flag is committed.** `models.summarizer.inference.log_verbosity` is `4` in
 `config/idhazh.json`, and `idhazh.llm.server.server_argv` emits `-lv 4` from
 it. It is a knob rather than a literal because an operator debugging a start
 wants `9` and a daily run does not (Guardrail #6). Null omits the flag and keeps the

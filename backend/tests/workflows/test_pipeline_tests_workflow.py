@@ -801,8 +801,8 @@ def test_the_case_configs_the_workflow_writes_all_load(tmp_path: Path) -> None:
         assert loaded.app.summarize.asks_for_a_visual_plan is case.asks_for_a_visual_plan
         if not case.asks_for_a_visual_plan:
             assert loaded.app.visuals.enabled_kinds == [], "no picture is reachable"
-        served = loaded.models.summarize.server
-        committed = config.load(CONFIG_DIR).models.summarize.server
+        served = loaded.models.summarizer.server
+        committed = config.load(CONFIG_DIR).models.summarizer.server
         assert setting(served, "n_parallel") == (
             case.n_parallel or setting(committed, "n_parallel")
         )
@@ -848,7 +848,7 @@ def test_the_parallel_case_keeps_the_window_the_gate_admits_articles_against() -
     still admits articles against the config number. The case would then refuse
     long articles and read as a concurrency result.
     """
-    committed = config.load(CONFIG_DIR).models.summarize.server
+    committed = config.load(CONFIG_DIR).models.summarizer.server
     for case in _settings().cases:
         if case.n_parallel is None or case.n_parallel == (setting(committed, "n_parallel") or 1):
             continue
@@ -1008,7 +1008,7 @@ def test_a_dispatch_that_names_nothing_runs_the_model_config_already_names() -> 
     pointer = json.loads(read_text(CONFIG_DIR / "idhazh.json"))["models_file"]
     assert empty["candidate_models_file"] == pointer
     for field in model_refs.CONFIGURED_FIELDS:
-        assert empty[f"candidate_{field}"] == configured[f"summarize_{field}"], field
+        assert empty[f"candidate_{field}"] == configured[f"summarizer_{field}"], field
 
 
 def test_a_named_candidate_moves_one_line_and_leaves_the_committed_config_alone(
@@ -1043,7 +1043,7 @@ def test_a_named_candidate_moves_one_line_and_leaves_the_committed_config_alone(
     assert json.loads(read_text(CONFIG_DIR / "idhazh.json")) == committed, (
         "the committed config is read, never written"
     )
-    assert config.load(scratch).models.summarize.id, "the scratch root still loads"
+    assert config.load(scratch).models.summarizer.id, "the scratch root still loads"
 
 
 def test_no_step_opens_the_committed_models_file_once_a_candidate_may_be_named() -> None:

@@ -227,7 +227,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--binary", type=Path, default=Path("backend/bin/llama-server"))
     parser.add_argument("--weights", type=Path, required=True)
     parser.add_argument("--config-root", type=Path, default=Path("config"))
-    parser.add_argument("--role", default="summarize")
+    parser.add_argument("--role", default="summarizer")
     parser.add_argument("--runs", type=int, default=3)
     parser.add_argument("--alternatives", type=int, default=25)
     parser.add_argument("--out", type=Path, default=None)

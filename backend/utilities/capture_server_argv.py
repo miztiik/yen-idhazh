@@ -71,7 +71,7 @@ def command_line(config: ModelsConfig) -> dict[str, str | None]:
     argument this capture builds from a `Path`, and a committed file carries no
     backslash (`CLAUDE.md` section 2).
     """
-    entry = config.summarize
+    entry = config.summarizer
     flags = flags_of(
         server_argv(
             binary=BINARY,

@@ -463,7 +463,7 @@ def _model_id(manifest: RunManifest, score_rows: Sequence[dict[str, str]]) -> st
         return newest["model_id"]
     run = manifest.runs[-1]
     model_id = next(
-        (use.model_ref.id for use in run.models if use.role is ModelRole.SUMMARIZE),
+        (use.model_ref.id for use in run.models if use.role is ModelRole.SUMMARIZER),
         None,
     )
     if model_id is None:

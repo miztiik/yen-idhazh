@@ -424,13 +424,13 @@ def stage_qualify(
 
     started = time.monotonic()
     read_url = fetcher or common.live_fetcher(settings)
-    model = settings.models.summarize
-    observed = props(model_endpoint, timeout=request_timeout_seconds(model.request))
+    model = settings.models.summarizer
+    observed = props(model_endpoint, timeout=request_timeout_seconds(model))
     inputs = build_inputs(
         model=model,
         model_sha256=candidate.sha256_observed,
         server=model.server,
-        request=model.request,
+        sampling=model.sampling,
         truncation_cap_tokens=settings.app.extract.truncation_cap_tokens,
         runtime_build=candidate.runtime_build,
         chat_template=str(observed.get("chat_template") or UNRECORDED_TEMPLATE),
@@ -440,7 +440,7 @@ def stage_qualify(
         extractor_version=extract.EXTRACTOR_VERSION,
         sanitizer_version=SANITIZER_VERSION,
         markers=derive_turn_markers(
-            model_endpoint, entry=model, timeout=request_timeout_seconds(model.request)
+            model_endpoint, entry=model, timeout=request_timeout_seconds(model)
         ),
     )
 

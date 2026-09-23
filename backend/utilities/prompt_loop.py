@@ -362,11 +362,11 @@ class LiveSummarizer:
 
     def summarize(self, prompt: str, items: Sequence[FrozenItem]) -> list[ItemSummary]:
         ask = self._settings.app.summarize
-        entry = self._settings.models.summarize
-        request = entry.request
+        entry = self._settings.models.summarizer
+        sampling = entry.sampling
         model_id = entry.id
         markers = derive_turn_markers(
-            self._endpoint, entry=entry, timeout=request_timeout_seconds(request)
+            self._endpoint, entry=entry, timeout=request_timeout_seconds(entry)
         )
         produced: list[ItemSummary] = []
         for item in items:
@@ -374,7 +374,7 @@ class LiveSummarizer:
             payload = summarize.build_request(
                 article,
                 model_id=model_id,
-                request=request,
+                sampling=sampling,
                 markers=markers,
                 prompt_config=ask,
             )
@@ -382,7 +382,7 @@ class LiveSummarizer:
                 prompt, ask, source_words=article.band_source_words, brief=article.brief
             )
             completion = post(
-                payload, endpoint=self._endpoint, timeout=request_timeout_seconds(request)
+                payload, endpoint=self._endpoint, timeout=request_timeout_seconds(entry)
             )
             draft = summarize.parse_draft(
                 completion.content,
@@ -460,21 +460,20 @@ class ModelJudge:
         return bool(reply.get("prefers_candidate", False))
 
     def _call(self, user: str, schema: dict[str, object], schema_name: str) -> dict[str, object]:
-        entry = self._settings.models.summarize
-        request = entry.request
+        entry = self._settings.models.summarizer
         payload = request_payload(
             model_id=entry.id,
             system=_JUDGE_SYSTEM,
             user=user,
             output_schema=schema,
-            request=request,
+            sampling=entry.sampling,
             markers=derive_turn_markers(
-                self._endpoint, entry=entry, timeout=request_timeout_seconds(request)
+                self._endpoint, entry=entry, timeout=request_timeout_seconds(entry)
             ),
             schema_name=schema_name,
         )
         completion = post(
-            payload, endpoint=self._endpoint, timeout=request_timeout_seconds(request)
+            payload, endpoint=self._endpoint, timeout=request_timeout_seconds(entry)
         )
         parsed = json.loads(completion.content)
         if not isinstance(parsed, dict):

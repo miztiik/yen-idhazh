@@ -110,8 +110,8 @@ Statuses: PENDING, IN PROGRESS, BLOCKED, DONE. A row's status is stamped by the 
 | 6 | The loopback literals outside the workflows become one function | 4 | A | DONE | p47w3 | - | W3 |
 | 7 | The model file, and the value nothing reads | 4 | A | DONE | p47w2 | - | W2 |
 | 8 | The run says which server answered | 3 | A | DONE | p47w3 | - | W3 |
-| 9 | Sampling settings pass through, unmapped | 8 | B | PENDING | - | - | - |
-| 10 | Model slots get nouns | 9 | B | PENDING | - | - | - |
+| 9 | Sampling settings pass through, unmapped | 8 | B | DONE | p47w5 | - | W5 |
+| 10 | Model slots get nouns | 9 | B | DONE | p47w5 | - | W5 |
 | 11 | The run record stops claiming a build it cannot see | 2 | C | DONE | p47w4 | - | W4 |
 
 ### 1a. The three pull requests
@@ -677,6 +677,15 @@ One commit per row, in Reckoner order. A worker who follows it never writes an i
 | 9.R4 | Set the three samplers to disabled | Changes the sampler on every summary from the next run | A holdout measurement first, which is a different job |
 | 9.R5 | Move this row to a later plan | **This was done on 2026-09-23 and reversed by the owner the same day.** Section 0a records it. The findings that prompted it are folded in above as C7 and C10 | The per-key gate stays live for a plan cycle, for no gain |
 
+**Corrected while executing, 2026-09-23.** Three clauses of this row were wrong as written.
+
+| id | What the row said | What is true |
+| --- | --- | --- |
+| 9.C1 | `SETTING_KEYS` ends with seven rows | Six. The arithmetic was 10 minus 3, which missed that `request_timeout_minutes` becomes a typed field on the entry and so leaves the table as well. C8's own JSON puts it at the entry's top level, and `ModelEntry` forbids an undeclared key, so a typed field is the only shape that reads |
+| 9.C2 | `config.py`'s loop still refuses an entry with no timeout, reading two names | It reads one. The typed field refuses a missing or non-numeric timeout first, and names the role doing it, so the loop's second half would be a second spelling of a rule the contract already holds (Guardrail #3) |
+| 9.C3 | C7's file list is complete | It named neither `backend/tests/conftest.py`, `backend/utilities/runtime_sweep.py`, `backend/tests/test_server_argv.py`, `backend/tests/contracts/test_model_registry.py`, `backend/tests/test_similarity_judge.py`, `backend/idhazh/classify/calls.py`, `backend/idhazh/summarize.py` nor `tests/fixtures/planner/recorded-call-payloads.json`, all of which had to move |
+| 9.C4 | C2's comment says no workflow pins a build, and `.github/scripts/llama-cpp-pin.sh` pins `b10598` | The shell script is gone; `config/llama-cpp-pin.json` holds the pin. The corrected sentence cites the config file |
+
 ---
 
 ## 12. Row 10 - Model slots get nouns
@@ -702,6 +711,16 @@ One commit per row, in Reckoner order. A worker who follows it never writes an i
 **Decisions.** 10.1 A noun per slot (`CLAUDE.md` section 1a). 10.2 The enum **value** is pinned and only the python name and config key move, because the string is in 127 places across 35 published run records and the file already carries that precedent. 10.3 After row 9, because both edit the model files and the same contract module, and the settings shape is the one a worker is likelier to get wrong.
 
 **Rejected.** `models.summarizer_model` - says "model" twice under a key already called `models`. Leaving the verb - one verb where the contract asks for a noun, in the key a second slot will copy; the same rename later across more callers.
+
+**Corrected while executing, 2026-09-23.** Three clauses of this row were wrong as written.
+
+| id | What the row said | What is true |
+| --- | --- | --- |
+| 10.C1 | A workflow test asserts the `--role` argument matches the config key | There is no `--role` argument. Plan 44 row 3 deleted it from the server launcher, and `backend/tests/workflows/test_model_server_jobs.py` already asserts it is refused. The gate that replaced it is that the ref-publishing prefix, the model-file key and the cache role are one string, which `test_weights_and_model_refs.py` already checks |
+| 10.C2 | The five `tests/fixtures/server-argv/*.json` goldens move, because `capture_server_argv.py` names the role | They regenerate byte-identical. The command line is built from the entry's contents and names the key nowhere |
+| 10.C3 | C11d: `finetune.teacher` is typed `ModelRole` | It is typed by a constrained string of the same name declared in `backend/idhazh/contracts/knobs/finetune.py`, not by the published enum in `run_manifest.py`. The value moves to `summarizer` with no type change, and `SUPERSEDED_MODELS_NAMES` now answers a stale one by where the key went |
+
+The row also moved the ref prefix `summarize_*` to `summarizer_*` across `.github/actions/model-server/action.yml` and `.github/workflows/measure.yml`. C12 did not list it, and it is not optional: `backend/tests/workflows/test_weights_and_model_refs.py` reads the model-file key and the published prefix as one string.
 
 ---
 
