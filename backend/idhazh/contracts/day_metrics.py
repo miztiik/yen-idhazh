@@ -30,7 +30,7 @@ file and the reducers that read it come later, against the shape the owner signs
 off here.
 
 Every path this record could name is relative and POSIX (CLAUDE.md section 2),
-and it carries facts about a day and never a line of article text (section 0a).
+and it carries facts about a day and never a line of article text.
 """
 
 from __future__ import annotations
@@ -257,10 +257,10 @@ class DayLabelSimilarity(Model):
 
     **No label is picked and no per-item value survives.** The closest label is
     computed and thrown away; `nearest` is the aggregate and nothing anywhere
-    says what one item scored. A verdict that reaches no reader and selects
-    nothing to publish is not a `CLAUDE.md` section 0a deviation, and the
-    moment either half of that stopped being true this would need everything a
-    classifier needs.
+    says what one item scored. That used to be what kept this clear of the
+    LLM-as-judge ban, and `CLAUDE.md` section 1a has since lifted the ban. The
+    shape stays for the reason underneath it: the moment a per-item value
+    survived, this would need everything a classifier needs.
 
     **The two rulers travel with the reading**, because a number is only
     comparable against another number taken under the same ones. `taxonomy_digest`

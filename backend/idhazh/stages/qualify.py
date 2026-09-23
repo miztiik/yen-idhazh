@@ -137,8 +137,8 @@ def _freeze(
     Once, and never again: the three deterministic repeats have to see identical
     bytes, and a publisher rewriting a page between two of them would read as a
     decoding drift. The bytes stay on this job's own disk - only the hashes and
-    the measurements travel, because an article body is not ours to move
-    (`CLAUDE.md` section 0a).
+    the measurements travel, because an article body is never republished to a
+    reader.
 
     The walk stops at the LATER of two floors: a pool wide enough to choose from
     at all, and a pool that already holds every tier the definition asks for.

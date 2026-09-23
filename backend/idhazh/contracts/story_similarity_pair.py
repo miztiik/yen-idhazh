@@ -7,8 +7,9 @@ own disagreement measurable, and a pair the two readings disagree about is a
 fact about the judge rather than about the pair.
 
 Nothing here decides what publishes. A verdict is a label on a pair, and the
-line it eventually moves is fitted deterministically off counts (CLAUDE.md
-section 0a).
+line it eventually moves is fitted deterministically off counts. That is the
+design and no longer a rule - CLAUDE.md section 1a lifted the ban on a model
+verdict reaching a publish decision.
 
 The row is persisted twice on the way through: the draw the council leaves under
 `backend/var/council/<date>/selection/<judge>/` holds the day's pairs before a

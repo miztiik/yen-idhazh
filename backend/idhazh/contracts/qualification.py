@@ -15,8 +15,8 @@ Two documents, because two jobs write them. A capture-and-replay shard writes a
 `QualificationShard` - the frozen corpus it hashed, every call it made, and the
 canaries it ran. The decide job merges those and writes one
 `QualificationReport`. Neither carries article text: the corpus lives under
-gitignored `backend/var/` and only its hashes travel (`CLAUDE.md` section 0a -
-the pipeline never republishes an article body).
+gitignored `backend/var/` and only its hashes travel, because an article body is
+never republished to a reader.
 """
 
 from __future__ import annotations

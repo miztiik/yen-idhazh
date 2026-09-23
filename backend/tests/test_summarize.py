@@ -2883,8 +2883,8 @@ def test_a_summary_that_is_one_copied_run_of_its_source_is_refused() -> None:
     """The measured defect: 44 published words, every one of them lifted unbroken.
 
     Run 33016222069 on 2026-08-26 published item business-economy-4010712495 as a
-    44-word copy of its 53-word source. Republishing an article body is a
-    non-goal (CLAUDE.md section 0a), so it is refused rather than scored down.
+    44-word copy of its 53-word source. An article body is never republished to a
+    reader, so it is refused rather than scored down.
     """
     result = summarised("copied-the-source", source="brief")
 
