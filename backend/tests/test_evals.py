@@ -1700,8 +1700,12 @@ def test_rebuilding_one_day_opens_and_rewrites_only_that_day(
 
     opened = _opened_bytes(monkeypatch, state, lambda: writer.rebuild_index(state, ["2026-02-11"]))
 
-    assert "scores/2026/01/09.csv" not in opened, f"a day nobody named was read: {sorted(opened)}"
-    assert "scores/2026/02/11.csv" in opened, "the rows of the named day were never read"
+    assert not [name for name in opened if name.startswith("scores/2026/01/09/")], (
+        f"a day nobody named was read: {sorted(opened)}"
+    )
+    assert [name for name in opened if name.startswith("scores/2026/02/11/")], (
+        "the rows of the named day were never read"
+    )
     assert _index_bytes(state, "2026-01-09") == untouched
     assert _indexed(state, "2026-02-11") == _rows_produce(state, ["2026-02-11"])
 

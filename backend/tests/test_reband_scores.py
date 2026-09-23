@@ -83,8 +83,8 @@ def test_reband_output_is_stable_for_operators() -> None:
 
 
 def _day(state: Path, date: str, lines: list[str]) -> Path:
-    """One day of the ledger, in the layout `evals.writer` writes."""
-    day = state / "scores" / date[:4] / date[5:7] / f"{date[8:10]}.csv"
+    """One writer's file of the ledger, in the layout `evals.writer` writes."""
+    day = state / "scores" / date[:4] / date[5:7] / date[8:10] / f"{date}-1-1-work-00.csv"
     day.parent.mkdir(parents=True, exist_ok=True)
     header = FIXTURE.read_text(encoding="utf-8").splitlines()[0]
     day.write_text("\n".join([header, *lines]) + "\n", encoding="utf-8", newline="")
@@ -133,7 +133,7 @@ def test_a_day_missing_a_column_is_named_by_its_own_filename(tmp_path: Path) -> 
     narrow = _day(state, "2026-03-11", [])
     narrow.write_text("band,hhem\nhigh,0.91\n", encoding="utf-8", newline="")
 
-    with pytest.raises(ValueError, match=re.escape("11.csv is missing columns")):
+    with pytest.raises(ValueError, match=re.escape("2026-03-11-1-1-work-00.csv is missing columns")):
         read_ledger(state)
 
 

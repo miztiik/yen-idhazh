@@ -299,7 +299,7 @@ def test_a_month_shaped_name_beside_the_day_tree_is_refused_rather_than_archived
     for path, text in strays.items():
         path.write_text(text, encoding="utf-8")
 
-    with pytest.raises(ValueError, match="day file"):
+    with pytest.raises(ValueError, match="day directory"):
         prune_scores(state, ObservabilityConfig(), TODAY)
 
     assert {path: path.read_text(encoding="utf-8") for path in strays} == strays
