@@ -423,6 +423,40 @@ reports and deletes nothing.
 is one paragraph here and not a second retention design. A collection is three
 callables - list, describe, delete - and everything else is shared.
 
+### Design rationale: the pipeline test's prose stays an artifact (2026-09-23)
+
+A pipeline-test dispatch runs two models over the same articles across three
+cases and writes, per item, the model's summary, its score, the fetched article
+and a visual decision. All of it uploads as an artifact at 90 days. Only the CSV
+day-ledgers are committed, into `state/pipeline-tests/`. After day 90 the prose
+is gone and the numbers remain: the ledger says an item scored 0.62 and cannot
+say what the model wrote to earn it.
+
+**It stays that way.** Nobody has asked the question a committed record would
+answer, and 90 days covers the window in which a prompt change is argued.
+Production keeps less: the premise-and-summary payload a human labeller reads is
+a 14-day artifact, chosen deliberately, so a dispatch already keeps its prose six
+times longer than the instrument the labelling loop runs on.
+
+Two costs make committing it the worse trade. Measured 2026-09-23: model output
+alone is about 19 KB a dispatch and everything is about 48 KB, and **neither has
+a prune path** - `day_shards.shard_files` refuses a stray, and a `.summary.json`
+is not a day shard, so committing either needs a new one built first. And the
+article payload sits in the same directory as the prose, so committing the
+directory commits `article.text`, which the corpus carve-out permits only for
+training data nobody renders and which the prune rewrites.
+
+Raising the retention is not an option that exists: GitHub caps artifact
+retention at 90 days for a public repository.
+
+**What would reopen it:** the first time somebody moves the scorer or the model
+pin and asks to re-score a dispatch older than 90 days. Re-running is not a
+substitute - it re-fetches pages that have changed, which is the premise
+mismatch `backend/idhazh/contracts/evidence.py` already refuses - and a
+committed article would pin the premise but not the generator, so only the
+article and the prose together make a valid comparison. Authority: Fowler and
+Andre, owner ruling 2026-09-23.
+
 ## `state/scores/` became a directory, and that bounds nothing on its own (2026-08-31)
 
 **The eval ledger moved from `state/scores.csv` to `state/scores/<YYYY-MM>.csv` on
