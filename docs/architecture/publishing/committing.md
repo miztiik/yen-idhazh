@@ -303,13 +303,17 @@ The work shard is the one caller that overrides it, with 120 s in its own `env:`
 block: the whole of what a shard keeps back for everything after its last item is
 `run.shard_wrap_up_minutes`, which is 12 minutes, and 300 s would be 5 of them.
 
-**Each attempt prints six stamps**, to the job log and to the step summary:
+**Each attempt publishes six stamps**, to the job log and to the step summary,
+as one record behind a fixed label:
 
 ```
-push attempt=2 job=assemble shard=none outcome=landed window_ms= fetch_ms= handback_ms= rebase_ms= rebuild_ms= push_ms=
+push attempt {"attempt": 2, "job": "assemble", "shard": "none", "outcome": "landed", "window_ms": 0, "fetch_ms": 0, "handback_ms": 0, "rebase_ms": 0, "rebuild_ms": 0, "push_ms": 0}
 ```
 
-The split is the point. A single figure cannot tell a slow rebuild from a slow
+The fields are published rather than spelled into a sentence a reader splits
+back apart, because those were two spellings of one record and either could
+drift while the other stayed green. The split across six is the point. A single
+figure cannot tell a slow rebuild from a slow
 push, and which of the two the deadline is being spent on is what decides whether
 300 s is the right number. **Attempt 1 has no window in the retry sense**:
 nothing fetches before the first push, so its exposure is the whole job -

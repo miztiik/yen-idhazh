@@ -760,9 +760,9 @@ jobs:
       # declares would be 5 of those 12. 120 s is 16.7 percent of the reserve,
       # which is four attempts at the capped backoff.
       #
-      # `SHARD` is here so the `push attempt=` line names which of the shards it
-      # came from. Eight of them commit to one branch, and a contention figure
-      # nobody can attribute to a writer answers nothing.
+      # `SHARD` is here so the `push attempt` record names which of the shards
+      # it came from. Eight of them commit to one branch, and a contention
+      # figure nobody can attribute to a writer answers nothing.
       - name: Commit what this shard measured
         if: always()
         continue-on-error: true

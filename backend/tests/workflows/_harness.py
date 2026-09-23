@@ -27,6 +27,7 @@ from idhazh import ledger, paths
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.visual_decision import PAYLOAD_SUFFIX, VisualDecision, VisualKind, VisualState
 from idhazh.telemetry.publish import series
+from utilities.commit_and_push import PUSH_ATTEMPT_LABEL
 
 #: Everything the platform runs. A rule about what a runner may execute is
 #: stated over this rather than over the three directories below, so a file
@@ -2368,17 +2369,19 @@ def _reject_the_first_pushes(origin: Path, count: int) -> None:
     hook.chmod(0o755)
 
 
-def _push_attempts(stdout: str) -> list[dict[str, str]]:
-    """Every `push attempt=` line the loop printed, as the fields it carries.
+def _push_attempts(stdout: str) -> list[dict[str, Any]]:
+    """Every attempt record the loop published, decoded.
 
-    Parsed rather than matched as text, because what the line is for is being
-    read by whoever is deciding whether the deadline is the right number. The
-    leading word is the line's own label and carries no value, so it goes.
+    The program publishes the fields; this reads them. It used to compose a
+    sentence with the fields spelled into it and this function split the
+    sentence back apart, which was two spellings of one record - either could
+    drift while the other stayed green. The label is imported rather than
+    spelled, so there is one place that decides where a record starts.
     """
     return [
-        dict(pair.split("=", 1) for pair in line.split()[1:])
+        json.loads(line[len(PUSH_ATTEMPT_LABEL) :])
         for line in stdout.splitlines()
-        if line.startswith("push attempt=")
+        if line.startswith(PUSH_ATTEMPT_LABEL)
     ]
 
 

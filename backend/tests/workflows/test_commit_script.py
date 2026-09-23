@@ -466,7 +466,7 @@ def test_a_push_rejected_more_times_than_the_old_loop_allowed_still_lands(
     assert _git(origin, env, "log", "-1", "--format=%s").strip() == settings["COMMIT_MESSAGE"]
 
     attempts = _push_attempts(result.stdout)
-    assert [row["attempt"] for row in attempts] == ["1", "2", "3", "4", "5"]
+    assert [row["attempt"] for row in attempts] == [1, 2, 3, 4, 5]
     assert [row["outcome"] for row in attempts] == [
         *["rejected"] * 4,
         "landed",
@@ -474,9 +474,9 @@ def test_a_push_rejected_more_times_than_the_old_loop_allowed_still_lands(
     # Attempt 1 has no window in the retry sense: nothing fetches before the
     # first push, so its exposure is the whole job rather than a retry
     # parameter, and its zero is the truth about it.
-    assert attempts[0]["window_ms"] == "0"
-    assert all(int(row["window_ms"]) > 0 for row in attempts[1:])
-    assert sum(int(row["window_ms"]) for row in attempts) < deadline * 1000
+    assert attempts[0]["window_ms"] == 0
+    assert all(row["window_ms"] > 0 for row in attempts[1:])
+    assert sum(row["window_ms"] for row in attempts) < deadline * 1000
     # Six stamps, because one figure cannot tell a slow rebuild from a slow push.
     for row in attempts:
         assert set(row) == {

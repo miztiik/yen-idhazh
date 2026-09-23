@@ -64,6 +64,7 @@ Outputs, when the caller is a workflow step:
 
 from __future__ import annotations
 
+import json
 import os
 import random
 import re
@@ -163,6 +164,12 @@ def _elapsed_ms(since: float) -> int:
     return int((time.monotonic() - since) * 1000)
 
 
+#: What every attempt record is published behind, so a job log can be grepped
+#: for it and a reader can find where the record starts without a format to
+#: agree on. The reader imports this rather than spelling it again.
+PUSH_ATTEMPT_LABEL = "push attempt"
+
+
 def _report_rebased(rebased: bool) -> None:
     """Whether the tree this program pushed is still the tree it was handed.
 
@@ -193,7 +200,12 @@ def _report_rebased(rebased: bool) -> None:
 
 
 def _say_what_this_attempt_spent(attempt: int, outcome: str, stamps: Stamps) -> None:
-    """Print one attempt's six stamps, and add them to the step summary.
+    """Publish one attempt's record, to the job log and to the step summary.
+
+    One record, one encoding. It is published as the fields it carries rather
+    than as a sentence with the fields spelled into it, because a reader that
+    has to split a sentence back apart is a second spelling of the same record
+    and either can drift while the other stays green.
 
     Attempt 1 has no window in the retry sense. Nothing fetches before the first
     push, so its exposure is the whole job - checkout to push, two to three hours
@@ -204,18 +216,19 @@ def _say_what_this_attempt_spent(attempt: int, outcome: str, stamps: Stamps) -> 
     is absent when a test drives this, so that write is skipped rather than
     refused (CLAUDE.md section 1a: degrade, do not fail).
     """
-    line = (
-        f"push attempt={attempt}"
-        f" job={os.environ.get('GITHUB_JOB') or 'local'}"
-        f" shard={os.environ.get('SHARD') or 'none'}"
-        f" outcome={outcome}"
-        f" window_ms={stamps.window_ms}"
-        f" fetch_ms={stamps.fetch_ms}"
-        f" handback_ms={stamps.handback_ms}"
-        f" rebase_ms={stamps.rebase_ms}"
-        f" rebuild_ms={stamps.rebuild_ms}"
-        f" push_ms={stamps.push_ms}"
-    )
+    record = {
+        "attempt": attempt,
+        "job": os.environ.get("GITHUB_JOB") or "local",
+        "shard": os.environ.get("SHARD") or "none",
+        "outcome": outcome,
+        "window_ms": stamps.window_ms,
+        "fetch_ms": stamps.fetch_ms,
+        "handback_ms": stamps.handback_ms,
+        "rebase_ms": stamps.rebase_ms,
+        "rebuild_ms": stamps.rebuild_ms,
+        "push_ms": stamps.push_ms,
+    }
+    line = f"{PUSH_ATTEMPT_LABEL} {json.dumps(record)}"
     _say(line)
     summary = os.environ.get("GITHUB_STEP_SUMMARY")
     if not summary:
