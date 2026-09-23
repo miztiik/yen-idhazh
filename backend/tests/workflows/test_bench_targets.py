@@ -895,7 +895,15 @@ def test_a_server_that_is_still_running_is_not_refused(tmp_path: Path) -> None:
         alive.kill()
         alive.wait(timeout=20)
 
-    assert took >= model_runtime.START_GRACE_SECONDS, (
+    # `Popen.wait(timeout=...)` is allowed back marginally before its deadline,
+    # because the platform's sleep granularity is coarser than the number it was
+    # handed - one run returned 70 microseconds early and failed on `>= 2.0`.
+    # Comparing a measured elapsed time against the timeout itself measures the
+    # clock, not the behaviour. The behaviour being separated here is waiting
+    # from not waiting, and the dead-process test above answers in under a fifth
+    # of a second, so most of the grace period tells the two apart with room.
+    waited_rather_than_returned = model_runtime.START_GRACE_SECONDS * 0.9
+    assert took >= waited_rather_than_returned, (
         f"the check returned after {took:.2f}s, so it waited for nothing"
     )
 
