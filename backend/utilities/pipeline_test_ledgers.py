@@ -19,6 +19,14 @@ same two facts the check needs - which cases are declared, and what each one's
 trial root is called - and a copy of either in a `run:` body is a second spelling
 that drifts. They also fix the artifact's root directory, which a glob would
 leave to whichever cases happened to produce a file.
+
+**Two streams, and the split is not tidiness.** A line another program reads goes
+to stdout: `gather`'s `ledgers=<true|false>`, which the step appends to
+`$GITHUB_OUTPUT`, and `place`'s staged paths, which the step reads with
+`mapfile`. Every line a person reads goes to stderr. `$GITHUB_OUTPUT` takes
+`key=value` and nothing else, so a progress line on stdout is not untidy output -
+it is a step that fails on a line it cannot parse, and it takes the push of a
+whole dispatch's ledgers with it.
 """
 
 from __future__ import annotations
@@ -26,6 +34,7 @@ from __future__ import annotations
 import argparse
 import json
 import shutil
+import sys
 from pathlib import Path
 
 from idhazh import day_shards, ledger
@@ -155,19 +164,21 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.verb == "gather":
         for name in gather(args.state, args.tree, roots=roots):
-            print(f"gathered {name}")
+            print(f"gathered {name}", file=sys.stderr)
         found = any(args.tree.rglob("*"))
+        if not found:
+            print("no case left a ledger tree behind, so there is nothing to push", file=sys.stderr)
         print(f"{FOUND_KEY}={'true' if found else 'false'}")
         return 0
 
     if args.verb == "check":
         refused = refusals(args.tree, roots=frozenset(roots))
         for line in refused:
-            print(f"refused: {line}")
+            print(f"refused: {line}", file=sys.stderr)
         if refused:
             return 1
         for path in sorted(entry for entry in args.tree.rglob("*") if entry.is_file()):
-            print(f"read {path.relative_to(args.tree).as_posix()}")
+            print(f"read {path.relative_to(args.tree).as_posix()}", file=sys.stderr)
         return 0
 
     for path in place(args.tree, args.state, roots=roots):
