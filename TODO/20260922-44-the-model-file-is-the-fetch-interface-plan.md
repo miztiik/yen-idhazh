@@ -835,7 +835,6 @@ Four things a dispatch must prove that nothing cheaper can: the download fetches
 
 - [`20260921-42-lane-b-workflows-plan.md`](20260921-42-lane-b-workflows-plan.md) - the parent, whose rows 1 to 6 landed and whose rows 7 to 11 this plan carries.
 - [`20260923-48-the-corpus-ref-move-plan.md`](20260923-48-the-corpus-ref-move-plan.md) - plan 46's one surviving row, priced and not scheduled. It shares none of row 6's three files.
-- [`20260922-47-the-pipeline-stops-naming-a-server-plan.md`](20260922-47-the-pipeline-stops-naming-a-server-plan.md) - shares one docstring in `backend/idhazh/llm/server.py`. Whoever lands second rebases one hunk.
 - [`../docs/reference/ci-model-runtime.md`](../docs/reference/ci-model-runtime.md) - the page that owns the model path and the cache key.
 - [`../docs/architecture/summarize/model-boundary.md`](../docs/architecture/summarize/model-boundary.md) - the page that owns what the model file declares.
 - [`../docs/how-to/execute-a-plan.md`](../docs/how-to/execute-a-plan.md) - how a row is run and closed.
