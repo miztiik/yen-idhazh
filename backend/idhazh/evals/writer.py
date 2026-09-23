@@ -407,8 +407,9 @@ def append_segment(
 
     **Nothing here checks a header.** Each file is this writer's alone and is
     written whole from the contract's own columns, so there is no earlier header
-    to agree with. The fold reads the day, and it re-files a stale header
-    through `ledger.settle_header` before it merges a row into it.
+    to agree with. The fold reads every file back through the contract's own
+    reader and writes the day whole under the current columns, so a header from
+    an earlier build is replaced rather than repaired.
 
     Returns how many measurements went into the segment, so a caller can log the
     count.

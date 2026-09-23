@@ -1055,57 +1055,6 @@ def _committed_rows(path: Path) -> list[list[str]]:
         return [row for row in csv.reader(handle) if row]
 
 
-def test_a_day_file_that_carries_two_headers_is_refiled_by_the_settlement(
-    tmp_path: Path,
-) -> None:
-    """A union merge stacked two generations and git called the merge clean.
-
-    That was the right answer for two runs appending different rows and no answer
-    at all for two runs appending under different headings. Line 1 still names
-    the contract, so the header check alone passes and the file stays split -
-    which is how `state/item-health/2026/09/14.csv` came to hold 394 rows under
-    one header and 71 under another.
-
-    No path under `state/` carries a union driver any more, so nothing can make
-    this shape again. Files that already hold it are committed, and the fold is
-    what reads them back: the compaction calls it on every head before it merges
-    a segment into one.
-    """
-    state = tmp_path / "state"
-    path = the_settled_file(ledger.item_health_path(state, DATE))
-    current = ItemHealthRow.csv_columns()
-    settled, stranded = timed_row(1), timed_row(2)
-    path.write_text(
-        a_generation(current, [settled]) + a_generation(A_RETIRED_GENERATION, [stranded]),
-        encoding="utf-8",
-        newline="",
-    )
-
-    moved, complaints = ledger.settle_header(
-        path,
-        current,
-        ledger.refiler(ItemHealthRow),
-        carried=ledger.ITEM_HEALTH_CARRIED,
-    )
-    assert (moved, complaints) == (1, [])
-
-    assert seed_item_health(state, DATE, [carried_row(3, source_id="wire")]) == 1
-
-    rows = _committed_rows(path)
-    assert rows[0] == list(current), "one header, on line 1, and it is the contract's"
-    assert [len(row) for row in rows] == [len(current)] * 4
-    read_back = ledger.load_item_health_shard(path)
-    assert [row.item_id for row in read_back] == [
-        settled.item_id,
-        stranded.item_id,
-        carried_row(3, source_id="wire").item_id,
-    ], "the stranded row keeps its place, and the new row lands after it"
-    refiled = read_back[1]
-    assert refiled.csv_row() == stranded.csv_row(), (
-        "every cell the retired headings carried reaches the column it migrated to"
-    )
-
-
 def test_the_older_generation_is_refiled_whichever_block_the_merge_put_first(
     tmp_path: Path,
 ) -> None:
@@ -1242,34 +1191,6 @@ def test_a_day_file_already_under_the_current_header_is_left_byte_identical(
     assert path.read_bytes() == before
 
 
-def test_a_refiled_row_is_the_bytes_the_contract_would_have_written(tmp_path: Path) -> None:
-    """Two ways of writing one row have to agree, or the file disagrees with itself.
-
-    A migration that serialized a row its own way would leave a day file whose
-    older half and newer half differ in quoting, and every byte-level check over
-    the archive would then be reading that difference rather than the data.
-
-    The comparison is against `render_file`, which is what the fold writes a head
-    with. It used to be against the head writer, and that writer is gone.
-    """
-    state = tmp_path / "state"
-    migrated = the_settled_file(ledger.item_health_path(state, DATE))
-    row = timed_row(1)
-    migrated.write_text(a_generation(A_RETIRED_GENERATION, [row]), encoding="utf-8", newline="")
-
-    moved, complaints = ledger.settle_header(
-        migrated,
-        ItemHealthRow.csv_columns(),
-        ledger.refiler(ItemHealthRow),
-        carried=ledger.ITEM_HEALTH_CARRIED,
-    )
-
-    assert (moved, complaints) == (1, [])
-    assert migrated.read_text(encoding="utf-8") == ledger.render_file(
-        ItemHealthRow.csv_columns(), [row.csv_row()]
-    )
-
-
 def test_a_file_wider_than_this_checkout_is_refused_and_left_byte_identical(
     tmp_path: Path,
 ) -> None:
@@ -1296,26 +1217,6 @@ def test_a_file_wider_than_this_checkout_is_refused_and_left_byte_identical(
 
     assert path.read_bytes() == before, "not one cell moved"
     assert ledger.load_item_health_shard(path)[0].csv_row() == timed_row(1).csv_row()
-
-
-def test_the_settlement_refuses_the_same_direction_without_raising(tmp_path: Path) -> None:
-    """The settlement makes the same call and says so rather than aborting.
-
-    A non-zero exit there would cost the run every ledger row staged beside the
-    file, so the refusal is a log line and a byte-identical file.
-    """
-    state = tmp_path / "state"
-    assert seed_item_health(state, DATE, [timed_row(1)]) == 1
-    path = the_settled_file(ledger.item_health_path(state, DATE))
-    before = path.read_bytes()
-
-    moved, complaints = ledger.settle_header(
-        path, A_RETIRED_GENERATION, ledger.refiler(ItemHealthRow)
-    )
-
-    assert moved == 0
-    assert complaints and "cannot place" in complaints[0]
-    assert path.read_bytes() == before
 
 
 class _CountedRead:
@@ -1429,70 +1330,6 @@ def test_the_records_a_day_already_holds_are_read_in_one_pass(
     assert lines[0] == len(rows) + 1, (
         f"{lines[0]} lines read over a 21-line file; the rows are read once"
     )
-
-
-def test_the_settlement_repairs_a_torn_row(
-    tmp_path: Path,
-) -> None:
-    """A row shorter than its header is repaired, and the contract says with what.
-
-    A short row is what a merge can leave when two sides wrote different widths,
-    and the contract's own reader knows what an absent cell means.
-
-    A row of the right width under the right header is not read at all. This pass
-    repairs a shape; asking whether every committed cell still parses would be a
-    scan of the archive wearing a repair's clothes (CLAUDE.md section 13).
-    """
-    state = tmp_path / "state"
-    assert seed_item_health(state, DATE, [carried_row(1, source_id="wire")]) == 1
-    path = the_settled_file(ledger.item_health_path(state, DATE))
-    columns = ItemHealthRow.csv_columns()
-    torn = ",".join(carried_row(2, source_id="wire").csv_row()[name] for name in columns[:11])
-    with path.open("a", encoding="utf-8", newline="") as handle:
-        handle.write(f"{torn}\n")
-
-    moved, complaints = ledger.settle_header(
-        path, columns, ledger.refiler(ItemHealthRow), carried=ledger.ITEM_HEALTH_CARRIED
-    )
-
-    assert moved == 1, "the short row was re-filed under the full header"
-    assert complaints == []
-    rows = _committed_rows(path)
-    assert [len(row) for row in rows] == [len(columns)] * len(rows)
-
-
-def test_the_settlement_leaves_the_file_alone_when_one_line_cannot_be_read(
-    tmp_path: Path,
-) -> None:
-    """One unreadable line stops the whole repair, and nothing is dropped.
-
-    Writing the rest would leave a header over a line that did not move, and the
-    width in that header is the one the next append checks itself against - so
-    the ragged row stops being visible as damage and becomes the file's own
-    shape. Nothing here reads that row to find out; the repair simply does not
-    half-land.
-
-    `migrate_header` refuses on the same condition. It raises where this returns,
-    because an abort here would cost the run every ledger row staged beside the
-    file it was fixing.
-    """
-    state = tmp_path / "state"
-    assert seed_item_health(state, DATE, [carried_row(1, source_id="wire")]) == 1
-    path = the_settled_file(ledger.item_health_path(state, DATE))
-    columns = ItemHealthRow.csv_columns()
-    torn = ",".join(carried_row(2, source_id="wire").csv_row()[name] for name in columns[:11])
-    unreadable = "not-a-version,2026-09-15,2026-09-15-1"
-    with path.open("a", encoding="utf-8", newline="") as handle:
-        handle.write(f"{torn}\n{unreadable}\n")
-    before = path.read_bytes()
-
-    moved, complaints = ledger.settle_header(
-        path, columns, ledger.refiler(ItemHealthRow), carried=ledger.ITEM_HEALTH_CARRIED
-    )
-
-    assert moved == 0, "the repair lands whole or not at all"
-    assert len(complaints) == 1, complaints
-    assert path.read_bytes() == before, "not one cell moved, and no line was dropped"
 
 
 def test_the_day_count_is_what_each_feed_put_in_front_of_a_reader(tmp_path: Path) -> None:
