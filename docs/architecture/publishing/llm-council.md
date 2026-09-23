@@ -636,6 +636,7 @@ today. Where one of them gains a fitted line, this is the room it is fitted in.
 ## See also
 
 - [autotune-content-similarity.md](autotune-content-similarity.md) - the one case heard here today: the merge line, its fold, and how it moves.
+- [autotune-search-quality.md](autotune-search-quality.md) - research: what search returns, and a judge that would tune the similarity floor. Not built.
 - [autotune-summary-quality.md](autotune-summary-quality.md) - the next-day fluency judge, and the loop it feeds.
 - [autotune-story-prominence.md](autotune-story-prominence.md) - what decides a story's position, hand-set today.
 - [autotune-feed-reliability.md](autotune-feed-reliability.md) - what decides how much a feed is trusted, hand-set today.
