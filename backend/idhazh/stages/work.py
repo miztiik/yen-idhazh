@@ -147,7 +147,7 @@ def _shard_cells(
     reason: with `shard` it is the key that reaches this job's host record, and a
     key filled from two places is a key that can disagree with itself.
     """
-    model = settings.models.summarize
+    model = settings.models.summarizer
     return {
         "shard": shard,
         "shard_item_count": shard_item_count,
@@ -308,7 +308,7 @@ def stage_work(
         now=assemble.utc_now,
     )
     read_url = fetcher or common.live_fetcher(settings, tracer=tracer)
-    model = settings.models.summarize
+    model = settings.models.summarizer
     observed = props(model_endpoint, timeout=request_timeout_seconds(model))
     markers = derive_turn_markers(
         model_endpoint, entry=model, timeout=request_timeout_seconds(model)

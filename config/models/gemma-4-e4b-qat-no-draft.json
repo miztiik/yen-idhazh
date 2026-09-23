@@ -1,5 +1,5 @@
 {
-  "summarize": {
+  "summarizer": {
     "arch": "gemma4",
     "byte_count": 4215695776,
     "declared_for": "df0fd4ee07072c607c29a0a1cb4f98918426cca12f45a2776bdd6ee6d09a4de3",

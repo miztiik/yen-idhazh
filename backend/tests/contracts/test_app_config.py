@@ -312,8 +312,8 @@ def test_the_model_server_publishes_its_counters_without_being_asked_for() -> No
         entry["declared_for"] = None
     fresh = ModelsConfig.model_validate(models)
 
-    assert "--metrics" in fresh.summarize.server, "a fresh clone must count"
-    assert "--metrics" in committed.summarize.server, "the committed config must count"
+    assert "--metrics" in fresh.summarizer.server, "a fresh clone must count"
+    assert "--metrics" in committed.summarizer.server, "the committed config must count"
 
 
 def test_the_committed_window_is_one_a_measurement_widened() -> None:
@@ -331,10 +331,10 @@ def test_the_committed_window_is_one_a_measurement_widened() -> None:
     """
     models = committed_models()
 
-    assert window(models.summarize.server) > UNMEASURED_WINDOW, (
+    assert window(models.summarizer.server) > UNMEASURED_WINDOW, (
         "the summarizer is the one role a measurement widened"
     )
-    assert models.summarize.server["-fa"] == "on"
+    assert models.summarizer.server["-fa"] == "on"
 
 
 #: What the summarize prompt costs before a word of the article reaches it, and
@@ -382,7 +382,7 @@ def test_the_longest_article_the_cap_allows_still_fits_the_window() -> None:
     from word count and can undercount the rendered prompt.
     """
     committed = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json"))
-    n_ctx = window(committed_models().summarize.server)
+    n_ctx = window(committed_models().summarizer.server)
     worst_prompt, worst_sequence = _worst_sequence_tokens(committed)
     answer = summarize_and_plan_budget_tokens(committed.summarize)
 
@@ -391,7 +391,7 @@ def test_the_longest_article_the_cap_allows_still_fits_the_window() -> None:
         f"({committed.extract.truncation_cap_tokens}) lets through is "
         f"{worst_prompt} prompt tokens, and {answer} of answer "
         f"puts the sequence at {worst_sequence} against a window of {n_ctx}. "
-        "Raise --ctx-size in models.summarize.server beside the cap, or lower the cap."
+        "Raise --ctx-size in models.summarizer.server beside the cap, or lower the cap."
     )
 
 
@@ -454,7 +454,7 @@ def test_the_two_calls_fit_the_window_at_the_cap() -> None:
     that could exhaust the window and truncate the summary or visual plan.
     """
     committed = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json"))
-    n_ctx = window(committed_models().summarize.server)
+    n_ctx = window(committed_models().summarizer.server)
     prompt, sequence = _worst_two_call_sequence_tokens(committed)
 
     assert sequence <= n_ctx, (
@@ -465,7 +465,7 @@ def test_the_two_calls_fit_the_window_at_the_cap() -> None:
         f"reply, the {SUMMARIZE_AND_PLAN_SEAM_TOKENS}-token seam and the summarize-and-plan call's "
         f"{summarize_and_plan_budget_tokens(committed.summarize)}-token reply put the pair at "
         f"{sequence} against a window of {n_ctx}, over by "
-        f"{sequence - n_ctx}. Raise --ctx-size in models.summarize.server, or "
+        f"{sequence - n_ctx}. Raise --ctx-size in models.summarizer.server, or "
         "lower extract.truncation_cap_tokens or elements.max_per_article beside it. "
         "KV is 32 KiB a token on the configured weights, so a doubling is about a "
         "gigabyte and docs/reference/pipeline-cost.md says what the runner had free."

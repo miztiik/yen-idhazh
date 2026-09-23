@@ -362,7 +362,7 @@ class LiveSummarizer:
 
     def summarize(self, prompt: str, items: Sequence[FrozenItem]) -> list[ItemSummary]:
         ask = self._settings.app.summarize
-        entry = self._settings.models.summarize
+        entry = self._settings.models.summarizer
         sampling = entry.sampling
         model_id = entry.id
         markers = derive_turn_markers(
@@ -460,7 +460,7 @@ class ModelJudge:
         return bool(reply.get("prefers_candidate", False))
 
     def _call(self, user: str, schema: dict[str, object], schema_name: str) -> dict[str, object]:
-        entry = self._settings.models.summarize
+        entry = self._settings.models.summarizer
         payload = request_payload(
             model_id=entry.id,
             system=_JUDGE_SYSTEM,

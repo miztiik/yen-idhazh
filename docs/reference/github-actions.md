@@ -209,7 +209,7 @@ value and nothing else, so changing the config number changes the bound.
 `run.safety_ceiling_per_run` is the item ceiling sized against it.
 
 Each worker checks its weights before it starts the server. `sha256sum` compares
-the file on disk against `models.summarize.sha256` in the active model file, on a
+the file on disk against `models.summarizer.sha256` in the active model file, on a
 cache hit as well as a miss, because a restored cache entry is the one case where
 nobody watched the bytes arrive. So do the two measurement jobs that load the summarizer.
 The rule is written once, under
@@ -797,7 +797,7 @@ plumbing scales with what the block needs rather than with how many callers it
 has.
 
 **The role is the input it deliberately does not take.** The action serves
-`models.summarize` and no caller chooses. That is exactly why the two callers
+`models.summarizer` and no caller chooses. That is exactly why the two callers
 can share one cache entry: they open the same bytes. A caller serving a
 different model needs a different key, a different recorded digest and a
 different alias to assert, which is a design change rather than a parameter.

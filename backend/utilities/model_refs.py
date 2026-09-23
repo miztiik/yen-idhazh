@@ -117,7 +117,7 @@ class _Declared:
     opened: str
     #: Where the name of that file came from, for a refusal to point at.
     named_at: str
-    summarize: dict[str, Any]
+    summarizer: dict[str, Any]
 
 
 def _refuse(opened: str, where: str, says: str, value: object) -> NoReturn:
@@ -192,8 +192,8 @@ def _declared(config_root: Path, named: str) -> _Declared:
         wanted = str(json.loads(pointer.read_text(encoding="utf-8"))[POINTER_KEY])
     path = resolve_under_config(wanted, root=config_root)
     models_file = path.relative_to(config_root.resolve()).as_posix()
-    summarize: dict[str, Any] = json.loads(path.read_text(encoding="utf-8"))["summarize"]
-    return _Declared(models_file, (config_root / models_file).as_posix(), named_at, summarize)
+    summarizer: dict[str, Any] = json.loads(path.read_text(encoding="utf-8"))["summarizer"]
+    return _Declared(models_file, (config_root / models_file).as_posix(), named_at, summarizer)
 
 
 def _a_file(declared: _Declared, block: Mapping[str, Any], at: str, *, weights: bool) -> ModelFile:
@@ -222,10 +222,10 @@ def _model_files(declared: _Declared) -> list[ModelFile]:
     where one file overwrites the other and the digest check then passes on
     whichever was written last.
     """
-    entry = declared.summarize
+    entry = declared.summarizer
     companions: list[dict[str, Any]] = entry.get("companion_files") or []
-    at = ["summarize"]
-    at += [f"summarize.companion_files[{index}]" for index in range(len(companions))]
+    at = ["summarizer"]
+    at += [f"summarizer.companion_files[{index}]" for index in range(len(companions))]
     files = [_a_file(declared, entry, at[0], weights=True)]
     files += [
         _a_file(declared, companion, at[index + 1], weights=False)
@@ -306,7 +306,7 @@ def _draft_rows(declared: _Declared, files: Sequence[ModelFile], *, prefix: str)
     if len(companions) > 1:
         landed = [one.file for one in companions]
         raise SystemExit(
-            f"{declared.opened}: summarize.companion_files:\n"
+            f"{declared.opened}: summarizer.companion_files:\n"
             f"  more than the one companion this publishes ({len(companions)}): {landed!r}"
         )
     companion = companions[0] if companions else None
@@ -316,7 +316,7 @@ def _draft_rows(declared: _Declared, files: Sequence[ModelFile], *, prefix: str)
             prefix,
             f"draft_{field}",
             getattr(companion, field) if companion else "",
-            f"summarize.companion_files[0].{field}",
+            f"summarizer.companion_files[0].{field}",
         )
         for field in COMPANION_FIELDS
     ]
@@ -329,27 +329,29 @@ def _values(declared: _Declared, files: Sequence[ModelFile]) -> dict[str, tuple[
     and `:` - so those two and `,` must stay outside `REPO_RE`, `REVISION_RE` and
     `GGUF_RE`, or that re-parse mis-splits.
     """
-    entry = declared.summarize
+    entry = declared.summarizer
     weights = files[0]
     values = {
-        field: (getattr(weights, field), f"summarize.{field}")
+        field: (getattr(weights, field), f"summarizer.{field}")
         for field in ("repo", "revision", "file", "sha256", "byte_count")
     }
     values["id"] = (
-        _field(declared, entry, "summarize", "id", SLUG_RE, "not a slug"),
-        "summarize.id",
+        _field(declared, entry, "summarizer", "id", SLUG_RE, "not a slug"),
+        "summarizer.id",
     )
     values["quantisation"] = (
-        _field(declared, entry, "summarize", "quantisation", QUANTISATION_RE, "not a quantisation"),
-        "summarize.quantisation",
+        _field(
+            declared, entry, "summarizer", "quantisation", QUANTISATION_RE, "not a quantisation"
+        ),
+        "summarizer.quantisation",
     )
     values["models_file"] = (declared.models_file, declared.named_at)
     values["ref"] = (
         f"{weights.repo}@{weights.revision}:{weights.file}",
-        "summarize.repo, summarize.revision and summarize.file",
+        "summarizer.repo, summarizer.revision and summarizer.file",
     )
-    values["cache_key"] = (_cache_key(files), "summarize and summarize.companion_files")
-    values["weights_path"] = (weights.landed_path, "summarize.file")
+    values["cache_key"] = (_cache_key(files), "summarize and summarizer.companion_files")
+    values["weights_path"] = (weights.landed_path, "summarizer.file")
     return values
 
 
@@ -365,7 +367,7 @@ def pinned_rows(config_root: Path) -> list[str]:
     files = _model_files(declared)
     values = _values(declared, files)
     return [
-        _row(declared, "summarize_", name, *values[name])
+        _row(declared, "summarizer_", name, *values[name])
         for name in (*CONFIGURED_FIELDS, *CONFIGURED_EXTRA)
     ]
 

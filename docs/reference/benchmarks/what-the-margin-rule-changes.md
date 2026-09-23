@@ -31,7 +31,7 @@ weighed.
 | --- | --- |
 | Instrument, live arm | `idhazh.llm.server.grammar_completion_payload` off the committed entry, posted to a server started by `idhazh.llm.server.server_argv` - the judge's own body, not a body written for this page |
 | Instrument, census arm | Every committed row read back through `StorySimilarityPair.from_csv_row` |
-| Weights | `Qwen3.5-9B-Q4_K_M.gguf`, sha256 `03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8` - the file `models.summarize` declares |
+| Weights | `Qwen3.5-9B-Q4_K_M.gguf`, sha256 `03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8` - the file `models.summarizer` declares |
 | Build | `b10444-5f754ea0e`, read off `/props` on the running process |
 | Prompt | The judge's own system turn and the first two items of `tests/fixtures/contracts/digest-day`, rendered through the entry's turn markers |
 | Grammar | `root ::= " "? ("YES" \| "NO" \| "UNCLEAR")`, unchanged by this work - its digest is still `c1d1b9dc`, which is what every committed row and the record itself carry |

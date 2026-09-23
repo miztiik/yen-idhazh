@@ -479,7 +479,7 @@ def two_calls_one_item(
     endpoint = endpoint or resolve_endpoint(settings.app.model_server.base_url)
     trace = tracer if tracer is not None else silent_tracer()
     kept = recorder if recorder is not None else _silent_recorder()
-    model = settings.models.summarize
+    model = settings.models.summarizer
     model_id = model.id
     # Both calls render their own prompt bytes, so they go to the completions
     # route and never to the chat one - which accepts `response_format` and
@@ -812,7 +812,7 @@ def _decide_the_visual(
     if not wants_a_plan:
         return visual_planner.suppressed_by_the_gate(summary, **stamp)
     if two.hit_the_budget:
-        n_ctx = window(settings.models.summarize.server)
+        n_ctx = window(settings.models.summarizer.server)
         asked_for = calls.summarize_and_plan_budget_tokens(settings.app.summarize)
         if two.prompt_tokens + asked_for > n_ctx:
             LOG.warning(

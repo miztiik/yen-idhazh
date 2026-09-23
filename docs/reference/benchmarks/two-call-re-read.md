@@ -19,7 +19,7 @@ rows #3c and #3e).
 | | |
 | --- | --- |
 | Instrument | `backend/utilities/measure_two_calls.py`, `--decode-cap 16 --items 2` |
-| Weights | `Qwen3.5-9B-Q4_K_M.gguf`, sha256 `03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8` - the file `models.summarize` declares, hashed by the harness before the server started |
+| Weights | `Qwen3.5-9B-Q4_K_M.gguf`, sha256 `03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8` - the file `models.summarizer` declares, hashed by the harness before the server started |
 | Runtime | `llama-server` build **b10444-5f754ea0e**, Clang 20.1.8, Windows x86_64 |
 | Chat template | sha256 `7f0e529032c25183bcd66c7f238da2d377f43be754a94e2725a58c4e16d2ed67`, 7,816 characters, read off the server's own `/props` - a template ships with a build as well as with weights |
 | Server flags | From `server_argv` and `config/` alone: `--ctx-size 16384 --no-context-shift --batch-size 512 --ubatch-size 512 --threads 4 -np 1 -fa on -lv 4 --metrics`. The log confirms `flash_attn = enabled` |

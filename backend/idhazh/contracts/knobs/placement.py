@@ -286,7 +286,7 @@ class SimilarityThresholdConfig(Model):
             "disagreement_max gates on. Above 0.0 the same pair can answer differently with "
             "nothing swapped at all, so the comparison measures sampling noise instead and "
             "the gate stops meaning what its own name says. It sits here rather than on "
-            "models.summarize.inference because that entry pins its temperature for writing "
+            "models.summarizer.sampling because that entry pins its temperature for writing "
             "summaries, which is a different job on the same weights."
         ),
     )

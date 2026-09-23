@@ -47,6 +47,9 @@ def test_the_manifest_keeps_the_keys_its_python_names_stopped_matching() -> None
     parsed once per published day to re-ask it.
     """
     assert ModelRole.VISUAL_PLANNER.value == "route"
+    assert ModelRole.SUMMARIZER.value == "summarize", (
+        "the published role value is pinned; only the python name and the config key moved"
+    )
 
     raw = read_text(CONTRACT_FIXTURES_DIR / "run-manifest" / "two-runs.json")
     payload = json.loads(raw)

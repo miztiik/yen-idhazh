@@ -47,8 +47,8 @@ def entry_with(server: dict[str, Any]) -> Any:
     """The committed entry with its server block replaced, so a fixture case is
     one edit away from a file a person really wrote."""
     raw = json.loads(read_text(CONFIG_DIR / "models" / "qwen3.5-9b-q4km.json"))
-    raw["summarize"]["server"] = server
-    return ModelsConfig.model_validate(raw).summarize
+    raw["summarizer"]["server"] = server
+    return ModelsConfig.model_validate(raw).summarizer
 
 
 @pytest.mark.parametrize("path", model_files(), ids=model_id)
@@ -97,7 +97,7 @@ def test_no_committed_entry_puts_a_sampling_value_on_the_command_line(path: Path
     config = ModelsConfig.model_validate_json(read_text(path))
 
     for name in SAMPLING_KEYS:
-        assert name in config.summarize.sampling, f"{name} left the sampling block"
+        assert name in config.summarizer.sampling, f"{name} left the sampling block"
         assert name not in golden
 
 

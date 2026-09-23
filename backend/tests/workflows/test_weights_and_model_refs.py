@@ -286,12 +286,12 @@ def test_the_model_block_reads_the_refs_out_of_config_where_it_uses_them(
     # to stop. Nothing else between config and those commands can catch it.
     pointer = "models/probe.json"
     (tmp_path / "config" / "models").mkdir(parents=True)
-    models["summarize"]["file"] = "Qwen3-8B-Q4_K_M.gguf; rm -rf /"
+    models["summarizer"]["file"] = "Qwen3-8B-Q4_K_M.gguf; rm -rf /"
     (tmp_path / "config" / pointer).write_text(json.dumps(models), encoding="utf-8")
     (tmp_path / "config" / "idhazh.json").write_text(
         json.dumps({MODELS_POINTER_KEY: pointer}), encoding="utf-8"
     )
-    with pytest.raises(SystemExit, match=re.escape("summarize.file")):
+    with pytest.raises(SystemExit, match=re.escape("summarizer.file")):
         model_refs.pinned_rows(tmp_path / "config")
 
 
@@ -314,7 +314,7 @@ def test_a_daily_run_refuses_a_draft_head_that_declares_only_half_of_itself(
     pointer = "models/probe.json"
     (tmp_path / "config" / "models").mkdir(parents=True)
     models = _committed_models()
-    models["summarize"]["companion_files"] = [
+    models["summarizer"]["companion_files"] = [
         {
             "repo": "publisher/head-GGUF",
             "revision": "8c5a9e4fd5482e2be20fe0bf013b4c262a8f4265",
@@ -328,7 +328,7 @@ def test_a_daily_run_refuses_a_draft_head_that_declares_only_half_of_itself(
     )
 
     with pytest.raises(
-        SystemExit, match=re.escape("summarize.companion_files[0].sha256")
+        SystemExit, match=re.escape("summarizer.companion_files[0].sha256")
     ):
         model_refs.pinned_rows(tmp_path / "config")
 
@@ -368,7 +368,7 @@ def test_a_candidate_is_named_by_its_models_file_and_by_nothing_else(tmp_path: P
 
         published = _published(model_refs.trial_rows(CONFIG_DIR, "", prefix=prefix))
         for field in ("repo", "revision", "file", "id", "quantisation", "sha256"):
-            assert published[f"{prefix}{field}"] == committed["summarize"][field], (
+            assert published[f"{prefix}{field}"] == committed["summarizer"][field], (
                 f"{filename} publishes a {field} the committed entry does not carry"
             )
 
@@ -376,7 +376,7 @@ def test_a_candidate_is_named_by_its_models_file_and_by_nothing_else(tmp_path: P
         # stops here - nothing downstream opens the path again to check it.
         (tmp_path / "config" / "models").mkdir(parents=True, exist_ok=True)
         other = json.loads(json.dumps(committed))
-        other["summarize"]["id"] = "some-other-model"
+        other["summarizer"]["id"] = "some-other-model"
         (tmp_path / "config" / "models" / "other.json").write_text(
             json.dumps(other), encoding="utf-8"
         )
@@ -426,17 +426,17 @@ def test_the_weights_cache_key_names_the_model_and_the_build_it_holds() -> None:
     assert len(set(keys.values())) == 1, f"one entry cannot hold two sets of weights: {keys}"
     key = next(iter(keys.values()))
 
-    digest = _expression("steps.model.outputs.summarize_cache_key")
+    digest = _expression("steps.model.outputs.summarizer_cache_key")
     build = _expression(f"inputs.{_pin_output_name()}")
     assert key == f"llm-{digest}-{build}-{WEIGHTS_CACHE_SUFFIX}"
 
     published = _published(model_refs.pinned_rows(CONFIG_DIR))
-    composed = key.replace(digest, published["summarize_cache_key"]).replace(
+    composed = key.replace(digest, published["summarizer_cache_key"]).replace(
         build, PINNED_LLAMA_BUILD
     )
     assert "${{" not in composed, "every half of the key must resolve"
     assert composed == (
-        f"llm-{published['summarize_cache_key']}-{PINNED_LLAMA_BUILD}-{WEIGHTS_CACHE_SUFFIX}"
+        f"llm-{published['summarizer_cache_key']}-{PINNED_LLAMA_BUILD}-{WEIGHTS_CACHE_SUFFIX}"
     )
 
     # The build is the one half the model file does not decide, so it is the one
@@ -503,7 +503,7 @@ def _a_config_tree(tmp_path: Path, summarize: dict[str, object]) -> Path:
         json.dumps({"models_file": "models/candidate.json"}) + "\n", encoding="utf-8"
     )
     (models / "candidate.json").write_text(
-        json.dumps({"summarize": summarize}) + "\n", encoding="utf-8"
+        json.dumps({"summarizer": summarize}) + "\n", encoding="utf-8"
     )
     return tmp_path / "config"
 
@@ -702,7 +702,7 @@ def test_a_value_a_shell_would_read_as_more_than_itself_is_refused(
 
     said = str(refused.value)
     assert "models/candidate.json" in said, "a refusal names the file it read"
-    assert f"summarize.{field}:" in said, "a refusal names where in that file"
+    assert f"summarizer.{field}:" in said, "a refusal names where in that file"
     assert says in said, "a refusal says the rule in plain words"
     assert repr(value) in said, "a refusal shows the value that broke it"
     assert "[A-Za-z" not in said, "a refusal prints the rule in words, never the pattern"
@@ -1052,8 +1052,8 @@ def test_two_declared_files_landing_on_one_name_are_refused(tmp_path: Path) -> N
 
     said = str(refused.value)
     assert "two files land on one name" in said
-    assert "summarize.file 'model-Q4_K_M.gguf'" in said
-    assert "summarize.companion_files[0].file 'model-Q4_K_M.gguf'" in said
+    assert "summarizer.file 'model-Q4_K_M.gguf'" in said
+    assert "summarizer.companion_files[0].file 'model-Q4_K_M.gguf'" in said
 
 
 def test_a_second_companion_is_refused_rather_than_dropped(tmp_path: Path) -> None:

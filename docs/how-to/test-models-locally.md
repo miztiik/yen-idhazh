@@ -54,7 +54,7 @@ A number from another build is a separate measurement.
 
 Every URL names a commit rather than a branch. A branch hands back whatever was
 uploaded last, so a download from one is not the file the active model file
-records the SHA-256 of. The commit below is `models.summarize.revision` in that
+records the SHA-256 of. The commit below is `models.summarizer.revision` in that
 file - copy it from there rather than from
 here, because there it is the value the pipeline itself fetches.
 
@@ -131,7 +131,7 @@ from idhazh import config
 from idhazh.llm.server import server_argv
 
 settings = config.load(Path("config"))
-model = settings.models.summarize
+model = settings.models.summarizer
 print(" ".join(server_argv(
  binary=Path("backend/bin/llama-server"),
  weights=Path("backend/models") / model.file,

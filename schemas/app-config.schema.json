@@ -1149,7 +1149,7 @@
     },
     "FinetuneConfig": {
       "additionalProperties": false,
-      "description": "The training corpus and the schedules that maintain it.\n\nNothing here runs on the runner. Training needs a GPU and the runner has\nnone (section 0a), so these knobs size a file CI commits and a notebook\nsomewhere else reads. `teacher` names a KEY in `models` rather than a model,\nbecause `models.summarize` has already moved once and a knob that spells a\nmodel name is stale the day the config moves.\n\nThere is no `student`. It named the small visual planner, retired when the\ntwo calls moved onto the summarizer's weights, and a distillation session\nneeds two models: with one role left, the student could only be the teacher.\n\nThe prune knobs live here and not in `retention`. That block is about\npublished-site images and its own `site_budget_mb`; putting corpus history\nunder the same name would file two unrelated retention policies together.",
+      "description": "The training corpus and the schedules that maintain it.\n\nNothing here runs on the runner. Training needs a GPU and the runner has\nnone (section 0a), so these knobs size a file CI commits and a notebook\nsomewhere else reads. `teacher` names a KEY in `models` rather than a model,\nbecause the summarizer slot has already moved twice and a knob that spells a\nmodel name is stale the day the config moves.\n\nThere is no `student`. It named the small visual planner, retired when the\ntwo calls moved onto the summarizer's weights, and a distillation session\nneeds two models: with one role left, the student could only be the teacher.\n\nThe prune knobs live here and not in `retention`. That block is about\npublished-site images and its own `site_budget_mb`; putting corpus history\nunder the same name would file two unrelated retention policies together.",
       "properties": {
         "corpus_rows": {
           "default": 2000,
@@ -1228,7 +1228,7 @@
           "type": "integer"
         },
         "teacher": {
-          "default": "summarize",
+          "default": "summarizer",
           "description": "A key in `models`. The model whose outputs a session fine-tunes.",
           "pattern": "^[a-z0-9]+(?:_[a-z0-9]+)*$",
           "title": "Teacher",
@@ -2043,7 +2043,7 @@
         },
         "judge_temperature": {
           "default": 0.0,
-          "description": "How far the judge's sampler may stray from the likeliest word. 0.0, because every pair is read twice with the two summaries swapped and the two readings are then compared: at 0.0 a disagreement is position bias, which is the thing disagreement_max gates on. Above 0.0 the same pair can answer differently with nothing swapped at all, so the comparison measures sampling noise instead and the gate stops meaning what its own name says. It sits here rather than on models.summarize.inference because that entry pins its temperature for writing summaries, which is a different job on the same weights.",
+          "description": "How far the judge's sampler may stray from the likeliest word. 0.0, because every pair is read twice with the two summaries swapped and the two readings are then compared: at 0.0 a disagreement is position bias, which is the thing disagreement_max gates on. Above 0.0 the same pair can answer differently with nothing swapped at all, so the comparison measures sampling noise instead and the gate stops meaning what its own name says. It sits here rather than on models.summarizer.sampling because that entry pins its temperature for writing summaries, which is a different job on the same weights.",
           "maximum": 2.0,
           "minimum": 0.0,
           "title": "Judge Temperature",

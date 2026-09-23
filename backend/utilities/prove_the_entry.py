@@ -16,7 +16,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     settings = config.load(args.config_root)
-    entry = settings.models.summarize
+    entry = settings.models.summarizer
     prove_the_entry(
         model=entry,
         output_schema=summarize_and_plan_schema(),

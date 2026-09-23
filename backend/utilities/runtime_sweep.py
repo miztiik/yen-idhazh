@@ -268,7 +268,7 @@ def write_config(label: str, update: dict[str, Any]) -> Path:
     pointer = json.loads((dst / "idhazh.json").read_text(encoding="utf-8"))["models_file"]
     path = dst / pointer
     payload = json.loads(path.read_text(encoding="utf-8"))
-    entry = payload["summarize"]
+    entry = payload["summarizer"]
     for key, value in update.items():
         if key in ENTRY_KEYS:
             entry[key] = value
@@ -455,8 +455,8 @@ def run_once(
     argv = server_argv(
         binary=SERVER_BINARY,
         weights=WEIGHTS_DIR / candidate_file,
-        model=settings.models.summarize,
-        server=settings.models.summarize.server,
+        model=settings.models.summarizer,
+        server=settings.models.summarizer.server,
         port=port,
     )
     env = os.environ.copy()

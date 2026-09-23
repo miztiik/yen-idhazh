@@ -202,17 +202,19 @@ class AppConfig(Contract):
         Checked here because `FinetuneConfig` cannot see `models` and a typo
         would otherwise surface on a GPU somebody is paying for, hours later.
 
-        A role still naming a retired one is answered by name. `visual_planner`
-        and its older spelling `route` are the two that were legal, and the
-        difference matters to whoever is reading the failure: they did not
-        misspell a key, the model is gone.
+        A role still naming a retired or renamed one is answered by name, and
+        the answer is read off `SUPERSEDED_MODELS_NAMES` rather than written
+        again here. The difference matters to whoever is reading the failure:
+        they did not misspell a key, the key moved or the model is gone.
         """
         roles = set(ModelsConfig.roles())
         named = self.finetune.teacher
         if named in SUPERSEDED_MODELS_NAMES:
+            went = SUPERSEDED_MODELS_NAMES[named]
+            where = f"now {went}" if went else "a model that was retired with the visuals stage"
             raise ValueError(
-                f"finetune.teacher names {named}, a model that was retired with the "
-                "visuals stage. Name one of models: " + ", ".join(sorted(roles))
+                f"finetune.teacher names {named}, which is {where}. "
+                "Name one of models: " + ", ".join(sorted(roles))
             )
         if named not in roles:
             spelled = ", ".join(sorted(roles))

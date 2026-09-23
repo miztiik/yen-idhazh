@@ -213,7 +213,7 @@ def test_a_config_file_that_names_the_retired_settings_block_is_refused_by_name(
     reads.
     """
     raw = committed_models_raw()
-    raw["summarize"]["inference"] = {"n_ctx": 4096}
+    raw["summarizer"]["inference"] = {"n_ctx": 4096}
 
     with pytest.raises(ValidationError, match=re.escape("models.<role>.server")):
         ModelsConfig.model_validate(raw)

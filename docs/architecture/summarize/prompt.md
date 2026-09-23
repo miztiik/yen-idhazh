@@ -17,7 +17,7 @@ owns the prompt.
 
 `backend/idhazh/prompts/summarize.txt` holds no numbers. It holds
 `$target_words_min`, `$title_words_max`, `$max_verbatim_words` and their
-siblings, and `system_prompt` substitutes them from `config.summarize` at
+siblings, and `system_prompt` substitutes them from `config.summarizer` at
 render time (Guardrail #6).
 
 Substitution uses `substitute` and never `safe_substitute`. A renamed knob
@@ -27,7 +27,7 @@ looks like.
 
 ## One ask per article length
 
-`config.summarize.bands` holds one length ask per article size, ordered by
+`config.summarizer.bands` holds one length ask per article size, ordered by
 `min_source_words`. `band_for` picks the longest band the article reaches,
 unless extraction recorded the item as brief. A brief item always uses band 0.
 
@@ -461,7 +461,7 @@ with no number is a valid summary. The ban now names the job it belongs to.
 ### What is in the prompt bytes, and who wrote each part
 
 Three strings open and close a turn, and they live on the model entry that names
-the weights - `models.summarize.turns`, in the file `config/idhazh.json` points
+the weights - `models.summarizer.turns`, in the file `config/idhazh.json` points
 `models_file` at.
 They are model-shaped text and they move when the model does, so they belong
 beside the weights rather than in a package this project writes: held apart, a
@@ -861,7 +861,7 @@ unbreakable ceiling would leave no window for the article it is summarising.
 **A budget is also a clock, and this one is close to a bound.** At the 6.01
 tokens a second the configured summarizer decodes at on `ubuntu-latest`
 (2026-08-23), 4,735 tokens is 13.1 minutes, against a
-`models.summarize.request_timeout_minutes` of 22.1 and a
+`models.summarizer.request_timeout_minutes` of 22.1 and a
 `run.shard_timeout_minutes` of 200. So a single reply that ran to the
 brake would not trip the request timeout, and fifteen of them would spend the
 whole shard. The grammar closes the object long before that on every
@@ -1085,10 +1085,10 @@ are the cases that move. A model judge remains banned
 ## Model compatibility is mechanical
 
 The chat route sends `chat_template_kwargs` with one key, and the key is named
-by `models.summarize.turns.thinking_kwarg` rather than spelled in this project's
+by `models.summarizer.turns.thinking_kwarg` rather than spelled in this project's
 source - it is a variable in somebody else's Jinja template, so it moves when
 the model does. On the configured weights it is `enable_thinking`, and its value
-is whether `models.summarize.turns.thinking_close` is declared, which on the
+is whether `models.summarizer.turns.thinking_close` is declared, which on the
 incumbent it is not. An entry may declare the keyword null, which means the
 template reads no variables and the request sends no `chat_template_kwargs` at
 all. The two calls the digest run makes render their own prompt bytes and send

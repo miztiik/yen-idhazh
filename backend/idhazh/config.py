@@ -95,11 +95,11 @@ def refuse_a_model_nothing_could_run(models_file: str, models: ModelsConfig) -> 
                 f"them for these weights and set models.{role}.declared_for to the digest "
                 "the entry carries - or put the entry back"
             )
-        if role not in type(models).roles() and entry.sha256 != models.summarize.sha256:
+        if role not in type(models).roles() and entry.sha256 != models.summarizer.sha256:
             raise ValueError(
                 f"config/{models_file} is refused: models.{role} names weights "
-                f"{entry.sha256 or 'nothing at all'} and models.summarize names "
-                f"{models.summarize.sha256 or 'nothing at all'}. No server is started "
+                f"{entry.sha256 or 'nothing at all'} and models.summarizer names "
+                f"{models.summarizer.sha256 or 'nothing at all'}. No server is started "
                 f"for models.{role}, so it decodes on the weights the summariser's "
                 "server holds - name those, or make it a role of its own"
             )

@@ -238,7 +238,7 @@ def test_the_model_block_is_one_action_with_a_contract_its_callers_can_read() ->
             f"{filename}/{job_name} calls the action before it has the tree"
         )
 
-    # The role is `models.summarize` and no caller chooses it, which is why the
+    # The role is `models.summarizer` and no caller chooses it, which is why the
     # two can share one cache entry - so naming it is correct. Naming a CALLER
     # is not: a block that knows who called it is a block one caller cannot be
     # built or tested without.
@@ -676,7 +676,7 @@ def test_the_weights_path_a_launcher_derives_is_the_one_the_download_wrote(
     """
     workflows = _load_workflows()
     roots = _the_five_roots(tmp_path)
-    landed = _published(model_refs.pinned_rows(CONFIG_DIR))["summarize_weights_path"]
+    landed = _published(model_refs.pinned_rows(CONFIG_DIR))["summarizer_weights_path"]
 
     for filename, job_name, step_name, root_name in LAUNCH_ROOTS:
         where = f"{filename}/{job_name}/{step_name}"

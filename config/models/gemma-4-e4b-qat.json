@@ -1,5 +1,5 @@
 {
-  "summarize": {
+  "summarizer": {
     "arch": "gemma4",
     "byte_count": 4215695776,
     "companion_files": [

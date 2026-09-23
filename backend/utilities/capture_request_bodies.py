@@ -64,7 +64,7 @@ def markers_for(model_file: str) -> TurnMarkers:
 
 def bodies(config: ModelsConfig, *, markers: TurnMarkers) -> dict[str, Any]:
     """Every route's body for one entry, keyed by the route that posts it."""
-    entry = config.summarize
+    entry = config.summarizer
     server, sampling = entry.server, entry.sampling
     completion = completion_payload(
         model_id=entry.id,

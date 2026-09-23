@@ -190,8 +190,8 @@ watched the bytes arrive.
 
 | Workflow and job | Weights | Digest read from |
 | --- | --- | --- |
-| every job on the shared download | whatever its config root declares | that root's own `models.summarize.sha256` and each companion's, read by `verify-model-files` |
-| `measure.yml`'s four inline arms | the bench candidate, or the summarizer | the `models` job's republished `candidate_sha256`, or `models.summarize.sha256` |
+| every job on the shared download | whatever its config root declares | that root's own `models.summarizer.sha256` and each companion's, read by `verify-model-files` |
+| `measure.yml`'s four inline arms | the bench candidate, or the summarizer | the `models` job's republished `candidate_sha256`, or `models.summarizer.sha256` |
 
 The four inline arms are the exception, and deliberately: an operator can point
 the bench at a model config does not name, so that job resolves the digest once
@@ -247,7 +247,7 @@ anybody remembered it.
 
 ## One place writes a production model ref, and it is config
 
-`config/models/<name>.json` holds `models.summarize`, and `config/idhazh.json`
+`config/models/<name>.json` holds `models.summarizer`, and `config/idhazh.json`
 says which of those files is active through `models_file`. None of the
 three workflows that load weights - `digest.yml`, `measure.yml`, `validate.yml` -
 holds a model repository, a weights filename or a publisher name of its own.

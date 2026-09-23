@@ -102,7 +102,7 @@ def configured() -> ModelEntry:
     Read through `config.load`, which is what a stage calls, so a test never
     reaches the markers by a second route.
     """
-    return config.load(CONFIG_DIR).models.summarize
+    return config.load(CONFIG_DIR).models.summarizer
 
 #: How to re-record after a DELIBERATE prompt or bound change. Nothing else may
 #: move these bytes, which is the whole point of the file. It rewrites the two

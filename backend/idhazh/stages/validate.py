@@ -58,8 +58,8 @@ def _summarize_one(
     """
     endpoint = endpoint or resolve_endpoint(settings.app.model_server.base_url)
     trace = tracer if tracer is not None else silent_tracer()
-    sampling = settings.models.summarize.sampling
-    model_id = settings.models.summarize.id
+    sampling = settings.models.summarizer.sampling
+    model_id = settings.models.summarizer.id
     with trace.span(telemetry.SpanName.SUMMARIZE) as stage_span:
         stage_span.set(telemetry.AttrKey.MODEL_ID, model_id)
         with trace.span(telemetry.SpanName.RENDER_PROMPT) as span:
@@ -79,7 +79,7 @@ def _summarize_one(
             article,
             model_id=model_id,
             endpoint=endpoint,
-            timeout=request_timeout_seconds(settings.models.summarize),
+            timeout=request_timeout_seconds(settings.models.summarizer),
             prompt_digest=prompt_digest,
             run_id=run_id,
             trace=trace,
@@ -126,7 +126,7 @@ def stage_validate(
     model_endpoint = model_endpoint or resolve_endpoint(settings.app.model_server.base_url)
     read_url = fetcher or common.live_fetcher(settings)
     plan = _load_plan(date)
-    model = settings.models.summarize
+    model = settings.models.summarizer
     model_id = model.id
     markers = derive_turn_markers(
         model_endpoint, entry=model, timeout=request_timeout_seconds(model)

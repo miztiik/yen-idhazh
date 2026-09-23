@@ -243,7 +243,7 @@ def entry_of(settings: config.Settings) -> ModelEntry:
     Read here by the decode, by the stamp and by the shard, so a run cannot judge
     under one entry and record another.
     """
-    return settings.models.judge or settings.models.summarize
+    return settings.models.judge or settings.models.summarizer
 
 
 def decode_settings(settings: config.Settings) -> Mapping[str, Any]:

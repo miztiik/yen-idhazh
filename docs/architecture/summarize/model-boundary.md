@@ -385,7 +385,7 @@ one. Before that, an alternative sat unvalidated until the day somebody switched
 to it - and that day is a pipeline run.
 
 **A second set of weights that drafts ahead of the first is not offered.** It
-was until 2026-09-21, as `models.summarize.draft`, and the mechanism's whole
+was until 2026-09-21, as `models.summarizer.draft`, and the mechanism's whole
 claim is that it cannot change a word: the target verifies every drafted token
 and rejects any it would not itself have produced. Two paired dispatches refused
 that claim on nine articles of nine - each case reproduced its own summaries

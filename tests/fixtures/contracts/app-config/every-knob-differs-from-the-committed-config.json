@@ -267,7 +267,7 @@
     "reference_rows": 300,
     "reference_test_rows": 100,
     "sequence_length": 4096,
-    "teacher": "summarize",
+    "teacher": "summarizer",
     "train_rows": 1000
   },
   "lens_weights": {

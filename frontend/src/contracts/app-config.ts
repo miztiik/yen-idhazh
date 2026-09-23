@@ -514,7 +514,7 @@ export type FailureCode = (typeof FAILURE_CODE)[number];
  * Nothing here runs on the runner. Training needs a GPU and the runner has
  * none (section 0a), so these knobs size a file CI commits and a notebook
  * somewhere else reads. `teacher` names a KEY in `models` rather than a model,
- * because `models.summarize` has already moved once and a knob that spells a
+ * because the summarizer slot has already moved twice and a knob that spells a
  * model name is stale the day the config moves.
  *
  * There is no `student`. It named the small visual planner, retired when the
@@ -1087,7 +1087,7 @@ export interface SimilarityThresholdConfig {
 	/** How many pairs a judging shard finishes before it writes its verdict file again. Every pair, because the file holds one shard's slice of pair_budget - 50 rows at the committed numbers - and rewriting 50 rows is not measurable beside a pair that costs 110.98 s. It buys the case the cadence exists for: a shard that stops on its clock, or dies, still leaves every pair it had already judged. Counted in pairs because a pair is the unit this judge stops between. Raise it only if a run ever shows the rewrite costing anything. */
 	flush_every_pairs?: number;
 
-	/** How far the judge's sampler may stray from the likeliest word. 0.0, because every pair is read twice with the two summaries swapped and the two readings are then compared: at 0.0 a disagreement is position bias, which is the thing disagreement_max gates on. Above 0.0 the same pair can answer differently with nothing swapped at all, so the comparison measures sampling noise instead and the gate stops meaning what its own name says. It sits here rather than on models.summarize.inference because that entry pins its temperature for writing summaries, which is a different job on the same weights. */
+	/** How far the judge's sampler may stray from the likeliest word. 0.0, because every pair is read twice with the two summaries swapped and the two readings are then compared: at 0.0 a disagreement is position bias, which is the thing disagreement_max gates on. Above 0.0 the same pair can answer differently with nothing swapped at all, so the comparison measures sampling noise instead and the gate stops meaning what its own name says. It sits here rather than on models.summarizer.sampling because that entry pins its temperature for writing summaries, which is a different job on the same weights. */
 	judge_temperature?: number;
 
 	/** Agreed NO verdicts the record needs before the fit may set the line at all. 200, because discard_share is 0.03 and three percent of 200 sets six verdicts aside - enough to absorb the four wrong NO verdicts one news cluster produced in the 200 labelled pairs of 2026-09-19. Three percent of 100 sets three aside, which does not. */

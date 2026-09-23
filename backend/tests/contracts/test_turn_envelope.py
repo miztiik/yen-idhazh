@@ -142,7 +142,7 @@ def test_a_turn_block_left_in_a_model_file_is_refused_by_name() -> None:
     because silence teaches a block that nothing reads.
     """
     raw = committed_models_raw()
-    raw["summarize"]["turns"] = {"turn_opening": "<|im_start|>$role\n"}
+    raw["summarizer"]["turns"] = {"turn_opening": "<|im_start|>$role\n"}
 
     with pytest.raises(ValidationError, match="turns"):
         ModelsConfig.model_validate(raw)
@@ -157,8 +157,8 @@ def test_a_template_that_reads_no_keyword_cannot_be_asked_to_think() -> None:
     default happens to be.
     """
     raw = committed_models_raw()
-    raw["summarize"]["thinking_kwarg"] = None
-    raw["summarize"]["thinking_close"] = "</think>"
+    raw["summarizer"]["thinking_kwarg"] = None
+    raw["summarizer"]["thinking_close"] = "</think>"
 
     with pytest.raises(ValidationError, match="thinking_kwarg is null"):
         ModelsConfig.model_validate(raw)
@@ -176,11 +176,11 @@ def test_a_run_records_which_weights_ran_and_not_how_their_turns_are_written() -
     `RunRecord.inputs.turn_markers_sha256` digests the whole envelope the server
     derived, so a model whose template differs still moves the stamp.
     """
-    entry = committed_models().summarize
+    entry = committed_models().summarizer
     assert "thinking_close" not in ModelRef.model_fields
     assert "thinking_close" in ModelEntry.model_fields
 
-    use = ModelUse(role=ModelRole.SUMMARIZE, model_ref=entry)
+    use = ModelUse(role=ModelRole.SUMMARIZER, model_ref=entry)
     written = json.loads(use.model_dump_json())
 
     assert "thinking_close" not in written["model_ref"]
@@ -205,11 +205,11 @@ def test_the_thinking_arms_closing_marker_is_derived_from_its_own_reply_openings
     """
     entry = ModelsConfig.from_json(
         (CONFIG_DIR / "models" / "qwen3.5-9b-q4km-thinking.json").read_text(encoding="utf-8")
-    ).summarize
+    ).summarizer
     markers = derived(recorded()["entries"]["qwen3.5-9b-q4km-thinking.json"])
 
     assert entry.thinks, "the arm exists to turn reasoning on"
     assert entry.thinking_close == "\n</think>\n\n"
     assert markers.reply_opening_thinking + entry.thinking_close == markers.reply_opening
     assert entry.thinking_kwarg == "enable_thinking", "a marker with no keyword is refused"
-    assert entry.sha256 == committed_models().summarize.sha256, "same weights, one dossier"
+    assert entry.sha256 == committed_models().summarizer.sha256, "same weights, one dossier"

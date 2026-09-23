@@ -676,7 +676,7 @@ front of the verdict, and the committed entry that offers one also moves the
 summariser's answer budget, its cache types and its batch size - which is an
 uninstrumented change to the words a reader gets. So `models.judge` is optional,
 it is null everywhere, and a second entry is refused unless it names the weights
-`models.summarize` already holds: no server is started for it, so it decodes on
+`models.summarizer` already holds: no server is started for it, so it decodes on
 whatever the running one has open. What it may move is the decode. It is filled
 the day a replay says a reasoned verdict is a better verdict, and that replay is
 priced and unrun.

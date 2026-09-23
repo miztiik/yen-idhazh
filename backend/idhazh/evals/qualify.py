@@ -409,7 +409,7 @@ def context_fit(
             f"{len(overflow)} overflowed, {len(under_reserved)} under-reserved"
         ),
         threshold=f"< n_ctx {n_ctx}; fits_context over-reserves",
-        source=f"{_CONFIG} models.summarize.server --ctx-size",
+        source=f"{_CONFIG} models.summarizer.server --ctx-size",
         detail=(
             "a request that does not fit is not a shorter summary, it is a reply "
             "cut off before it closed its JSON"

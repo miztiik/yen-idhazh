@@ -54,7 +54,7 @@ function limits(): MachineLimits {
 		readFileSync(join(REPO, 'config', idhazh.models_file), 'utf8')
 	) as { summarize: { server: { '--ctx-size': number } } };
 	return {
-		contextWindow: models.summarize.server['--ctx-size'],
+		contextWindow: models.summarizer.server['--ctx-size'],
 		jobTimeoutSeconds: idhazh.run.shard_timeout_minutes * 60
 	};
 }

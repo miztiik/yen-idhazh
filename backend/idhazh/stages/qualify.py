@@ -424,7 +424,7 @@ def stage_qualify(
 
     started = time.monotonic()
     read_url = fetcher or common.live_fetcher(settings)
-    model = settings.models.summarize
+    model = settings.models.summarizer
     observed = props(model_endpoint, timeout=request_timeout_seconds(model))
     inputs = build_inputs(
         model=model,

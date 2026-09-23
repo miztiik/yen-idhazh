@@ -175,7 +175,7 @@ def test_the_judge_literal_names_every_model_this_repo_ships() -> None:
     shipped = set()
     for path in sorted((CONFIG_DIR / "models").glob("*.json")):
         payload = json.loads(read_text(path))
-        shipped.add(payload["summarize"]["id"])
+        shipped.add(payload["summarizer"]["id"])
 
     assert set(get_args(JudgeModelId)) == shipped
 

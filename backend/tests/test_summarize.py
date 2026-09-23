@@ -19,6 +19,7 @@ import logging
 import re
 import socket
 import threading
+from collections.abc import Callable
 from dataclasses import replace
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -315,7 +316,7 @@ def three_bodies(sampling: dict[str, Any], *, only: str | None = None) -> Any:
     The three are asked together because the rule is the same rule on all three
     and a case written against one of them says nothing about the other two.
     """
-    built = {
+    built: dict[str, Callable[[], dict[str, Any]]] = {
         "chat": lambda: request_payload(
             model_id="m",
             system="s",
@@ -749,7 +750,7 @@ class TestTheRenderedCompletionEnvelope:
     """The second shape `parse_completion` reads, from a reply a server really sent.
 
     Recorded 2026-09-12 by posting the committed label prompt to llama-server
-    build b10444-5f754ea0e on the weights `models.summarize` declares, over its
+    build b10444-5f754ea0e on the weights `models.summarizer` declares, over its
     rendered-completion route. Nothing is hand-written: the route names its
     fields differently from the chat route, and a fake would agree with whatever
     the reader happened to expect (Guardrail #7).
@@ -3395,7 +3396,7 @@ class TestTheServerSettlesTheEntry:
 
     def test_an_entry_that_declares_no_architecture_is_refused_at_load(self) -> None:
         document = json.loads(read_text(CONFIG_DIR / "models" / "qwen3.5-9b-q4km.json"))
-        del document["summarize"]["arch"]
+        del document["summarizer"]["arch"]
 
         with pytest.raises(ValidationError, match="arch"):
             ModelsConfig.model_validate(document)

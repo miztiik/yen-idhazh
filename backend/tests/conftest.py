@@ -242,7 +242,7 @@ def llama_server_flags() -> frozenset[str]:
     """
     emitted: set[str] = set()
     for path in sorted((CONFIG_DIR / "models").glob("*.json")):
-        entry = ModelsConfig.from_json(read_text(path)).summarize
+        entry = ModelsConfig.from_json(read_text(path)).summarizer
         emitted |= set(
             server_argv(
                 binary=Path("bin/llama-server"),
@@ -536,7 +536,7 @@ def committed_markers(model_file: str = INCUMBENT_MODEL) -> TurnMarkers:
 
 
 def label_payload(article: Article) -> dict[str, Any]:
-    entry = config.load(CONFIG_DIR).models.summarize
+    entry = config.load(CONFIG_DIR).models.summarizer
     return build_label_request(
         article,
         a_table(article),

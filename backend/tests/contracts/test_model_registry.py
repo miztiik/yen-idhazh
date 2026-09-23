@@ -45,7 +45,7 @@ def test_swapping_the_model_is_one_line_and_reverting_is_the_same_line(tmp_path:
     incumbent = copy_config(tmp_path)
     candidate = "models/other-model-q4km.json"
     other = committed_models_raw()
-    other["summarize"] |= {
+    other["summarizer"] |= {
         "id": "some-other-model-q4-k-m",
         "repo": "someone/Other-GGUF",
         "file": "Other-Q4_K_M.gguf",
@@ -53,7 +53,7 @@ def test_swapping_the_model_is_one_line_and_reverting_is_the_same_line(tmp_path:
         "sha256": "1" * 64,
         "hf_base_repo": None,
     }
-    other["summarize"]["declared_for"] = "1" * 64
+    other["summarizer"]["declared_for"] = "1" * 64
     (tmp_path / "config" / candidate).write_text(
         canonical_json(other), encoding="utf-8", newline="\n"
     )
@@ -61,8 +61,8 @@ def test_swapping_the_model_is_one_line_and_reverting_is_the_same_line(tmp_path:
 
     point_at(tmp_path, candidate)
     swapped = config.load(tmp_path / "config")
-    assert swapped.models.summarize.id == "some-other-model-q4-k-m"
-    assert swapped.models.summarize.sha256 == "1" * 64
+    assert swapped.models.summarizer.id == "some-other-model-q4-k-m"
+    assert swapped.models.summarizer.sha256 == "1" * 64
     assert changed_lines(before, read_text(tmp_path / "config" / "idhazh.json")) == 1
 
     point_at(tmp_path, incumbent)
@@ -99,8 +99,8 @@ def test_a_template_that_reads_no_keyword_loads_with_reasoning_off() -> None:
     """The bite proof. Null is a legal declaration, not a broken entry."""
     silent = ModelsConfig.model_validate(entry_with(thinking_kwarg=None))
 
-    assert silent.summarize.thinking_kwarg is None
-    assert silent.summarize.thinks is False
+    assert silent.summarizer.thinking_kwarg is None
+    assert silent.summarizer.thinks is False
 
 
 def test_the_closing_marker_is_the_whole_declaration_that_reasoning_is_wanted() -> None:
@@ -113,9 +113,9 @@ def test_the_closing_marker_is_the_whole_declaration_that_reasoning_is_wanted() 
     quiet = ModelsConfig.model_validate(entry_with())
     loud = ModelsConfig.model_validate(entry_with(thinking_close="</think>"))
 
-    assert quiet.summarize.thinks is False
-    assert loud.summarize.thinks is True
-    assert loud.summarize.thinking_close == "</think>"
+    assert quiet.summarizer.thinks is False
+    assert loud.summarizer.thinks is True
+    assert loud.summarizer.thinking_close == "</think>"
 
 
 def test_a_config_that_still_spells_the_old_settings_block_is_refused_by_name() -> None:
@@ -132,7 +132,7 @@ def test_a_config_that_still_spells_the_old_settings_block_is_refused_by_name() 
     and the file spells llama-server's own flags now.
     """
     payload = entry_with()
-    payload["summarize"]["inference"] = {"n_ctx": 8192, "thinking": False}
+    payload["summarizer"]["inference"] = {"n_ctx": 8192, "thinking": False}
 
     with pytest.raises(ValidationError) as raised:
         ModelsConfig.model_validate(payload)
@@ -151,7 +151,7 @@ def test_a_config_still_spelling_the_request_block_is_refused_by_name() -> None:
     on llama.cpp's own defaults with nothing saying why.
     """
     payload = entry_with()
-    payload["summarize"]["request"] = {"temperature": 0.2}
+    payload["summarizer"]["request"] = {"temperature": 0.2}
 
     with pytest.raises(ValidationError) as raised:
         ModelsConfig.model_validate(payload)
@@ -169,13 +169,13 @@ def test_a_sampling_key_a_route_sets_itself_is_refused_when_the_config_loads() -
     about the file they edited.
     """
     raw = committed_models_raw()
-    raw["summarize"]["sampling"]["grammar_lazy"] = True
+    raw["summarizer"]["sampling"]["grammar_lazy"] = True
 
     with pytest.raises(ValueError) as raised:
         refuse_a_model_nothing_could_run("models/x.json", ModelsConfig.model_validate(raw))
 
     message = str(raised.value)
-    assert "models.summarize.sampling" in message, "the refusal names the block"
+    assert "models.summarizer.sampling" in message, "the refusal names the block"
     assert "grammar_lazy" in message, "and the key inside it"
 
 
@@ -188,9 +188,9 @@ def test_an_entry_that_dumps_and_reloads_is_not_refused_for_its_own_shape() -> N
     project's own serialization rather than about anything a person typed.
     """
     payload = entry_with()
-    payload["summarize"]["inference"] = {}
+    payload["summarizer"]["inference"] = {}
 
-    assert ModelsConfig.model_validate(payload).summarize.inference == {}
+    assert ModelsConfig.model_validate(payload).summarizer.inference == {}
 
 
 def test_the_committed_entry_names_the_keyword_rather_than_inheriting_it() -> None:
@@ -202,8 +202,8 @@ def test_the_committed_entry_names_the_keyword_rather_than_inheriting_it() -> No
     """
     raw = committed_models_raw()
 
-    assert raw["summarize"]["thinking_kwarg"] == "enable_thinking"
-    assert "turns" not in raw["summarize"], "the markers are the model's own template now"
+    assert raw["summarizer"]["thinking_kwarg"] == "enable_thinking"
+    assert "turns" not in raw["summarizer"], "the markers are the model's own template now"
 
 
 def changed_lines(before: str, after: str) -> int:
@@ -222,13 +222,49 @@ def test_a_config_that_still_carries_the_old_models_block_is_refused_by_name() -
     exists to end, one level up.
     """
     raw = json.loads(read_text(CONFIG_DIR / "idhazh.json"))
-    raw["models"] = {"summarize": committed_models_raw()["summarize"]}
+    raw["models"] = {"summarizer": committed_models_raw()["summarizer"]}
 
     with pytest.raises(ValidationError) as raised:
         AppConfig.model_validate(raw)
 
     assert "config.models is now config.models_file" in str(raised.value)
     assert SUPERSEDED_APP_NAMES["models"] == "models_file"
+
+
+def test_a_model_file_still_naming_the_verb_is_refused_by_name() -> None:
+    """The slot holds a model, so its key is a noun (`CLAUDE.md` section 1a).
+
+    Refused rather than read under either spelling. An operator file still
+    naming the verb would otherwise fail with "extra inputs are not permitted"
+    beside "field required", which tells them nothing about where their entry
+    went.
+    """
+    raw = committed_models_raw()
+    raw["summarize"] = raw.pop("summarizer")
+
+    with pytest.raises(ValidationError) as raised:
+        ModelsConfig.model_validate(raw)
+
+    assert "models.summarizer" in str(raised.value)
+    assert SUPERSEDED_MODELS_NAMES["summarize"] == "models.summarizer"
+
+
+def test_the_teacher_names_the_slot_the_model_file_declares() -> None:
+    """One string, checked across two files, because a typo surfaces on a GPU.
+
+    `finetune.teacher` names a KEY in `models` rather than a model, so it moved
+    with the key. A stale one is answered by where the key went rather than by
+    "must name one of", which would name the new key without saying the old one
+    is what they wrote.
+    """
+    raw = json.loads(read_text(CONFIG_DIR / "idhazh.json"))
+    assert raw["finetune"]["teacher"] in ModelsConfig.roles()
+
+    with pytest.raises(ValidationError) as raised:
+        AppConfig.model_validate(raw | {"finetune": raw["finetune"] | {"teacher": "summarize"}})
+
+    message = str(raised.value)
+    assert "now models.summarizer" in message, "the refusal says where the key went"
 
 
 def test_the_pointer_may_not_leave_the_models_directory() -> None:
@@ -273,21 +309,21 @@ def test_a_model_swap_can_no_longer_inherit_settings_nothing_declared_for_it() -
     """The Oracle: new weights under an untouched settings block are refused.
 
     Every number in an `inference` block is a measurement about one model on one
-    runner. Until this gate, `models.summarize` could name a different
+    runner. Until this gate, `models.summarizer` could name a different
     repository, file, revision and digest with the block left exactly where it
     was and `AppConfig.model_validate` raised nothing - so the run stood a server
     up on numbers derived for weights it never opened and published a whole
     plausible day.
     """
     committed = committed_models()
-    assert committed.summarize.declared_for == committed.summarize.sha256
+    assert committed.summarizer.declared_for == committed.summarizer.sha256
 
     with pytest.raises(ValueError) as raised:
         refuse_a_model_nothing_could_run(
             "models/x.json", ModelsConfig.model_validate(swapped_summarizer())
         )
     message = str(raised.value)
-    assert "models.summarize is declared for" in message, "the message names the entry"
+    assert "models.summarizer is declared for" in message, "the message names the entry"
     assert "1" * 64 in message, "and the weights the entry now names"
 
 
@@ -306,7 +342,7 @@ def test_a_refused_model_file_is_named_by_the_loader(tmp_path: Path) -> None:
 
     message = str(raised.value)
     assert f"config/{written}" in message, "the refusal names the file that is wrong"
-    assert "models.summarize is declared for" in message, "and the entry inside it"
+    assert "models.summarizer is declared for" in message, "and the entry inside it"
 
 
 def test_an_entry_that_declares_no_window_is_refused_by_the_flag_name() -> None:
@@ -316,7 +352,7 @@ def test_an_entry_that_declares_no_window_is_refused_by_the_flag_name() -> None:
     the flag is what an operator has to go and write.
     """
     raw = committed_models_raw()
-    del raw["summarize"]["server"]["--ctx-size"]
+    del raw["summarizer"]["server"]["--ctx-size"]
 
     with pytest.raises(ValueError, match=re.escape("--ctx-size")):
         refuse_a_model_nothing_could_run("models/x.json", ModelsConfig.model_validate(raw))
@@ -325,7 +361,7 @@ def test_an_entry_that_declares_no_window_is_refused_by_the_flag_name() -> None:
 def test_a_timeout_that_is_not_a_number_is_refused_at_load_rather_than_mid_item() -> None:
     """Four call sites multiply it by sixty, and none of them can say which key broke."""
     raw = committed_models_raw()
-    raw["summarize"]["request_timeout_minutes"] = "twenty two"
+    raw["summarizer"]["request_timeout_minutes"] = "twenty two"
 
     with pytest.raises(ValidationError, match=re.escape("request_timeout_minutes")):
         ModelsConfig.model_validate(raw)
@@ -374,7 +410,7 @@ def test_every_model_file_loads_and_not_only_the_one_the_pointer_names() -> None
     assert len(files) >= 2, "the swap has nothing to swap between"
 
     for path in files:
-        entry = ModelsConfig.from_json(read_text(path)).summarize
+        entry = ModelsConfig.from_json(read_text(path)).summarizer
         assert entry.declared_for == entry.sha256, path.name
 
 
@@ -388,7 +424,7 @@ def test_no_committed_file_declares_a_second_entry() -> None:
     for path in sorted((CONFIG_DIR / "models").glob("*.json")):
         declared = ModelsConfig.from_json(read_text(path))
         assert declared.judge is None, path.name
-        assert [name for name, _ in declared.entries()] == ["summarize"], path.name
+        assert [name for name, _ in declared.entries()] == ["summarizer"], path.name
 
 
 def test_a_second_entry_naming_other_weights_is_refused() -> None:
@@ -398,12 +434,12 @@ def test_a_second_entry_naming_other_weights_is_refused() -> None:
     verdict is filed against a model that never saw the pair.
     """
     raw = committed_models_raw()
-    elsewhere = json.loads(json.dumps(raw["summarize"]))
+    elsewhere = json.loads(json.dumps(raw["summarizer"]))
     elsewhere["sha256"] = "f" * 64
     elsewhere["declared_for"] = "f" * 64
 
     refuse_a_model_nothing_could_run(
-        "models/x.json", ModelsConfig.model_validate(raw | {"judge": raw["summarize"]})
+        "models/x.json", ModelsConfig.model_validate(raw | {"judge": raw["summarizer"]})
     )
     with pytest.raises(ValueError) as raised:
         refuse_a_model_nothing_could_run(

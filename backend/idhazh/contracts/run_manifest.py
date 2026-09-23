@@ -43,7 +43,10 @@ class RunStatus(StrEnum):
 
 
 class ModelRole(StrEnum):
-    SUMMARIZE = "summarize"
+    #: The value stays `summarize` because 127 places across 35 published run
+    #: records carry it and this plan migrates no committed day (CLAUDE.md
+    #: section 11). Only the python name and the config key moved.
+    SUMMARIZER = "summarize"
     #: The value stays `route` because a published manifest may carry it and this
     #: plan migrates no committed day (CLAUDE.md section 11).
     VISUAL_PLANNER = "route"

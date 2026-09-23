@@ -100,7 +100,7 @@ def test_the_recorded_inputs_name_the_run_and_never_a_placeholder(
     assert recorded is not None
     assert recorded.runtime_build != "llama-server-local"
     assert recorded.runner_class != "local"
-    assert recorded.chat_template_sha256 != text_digest(settings.models.summarize.id)
+    assert recorded.chat_template_sha256 != text_digest(settings.models.summarizer.id)
 
 
 def test_a_run_pointed_at_a_second_machine_records_no_build_for_it(

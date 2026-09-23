@@ -52,7 +52,7 @@ def test_a_field_transplanted_onto_the_entry_is_refused(tmp_path: Path) -> None:
     committed = json.loads((_scratch(tmp_path) / "idhazh.json").read_text(encoding="utf-8"))
     transplanted = json.loads(json.dumps(committed))
     transplanted["models_file"] = "config/models/candidate.json"
-    transplanted["summarize"]["sha256"] = "a" * 64
+    transplanted["summarizer"]["sha256"] = "a" * 64
 
     with pytest.raises(ValueError, match=r"summarize\.sha256"):
         candidate_pointer.refuse_any_other_move(committed, transplanted)

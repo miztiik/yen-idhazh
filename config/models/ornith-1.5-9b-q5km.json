@@ -1,5 +1,5 @@
 {
-  "summarize": {
+  "summarizer": {
     "arch": "qwen35",
     "byte_count": 6642544576,
     "declared_for": "e4d9634a3b6546a5c00a8680568fe1125f6c98c704ee51ae52ba07650fb4247d",

@@ -719,7 +719,7 @@ def conditions_of(
     difference between our candidate models. It reads None off a machine with no
     `/proc/cpuinfo`, and the page then says so rather than printing a blank.
     """
-    entry = settings.models.summarize
+    entry = settings.models.summarizer
     return {
         "Processor": silicon.host_cpu_model() or "not reported by this host",
         "Runner": args.runner,
