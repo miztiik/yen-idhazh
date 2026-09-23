@@ -26,9 +26,11 @@ recorded (`docs/architecture/contracts/determinism.md`).
 from __future__ import annotations
 
 import json
+import logging
 from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from enum import StrEnum
+from functools import cache
 from pathlib import Path
 from string import Template
 from types import MappingProxyType
@@ -40,6 +42,8 @@ from idhazh.contracts.base import derive_text_digest
 from idhazh.contracts.knobs.model_server import resolve_base_url
 from idhazh.contracts.knobs.models import CompanionFile, ModelEntry, ModelRef
 from idhazh.sanitize import why_a_forged_turn_would_survive
+
+LOG: Final = logging.getLogger("idhazh")
 
 # The route that takes a prompt string. It is a consequence of which builder
 # rendered the payload rather than a dial anybody turns - a chat body posted
@@ -952,6 +956,32 @@ def parse_completion(body: str, *, answer_at: int = 0) -> Completion:
     )
 
 
+def _origin_of(endpoint: str) -> str:
+    """Scheme, host and port of the server an endpoint names, and nothing else.
+
+    Read apart rather than taken whole. The authority of a URL carries userinfo,
+    so `http://user:token@box:8080` taken as one piece would write a credential
+    into a log line verbatim, and a log line is the artefact somebody pastes
+    into an issue (Guardrail #11). A host and a port cannot carry one.
+    """
+    parts = urlsplit(endpoint)
+    return urlunsplit((parts.scheme, f"{parts.hostname}:{parts.port}", "", "", ""))
+
+
+@cache
+def _note_origin(origin: str) -> None:
+    """Say once which server this run is talking to.
+
+    Keyed on the origin rather than the endpoint: the qualification process
+    posts to the chat route and to the rendered-completion route on one server,
+    and an endpoint key would write the identical line twice.
+
+    The cache is process-global, so a test that asserts "once" calls
+    `_note_origin.cache_clear()` first.
+    """
+    LOG.info("model server origin=%s", origin)
+
+
 def post(
     payload: dict[str, Any],
     *,
@@ -959,7 +989,19 @@ def post(
     timeout: float,
     answer_at: int = 0,
 ) -> Completion:
-    """The only place an item is sent for summarizing. Loopback only, by construction."""
+    """The only place an item is sent for summarizing.
+
+    One address for the whole run, and `_note_origin` says once which one. The
+    scheme, host and port are read apart rather than taken as the authority,
+    because the authority carries userinfo and would write a credential into a
+    log line verbatim (Guardrail #11).
+
+    Two other functions in this module send. `_ask` carries only this module's
+    own probe constants to routes derived from an address a caller already
+    named. `token_pieces` would send whatever it is handed and has no caller -
+    so whoever gives it one brings this constraint with them.
+    """
+    _note_origin(_origin_of(endpoint))
     outbound = request.Request(
         endpoint,
         data=json.dumps(payload).encode("utf-8"),

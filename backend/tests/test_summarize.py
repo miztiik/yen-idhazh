@@ -15,6 +15,7 @@ from __future__ import annotations
 import ast
 import dataclasses
 import json
+import logging
 import re
 import socket
 import threading
@@ -577,6 +578,69 @@ def test_the_loopback_host_is_written_in_five_named_places() -> None:
         "these modules write the loopback host and are not on the list: "
         f"{sorted(writing - LOOPBACK_IS_WRITTEN_IN)}; "
         f"and these are listed and no longer write it: {sorted(LOOPBACK_IS_WRITTEN_IN - writing)}"
+    )
+
+
+def test_the_run_says_which_server_answered_and_never_says_a_credential(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """The one thing a finished run can be read for: which machine produced the output.
+
+    Scheme, host and port, because a URL's authority carries userinfo:
+    `http://user:token@box:8080` written whole would put a credential in a log
+    line, and a log line is the artefact somebody pastes into an issue
+    (Guardrail #11).
+
+    Nothing in this repository builds a credentialed address, and the point is
+    what happens if something one day does - so the URL is the test's own and it
+    goes to the function `post` reads an endpoint apart with. No socket opens.
+    """
+    from idhazh.llm.server import _note_origin, _origin_of
+
+    credentialed = "http://user:token@box:8080/v1/chat/completions"
+    assert _origin_of(credentialed) == "http://box:8080"
+
+    _note_origin.cache_clear()
+    with caplog.at_level(logging.INFO, logger="idhazh"):
+        _note_origin(_origin_of(credentialed))
+
+    said = caplog.text
+    assert "model server origin=http://box:8080" in said, said
+    assert "token" not in said and "user" not in said, f"a credential reached the log: {said}"
+
+
+def test_one_server_is_named_once_however_many_items_are_sent(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A day is thousands of items and this answers the same question once.
+
+    Driven through `post` rather than through `_note_origin`, because the record
+    existing and the record being written are two different claims and only the
+    second one is worth anything. `RecordedEndpoint` is a server, not a mock
+    (Guardrail #7): it binds a port the operating system picked this second, so
+    the address in the log can only have come from the endpoint `post` was
+    given.
+
+    The cache is keyed on the origin rather than the endpoint, because the
+    qualification process posts to two routes on one server and an endpoint key
+    would write the identical line twice. `lru_cache` is process-global, so the
+    clear is what makes this a statement about the code rather than about
+    whatever ran before it.
+    """
+    from idhazh.llm.server import _note_origin, completion_url
+
+    reply = read_text(RENDERED_REPLY).encode("utf-8")
+    _note_origin.cache_clear()
+    with caplog.at_level(logging.INFO, logger="idhazh"), RecordedEndpoint(
+        200, reply, reply
+    ) as served:
+        post({}, endpoint=served.endpoint, timeout=5.0)
+        post({}, endpoint=completion_url(served.endpoint), timeout=5.0)
+
+    origins = [line for line in caplog.text.splitlines() if "model server origin=" in line]
+    assert len(origins) == 1, f"two routes on one server wrote {len(origins)} records: {origins}"
+    assert served.endpoint.startswith(origins[0].split("origin=")[-1]), (
+        f"the record does not name the server that answered: {origins[0]}"
     )
 
 
