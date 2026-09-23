@@ -8,8 +8,7 @@ import pytest
 from conftest import CONTRACT_FIXTURES_DIR, REPO_ROOT, read_text
 from pydantic import ValidationError
 
-from idhazh.contracts import canonical_json
-from idhazh.contracts.export import CONTRACTS
+from idhazh.contracts import CONTRACTS, canonical_json
 
 from ._config import (
     FINGERPRINT_FIXTURES,

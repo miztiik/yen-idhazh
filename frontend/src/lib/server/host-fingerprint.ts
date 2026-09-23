@@ -11,15 +11,16 @@
  * window reaches and no more, so another published day adds a file this call
  * never opens once the cover is filled (`CLAUDE.md` Guardrail #12).
  *
- * **The row shape and the flag vocabulary are generated, never typed here.**
- * `../../contracts/host-fingerprint-row` is emitted from
- * `backend/idhazh/contracts/host_fingerprint.py` by the same command that
- * writes `schemas/`, and CI regenerates both and fails on any diff. So a column
- * added to the contract lands here as a compile error on the object below
- * rather than as a cell nobody reads, and the twelve chips a card draws cannot
- * fall out of step with the twelve the probe records. A hand-written copy is
- * what the drift gate exists to make impossible, and the page would have
- * carried the eleventh flag for a month before anybody noticed.
+ * **The row shape and the flag vocabulary are copied by hand, and two tests
+ * hold the copy in step.** `backend/tests/contracts/test_frontend_field_set.py`
+ * fails when this file's `HostFingerprintRow` names a different set of columns,
+ * or a different type for one, than `backend/idhazh/contracts/host_fingerprint.py`
+ * declares. `backend/tests/contracts/test_frontend_vocabularies.py` fails when
+ * either closed set below holds a different member list from its Python enum.
+ * So a column added to the contract lands here as a red test rather than as a
+ * cell nobody reads, and the twelve chips a card draws cannot fall out of step
+ * with the twelve the probe records. The columns' own descriptions stay on the
+ * Pydantic model, which is the one place they are written.
  *
  * Nothing here is published. It sits under `$lib/server/` so SvelteKit refuses
  * to bundle it for a browser, the same place and for the same reason as
@@ -27,24 +28,79 @@
  */
 
 import { join } from 'node:path';
-// Relative, not `$lib`, for the reason in `machine-counters.ts`: the browser
-// suite loads this module in plain Node, where no Vite alias resolves. The
-// generated contracts are reached the same way and for the same reason.
-import {
-	SERVER_JOB,
-	type HostFingerprintRow,
-	type ServerJob
-} from '../../contracts/host-fingerprint-row';
-import { WATCHED_FLAG, type WatchedFlag } from '../../contracts/machine-panels';
 import { dayShardFiles, LEDGER_WINDOW_DAYS, readDayShards, STATE_ROOT } from './payload';
+
+/** Which workflow job produced a row. `ServerJob` in `contracts/base.py`. */
+export const SERVER_JOB = ['plan', 'work', 'assemble', 'visuals', 'runtime', 'decide'] as const;
+
+export type ServerJob = (typeof SERVER_JOB)[number];
+
+/** The instruction-set flags a card draws a chip for. `WatchedFlag` in
+ * `contracts/machine_panels.py`, which restates the probe's own `WATCHED_FLAGS`
+ * tuple and refuses to import on a mismatch. */
+export const WATCHED_FLAG = [
+	'amx_bf16',
+	'amx_int8',
+	'amx_tile',
+	'avx2',
+	'avx512_bf16',
+	'avx512_fp16',
+	'avx512_vnni',
+	'avx512f',
+	'avx_vnni',
+	'f16c',
+	'fma',
+	'sse4_2'
+] as const;
+
+export type WatchedFlag = (typeof WATCHED_FLAG)[number];
+
+/** One job, one machine, one row: what the host said it was.
+ *
+ * `HostFingerprintRow` in `contracts/host_fingerprint.py`, in its field order.
+ * What each column means is written there and nowhere else.
+ */
+export interface HostFingerprintRow {
+	version?: string;
+	date: string;
+	run_id: string;
+	job?: ServerJob;
+	shard: number;
+	fingerprint?: string | null;
+	cpu_model?: string | null;
+	cpu_vendor?: string | null;
+	cpu_family?: number | null;
+	cpu_model_number?: number | null;
+	cpu_stepping?: number | null;
+	microcode?: string | null;
+	cores?: number | null;
+	threads?: number | null;
+	l3_cache_bytes?: number | null;
+	mhz_max?: number | null;
+	mhz_at_probe?: number | null;
+	flags?: string;
+	boot_seconds?: number | null;
+	memcpy_gib_s?: number | null;
+	memcpy_probe_mib?: number | null;
+	vm_size?: string | null;
+	vm_location?: string | null;
+	vm_zone?: string | null;
+	vm_fault_domain?: string | null;
+	runner_name?: string | null;
+	measured_at?: string | null;
+	model_load_ms?: number | null;
+	job_seconds?: number | null;
+	server_prompt_tokens?: number | null;
+	server_prompt_seconds?: number | null;
+}
 
 /** One job's machine, as the host reported it.
  *
- * The generated row with every key present. The contract marks a column
- * optional because a payload may leave it out; this reader never does - an
- * absent cell arrives as null, which is the reading "nobody took it" rather
- * than a key that is not there. Derived rather than restated, so a column added
- * to the contract arrives here without an edit.
+ * The row above with every key present. The contract marks a column optional
+ * because a payload may leave it out; this reader never does - an absent cell
+ * arrives as null, which is the reading "nobody took it" rather than a key that
+ * is not there. Derived rather than restated, so a column added to the row
+ * arrives here without an edit.
  *
  * The fingerprint is the one cell narrowed past the contract, and that is a
  * fact about this reader rather than about the row: a line carrying no digest
@@ -66,9 +122,9 @@ function figure(cell: string | undefined): number | null {
 
 /** The job a cell names, or null where it names nothing this build knows.
  *
- * Matched against the generated vocabulary rather than a list typed here. A
- * value outside it is a row this build cannot place, and calling it `work`
- * would put an unknown job into the work shards' own count.
+ * Matched against the one vocabulary above rather than a second list typed at
+ * the call site. A value outside it is a row this build cannot place, and
+ * calling it `work` would put an unknown job into the work shards' own count.
  */
 function serverJob(cell: string | undefined): ServerJob | null {
 	const named = text(cell);
@@ -158,11 +214,10 @@ export function machineRecordDays(
 
 /** The flags a card draws a chip for, in the order the probe records them.
  *
- * The generated vocabulary, compiled in rather than parsed back out of a file
- * at run time. The contract restates the probe's tuple and refuses to import on
- * a mismatch, one command writes both the schema and this constant from that
- * contract, and CI regenerates both and fails on a diff - so the probe, the
- * schema and the page cannot drift apart and this module holds no copy at all.
+ * Compiled in rather than parsed back out of a file at run time. The contract
+ * restates the probe's tuple and refuses to import on a mismatch, and the
+ * vocabulary test holds the copy above in step with that contract - so the
+ * probe and the page cannot drift apart.
  */
 export function watchedFlags(): WatchedFlag[] {
 	return [...WATCHED_FLAG];

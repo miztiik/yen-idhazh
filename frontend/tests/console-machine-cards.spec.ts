@@ -20,9 +20,9 @@
  */
 
 import { expect, test } from '@playwright/test';
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { join } from 'node:path';
 import {
 	cacheWords,
 	clockSentence,
@@ -125,16 +125,6 @@ function cardsFor(rows: HostFingerprint[], recording = true) {
 		recording
 	});
 }
-
-test.describe('the flag vocabulary', () => {
-	test('the twelve come from the generated contract, so no copy can drift', () => {
-		const schema = JSON.parse(
-			readFileSync(resolve(process.cwd(), '..', 'schemas', 'machine-panels.schema.json'), 'utf8')
-		) as { $defs: { WatchedFlag: { enum: string[] } } };
-		expect(FLAGS).toEqual(schema.$defs.WatchedFlag.enum);
-		expect(FLAGS).toHaveLength(12);
-	});
-});
 
 test.describe('what a card says a machine can do', () => {
 	test('a card draws every watched flag, present or absent, never a subset', () => {
@@ -254,22 +244,10 @@ test.describe('the copy speed and the buffer it was taken with', () => {
 
 	test('the page grades a row by the same margin the probe sized its buffer with', () => {
 		// Two numbers in two languages would let the page refuse a row the probe
-		// wrote correctly. Read inside the test, so one unexpected shape fails
-		// this case rather than the module (CLAUDE.md section 13).
-		const schema = JSON.parse(
-			readFileSync(resolve(process.cwd(), '..', 'schemas', 'app-config.schema.json'), 'utf8')
-		) as {
-			$defs: {
-				ObservabilityConfig: {
-					properties: { host_fingerprint_bandwidth_cache_multiple: { default: number } };
-				};
-			};
-		};
-		const shipped =
-			schema.$defs.ObservabilityConfig.properties.host_fingerprint_bandwidth_cache_multiple
-				.default;
-		expect(observabilityConfig().host_fingerprint_bandwidth_cache_multiple).toBe(shipped);
-		expect(MARGIN).toBe(shipped);
+		// wrote correctly. What binds the config fallback to the contract's own
+		// default is `test_frontend_console_lists.py`; what this holds is that the
+		// page grades by the value the config resolved rather than by a third copy.
+		expect(observabilityConfig().host_fingerprint_bandwidth_cache_multiple).toBe(MARGIN);
 	});
 
 	test('a machine that reported no cache cannot be graded either way', () => {

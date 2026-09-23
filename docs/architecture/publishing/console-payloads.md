@@ -14,7 +14,7 @@ against a payload nobody has written is a consumer written against a guess.
 
 ## The eleven
 
-Every path below is under `frontend/public/`. Every schema is under `schemas/`.
+Every path below is under `frontend/public/`. Every shape is a contract under `backend/idhazh/contracts/`.
 
 | Dataset | Reader it replaces | Published to | Schema |
 | --- | --- | --- | --- |
@@ -440,11 +440,10 @@ the named absence while the suite reported a page that works.
 
 **The inventory is a page and a module, not a paragraph inside the producer.**
 Before this, the list of what the console needs existed nowhere: the producer,
-the consumer, the retention step and the drift gate would each have worked it
-out again, and four independent derivations of one list is four chances to miss
-the same entry. Naming it first is what makes a missing dataset fail at import
-instead of at review. Fowler, 2026-09-08, during the shell-and-fetch
-migration.
+the consumer and the retention step would each have worked it out again, and
+three independent derivations of one list is three chances to miss the same
+entry. Naming it first is what makes a missing dataset fail at import instead of
+at review. Fowler, 2026-09-08, during the shell-and-fetch migration.
 
 **Re-deriving it from the code found two datasets the plan's own table missed.**
 `dayMetrics` and `loadSpanRollup` are console reads out of `state/` and were not

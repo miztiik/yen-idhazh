@@ -2,7 +2,7 @@
 
 **Last Updated**: 2026-09-23
 Traps in the commands that decide whether a change is done: the test selector,
-pytest, ruff, mypy, the schema drift gate, the build, the canary day, and the
+pytest, ruff, mypy, the build, the canary day, and the
 measurement recipes that run on top of them. Index and scope:
 [../agent-notes.md](../agent-notes.md).
 
@@ -70,16 +70,12 @@ npm --prefix frontend run test:changed -- --list
 
 **A changelog can break its cap with neither side writing a sixth entry.** `backend/tests/contracts/test_changelog_shape.py` allows five - the four newest changes and one pointer at git (`CLAUDE.md` section 11). Two branches that each prepend one entry to the same contract merge to six with no conflict, and the gate then reports a count at a line number and says nothing about a merge, which reads as a hand-edit of your own. The tell is that the entries above the pointer name two changes you did not make one of. The resolution is fixed and needs no judgement: keep both new entries newest-first, then delete the oldest entry that is not the pointer.
 
-**A worktree borrowing another checkout's venv exports into whichever tree that venv was installed from, and the drift gate then passes on the wrong tree.** The editable install resolves `idhazh` through a meta-path finder, so neither the working directory nor the `python.exe` you named moves it: run from worktree `A` with the root checkout's interpreter and `python -m idhazh.contracts.export` can write `B/schemas/` and `B/frontend/src/contracts/`, print paths that look right, and leave `A` untouched. `git status --porcelain -- schemas/` is then empty for the best possible reason and the worst one at once. It is also a write into a sibling's checkout, which is the contamination the execution contract forbids. Ask where the package came from before believing any export, and set `PYTHONPATH` - it wins over the finder:
+**A worktree borrowing another checkout's venv runs the other tree's code, and a green suite then says nothing about yours.** The editable install resolves `idhazh` through a meta-path finder, so neither the working directory nor the `python.exe` you named moves it: run from worktree `A` with the root checkout's interpreter and `import idhazh` resolves into `B`. Ask where the package came from before believing any run, and set `PYTHONPATH` - it wins over the finder:
 
 ```powershell
 python -c "import idhazh; print(idhazh.__file__)"
 $env:PYTHONPATH = (Join-Path $PWD 'backend')
 ```
-
-**`git status --porcelain -- schemas/` straight after `python -m idhazh.contracts.export` looks like every schema changed.** The exporter prints the path of every file it wrote, so the two commands' output runs together and reads as twenty-nine modified files; `git diff --stat -- schemas/` is the question you meant, and empty is the pass. And `git diff --exit-code -- schemas/` is not the drift gate until you have committed - on a branch whose only schema change is the one it exists to make it returns 1, which reads exactly like a hand-edited schema. The gate is `test_committed_schemas_match_the_models`, which exports into a temporary directory, so it does not care what `HEAD` holds.
-
-**The schema export CLI needs an absolute `--out` path.** A relative one lets the export write its files and then fails when the CLI prints each path relative to the repository root, which is not schema drift. Use `--out (Join-Path $PWD 'backend/var/schemas')`.
 
 **Round-tripping a committed config through its model puts back fields you deleted.** `to_json` writes every defaulted field, so a two-line config edit arrives as a three-line diff with a resurrection in it - `digest.items_per_topic`, retired on purpose, came back that way. Read the diff line by line rather than for the lines you meant to add.
 

@@ -135,7 +135,6 @@ faithfulness = [
 
 [project.scripts]
 idhazh = "idhazh.cli:main"
-idhazh-export-schemas = "idhazh.contracts.export:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["backend/idhazh"]

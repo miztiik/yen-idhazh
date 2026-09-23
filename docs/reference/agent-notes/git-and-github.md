@@ -209,7 +209,7 @@ One width for every row and one header per shard, or repair on the trunk. What t
 
 **Line endings are pinned, so do not hand-normalise.** `.gitattributes` defaults every path to `text=auto eol=lf`, then marks known binary formats. A blanket normalise pass rewrites files you never touched and produces a phantom diff of hundreds of lines.
 
-**That normalisation happens at `git add`, and the gates run before it.** `test_repo_text_is_ascii_and_lf` reads the WORKING-TREE bytes under `schemas/`, `config/` and the fixture directories, so a new JSON file authored on Windows fails on a file you just wrote. The same CRLF also breaks a byte-identical round trip, so the drift gate reports a diff in a file whose content never changed. Write new files LF explicitly:
+**That normalisation happens at `git add`, and the gates run before it.** `test_repo_text_is_ascii_and_lf` reads the WORKING-TREE bytes under `config/` and the fixture directories, so a new JSON file authored on Windows fails on a file you just wrote. The same CRLF also breaks a byte-identical round trip, so a fixture's round-trip test reports a diff in a file whose content never changed. Write new files LF explicitly:
 
 ```powershell
 [System.IO.File]::WriteAllText($path, ($text -replace "`r`n", "`n"), [System.Text.UTF8Encoding]::new($false))

@@ -18,10 +18,10 @@ alongside the CSV protocol: `CsvRecord` and `CsvContract` are `typing.Protocol`s
 in `idhazh.ledger`, mixing one with a pydantic model is a metaclass conflict, and
 the import runs the other way round in any case.
 
-**It declares no schema stem and joins no export tuple, and that is a carve-out
-rather than an omission.** `contracts.export.CONTRACTS` is typed
-`tuple[type[Contract], ...]` and the exporter calls `schema_filename()` on every
-member, so a stem-less mixin registered there would stop the export. This is a
+**It declares no schema stem and joins no registry, and that is a carve-out
+rather than an omission.** `contracts.CONTRACTS` is typed
+`tuple[type[Contract], ...]` and every check over it calls `schema_filename()` on
+each member, so a stem-less mixin registered there would break them. This is a
 `Model`; every row that inherits it is the `Contract`, and each of those
 registers itself.
 

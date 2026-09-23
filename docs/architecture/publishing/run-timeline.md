@@ -14,8 +14,8 @@ because a drawing is not a contract and a person arrives holding one question or
 the other.
 
 The machine-readable copy is `backend/idhazh/contracts/run_timeline.py`, and it
-is the one a build reads. The generated schema is
-`schemas/run-timeline-row.schema.json` and is never hand-edited.
+is the one a build reads. `RunTimelineRow` is the contract, and
+`RunTimelineRow.json_schema()` is the schema a reader outside Python is handed.
 
 ## The question the timeline answers
 

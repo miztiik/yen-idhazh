@@ -6,7 +6,7 @@ import json
 from typing import Any, Final
 
 import pytest
-from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR, REPO_ROOT, read_text
+from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR, read_text
 from pydantic import ValidationError
 
 from idhazh.contracts.digest_day import DigestDay, DigestItem
@@ -171,7 +171,7 @@ def test_a_taxonomy_with_no_floor_and_no_ceiling_still_validates() -> None:
     no rule at all - a desk nobody configured may hold the whole day and is
     required to publish nothing.
     """
-    schema = json.loads(read_text(REPO_ROOT / "schemas" / "taxonomy.schema.json"))
+    schema = Taxonomy.json_schema()
     required = schema["$defs"]["VerticalDef"].get("required", [])
 
     assert "floor" not in required

@@ -12,7 +12,7 @@ import {
  *
  * `frontend/public/digest/` is the committed day. `projectDay` narrows it into
  * the file the site serves at `<base>/digest/<Y>/<M>/<D>/digest.json`, and from
- * 2026-08-31 that file is a contract - `schemas/digest-view.schema.json`, from
+ * 2026-08-31 that file is a contract - `DigestView`, in
  * `backend/idhazh/contracts/digest_view.py`. This is the reader's half of it.
  *
  * **The one claim under test: an absent field reads as unknown, and never as a
@@ -155,7 +155,7 @@ const DAYS = [day('a day older than the five fields', LEGACY), day('a day since'
 test('every day serves the shape the contract names', () => {
 	// The committed shapes are not guesses: `COMMITTED_FIELDS` is what a day
 	// carries on disk, and a backend contract test holds the served list against
-	// `schemas/digest-view.schema.json`.
+	// the `DigestView` contract.
 	const [legacy, current] = DAYS as [Day, Day];
 	for (const item of legacy.committed.items) {
 		expect(Object.keys(item).sort(), 'the older fixture is not the older shape').toEqual(

@@ -10,7 +10,7 @@
  * assigns every measured column of the ledger to exactly one panel, and
  * `NOT_A_MEASUREMENT` says of every remaining column why it is not one. The two
  * together must cover the contract exactly - `frontend/tests/console-model-instruments.spec.ts`
- * reads `schemas/eval-row.schema.json` and fails on a column that is in neither,
+ * reads `EvalRow` and fails on a column that is in neither,
  * in both, or in a map and not in the contract. So a column added to `EvalRow`
  * next month fails a test instead of quietly going undrawn for a year, which is
  * how `hhem` and `coverage` got here.

@@ -49,14 +49,13 @@ refuses the mismatch rather than leaving it to a reader of the payload:
 
 ## No schema stem, and that is a decision rather than an omission
 
-These are `Model`s and not `Contract`s, so `python -m idhazh.contracts.export`
-writes no `schemas/derived-value.schema.json`. The stem belongs to the payload
-that *carries* a resolved set, and that payload is the compiler's - it does not
-exist yet. Minting one now would mean a committed fixture standing in for a
-writer nobody has built, which is the "field nobody writes" defect one level up.
-The shapes land here ahead of their producer because contracts come before logic
-(Guardrail #3) and because `contracts/` is where a shape lives, not because something
-persists one today.
+These are `Model`s and not `Contract`s, so they join no registry of persisted
+documents. The stem belongs to the payload that *carries* a resolved set, and
+that payload is the compiler's - it does not exist yet. Minting one now would
+mean a committed fixture standing in for a writer nobody has built, which is the
+"field nobody writes" defect one level up. The shapes land here ahead of their
+producer because contracts come before logic (Guardrail #3) and because
+`contracts/` is where a shape lives, not because something persists one today.
 """
 
 from __future__ import annotations

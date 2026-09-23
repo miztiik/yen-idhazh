@@ -91,19 +91,20 @@ See [`sources/trust-boundary.md`](sources/trust-boundary.md).
 ```mermaid
 flowchart LR
  PY["backend/idhazh/contracts/*.py<br/><b>Pydantic models</b><br/><i>hand-written</i>"]
- JS["schemas/*.schema.json<br/><i>generated</i>"]
+ JS["frontend/src/lib/server/*.ts<br/><i>six names, copied by hand</i>"]
  TS["frontend/src/lib/payload/types.ts<br/><i>the page reads these</i>"]
- PY -->|"python -m idhazh.contracts.export"| JS
- JS -.->|"mirrored by hand, drift-gated"| TS
+ PY -->|"copied, bound by three tests"| JS
+ PY -.->|"mirrored by hand, bound by nothing"| TS
 
  style PY fill:#eef2ff,stroke:#4c6ef5
 ```
 
-Every persisted shape is a Pydantic model first. The JSON Schema is generated
-from it and never hand-edited; a test regenerates and fails on any diff. Change
-the model, run the export, commit both.
+Every persisted shape is a Pydantic model first, and nothing is generated from
+it. `Contract.json_schema()` computes a JSON Schema on demand. Where the
+frontend has to copy a shape, the copy is small, hand-written, and held in step
+by a named test.
 
-Each schema carries a date-stamped `version` and a `changelog` explaining every
+Each shape carries a date-stamped `version` and a `changelog` explaining every
 change. A payload written by yesterday's run that today's build cannot read is a
 release blocker.
 

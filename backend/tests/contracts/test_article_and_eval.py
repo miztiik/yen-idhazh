@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 
 import pytest
-from conftest import CONTRACT_FIXTURES_DIR, SCHEMAS_DIR, read_text
+from conftest import CONTRACT_FIXTURES_DIR, read_text
 
 from idhazh.contracts import derive_url_key
 from idhazh.contracts.article import Article
@@ -146,8 +146,7 @@ def test_a_kept_column_says_what_it_holds_and_who_reads_it(
 def test_every_kept_column_reaches_its_generated_schema() -> None:
     """A description a reader never sees is a comment. These are read by people."""
     for model, field, units, readers in KEPT_COLUMNS:
-        schema = json.loads(read_text(SCHEMAS_DIR / f"{model.__schema_stem__}.schema.json"))
-        described = schema["properties"][field]["description"]
+        described = model.json_schema()["properties"][field]["description"]
         assert any(unit in described for unit in units)
         assert any(reader in described for reader in readers)
 

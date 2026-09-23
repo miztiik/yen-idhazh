@@ -39,7 +39,7 @@ The per-day figures are the three mature days only - 2026-08-24, -25 and -26, at
 
 ## The served day is a contract, and its address stops being movable
 
-The staged file is now [../../../schemas/digest-view.schema.json](../../../schemas/digest-view.schema.json), generated from [../../../backend/idhazh/contracts/digest_view.py](../../../backend/idhazh/contracts/digest_view.py), and every staged day carries its `version`. Until this commit the shape was a thirteen-name array in a build script. That was honest while the only reader was our own archive page rendering a search result: both halves shipped in one build, so a widening could not surprise anybody.
+The staged file is now `DigestView`, in [../../../backend/idhazh/contracts/digest_view.py](../../../backend/idhazh/contracts/digest_view.py), and every staged day carries its `version`. Until this commit the shape was a thirteen-name array in a build script. That was honest while the only reader was our own archive page rendering a search result: both halves shipped in one build, so a widening could not surprise anybody.
 
 **What changed is the consumer, not the file.** A reading route is about to fetch this day rather than inline it, so a browser we do not control parses it and a reader's cached shell can be older than the payload it reads. Two things follow, and neither is undone by rebuilding. `<base>/digest/<YYYY>/<MM>/<DD>/digest.json` becomes a public address. And the shape needs a stamp a shell can branch on, which is why `version` is here from the first byte rather than added when it is first needed - a version added later cannot help the shells that are already out.
 

@@ -34,11 +34,10 @@ test('whole-day checks cannot be mixed with canary or other spec selections', ()
 	assert.deepEqual(options(['--mode', 'real', '--spec', 'whole-day.spec.ts']).specs, ['whole-day.spec.ts']);
 });
 
-test('an explicit all selection includes schema and tooling checks', () => {
+test('an explicit all selection includes the tooling checks', () => {
 	const directory = mkdtempSync(join(tmpdir(), 'idhazh-explicit-all-'));
 	try {
 		const selected = selection(directory, options(['--group', 'all']));
-		assert.equal(selected.contracts, true);
 		assert.equal(selected.tooling, true);
 		assert.equal(selected.backendFiles, null);
 		assert.ok(selected.groups.includes('backend'));

@@ -24,25 +24,22 @@ import {
 /**
  * Every instrument the eval ledger writes, and the panel that answers for it.
  *
- * **The oracle is a set comparison, not a number.** `schemas/eval-row.schema.json`
- * is the contract for what the checker writes down. `DRAWN_BY` and
- * `NOT_A_MEASUREMENT` between them must name every column of it, exactly once,
- * and name nothing else. So a column added to `EvalRow` next month fails here,
- * in the ninety-second gate, instead of being scored on every summary for a year
- * with nowhere to look at it - which is exactly what happened to `hhem` and
- * `coverage`, the two the pipeline has written since its first published day.
+ * **The set comparison behind this panel is
+ * `backend/tests/contracts/test_frontend_console_lists.py`.** `DRAWN_BY` and
+ * `NOT_A_MEASUREMENT` between them must name every column of `EvalRow`, exactly
+ * once, and name nothing else, so a column added next month fails there instead
+ * of being scored on every summary for a year with nowhere to look at it - which
+ * is exactly what happened to `hhem` and `coverage`, the two the pipeline has
+ * written since its first published day. It asks that of the contract itself
+ * rather than of a generated copy of it, which is why it is not here.
  *
- * That is the whole reason this file is stronger than a test of the two new
- * charts would be. A chart test proves this panel draws; the set comparison
- * proves the *next* one will have to.
- *
- * The second half re-derives every drawn figure from the canary shard the site
- * was built from, by a plain loop that shares nothing with the module under
- * test. An oracle that calls the code it is checking cannot fail.
+ * What this file holds is what the browser tier alone can say: every drawn
+ * figure re-derived from the canary shard the site was built from, by a plain
+ * loop that shares nothing with the module under test. An oracle that calls the
+ * code it is checking cannot fail.
  */
 
 const REPO = resolve(process.cwd(), '..');
-const SCHEMA = resolve(REPO, 'schemas', 'eval-row.schema.json');
 const CANARY_SCORES = resolve(REPO, 'backend', 'var', 'canary', 'state', 'scores');
 
 const CONFIG = JSON.parse(readFileSync(resolve(REPO, 'config', 'idhazh.json'), 'utf8')) as {
@@ -50,14 +47,6 @@ const CONFIG = JSON.parse(readFileSync(resolve(REPO, 'config', 'idhazh.json'), '
 	console?: { default_window_days?: number };
 };
 const LEAD_FLOOR = CONFIG.evaluation?.lead_coverage_min ?? 0.3;
-
-/** Every column the contract says a scored row carries. */
-function contractColumns(): string[] {
-	const schema = JSON.parse(readFileSync(SCHEMA, 'utf8')) as {
-		properties?: Record<string, unknown>;
-	};
-	return Object.keys(schema.properties ?? {}).sort();
-}
 
 /** The canary ledger, as rows of strings, exactly as the page's reader sees it.
  *
@@ -119,9 +108,15 @@ function byHand(rows: readonly EvalInput[], date: string) {
  * every column name fails on a sentence that uses it correctly. What has to stay
  * off the page is the pipeline's own spelling - anything holding an underscore,
  * plus the one acronym nobody outside the checker has heard of.
+ *
+ * Taken from the two maps rather than from a contract file, because
+ * `test_frontend_console_lists.py` holds those two to exactly `EvalRow`'s
+ * columns - so this is still the contract's list.
  */
 function jargonColumns(): string[] {
-	return contractColumns().filter((column) => column.includes('_') || column === 'hhem');
+	return [...Object.keys(DRAWN_BY), ...Object.keys(NOT_A_MEASUREMENT)].filter(
+		(column) => column.includes('_') || column === 'hhem'
+	);
 }
 
 /** Six days covering every state the reduction has to survive.
@@ -150,28 +145,6 @@ const FIXTURE: EvalInput[] = [
 ];
 
 test.describe('the map', () => {
-	test('THE ORACLE: every column the ledger writes is on exactly one panel', () => {
-		const columns = contractColumns();
-		expect(columns.length, 'the eval-row contract lost its properties').toBeGreaterThan(20);
-
-		const drawn = Object.keys(DRAWN_BY);
-		const excluded = Object.keys(NOT_A_MEASUREMENT);
-		const both = drawn.filter((column) => excluded.includes(column));
-		expect(both, 'a column is both drawn and declared not a measurement').toEqual([]);
-
-		const claimed = [...drawn, ...excluded].sort();
-		// Said as two directed comparisons rather than one equality, because the
-		// two failures need different fixes and a set equality names neither.
-		const undeclared = columns.filter((column) => !claimed.includes(column));
-		expect(
-			undeclared,
-			'a column the checker writes reaches no console panel and is not declared as identity. ' +
-				'Give it a panel in DRAWN_BY, or a one-line reason in NOT_A_MEASUREMENT.'
-		).toEqual([]);
-		const invented = claimed.filter((column) => !columns.includes(column));
-		expect(invented, 'a map names a column the eval-row contract does not have').toEqual([]);
-	});
-
 	test('every panel a column is assigned to is a declared panel', () => {
 		const ids = EVAL_PANELS.map((panel) => panel.id);
 		expect(new Set(ids).size, 'two panels share an id').toBe(ids.length);

@@ -788,7 +788,7 @@ behaviour is byte-identical until the second call lands.
 
 ## See also
 
-- [../contracts/schemas.md](../contracts/schemas.md) - the contract subsystem: the base model, the generated schemas, and the drift gate over both.
+- [../contracts/schemas.md](../contracts/schemas.md) - the contract subsystem: the base model, the registry, and what binds the frontend's hand copy.
 - [../publishing/visuals.md](../publishing/visuals.md) - the picture, which is decided from this table.
 - [../../concepts/growing-reads.md](../../concepts/growing-reads.md) - what a read over a growing collection has to declare.
 - [../../../CLAUDE.md](../../../CLAUDE.md) - Guardrail #3 (contracts before logic), Guardrail #6 (no hardcoding), Guardrail #11 (fetched text is data), section 11 (schema versioning).

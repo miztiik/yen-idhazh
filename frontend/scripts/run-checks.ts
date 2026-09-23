@@ -5,7 +5,7 @@ import { createRequire } from 'node:module';
 import { dirname, join, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
-import { assertBuild, buildEnvironment, changedInputNote, inputFingerprint, REPO, treeFingerprint, writeRecord } from './build-state.ts';
+import { assertBuild, buildEnvironment, changedInputNote, inputFingerprint, REPO, writeRecord } from './build-state.ts';
 import type { BuildMode, BuildRecord } from './build-state.ts';
 import { FRONTEND_GROUPS, groupedSpecs, groupForSpec } from './test-groups.ts';
 import { selectionForChange } from './test-scope.ts';
@@ -69,7 +69,6 @@ export function selection(root: string, opts: Options): Selection {
 		}
 		selected.groups = [...new Set(asked)] as TestGroup[];
 		selected.backendFiles = null;
-		selected.contracts = opts.groups.includes('all');
 		selected.tooling = opts.groups.includes('all');
 		selected.reasons = [{ path: 'explicit selection', groups: selected.groups, reason: 'requested groups or specs' }];
 	}
@@ -244,7 +243,7 @@ async function main(args: string[]): Promise<number> {
 	const source = inputFingerprint(root);
 	const id = createHash('sha256').update(JSON.stringify({ source, versions, packages, node: process.version,
 		environment: buildEnvironment(env), groups: selected.groups, files: selected.backendFiles,
-		contracts: selected.contracts, tooling: selected.tooling, mode: opts.mode, specs: opts.specs })).digest('hex');
+		tooling: selected.tooling, mode: opts.mode, specs: opts.specs })).digest('hex');
 	const resultFile = join(directory, `${id}.json`);
 	const requested = Number(process.env.IDHAZH_CHECK_REQUESTED ?? Date.now());
 	const needsBuild = selected.groups.some((group) => group !== 'backend' && group !== 'logic');
@@ -303,16 +302,6 @@ async function main(args: string[]): Promise<number> {
 				const step = await run('pytest', python, ['-m', 'pytest', '-o', 'addopts=', '-q', '-n', selected.backendFiles ? '0' : 'auto',
 					`--junitxml=${report}`, ...(selected.backendFiles ?? [])]);
 				step.tests = pytestCounts(python, report, env);
-			}
-			if (selected.contracts) {
-				// Both generated trees, because one command writes both: the schemas
-				// and the TypeScript the frontend imports.
-				const generated = [join(root, 'schemas'), join(root, 'frontend', 'src', 'contracts')];
-				const before = generated.map(treeFingerprint);
-				await run('schema export', python, ['-m', 'idhazh.contracts.export']);
-				if (generated.map(treeFingerprint).some((now, index) => now !== before[index])) {
-					throw new Error('Schema export changed generated files. Review them and rerun the selected checks.');
-				}
 			}
 			if (selected.groups.some((group) => group !== 'backend')) {
 				await run('svelte-check', process.execPath, [npm, 'run', 'check'], frontend);

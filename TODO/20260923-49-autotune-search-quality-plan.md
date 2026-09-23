@@ -141,7 +141,7 @@ Its description says what it selects and what moving it does: how many published
 | E1 | `test_the_entity_tier_needs_a_slug_on_enough_items` | **Keeps both literals.** It drives the pure function with `min_items=3` and `min_items=4` over a three-item hand-built corpus. They are the arguments under test. A unit test that read the config would test the config, and would go red the day somebody tuned a knob. |
 | E2 | `test_the_entity_tier_builds_one_query_per_slug_that_clears_the_floor` | **Reads the knob in both places** - the `carried >= 3` comparison and the `min_items=3` argument - so the assertion follows what ships. It already takes a `corpus` fixture; it takes the `config` fixture beside it. |
 
-**The generated layer.** `python -m idhazh.contracts.export` regenerates `schemas/app-config.schema.json` and `frontend/src/contracts/app-config.ts`. Both are in the commit or the drift gate fails in CI.
+**There is no generated layer to regenerate.** `schemas/` and `frontend/src/contracts/` went on 2026-09-23. `AppConfig` is the only copy of this shape, and `Contract.json_schema()` computes a schema from it on demand when one is wanted. What holds the frontend's hand-written copies in step is four tests under `backend/tests/contracts/`: `test_frontend_field_set.py`, `test_frontend_vocabularies.py`, `test_frontend_console_lists.py` and `test_no_generated_layer.py`.
 
 **The appearance file does not declare it.** This knob is the measurement's, like `eval_corpus_through`, not the browser's. `config/appearance.json` and `AppearanceConfig` stay untouched. `backend/tests/contracts/_fixtures.py` carries the list of `assist` knobs the browser interface declares none of; the census in Section 0a says whether this name belongs on it.
 
@@ -149,15 +149,15 @@ Its description says what it selects and what moving it does: how many published
 
 ### Section 2b - Files, measured 2026-09-23
 
-`backend/idhazh/contracts/knobs/assist.py`, `config/idhazh.json`, `schemas/app-config.schema.json` and `frontend/src/contracts/app-config.ts` (both generated), `backend/tests/test_retrieval_eval.py`, `backend/tests/contracts/_fixtures.py`, `tests/fixtures/contracts/app-config/every-knob-differs-from-the-committed-config.json`, `docs/concepts/config.md`.
+`backend/idhazh/contracts/knobs/assist.py`, `config/idhazh.json`, `backend/tests/test_retrieval_eval.py`, `backend/tests/contracts/_fixtures.py`, `tests/fixtures/contracts/app-config/every-knob-differs-from-the-committed-config.json`, `docs/concepts/config.md`.
 
 ### Section 2c - Acceptance gates
 
 - Local: `ruff check backend`, `ruff format --check backend`, `mypy backend` clean.
 - Local: `pytest backend/tests/test_retrieval_eval.py backend/tests/contracts backend/tests/test_appearance_config.py -q`. Named because they are the readers of the knob list.
-- Local: `python -m idhazh.contracts.export`, then `git diff --exit-code -- schemas/ frontend/src/contracts/` clean once the regenerated files are staged.
+- Local: `pytest backend/tests/contracts/test_frontend_field_set.py backend/tests/contracts/test_frontend_vocabularies.py backend/tests/contracts/test_frontend_console_lists.py backend/tests/contracts/test_no_generated_layer.py -q`. These four are what a generated layer used to do: they hold the frontend's hand copies against the contract, and refuse the generator coming back.
 - Local: **the committed config builds a key that is not empty.** E2 asserts at least one question, so a value that empties the key fails by name rather than by a silent pass over zero questions.
-- CI: the full suite and the contract drift gate.
+- CI: the full suite.
 
 ### Section 2d - Oracle
 
@@ -224,9 +224,9 @@ Under C1 no appearance-side file moves. Under C2 the eight in Table C move too, 
 
 - Local: `ruff check backend`, `ruff format --check backend`, `mypy backend` clean.
 - Local: `pytest backend/tests/test_retrieval_eval.py backend/tests/contracts -q`. **The module carries `pytestmark = pytest.mark.slow`**, so name it by path rather than trusting the default selection.
-- Local: `python -m idhazh.contracts.export`, then `git diff --exit-code -- schemas/ frontend/src/contracts/` clean once the regenerated files are staged.
+- Local: no generated layer to regenerate - `schemas/` and `frontend/src/contracts/` went on 2026-09-23, and `Contract.json_schema()` computes a schema on demand. `backend/tests/contracts/test_frontend_field_set.py`, `test_frontend_vocabularies.py`, `test_frontend_console_lists.py` and `test_no_generated_layer.py` are what holds the frontend's hand copies in step, and `backend/tests/contracts` above already runs all four.
 - Local: the printed summary names the precision, its standard error, the excluded query count and the unjudged share on one line.
-- CI: the full suite and the contract drift gate.
+- CI: the full suite.
 
 ### Section 3e - Oracle
 
@@ -418,11 +418,11 @@ H6 to H9 repeat on every row of one run. That is what `item-health` already does
 
 - Local: `ruff check backend`, `ruff format --check backend`, `mypy backend` clean.
 - Local: `pytest backend/tests/test_search_quality.py backend/tests/contracts backend/tests/test_ledger.py backend/tests/workflows/test_worker_ledgers.py backend/tests/workflows/test_ledger_staging.py -q`.
-- Local: `python -m idhazh.contracts.export`, then `git diff --exit-code -- schemas/ frontend/src/contracts/` clean once the generated files are staged.
+- Local: no generated layer to regenerate - `schemas/` and `frontend/src/contracts/` went on 2026-09-23, and `Contract.json_schema()` computes a schema on demand. `backend/tests/contracts/test_frontend_field_set.py`, `test_frontend_vocabularies.py`, `test_frontend_console_lists.py` and `test_no_generated_layer.py` are what holds the frontend's hand copies in step, and `backend/tests/contracts` above already runs all four.
 - Local: a round trip - a row through `csv_row` and back through `from_csv_row` is the same row, float cells included.
 - Local: `python backend/utilities/doc_load.py` before and after.
 - **The run id in every fixture is production-shaped**, `<YYYY-MM-DD>-<execution>`, and matches `RUN_ID_PATTERN`. A made-up id passes a test against a filename production never writes.
-- CI: the full suite and the contract drift gate.
+- CI: the full suite.
 
 ### Section 5g - Oracle
 

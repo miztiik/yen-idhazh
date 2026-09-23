@@ -46,8 +46,8 @@ npm run test:changed -- --spec archive.spec.ts
 npm run test:changed -- --mode real --spec reading-page.spec.ts --spec layout-overflow.spec.ts
 ```
 
-`--group browser` selects all frontend groups; `--group all` adds the backend.
-The `all` selection also includes schema regeneration and the tooling tests.
+`--group browser` selects all frontend groups; `--group all` adds the backend
+and the tooling tests.
 Choose group flags or spec flags for one invocation, not both. Several spec
 flags can select tests from different groups.
 A real-build run requires an explicitly supported reading or visual spec, so
@@ -142,10 +142,10 @@ rather than a filter this repository wrote. So the daily digest, visuals and
 state commits cost nothing here, and `digest.yml` and `backfill.yml` run
 `validate-days` before their own commit because `ci.yml` never sees it.
 
-For a local contract change, the launcher compares schema files before and
-after export. Correct uncommitted generated files can pass; an exporter that
-changes them requires review and a new run. CI still compares its clean
-checkout against the committed schemas.
+A contract change selects both languages and re-reads every committed day,
+because the shape a day is read through is the only thing that can invalidate a
+frozen one. There is no export step and nothing to compare: the three tests that
+bind the frontend's hand copies run inside the backend group.
 
 ## Direct backend checks
 
@@ -294,7 +294,7 @@ anywhere has to be repointed.
 
 | Selector | What it holds |
 | --- | --- |
-| `-m contract` | The persisted shapes: the generated schemas, the two config contracts, the append-only ledgers, the committed digest tree |
+| `-m contract` | The persisted shapes: the models and their fixtures, the two config contracts, the append-only ledgers, the committed digest tree, and the three tests that bind the frontend's hand copies |
 | `-m visual` | The picture's gate and ladder, its validator, the compiler that turns a plan into published marks, and the planted attacks aimed at the picture |
 | `-m workflow` | The workflow YAML and the shell scripts under `.github/` |
 | `-m slow` | Every module whose average test runs over a second |
@@ -349,22 +349,19 @@ make this slower.
 
 ## The backend gates
 
-Run all five from the repository root. Each must be clean.
+Run all four from the repository root. Each must be clean.
 
 ```powershell
 .\.venv\Scripts\python.exe -m ruff check.
 .\.venv\Scripts\python.exe -m mypy
 .\.venv\Scripts\python.exe -m pytest
 .\.venv\Scripts\shellcheck.exe --severity=style (Get-ChildItem.github/scripts/*.sh).FullName
-.\.venv\Scripts\python.exe -m idhazh.contracts.export
-git diff --exit-code -- schemas/ frontend/src/contracts/
 ```
 
-The last two lines
-are the contract drift gate: the export regenerates `schemas/` AND
-`frontend/src/contracts/` from the Pydantic models, and a non-empty diff in
-either means a generated artifact was hand-edited or a model changed without
-regenerating ([../architecture/contracts/schemas.md](../architecture/contracts/schemas.md)).
+**There is no schema export and no drift gate.** Both went on 2026-09-23 with
+the two generated trees they checked. What the frontend copies by hand is held
+in step by three tests in `backend/tests/contracts/`, which `pytest` above runs
+([../architecture/contracts/schemas.md](../architecture/contracts/schemas.md)).
 
 **`shellcheck` is the same binary CI runs**, installed by the `dev` extra rather
 than downloaded, so the local gate and the CI gate cannot disagree about a
@@ -945,5 +942,5 @@ precisely when an operator needs it.
 - [../reference/agent-notes.md](../reference/agent-notes.md) - environment quirks that make a command lie about its result.
 - [../reference/test-selection.md](../reference/test-selection.md) - why a pull request runs only some of these, what that gives up, and what was rejected.
 - [../reference/ci-environment.md](../reference/ci-environment.md) - what CI downloads once and keeps, and why a gate job is not always as slow as its step list looks.
-- [../architecture/contracts/schemas.md](../architecture/contracts/schemas.md) - what the drift gate compares.
+- [../architecture/contracts/schemas.md](../architecture/contracts/schemas.md) - the three tests that replaced the drift gate.
 - [../../CLAUDE.md](../../CLAUDE.md) - sections 9, 12, and 13.

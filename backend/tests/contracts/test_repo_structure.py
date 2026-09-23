@@ -14,7 +14,6 @@ from conftest import (
     CONTRACT_FIXTURES_DIR,
     FIXTURES_DIR,
     REPO_ROOT,
-    SCHEMAS_DIR,
     read_text,
 )
 from pydantic import ValidationError
@@ -111,7 +110,7 @@ def test_a_council_module_names_no_judge() -> None:
 
 @pytest.mark.parametrize(
     "path",
-    sorted(SCHEMAS_DIR.glob("*.json")) + sorted(CONFIG_DIR.glob("*.json")) + fixture_paths(),
+    sorted(CONFIG_DIR.glob("*.json")) + fixture_paths(),
     ids=lambda p: p.name,
 )
 def test_repo_text_is_ascii_and_lf(path: Path) -> None:
@@ -508,10 +507,10 @@ def test_every_script_a_workflow_runs_is_on_disk() -> None:
 #: the loose word.
 RETIRED_STORE_PATH = re.compile(r"state/[s]tory-similarity|STORY[_]SIMILARITY_DIRNAME")
 
-#: The six trees a person edits, swept through `git ls-files` rather than a
+#: The five trees a person edits, swept through `git ls-files` rather than a
 #: directory walk: an untracked scratch file cannot turn this red, and a tracked
 #: one cannot escape it.
-RETIRED_STORE_SWEEP = ("backend", "frontend/src", ".github", "docs", "schemas", "config")
+RETIRED_STORE_SWEEP = ("backend", "frontend/src", ".github", "docs", "config")
 
 
 def test_no_reader_resolves_a_path_under_the_retired_store_name() -> None:

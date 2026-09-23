@@ -85,7 +85,7 @@ Three files carry one item-health row, and each owns one thing:
 | Where | What it owns |
 | --- | --- |
 | `backend/idhazh/contracts/item_health.py` | the shape: field order, types, enums, the validator, and `csv_columns` |
-| `schemas/item-health-row.schema.json` | the generated schema. Never hand-edited (Guardrail #3) |
+| `ItemHealthRow` | the contract. Every column is declared here first (Guardrail #3) |
 | `backend/idhazh/ledger.py` | the header guard, `write_segment`, and the writer file path |
 | `backend/idhazh/day_shards.py` | the walk over a day, and the settlement a reader gets |
 
@@ -499,7 +499,7 @@ stage that did the work.
 `CollectConfig.settled_failure_codes`, and - the one that is easy to miss -
 `ItemHealthRow._state_is_complete`, which lists the codes an `ok` row may carry.
 Miss the fifth on a signal that publishes and nothing goes red until a real row
-is built: the enum, the schema and the drift gate are all satisfied, and the
+is built: the enum and the contract are both satisfied, and the
 failure is a `ValidationError` raised inside the census. Then the committed
 `config/idhazh.json` names the settled list again, this page enumerates the
 neutral split twice, and `backend/tests/test_telemetry.py` needs a fixture

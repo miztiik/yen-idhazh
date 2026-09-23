@@ -6,7 +6,7 @@ import json
 from typing import Any
 
 import pytest
-from conftest import CONTRACT_FIXTURES_DIR, SCHEMAS_DIR, read_text
+from conftest import CONTRACT_FIXTURES_DIR, read_text
 from pydantic import ValidationError
 
 from idhazh.contracts.item_health import ItemHealthRow, TimeSource
@@ -50,7 +50,7 @@ def test_a_clock_nobody_declared_is_refused_and_not_folded() -> None:
 
 def test_the_generated_schema_carries_every_member() -> None:
     """The schema is what a reader outside Python validates against (Guardrail #3)."""
-    schema = json.loads(read_text(SCHEMAS_DIR / "item-health-row.schema.json"))
+    schema = ItemHealthRow.json_schema()
 
     assert schema["$defs"]["TimeSource"]["enum"] == [member.value for member in TimeSource]
 

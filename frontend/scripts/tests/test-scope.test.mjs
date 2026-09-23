@@ -115,19 +115,12 @@ test('a test module inside a package is selected like a flat one', () => {
 	assert.equal(selection.reasons[0].reason, 'changed backend test module');
 });
 
-test('contract and config changes include both languages and drift checks', () => {
-	for (const path of ['config/appearance.json', 'schemas/article.schema.json', 'backend/idhazh/contracts/article.py']) {
+test('contract and config changes include both languages and revalidate the archive', () => {
+	for (const path of ['config/appearance.json', 'backend/idhazh/contracts/article.py']) {
 		const selection = selectPaths([path]);
 		assert.deepEqual(selection.groups, ['backend', ...FRONTEND_GROUPS]);
 		assert.equal(selection.contracts, true);
 	}
-});
-
-test('a generated frontend contract selects the drift check too', () => {
-	// One command writes `schemas/` and `frontend/src/contracts/`, so an edit to
-	// either is the same defect and the same check has to catch it.
-	const selection = selectPaths(['frontend/src/contracts/article.ts']);
-	assert.equal(selection.contracts, true);
 });
 
 //: A change, and what the `scope` job has to buy for it on a pull request: the
@@ -185,7 +178,6 @@ test('a pull request buys the console specs only for the console or the harness'
 //: day was written.
 const REVALIDATES_THE_ARCHIVE = [
 	'backend/idhazh/contracts/item_health.py',
-	'schemas/digest-day.schema.json',
 	'config/idhazh.json',
 	'pyproject.toml',
 	'frontend/package.json',

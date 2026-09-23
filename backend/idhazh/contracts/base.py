@@ -3,8 +3,8 @@
 This module is the bottom of the dependency graph: it imports nothing from
 `idhazh` outside `idhazh.contracts` (CLAUDE.md section 4). It owns the
 `version` date-stamp, the in-schema `changelog`, the invariant that the two
-cannot fall out of step, the canonical JSON serialization, and the JSON Schema
-emitter that `schemas/` is generated from (CLAUDE.md section 11).
+cannot fall out of step, the canonical JSON serialization, and the JSON Schema a
+contract computes for itself on demand (CLAUDE.md section 11).
 """
 
 from __future__ import annotations
@@ -697,11 +697,13 @@ def _payload_name(path: Path) -> str:
 class Contract(Model):
     """Base for a top-level persisted document.
 
-    A subclass declares `__schema_stem__` (the `schemas/<stem>.schema.json`
-    filename) and `__changelog__` (newest entry first). The document's `version`
-    defaults to the newest changelog entry but accepts an older date-stamp, so a
-    payload written by an earlier run still validates and a read-side migration
-    has something to branch on.
+    A subclass declares `__schema_stem__` and `__changelog__` (newest entry
+    first). The stem is the document's stable published key: the fixture map and
+    the console payload inventory both address a shape by it, so it survives a
+    rename of the Python class. The document's `version` defaults to the newest
+    changelog entry but accepts an older date-stamp, so a payload written by an
+    earlier run still validates and a read-side migration has something to
+    branch on.
     """
 
     __schema_stem__: ClassVar[str] = ""
@@ -738,7 +740,12 @@ class Contract(Model):
 
     @classmethod
     def json_schema(cls) -> dict[str, Any]:
-        """The generated schema document. Never hand-edited (Guardrail #3)."""
+        """This contract's JSON Schema, computed on demand.
+
+        Nothing writes these to disk. A reader outside Python is handed one when
+        it asks, and the two tests that hold the frontend's hand copy in step
+        compute over it (`CLAUDE.md` section 1a).
+        """
         schema = cls.model_json_schema()
         # A document that omits `version` is stamped with the current one on
         # read, so the schema says optional-with-a-default rather than required.
@@ -749,8 +756,8 @@ class Contract(Model):
             schema["required"] = required
         else:
             schema.pop("required", None)
-        # `$id` is the file's own relative name, not a URL, so an editor's
-        # JSON Schema plugin resolves it offline with nothing to 404.
+        # `$id` is the stem's filename form rather than a URL, so a reader handed
+        # this schema identifies it offline with nothing to 404.
         schema["$schema"] = JSON_SCHEMA_DIALECT
         schema["$id"] = cls.schema_filename()
         schema["version"] = cls.schema_version()

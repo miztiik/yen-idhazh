@@ -183,27 +183,3 @@ test('a window nothing measured says so rather than drawing an empty track', asy
 		'data-prompt-reuse-empty="none"'
 	);
 });
-
-test('the contract names its requests in the spelling the panel discovers them by', () => {
-	// The generated schema and not a committed day file: the schema is the
-	// contract the producer writes those columns under, it is one file of fixed
-	// size, and no run can edit it (`CLAUDE.md` section 13).
-	//
-	// Read off it rather than asserted as a list. How many requests the pipeline
-	// makes is a config value, so a test that named two would be the very
-	// constant this row exists to remove. What is asserted is the property: the
-	// contract names at least one request, and each one carries the
-	// reading-speed column this panel pairs with it.
-	const schema = JSON.parse(
-		readFileSync(path.join(frontend, '..', 'schemas', 'item-health-row.schema.json'), 'utf8')
-	) as { properties: Record<string, unknown> };
-	const columns = Object.keys(schema.properties);
-	const names = requestNames(columns);
-
-	expect(names.length, 'the contract names no request at all').toBeGreaterThan(0);
-	for (const name of names) {
-		expect(columns, `${name} carries no reading-speed column to pair with`).toContain(
-			`${name}_prefill_tokens_per_s`
-		);
-	}
-});

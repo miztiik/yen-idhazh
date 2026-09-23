@@ -81,11 +81,10 @@ Every row's acceptance gate below names one or more of these sets **and then lis
 .\.venv\Scripts\python.exe -m pytest -n 0 backend/tests/<the modules this row names>
 ```
 
-**`GATE-SCHEMA`** - every row that edits a model under `backend/idhazh/contracts/`. This is the contract drift gate and a non-empty diff fails it:
+**`GATE-SCHEMA`** - every row that edits a model under `backend/idhazh/contracts/`. There is no generated layer to regenerate: the model is the only copy of its shape, and `Contract.json_schema()` computes a schema from it on demand. Four tests hold the frontend's hand copies against the models and refuse the generator coming back:
 
 ```powershell
-.\.venv\Scripts\python.exe -m idhazh.contracts.export
-git diff --exit-code -- schemas/
+.\.venv\Scripts\python.exe -m pytest backend/tests/contracts/test_frontend_field_set.py backend/tests/contracts/test_frontend_vocabularies.py backend/tests/contracts/test_frontend_console_lists.py backend/tests/contracts/test_no_generated_layer.py
 ```
 
 **`GATE-SUITE`** - the whole backend suite, which is what CI runs. Run it locally only when you cannot push:
@@ -1214,7 +1213,7 @@ Every definition begins **"This piece argues that..."**, and every field carries
   - **a `docs/concepts/growing-reads.md` declaration for every read this row adds**, naming what it reads, how the cost grows and why a bounded input cannot answer the question.
 - **Oracle:** **The console's payload producer opens one day file for each day in its window and opens no shard.** **Driven from `tests/fixtures/classifications/three-day-window/`** - three day files and three day-shards of the ledger beside them. The test counts file opens by path and asserts the shards were never touched. **This is the assertion that keeps the console's cost proportional to the window a reader chose rather than to how long the pipeline has been running** (Guardrail #12), and a fixture window is what lets it go red without waiting for the archive to grow.
 - **What this row does not do:** it produces no label. Every row it feeds - #9, #10, #11, #15, #16, #17, #18 and #19 - writes into a shape this row defines and this row fills none of it.
-- **Five rows write `backend/idhazh/contracts/day_metrics.py` and `schemas/day-metrics.schema.json`, and four of them are in this plan.** Rows **#1a** (relaxing the fingerprint), **#1b** (removing it), **#13** (the encoder alarm's counter) and **#14** (this row's `DayTaxonomy` block) all edit that model, in groups C, P, F and J - so no group holds two of them and the within-group rule survives. The fifth is [`20260910-25-placement-plan.md`](20260910-25-placement-plan.md) row #14, which adds a divergence block to the same model, the same schema and `backend/idhazh/publish_day_metrics.py`. **Neither plan blocks the other and every one of the five may land**, because the blocks are disjoint and each is declared optional against the day files already on disk. **Whichever lands after another re-runs `python -m idhazh.contracts.export` and reads the previous `changelog` entry before adding its own**, because the drift gate fails on a byte and two entries dated the same day need the minute form (`CLAUDE.md` section 11). Found 2026-09-11; an earlier note here named only the cross-plan half.
+- **Five rows write `backend/idhazh/contracts/day_metrics.py`, and four of them are in this plan.** Rows **#1a** (relaxing the fingerprint), **#1b** (removing it), **#13** (the encoder alarm's counter) and **#14** (this row's `DayTaxonomy` block) all edit that model, in groups C, P, F and J - so no group holds two of them and the within-group rule survives. The fifth is [`20260910-25-placement-plan.md`](20260910-25-placement-plan.md) row #14, which adds a divergence block to the same model and to `backend/idhazh/publish_day_metrics.py`. **Neither plan blocks the other and every one of the five may land**, because the blocks are disjoint and each is declared optional against the day files already on disk. **Whichever lands after another reads the previous `changelog` entry before adding its own**, because two entries dated the same day need the minute form (`CLAUDE.md` section 11). Found 2026-09-11; an earlier note here named only the cross-plan half, and a later one named a generated schema that no longer exists.
 
 ### The shape
 

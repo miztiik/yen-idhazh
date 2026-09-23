@@ -41,8 +41,8 @@ from ._harness import SCRIPTS_DIR, _load_workflows, _run_bodies
 pytestmark = pytest.mark.workflow
 
 #: How a step spells a call into the pipeline. The verb has to be separated from
-#: `idhazh` by a space, so `python -m idhazh.contracts.export` is a call into a
-#: module rather than a verb and is correctly not matched.
+#: `idhazh` by a space, so `python -m idhazh.council.run` is a call into a module
+#: rather than a verb and is correctly not matched.
 INVOCATION: Final = re.compile(r"python3?\s+-m\s+idhazh\s+(?P<verb>[a-z][a-z0-9-]*)")
 
 
