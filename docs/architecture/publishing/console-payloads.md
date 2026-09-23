@@ -134,7 +134,7 @@ day the run is publishing, and every projection's body stays in its own module
 | `run_days.py` | `run-days/<YYYY-MM>.json` | one month of committed `run.json` and `digest.json` |
 | `day_metrics.py` `publish_public` | `day-metrics/<YYYY-MM>.json` | one month of `state/day-metrics/<YYYY>/<MM>/` |
 | `machine.py` | `machine/<YYYY-MM>.csv` | one month of `state/item-health/<YYYY>/<MM>/` and of `state/host-fingerprint/<YYYY>/<MM>/` |
-| `span_rollup.py` | `span-rollup/<YYYY-MM>.csv` | `state/span-rollup/<YYYY-MM>.csv` |
+| `span_rollup.py` | `span-rollup/<YYYY-MM>.csv` | `state/span-rollup/<YYYY>/<MM>/<DD>/` |
 | `run_timeline.py` | `run-timeline/<YYYY-MM>.csv` | one month of `state/item-health/<YYYY>/<MM>/` |
 
 `scores.py` and `feed_health.py` were two more rows of that table until
@@ -188,26 +188,20 @@ TypeScript one. Two things about where it reads from:
  `discover.streak` and `discover.resting`** - the reducers the pipeline itself
  rested a feed by. A page running its own copy is how a console starts
  contradicting the run that produced it.
-- **The compaction lag comes from the fold's own return value, handed in by the
- caller, and never from a listing taken here.** `stage_compact` runs inside
- `stage_assemble` before `dispatch.publish_all`, so it has already drained
- `state/segments/` by the time the band is written - a listing at this point is
- always empty, the three fields could never be anything but zero, and a warning
- with no reachable state teaches an operator that no warning means nothing is
- wrong. `CompactionReport` is a return value with no schema and no file, so
- `assemble` is the one place the numbers exist, and it is where they are read.
+- **`compaction_lag_days` and `rows_uncompacted` are handed in at 0 and have
+ been since 2026-09-23.** Every writer files its own rows under the day those
+ rows name, so a run that died three days ago left them in that day rather than
+ in a store a later run had to drain. There is no backlog for either reading to
+ count. They stay on the payload because a reader of an older day still finds
+ them there, and a field removed is a contract break for a page nobody
+ re-publishes.
 
-**The lag is the fold's, and the run date is the caller's.** `stage_compact`
-never reads a clock - the head a row lands in is named by the row's own date
-cell - so the report carries rows counted against each segment's run date, and
-`CompactionReport.lag_days` and `.rows_waiting_before` take the run date from the
-caller that has one. That is what keeps a recovering run's own segments out of
-its backlog count: every run writes segments, so a count of rows folded would be
-non-zero on every run and would report a working pipeline as a late one.
-
-**What this signal cannot cover, said here rather than implied.** A run that
-never finishes writes no band at all, so no sentence appears however far behind
-the record falls. The band's `generated_at` is what covers that case.
+**The band drew a line from those two readings until 2026-09-23, and it no
+longer does.** A reading that cannot move is a line that says the same thing
+every day, and an operator learns to read past it. **What the reader gives up**
+is a "nothing is waiting to be folded" reassurance they could not have acted on.
+A later change that can make the readings move again gets its line back with no
+schema break, because the fields are still there.
 
 The window is `max(console.window_presets)`, which is the furthest back any
 panel on any route can draw, and it is **anchored on the newest day found rather

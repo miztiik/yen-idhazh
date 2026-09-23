@@ -63,12 +63,12 @@ same variable. There is no hosted inference anywhere in this project
 | `backend/var/run/<date>/plan.json` | The day's work list | no - gitignored |
 | `backend/var/run/<date>/items/*.json` | Per-item article, summary and eval | no - gitignored |
 | `frontend/public/digest/<YYYY>/<MM>/<DD>/` | `digest.json` and `run.json` | **yes** |
-| `state/scores/<YYYY>/<MM>/<DD>.csv` | One row per scored item | **yes** |
+| `state/scores/<YYYY>/<MM>/<DD>/` | One row per scored item | **yes** |
 | `state/seen/<YYYY>/<MM>/<DD>.csv` | First sight of every address, so an undated article still has an age | **yes** |
 | `state/published/<YYYY>/<MM>/<DD>.csv` | Every address that reached a digest, so nothing runs twice | **yes** |
-| `state/feed-health/<YYYY>/<MM>/<DD>.csv` | What every feed did on every run | **yes** |
+| `state/feed-health/<YYYY>/<MM>/<DD>/` | What every feed did on every run | **yes** |
 | `state/feed-retirements.csv` | Every endpoint the run stopped asking, and the evidence | **yes** |
-| `state/item-health/<YYYY>/<MM>/<DD>.csv` | What every planned item did on every run | **yes** |
+| `state/item-health/<YYYY>/<MM>/<DD>/` | What every planned item did on every run | **yes** |
 
 **The ledgers under `state/` are the pipeline's whole memory.** Plan reads them
 at the start of a run and appends to them before it ranks anything, and Assemble
@@ -154,7 +154,7 @@ python -m idhazh telemetry rollup --date 2026-09-15  # how long that day's spans
 `census` is the fastest way in: it counts the day's items by stage, outcome and
 failure code, which is the same answer as filtering the census shard by hand.
 
-Every planned item has a census row in `state/item-health/<YYYY>/<MM>/<DD>.csv`.
+Every planned item has a census row in `state/item-health/<YYYY>/<MM>/<DD>/`.
 Open it directly when you need a column `census` does not fold, because that
 ledger is committed and keeps the denominator next to the failure count:
 

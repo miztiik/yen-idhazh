@@ -58,21 +58,19 @@ export interface BandRun {
 	label: string;
 }
 
-/** What one run folded in that an earlier run had left waiting.
+/** The band, which is three facts and nothing else.
  *
- * It describes the fold that ran a moment before the band was written, so it is
- * the only moment the backlog can be seen: the fold drained the directory, and
- * anything listing it afterwards finds nothing.
+ * A fourth line stood under the three until 2026-09-23 and said how far behind
+ * the record had been before the run folded it in. Every writer files its own
+ * day now, so no run finds a backlog and `compaction_lag_days` is always 0: the
+ * line could only ever have drawn on a payload written before that change.
+ *
+ * **What the reader gives up:** a "nothing is waiting to be folded" reassurance.
+ * It was a reassurance that was always going to say the same thing, so it told
+ * an operator nothing they could act on. The payload still carries the two
+ * readings, so a later change that can make them move again has its field back
+ * without a schema break.
  */
-export interface CompactionLag {
-	/** Whole days between the oldest waiting segment and the run that folded it. */
-	days: number;
-	/** Rows the run folded in from segments an earlier run left behind. */
-	rows: number;
-	/** The day the run that wrote this band assembled. */
-	coversThrough: string | null;
-}
-
 export interface ConsoleBandFacts {
 	/** The newest day the manifests hold, as a sentence. */
 	verdict: {
@@ -100,8 +98,6 @@ export interface ConsoleBandFacts {
 		measuredDays: number;
 		sentence: string;
 	};
-	/** Null when the run found nothing waiting, which is every normal run. */
-	compaction: CompactionLag | null;
 }
 
 export interface ConsoleShell {
@@ -192,8 +188,7 @@ export const BAND_UNREAD: ConsoleShell = {
 			articlesToCap: null,
 			measuredDays: 0,
 			sentence: 'No size was read, so there is nothing to hold against the 1 GB limit.'
-		},
-		compaction: null
+		}
 	},
 	routes: ROUTE_IDS.map((id) => ({
 		id,
@@ -218,37 +213,6 @@ function count(value: unknown): number | null {
 
 function healthOf(value: unknown): Health {
 	return HEALTHS.includes(value as Health) ? (value as Health) : 'amber';
-}
-
-/** `2026-09-17` as `17 September`, or null for anything that is not a day.
- *
- * `en-GB` and UTC, the same pair `ItemMeta.svelte` prints a reading date with,
- * so one date never reads two ways on one site.
- */
-function readableDate(stamp: unknown): string | null {
-	if (typeof stamp !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(stamp)) return null;
-	const day = new Date(`${stamp}T00:00:00Z`);
-	if (Number.isNaN(day.getTime())) return null;
-	return day.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', timeZone: 'UTC' });
-}
-
-/** What a run that cleared a backlog leaves behind, or null when there was none.
- *
- * **Past tense, and that is the whole of the wording rule.** The page it stands
- * on was brought current by the run that wrote it, so a present-tense "the
- * record is two days behind" would be false on the one page that can say it.
- *
- * **What it cannot cover, said here because the page cannot say it:** a run that
- * never finishes writes no band at all, so no sentence appears however far
- * behind the record falls. The band's `generated_at` is what covers that.
- */
-export function compactionSentence(lag: CompactionLag | null): string | null {
-	if (lag === null) return null;
-	const rows = `${lag.rows} ${lag.rows === 1 ? 'row' : 'rows'}`;
-	const days = `${lag.days} ${lag.days === 1 ? 'day' : 'days'}`;
-	const merged = `This run merged ${rows} that had been waiting ${days}.`;
-	const through = readableDate(lag.coversThrough);
-	return through === null ? merged : `${merged} The Hardware page now reaches ${through}.`;
 }
 
 /** The published band as the components read it, or the named absence.
@@ -288,9 +252,6 @@ export function readBand(payload: unknown): ConsoleShell {
 	const worst = (raw.worst ?? null) as Record<string, unknown> | null;
 	const worstId = worst === null ? '' : text(worst.id);
 	const runs = Array.isArray(verdict.runs) ? (verdict.runs as Record<string, unknown>[]) : [];
-	// Zero days is the state of every normal run, and a payload written before
-	// this field existed reads the same way. Both mean there is nothing to say.
-	const lagDays = count(raw.compaction_lag_days) ?? 0;
 
 	return {
 		band: {
@@ -317,16 +278,7 @@ export function readBand(payload: unknown): ConsoleShell {
 				articlesToCap: count(size.articles_to_cap),
 				measuredDays: count(size.measured_days) ?? 0,
 				sentence: size.sentence
-			},
-			compaction:
-				lagDays > 0
-					? {
-							days: lagDays,
-							rows: count(raw.rows_uncompacted) ?? 0,
-							coversThrough:
-								typeof raw.covers_through === 'string' ? raw.covers_through : null
-						}
-					: null
+			}
 		},
 		routes,
 		carries: Object.fromEntries(

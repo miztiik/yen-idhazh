@@ -1334,10 +1334,10 @@ class ItemHealthRow(Contract):
         resolves to every shard that job ran.
 
         **The converse is not a rule, and that is the load-bearing half.** Every
-        row written before this column carries a shard and no job; the archive is
-        read back through `from_csv_row` on the next append
-        (`ledger.append_item_health`), so `job iff shard` would refuse the whole
-        of it on the first run after this lands.
+        row written before this column carries a shard and no job; every read of
+        a committed day parses each row back through `from_csv_row`
+        (`day_shards.parsed`), so `job iff shard` would refuse the whole of it on
+        the first run after this lands.
         """
         if self.job is not None and self.shard is None:
             raise ValueError("a job on an item-health row names a shard as well")

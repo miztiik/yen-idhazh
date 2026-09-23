@@ -287,7 +287,7 @@ artifact, which expires and is never committed.
 
 A worker commits a third row in the same step: what its model server counted for
 the whole shard, read once from `/metrics` at job end and filed into this
-shard's own segment, which `assemble` folds into `state/host-fingerprint/`.
+shard's own segment under `state/host-fingerprint/`.
 The raw body still ships in `runtime-log-<shard>`, which keeps it for two days -
 long enough to read a failure, far too short to hold a published rate to
 account. The committed row is what lets
@@ -873,9 +873,9 @@ production happened to publish that week. The count does not move - 3 shards of
 to leave, and `evals.golden.ledger_relpath` returned `state/validation-<date>.csv`
 for both callers to join to the repository root - so that row landed in production
 `state/` whatever `run.trial_state_dirname` said. The verdict now goes to
-`state/pipeline-tests/validation/<YYYY>/<MM>/<DD>.csv`, its `decide` job builds the
-scratch copy like the two jobs before it, and the segment it writes is folded by
-`idhazh compact` in the same job.
+`state/pipeline-tests/validation/<YYYY>/<MM>/<DD>/`, its `decide` job builds the
+scratch copy like the two jobs before it, and the segment it writes there is the
+verdict rather than a copy waiting to be folded.
 `backend/tests/workflows/test_validation_state_root.py` holds the assertions;
 `test_no_validation_stage_can_reach_the_production_state_root` asserts the
 redirect for every stage any job in that file runs, present or future, and

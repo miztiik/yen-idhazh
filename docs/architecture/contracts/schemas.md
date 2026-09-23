@@ -85,13 +85,13 @@ The shapes, and where each one lives once written:
 | `VisualDecision` | `visual-decision` | one file per item under the run directory |
 | `VisualPlan` | `visual-plan` | not persisted yet - the shape lands ahead of its producers (Guardrail #3), and what a plan may not carry is as much of it as what it holds ([../publishing/visuals.md](../publishing/visuals.md)) |
 | `ElementTable` | `element-table` | not persisted yet - the shape lands ahead of its producers (Guardrail #3), and where an article's elements are written is settled by the row that writes them |
-| `EvalRow` | `eval-row` | one appended row of `state/scores/<YYYY>/<MM>/<DD>.csv` |
-| `ObservationIndexRow` | `observation-index-row` | one appended row of `state/score-index/<YYYY>/<MM>/<DD>.csv`, the identity of one measurement the day file beside it holds |
+| `EvalRow` | `eval-row` | one row of `state/scores/<YYYY>/<MM>/<DD>/`, in the file its writer owns |
+| `ObservationIndexRow` | `observation-index-row` | one row of `state/score-index/<YYYY>/<MM>/<DD>/`, the identity of one measurement the day beside it holds |
 | `SeenRow` | `seen-row` | one appended row of `state/seen/<YYYY>/<MM>/<DD>.csv` |
 | `PublishedRow` | `published-row` | one appended row of `state/published/YYYY/MM/DD.csv` |
-| `FeedHealthRow` | `feed-health-row` | one appended row of `state/feed-health/<YYYY>/<MM>/<DD>.csv` |
+| `FeedHealthRow` | `feed-health-row` | one row of `state/feed-health/<YYYY>/<MM>/<DD>/`, in the file its writer owns |
 | `FeedRetirementRow` | `feed-retirement-row` | one appended row of `state/feed-retirements.csv` |
-| `ItemHealthRow` | `item-health-row` | one appended row of `state/item-health/<YYYY>/<MM>/<DD>.csv` |
+| `ItemHealthRow` | `item-health-row` | one row of `state/item-health/<YYYY>/<MM>/<DD>/`, in the file its writer owns |
 | `PublicTelemetryRow` | `public-telemetry` | one row of `frontend/public/telemetry/<YYYY-MM>.csv`, the browser-safe projection of the row above |
 | `TelemetryAggregateRow` | `telemetry-aggregate-row` | one row of `state/telemetry-aggregate/<YYYY-MM>.csv`, rewritten whole |
 | `ScoreArchive` | `score-archive` | `state/score-archive/<YYYY-MM>.json`, one whole document per archived score month |
@@ -103,7 +103,7 @@ The shapes, and where each one lives once written:
 | `CouncilShardOutcome` | `council-shard-outcome` | one appended row of `state/llm-council/shard-outcomes/<YYYY>/<MM>/<DD>.csv` - whether one unit of work finished, stopped on its deadline or had nothing to do, and what the work it hosted cost. It carries no name for the unit, so it reads the same whichever tenant ran |
 | `ContentSimilarityJudgeMetrics` | `content-similarity-judge-metrics` | one appended row of `state/content-similarity-judge/metrics/<YYYY>/<MM>/<DD>.csv` - what one shard of that judge's night dealt, read, agreed and lost, plus its two rates and its clocks |
 | `MergeLineHoldoutScore` | `content-similarity-judge-merge-line-holdout-score` | one appended row of `state/content-similarity-judge/merge-line-holdout-scores/<YYYY>/<MM>/<DD>.csv` - the line in force, the four cells it scored against the hand-marked holdout, and what the line was made of. No model runs in it, so it carries no call stamp |
-| `ValidationRow` | `validation-row` | one row of `state/<run.trial_state_dirname>/validation/<YYYY>/<MM>/<DD>.csv`, folded in from a segment |
+| `ValidationRow` | `validation-row` | one row of `state/<run.trial_state_dirname>/validation/<YYYY>/<MM>/<DD>/`, folded in from a segment |
 | `RunManifest` | `run-manifest` | `.../<DD>/run.json`, append-only per date |
 | `DigestDay` | `digest-day` | `.../<DD>/digest.json` and each `run-<N>.json` |
 | `SearchIndex` | `search-index` | `frontend/public/assist/index/<YYYY-MM>.json`, with its vectors in a sibling `.bin` |
@@ -189,7 +189,7 @@ mirrors the digest tree its rows are derived from.
 | `state/telemetry-aggregate/` | monthly shards | what did a month past `item_health_full_grain_months` do, in totals? | it inherits the shard boundary of the file it replaces |
 | `state/published/` | day files | have we already published this? | yes, `collect.published_window_days` - committed at `-1`, so the read is whole today |
 | `state/scores/` | day files | how did every scored item do? | no - sharded by month from 2026-08-31 and filed by **day** since 2026-09-13, and a month past `scores_full_grain_months` becomes [one `ScoreArchive` document](../publishing/retention.md#what-bounds-the-committed-state-tree) |
-| `state/score-index/` | day files | which measurements does the day file beside this one already hold? | no, and deliberately - `OBSERVATION_KEY` carries no date, so the same address, output and scorer is one measurement whenever it is re-taken. It files by the ledger's day rather than a grain of its own, because `refresh_index` fills a partition with no index from the partition beside it |
+| `state/score-index/` | day files | which measurements does the day file beside this one already hold? | no, and deliberately - `OBSERVATION_KEY` carries no date, so the same address, output and scorer is one measurement whenever it is re-taken. It files by the ledger's day rather than a grain of its own, because two grains in one relationship would be a mapping somebody maintains |
 | `state/score-archive/` | monthly documents | what did a month past `scores_full_grain_months` do, in totals and distributions - and which measurements did it hold? | it inherits the shard boundary of the file it replaces |
 | `state/feed-retirements.csv` | one file | is this address gone for good? | no - a retirement is permanent for one endpoint |
 | `state/day-validations.csv` | one file | which frozen days have passed, and against what? | no - a receipt file, read once a run |

@@ -49,17 +49,14 @@ flowchart TD
   sinks --> rollup
   record --> census
 
-  census --> ih["state/segments/item-health/ (one per writer)"]
-  rollup --> sr["state/segments/span-rollup/ (one per writer)"]
+  census --> ih["state/item-health/ (day, one file per writer)"]
+  rollup --> sr["state/span-rollup/ (month)"]
   traces --> tr["state/traces/ (day)"]
-  health --> fh["state/feed-health/ (day)"]
-
-  ih --> head_ih["state/item-health/ (day)"]
-  sr --> head_sr["state/span-rollup/ (month)"]
+  health --> fh["state/feed-health/ (day, one file per writer)"]
 
   subgraph state["state/ - committed, append-only, day-sharded"]
-    head_ih
-    head_sr
+    ih
+    sr
     tr
     fh
     other["day-metrics/ and scores/ and published/ and seen/<br/>day-validations.csv"]
@@ -202,9 +199,9 @@ This is the Guardrail #1 boundary applied to observability: `backend/` is a buil
 
 ## The committed rollup
 
-The span tree is evidence and expires with the run. One summary of it is a record and is committed: `state/span-rollup/<YYYY-MM>.csv`, one row per `(date, run_id, shard, span_name)`, carrying how many spans of that name the shard opened and how long they took added together. The fold lives in `telemetry.roll_up_spans` and the row is `SpanRollupRow`.
+The span tree is evidence and expires with the run. One summary of it is a record and is committed: `state/span-rollup/<YYYY>/<MM>/<DD>/`, one row per `(date, run_id, shard, span_name)`, carrying how many spans of that name the shard opened and how long they took added together. The fold lives in `telemetry.roll_up_spans` and the row is `SpanRollupRow`.
 
-**A shard writes its fold to a segment, not to the month file.** Up to eight work shards fold one month head, so from 2026-09-18 each one writes `state/segments/span-rollup/<run>-<attempt>-work-<shard>.csv` - a name no second writer can take - and `idhazh compact` inside `assemble` merges the segments into the month each row's own `date` cell names. The month head has one writer per run. The routing is the row's date and not the compaction's clock, which is what carries the one night a month when a run starting at 23:59 UTC is read by a compaction running in the next month ([partitions.md](partitions.md)).
+**A shard writes its fold to its own file, not to a shared one.** Up to eight work shards record one month, so from 2026-09-18 each one writes its own file - a name no second writer can take - and the row lands under the day its own `date` cell names. The routing is the row's date and not a clock, which is what carries the one night a month when a run starting at 23:59 UTC is read in the next month ([partitions.md](partitions.md)).
 
 **It commits five span names, not the eleven the tracer opens**, and the five are the steps no ledger column already times:
 
@@ -323,18 +320,18 @@ our candidate models ([the processor
 lottery](../reference/benchmarks/the-processor-lottery.md)).
 
 So there is a third grain: **one row a job**, in
-`state/host-fingerprint/<YYYY>/<MM>/<DD>.csv`, holding what the host reports
+`state/host-fingerprint/<YYYY>/<MM>/<DD>/`, holding what the host reports
 about its own silicon plus a memory-bandwidth probe. A bench dispatch writes the
 same shape into `state/pipeline-tests/host-fingerprint/`, apart from the rows the
 console reads.
 
-**No job opens that day file.** Ten jobs of one run each draw a machine and each
+**No job opens a shared day file.** Ten jobs of one run each draw a machine and each
 record it, so each writes its own
-`state/segments/host-fingerprint/<run>-<attempt>-<job>-<shard>.csv` and the
-compaction in `assemble` folds them into the day. Ten runners appending to one
+`state/host-fingerprint/<YYYY>/<MM>/<DD>/<run>-<attempt>-<job>-<shard>.csv` inside
+the day directory. Ten runners appending to one
 path is not a thing a merge driver can settle: on 2026-09-16 the pushes raced and
-the day came back header-only. What a reader opens is unchanged, because a
-segment is the head's own rows in transit and carries no shape of its own.
+the day came back header-only. What a reader opens is unchanged, because every
+file in the day carries the tree's own columns and the tree's own contract.
 
 `state/item-health/` goes the same way from 2026-09-18, with `state/scores/` and
 `state/score-index/` beside it. The writers there are the work shards and
@@ -500,7 +497,7 @@ Read this table before proposing a merge. A store folds only when it fails **eve
 | --- | --- | --- | --- |
 | `item-health` | an item | 14 months | **the census.** Whatever folds, folds here |
 | `visual-prunes` | a run | with the pictures | **FOLD** into a run-grain ledger. 41 rows, and a run is not an item |
-| `<trial>/validation` | a model | never | **MOVED 2026-09-18** to `state/<run.trial_state_dirname>/validation/<YYYY>/<MM>/<DD>.csv`, where it was `state/validation-<date>.csv` at the root of `state/`. A date in a filename is not a partition, and a hardcoded path let a trial dispatch write production state |
+| `<trial>/validation` | a model | never | **MOVED 2026-09-18** to `state/<run.trial_state_dirname>/validation/<YYYY>/<MM>/<DD>/`, where it was `state/validation-<date>.csv` at the root of `state/`. A date in a filename is not a partition, and a hardcoded path let a trial dispatch write production state |
 | `day-validations.csv` | a day | with the day | **KEEP**, move to day files. A receipt is not an item |
 | `scores` | an observation | 14 months | **KEEP.** One item holds several rows - re-measurement is the point, and an item key allows only one |
 | `score-index` | a digest | with the scores | **KEEP.** 76 bytes an observation against 819 for a census row. Reading the wide store to answer a narrow question costs 10.8 times more |
@@ -561,7 +558,7 @@ Treating the Actions run log as the log store, rather than shipping logs anywher
 
 **The rollup measured nothing for nine days, and the cause was a path nobody named.** From 2026-09-06 every shard folded its spans and appended `state/span-rollup/<YYYY-MM>.csv` into its own checkout. No commit step staged that path, so each fold died with its runner; assemble, on another machine, projected a directory that had never existed and published a header row. Nothing failed and no test was red - the instrument ran, cost what it cost, and reported nothing. `state/traces/` was missed the same way and by the same list: `stage_work` opens a file sink onto it whenever tracing is on, and nothing staged it either, so the raw evidence the fold is taken from never survived its runner. The fix is both paths in the work job's commit step, a seed in each so `git add` under `set -euo pipefail` cannot abort the step on a fresh clone, and both in assemble's refresh set so a lost race does not let the union merge double the rows. The lasting part is the test: the stores a stage writes are now read out of the stage and compared against the paths the job stages, so the two lists cannot drift again. Authority: Carmack found the rollup, 2026-09-15.
 
-**The host fingerprint was the same failure and it had run longer, because the guard above could not see it.** The probe writes one row a job into `state/host-fingerprint/<YYYY>/<MM>/<DD>.csv` before the model server starts, and no commit step had ever named that path - `git ls-files state/host-fingerprint*` returned nothing, so every fingerprint this project had taken was deleted with its runner. The test that caught the rollup reads `ledger.append_*` calls out of `stages/work.py`, and this probe is not in `stages/work.py`: it runs from `cli.py` as its own subcommand, early on purpose, because the bandwidth reading wants an idle host. **A guard scoped to one source file cannot see a second writer**, which is the part worth remembering rather than the path. The fix is the same three moves - the path in the work job's commit step, a header-only day file seeded so `git add` cannot abort the step on a fresh clone, and the path in assemble's refresh set. A second guard reading the probe's own source shipped beside it and was retired on 2026-09-17: a second file-scoped guard is the same defect a second time. **What replaced both names no file.** It takes the stores from the path helpers the store modules export, counts a file sink as a write beside an `append_*` call, and charges each store to the job whose `python -m idhazh <verb>` step reaches its writer - so a third writer in a third file is covered the day it lands. Authority: Carmack's rule applied to a second writer, 2026-09-16; the general derivation, 2026-09-17.
+**The host fingerprint was the same failure and it had run longer, because the guard above could not see it.** The probe writes one row a job into `state/host-fingerprint/<YYYY>/<MM>/<DD>/` before the model server starts, and no commit step had ever named that path - `git ls-files state/host-fingerprint*` returned nothing, so every fingerprint this project had taken was deleted with its runner. The test that caught the rollup reads `ledger.append_*` calls out of `stages/work.py`, and this probe is not in `stages/work.py`: it runs from `cli.py` as its own subcommand, early on purpose, because the bandwidth reading wants an idle host. **A guard scoped to one source file cannot see a second writer**, which is the part worth remembering rather than the path. The fix is the same three moves - the path in the work job's commit step, a header-only day file seeded so `git add` cannot abort the step on a fresh clone, and the path in assemble's refresh set. A second guard reading the probe's own source shipped beside it and was retired on 2026-09-17: a second file-scoped guard is the same defect a second time. **What replaced both names no file.** It takes the stores from the path helpers the store modules export, counts a file sink as a write beside an `append_*` call, and charges each store to the job whose `python -m idhazh <verb>` step reaches its writer - so a third writer in a third file is covered the day it lands. Authority: Carmack's rule applied to a second writer, 2026-09-16; the general derivation, 2026-09-17.
 
 **Two ledgers declared what makes two of their rows one record and nothing applied it.** `ledger.keyed_paths` is the registry that pairs each ledger with its key, and neither `state/host-fingerprint/` nor `state/span-rollup/` was in it. For the fingerprint that cost nothing yet, because nothing was committed for a repeat to be in. For the fold it was live: the work job staged it, and `state/**/*.csv` carried a union merge driver then - so a second attempt at one shard would have left two rows folding the same spans, and `SPAN_ROLLUP_KEY`'s own comment says a second row adds a count to itself rather than recording a new fact. **A key written down is not a rule applied.** Both joined the registry on 2026-09-16, and the registry's one deliberate absence is still `state/seen/`, which declares no key at all. The key is what `idhazh compact` merges a segment into a head by. Authority: Fowler on the registry, 2026-09-16.
 

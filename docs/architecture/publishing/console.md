@@ -365,18 +365,14 @@ reports it as a fact rather than a verdict** - how far in is too far is a
 threshold nobody here has measured, and a severity built on one would publish a
 number this project has not taken. Authority: Susan, 2026-09-17.
 
-**One line can appear under the three facts, and it is not a fourth.** A run that
-folded segments an earlier run left behind says so, in the past tense: `This run
-merged 303 rows that had been waiting 2 days. The Hardware page now reaches 17
-September.` A member of the band stands on every route every day; this line is
-absent on every run that found nothing waiting, which is every normal run - so it
-does not compete with the three for the first viewport. Present tense on a page
-that was just brought current would be a false sentence, and a false sentence is
-what the Hardware route's own day-with-no-rows fix exists to delete. **What the
-line cannot cover:** a run that never finishes writes no band at all, so nothing
-appears however far behind the record falls. The band's `generated_at` is what
-covers that. Where the three numbers come from, and why they are not a listing:
-[console-payloads.md](console-payloads.md).
+**One line stood under the three facts until 2026-09-23, and it is gone.** A run
+that folded rows an earlier run had left behind said so in the past tense. Every
+writer files its own day now, so no run finds a backlog: `compaction_lag_days` is
+always 0 and the line could never draw again. **What the reader gives up** is a
+"nothing is waiting to be folded" reassurance - one that was always going to say
+the same thing, so it told an operator nothing they could act on. The payload
+still carries the two readings, so a later change that can make them move again
+has its line back without a schema break.
 
 **The verdict fact draws one small square per run of the newest day**, on the
 same `--fill-*` ramp and the same shape as `Run health` 800px below, capped at
@@ -501,7 +497,7 @@ Nothing under `state/` is ever served - the browser reads only the narrow
 projection that drops `canonical_url`, `url_key` and `detail`
 ([telemetry-series.md](telemetry-series.md)).
 
-Stage timing medians read from `state/item-health/<YYYY>/<MM>/<DD>.csv`, not from
+Stage timing medians read from `state/item-health/<YYYY>/<MM>/<DD>/`, not from
 `state/scores.csv`. The item-health ledger has one row per planned item, so it
 can answer "is it getting slower" even when the scorer did not run. The score
 ledger still owns faithfulness and scorer time for the scored subset.

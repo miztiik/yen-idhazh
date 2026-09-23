@@ -48,7 +48,7 @@ HUMAN SOURCE REVIEW (after at least 30 days of evidence)
 
 ## Every feed, every run, one row
 
-`state/feed-health/<YYYY>/<MM>/<DD>.csv`, appended by the Collect stage. One row per feed per run, carrying the run id, the date, the feed id, the outcome, the HTTP status, how many items came back, and a short detail.
+`state/feed-health/<YYYY>/<MM>/<DD>/`, appended by the Collect stage. One row per feed per run, carrying the run id, the date, the feed id, the outcome, the HTTP status, how many items came back, and a short detail.
 
 It is written **whether the run publishes or not**. The days a source is worth measuring on are the days the run went badly, and a ledger that only records good runs measures nothing.
 
@@ -68,9 +68,9 @@ Monthly shards, because a read looks back 31 days - just enough that a quarantin
 
 `(run_id, feed_id)` is what makes two rows the same record - `ledger.FEED_HEALTH_KEY`. A feed is read once in a run, so two rows under one key are two accounts of one event.
 
-**Two runs are entitled to a row each and always get one**, because a run id carries the identity of the execution that made it. What repeats the key is one execution attempted twice: the second attempt appends against a checkout frozen at the commit its run was triggered at, so it cannot see what the first attempt pushed. Until 2026-09-19 a union merge driver on `state/**/*.csv` then concatenated the two rather than conflicting, and counted raw, one bad run read as two failures and a five-strike rest arrived in three runs.
+**Two runs are entitled to a row each and always get one**, because a run id carries the identity of the execution that made it. What repeats the key is one execution attempted twice: the second attempt writes against a checkout frozen at the commit its run was triggered at, so it cannot see what the first attempt pushed. Until 2026-09-19 a union merge driver on `state/**/*.csv` then concatenated the two rather than conflicting, and counted raw, one bad run read as two failures and a five-strike rest arrived in three runs.
 
-`ledger.append_health` settles the shard it just wrote, which catches a repeat inside one checkout. That is now the only settlement this ledger gets, and it is enough because the union driver is gone: a second attempt that races its own first attempt stops at the rebase instead of landing a second row. A repeat already in committed history is data this change does not touch - `idhazh rebuild-score-index` is the shape an operator's repair takes, and there is no equivalent verb for this file.
+`ledger.write_segment` puts each writer's rows in its own file under the day, and `day_shards.settled_rows` settles the day against `FEED_HEALTH_KEY` at read time. That settlement is what this ledger gets, and it is enough because the union driver is gone: a second attempt that races its own first attempt stops at the rebase instead of landing a second row. A repeat already in committed history is data this change does not touch - `idhazh rebuild-score-index` is the shape an operator's repair takes, and there is no equivalent verb for this file.
 
 **Where two accounts conflict, the read that carried entries wins**, whichever row is newer: the attempt that got articles is the attempt that happened, and an empty retry against an address that had just delivered describes the retry rather than the feed. Between two rows that agree on that, the later `checked_at` wins. A tie leaves the row already on record. The rule is `contracts.feed_health.supersedes`, and it is the one key here settled by a rule instead of by arrival order - everywhere else a repeat is one attempt written down twice, so the two rows agree.
 
@@ -125,7 +125,7 @@ result was one file with two headers. Taking the upstream shards whole and runni
 the utility over them again was the resolution.
 
 **The utility was deleted on 2026-09-13**, when the ledger moved to
-`state/feed-health/<YYYY>/<MM>/<DD>.csv`. It read month shards, so after the move
+`state/feed-health/<YYYY>/<MM>/<DD>/`. It read month shards, so after the move
 there was no file it could ever open again - and every committed row already
 carries the wide header. `git show` on the 2026-09-02 commit holds the tool and
 its output together.

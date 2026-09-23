@@ -370,7 +370,7 @@ class EvalRow(Contract):
     def csv_row(self) -> dict[str, str]:
         """Every cell a string, keyed by column name.
 
-        The same serialization `evals.writer.append` reaches by dumping the model
+        The same serialization `evals.writer.append_segment` reaches by dumping the model
         and picking the columns, spelled once here instead. A segment of these
         rows is written and read back by the generic machinery in `idhazh.ledger`,
         which takes a row that can write itself and never a dict somebody built.

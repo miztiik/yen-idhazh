@@ -8,7 +8,7 @@ never read `state/item-health/` directly.
 ## Published shards
 
 `backend/idhazh/telemetry/publish/public_telemetry.py` reads
-`state/item-health/<YYYY>/<MM>/<DD>.csv` and writes
+`state/item-health/<YYYY>/<MM>/<DD>/` and writes
 `frontend/public/telemetry/<YYYY-MM>.csv`. The browser fetches these monthly
 shards on demand as the operator pans the viewport.
 
@@ -372,8 +372,8 @@ keeps reading a projection it cannot see all of.
 The console's `What the model did` section is not drawn from the published
 shards. It is computed while the site is built, out of two private ledgers:
 
-- `state/scores/<YYYY>/<MM>/<DD>.csv` - one row per scored item.
-- `state/item-health/<YYYY>/<MM>/<DD>.csv` - one row per planned item per run.
+- `state/scores/<YYYY>/<MM>/<DD>/` - one row per scored item.
+- `state/item-health/<YYYY>/<MM>/<DD>/` - one row per planned item per run.
 
 Neither file is served and neither crosses to a browser. What reaches the page
 is a count of that day's items, never a row and never a score. The derivation is
@@ -651,9 +651,9 @@ disagreed.
 **Every one of those defects is closed on the writer's side now, and the reader
 that worked around them is gone with the store.** A run id carries the identity
 of the execution that made it, so two workflow runs can no longer compute one.
-From 2026-09-18 each model-server job writes its readings into its own segment
-under `state/segments/`, so no two writers open one file. `stage_compact` folds
-those segments by key and the later attempt wins, so a re-run corrects its first
+From 2026-09-18 each model-server job writes its readings into its own file
+under the day it recorded, so no two writers open one file. `day_shards.settled_rows` settles
+those files by key and the later attempt wins, so a re-run corrects its first
 try instead of adding a second row. The union driver that made the repeat
 possible came off every head under `state/` on 2026-09-19, and
 `state/runtime-counters.csv` itself was deleted the day after - the four cells a
