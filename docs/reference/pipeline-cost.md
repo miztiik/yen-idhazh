@@ -1,6 +1,6 @@
 # What the pipeline costs to run
 
-**Last Updated**: 2026-09-21
+**Last Updated**: 2026-09-23
 How fast, how heavy and how hot the thing that makes the digest is - the model,
 the runner, prefill and decode, memory, shard cost and the corpus. Every figure
 carries the date it was taken and its spread. Guardrail #10 in one page: **an
@@ -514,13 +514,19 @@ what the second call spends, so lowering the timeout to reclaim the halved item
 count would take that room back before the change that needs it (Guardrail #2). 200
 is 56 percent of the six-hour platform ceiling, which is not ours to move.
 
-**The concurrency gap is why the bound stayed low before, and it is the one
-thing the rise has to answer.** The five scheduled runs are four hours apart and
-every run shares one concurrency group with `cancel-in-progress: false`, so a run
-that overruns queues the next one behind it rather than being cancelled. A worker
-that hangs to its bound then has to leave `visuals` (50) and `assemble` (20) room
+**The concurrency gap is why the bound stayed low before, and that reason has
+since gone.** The five scheduled runs are four hours apart, and until 2026-09-23
+every run shared one concurrency group with `cancel-in-progress: false`, so a run
+that overran queued the next one behind it rather than being cancelled. A worker
+that hung to its bound then had to leave `visuals` (50) and `assemble` (20) room
 to finish inside the 240-minute gap, and `150 + 50 + 20` clears it where
-`200 + 50 + 20` does not. Two things make 200 safe anyway. Today a healthy worker
+`200 + 50 + 20` does not. The group is gone
+([../architecture/publishing/committing.md](../architecture/publishing/committing.md#two-runs-of-one-day-work-at-the-same-time-and-nothing-queues-them)),
+so an overrunning run now overlaps the next rather than delaying it, and the
+240-minute gap is no longer a deadline a worker has to finish inside. That
+removes the objection; it does not move the bound, which is
+`run.shard_timeout_minutes` and moves with a measurement (Guardrail #10). Two
+things made 200 safe anyway. Today a healthy worker
 at 20 items finishes near 68 minutes, far under either bound, so the 200 is a
 backstop a healthy run never reaches, not a budget it spends. And the two-call
 change that needs the 200 folds the visual decision into the work shard and
@@ -528,7 +534,7 @@ retires the separate `visuals` job, so the 50-minute serial stage that made a
 bound above about 165 minutes unhonourable goes away in the same change. Until
 then the ceiling, not the timeout, is still the lever for a worker that runs
 long. At 330 one stuck worker delayed the next two digests a reader was waiting
-for.
+for; with no group it would cost that worker's own run instead.
 
 **This does not size a Qwen3.5-9B production worker, and the two derivations on
 record for it disagree.** [The qualification budget](../archive/measurements-2026-08.md#the-qualification-budget-derived-2026-08-26)

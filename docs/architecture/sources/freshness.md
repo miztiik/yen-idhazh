@@ -1,6 +1,6 @@
 # Freshness and Identity
 
-**Last Updated**: 2026-09-20
+**Last Updated**: 2026-09-23
 
 How often the pipeline runs, what makes an article worth today's slot, what stops the same article being published twice, and how an item keeps its name across the runs of one day. This page owns the decisions the planning step makes before any model loads.
 
@@ -21,10 +21,11 @@ the evening is read at the top of the next day rather than eight hours into it.
 
 Twenty past the hour, not the top of it. GitHub queues scheduled jobs by load, and the top of every hour is when everyone else asks.
 
-The slots are four hours apart and a run takes under three, so two runs do not
-overlap. If one ever did, the `digest` concurrency group queues the next rather
-than cancelling it, because a run that is halfway through the day's items has
-already paid for its weights.
+The slots are four hours apart and a run takes under three, so two runs normally
+do not overlap. When one does - a late slot, or a dispatch fired during a run -
+both work. Nothing queues a content refresh run behind another, because every
+row each run commits lands under that run's own name and the read settles them
+([../publishing/committing.md](../publishing/committing.md#two-runs-of-one-day-work-at-the-same-time-and-nothing-queues-them)).
 
 Five runs share one day. They append to the same dated digest rather than replacing it, so the day grows through the day. That is only safe because an item's identity does not depend on its rank - see below.
 

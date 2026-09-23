@@ -18,6 +18,7 @@ from ._harness import (
     DISPATCH_INPUT_SHAPES,
     DISPATCH_READ_BY_NAME,
     EXPECTED_WORKFLOWS,
+    RUNS_MAY_OVERLAP,
     SCHEDULED_START_DRIFT_MINUTES,
     UNPUBLISHABLE_DATES,
     _declared_dispatch_inputs,
@@ -225,18 +226,23 @@ def _render_concurrency_group(group: str, dispatched: dict[str, str]) -> str:
 
 
 def test_every_workflow_that_commits_a_ledger_says_which_of_its_runs_may_overlap() -> None:
-    """A `state/` writer with no concurrency group is a writer nothing holds apart.
+    """A `state/` writer that neither groups its runs nor is named here is an accident.
 
-    `measure.yml` was the last one. It is dispatched by hand many times a day
-    and its `runtime` job pushes one host row into a day file that every other
-    dispatch of that day also appends to, so two of them racing lose a row at
-    the rebase - and the step is `continue-on-error`, so the run stays green
-    while the record goes.
+    `measure.yml` was the last one to miss a group. It is dispatched by hand
+    many times a day and its `runtime` job pushes one host row into a day file
+    that every other dispatch of that day also appends to, so two of them racing
+    lose a row at the rebase - and the step is `continue-on-error`, so the run
+    stays green while the record goes.
+
+    A workflow whose runs are meant to overlap says so by appearing in
+    `RUNS_MAY_OVERLAP` rather than by leaving the key out, so the difference
+    between a decision and an omission is written down. Each name there must
+    still commit a ledger, or the exception outlived what it excused.
 
     What this settles is that none is missing. It cannot settle that a group is
     the right one: whether two dispatches are one question is a judgement about
-    what the dispatch means, and the test above is where that is argued for the
-    one workflow it matters most in.
+    what the dispatch means, and the candidate test below is where that is
+    argued for the one workflow it matters most in.
 
     `cancel-in-progress` is checked as well, because the cancelling kind is not
     a queue - it throws the running job away, and a job that was about to
@@ -245,8 +251,12 @@ def test_every_workflow_that_commits_a_ledger_says_which_of_its_runs_may_overlap
     workflows = _load_workflows()
     writers = sorted(name for name, body in workflows.items() if _stages_a_state_path(body))
     assert writers, "no workflow stages a path under state/, so this test proves nothing"
+    stale = sorted(RUNS_MAY_OVERLAP.difference(writers))
+    assert not stale, f"named as free to overlap, but no longer commits a ledger: {stale}"
 
     for name in writers:
+        if name in RUNS_MAY_OVERLAP:
+            continue
         concurrency = _mapping(workflows[name].get("concurrency"), f"{name} concurrency")
         assert str(concurrency.get("group", "")).strip(), (
             f"{name} commits a path under state/ and declares no concurrency group"
@@ -254,6 +264,36 @@ def test_every_workflow_that_commits_a_ledger_says_which_of_its_runs_may_overlap
         assert str(concurrency.get("cancel-in-progress")) != "true", (
             f"{name} would cancel a run that is already committing a ledger"
         )
+
+
+def test_nothing_holds_one_content_refresh_run_behind_another() -> None:
+    """Two content refresh runs are meant to work at the same time.
+
+    Every committed path a job of this workflow writes carries that run's own
+    identity in the filename, so two runs at once name two files and the rebase
+    applies both whole. A group on top of that bought no safety. It bought a
+    queue, and the queue cost two things: GitHub keeps one pending run per group
+    and cancels the older with no error anywhere, and a run that did wait then
+    read a store its own wait had made stale. Run 35660521768 waited 46 minutes,
+    folded a 46-minute-old store, and lost the day at the push.
+
+    Both levels are read. A group on a job holds that job behind the same job of
+    another run, which is the same queue one step down.
+
+    What this settles is that nothing in the file holds a run back. It cannot
+    settle that two live runs both publish - that is a pair of overlapping runs
+    on the schedule, watched by a person.
+    """
+    workflow = _load_workflows()["digest.yml"]
+
+    assert "concurrency" not in workflow, (
+        "a group here queues the next content refresh run behind this one, and "
+        "cancels it if a third arrives first"
+    )
+    jobs = _mapping(workflow.get("jobs"), "digest.yml jobs")
+    assert jobs, "a workflow with no jobs proves nothing about what holds them"
+    held = sorted(name for name, body in jobs.items() if "concurrency" in _mapping(body, name))
+    assert not held, f"these jobs hold the same job of another run behind them: {held}"
 
 
 def test_two_candidates_dispatched_together_are_two_qualifications_and_not_one() -> None:
