@@ -49,10 +49,10 @@
  * and a visual's marks are about a tenth of what its drawing weighed, so what
  * is left beside the projections is small and this step must still not touch it.
  *
- * The shape is `schemas/digest-view.schema.json`, generated from
- * `backend/idhazh/contracts/digest_view.py`, and every staged file carries its
- * `version`. It is a contract because a reading route is about to fetch it, so
- * a browser we cannot upgrade will parse it (Guardrail #3).
+ * The shape is `DigestView` in `backend/idhazh/contracts/digest_view.py`, and
+ * every staged file carries its `version`. It is a contract because a reading
+ * route is about to fetch it, so a browser we cannot upgrade will parse it
+ * (Guardrail #3).
  */
 
 import {

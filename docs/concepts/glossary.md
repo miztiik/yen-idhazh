@@ -39,7 +39,7 @@ a doc is a fine change to make; moving it into *this* page is not.
 | **compaction** | The `compact` stage. Once a day is closed it folds that day's segments into one `settled.csv` and deletes them, which saves files and changes no answer | `backend/idhazh/stages/compact.py` |
 | **council** | The nightly workflow where models judge borderline same-story pairs and fit the merge line | [../architecture/publishing/llm-council.md](../architecture/publishing/llm-council.md) |
 | **dispatch** | A workflow run somebody started by hand, rather than one the schedule started | [../reference/github-actions.md](../reference/github-actions.md) |
-| **drift gate** | The check that regenerates the schemas and the frontend types from the Pydantic models and fails if what is committed differs | [../architecture/contracts/schemas.md](../architecture/contracts/schemas.md) |
+| **drift gate** | Retired on 2026-09-23 with the generated layer it checked. What binds the frontend's hand copies now is three tests in `backend/tests/contracts/` | [../architecture/contracts/schemas.md](../architecture/contracts/schemas.md) |
 | **fold** | One of the four retention policies: keep the durable total, drop the per-item grain. Compaction uses the same word for what it does to a closed day | [adaptive-pruning.md](adaptive-pruning.md) |
 | **holdout** | Labelled pairs kept out of fitting, so a fitted threshold is scored against something it has never seen | [../how-to/label-the-similarity-holdout.md](../how-to/label-the-similarity-holdout.md) |
 | **item** | One source URL and everything derived from it. The atom of the whole system | [pipeline-loop.md](pipeline-loop.md) |

@@ -639,10 +639,9 @@ def test_moving_a_rare_event_threshold_in_the_config_moves_what_resolves(
 def test_the_rare_event_thresholds_are_knobs_the_frontend_agrees_with() -> None:
     """The same three-copies problem the chart size has, four fields along.
 
-    `frontend/src/contracts/appearance-config.ts` is generated and the drift
-    gate holds it. The `ConsoleConfig` interface in `config.ts` is not: it is
-    what a clone with no `config/` renders from, so a field missing there is a
-    console drawing a threshold nobody set.
+    The `ConsoleConfig` interface in `config.ts` is what a clone with no
+    `config/` renders from, so a field missing there is a console drawing a
+    threshold nobody set.
     """
     drawn = AppearanceConfig.from_json(read_text(CONFIG_DIR / "appearance.json")).console
     fresh = ConsoleConfig()

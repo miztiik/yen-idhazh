@@ -21,9 +21,8 @@ import pytest
 from pydantic import Field, ValidationError
 
 from idhazh import ledger
-from idhazh.contracts import judge_call
+from idhazh.contracts import CONTRACTS, judge_call
 from idhazh.contracts.base import ChangelogEntry, Contract, DateStamp
-from idhazh.contracts.export import CONTRACTS
 from idhazh.contracts.judge_call import JudgeConfigStamp
 
 pytestmark = pytest.mark.contract
@@ -44,10 +43,10 @@ class StampedReading(JudgeConfigStamp, Contract):
     would make the gate go red the day that judge moved a column and would make
     this module unrunnable with no judge in the tree.
 
-    Deliberately absent from `contracts.export.CONTRACTS`, so no schema is
-    generated for it and the drift gate reports no orphan. It declares one
-    changelog entry because the base class refuses a subclass without one, and it
-    hand-declares the three CSV members like every other row under `state/`.
+    Deliberately absent from `contracts.CONTRACTS`, so nothing that walks every
+    persisted document finds it. It declares one changelog entry because the base
+    class refuses a subclass without one, and it hand-declares the three CSV
+    members like every other row under `state/`.
     """
 
     __schema_stem__: ClassVar[str] = "stamped-reading"

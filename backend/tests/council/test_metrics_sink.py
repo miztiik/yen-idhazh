@@ -40,10 +40,10 @@ class PaperMetrics(Contract):
     that judge moved a column and would make this file unrunnable with no judge
     in the tree.
 
-    It is deliberately absent from `contracts.export.CONTRACTS`, so no schema is
-    generated for it and the drift gate never reports an orphan. It declares one
-    changelog entry because the base class refuses a subclass without one, and it
-    hand-declares the three CSV members like every other row under `state/`.
+    It is deliberately absent from `contracts.CONTRACTS`, so nothing that walks
+    every persisted document finds it. It declares one changelog entry because
+    the base class refuses a subclass without one, and it hand-declares the three
+    CSV members like every other row under `state/`.
     """
 
     __schema_stem__: ClassVar[str] = "paper-tenant-metrics"

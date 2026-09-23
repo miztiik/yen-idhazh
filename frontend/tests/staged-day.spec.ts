@@ -179,8 +179,8 @@ test('the allow-list is the twenty-seven fields this file promises', () => {
 
 test('a staged day carries its items, its own facts, and the stamp that says what shape they are', () => {
 	// `assist/day.ts` refuses a payload whose `items` is not an array, and the
-	// version is what an older shell branches on when this shape next moves -
-	// `schemas/digest-view.schema.json` is the contract both answer to. The day's
+	// version is what an older shell branches on when this shape next moves - the
+	// `DigestView` contract is what both answer to. The day's
 	// own facts joined it on 2026-09-09: a dated URL is served by one shell that
 	// no build writes a day into, so this file is the only source a browser has
 	// for the date, the desks, the leading block and the day notice.

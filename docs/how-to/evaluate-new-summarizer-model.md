@@ -775,9 +775,8 @@ are different things (Guardrail #6).
 
 Do not change historical payloads or historical measurement rows. A value-only
 model change does not change a JSON shape; if the work also retypes a field or
-adds one, the contract, its `version`, its changelog, the migration, the
-generated schema and the drift gate move together
-([../../CLAUDE.md](../../CLAUDE.md) section 11).
+adds one, the contract, its `version`, its changelog and the migration move
+together ([../../CLAUDE.md](../../CLAUDE.md) section 11).
 
 ### 2.4 The fine-tuning check
 

@@ -162,8 +162,8 @@ further up against the 1 GB site cap.
 
 ## The contract, and the one field the day payload gains
 
-`VisualData` in `backend/idhazh/contracts/visual_data.py` is the shape of that file, and
-`schemas/visual-data.schema.json` is generated from it. Three parts.
+`VisualData` in `backend/idhazh/contracts/visual_data.py` is the shape of that file.
+Three parts.
 
 | Part | What it is |
 | --- | --- |
@@ -316,5 +316,5 @@ the day.
 - [one-visual-one-file-and-the-race-between-two-runs.md](one-visual-one-file-and-the-race-between-two-runs.md) - what the file is called, and what happens when two runs write it.
 - [what-drawing-costs-and-what-has-been-retired-for-it.md](what-drawing-costs-and-what-has-been-retired-for-it.md) - the three renderers this ruling replaced, and what each cost.
 - [how-a-story-chart-is-drawn-and-what-refuses-one.md](how-a-story-chart-is-drawn-and-what-refuses-one.md) - what the browser does with the file.
-- [../contracts/schemas.md](../contracts/schemas.md) - `VisualData` and the drift gate over it.
+- [../contracts/schemas.md](../contracts/schemas.md) - `VisualData`, and where a persisted shape lives.
 - [layout.md](layout.md) - the published tree this file lands in.

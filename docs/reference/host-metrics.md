@@ -26,7 +26,7 @@ set is still operator-only: the console reads it at build time under
 | | |
 | --- | --- |
 | Contract | [`backend/idhazh/contracts/host_fingerprint.py`](../../backend/idhazh/contracts/host_fingerprint.py) |
-| Generated schema | [`schemas/host-fingerprint-row.schema.json`](../../schemas/host-fingerprint-row.schema.json) |
+| Generated schema | [`HostFingerprintRow`](../../`HostFingerprintRow`) |
 | Store | `state/host-fingerprint/<YYYY>/<MM>/<DD>/` for the daily run; `state/pipeline-tests/host-fingerprint/<YYYY>/<MM>/<DD>/` for a bench dispatch |
 | One file per writer | `<run_id>-<attempt>-<job>-<shard>.csv` inside the day directory - nothing else ever opens that path |
 | Producer | `idhazh fingerprint` and `idhazh job-clock`, through [`backend/idhazh/telemetry/silicon.py`](../../backend/idhazh/telemetry/silicon.py). Each job writes its own file through `ledger.write_segment` and `ledger.extend_segment`, and nothing else writes the store |

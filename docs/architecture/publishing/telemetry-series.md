@@ -99,7 +99,7 @@ Two consequences worth stating plainly:
 
 - **`version` is a field of the shape and never a cell.** The header check below
  is a prefix, so one more name at position zero would shift every position the
- console reads. `schemas/public-telemetry.schema.json` is where the stamp lives.
+ console reads. `PublicTelemetryRow` is where the stamp lives.
 - **A published shard has to load, not merely parse.** `public_telemetry
  --migrate` reads every committed shard back through the contract and rewrites
  it, and a test runs the same round trip on a copy of the committed files. Run
