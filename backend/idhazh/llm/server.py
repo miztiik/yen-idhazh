@@ -1,7 +1,9 @@
 """Talk to a local llama-server over the two routes it answers on.
 
-Nothing here is hosted - `CLAUDE.md` section 0a forbids that. Two transports,
-and which one a caller takes is decided by whether the prompt bytes are ours.
+The address is a committed config value and defaults to loopback. Nothing in
+this module starts a server, and nothing here reads the config - every caller
+brings the address it means. Two transports, and which one a caller takes is
+decided by whether the prompt bytes are ours.
 
 **The chat-completions shape** hands the server a message array and lets the
 model's own chat template render the prompt. It is the one wire format every

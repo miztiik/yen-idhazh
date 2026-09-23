@@ -44,8 +44,8 @@ hand-typed copy here has already drifted once.
 
 The summarize stage talks to `127.0.0.1:8080` and nothing else. Set `LLAMA_PORT`
 before both commands to move it - the server command and the client read the
-same variable. There is no hosted inference anywhere in this project
-([../../CLAUDE.md](../../CLAUDE.md) section 0a).
+same variable. Article text goes only to a model process the operator of this
+run controls ([../../CLAUDE.md](../../CLAUDE.md) Guardrail #11).
 
 ## Useful flags
 
