@@ -21,7 +21,7 @@ does not move when the archive grows (Guardrail #12).
 
 from __future__ import annotations
 
-import csv
+import shutil
 from pathlib import Path
 from typing import Final
 
@@ -79,10 +79,11 @@ def sealed(items_dir: Path) -> dict[str, ItemHealthRow]:
 
 
 def committed(state_dir: Path, date: str) -> dict[str, ItemHealthRow]:
-    """The row the day's ledger kept for each item."""
-    path = ledger.item_health_path(state_dir, date)
-    with path.open(encoding="utf-8", newline="") as handle:
-        rows = [ItemHealthRow.from_csv_row(record) for record in csv.DictReader(handle)]
+    """The row the day's ledger kept for each item, settled across its files."""
+    settled = day_shards.settled_day(
+        state_dir / ledger.ITEM_HEALTH_DIRNAME, date, ledger.ITEM_HEALTH_KEY, ItemHealthRow
+    )
+    rows = [ItemHealthRow.from_csv_row(record) for record in settled]
     return {row.item_id: row for row in rows}
 
 
@@ -194,7 +195,7 @@ def test_which_writer_reaches_the_ledger_first_does_not_change_the_row(
     fold(state, run_plan.date)
     after_the_worker = committed(state, run_plan.date)
 
-    ledger.item_health_path(state, run_plan.date).unlink()
+    shutil.rmtree(ledger.item_health_path(state, run_plan.date))
     stage_assemble(run_plan, settings=settings, commit_sha="a" * 40, runner="fixture")
     after_assemble = committed(state, run_plan.date)
 
@@ -251,10 +252,10 @@ def test_work_then_assemble_leaves_one_settled_head_and_no_waiting_segments(
     ledger - a feed's share of the day, the day's own metrics - would read
     double.
 
-    **Nothing left waiting.** A fold that wrote the head and did not clear
-    `state/segments/` would re-fold the same rows on the next run, and the store
-    would grow with the archive rather than with what is waiting (Guardrail
-    #12).
+    **Nothing left waiting.** A fold that wrote the settled file and did not
+    take the writer files it read would re-fold the same rows on the next run,
+    and the day would grow with the archive rather than with what is waiting
+    (Guardrail #12).
 
     **One header line.** The head is what every reader of this ledger opens, and
     a second header block inside it is the shape a stacked append makes and no
@@ -274,6 +275,9 @@ def test_work_then_assemble_leaves_one_settled_head_and_no_waiting_segments(
         "the work stage wrote no file, so the rest of this proves nothing"
     )
     stage_assemble(run_plan, settings=settings, commit_sha="a" * 40, runner="fixture")
+    # The fold is a step of the assemble job rather than of the stage, because a
+    # day a shard could still be writing is not one to fold.
+    fold(state, run_plan.date)
 
     settled = ledger.item_health_path(state, run_plan.date) / day_shards.SETTLED_NAME
     lines = settled.read_text(encoding="utf-8").splitlines()

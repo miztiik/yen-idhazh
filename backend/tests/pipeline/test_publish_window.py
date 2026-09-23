@@ -16,6 +16,7 @@ from idhazh.contracts.article import Article
 from idhazh.contracts.base import StalePayloadError
 from idhazh.contracts.digest_day import DigestDay
 from idhazh.contracts.feed_health import FetchOutcome
+from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.item_health import FailureCode, ItemHealthRow, ItemOutcome, TimeSource
 from idhazh.contracts.run_manifest import RunManifest
 from idhazh.contracts.run_plan import RunPlan, VerticalPlan
@@ -392,17 +393,18 @@ def test_assemble_writes_one_item_health_row_per_planned_item(
         runner="fixture",
     )
 
-    health_path = ledger.item_health_path(tmp_path / "state", run_plan.date)
-    with health_path.open(encoding="utf-8", newline="") as handle:
-        rows = [ItemHealthRow.from_csv_row(row) for row in csv.DictReader(handle)]
+    rows = health_rows(tmp_path / "state", run_plan.date)
     failed = sum(1 for row in rows if row.outcome is ItemOutcome.FAILED)
     ok = sum(1 for row in rows if row.outcome is ItemOutcome.OK)
     manifest = RunManifest.from_json(
         read_text(tmp_path / "public" / "digest" / "2026" / "08" / "21" / "run.json")
     )
 
-    with health_path.open(encoding="utf-8", newline="") as handle:
-        assert tuple(csv.DictReader(handle).fieldnames or ()) == ItemHealthRow.csv_columns()
+    for shard in day_shards.one_day(
+        tmp_path / "state" / ledger.ITEM_HEALTH_DIRNAME, run_plan.date
+    ):
+        with shard.open(encoding="utf-8", newline="") as handle:
+            assert tuple(csv.DictReader(handle).fieldnames or ()) == ItemHealthRow.csv_columns()
     assert len(rows) == len(run_plan.items)
     assert ok > 0
     assert failed > 0
@@ -418,12 +420,11 @@ def test_assemble_writes_one_item_health_row_per_planned_item(
 
 
 def health_rows(state_dir: Path, date: str) -> list[ItemHealthRow]:
-    """Every item-health row the committed shard holds, in file order."""
-    path = ledger.item_health_path(state_dir, date)
-    if not path.exists():
-        return []
-    with path.open(encoding="utf-8", newline="") as handle:
-        return [ItemHealthRow.from_csv_row(record) for record in csv.DictReader(handle)]
+    """Every item-health row the committed day holds, settled across its files."""
+    settled = day_shards.settled_day(
+        state_dir / ledger.ITEM_HEALTH_DIRNAME, date, ledger.ITEM_HEALTH_KEY, ItemHealthRow
+    )
+    return [ItemHealthRow.from_csv_row(record) for record in settled]
 
 
 def test_a_run_that_dies_before_assemble_keeps_what_its_workers_measured(
@@ -517,7 +518,7 @@ def test_replaying_a_day_the_worker_already_recorded_appends_no_duplicate(
     run_plan = plan()
     settings = config.load(CONFIG_DIR)
     isolate_ledgers(tmp_path, monkeypatch)
-    committed = ledger.item_health_path(tmp_path / "state", run_plan.date)
+    committed = ledger.item_health_path(tmp_path / "state", run_plan.date) / day_shards.SETTLED_NAME
     with a_server_that_refuses_every_completion() as server:
         stage_work(
             run_plan,
@@ -694,9 +695,15 @@ def test_the_two_ledgers_agree_about_which_shards_ran(
 
     fold(state, run_plan.date)
     rows = health_rows(state, run_plan.date)
-    counted = ledger.load_host_fingerprint_shard(
-        ledger.host_fingerprint_path(state, run_plan.date)
-    )
+    counted = [
+        HostFingerprintRow.from_csv_row(record)
+        for record in day_shards.settled_day(
+            state / ledger.HOST_FINGERPRINT_DIRNAME,
+            run_plan.date,
+            ledger.HOST_FINGERPRINT_KEY,
+            HostFingerprintRow,
+        )
+    ]
 
     assert {row.shard for row in rows} == {row.shard for row in counted} == {0, 1}
     assert [row.server_prompt_tokens for row in counted] == [23411, 23411], (

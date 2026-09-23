@@ -164,14 +164,14 @@ def test_a_stray_inside_a_day_tree_stops_the_read(tmp_path: Path) -> None:
 def test_a_name_inside_a_day_directory_that_is_not_a_writers_stops_the_read(
     tmp_path: Path,
 ) -> None:
-    """`parse_segment_name` is not touched, so an unknown name still raises."""
+    """An unknown name inside a day directory is refused rather than skipped."""
     day = tmp_path / "2026" / "09" / "18"
     day.mkdir(parents=True)
     shutil.copy(
         _root() / "2026" / "09" / "18" / "2026-09-18-1-1-work-01.csv",
         day / "nobody-declared-this.csv",
     )
-    with pytest.raises(ValueError, match="is not a segment name"):
+    with pytest.raises(ValueError, match="is not a writer's name"):
         day_shards.settled_rows(tmp_path, ledger.SPAN_ROLLUP_KEY, SpanRollupRow, days=1)
 
 
