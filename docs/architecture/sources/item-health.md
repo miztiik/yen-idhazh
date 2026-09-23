@@ -188,6 +188,13 @@ row for the key. Where the two rows disagree the one that names a job wins, for
 the reason the next section gives - `assemble` runs once for the whole day and
 cannot say which machine an item was for.
 
+**Every reader settles, including the one outside this package.** The console
+opens this ledger at build time through `itemHealthRows` in
+`frontend/src/lib/server/payload.ts`, which restates the key and the rule rather
+than reading the files raw - because a reader that does not settle counts the
+newest day's items twice and draws each of them twice
+([../publishing/console-payloads.md](../publishing/console-payloads.md)).
+
 **A worker records only settled items.** It writes an article payload for every
 item it reaches and a summary payload for every item that got as far as the
 model, so an accepted article with no summary beside it means the shard stopped
