@@ -325,17 +325,25 @@ def settle(
     a ledger reaches when its non-key cells are all optional rather than one any
     of them reaches now.
 
-    **Supersede** - something is filled in both and the attempts differ. The
-    higher attempt wins each contested cell, because attempt 2 exists precisely
-    because attempt 1 did not finish. A cell only the lower attempt filled is
-    kept: a longer-lived first attempt can have recorded something the second
-    never reached.
+    **The key decides** - something is filled in both and the key declares a
+    preference. The preference picks the winner whatever attempt each row came
+    from. It has to: a feed read that carried entries beats one that carried
+    none however late the empty one ran, and a retry that came back with nothing
+    describes the retry rather than the feed.
+    `contracts.feed_health.supersedes` says so, and `ledger.drop_repeated_rows`,
+    `discover.settled` and the page all apply it with no notion of attempts at
+    all. Attempt order here would be a fourth answer to a question three other
+    modules have already settled.
 
-    **Repeat** - something is filled in both at the same attempt. The incumbent
-    keeps every cell it filled and the arriving row keeps every cell the
-    incumbent left empty, unless the key declares a preference. That per-cell
-    answer is what lets two steps of one job write one record, and it is what
-    makes a second settlement free.
+    **Attempt order** - something is filled in both and the key declares
+    nothing. The higher attempt wins each contested cell, because attempt 2
+    exists precisely because attempt 1 did not finish. Two rows at one attempt
+    leave the incumbent in place, which is what lets two steps of one job write
+    one record.
+
+    The loser is not discarded either way: a cell only the loser filled is kept,
+    because a longer-lived first attempt can have recorded something the second
+    never reached.
     """
     if not contested(held.cells, arriving.cells, key):
         held.attempt = max(held.attempt, arriving.attempt)
@@ -343,8 +351,8 @@ def settle(
             if value and not held.cells.get(name):
                 held.cells[name] = value
         return False
-    if arriving.attempt == held.attempt:
-        arriving_wins = prefers is not None and prefers(arriving.cells, held.cells)
+    if prefers is not None:
+        arriving_wins = prefers(arriving.cells, held.cells)
     else:
         arriving_wins = arriving.attempt > held.attempt
     winner, loser = (arriving.cells, held.cells) if arriving_wins else (held.cells, arriving.cells)

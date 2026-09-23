@@ -418,6 +418,10 @@ def _item_health_rule(later: dict[str, str], kept: dict[str, str]) -> bool:
     reads filenames in sorted order, where `assemble` comes before `work`, so
     the order would have silently reversed. The preference says out loud what
     the order used to decide.
+
+    It beats attempt order too. A later attempt that reached no item leaves
+    `job` empty, and a row carrying the identity is better evidence than a row
+    that does not, whichever run wrote it.
     """
     return bool(later.get("job")) and not kept.get("job")
 
