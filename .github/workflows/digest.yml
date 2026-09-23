@@ -865,6 +865,7 @@ jobs:
       # job log where a person looking at a failed shard will find it. It writes
       # nothing: `memory-peak.txt` is written by the scrape step above, so the
       # number printed here and the number the sampler took are one reading.
+      #
       # The five figures and the roll-call behind them come off the module that
       # wrote the records, rather than off an `awk` program reading a
       # tab-separated file by column name. Both are keyed JSON now, so a key
