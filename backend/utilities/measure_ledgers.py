@@ -528,7 +528,7 @@ def main() -> int:
         report(
             args.state,
             cap_tokens=settings.app.extract.truncation_cap_tokens,
-            context_tokens=window(settings.models.summarize.server),
+            context_tokens=window(settings.models.summarizer.server),
             output_tokens=calls.summarize_and_plan_budget_tokens(settings.app.summarize),
         )
     )

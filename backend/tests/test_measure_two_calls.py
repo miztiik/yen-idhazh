@@ -339,8 +339,8 @@ def declaring(models: ModelsConfig, digest: str) -> ModelsConfig:
     bytes on disk rather than reading any of them.
     """
     raw: dict[str, Any] = models.model_dump(mode="json")
-    raw["summarize"]["sha256"] = digest
-    raw["summarize"]["declared_for"] = digest
+    raw["summarizer"]["sha256"] = digest
+    raw["summarizer"]["declared_for"] = digest
     return ModelsConfig.model_validate(raw)
 
 
@@ -364,5 +364,5 @@ def test_the_harness_refuses_weights_config_does_not_declare(tmp_path: Path) -> 
     impostor.write_bytes(b"GGUF, but not the right ones")
     with pytest.raises(WrongWeightsError) as refusal:
         refuse_undeclared_weights(impostor, models)
-    assert str(models.summarize.declared_for) in str(refusal.value)
+    assert str(models.summarizer.declared_for) in str(refusal.value)
     assert hashlib.sha256(impostor.read_bytes()).hexdigest() in str(refusal.value)

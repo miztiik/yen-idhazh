@@ -544,7 +544,7 @@ def render_check(stale: Sequence[Unreached], configured: str) -> str:
 
 
 def run_check(args: argparse.Namespace) -> int:
-    configured = config.load(args.config).models.summarize.sha256
+    configured = config.load(args.config).models.summarizer.sha256
     if configured is None:
         print("the configured summarizer names no weights digest", file=sys.stderr)
         return 2
@@ -554,11 +554,11 @@ def run_check(args: argparse.Namespace) -> int:
 
 
 def run_read(args: argparse.Namespace) -> int:
-    subject = args.subject or config.load(args.config).models.summarize.sha256
+    subject = args.subject or config.load(args.config).models.summarizer.sha256
     if subject is None:
         print(
             "no weights digest to stamp the readings with: pass --subject, or configure "
-            "one on models.summarize",
+            "one on models.summarizer",
             file=sys.stderr,
         )
         return 2

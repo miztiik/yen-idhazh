@@ -413,7 +413,7 @@ def build_request(
     article: Article,
     *,
     model_id: str,
-    request: Mapping[str, Any],
+    sampling: Mapping[str, Any],
     markers: TurnMarkers,
     prompt_config: SummarizeConfig | None = None,
 ) -> dict[str, Any]:
@@ -435,7 +435,7 @@ def build_request(
             source_words=article.band_source_words,
             brief=article.brief,
         ),
-        request=request,
+        sampling=sampling,
         markers=markers,
     )
 

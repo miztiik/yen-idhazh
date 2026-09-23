@@ -212,7 +212,7 @@ def _settings_judging_behind_a_thinking_span() -> config.Settings:
     thinking = ModelsConfig.from_json(read_text(CONFIG_DIR / "models" / THINKING_ENTRY_FILE))
     models = ModelsConfig.model_validate(
         settings.models.model_dump(mode="json")
-        | {"judge": thinking.summarize.model_dump(mode="json")}
+        | {"judge": thinking.summarizer.model_dump(mode="json")}
     )
     return dataclasses.replace(settings, models=models)
 
@@ -667,14 +667,14 @@ def test_the_decode_is_sent_at_the_judging_knob_and_not_the_entry() -> None:
 
     assert decodes, "no body was posted, so this proves nothing"
     assert tuning.judge_temperature == 0.0, "the committed judging knob is no longer greedy"
-    entry = settings.models.summarize
-    assert entry.request["temperature"] != tuning.judge_temperature, (
+    entry = settings.models.summarizer
+    assert entry.sampling["temperature"] != tuning.judge_temperature, (
         "the entry and the knob hold the same number, so this test cannot tell them apart"
     )
     for body in decodes:
         assert body["temperature"] == tuning.judge_temperature
-        assert body["top_p"] == entry.request["top_p"]
-        assert body["seed"] == entry.request["seed"]
+        assert body["top_p"] == entry.sampling["top_p"]
+        assert body["seed"] == entry.sampling["seed"]
 
 
 def test_a_reply_the_grammar_could_not_have_written_is_written_down(
@@ -947,7 +947,7 @@ def test_a_settings_with_no_judge_role_decodes_one_span_and_says_so() -> None:
         decodes = server.decodes
 
     assert settings.models.judge is None
-    assert judge.entry_of(settings) is settings.models.summarize
+    assert judge.entry_of(settings) is settings.models.summarizer
     assert reading.thinking_spans == 0
     assert reading.thinking == ""
     assert len(decodes) == 1
@@ -960,8 +960,8 @@ def test_a_judge_role_decodes_on_the_weights_the_summariser_server_holds() -> No
 
     assert judging is not None
     assert judge.entry_of(settings) is judging
-    assert judging.sha256 == settings.models.summarize.sha256
-    assert judging.thinks and not settings.models.summarize.thinks
+    assert judging.sha256 == settings.models.summarizer.sha256
+    assert judging.thinks and not settings.models.summarizer.thinks
 
 
 def test_a_verdict_is_the_word_and_at_most_one_leading_space() -> None:
@@ -1111,7 +1111,7 @@ def test_a_verdict_file_round_trips_through_the_contract(
     assert row.verdict is SameStoryVerdict.YES
     assert row.verdict_swapped is SameStoryVerdict.YES
     assert row.usable is True
-    assert row.judge_model == settings.models.summarize.id
+    assert row.judge_model == settings.models.summarizer.id
     assert row.prompt_digest == prompt.prompt_digest()
     assert row.grammar_digest == prompt.grammar_digest()
     assert row.first_token_margin is not None

@@ -51,7 +51,7 @@ def _a_config_root(tmp_path: Path, entry: dict[str, object]) -> Path:
         json.dumps({"models_file": "models/candidate.json"}) + "\n", encoding="utf-8"
     )
     (root / "models" / "candidate.json").write_text(
-        json.dumps({"summarize": entry}) + "\n", encoding="utf-8"
+        json.dumps({"summarizer": entry}) + "\n", encoding="utf-8"
     )
     return root
 

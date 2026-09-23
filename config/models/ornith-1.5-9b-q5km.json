@@ -1,5 +1,5 @@
 {
-  "summarize": {
+  "summarizer": {
     "arch": "qwen35",
     "byte_count": 6642544576,
     "declared_for": "e4d9634a3b6546a5c00a8680568fe1125f6c98c704ee51ae52ba07650fb4247d",
@@ -8,13 +8,23 @@
     "id": "ornith-1-5-9b-q5-k-m",
     "quantisation": "Q5_K_M",
     "repo": "ornith-ai/Ornith-1.5-9B-GGUF",
-    "request": {
+    "request_timeout_minutes": 22.1,
+    "revision": "abdd624b12ebf020b767fff532ff44fe552b28c3",
+    "sampling": {
       "temperature": 0.2,
       "top_p": 1.0,
-      "seed": 0,
-      "request_timeout_minutes": 22.1
+      "top_k": 40,
+      "min_p": 0.05,
+      "typical_p": 1.0,
+      "repeat_penalty": 1.0,
+      "repeat_last_n": 64,
+      "presence_penalty": 0.0,
+      "frequency_penalty": 0.0,
+      "dry_multiplier": 0.0,
+      "xtc_probability": 0.0,
+      "mirostat": 0,
+      "seed": 0
     },
-    "revision": "abdd624b12ebf020b767fff532ff44fe552b28c3",
     "server": {
       "--batch-size": 512,
       "--ctx-size": 65536,
@@ -29,5 +39,5 @@
     "thinking_close": null,
     "thinking_kwarg": "enable_thinking"
   },
-  "version": "2026-09-21T06:00"
+  "version": "2026-09-23"
 }

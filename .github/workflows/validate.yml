@@ -301,7 +301,7 @@ jobs:
       - name: Start the candidate
         run: |
           set -euo pipefail
-          # The scratch config's `models.summarize` IS the candidate, so the
+          # The scratch config's `models.summarizer` IS the candidate, so the
           # alias, every flag and the weights come from the same place the run
           # is judged against. This step used to render the flag list from a
           # second copy, which is how it went two changes without the

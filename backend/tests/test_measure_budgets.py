@@ -425,7 +425,7 @@ def test_the_check_names_every_stale_site_and_both_digests() -> None:
     no entry names instead. Asserting the committed state would have made this
     test a clock: green only while somebody had not done the work.
     """
-    configured = config.load(CONFIG_DIR).models.summarize.sha256
+    configured = config.load(CONFIG_DIR).models.summarizer.sha256
     assert configured is not None
     assert readings_awaiting_a_retake(configured_sha256=configured) == (), (
         "row #13b retook all three; a stale one here means a reading moved without "

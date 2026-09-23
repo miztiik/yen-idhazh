@@ -26,7 +26,7 @@ flag loses the column with no error to read.
 | | |
 | --- | --- |
 | Instrument | `backend/utilities/measure_probability_mode.py`, defaults - 3 runs a mode, `n_probs: 25` |
-| Weights | `Qwen3.5-9B-Q4_K_M.gguf`, sha256 `03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8` - the file `models.summarize` declares, and the tool refuses a file the config does not name |
+| Weights | `Qwen3.5-9B-Q4_K_M.gguf`, sha256 `03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8` - the file `models.summarizer` declares, and the tool refuses a file the config does not name |
 | Build | `b10444-5f754ea0e`, read off `/props` on the running process |
 | Flags | `idhazh.llm.server.server_argv` off the configured entry, so they are the run's own |
 | Grammar | `root ::= "YES" \| "NO" \| "UNCLEAR"` |

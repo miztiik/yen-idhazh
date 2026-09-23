@@ -68,10 +68,10 @@ CANDIDATE_UPDATES: dict[str, tuple[dict[str, Any], int]] = {
 }
 
 #: Entry keys a case may set that are not llama-server flags.
-ENTRY_KEYS = ("companion_files",)
+ENTRY_KEYS = ("companion_files", "request_timeout_minutes")
 
-#: What goes in a request body rather than on the command line (C1).
-REQUEST_KEYS = ("temperature", "top_p", "seed", "request_timeout_minutes")
+#: What goes in a request body rather than on the command line.
+SAMPLING_KEYS = ("temperature", "top_p", "seed")
 
 #: Two knobs whose value an operator types, so each is bounded where it is read.
 SIZED_BY_DISPATCH = ("threads", "threads_batch")
@@ -268,12 +268,12 @@ def write_config(label: str, update: dict[str, Any]) -> Path:
     pointer = json.loads((dst / "idhazh.json").read_text(encoding="utf-8"))["models_file"]
     path = dst / pointer
     payload = json.loads(path.read_text(encoding="utf-8"))
-    entry = payload["summarize"]
+    entry = payload["summarizer"]
     for key, value in update.items():
         if key in ENTRY_KEYS:
             entry[key] = value
-        elif key in REQUEST_KEYS:
-            entry.setdefault("request", {})[key] = value
+        elif key in SAMPLING_KEYS:
+            entry.setdefault("sampling", {})[key] = value
         else:
             entry.setdefault("server", {})[key] = value
     # A speculation flag with no draft model is a server that refuses to start,
@@ -455,8 +455,8 @@ def run_once(
     argv = server_argv(
         binary=SERVER_BINARY,
         weights=WEIGHTS_DIR / candidate_file,
-        model=settings.models.summarize,
-        server=settings.models.summarize.server,
+        model=settings.models.summarizer,
+        server=settings.models.summarizer.server,
         port=port,
     )
     env = os.environ.copy()

@@ -370,7 +370,7 @@ ruling, 2026-09-13: move forward, no rollback.
 **The pipeline stamp digests a different prompt now.** The stamp
 hashes the chat template read off `/props`, and the two calls render their own
 bytes, so that template no longer reaches what the model reads and
-`models.summarize.turns` does. `classify.calls.prompt_inputs`
+`models.summarizer.turns` does. `classify.calls.prompt_inputs`
 is what the stamp hashes instead: both turns rendered through the same helpers
 the live requests use, with the article and the label call's reply empty, plus every
 number `summarize` can substitute into them. Editing a marker moves the stamp,

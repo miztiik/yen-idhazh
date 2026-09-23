@@ -224,7 +224,7 @@ def _manifest(stamp: str, *, planned: int, succeeded: int, failed: int, site_byt
                 items_failed=failed,
                 models=[
                     ModelUse(
-                        role=ModelRole.SUMMARIZE,
+                        role=ModelRole.SUMMARIZER,
                         model_ref=ModelRef(
                             id="energy-model",
                             repo="acme/energy",

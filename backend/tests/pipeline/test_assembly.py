@@ -126,17 +126,15 @@ def test_a_hung_model_request_costs_one_item_not_the_shard(
     settings = config.load(CONFIG_DIR)
     # `model_copy(update=...)` does not validate, so the update has to name a
     # key the model really has. Aimed one level too high it sets an attribute
-    # nothing reads, the request keeps the committed 22.1-minute bound, and this
+    # nothing reads, the entry keeps the committed 22.1-minute bound, and this
     # test sits on the hanging endpoint until the job's own timeout kills it.
-    summarizer = settings.models.summarize
+    summarizer = settings.models.summarizer
     fast_settings = config.Settings(
         app=settings.app,
         models=settings.models.model_copy(
             update={
-                "summarize": summarizer.model_copy(
-                    update={
-                        "request": summarizer.request | {"request_timeout_minutes": 0.01}
-                    }
+                "summarizer": summarizer.model_copy(
+                    update={"request_timeout_minutes": 0.01}
                 )
             }
         ),

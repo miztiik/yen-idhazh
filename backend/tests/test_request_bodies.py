@@ -96,8 +96,8 @@ def test_a_thinking_entry_makes_two_requests_and_a_plain_one_makes_one() -> None
         read_text(CONFIG_DIR / "models" / "qwen3.5-9b-q4km.json")
     )
     thinking_markers = capture_request_bodies.markers_for("qwen3.5-9b-q4km-thinking.json")
-    assert thinking.summarize.thinks, "the fixture entry stopped declaring a marker"
-    assert not plain.summarize.thinks
+    assert thinking.summarizer.thinks, "the fixture entry stopped declaring a marker"
+    assert not plain.summarizer.thinks
 
     body = capture_request_bodies.bodies(thinking, markers=thinking_markers)["completion"]
     with RecordedEndpoint(200, first, second) as served:

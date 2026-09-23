@@ -135,7 +135,7 @@ def stage_judge_item_pairs(
     # inside a `partial`, so an unresolved address would raise there instead.
     base_url = base_url or resolve_endpoint(settings.app.model_server.base_url)
     entry = judge.entry_of(settings)
-    timeout = request_timeout_seconds(entry.request)
+    timeout = request_timeout_seconds(entry)
     stamp = stamps.judge_inputs(settings)
     flush_every = settings.app.assemble.same_story.judging_knobs().flush_every_pairs
     drawn = _rows_this_shard_owns(draw_path, shard=shard, shards=shards)

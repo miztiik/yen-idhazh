@@ -17,7 +17,7 @@ re-read findings stand and are not touched here.
 
 | | |
 | --- | --- |
-| Weights | `backend/models/Qwen3.5-9B-Q4_K_M.gguf`, 5,680,522,464 bytes, hashed against `models.summarize.declared_for` |
+| Weights | `backend/models/Qwen3.5-9B-Q4_K_M.gguf`, 5,680,522,464 bytes, hashed against `models.summarizer.declared_for` |
 | Server flags | From `server_argv` and `config/` alone: `--ctx-size <case> --no-context-shift --batch-size 512 --ubatch-size 512 --threads 4 -np 1 -fa on -lv 4 --metrics` |
 | Instrument | The server's own `POST /tokenize`. No decode ran in this session at all |
 | Hardware | A developer laptop: i7-1265U, 12 logical CPUs, 32 GiB, Windows, with four other agents live and 2.0 to 3.1 GB free at each case's start |

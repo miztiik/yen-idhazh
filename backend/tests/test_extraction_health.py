@@ -224,7 +224,7 @@ def _manifest() -> RunManifest:
                 items_skipped=0,
                 models=[
                     ModelUse(
-                        role=ModelRole.SUMMARIZE,
+                        role=ModelRole.SUMMARIZER,
                         model_ref=ModelRef(
                             id="energy-model",
                             repo="acme/energy",

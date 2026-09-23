@@ -189,7 +189,7 @@ def test_a_decide_run_on_a_trial_config_writes_nothing_outside_its_own_tree(
 
     golden_root = tmp_path / "var" / "validation"
     golden_root.mkdir(parents=True)
-    _golden(golden_root, settings.models.summarize.id, measured=0.90)
+    _golden(golden_root, settings.models.summarizer.id, measured=0.90)
     _golden(golden_root, "a-challenger-that-lost", measured=0.50)
     monkeypatch.setattr(common, "VALIDATION_ROOT", golden_root)
     # Exactly what `cli` does when the config names a trial directory, and the

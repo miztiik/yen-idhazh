@@ -142,7 +142,7 @@ def _run(n: int, *, planned: int, succeeded: int, failed: int, skipped: int) -> 
         items_skipped=skipped,
         models=[
             ModelUse(
-                role=ModelRole.SUMMARIZE,
+                role=ModelRole.SUMMARIZER,
                 model_ref=ModelRef(
                     id="energy-model", repo="acme/energy", file="w.gguf", quantisation="Q4_K_M"
                 ),

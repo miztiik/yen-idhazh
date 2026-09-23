@@ -47,14 +47,14 @@ def write_case(case: object, *, source: Path, root: Path) -> Path:
 
     models_path = root / app["models_file"]
     models = json.loads(models_path.read_text(encoding="utf-8"))
-    entry = dict(models["summarize"])
+    entry = dict(models["summarizer"])
     server = dict(entry["server"])
     if case.n_parallel is not None:  # type: ignore[attr-defined]
         server[SETTING_KEYS["n_parallel"]] = case.n_parallel  # type: ignore[attr-defined]
     if case.n_ctx is not None:  # type: ignore[attr-defined]
         server[SETTING_KEYS["n_ctx"]] = case.n_ctx  # type: ignore[attr-defined]
     entry["server"] = server
-    models["summarize"] = entry
+    models["summarizer"] = entry
     models_path.write_text(json.dumps(models, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return root
 

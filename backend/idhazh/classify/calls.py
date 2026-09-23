@@ -547,7 +547,7 @@ def build_label_request(
     *,
     model_id: str,
     server: Mapping[str, Any],
-    request: Mapping[str, Any],
+    sampling: Mapping[str, Any],
     markers: TurnMarkers,
     prompt_config: SummarizeConfig | None = None,
 ) -> dict[str, Any]:
@@ -572,7 +572,7 @@ def build_label_request(
         user=label_user_turn(article, table),
         output_schema=label_schema(),
         server=server,
-        request=request,
+        sampling=sampling,
         markers=markers,
         max_answer_tokens=label_budget_tokens(),
     )

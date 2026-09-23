@@ -77,7 +77,7 @@ Every field is read from the thing it describes, not from a literal beside the c
 
 | Field | Read from | When that source is silent |
 | --- | --- | --- |
-| `model_sha256` | `models.summarize.sha256` in the active model file, which is not yet the observation the contract asks for - see the gap below | Raises. A run without a recorded weights digest stops rather than stamping one that validates and says nothing. |
+| `model_sha256` | `models.summarizer.sha256` in the active model file, which is not yet the observation the contract asks for - see the gap below | Raises. A run without a recorded weights digest stops rather than stamping one that validates and says nothing. |
 | `runtime_build` | `LLAMA_CPP_BUILD`, handed to the work step by the `plan` job that read `config/llama-cpp-pin.json` - the same file the install reads, so the build stamped and the build installed are one answer | `build-not-recorded`, and the same when `model_server.base_url` is not loopback, because the environment names a build on this machine and that is not where the weights decoded. It is not a llama.cpp release tag and cannot be read as one. |
 | `chat_template_sha256` | the Jinja source `llama-server` returns from `GET /props` - the template it will apply to every request | a digest of `chat-template-not-recorded`. |
 | `runner_class` | `RUNNER_ENVIRONMENT` / `RUNNER_OS` / `RUNNER_ARCH` | `local/<system>/<machine>` from `platform`. A machine that publishes none of the three is a developer machine and says so. |
@@ -88,7 +88,7 @@ Degrading is not the same as inventing. A degraded run stamps a value nothing el
 ### What the record still cannot see
 
 **`model_sha256` is what config expected, not what the server opened.** The
-`work` job checks the file on disk against `models.summarize.sha256` with
+`work` job checks the file on disk against `models.summarizer.sha256` with
 `sha256sum` before `llama-server` starts, on a cache hit as well as a miss, and
 its health check asserts the server serves the configured alias and loaded the
 configured filename. That gate is what lets the config value stand in for the
@@ -138,7 +138,7 @@ The model file spells llama-server's own flags, so the record enumerates flags r
 | Knob | Where it lands |
 | --- | --- |
 | `--ctx-size`, `--batch-size`, `--ubatch-size`, `--threads` | Their own fields, under this project's names for them. They change how the partial sums accumulate. |
-| `temperature`, `top_p`, `seed` | `sampling`, one key each. No span budget is in it, because no span carries one: the two decode caps left the settings on 2026-09-21, and what bounds a span is the window and the per-request timeout, both enumerated elsewhere. |
+| `temperature`, `top_p`, `seed`, and every other sampler the entry declares | `sampling`, one key each, and the whole block the request sent. Three were read by name until 2026-09-23 while the body carried thirteen, so ten keys could move the decode with this record unchanged. A key the file leaves out is a key that is absent: there is no list of every sampler to write a default against, and inventing one would file a guess as a measurement (Guardrail #10). No span budget is in it, because no span carries one: the two decode caps left the settings on 2026-09-21, and what bounds a span is the window and the per-request timeout, both enumerated elsewhere. |
 | `-ctk`, `-ctv`, `-fa`, `-np`, `-tb` and the cache and template switches | `runtime_flags`, one key each, under llama-server's own flag names. A quantised KV cache, another attention kernel, a second slot and a different prompt-thread count each change how the partial sums accumulate. |
 | The turn envelope | `turn_markers_sha256`, and `prompt_sha256` as well, because the prompt is rendered through the envelope. |
 

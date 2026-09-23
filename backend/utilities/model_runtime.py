@@ -550,7 +550,7 @@ def start_server(config_root: Path, name: str) -> None:
     SERVER_BINARY.chmod(0o755)
     Path("backend/var").mkdir(parents=True, exist_ok=True)
 
-    entry = settings.models.summarize
+    entry = settings.models.summarizer
     argv = server_argv(
         binary=SERVER_BINARY,
         weights=Path(_declared(config_root)[0].landed_path),

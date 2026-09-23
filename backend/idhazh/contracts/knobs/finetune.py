@@ -84,7 +84,7 @@ class FinetuneConfig(Model):
     Nothing here runs on the runner. Training needs a GPU and the runner has
     none (section 0a), so these knobs size a file CI commits and a notebook
     somewhere else reads. `teacher` names a KEY in `models` rather than a model,
-    because `models.summarize` has already moved once and a knob that spells a
+    because the summarizer slot has already moved twice and a knob that spells a
     model name is stale the day the config moves.
 
     There is no `student`. It named the small visual planner, retired when the
@@ -97,7 +97,7 @@ class FinetuneConfig(Model):
     """
 
     teacher: ModelRole = Field(
-        default="summarize",
+        default="summarizer",
         description="A key in `models`. The model whose outputs a session fine-tunes.",
     )
     corpus_rows: int = Field(

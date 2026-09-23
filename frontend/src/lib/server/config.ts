@@ -668,7 +668,7 @@ interface RawConfig {
  * carries: an entry's `server` block is the flags the binary is started with,
  * emitted verbatim. */
 interface RawModels {
-	summarize?: { server?: Record<string, unknown> };
+	summarizer?: { server?: Record<string, unknown> };
 }
 
 /** Keys the `digest` block carries that no page reads.
@@ -947,7 +947,7 @@ export function visualsConfig(): VisualsConfig {
 }
 
 export function inferenceConfig(): InferenceConfig {
-	const declared = models().summarize?.server?.['--ctx-size'];
+	const declared = models().summarizer?.server?.['--ctx-size'];
 	return typeof declared === 'number' ? { n_ctx: declared } : { ...INFERENCE_DEFAULTS };
 }
 
