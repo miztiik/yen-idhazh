@@ -176,7 +176,6 @@ SHIPPED_SCRIPTS: Final = (
     "commit-and-push.sh",
     "push-rewritten-history.sh",
     "run-pipeline-test-case.sh",
-    "sample-rss.sh",
     "take-state-from-the-tip.sh",
 )
 
@@ -534,7 +533,7 @@ SERVER_STARTER_MODULES: Final = (
 #: reaches `server_argv` through this is still a starter, and `_server_starters`
 #: counts it as one.
 ARGV_MODULE_CALL: Final = f"{MODEL_RUNTIME_MODULE} start-server"
-RSS_SAMPLE_FILE: Final = "rss-samples.tsv"
+RSS_SAMPLE_FILE: Final = "rss-samples.jsonl"
 
 SERVER_LOG_FILE: Final = "llama-server.log"
 
@@ -548,23 +547,21 @@ SAMPLE_MEMORY_STEP: Final = "Sample memory"
 
 MEMORY_SUMMARY_STEP: Final = "What memory this shard used"
 
-# The sampler itself, which stopped being a heredoc inside that step on
-# 2026-09-12: two jobs take this reading now, and a shell step two jobs run is
-# what `.github/scripts/` is for (`CLAUDE.md` section 3). It is also now under
-# `shellcheck`, which cannot see a `run:` body.
-SAMPLE_SCRIPT: Final = SCRIPTS_DIR / "sample-rss.sh"
-# The roll-call beside it: one row per python process per sample, so the count
-# in `python_procs` can be attributed. Same reader hazard as above - the
-# operator print reads it by position - so the same agreement is written down.
-PYTHON_PROCS_FILE: Final = "python-procs.tsv"
+#: The sampler itself, which stopped being a shell script on 2026-09-23. It
+#: shares its `/proc` read with `runtime_sweep.py`, which is why it is a module
+#: rather than a second reader of the same two kernel rows.
+MEMORY_SAMPLER_MODULE: Final = "backend/utilities/memory_sampler.py"
 
-PYTHON_PROCS_FIELDS: Final = {
-    2: "pid",
-    3: "comm",
-    4: "vmrss_kb",
-    6: "exe",
-    7: "args",
-}
+#: The two calls the work job makes. The launch is a foreground parent that
+#: detaches the loop, so a step body that backgrounds it again is the `$!` bug
+#: the port removed coming back.
+SAMPLER_START_CALL: Final = f"{MEMORY_SAMPLER_MODULE} start-sampler"
+
+SAMPLER_SUMMARY_CALL: Final = f"{MEMORY_SAMPLER_MODULE} summarize"
+
+#: The roll-call beside the samples: one row per python process per sample, so
+#: the count in `python_procs` can be attributed to processes by name.
+PYTHON_PROCS_FILE: Final = "python-procs.jsonl"
 
 
 # llama-server's own loopback counters, read once at job end. The two series are

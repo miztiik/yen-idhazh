@@ -597,17 +597,20 @@ jobs:
       # and the runner has 16 GB (Guardrail #2). `measure.yml` already samples exactly
       # this; the daily path did not.
       #
-      # The sampler itself is `.github/scripts/sample-rss.sh`. A script rather
-      # than an inline `run:` body because that directory is what `CLAUDE.md`
-      # section 3 asks for, it puts the sampler under `shellcheck`, and it means
-      # a test can execute it rather than grep a `run:` body. Every column it
-      # writes, and why each one is there, is in the script's own header.
+      # The sampler is `backend/utilities/memory_sampler.py`, which shares its
+      # `/proc` read with the sweep that has taken the same reading for longer.
+      # Every key it writes, and why each one is there, is in that module's own
+      # docstring.
+      #
+      # This step is the parent and it exits: the loop is launched into its own
+      # session and the pid written is the LOOP's. The shell this replaced
+      # backgrounded itself and wrote `$!`, which named the shell rather than
+      # the sampler, so a loop that died at once left a green step.
       - name: Sample memory
         run: |
           set -euo pipefail
-          nohup bash .github/scripts/sample-rss.sh "$(cat llama-server.pid)" \
-            > sample-rss.log 2>&1 &
-          echo "$!" > sample-rss.pid
+          python3 backend/utilities/memory_sampler.py start-sampler \
+            --pid "$(cat llama-server.pid)"
 
       # `LLAMA_CPP_BUILD` is what the run manifest stamps as `runtime_build`,
       # the llama.cpp release that decoded this shard's bytes. It used to reach
@@ -862,58 +865,15 @@ jobs:
       # job log where a person looking at a failed shard will find it. It writes
       # nothing: `memory-peak.txt` is written by the scrape step above, so the
       # number printed here and the number the sampler took are one reading.
+      # The five figures and the roll-call behind them come off the module that
+      # wrote the records, rather than off an `awk` program reading a
+      # tab-separated file by column name. Both are keyed JSON now, so a key
+      # cannot move and there is no column position left to get wrong.
       - name: What memory this shard used
         if: always()
         run: |
           cat memory-peak.txt 2>/dev/null || echo "memory-peak.txt not found"
-          if [ -f rss-samples.tsv ]; then
-            # The header row decides which column is which. Reading by position
-            # meant a column inserted anywhere but the end shifted every field
-            # after it, and the log then reported `python_procs` - a count of
-            # three - as a peak in kilobytes. Nothing failed and the number was
-            # out by six orders of magnitude. A name that is gone says so and
-            # stops, which is the whole class of defect.
-            awk -F'\t' '
-              NR == 1 {
-                for (i = 1; i <= NF; i++) at[$i] = i
-                split("llama_vmrss_kb llama_vmhwm_kb python_vmrss_kb python_vmhwm_kb", want, " ")
-                for (i in want) {
-                  if (!(want[i] in at)) {
-                    printf "rss-samples.tsv has no %s column\n", want[i]
-                    exit 1
-                  }
-                }
-                next
-              }
-              {
-                if ($(at["llama_vmhwm_kb"]) + 0 > llama) llama = $(at["llama_vmhwm_kb"]) + 0
-                if ($(at["python_vmhwm_kb"]) + 0 > py) py = $(at["python_vmhwm_kb"]) + 0
-                if ($(at["llama_vmrss_kb"]) + $(at["python_vmrss_kb"]) > together) together = $(at["llama_vmrss_kb"]) + $(at["python_vmrss_kb"])
-              }
-              END {
-                printf "peak llama VmHWM %d kB, peak python VmHWM %d kB, most the two held at once %d kB, n=%d samples\n", llama, py, together, NR - 1
-              }
-            ' rss-samples.tsv
-          else
-            echo "rss-samples.tsv not found"
-          fi
-          # Which python processes those kilobytes belonged to. The line above
-          # is a sum, and a sum of three processes says nothing about which one
-          # to look at.
-          if [ -f python-procs.tsv ]; then
-            awk -F'\t' '
-              NR > 1 {
-                who = $2 "  " $3 "  " $6 "  " $7
-                if ($4 + 0 > peak[who]) peak[who] = $4 + 0
-                seen[who]++
-              }
-              END {
-                for (who in peak) printf "python %s peak VmRSS %d kB in %d samples\n", who, peak[who], seen[who]
-              }
-            ' python-procs.tsv | sort
-          else
-            echo "python-procs.tsv not found"
-          fi
+          python3 backend/utilities/memory_sampler.py summarize
 
       - name: Upload runtime log
         if: always()
@@ -922,8 +882,8 @@ jobs:
           name: runtime-log-${{ matrix.shard }}
           path: |
             llama-server.log
-            rss-samples.tsv
-            python-procs.tsv
+            rss-samples.jsonl
+            python-procs.jsonl
             memory-peak.txt
             llama-metrics.prom
           retention-days: 2

@@ -85,7 +85,7 @@ Measured on `origin/main`, 2026-09-22, by reading the files.
 | 2 | The two CI-selection scripts go | - | A | DONE | p44r2 | - | R2 |
 | 3 | The model path becomes one Python program, and the verbs are renamed | 1 | B | DONE | p44r3 | - | R3 |
 | 4 | The pipeline-test case runner becomes Python | 3 | C | PENDING | - | - | - |
-| 5 | The memory sampler joins the one that already exists | 3 | C | PENDING | - | - | - |
+| 5 | The memory sampler joins the one that already exists | 3 | C | DONE | p44r5 | - | R5 |
 | 6 | The last three scripts go | plan 46 all-DONE | D | BLOCKED | - | - | - |
 | 7 | The benchmark arms learn the server died, and the repeat count is config | - | E | DONE | p42p5 | - | P5 |
 | 8 | The harness keeps only what more than one module reads | - | F | COLLAPSED | - | - | - |

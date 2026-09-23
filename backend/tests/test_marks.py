@@ -106,6 +106,7 @@ UNMARKED_MODULES: Final = frozenset(
         "test_measure_ledgers",
         "test_measure_llm",
         "test_measure_two_calls",
+        "test_memory_sampler",
         "test_merge_line_holdout",
         "test_metrics_sink",
         "test_migrate_to_day_shards",
