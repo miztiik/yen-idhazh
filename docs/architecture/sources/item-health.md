@@ -1005,7 +1005,7 @@ by the row identity above. Authority: Fowler, over Carmack's original ruling.
   carries it into this row.
 - [health.md](health.md) - the feed-grain ledger.
 - [../summarize/throughput.md](../summarize/throughput.md) - what the two model rates mean, and why the spread inside a run is wide.
-- [../publishing/visuals.md](../publishing/visuals.md) - what the picture costs, which this ledger deliberately does not carry.
+- [../publishing/what-drawing-costs-and-what-has-been-retired-for-it.md](../publishing/what-drawing-costs-and-what-has-been-retired-for-it.md) - what the picture costs, which this ledger deliberately does not carry.
 - [trust-boundary.md](trust-boundary.md) - how fetched bytes become sanitized text.
 - [../contracts/schemas.md](../contracts/schemas.md) - the contract and schema rules.
 - [../../concepts/telemetry.md](../../concepts/telemetry.md) - logs as evidence, ledgers as records.
