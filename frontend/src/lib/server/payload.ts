@@ -508,17 +508,32 @@ export function readCsv(path: string): CsvTable {
 	return { rows, columns };
 }
 
-/** One row per scored item, read from the committed ledger and never recomputed.
+/** One row per scored measurement, read from the committed ledger and never recomputed.
  *
  * The ledger is a tree of day files, so this reads the newest `days` of them
  * oldest first and hands back one table. Pass `-1` to read every day, and say
  * beside the call why (`docs/concepts/growing-reads.md`).
  *
+ * Settled under `OBSERVATION_KEY`, within each day, at this one read rather than
+ * in each panel - the placement `itemHealthRows` and `feedResults` take below,
+ * for the same reason. Two jobs write a score row for one observation, so the
+ * day a run is publishing holds both accounts of it and a panel counting rows
+ * counts the measurement twice. The key declares no preference, which the
+ * backend reads as keep the first: a repeat here is one attempt written twice
+ * and the rows agree. Measured 2026-09-23 over the committed ledger, they agree
+ * cell for cell in all 204 repeated keys of the publishing day.
+ *
+ * **It is the newest day that carries the repeat.** A day older than
+ * `retention.settled_fold_after_days` has been folded into one settled file and
+ * holds no repeated key at all. Measured the same day: the publishing day held
+ * 441 rows over 237 keys, and the thirty-two folded days before it held 0
+ * repeats between them.
+ *
  * There is no published mirror of this ledger. `frontend/public/scores/` was one
  * until 2026-09-16 and no route ever fetched it, so it went with its producer.
  */
 export function evalRows(days: number = LEDGER_WINDOW_DAYS): CsvTable {
-	return readDayShards(join(STATE_ROOT, 'scores'), days);
+	return settledDayShards(join(STATE_ROOT, 'scores'), OBSERVATION_KEY, undefined, days);
 }
 
 /** The newest `months` `<YYYY-MM>.csv` shards of a series, oldest first, as one table.
@@ -659,38 +674,89 @@ export function dayShardFiles(dir: string, days: number = LEDGER_WINDOW_DAYS): D
 	return kept.flat();
 }
 
+/** Which of two rows holding one key survives. `true` means `later` replaces
+ * `kept`; a key with no preference keeps the first row it saw.
+ *
+ * `ledger.Preference`, restated for this side of the boundary. */
+export type Preference = (later: Record<string, string>, kept: Record<string, string>) => boolean;
+
+/** `ledger.ITEM_HEALTH_KEY` - what makes two census rows the same record. */
+export const ITEM_HEALTH_KEY = ['date', 'run_id', 'item_id'] as const;
+
+/** `ledger.OBSERVATION_KEY` - what makes two eval rows the same measurement.
+ *
+ * The address says which article, the digest says which words came out, and the
+ * scorer version says which instrument read them. No `item_id`, because that is
+ * a slot on a page rather than an identity, and no date, which is why the
+ * settlement below is per day rather than over the whole cover. */
+export const OBSERVATION_KEY = ['url_key', 'output_digest', 'scorer_version'] as const;
+
 /** Does `later` replace `kept` as this run's one census row for this item?
  *
- * `ledger.ITEM_HEALTH_RULE`, restated. A row that names the job which ran the
- * item beats one that does not: the shard's rebuild carries `job` and `shard` -
- * the one moment either is known - and assemble's rebuild leaves both empty,
- * because it runs once for the whole day on a machine that read none of the
- * items. Anything else leaves the row already held.
+ * `ledger.ITEM_HEALTH_RULE`, restated, and named for it so the two are one grep
+ * apart. A row that names the job which ran the item beats one that does not:
+ * the shard's rebuild carries `job` and `shard` - the one moment either is
+ * known - and assemble's rebuild leaves both empty, because it runs once for the
+ * whole day on a machine that read none of the items. Anything else leaves the
+ * row already held.
  */
-function supersedesCensus(later: Record<string, string>, kept: Record<string, string>): boolean {
-	return Boolean(later.job) && !kept.job;
-}
+export const ITEM_HEALTH_RULE: Preference = (later, kept) => Boolean(later.job) && !kept.job;
 
-/** One census row per planned item per run, in the order the rows arrived.
+/** One row per key, in the order the rows arrived.
  *
- * Two jobs write a row for one item - a work shard as the item settles, and
- * assemble over the whole day afterwards - so both accounts of one item reach
- * a reader of the raw files. A panel counting both counts every item twice,
- * and a list keyed by item id draws the same story twice under one id.
- *
- * `ledger.ITEM_HEALTH_KEY` is what makes two rows the same record and
- * `ledger.ITEM_HEALTH_RULE` is which one survives. Every backend reader of this
- * ledger goes through that pair, so the console and the pipeline cannot
- * disagree about how many items a run had.
+ * `ledger.settled_rows` for a reader that cannot import it. The key decides
+ * what two rows saying one thing look like, and `prefer` decides which of them
+ * survives - the same pair `ledger.preference_for` hands the backend, so the
+ * console and the pipeline cannot disagree about how many records a day had.
  */
-export function settledCensus<T extends Record<string, string>>(rows: readonly T[]): T[] {
+export function settleRows<T extends Record<string, string>>(
+	rows: readonly T[],
+	key: readonly string[],
+	prefer?: Preference
+): T[] {
 	const kept = new Map<string, T>();
 	for (const row of rows) {
-		const key = `${row.date ?? ''}\u0000${row.run_id ?? ''}\u0000${row.item_id ?? ''}`;
-		const held = kept.get(key);
-		if (held === undefined || supersedesCensus(row, held)) kept.set(key, row);
+		const cells = key.map((cell) => row[cell] ?? '').join('\u0000');
+		const held = kept.get(cells);
+		if (held === undefined || (prefer !== undefined && prefer(row, held))) kept.set(cells, row);
 	}
 	return [...kept.values()];
+}
+
+/** `readDayShards`, settled within each recorded day, oldest day first.
+ *
+ * **Within a day, never across the cover.** A day is the unit a writer owns:
+ * one directory holding one file per job that wrote the ledger that day, and a
+ * repeat inside it is one record written twice. Two days holding one key can be
+ * two real measurements, and `OBSERVATION_KEY` carries no date to tell them
+ * apart - so settling over the flattened walk would delete the second. Measured
+ * 2026-09-23 over the committed score ledger: of 12,463 keys in the cover, one
+ * genuinely spans two days, and a cover-wide settlement would have dropped it.
+ *
+ * Costs nothing for a key that already carries `date`: the day groups and the
+ * key agree, and the rows come back in the order the flat walk would have given
+ * them, because the walk is oldest day first and a Map keeps what it was given.
+ *
+ * Exported for the same reason `dayShardFiles` is: the day scope is the claim,
+ * and it can only be driven from a tree, so a test needs a reader it can point
+ * at a fixture instead of at `state/` (`CLAUDE.md` section 13).
+ */
+export function settledDayShards(
+	dir: string,
+	key: readonly string[],
+	prefer: Preference | undefined,
+	days: number
+): CsvTable {
+	const byDay = new Map<string, Record<string, string>[]>();
+	let columns: string[] = [];
+	for (const shard of dayShardFiles(dir, days)) {
+		const table = readCsv(shard.path);
+		if (columns.length === 0 && table.columns.length > 0) columns = table.columns;
+		const held = byDay.get(shard.date);
+		if (held === undefined) byDay.set(shard.date, [...table.rows]);
+		else held.push(...table.rows);
+	}
+	return { rows: [...byDay.values()].flatMap((day) => settleRows(day, key, prefer)), columns };
 }
 
 /** One row per planned item per run, read from the newest `days` recorded days.
@@ -707,8 +773,7 @@ export function settledCensus<T extends Record<string, string>>(rows: readonly T
  * repeats over 240 items - every item of it, twice.
  */
 export function itemHealthRows(days: number = LEDGER_WINDOW_DAYS): CsvTable {
-	const table = readDayShards(join(STATE_ROOT, 'item-health'), days);
-	return { rows: settledCensus(table.rows), columns: table.columns };
+	return settledDayShards(join(STATE_ROOT, 'item-health'), ITEM_HEALTH_KEY, ITEM_HEALTH_RULE, days);
 }
 
 /** The published-set counts a run settled about one day.

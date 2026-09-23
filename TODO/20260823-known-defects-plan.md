@@ -49,30 +49,31 @@ decision. Current project behaviour belongs in `docs/` (Guardrail #4).
 | 29 | A shard is called a `unit` in the council's workflow and its tests | 1 | **OPEN - one borrowed word replaced by another** |
 | 30 | A third spelling of the vector norm lives in the canary builder | 1 | **OPEN - the one it duplicates is now public** |
 | 31 | The council's selection artifact is named for one date and carries several | 1 | **OPEN - cosmetic today, wrong the day somebody reads the name** |
-| 32 | The console reads the score ledger raw, so the newest day counts twice | 2 | **OPEN - one line, and it moves figures a reader sees** |
+| 32 | The console reads the score ledger raw, so the newest day counts twice | 2 | CLOSED 2026-09-23 |
 
-## 32 - The console reads the score ledger raw, so the newest day counts twice (OPEN)
+## 32 - The console reads the score ledger raw, so the newest day counts twice (CLOSED 2026-09-23)
 
-`evalRows` in `frontend/src/lib/server/payload.ts` opens `state/scores/` through
-`readDayShards` and hands the rows straight to the panels. That store declares a
-settlement - `ledger.OBSERVATION_KEY` is `(url_key, output_digest,
-scorer_version)` - and every backend reader applies it. This one does not.
+`evalRows` in `frontend/src/lib/server/payload.ts` opened `state/scores/`
+through `readDayShards` and handed the rows straight to the panels. That store
+declares a settlement - `ledger.OBSERVATION_KEY` is `(url_key, output_digest,
+scorer_version)` - and every backend reader applied it. This one did not.
 
 Two jobs write a score row for one observation, so the day a run is publishing
-holds both. Measured 2026-09-23 over the committed ledger: the day being
-published held **408 rows over 204 distinct keys**, and every one of the fifteen
-days before it held 0 repeats. An older day has been folded into one settled
-file, which is why no fixture built from folded days can reach this.
+held both. Measured 2026-09-23 over the committed ledger: the day being
+published held **441 rows over 237 distinct keys**, and every one of the
+thirty-two days before it held 0 repeats. An older day has been folded into one
+settled file, which is why no fixture built from folded days could reach this.
 
-The fix is the one `itemHealthRows` took beside it on 2026-09-23 (PR #1087):
-settle at the shared read door rather than in each panel. What makes it a
-separate change rather than a line inside that one is the cost - today's score
-counts halve on `/console/model/`, so a figure a reader sees moves, and that
-deserves a change somebody can look at on its own (owner decision, 2026-09-23).
+Filed and closed the same day. The fix is the one `itemHealthRows` took beside
+it: settle at the shared read door. Both now go through `settledDayShards`,
+which settles **within each recorded day** rather than over the cover - the part
+that needed measuring, because `OBSERVATION_KEY` carries no date and exactly one
+key of 12,463 legitimately spans two days. Collapsing the cover would have
+deleted it.
 
-The rule this breaks is written up in
-`docs/architecture/publishing/console-payloads.md`: a reader function that opens
-a `state/` ledger settles it, and settles it once.
+The rule is written up in `docs/architecture/publishing/console-payloads.md`: a
+reader function that opens a `state/` ledger settles it, settles it once, and
+settles it per day.
 
 ## 31 - The council's selection artifact is named for one date and carries several (OPEN)
 
