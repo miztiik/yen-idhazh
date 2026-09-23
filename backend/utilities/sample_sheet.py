@@ -42,6 +42,7 @@ from pathlib import Path
 from typing import Final
 
 from idhazh.contracts.base import derive_url_key
+from idhazh.council.session import SELECTION_DIRNAME
 
 REPO_ROOT: Final = Path(__file__).resolve().parents[2]
 LOG: Final = logging.getLogger("idhazh")
@@ -245,7 +246,14 @@ def _load_day(digest_root: Path, date: str) -> dict[str, object]:
 
 
 def _drawn_rows(draw_root: Path) -> Iterator[dict[str, str]]:
-    for path in sorted(draw_root.rglob("*.csv")):
+    """Every drawn pair under this root, and nothing a judging unit wrote.
+
+    Scoped to the venue's selection slot rather than every CSV below the root: a
+    night leaves its verdicts and its instrument rows in the same tree, and those
+    carry no `composite_score`, so a wider read would quietly refuse them one by
+    one and shrink the sheet.
+    """
+    for path in sorted(draw_root.rglob(f"{SELECTION_DIRNAME}/*/*.csv")):
         with path.open(encoding="utf-8", newline="") as handle:
             yield from csv.DictReader(handle)
 

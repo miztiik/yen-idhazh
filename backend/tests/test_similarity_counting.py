@@ -27,12 +27,11 @@ from idhazh.contracts.content_similarity_judge_metrics import ContentSimilarityJ
 from idhazh.contracts.knobs.placement import SimilarityThresholdConfig
 from idhazh.contracts.story_similarity_distribution import StorySimilarityDistribution
 from idhazh.contracts.story_similarity_pair import SameStoryVerdict, StorySimilarityPair
-from idhazh.council import metrics_sink
+from idhazh.council import metrics_sink, session
 from idhazh.similarity import counting, tenant
 from idhazh.similarity.stamps import JudgeStamp, ScorerStamp
-from idhazh.similarity.tenant import JUDGE_ID
+from idhazh.similarity.tenant import JUDGE_ID, VERDICTS_DIRNAME
 from idhazh.stages import count_verdicts
-from idhazh.stages.judge_item_pairs import VERDICTS_DIRNAME
 
 DATE: Final = "2026-09-18"
 
@@ -352,12 +351,15 @@ def a_night(
     needs a day file with something in it says how much.
     """
     shipped = root / "shipped"
-    judge_root = root / "judge"
+    verdicts = root / VERDICTS_DIRNAME
     written = [a_metrics_row(shard=unit, date=date) for unit in range(units)]
     for unit, row in enumerate(written):
         metrics_sink.ship_judge_metrics(row, judge_id=JUDGE_ID, shard=unit, out_dir=shipped)
         assemble.write_atomic(
-            judge_root / date / VERDICTS_DIRNAME / f"{unit}.csv",
+            verdicts
+            / session.unit_file(
+                date, slot=VERDICTS_DIRNAME, judge_id=JUDGE_ID, shard=unit
+            ).name,
             a_verdict_file(
                 [
                     a_row(score=0.55, pair=unit * 16 + index, date=date)
@@ -365,7 +367,7 @@ def a_night(
                 ]
             ),
         )
-    return shipped, judge_root, written
+    return shipped, verdicts, written
 
 
 def test_the_row_the_collecting_job_lands_is_the_row_the_unit_shipped(tmp_path: Path) -> None:
@@ -378,16 +380,16 @@ def test_the_row_the_collecting_job_lands_is_the_row_the_unit_shipped(tmp_path: 
     """
     settings = config.load(CONFIG_DIR)
     state = tmp_path / "state"
-    shipped, judge_root, written = a_night(tmp_path, units=settings.app.council.shards)
+    shipped, verdicts, written = a_night(tmp_path, units=settings.app.council.shards)
 
     report = count_verdicts.stage_count_verdicts(
         DATE,
         run_id=A_COUNCIL_RUN,
         judge_id=JUDGE_ID,
         shipped_root=shipped,
+        verdicts_dir=verdicts,
         settings=settings,
         state_dir=state,
-        judge_root=judge_root,
     )
 
     landed = read_text(ledger.content_similarity_judge_metrics_path(state, DATE)).splitlines()
@@ -415,16 +417,16 @@ def test_the_readings_land_on_a_night_the_record_refused_to_count(tmp_path: Path
     """
     settings = config.load(CONFIG_DIR)
     state = tmp_path / "state"
-    shipped, judge_root, written = a_night(tmp_path, units=1)
+    shipped, verdicts, written = a_night(tmp_path, units=1)
 
     report = count_verdicts.stage_count_verdicts(
         DATE,
         run_id=A_COUNCIL_RUN,
         judge_id=JUDGE_ID,
         shipped_root=shipped,
+        verdicts_dir=verdicts,
         settings=settings,
         state_dir=state,
-        judge_root=judge_root,
     )
 
     assert settings.app.council.shards > len(written), "a night short of a unit"
@@ -443,9 +445,9 @@ def test_a_night_whose_units_shipped_nothing_appends_nothing(tmp_path: Path) -> 
         run_id=A_COUNCIL_RUN,
         judge_id=JUDGE_ID,
         shipped_root=tmp_path / "nothing-was-uploaded",
+        verdicts_dir=tmp_path / "nothing-was-judged",
         settings=settings,
         state_dir=state,
-        judge_root=tmp_path / "judge",
     )
 
     assert report.metrics_appended == 0
@@ -473,15 +475,15 @@ def counted_by(
     a unit still puts rows in the day file - which is the shape the dominant
     failure produces and the one an outstanding-night answer has to see through.
     """
-    shipped, judge_root, _ = a_night(root, units=units, date=date, verdicts_a_unit=1)
+    shipped, verdicts, _ = a_night(root, units=units, date=date, verdicts_a_unit=1)
     return count_verdicts.stage_count_verdicts(
         date,
         run_id=f"{date}-9",
         judge_id=JUDGE_ID,
         shipped_root=shipped,
+        verdicts_dir=verdicts,
         settings=settings,
         state_dir=state,
-        judge_root=judge_root,
     )
 
 
