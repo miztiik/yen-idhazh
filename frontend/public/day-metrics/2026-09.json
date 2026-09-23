@@ -13787,81 +13787,81 @@
     "date": "2026-09-22",
     "determinism_violations": 0,
     "extraction": {
-      "chartable": 101,
+      "chartable": 177,
       "chartable_charted": 0,
       "chartable_published": 96,
-      "elements_found": 3029,
-      "items": 219,
-      "narrative": 19,
-      "span_integrity_pass": 219,
-      "unclassified": 99
+      "elements_found": 5035,
+      "items": 370,
+      "narrative": 35,
+      "span_integrity_pass": 370,
+      "unclassified": 158
     },
     "extraction_suspect": 0,
     "instruments": [
       {
         "column": "compression",
         "stat": {
-          "count": 210,
+          "count": 356,
           "maximum": 1.2698412698412698,
-          "minimum": 0.043374642516682556,
-          "p25": 0.11969696969696969,
-          "p50": 0.18140589569160998,
-          "p75": 0.27469135802469136,
-          "total": 50.836913737808366
+          "minimum": 0.02850467289719626,
+          "p25": 0.11647254575707154,
+          "p50": 0.17246175243393602,
+          "p75": 0.27241379310344827,
+          "total": 83.35899710763776
         }
       },
       {
         "column": "coverage",
         "stat": {
-          "count": 210,
+          "count": 356,
           "maximum": 1.0,
           "minimum": 0.0,
           "p25": 0.5,
           "p50": 0.6666666666666666,
-          "p75": 0.8181818181818182,
-          "total": 135.57056328890695
+          "p75": 0.8333333333333334,
+          "total": 227.52529063929993
         }
       },
       {
         "column": "evidential_density",
         "stat": {
-          "count": 210,
+          "count": 356,
           "maximum": 0.025839793281653745,
           "minimum": 0.0,
           "p25": 0.0,
           "p50": 0.0,
-          "p75": 0.0030959752321981426,
-          "total": 0.5016305553199023
+          "p75": 0.003048780487804878,
+          "total": 0.8343300833143386
         }
       },
       {
         "column": "extractiveness",
         "stat": {
-          "count": 210,
-          "maximum": 0.6625,
+          "count": 356,
+          "maximum": 0.953125,
           "minimum": 0.0,
-          "p25": 0.11363636363636363,
-          "p50": 0.19047619047619047,
-          "p75": 0.30097087378640774,
-          "total": 45.508298331485776
+          "p25": 0.1076923076923077,
+          "p50": 0.17543859649122806,
+          "p75": 0.2891566265060241,
+          "total": 75.22341780123742
         }
       },
       {
         "column": "hhem",
         "stat": {
-          "count": 210,
+          "count": 356,
           "maximum": 0.9899116158485413,
           "minimum": 0.013669893145561218,
-          "p25": 0.8979982137680054,
-          "p50": 0.9457051753997803,
-          "p75": 0.9635336995124817,
-          "total": 181.01228927262127
+          "p25": 0.9090368151664734,
+          "p50": 0.9443884491920471,
+          "p75": 0.9635054469108582,
+          "total": 314.5326362494379
         }
       },
       {
         "column": "hhem_delta",
         "stat": {
-          "count": 210,
+          "count": 356,
           "maximum": 0.0,
           "minimum": 0.0,
           "p25": 0.0,
@@ -13873,43 +13873,43 @@
       {
         "column": "hhem_full",
         "stat": {
-          "count": 210,
+          "count": 356,
           "maximum": 0.9899116158485413,
           "minimum": 0.013669893145561218,
-          "p25": 0.8979982137680054,
-          "p50": 0.9457051753997803,
-          "p75": 0.9635336995124817,
-          "total": 181.01228927262127
+          "p25": 0.9090368151664734,
+          "p50": 0.9443884491920471,
+          "p75": 0.9635054469108582,
+          "total": 314.5326362494379
         }
       },
       {
         "column": "new_fact_rate",
         "stat": {
-          "count": 210,
+          "count": 356,
           "maximum": 1.0,
           "minimum": 0.0,
           "p25": 1.0,
           "p50": 1.0,
           "p75": 1.0,
-          "total": 189.5
+          "total": 319.5
         }
       },
       {
         "column": "score_ms",
         "stat": {
-          "count": 210,
+          "count": 356,
           "maximum": 14517.0,
           "minimum": 111.0,
-          "p25": 590.0,
-          "p50": 1024.0,
-          "p75": 2337.0,
-          "total": 457050.0
+          "p25": 613.0,
+          "p50": 1079.0,
+          "p75": 2464.0,
+          "total": 789401.0
         }
       },
       {
         "column": "self_repetition",
         "stat": {
-          "count": 210,
+          "count": 356,
           "maximum": 0.013157894736842146,
           "minimum": 0.0,
           "p25": 0.0,
@@ -13921,66 +13921,66 @@
       {
         "column": "source_seen_word_count",
         "stat": {
-          "count": 210,
+          "count": 356,
           "maximum": 2707.0,
           "minimum": 39.0,
-          "p25": 297.0,
-          "p50": 442.0,
-          "p75": 752.0,
-          "total": 124752.0
+          "p25": 291.0,
+          "p50": 464.0,
+          "p75": 754.0,
+          "total": 215129.0
         }
       },
       {
         "column": "source_word_count",
         "stat": {
-          "count": 210,
+          "count": 356,
           "maximum": 2707.0,
           "minimum": 39.0,
-          "p25": 297.0,
-          "p50": 442.0,
-          "p75": 752.0,
-          "total": 124752.0
+          "p25": 291.0,
+          "p50": 464.0,
+          "p75": 754.0,
+          "total": 215129.0
         }
       },
       {
         "column": "speculative_density",
         "stat": {
-          "count": 210,
+          "count": 356,
           "maximum": 0.0375,
           "minimum": 0.0,
           "p25": 0.0,
-          "p50": 0.003639672429481347,
-          "p75": 0.008009858287122612,
-          "total": 1.1546634213514566
+          "p50": 0.0035335689045936395,
+          "p75": 0.006920415224913495,
+          "total": 1.7600023622928183
         }
       },
       {
         "column": "summary_word_count",
         "stat": {
-          "count": 210,
+          "count": 356,
           "maximum": 151.0,
           "minimum": 41.0,
-          "p25": 71.0,
-          "p50": 82.0,
-          "p75": 95.0,
-          "total": 17774.0
+          "p25": 70.0,
+          "p50": 79.0,
+          "p75": 93.0,
+          "total": 29428.0
         }
       },
       {
         "column": "verbatim_run",
         "stat": {
-          "count": 210,
-          "maximum": 0.5365853658536586,
+          "count": 356,
+          "maximum": 0.6716417910447762,
           "minimum": 0.0125,
-          "p25": 0.07792207792207792,
-          "p50": 0.10377358490566038,
-          "p75": 0.14705882352941177,
-          "total": 25.751515458596813
+          "p25": 0.07692307692307693,
+          "p50": 0.09900990099009901,
+          "p75": 0.14285714285714285,
+          "total": 42.386253464244696
         }
       }
     ],
-    "items_failed": 30,
-    "items_planned": 240,
+    "items_failed": 38,
+    "items_planned": 320,
     "items_published": 210,
     "items_truncated": 0,
     "label_similarity": {
@@ -14005,8 +14005,8 @@
       "unattributed": 0,
       "unsupported_number": 8
     },
-    "revision": 3,
-    "runs": 3,
+    "revision": 4,
+    "runs": 4,
     "sources": [
       {
         "doubted": 1,
@@ -14427,37 +14427,37 @@
     "stage_timing": [
       {
         "max_ms": 42269,
-        "p50_ms": 503,
-        "p90_ms": 1896,
+        "p50_ms": 551,
+        "p90_ms": 1726,
         "stage": "fetch",
-        "sum_ms": 251739,
-        "timed": 240
+        "sum_ms": 389479,
+        "timed": 400
       },
       {
         "max_ms": 280,
         "p50_ms": 47,
-        "p90_ms": 102,
+        "p90_ms": 104,
         "stage": "extract",
-        "sum_ms": 13986,
-        "timed": 240
+        "sum_ms": 23659,
+        "timed": 400
       },
       {
         "max_ms": 1338957,
-        "p50_ms": 501569,
-        "p90_ms": 910522,
+        "p50_ms": 491552,
+        "p90_ms": 895941,
         "stage": "summarize",
-        "sum_ms": 118248676,
-        "timed": 215
+        "sum_ms": 193920537,
+        "timed": 364
       }
     ],
     "summaries_scored": 210,
     "throughput": {
-      "cached_tokens": 1254214,
-      "decode_ms": 64882188,
-      "input_tokens": 1724011,
-      "items": 210,
-      "output_tokens": 289835,
-      "prefill_ms": 46712824
+      "cached_tokens": 2171744,
+      "decode_ms": 106442346,
+      "input_tokens": 2931194,
+      "items": 357,
+      "output_tokens": 482048,
+      "prefill_ms": 78155681
     },
     "version": "2026-09-14T01:30",
     "visuals_rendered": 0
