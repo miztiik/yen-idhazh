@@ -1,6 +1,6 @@
 # Evaluation
 
-**Last Updated**: 2026-09-19
+**Last Updated**: 2026-09-22
 
 How a published summary is judged, and how the judgement is kept honest. This page fixes the vocabulary; the tunable bands live in [config.md](config.md).
 
@@ -136,8 +136,11 @@ The geometry is two knobs, `evaluation.chunk_words` (900) and
 wider window is mechanically allowed. What is missing is a reason to pick a
 number: **0 of 60 drawn rows carry a human label**, so nothing here can say
 whether a wider window scores more truthfully or just differently, and a sweep
-would show only that the number moves (Guardrail #10). Moving it is a measurement
-this project cannot yet take, not a tuning nobody got around to.
+would show only that the number moves (Guardrail #10). **Read that zero as an
+instrument nobody could run, not as a question nobody wants answered.**
+`evaluation.labellers` was an empty list until 2026-09-22, and an empty roster
+refuses every write by name. Moving this knob is a measurement this project has
+not yet taken, not a tuning nobody got around to.
 
 **Every window is now the full window, the last one included.** Until 2026-08-28
 the walk stepped past the end of the article and the final window was whatever
@@ -226,8 +229,9 @@ scoring 5 at-cap premises both ways moved the number by 0.000000 every time.
 **No default moves, and this measurement does not say one should.** It says the
 instrument moves with slicing; it does not say the whole-article reading is the
 truer one. That still needs the human labels this page has been waiting on -
-**0 of 60**. What has changed is that `evaluation.chunk_words` can no longer be
-called a neutral number nobody needs to look at.
+**0 of 60, on a roster that was empty until 2026-09-22**. What has changed is
+that `evaluation.chunk_words` can no longer be called a neutral number nobody
+needs to look at.
 
 **What it does settle is the cost.** A single 1,923-word pass costs **less** than
 today's two or three 900-word passes, not more: 4.278 s against 4.815 s a pass on
@@ -477,38 +481,45 @@ bounds, never a calibration.** The tool refuses to let the split go unprinted,
 and an empty pool exits non-zero listing every pair with its rows and dates.
 Article bodies remain local and uncommitted.
 
-**The exact remaining requirement**, checked against the committed ledger and
-current code on 2026-08-28. These are exact counts over committed files rather
-than a timing, so there is no spread: the same commit gives the same numbers on
-any machine.
+**The exact remaining requirement**, taken by
+[`../../backend/utilities/label_queue.py`](../../backend/utilities/label_queue.py)
+against the committed ledger on 2026-09-22. These are exact counts over
+committed files rather than a timing, so there is no spread: the same commit
+gives the same numbers on any machine.
 
 | What | Have | Need |
 | --- | --- | --- |
 | Labels | **0** | 60 |
-| Distinct run-days at the current `scorer_version` | **2** (`2026-08-26`, `2026-08-27`) | 10 |
-| Longest run of consecutive run-days at any one pair, ever reached | **3** (`2026-08-24` to `2026-08-26`) | 10 |
-| Eligible rows at that scorer | 450 | not the constraint |
+| Distinct run-days at the current `scorer_version` | **25** (`2026-08-29` to `2026-09-22`) | 10 |
+| Eligible rows at that scorer | 9,402 | not the constraint |
 | Rows the draw can fill | **60 of 60**, no decile short | 60 |
+| Names in `evaluation.labellers` | **1** | at least 1 |
+
+**The run-day gate is met, and the roster was the thing holding this up.** Every
+version of this page before 2026-09-22 read 2 of 10, because the count was taken
+on 2026-08-28, four days after a geometry change reset it. It has since run 25
+consecutive days at one `scorer_version` - the longest this ledger has ever
+held, against a previous record of 3. So the labels are what is missing, and
+until 2026-09-22 nothing could collect them: `evaluation.labellers` was `[]`,
+and an empty roster refuses every write by name. The list now carries one name.
 
 The current scorer is
-`hhem-2.1-open@8e4a2e6e;weights-841b70e0;metrics-3;bands=0.80/0.50;lead=0.30`.
-Two producers wrote those rows: `6a23e277` (the configured Qwen3.5-9B, 48 of the
-60 drawn) and `f0d4ecc7` (12 drawn, under the floor and marked). Under the old
-rule the same ledger filled 32 of 60 with seven deciles short, which is the
-measured cost of the pair requirement. The band
-values sit **inside** the scorer version string, so moving a threshold also
-mints a new scorer version and restarts the count. That is correct, and it is
-why a cut cannot move halfway through a collection.
+`hhem-2.1-open@8e4a2e6e;weights-841b70e0;metrics-3;window=900/150/anchored;bands=0.80/0.50;lead=0.30`.
+The band values sit **inside** that string, so moving a threshold also mints a
+new scorer version and restarts the run-day count. That is correct, and it is
+why a cut cannot move halfway through a collection. What sends the count back to
+zero, and what that costs, is in [Design rationale](#design-rationale) below.
 
-Read the second row and the third one together before reading the shortfall as
-patience. Ten is not ten days away. No pair in the ledger's whole history has
-ever held for more than three consecutive run-days, so the gate has never once
-been met. What sends the count back to zero, how often it has gone back, and
-what that costs are in [Design rationale](search-quality.md#design-rationale) below.
+**A sitting needs the evidence package too, and that is not in git.** The draw
+names 60 rows, and a row is labellable only if `backend/var/evidence/` holds the
+premise the scorer read. That directory is gitignored, so on a machine that has
+not run the pipeline the queue reports `labellable 0 of 60` and says so before
+anybody starts. The package comes from a local run, or from the workflow
+artifact for the day being labelled.
 
-**Nothing here may move a threshold.** The queue is usable now; the labels are
-not collected and the run-days are not banked. Until both counts are met, any
-re-cut is a number chosen so a chart looks humbler.
+**Nothing here may move a threshold.** The run-days are banked; the labels are
+not collected. Until they are, any re-cut is a number chosen so a chart looks
+humbler.
 
 ## The review tree: where a person looks at a day's visuals
 
@@ -794,13 +805,17 @@ benchmark or prove that every live source still has the captured layout.
 
 **One column reads the summary against itself (2026-08-26).** Eleven quality columns, and every n-gram machine in `backend/idhazh/evals/metrics.py` intersected the summary's n-grams with the *source's*. Nothing could see a summary that repeated itself, which greedy decoding makes possible and which every other column scores *better* on the worse it gets. Proved on committed fixtures rather than argued: two 26-word summaries of the same article, one saying a clause three times and one saying it once, score exactly equal on `extractiveness` (0.000), `verbatim_run` (0.077) and `coverage` (0.333), and 0.000 against 0.391 on the new one. Authority: Andre's blind-spot finding; nullable and appended, Fowler's layout rule.
 
-**`METRICS_VERSION` did not move for it (2026-08-26).** The constant is folded into `scorer_version`, and this page requires ten distinct run-days at one `scorer_version` before a threshold can move. The count is stated once, in [The human labels](#the-human-labels-the-instrument-and-what-it-still-needs), and it has never reached 10. A column no band and no derived column reads changes nothing that a row written under `metrics-3` says, so bumping would have spent a banked run-day to record a fact about nothing. Authority: Andre.
+**`METRICS_VERSION` did not move for it (2026-08-26).** The constant is folded into `scorer_version`, and this page requires ten distinct run-days at one `scorer_version` before a threshold can move. The count is stated once, in [The human labels](#the-human-labels-the-instrument-and-what-it-still-needs), and it had not once reached 10 when this was decided. A column no band and no derived column reads changes nothing that a row written under `metrics-3` says, so bumping would have spent a banked run-day to record a fact about nothing. Authority: Andre.
 
 **A fingerprint change restarts the run-day count at zero (2026-08-27).** The requirement above has asked for ten run-days at one `scorer_version` and one `pipeline_fingerprint` since it was written, and the page never said what happens when one of the two moves. The count goes back to zero, and it has to. The fingerprint exists so that ten days of scores are ten days of the *same* pipeline; a count carried across a model swap would average two different systems and present the result as one measurement. This is not a policy bolted on afterwards. `model_sha256` is a declared field of `PipelineInputs` in [`../../backend/idhazh/contracts/fingerprint.py`](../../backend/idhazh/contracts/fingerprint.py), and the stamp was a digest over that model's own serialization, so a model swap could not leave the stamp still - and neither could a reworded prompt, a llama.cpp rebuild, a changed truncation cap, or any other declared input. **Nothing has written that column since 2026-09-12 and the method that produced it went on 2026-09-21**, so this rule now describes the rows already committed rather than a stamp a run still takes; what a live run records instead is named values, one per input ([../architecture/contracts/determinism.md](../architecture/contracts/determinism.md)). Authority: the determinism contract, read rather than argued.
 
 **The measured reset rate (2026-08-27, `state/scores.csv` and `state/fingerprints.csv` at commit `c08d8b5`).** 2,232 eval rows, written by 18 runs across **5 scored run-days** (`2026-08-22` to `2026-08-26`), carry **5 distinct `pipeline_fingerprint` values** and **4 distinct `scorer_version` values** - one new pipeline stamp per scored day, on average. `2026-08-26` alone carried three different (`scorer_version`, `pipeline_fingerprint`) pairs: the stamp moved at that day's second run and again at its fifth, and the scorer version moved at the fifth with it. Every one of those 2,232 rows names the same `model_id`, `qwen3-8b-q4-k-m` - the model did not change once and the stamp still moved four times, so a model swap is *one* cause of a reset rather than the cause. `state/fingerprints.csv` holds a single row, because the ledger that expands a stamp into its inputs only started on 2026-08-26; four of the five stamps can no longer be expanded at all. Authority: measurement.
 
 **The consequence, and how it was resolved (2026-08-27).** The longest run of consecutive run-days under a single (`scorer_version`, `pipeline_fingerprint`) pair is **3** - `2026-08-24` to `2026-08-26`, under `969b1917...d2b945` - and the pair survived only the first of five runs on the third of those days. Three of ten, once, in the ledger's whole history. Adopting Qwen3.5-9B-Q4_K_M (commit `5d8ba60`, 2026-08-27) moved `model_sha256` and `chat_template_sha256` together, which is the one reset `state/fingerprints.csv` can expand into its cause. At the observed rate of pipeline change, every model or runtime improvement spent the whole window, so the pair requirement was unreachable rather than strict - a live tension between shipping a better pipeline and measuring the one already running. **The owner resolved it on 2026-08-27: count run-days at one `scorer_version`, and carry `pipeline_fingerprint` as a reported stratum rather than a disqualification.** The rejected alternative was to freeze the pipeline for ten days; it was declined because the claim it buys expires at the next prompt change, so the freeze would be paid repeatedly, and because a repository shipping several fixes a day cannot stand still that long. What the chosen rule gives up is stated wherever a result is printed: a rate over a pooled draw is a prior with wide bounds, not a calibration, and a stratum under `evaluation.label_min_stratum_rows` may not move a threshold at all. Measured effect on the same ledger: the drawable sample went from 32 of 60 with seven deciles short to **60 of 60**. Nothing here moves a threshold. Authority: owner. **Completed 2026-09-12**: the stamp stopped being written at all, so the reported stratum, the mix and `evaluation.label_min_stratum_rows` went with it and a draw is one pool.
+
+**How a faithfulness sample is drawn (2026-09-22).** Sixty rows, `evaluation.label_draw_per_decile` from each of ten `hhem` deciles, picked by [`../../backend/idhazh/evals/labels.py`](../../backend/idhazh/evals/labels.py) and by nothing else. Four properties carry the design, and each is there for its own reason. **Uniform across deciles, not crowded at the cuts.** The first question these labels answer is a level question - what does `high` mean at all - and a boundary-weighted draw would speak about 0.75 to 0.85 and stay silent about the rest of the ledger. A uniform draw can be re-weighted to the live distribution afterwards; the reverse is not available. **Deterministic by hash** over the address, the words, the instrument and the draw id, so the same ledger and the same draw id give the same sixty rows on any machine. A draw is reproducible rather than remembered, which is what lets two labellers compare notes by position. **One `scorer_version` is the whole pool**, because the cuts being calibrated are spelled inside that string, so a row read by another instrument answers a different question. **A short decile contributes all it has and the shortfall is printed**, because a stratum that quietly borrows from its neighbour is not the stratum it is named after. The strata pick the rows and never order them: the queue comes back in one global `label_id` sort, so the sequence leaks no gradient. What sixty rows cannot buy is a calibration - a rate over a pooled draw is a prior with wide bounds, and the counts it needs first are in the table above. Authority: Andre.
+
+**The roster carries a name, and an agent still does not fill the ledger (2026-09-22).** `evaluation.labellers` was `[]` from the day the instrument was written. The required `labeller` check refused every write, so no label has ever been recorded, and that is what the **0 of 60** on this page has always measured - the roster, never the demand. The list now carries `miztiik`, the one identity this repository commits under ([../../CLAUDE.md](../../CLAUDE.md) section 8). The owner changes it by editing one line of `config/idhazh.json`, and no schema moves when they do: the field default is still an empty list, so a clone that supplies its own config still cannot record a verdict. **Adding a name does not make the first sitting an agent's job.** `state/labels.csv` is the only file this project treats as ground truth, and a fabricated row in it would be indistinguishable from a real one - worse than no row, because the whole value of the file is that a machine did not write it. So the change that made the queue runnable wrote no row. It proved the write path end to end against a temporary state root instead, which is what [`../../backend/tests/test_labels.py`](../../backend/tests/test_labels.py) now holds. The first sitting is sixty rows at roughly 90 s each, about 90 minutes in one pass - an estimate, because `seconds_spent` is the only pace this project has ever recorded (Guardrail #10). Authority: owner.
 
 ## Rejected alternatives
 

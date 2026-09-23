@@ -6,7 +6,6 @@ body of its own (CLAUDE.md section 1a, "A router is the sharpest case").
 
 from __future__ import annotations
 
-import os
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -79,14 +78,11 @@ def _trace_id(run_id: str, item: PlannedItem) -> str:
 def trace_sink(
     settings: config.Settings, *, run_id: str, shard: int
 ) -> telemetry.SpanSink:
-    """Where this shard's spans go: nowhere, a committed file, or a file and a host.
+    """Where this shard's spans go: nowhere, or a committed file.
 
-    A file by default and a host only when the environment names one, with its
-    key pair (owner decision, 2026-08-30). No workflow sets those, so a daily
-    run reaches no third party and needs no secret; a developer who wants the
-    hosted view exports three variables and gets both. The host is added to the
-    file and never instead of it, so the record a test reads and the record a
-    host receives are the same record.
+    A file, and nothing else. Nothing this pipeline traces leaves the machine
+    that traced it, so a run needs no secret and reaches no third party
+    (Guardrail #1, CLAUDE.md section 1b).
 
     The file is the committed trace under `state/traces/`, not a gitignored one,
     so a recent run stays openable from the repository; `retention.prune_traces`
@@ -97,7 +93,7 @@ def trace_sink(
     """
     if not settings.app.observability.tracing_enabled:
         return telemetry.NullSink()
-    local = telemetry.FileSink(
+    return telemetry.FileSink(
         telemetry.committed_trace_path(
             common.STATE_ROOT,
             run_id=run_id,
@@ -106,16 +102,6 @@ def trace_sink(
             shard=shard,
         )
     )
-    host = os.environ.get("LANGFUSE_HOST", "").strip()
-    public_key = os.environ.get("LANGFUSE_PUBLIC_KEY", "").strip()
-    secret_key = os.environ.get("LANGFUSE_SECRET_KEY", "").strip()
-    if not (host and public_key and secret_key):
-        return local
-    remote = telemetry.langfuse_sink(host=host, public_key=public_key, secret_key=secret_key)
-    if remote is None:
-        LOG.warning("a langfuse host is named but the package is absent; tracing to the file")
-        return local
-    return telemetry.FanOut((local, remote))
 
 
 class _FetchedWorkItem(NamedTuple):

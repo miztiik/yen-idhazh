@@ -42,8 +42,10 @@ from idhazh.extract import (
     EXTRACTOR_VERSION,
     PAGE_TITLE_MAX_CHARS,
     boilerplate_ratio,
+    corroborated_words,
     declares_paywall,
     extract_text,
+    is_contaminated,
     page_headline,
     to_article,
     truncate_to_tokens,
@@ -1020,14 +1022,236 @@ def test_the_short_floor_never_closes_on_a_feed_declared_as_abstracts() -> None:
     assert published.failure_code is FailureCode.TOO_SHORT
 
 
-def test_the_three_shape_signals_each_have_a_switch_and_they_read_alike() -> None:
+def test_the_four_shape_signals_each_have_a_switch_and_they_read_alike() -> None:
     """Two of three had a switch until 2026-09-17. An asymmetry nobody chose is a defect."""
     switches = {
         name for name in ExtractConfig.model_fields if name.startswith("reject_")
     }
 
-    assert switches == {"reject_boilerplate", "reject_not_prose", "reject_too_short"}
+    assert switches == {
+        "reject_boilerplate",
+        "reject_contaminated",
+        "reject_not_prose",
+        "reject_too_short",
+    }
     assert all(ExtractConfig().model_dump()[name] is False for name in switches)
+
+
+# --- The corroborated-length gate: the page says how long its article is ------
+
+#: One article, wrapped the way a publisher's template wraps one. Long enough
+#: that every other extract signal declines and the length is the only question
+#: left. Built rather than captured, because a captured page cannot be asked to
+#: hold exactly one witness at a time and these tests are about which witness
+#: fired (`CLAUDE.md` section 13).
+#:
+#: Every paragraph differs. trafilatura drops a repeated one as duplicate text,
+#: so a page built from one sentence repeated ten times extracts to a sentence
+#: and the container witness silently falls under its floor.
+
+
+def _prose(times: int) -> str:
+    return "".join(
+        f"<p>The regulator cleared interconnector {index} for the spring of 2027 "
+        f"and said that construction on that link may begin at once.</p>"
+        for index in range(times)
+    )
+
+
+def _page_with(
+    *,
+    og_title: str | None = "Interconnector cleared",
+    heading: str | None = "Interconnector cleared",
+    paragraphs: int = 10,
+    json_ld: str | None = None,
+    microdata_words: int = 0,
+) -> str:
+    head = f'<meta property="og:title" content="{og_title}">' if og_title else ""
+    if json_ld is not None:
+        head += f'<script type="application/ld+json">{json_ld}</script>'
+    headed = f"<h1>{heading}</h1>" if heading else ""
+    micro = (
+        f'<div itemprop="articleBody">{"word " * microdata_words}</div>'
+        if microdata_words
+        else ""
+    )
+    return (
+        f"<html><head>{head}</head><body>"
+        f"<article>{headed}{_prose(paragraphs)}</article>{micro}"
+        "</body></html>"
+    )
+
+
+def _ld(words: int, *, kind: str = "NewsArticle", graphed: bool = False) -> str:
+    node = f'{{"@type": "{kind}", "articleBody": "{"word " * words}"}}'
+    return f'{{"@context": "https://schema.org", "@graph": [{node}]}}' if graphed else node
+
+
+def test_the_container_whose_heading_is_the_page_title_is_the_witness() -> None:
+    """The load-bearing witness, and the only one the page that started this had."""
+    page_text = _page_with(paragraphs=10)
+    whole = extract_text(page_text)
+
+    assert whole is not None
+    assert corroborated_words(page_text, min_words=100) == len(whole.split())
+
+
+@pytest.mark.parametrize("graphed", [False, True], ids=["bare", "under-a-graph"])
+def test_a_json_ld_article_body_is_a_witness_wherever_it_is_nested(graphed: bool) -> None:
+    """Publishers nest their nodes under `@graph` about as often as they do not."""
+    page_text = _page_with(heading=None, json_ld=_ld(400, graphed=graphed))
+
+    assert corroborated_words(page_text, min_words=100) == 400
+
+
+def test_a_microdata_article_body_is_a_witness() -> None:
+    assert corroborated_words(_page_with(heading=None, microdata_words=300), min_words=100) == 300
+
+
+def test_the_longest_witness_wins_when_several_speak() -> None:
+    """Best, not first. A template that declares a teaser as well must not win with it."""
+    page_text = _page_with(paragraphs=10, json_ld=_ld(900), microdata_words=120)
+
+    assert corroborated_words(page_text, min_words=100) == 900
+
+
+def test_a_page_that_states_no_length_yields_no_witness() -> None:
+    """`None` is a page this gate cannot check, and `is_contaminated` reads it as such."""
+    page_text = _page_with(og_title=None, heading=None)
+
+    assert corroborated_words(page_text, min_words=100) is None
+    assert not is_contaminated(4000, None, ExtractConfig())
+
+
+def test_a_witness_under_the_floor_is_a_caption_and_does_not_count() -> None:
+    """A teaser would otherwise divide a real article by a stub and flag every page."""
+    page_text = _page_with(heading=None, json_ld=_ld(40))
+
+    assert corroborated_words(page_text, min_words=100) is None
+    assert corroborated_words(page_text, min_words=20) == 40
+
+
+@pytest.mark.parametrize(
+    "kind", ["BreadcrumbList", "Organization", "WebPage"], ids=lambda k: str(k)
+)
+def test_a_json_ld_node_that_is_not_an_article_is_not_a_witness(kind: str) -> None:
+    page_text = _page_with(heading=None, json_ld=_ld(400, kind=kind))
+
+    assert corroborated_words(page_text, min_words=100) is None
+
+
+def test_a_type_declared_as_a_list_still_names_an_article() -> None:
+    """schema.org allows it and publishers use it. A string-only check misses those pages."""
+    node = f'{{"@type": ["Article", "NewsArticle"], "articleBody": "{"word " * 400}"}}'
+
+    assert corroborated_words(_page_with(heading=None, json_ld=node), min_words=100) == 400
+
+
+def test_broken_json_ld_degrades_the_witness_and_never_raises() -> None:
+    """A publisher's broken JSON is one page's data being wrong (`CLAUDE.md` section 1a)."""
+    page_text = _page_with(paragraphs=10, json_ld="{not json at all,,,}")
+
+    assert corroborated_words(page_text, min_words=100) is not None
+
+
+def test_a_page_with_no_markup_at_all_yields_no_witness() -> None:
+    assert corroborated_words("", min_words=100) is None
+    assert corroborated_words("not html at all", min_words=100) is None
+
+
+def test_the_real_contaminated_page_is_flagged_and_still_publishes() -> None:
+    """The page this gate was written for, reduced to 38 KB and still contaminated.
+
+    `heatmap.news` lays four full articles around the one we asked for, so the
+    extractor returns 3,818 words where the page's own container holds 1,034 -
+    a ratio of 3.69 against a default ceiling of 2.0. Every other check passes
+    it: it is real prose, of the right length, in the right voice.
+    """
+    article = to_article(
+        fixture_item("heatmap", CANONICAL), ok("contaminated-front-page.html"),
+        config=ExtractConfig(), fetched_at=FETCHED_AT,
+    )
+
+    assert article.status is ArticleStatus.OK, "the default records rather than rejects"
+    assert article.failure_code is FailureCode.CONTAMINATED
+    assert article.brief, "a signalled item takes the short prompt band"
+    assert article.corroborated_word_count == 1034
+    assert article.source_word_count == 3818
+
+
+def test_contamination_outranks_the_other_signals_on_the_same_page() -> None:
+    """A contaminated page trips `not_prose` too, and that sends an operator wrong.
+
+    It is also the only one of the four that makes an item MORE expensive
+    downstream, so it is the one worth recording.
+    """
+    loose = ExtractConfig(prose_line_count_min=10_000)
+    article = to_article(
+        fixture_item("heatmap", CANONICAL), ok("contaminated-front-page.html"),
+        config=loose, fetched_at=FETCHED_AT,
+    )
+
+    assert article.failure_code is FailureCode.CONTAMINATED
+
+
+def test_the_switch_turns_the_signal_into_a_refusal() -> None:
+    article = to_article(
+        fixture_item("heatmap", CANONICAL), ok("contaminated-front-page.html"),
+        config=ExtractConfig(reject_contaminated=True), fetched_at=FETCHED_AT,
+    )
+
+    assert article.status is ArticleStatus.EXTRACT_FAILED
+    assert article.failure_code is FailureCode.CONTAMINATED
+    assert article.text is None
+
+
+def test_a_clean_page_carries_its_witness_and_no_signal() -> None:
+    """The counter-oracle. A gate that flagged nothing would pass every test above."""
+    article = to_article(ITEM, ok("article.html"), config=ExtractConfig(), fetched_at=FETCHED_AT)
+
+    assert article.failure_code is not FailureCode.CONTAMINATED
+
+
+def test_the_ceiling_is_a_knob_and_moving_it_moves_the_verdict() -> None:
+    """The substitution test (Guardrail #6): change the config, change the behaviour."""
+    reading = ok("contaminated-front-page.html")
+    item = fixture_item("heatmap", CANONICAL)
+
+    lenient = to_article(
+        item, reading, config=ExtractConfig(corroboration_ratio_max=4.0), fetched_at=FETCHED_AT
+    )
+    strict = to_article(
+        item, reading, config=ExtractConfig(corroboration_ratio_max=1.5), fetched_at=FETCHED_AT
+    )
+
+    assert lenient.failure_code is not FailureCode.CONTAMINATED
+    assert strict.failure_code is FailureCode.CONTAMINATED
+
+
+def test_the_floor_is_a_knob_and_raising_it_blinds_the_gate() -> None:
+    """The other half of the substitution test: a floor above the witness hides it."""
+    reading = ok("contaminated-front-page.html")
+    item = fixture_item("heatmap", CANONICAL)
+
+    blinded = to_article(
+        item, reading, config=ExtractConfig(corroboration_min_words=5_000), fetched_at=FETCHED_AT
+    )
+
+    assert blinded.corroborated_word_count is None
+    assert blinded.failure_code is not FailureCode.CONTAMINATED
+
+
+def test_the_headline_match_tolerates_the_punctuation_a_template_changes() -> None:
+    """A curly apostrophe in `og:title` against a straight one in the heading.
+
+    The real page does exactly this, and a literal comparison reads it as two
+    different articles and loses the only witness that page has.
+    """
+    page_text = _page_with(
+        og_title="America&#8217;s grid, cleared", heading="America's grid, cleared"
+    )
+
+    assert corroborated_words(page_text, min_words=100) is not None
 
 
 def test_the_labelled_short_source_oracle_matches_disposition_and_reason() -> None:

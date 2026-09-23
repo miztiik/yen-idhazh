@@ -163,6 +163,7 @@ class CollectConfig(Model):
             FailureCode.NO_TEXT,
             FailureCode.NOT_PROSE,
             FailureCode.BOILERPLATE,
+            FailureCode.CONTAMINATED,
             FailureCode.TOO_SHORT,
             FailureCode.UNSUPPORTED_FORM,
         ),

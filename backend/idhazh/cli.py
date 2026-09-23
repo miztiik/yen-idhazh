@@ -180,6 +180,20 @@ def shard_count(items: int, *, run: RunConfig) -> int:
     return max(1, min(-(-items // run.shard_size), run.max_parallel))
 
 
+def qualification_repeats(override: int | None, *, run: RunConfig) -> int:
+    """How many times this invocation replays each frozen item.
+
+    The override goes back through `RunConfig` rather than being compared here,
+    so `--repeats 1` is refused by the same floor that refuses
+    `qualification_repeats: 1` in config. A second copy of the floor spelled in
+    this file is a floor that can drift away from the one the schema publishes.
+    """
+    if override is None:
+        return run.qualification_repeats
+    amended = {**run.model_dump(), "qualification_repeats": override}
+    return RunConfig.model_validate(amended).qualification_repeats
+
+
 def _candidate_identity(settings: config.Settings, args: argparse.Namespace) -> CandidateIdentity:
     """Which bytes are about to run, read off the disk rather than off config.
 
@@ -349,8 +363,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument(
         "--repeats",
         type=int,
-        default=3,
-        help="How many times each frozen article is summarized. `wording_spread` reads them.",
+        default=None,
+        help=(
+            "Override run.qualification_repeats for this invocation. "
+            "`wording_spread` reads the replays. Refused below the knob's floor."
+        ),
     )
     parser.add_argument(
         "--corpus-per-shard",
@@ -717,7 +734,6 @@ def main(argv: Sequence[str] | None = None) -> int:
             extract_config=settings.app.extract,
             retention_config=settings.app.retention,
             lens_weights=settings.app.lens_weights,
-            run=settings.app.run,
             run_id=plan_stage._run_id(pruned_on, args.execution),
             today=date_type.fromisoformat(pruned_on),
             dry_run=args.dry_run,
@@ -753,7 +769,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             date=date,
             shard=args.shard,
             shards=args.shards,
-            repeats=args.repeats,
+            repeats=qualification_repeats(args.repeats, run=settings.app.run),
             corpus_per_shard=args.corpus_per_shard,
             candidate=_candidate_identity(settings, args),
             scorer=_scorer(not args.no_faithfulness),

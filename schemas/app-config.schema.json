@@ -318,6 +318,7 @@
             "no_text",
             "not_prose",
             "boilerplate",
+            "contaminated",
             "too_short",
             "unsupported_form"
           ],
@@ -994,6 +995,20 @@
           "title": "Boilerplate Ratio Max",
           "type": "number"
         },
+        "corroboration_min_words": {
+          "default": 100,
+          "description": "Words a witness needs before it counts as a statement about the article's length. Below this it is a caption, a teaser or a stub, and the ratio it would give is noise rather than a reading.",
+          "minimum": 1,
+          "title": "Corroboration Min Words",
+          "type": "integer"
+        },
+        "corroboration_ratio_max": {
+          "default": 2.0,
+          "description": "Words we extracted, divided by the words the page's own markup says its article has. Past this the extraction is contaminated - it returned the publisher's front page rather than the one article we asked for. Measured over the 58 re-fetchable pages of one run, 41 of which state their own length: the median ratio is exactly 1.00, the 90th percentile 1.24 and the worst healthy page 1.64, against 3.69 on the page that started this. 2.0 sits in that gap and flags 1 of the 41 with no false positive. It is a line drawn through 41 pages of one day, which is why `reject_contaminated` is false and the run records the signal rather than acting on it.",
+          "exclusiveMinimum": 1.0,
+          "title": "Corroboration Ratio Max",
+          "type": "number"
+        },
         "max_body_bytes": {
           "default": 2000000,
           "minimum": 1024,
@@ -1057,6 +1072,12 @@
           "title": "Reject Boilerplate",
           "type": "boolean"
         },
+        "reject_contaminated": {
+          "default": false,
+          "description": "If true, a contaminated signal rejects the item. Default records and publishes.",
+          "title": "Reject Contaminated",
+          "type": "boolean"
+        },
         "reject_not_prose": {
           "default": false,
           "description": "If true, a not_prose signal rejects the item. Default records and publishes.",
@@ -1107,6 +1128,7 @@
         "too_short",
         "not_prose",
         "boilerplate",
+        "contaminated",
         "paywalled",
         "unsupported_form",
         "model_unreachable",
@@ -1529,7 +1551,7 @@
         },
         "tracing_enabled": {
           "default": true,
-          "description": "Whether a work shard builds a span tree. On by default: a span tree is the one thing the three ledgers cannot hold - a start instant, a parent, and a step too small to earn a column, the robots read inside the fetch and the prompt render and reply parse either side of the model call. It stays an instrument nothing reads: no page renders a span, no gate consults one, and the ledgers stay the record. True writes one JSON line per span to the committed trace under state/traces/, a short rolling window observability.trace_window_days bounds, and folds the shard's spans into the committed span rollup. A host is opt-in on top of that, through LANGFUSE_HOST with its key pair, and CI names none - so an ordinary run reaches no third party whatever this says.",
+          "description": "Whether a work shard builds a span tree. On by default: a span tree is the one thing the three ledgers cannot hold - a start instant, a parent, and a step too small to earn a column, the robots read inside the fetch and the prompt render and reply parse either side of the model call. It stays an instrument nothing reads: no page renders a span, no gate consults one, and the ledgers stay the record. True writes one JSON line per span to the committed trace under state/traces/, a short rolling window observability.trace_window_days bounds, and folds the shard's spans into the committed span rollup. That file is the only destination a span has, so no run reaches a third party whatever this says.",
           "title": "Tracing Enabled",
           "type": "boolean"
         },
@@ -1797,6 +1819,14 @@
           "description": "How long a job may keep trying to push what it already committed. The loop was three attempts, and a fixed count is spent at once however high it is set once several runs commit together - an optimistic rebase-and-push converges at any commit rate and a counter does not. 300 s is 25 percent of the assemble job's 20-minute timeout: measured on run 35701213155, that job used 1.8 of its 20 minutes, so 18.2 minutes were spare. The work shard does not read this number. Its commit step names 120 s in its own env block, because the whole of what it keeps back for everything after its last item is shard_wrap_up_minutes, which is 12 minutes - 300 s would be 5 of them. What would move this is the `push attempt=` line the loop prints, over twenty runs: a first-push success rate above 95 percent means the deadline is almost never spent and the number can rise, and below 80 percent means no deadline is the right answer for what is going wrong.",
           "minimum": 1,
           "title": "Push Deadline Seconds",
+          "type": "integer"
+        },
+        "qualification_repeats": {
+          "default": 3,
+          "description": "How many times a qualification shard replays each item. Three is the smallest count that separates a model that is deterministic from one that happened to agree twice, and it is the floor rather than the default because a report built on fewer passes is a report that cannot fail. It used to be a dispatch input an operator typed per run, where `1` was legal and nothing downstream could refuse it. Ten is the ceiling because that is past any determinism question; a run that wants more edits this field. `idhazh qualify --repeats` overrides it for one invocation and is refused on the same floor.",
+          "maximum": 10,
+          "minimum": 3,
+          "title": "Qualification Repeats",
           "type": "integer"
         },
         "qualify_on_the_production_path": {
@@ -2625,6 +2655,16 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "run.qualification_repeats, additive, default 3, floor 3, ceiling 10.",
+      "version": "2026-09-22T16:00",
+      "why": "The replay count is a knob with a floor, not a dispatch input that could be 1."
+    },
+    {
+      "change": "observability.tracing_enabled drops the hosted-host sentence. No knob moved.",
+      "version": "2026-09-22T14:00",
+      "why": "A span has one destination now, and it is the committed file."
+    },
+    {
       "change": "run.push_deadline_seconds, additive, default 300.",
       "version": "2026-09-22T12:00",
       "why": "The push loop is bounded by a clock now, not by three attempts."
@@ -2633,16 +2673,6 @@
       "change": "bench.repeats, additive, default 3 and at least 2.",
       "version": "2026-09-22",
       "why": "Both numbers the bench job's timeout is spent on now sit in one file."
-    },
-    {
-      "change": "council.first_night, repair_window_nights and repair_dates_a_night, additive.",
-      "version": "2026-09-21T15:00",
-      "why": "A night plans the older dates its tenants are behind on, inside a bounded window."
-    },
-    {
-      "change": "council descriptions say shard where they said leg. No knob moved.",
-      "version": "2026-09-21T13:00",
-      "why": "`leg` was a second name for the shard the council already sizes by."
     },
     {
       "change": "Earlier changes are in this file's git history.",
@@ -2726,7 +2756,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-09-22T12:00",
+      "default": "2026-09-22T16:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -2737,5 +2767,5 @@
   },
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-09-22T12:00"
+  "version": "2026-09-22T16:00"
 }

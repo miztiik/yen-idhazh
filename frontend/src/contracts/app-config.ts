@@ -471,6 +471,15 @@ export interface ExtractConfig {
 	/** Share of an item's lines also seen on sibling items from the same host. */
 	boilerplate_ratio_max?: number;
 
+	/** Words we extracted, divided by the words the page's own markup says its article has. Past this the extraction is contaminated - it returned the publisher's front page rather than the one article we asked for. Measured over the 58 re-fetchable pages of one run, 41 of which state their own length: the median ratio is exactly 1.00, the 90th percentile 1.24 and the worst healthy page 1.64, against 3.69 on the page that started this. 2.0 sits in that gap and flags 1 of the 41 with no false positive. It is a line drawn through 41 pages of one day, which is why `reject_contaminated` is false and the run records the signal rather than acting on it. */
+	corroboration_ratio_max?: number;
+
+	/** Words a witness needs before it counts as a statement about the article's length. Below this it is a caption, a teaser or a stub, and the ratio it would give is noise rather than a reading. */
+	corroboration_min_words?: number;
+
+	/** If true, a contaminated signal rejects the item. Default records and publishes. */
+	reject_contaminated?: boolean;
+
 	/** Fallback markers used only when publisher JSON-LD does not declare the paywall. */
 	paywall_markers?: string[];
 
@@ -495,7 +504,7 @@ export interface ExtractConfig {
  * fix for a rate limit. `output_truncated` and `labels_truncated` are the two
  * output budgets, derived from two different grammars, for the same reason.
  */
-export const FAILURE_CODE = ['not_attempted', 'robots_denied', 'robots_unreachable', 'blocked_address', 'http_client_error', 'http_rate_limited', 'http_server_error', 'network_error', 'no_text', 'no_title', 'too_short', 'not_prose', 'boilerplate', 'paywalled', 'unsupported_form', 'model_unreachable', 'model_refused', 'model_timed_out', 'context_exceeded', 'output_truncated', 'labels_truncated', 'bad_shape', 'length_out_of_range', 'copied_source', 'leaked_address', 'shard_out_of_time', 'unknown'] as const;
+export const FAILURE_CODE = ['not_attempted', 'robots_denied', 'robots_unreachable', 'blocked_address', 'http_client_error', 'http_rate_limited', 'http_server_error', 'network_error', 'no_text', 'no_title', 'too_short', 'not_prose', 'boilerplate', 'contaminated', 'paywalled', 'unsupported_form', 'model_unreachable', 'model_refused', 'model_timed_out', 'context_exceeded', 'output_truncated', 'labels_truncated', 'bad_shape', 'length_out_of_range', 'copied_source', 'leaked_address', 'shard_out_of_time', 'unknown'] as const;
 
 export type FailureCode = (typeof FAILURE_CODE)[number];
 
@@ -701,7 +710,7 @@ export interface ObservabilityConfig {
 	/** The fraction of RUNS whose scorer runs - never the fraction of items. A run scores every item or none, so a day's rows are never a partial sample of that day and a per-day rate stays honest. Below 1.0 most days write no eval row and the console's score panels thin to the sampled days. Not a switch: `evaluation_enabled` is the way to say off, and a rate of zero is refused so the two can never disagree about it. The draw is a digest of the run id, so it is reproducible from the committed manifest and blind to the run's content, and both the rate and the draw land on the run manifest whether or not the run was taken. A published rate is still computed from the item-health census, which is never sampled; the thinned ledger publishes distributions only. */
 	sample_rate?: number;
 
-	/** Whether a work shard builds a span tree. On by default: a span tree is the one thing the three ledgers cannot hold - a start instant, a parent, and a step too small to earn a column, the robots read inside the fetch and the prompt render and reply parse either side of the model call. It stays an instrument nothing reads: no page renders a span, no gate consults one, and the ledgers stay the record. True writes one JSON line per span to the committed trace under state/traces/, a short rolling window observability.trace_window_days bounds, and folds the shard's spans into the committed span rollup. A host is opt-in on top of that, through LANGFUSE_HOST with its key pair, and CI names none - so an ordinary run reaches no third party whatever this says. */
+	/** Whether a work shard builds a span tree. On by default: a span tree is the one thing the three ledgers cannot hold - a start instant, a parent, and a step too small to earn a column, the robots read inside the fetch and the prompt render and reply parse either side of the model call. It stays an instrument nothing reads: no page renders a span, no gate consults one, and the ledgers stay the record. True writes one JSON line per span to the committed trace under state/traces/, a short rolling window observability.trace_window_days bounds, and folds the shard's spans into the committed span rollup. That file is the only destination a span has, so no run reaches a third party whatever this says. */
 	tracing_enabled?: boolean;
 
 	/** How many days of raw span traces state/traces/ keeps. A trace is the evidence an operator opens to see one recent run step by step; the committed record is the span rollup, so a trace has a short life and a file past this window is deleted whole rather than folded - a fold would invent a total nobody reads. Seven days covers a week of runs, and the window is what keeps state/traces/ a constant size whatever the project's age rather than one that grows with it (Guardrail #12). It does nothing until observability.tracing_enabled is true: before that no trace is written and the prune walks an empty tree. */
@@ -969,6 +978,9 @@ export interface RunConfig {
 
 	/** Where a trial run's ledgers go, under `state/`. Null is production and is the default, so a run that says nothing writes where it always did. Set it and every day shard this run appends lands under `state/<name>/` instead - the seen store, feed health, item health, the published ledger, the traces and the rollups, all of them, because a run that split them would put half a trial in the published series. Owner decision, 2026-09-15: a run that exists to exercise production's code path must not be readable as a production day. `retention.trial_state_days` is what empties it again. */
 	trial_state_dirname?: string | null;
+
+	/** How many times a qualification shard replays each item. Three is the smallest count that separates a model that is deterministic from one that happened to agree twice, and it is the floor rather than the default because a report built on fewer passes is a report that cannot fail. It used to be a dispatch input an operator typed per run, where `1` was legal and nothing downstream could refuse it. Ten is the ceiling because that is past any determinism question; a run that wants more edits this field. `idhazh qualify --repeats` overrides it for one invocation and is refused on the same floor. */
+	qualification_repeats?: number;
 
 	/** Whether `idhazh qualify` summarizes the way the digest does. True is the digest's own path: the article is labelled and then summarized, in two adjacent calls. False is the qualification's own single call, which is what it did until 2026-09-15 and what every shard before that date measured. True by default because a gate that clears a call path nothing publishes has cleared nothing, and the switch exists so a run that goes wrong on it can be put back without a code change. Moving it moves every per-item number in a shard, so `QualificationShard.calls_per_item` records which side produced one. */
 	qualify_on_the_production_path?: boolean;

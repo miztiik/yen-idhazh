@@ -21,7 +21,13 @@ from idhazh.contracts.run_plan import RunPlan
 from idhazh.stages import compact as compact_stage
 from idhazh.stages.common import CAPTURES_DIRNAME
 from idhazh.telemetry import silicon
-from utilities import candidate_pointer, model_speed_case, runtime_sweep, sweep_verdict
+from utilities import (
+    candidate_pointer,
+    model_runtime,
+    model_speed_case,
+    runtime_sweep,
+    sweep_verdict,
+)
 
 from ._harness import (
     BENCH_ARTIFACTS,
@@ -869,10 +875,10 @@ def test_a_server_that_died_at_startup_is_refused_in_about_two_seconds(tmp_path:
     dead = _a_process_that_exits_at_once(log)
     started = time.perf_counter()
     with pytest.raises(RuntimeError) as refused:
-        runtime_sweep.refuse_a_server_that_died_at_startup(dead, log)
+        model_runtime.refuse_a_server_that_died_at_startup(dead, log)
     took = time.perf_counter() - started
 
-    assert took < runtime_sweep.START_GRACE_SECONDS, (
+    assert took < model_runtime.START_GRACE_SECONDS, (
         f"a dead process should be reported as soon as it is reaped, not in {took:.2f}s"
     )
     assert "exited 1" in str(refused.value)
@@ -894,13 +900,21 @@ def test_a_server_that_is_still_running_is_not_refused(tmp_path: Path) -> None:
         )
     try:
         started = time.perf_counter()
-        runtime_sweep.refuse_a_server_that_died_at_startup(alive, log)
+        model_runtime.refuse_a_server_that_died_at_startup(alive, log)
         took = time.perf_counter() - started
     finally:
         alive.kill()
         alive.wait(timeout=20)
 
-    assert took >= runtime_sweep.START_GRACE_SECONDS, (
+    # `Popen.wait(timeout=...)` is allowed back marginally before its deadline,
+    # because the platform's sleep granularity is coarser than the number it was
+    # handed - one run returned 70 microseconds early and failed on `>= 2.0`.
+    # Comparing a measured elapsed time against the timeout itself measures the
+    # clock, not the behaviour. The behaviour being separated here is waiting
+    # from not waiting, and the dead-process test above answers in under a fifth
+    # of a second, so most of the grace period tells the two apart with room.
+    waited_rather_than_returned = model_runtime.START_GRACE_SECONDS * 0.9
+    assert took >= waited_rather_than_returned, (
         f"the check returned after {took:.2f}s, so it waited for nothing"
     )
 
@@ -925,29 +939,26 @@ def test_the_sweep_proves_its_server_survived_before_it_waits_on_health() -> Non
 
 
 def test_the_budgets_job_proves_its_server_survived_before_it_waits_on_health() -> None:
-    """The same two seconds, in the job that starts a server inside a step.
+    """The same two seconds, in the job that starts a server against a scratch config.
 
-    This job cannot call the shared start script: it runs its server against a
-    scratch config that script knows nothing about, so it renders the flags and
-    backgrounds the process itself - and its own health wait is 180 attempts
-    five seconds apart, which is 900 seconds of asking a port nothing is
-    listening on.
-
-    Read off the step's own `run:` body rather than the shell the harness
-    follows delegation into, because what is being checked is that this step
-    carries the proof itself.
+    Its own health wait is 180 attempts five seconds apart, which is 900 seconds
+    of asking a port nothing is listening on. The proof used to be written out
+    in this step, because the shared start script knew nothing about a scratch
+    config root; the shared launcher takes one, so the step calls it and the
+    proof rides inside.
     """
     step = _step(_load_workflows()["measure.yml"], BUDGETS_JOB, "name", BUDGETS_START_STEP)
     body = step.get("run")
     assert isinstance(body, str), f"{BUDGETS_START_STEP} has no run body"
 
-    alive = body.index("kill -0")
+    started = body.index("model_runtime.py start-server")
     polled = body.index("/health")
-    assert alive < polled, (
-        f"{BUDGETS_START_STEP} waits on health before it checks the process is there"
+    assert started < polled, (
+        f"{BUDGETS_START_STEP} waits on health before the launcher has proved anything"
     )
-    assert "tail -50 llama-server.log" in body[alive:polled], (
-        "a dead start-up has to print the server's last words - the log dies with the runner"
+    launcher = read_text(REPO_ROOT / "backend" / "utilities" / "model_runtime.py")
+    assert "refuse_a_server_that_died_at_startup(" in launcher, (
+        "a dead start-up has to be reported now, not after fifteen minutes of polling"
     )
 
 

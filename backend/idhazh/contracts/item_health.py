@@ -450,6 +450,15 @@ class FailureCode(StrEnum):
     TOO_SHORT = "too_short"
     NOT_PROSE = "not_prose"
     BOILERPLATE = "boilerplate"
+    #: The extractor returned several of the publisher's articles rather than the
+    #: one we asked for - its front page, usually. The text is real prose and it
+    #: is the wrong prose, and there is several times too much of it. Separate
+    #: from `not_prose`, which a contaminated page also often trips: that one
+    #: sends an operator to the extractor's shape rules, and this one sends them
+    #: to the page's own markup, which is where the answer is. It is the only
+    #: extract signal that makes an item MORE expensive downstream, so it is read
+    #: first and recorded in preference to the others.
+    CONTAMINATED = "contaminated"
     PAYWALLED = "paywalled"
     UNSUPPORTED_FORM = "unsupported_form"
     #: Nothing answered at the model's address - the process is gone, the port is
@@ -507,6 +516,7 @@ FAILURE_CODE_STAGES: Final[Mapping[FailureCode, frozenset[ItemStage]]] = Mapping
         FailureCode.TOO_SHORT: frozenset({ItemStage.EXTRACT, ItemStage.PUBLISH}),
         FailureCode.NOT_PROSE: frozenset({ItemStage.EXTRACT, ItemStage.PUBLISH}),
         FailureCode.BOILERPLATE: frozenset({ItemStage.EXTRACT, ItemStage.PUBLISH}),
+        FailureCode.CONTAMINATED: frozenset({ItemStage.EXTRACT, ItemStage.PUBLISH}),
         FailureCode.PAYWALLED: frozenset({ItemStage.EXTRACT}),
         FailureCode.UNSUPPORTED_FORM: frozenset({ItemStage.EXTRACT}),
         FailureCode.MODEL_UNREACHABLE: frozenset({ItemStage.SUMMARIZE}),
@@ -540,6 +550,20 @@ FAILURE_CODE_STAGES: Final[Mapping[FailureCode, frozenset[ItemStage]]] = Mapping
 #: a full run it moved the signal zero times, against 12,917 committed rows with
 #: no `boilerplate` cell among them. A signal that cannot fire must not count
 #: against a publisher - the only thing it could do is be wrong.
+#:
+#: **`CONTAMINATED` is here because it rides on an `ok` row and because it is
+#: our extractor failing rather than the publisher.** `counts_against_source`
+#: asks only whether a code is on the row, so a signal that publishes would
+#: otherwise charge a feed for every story it published - which is why the three
+#: shape signals beside it are all here too. The page does carry the article, and
+#: the same page yields it correctly when read through the container its own
+#: markup names; a front page laid out beside the story is ordinary news-site
+#: furniture. The argument the other way is real - a publisher whose pages
+#: reliably defeat extraction is a worse source - and it loses on evidence, not
+#: on principle: the ratio this signal rests on is a line drawn through 41 pages
+#: of one day, and `collect.availability_strikes_before_rest` is 5, so charging
+#: it to the source would rest a quarantine on that line. Worth asking again once
+#: a full run has said how often it fires.
 SOURCE_NEUTRAL_FAILURE_CODES: Final[frozenset[FailureCode]] = frozenset(
     {
         FailureCode.NOT_ATTEMPTED,
@@ -548,6 +572,7 @@ SOURCE_NEUTRAL_FAILURE_CODES: Final[frozenset[FailureCode]] = frozenset(
         FailureCode.BLOCKED_ADDRESS,
         FailureCode.HTTP_RATE_LIMITED,
         FailureCode.BOILERPLATE,
+        FailureCode.CONTAMINATED,
         FailureCode.TOO_SHORT,
         FailureCode.MODEL_UNREACHABLE,
         FailureCode.MODEL_REFUSED,
@@ -571,6 +596,11 @@ class ItemHealthRow(Contract):
     __schema_stem__: ClassVar[str] = "item-health-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-22",
+            change="FailureCode gained contaminated, a fourth signal an ok row may carry.",
+            why="An extraction that returned the publisher's front page is a named outcome.",
+        ),
+        ChangelogEntry(
             version="2026-09-21",
             change="Retired max_output_tokens; the two settings behind it left inference.",
             why="The budgets that bounded a decode are the two derived ones still on the row.",
@@ -584,11 +614,6 @@ class ItemHealthRow(Contract):
             version="2026-09-20T15:30",
             change="llama_rss_peak_bytes says what it measures: a whole-life mark that can fall.",
             why="It read as a per-item peak that cannot fall, which is neither thing it is.",
-        ),
-        ChangelogEntry(
-            version="2026-09-17T18:00",
-            change="Six os_ columns: what the machine had, not only what a process held.",
-            why="An RSS mark counts evictable weight pages, so it cannot answer headroom.",
         ),
         ChangelogEntry(
             version="2026-08-23",
@@ -1284,6 +1309,7 @@ class ItemHealthRow(Contract):
                 FailureCode.TOO_SHORT,
                 FailureCode.NOT_PROSE,
                 FailureCode.BOILERPLATE,
+                FailureCode.CONTAMINATED,
             }:
                 raise ValueError("an ok item-health row carries only a recorded extract signal")
             if self.detail is not None:

@@ -19,7 +19,7 @@ import time
 import urllib.request
 from collections import Counter
 from pathlib import Path
-from typing import Any, Final, NamedTuple
+from typing import Any, NamedTuple
 
 from pydantic import ValidationError
 
@@ -31,6 +31,8 @@ from idhazh.llm.server import server_argv
 from idhazh.stages.common import CAPTURES_DIRNAME
 from idhazh.telemetry import silicon
 from utilities import sweep_verdict
+from utilities.memory_sampler import read_status
+from utilities.model_runtime import refuse_a_server_that_died_at_startup
 
 ROOT = Path("backend/var/runtime-sweep")
 CONFIG_ROOT = ROOT / "configs"
@@ -291,19 +293,6 @@ def write_config(label: str, update: dict[str, Any]) -> Path:
     return dst
 
 
-def read_status(pid: int) -> dict[str, str]:
-    """The server's resident set, as the kernel reports it this second."""
-    status = Path("/proc") / str(pid) / "status"
-    values: dict[str, str] = {}
-    if not status.exists():
-        return values
-    for line in status.read_text(encoding="utf-8", errors="replace").splitlines():
-        if line.startswith(("VmRSS:", "VmHWM:")):
-            key, value = line.split(":", 1)
-            values[key] = value.strip()
-    return values
-
-
 def cgroup_peak() -> str | None:
     path = Path("/sys/fs/cgroup/memory.peak")
     return path.read_text(encoding="utf-8").strip() if path.exists() else None
@@ -318,43 +307,6 @@ def parse_server_facts(log_path: Path) -> dict[str, str]:
         if match:
             facts[key] = match.group(1)
     return facts
-
-
-#: How long a server gets to die before the health wait starts. A build that
-#: refuses one of its own flags is gone in well under a second, so two seconds
-#: separates that from a server still reading weights. It is the wait
-#: `start-llama-server.sh` already does before its own `kill -0`, written out
-#: again here because a sweep needs the process handle and so cannot call it.
-START_GRACE_SECONDS: Final = 2.0
-
-#: How much of the server log a start-up failure carries out with it. The same
-#: fifty lines the shell script tails, because the refused flag is named in the
-#: last few and the log itself dies with the runner.
-LOG_TAIL_LINES: Final = 50
-
-
-def refuse_a_server_that_died_at_startup(
-    server: subprocess.Popen[bytes], log_path: Path
-) -> None:
-    """Say the server is gone now, rather than after ten minutes of health polling.
-
-    `wait_for_health` asks a port for up to 600 seconds. That is the right
-    patience for weights still loading and the wrong answer entirely for a
-    process that has already exited: a dispatch once burned five hours on a
-    flag the build refused, and nothing between the start and the first item
-    said so.
-    """
-    try:
-        server.wait(timeout=START_GRACE_SECONDS)
-    except subprocess.TimeoutExpired:
-        return
-    tail = ""
-    if log_path.exists():
-        lines = log_path.read_text(encoding="utf-8", errors="replace").splitlines()
-        tail = "\n".join(lines[-LOG_TAIL_LINES:])
-    raise RuntimeError(
-        f"llama-server exited {server.returncode} before it could answer\n{tail}"
-    )
 
 
 def wait_for_health(port: int) -> None:

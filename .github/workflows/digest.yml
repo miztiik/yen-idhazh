@@ -66,15 +66,15 @@ concurrency:
   cancel-in-progress: false
 
 # No model ref lives here. `config/idhazh.json` is the only place one is written
-# and the `plan` job's `models` step republishes it, so every job below reads one
+# and the model block reads it where it is used, so every job below reads one
 # answer. A copy here was a second answer: the alias already came from config
 # while the weights came from this block, so one edit could serve 8B bytes under
 # a 9B alias and file every eval row under a model that never ran (Guardrail #10).
 #
-# No llama.cpp pin either. It is `.github/scripts/llama-cpp-pin.sh`, which the
-# fetch step sources and the `plan` job reads, so the build this run installs,
-# the build its cache key names and the build its run manifest records are one
-# answer and cannot drift apart.
+# No llama.cpp pin either. It is `config/llama-cpp-pin.json`, which the install
+# reads and the `plan` job publishes, so the build this run installs, the build
+# its cache key names and the build its run manifest records are one answer and
+# cannot drift apart.
 env:
   # The one place this workflow says which port. `server_argv` binds it, every
   # probe below reads it, and `idhazh.llm.server` reads it for the address the
@@ -93,13 +93,6 @@ jobs:
       shard_timeout_minutes: ${{ steps.bounds.outputs.shard_timeout_minutes }}
       push_deadline_seconds: ${{ steps.bounds.outputs.push_deadline_seconds }}
       faithfulness: ${{ steps.decide.outputs.faithfulness }}
-      summarize_repo: ${{ steps.models.outputs.summarize_repo }}
-      summarize_revision: ${{ steps.models.outputs.summarize_revision }}
-      summarize_file: ${{ steps.models.outputs.summarize_file }}
-      draft_repo: ${{ steps.models.outputs.draft_repo }}
-      draft_revision: ${{ steps.models.outputs.draft_revision }}
-      draft_file: ${{ steps.models.outputs.draft_file }}
-      draft_sha256: ${{ steps.models.outputs.draft_sha256 }}
       llama_cpp_build: ${{ steps.runtime.outputs.llama_cpp_build }}
     steps:
       # First, before the checkout, for the reason written above the shard's own
@@ -164,35 +157,26 @@ jobs:
           echo "date=$DATE" >> "$GITHUB_OUTPUT"
           echo "faithfulness=$FAITH" >> "$GITHUB_OUTPUT"
 
-      # The model refs, read once from config and published to every job that
-      # needs them. They travel as job OUTPUTS rather than as `env`, because the
-      # `needs` context resolves before a job's first step and `steps` does not -
-      # which is why the weights cache key could not name the file it holds until
-      # now, and had to be told by a second copy that could disagree.
-      #
-      # Each value is asserted to be one bare word here, at the one point that
-      # writes them, so an expression that substitutes one of them into a shell
-      # command below cannot carry a space, a quote or a newline into it.
-      - id: models
-        run: |
-          set -euo pipefail
-          python3 backend/utilities/model_refs.py configured >> "$GITHUB_OUTPUT"
-
       # The build every worker is about to install, asked once of the file that
-      # decides it. It travels as a job OUTPUT for the same reason the model
-      # refs do: `needs` resolves before a worker's first step and `steps` does
-      # not, and the weights cache key below has to name the build it holds.
+      # decides it. It travels as a job OUTPUT because `needs` resolves before a
+      # worker's first step and `steps` does not, and the weights cache key has
+      # to name the build it holds.
       #
       # Reading it from its one home is what stops this workflow carrying a
       # second copy. Three things have to agree about which binary decoded the
-      # day - the fetch, the cache key, and the `runtime_build` the run manifest
-      # stamps - and they now agree by construction rather than by three edits
-      # landing together (Guardrail #10).
+      # day - the install, the cache key, and the `runtime_build` the run
+      # manifest stamps - and they now agree by construction rather than by
+      # three edits landing together (Guardrail #10).
+      #
+      # The model's own refs no longer travel this way. They used to be read
+      # here and relayed through seven job outputs to the step that downloaded
+      # them; the download reads the file itself now, so there is nothing to
+      # relay and nothing that can disagree with it.
       - id: runtime
         name: Say which llama.cpp build this run installs
         run: |
           set -euo pipefail
-          bash .github/scripts/llama-cpp-pin.sh \
+          python3 backend/utilities/model_runtime.py print-pinned-build \
             | tee /dev/stderr >> "$GITHUB_OUTPUT"
 
       # How long a worker may take, and how long any job here may keep trying to
@@ -510,24 +494,20 @@ jobs:
             --job work
 
       # The cache, the fetch, the digest check, the server and the health probe.
-      # One action, shared with `llm-council.yml`, which ran the same five steps
-      # as a second copy - so the two share one cache entry by construction
-      # rather than by a test comparing two literals.
+      # One action, shared with `llm-council.yml`, which ran the same steps as a
+      # second copy - so the two share one cache entry by construction rather
+      # than by a test comparing two literals.
       #
       # The port is handed over rather than inherited: it has one home, the
-      # workflow `env` above, and this is the line that carries it in.
+      # workflow `env` above, and this is the line that carries it in. Nothing
+      # about the model is handed over at all - the action reads the same config
+      # this run was planned from.
       - uses: ./.github/actions/model-server
+        id: model_server
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           port: ${{ env.LLAMA_PORT }}
-          weights_repo: ${{ needs.plan.outputs.summarize_repo }}
-          weights_revision: ${{ needs.plan.outputs.summarize_revision }}
-          weights_file: ${{ needs.plan.outputs.summarize_file }}
           llama_cpp_build: ${{ needs.plan.outputs.llama_cpp_build }}
-          draft_repo: ${{ needs.plan.outputs.draft_repo }}
-          draft_revision: ${{ needs.plan.outputs.draft_revision }}
-          draft_file: ${{ needs.plan.outputs.draft_file }}
-          draft_sha256: ${{ needs.plan.outputs.draft_sha256 }}
 
       # Healthy says a server answers and the step above says which file it
       # opened. Neither says the entry is true. Row #2 moved the turn envelope
@@ -553,7 +533,7 @@ jobs:
       # sends (`docs/architecture/summarize/model-boundary.md`).
       - name: The server proves the entry
         env:
-          LLAMA_WEIGHTS: backend/models/${{ needs.plan.outputs.summarize_file }}
+          LLAMA_WEIGHTS: ${{ steps.model_server.outputs.weights_path }}
         run: |
           set -euo pipefail
           python3 backend/utilities/prove_the_entry.py --config-root config
@@ -567,6 +547,7 @@ jobs:
         if: always()
         env:
           LLAMA_CPP_BUILD: ${{ needs.plan.outputs.llama_cpp_build }}
+          LLAMA_WEIGHTS: ${{ steps.model_server.outputs.weights_path }}
         run: |
           echo "pinned llama.cpp build: ${LLAMA_CPP_BUILD}"
           grep -m1 'model name' /proc/cpuinfo || true
@@ -574,23 +555,26 @@ jobs:
           grep -m1 'system_info' llama-server.log || true
           LD_LIBRARY_PATH=backend/bin backend/bin/llama-server --version 2>&1 | head -3 || true
           sha256sum backend/bin/llama-server || true
-          sha256sum "backend/models/${{ needs.plan.outputs.summarize_file }}" || true
+          sha256sum "${LLAMA_WEIGHTS}" || true
 
       # Neither of the two runs this shape was read from measured memory at all,
       # and the runner has 16 GB (Guardrail #2). `measure.yml` already samples exactly
       # this; the daily path did not.
       #
-      # The sampler itself is `.github/scripts/sample-rss.sh`. A script rather
-      # than an inline `run:` body because that directory is what `CLAUDE.md`
-      # section 3 asks for, it puts the sampler under `shellcheck`, and it means
-      # a test can execute it rather than grep a `run:` body. Every column it
-      # writes, and why each one is there, is in the script's own header.
+      # The sampler is `backend/utilities/memory_sampler.py`, which shares its
+      # `/proc` read with the sweep that has taken the same reading for longer.
+      # Every key it writes, and why each one is there, is in that module's own
+      # docstring.
+      #
+      # This step is the parent and it exits: the loop is launched into its own
+      # session and the pid written is the LOOP's. The shell this replaced
+      # backgrounded itself and wrote `$!`, which named the shell rather than
+      # the sampler, so a loop that died at once left a green step.
       - name: Sample memory
         run: |
           set -euo pipefail
-          nohup bash .github/scripts/sample-rss.sh "$(cat llama-server.pid)" \
-            > sample-rss.log 2>&1 &
-          echo "$!" > sample-rss.pid
+          python3 backend/utilities/memory_sampler.py start-sampler \
+            --pid "$(cat llama-server.pid)"
 
       # `LLAMA_CPP_BUILD` is what the run manifest stamps as `runtime_build`,
       # the llama.cpp release that decoded this shard's bytes. It used to reach
@@ -835,58 +819,16 @@ jobs:
       # job log where a person looking at a failed shard will find it. It writes
       # nothing: `memory-peak.txt` is written by the scrape step above, so the
       # number printed here and the number the sampler took are one reading.
+      #
+      # The five figures and the roll-call behind them come off the module that
+      # wrote the records, rather than off an `awk` program reading a
+      # tab-separated file by column name. Both are keyed JSON now, so a key
+      # cannot move and there is no column position left to get wrong.
       - name: What memory this shard used
         if: always()
         run: |
           cat memory-peak.txt 2>/dev/null || echo "memory-peak.txt not found"
-          if [ -f rss-samples.tsv ]; then
-            # The header row decides which column is which. Reading by position
-            # meant a column inserted anywhere but the end shifted every field
-            # after it, and the log then reported `python_procs` - a count of
-            # three - as a peak in kilobytes. Nothing failed and the number was
-            # out by six orders of magnitude. A name that is gone says so and
-            # stops, which is the whole class of defect.
-            awk -F'\t' '
-              NR == 1 {
-                for (i = 1; i <= NF; i++) at[$i] = i
-                split("llama_vmrss_kb llama_vmhwm_kb python_vmrss_kb python_vmhwm_kb", want, " ")
-                for (i in want) {
-                  if (!(want[i] in at)) {
-                    printf "rss-samples.tsv has no %s column\n", want[i]
-                    exit 1
-                  }
-                }
-                next
-              }
-              {
-                if ($(at["llama_vmhwm_kb"]) + 0 > llama) llama = $(at["llama_vmhwm_kb"]) + 0
-                if ($(at["python_vmhwm_kb"]) + 0 > py) py = $(at["python_vmhwm_kb"]) + 0
-                if ($(at["llama_vmrss_kb"]) + $(at["python_vmrss_kb"]) > together) together = $(at["llama_vmrss_kb"]) + $(at["python_vmrss_kb"])
-              }
-              END {
-                printf "peak llama VmHWM %d kB, peak python VmHWM %d kB, most the two held at once %d kB, n=%d samples\n", llama, py, together, NR - 1
-              }
-            ' rss-samples.tsv
-          else
-            echo "rss-samples.tsv not found"
-          fi
-          # Which python processes those kilobytes belonged to. The line above
-          # is a sum, and a sum of three processes says nothing about which one
-          # to look at.
-          if [ -f python-procs.tsv ]; then
-            awk -F'\t' '
-              NR > 1 {
-                who = $2 "  " $3 "  " $6 "  " $7
-                if ($4 + 0 > peak[who]) peak[who] = $4 + 0
-                seen[who]++
-              }
-              END {
-                for (who in peak) printf "python %s peak VmRSS %d kB in %d samples\n", who, peak[who], seen[who]
-              }
-            ' python-procs.tsv | sort
-          else
-            echo "python-procs.tsv not found"
-          fi
+          python3 backend/utilities/memory_sampler.py summarize
 
       - name: Upload runtime log
         if: always()
@@ -895,8 +837,8 @@ jobs:
           name: runtime-log-${{ matrix.shard }}
           path: |
             llama-server.log
-            rss-samples.tsv
-            python-procs.tsv
+            rss-samples.jsonl
+            python-procs.jsonl
             memory-peak.txt
             llama-metrics.prom
           retention-days: 2

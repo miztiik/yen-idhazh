@@ -19,7 +19,9 @@ from __future__ import annotations
 
 import ast
 import contextlib
+import csv
 import io
+import json
 import shutil
 import sys
 from collections.abc import Iterator
@@ -34,8 +36,9 @@ from pydantic import ValidationError
 from idhazh import config
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.eval_row import ConfidenceBand, EvalRow
-from idhazh.contracts.label_row import LabelRow, LabelTag
-from idhazh.evals import labels, writer
+from idhazh.contracts.evidence import EvidenceItem
+from idhazh.contracts.label_row import LabelRow, LabelTag, LabelVerdict
+from idhazh.evals import evidence, labels, writer
 from utilities import label_queue
 
 #: A scorer no run has ever written, so a draw for it is empty on any ledger.
@@ -419,6 +422,150 @@ class TestTheOperatorTool:
             assert f"{pair.rows} rows, {pair.first_date} to {pair.last_date}" in printed
 
 
+def _no_answer(*_: object) -> str:
+    raise AssertionError("a refused labeller must never be shown an item")
+
+
+def _committed_ledger() -> bytes | None:
+    """The committed ground truth as it stands, or `None` if no sitting has happened.
+
+    Compared before and after a run rather than asserted absent, so the day the
+    owner labels sixty rows and commits them this still checks the same thing.
+    """
+    path = REPO_ROOT / labels.LEDGER_RELPATH
+    return path.read_bytes() if path.exists() else None
+
+
+def _a_sitting_world(root: Path, *, rows: int = 2) -> None:
+    """A temporary state root holding eval rows and the evidence for each of them.
+
+    Built from the committed premise-recorded fixtures, so the digest the CLI
+    checks is the one a real run writes rather than one this file invented. Both
+    rows share the fixture's `hhem`, so one decile holds them and a draw returns
+    both.
+    """
+    shutil.copytree(CONFIG_DIR, root / "config")
+    held = EvidenceItem.from_json(
+        read_text(CONTRACT_FIXTURES_DIR / "evidence-item" / "premise-recorded.json")
+    )
+    base = EvalRow.from_json(read_text(CONTRACT_FIXTURES_DIR / "eval-row" / "premise-recorded.json"))
+    built = [
+        base.model_copy(
+            update={
+                "item_id": f"ai-{seq:04d}",
+                "url_key": f"{seq:064x}",
+                "output_digest": f"{seq + 1_000_000:064x}",
+                "source_url": f"https://example.test/story/{seq:04d}",
+                "title": f"Story {seq:04d}",
+                "date": "2026-09-02",
+                "run_id": "2026-09-02-1",
+                "scored_at": "2026-09-02T06:00:00Z",
+            }
+        )
+        for seq in range(rows)
+    ]
+    assert (
+        writer.append_segment(
+            root / "state",
+            built,
+            run_id="2026-09-02-1",
+            attempt=1,
+            job=ServerJob.ASSEMBLE,
+            shard=0,
+        )
+        == rows
+    )
+
+    package = root / evidence.EVIDENCE_ROOT_RELPATH
+    package.mkdir(parents=True, exist_ok=True)
+    for row in built:
+        item = evidence.of(row, premise=held.premise, summary=held.summary)
+        evidence.path_for(package, item).write_text(item.to_json(), encoding="utf-8", newline="\n")
+
+
+class TestTheQueueIsRunnable:
+    """The write path, end to end, and the roster that guards it.
+
+    Nothing automated may append to the committed `state/labels.csv`: it is the
+    only file this project treats as ground truth, and a fabricated row in it
+    would be indistinguishable from a real one. So these drive the real CLI
+    against a temporary state root. Everything under test is real - the
+    committed config, a ledger the real writer wrote, evidence from committed
+    fixtures. Only the keystrokes stand in for the person, because a human-paced
+    prompt has no other boundary to drive (Guardrail #7).
+    """
+
+    def test_one_sitting_writes_a_row_that_validates(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        root = tmp_path / "sitting"
+        _a_sitting_world(root)
+        before = _committed_ledger()
+        monkeypatch.setattr(label_queue, "REPO_ROOT", root)
+        monkeypatch.setattr(sys, "argv", ["label_queue.py", "--label", "--labeller", "miztiik"])
+        answers = iter(["y", "i", "the figure is not in the article", "q"])
+        monkeypatch.setattr("builtins.input", lambda *_: next(answers))
+
+        assert label_queue.main() == 0
+
+        written = root / labels.LEDGER_RELPATH
+        assert labels.read_header(written) == LabelRow.csv_columns()
+        with written.open("r", encoding="utf-8", newline="") as handle:
+            recorded = [LabelRow.from_csv_row(cells) for cells in csv.DictReader(handle)]
+
+        assert len(recorded) == 1
+        row = recorded[0]
+        assert row.labeller == "miztiik"
+        assert row.verdict is LabelVerdict.UNSUPPORTED
+        assert row.tag is LabelTag.INVENTED_FACT
+        assert row.seconds_spent >= 1
+        assert _committed_ledger() == before, "a run of the queue moved the committed ledger"
+
+    def test_a_name_off_the_roster_is_refused_by_name(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        """The roster is a control, and a control nothing exercises is a hope.
+
+        It could not discriminate while the list was empty, because it refused
+        everybody. It can now, so this is the first run in which it means
+        anything.
+        """
+        root = tmp_path / "stranger"
+        _a_sitting_world(root)
+        monkeypatch.setattr(label_queue, "REPO_ROOT", root)
+        monkeypatch.setattr(sys, "argv", ["label_queue.py", "--label", "--labeller", "nobody"])
+        monkeypatch.setattr("builtins.input", _no_answer)
+
+        with pytest.raises(SystemExit) as refused:
+            label_queue.main()
+
+        assert "nobody" in str(refused.value)
+        assert "evaluation.labellers" in str(refused.value)
+        assert not (root / labels.LEDGER_RELPATH).exists()
+
+    def test_an_empty_roster_refuses_the_one_name_that_is_on_it(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        """What the roster was until 2026-09-22, and why nothing was ever labelled."""
+        root = tmp_path / "empty-roster"
+        _a_sitting_world(root)
+        knobs = root / "config" / "idhazh.json"
+        payload = json.loads(knobs.read_text(encoding="utf-8"))
+        payload["evaluation"]["labellers"] = []
+        knobs.write_text(
+            json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8", newline="\n"
+        )
+        monkeypatch.setattr(label_queue, "REPO_ROOT", root)
+        monkeypatch.setattr(sys, "argv", ["label_queue.py", "--label", "--labeller", "miztiik"])
+        monkeypatch.setattr("builtins.input", _no_answer)
+
+        with pytest.raises(SystemExit) as refused:
+            label_queue.main()
+
+        assert "miztiik" in str(refused.value)
+        assert not (root / labels.LEDGER_RELPATH).exists()
+
+
 class TestTheRow:
     def test_a_supported_summary_carries_no_defect_tag(self) -> None:
         with pytest.raises(ValidationError):
@@ -515,9 +662,15 @@ class TestTheLedger:
         labels.append(path, [a_label()])
         assert labels.read_header(path) == LabelRow.csv_columns()
 
-    def test_the_committed_config_names_no_labeller_yet(self) -> None:
-        """A fresh clone can draw the queue and read it, and cannot record a verdict."""
+    def test_the_committed_config_names_a_labeller(self) -> None:
+        """An empty roster refuses every write, and it was empty until 2026-09-22.
+
+        That is what `0 of 60` on the evaluation page has always measured. Empty
+        this list again and the only independent check this project has on its
+        faithfulness judge stops being runnable, silently.
+        """
         settings = config.load(CONFIG_DIR)
+        assert settings.app.evaluation.labellers, "an empty roster refuses every write"
         assert settings.app.evaluation.label_draw_per_decile == 6
         assert settings.app.evaluation.label_min_run_days == 10
 

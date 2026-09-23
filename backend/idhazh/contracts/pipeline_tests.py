@@ -51,6 +51,12 @@ Headline = Annotated[
     str, StringConstraints(min_length=1, max_length=UNTRUSTED_LINE_MAX, pattern=r"\S")
 ]
 
+#: What every case's trial root is named after, and what the bench and
+#: `Model validation` already write under. One root per case, side by side under
+#: `state/` rather than nested inside a shared parent: `run.trial_state_dirname`
+#: is a `Slug`, and a slug holds no separator.
+TRIAL_STATE_PREFIX: str = "pipeline-tests"
+
 
 class PipelineTestCandidate(Model):
     """One address a dispatch may draw, and the feed it came from."""
@@ -126,6 +132,23 @@ class PipelineTestCase(Model):
             "window sized for a plan that is never asked for refuses articles that fit."
         ),
     )
+
+    @property
+    def trial_state_dirname(self) -> str:
+        """Where this case's ledgers go under `state/`.
+
+        Derived rather than declared, because it is not a choice anybody makes:
+        the dispatch runs one plan, so the three cases share a run id, a shard, a
+        job and an attempt - which is the whole of a writer's filename. Without a
+        root each, the last case to write would be the only one anybody could
+        read, and the three numbers this workflow exists to subtract would be one
+        number.
+
+        Here rather than beside either caller: the config writer names the root
+        and the commit job checks what arrived against it, and a second spelling
+        in either would drift the day a case id changed.
+        """
+        return f"{TRIAL_STATE_PREFIX}-{self.id}"
 
 
 class PipelineTestsConfig(Contract):

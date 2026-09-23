@@ -1,6 +1,6 @@
 # GitHub Actions Workflows
 
-**Last Updated**: 2026-09-21
+**Last Updated**: 2026-09-22
 The exact workflow display names, files, and trigger classes. All scheduled
 times are UTC.
 
@@ -512,8 +512,27 @@ whose spread hid whatever the change did. `idhazh-pipeline-tests.yaml` closes
 that loop inside `pipeline-tests.budget_minutes`, which is 45. It runs the real
 path - the real fetcher, the real extractor, the real two calls, the real model
 server - over two articles, three times over, and reports what each pass cost.
-It publishes nothing: no step writes `frontend/public/`, no step commits, and
-what the passes produced leaves as a 90-day artifact.
+It publishes nothing a reader sees: no step writes `frontend/public/` and no
+page is on any reader's path. It does commit one thing. A second `commit` job
+appends what each case measured - its span rollup and its traces - under that
+case's own trial root, which no console page reads, and what the passes produced
+otherwise leaves as a 90-day artifact.
+
+**The write is one job's, and the reading job never has it.** The `cases` job
+holds `contents: read`; the `commit` job holds `contents: write` and runs no
+case. The two meet through an artifact, and the artifact is read before anything
+is staged: `backend/utilities/pipeline_test_ledgers.py` takes every downloaded
+row through the contract its ledger declares and every directory name out of
+`config/pipeline-tests.json`, so nothing a fetched page touched decides a path
+(Guardrail #11). A refusal ends the job with nothing staged. The split bounds
+what a bad push could reach; the check is the control.
+
+**Each case writes its own trial root.** The three cases share one plan, so they
+share a run id, a shard, a job and an attempt - which is the whole of a writer's
+filename. Without a root each, the last case to write would be the only one
+anybody could read. `backend/utilities/pipeline_case_config.py` names them
+`pipeline-tests-<case>`, side by side under `state/` rather than nested, because
+`run.trial_state_dirname` is a slug and a slug holds no separator.
 
 **The dispatch takes one field, and it names the model.** Leave
 `candidate_models_file` empty and the cases run the model `config/idhazh.json`
@@ -524,8 +543,8 @@ weights - so the cheapest real-path check of a candidate is a dispatch here
 rather than a bench. What it settles and what it does not is in
 [../how-to/evaluate-new-summarizer-model.md](../how-to/evaluate-new-summarizer-model.md#the-cheapest-check-is-the-pipeline-tests-and-it-uses-the-real-prompts).
 The committed config is never written: the scratch copy differs in one line, and
-in `run.trial_state_dirname`, which puts this dispatch's own ledgers under
-`state/pipeline-tests/` rather than beside the rows the console reads.
+in `run.trial_state_dirname`, which puts each case's own ledgers under
+`state/pipeline-tests-<case>/` rather than beside the rows the console reads.
 
 **The two articles are drawn, not fixed.** `config/pipeline-tests.json` holds at
 least twenty candidate addresses, each one an article this pipeline has really
@@ -714,8 +733,8 @@ hundreds of lines across two dozen steps in four workflows - `digest.yml`,
 
 The pin itself - `LLAMA_CPP_BUILD`, its asset name and its SHA-256 - was spelled
 in more than a dozen places that had to change together. It is now in
-`.github/scripts/llama-cpp-pin.sh`, plus `measure.yml`'s `env:` block, which is
-the one caller still to convert.
+`config/llama-cpp-pin.json`, plus `measure.yml`'s `env:` block, which is the one
+caller still to convert.
 
 **The property is what mattered: every copy of the pin had to change at once, and
 nothing in the tree compared them.** Change all but one and a qualification runs
@@ -739,7 +758,7 @@ disliked.
 | --- | --- |
 | One commit converting all five | A revert takes four working conversions out with the fifth, and the daily run is in that set - so the blast radius of a mistake is a published day |
 | Leave the pin copied, add a test that compares the copies | The test goes green on five agreeing copies and says nothing about the sixth place somebody adds next |
-| One script with an optional `WEIGHTS_FILE` | Every caller's weights refusals become optional to satisfy one caller that opens no weights. Converting the weightless job first forced the question "what does a job that opens no weights need" to be answered before any weights-carrying caller moved, and the answer was a second script, `install-llama-runtime.sh`, which `fetch-model-runtime.sh` sources |
+| One script with an optional `WEIGHTS_FILE` | Every caller's weights refusals become optional to satisfy one caller that opens no weights. Converting the weightless job first forced the question "what does a job that opens no weights need" to be answered before any weights-carrying caller moved, and the answer was two shell scripts, one sourcing the other. Both are gone: the install and the download are two verbs of one program, and a verb takes no arguments it does not need |
 
 #### The model block is a block, and counting its inputs says the wrong thing
 

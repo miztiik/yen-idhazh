@@ -42,9 +42,6 @@ on:
       corpus_per_shard:
         description: 'Frozen articles each shard replays'
         default: '10'
-      repeats:
-        description: 'Deterministic repeats per frozen article'
-        default: '3'
       job_budget_minutes:
         description: 'Per-job bound. The budget gate is measured against it (Guardrail #2).'
         default: '330'
@@ -97,17 +94,8 @@ jobs:
       date: ${{ steps.decide.outputs.date }}
       matrix: ${{ steps.fanout.outputs.matrix }}
       candidate_models_file: ${{ steps.candidate.outputs.models_file }}
-      candidate_repo: ${{ steps.candidate.outputs.repo }}
-      candidate_revision: ${{ steps.candidate.outputs.revision }}
-      candidate_file: ${{ steps.candidate.outputs.file }}
       candidate_id: ${{ steps.candidate.outputs.id }}
-      candidate_quantisation: ${{ steps.candidate.outputs.quantisation }}
-      candidate_sha256: ${{ steps.candidate.outputs.sha256 }}
-      candidate_byte_count: ${{ steps.candidate.outputs.byte_count }}
-      candidate_draft_repo: ${{ steps.candidate.outputs.draft_repo }}
-      candidate_draft_revision: ${{ steps.candidate.outputs.draft_revision }}
-      candidate_draft_file: ${{ steps.candidate.outputs.draft_file }}
-      candidate_draft_sha256: ${{ steps.candidate.outputs.draft_sha256 }}
+      candidate_weights_path: ${{ steps.candidate.outputs.weights_path }}
       candidate_cache_key: ${{ steps.candidate.outputs.cache_key }}
       llama_cpp_build: ${{ steps.runtime.outputs.llama_cpp_build }}
     steps:
@@ -135,7 +123,7 @@ jobs:
         name: Say which llama.cpp build this run qualifies on
         run: |
           set -euo pipefail
-          bash .github/scripts/llama-cpp-pin.sh \
+          python3 backend/utilities/model_runtime.py print-pinned-build \
             | tee /dev/stderr >> "$GITHUB_OUTPUT"
 
       # One place decides what the candidate is: the models file the dispatch
@@ -157,7 +145,7 @@ jobs:
           CANDIDATE_MODELS_FILE: ${{ inputs.candidate_models_file }}
         run: |
           set -euo pipefail
-          python3 backend/utilities/model_refs.py candidate \
+          python3 backend/utilities/model_refs.py describe-trial-model \
             --models-file "$CANDIDATE_MODELS_FILE" >> "$GITHUB_OUTPUT"
 
       # Every number this dispatch carries, shaped once, here. `plan` is the job
@@ -169,7 +157,6 @@ jobs:
         env:
           SHARDS: ${{ inputs.shards }}
           CORPUS_PER_SHARD: ${{ inputs.corpus_per_shard }}
-          REPEATS: ${{ inputs.repeats }}
           JOB_BUDGET_MINUTES: ${{ inputs.job_budget_minutes }}
         run: |
           set -euo pipefail
@@ -177,9 +164,9 @@ jobs:
             echo "shards must be an integer from 1 through 8" >&2
             exit 1
           fi
-          for count in "$CORPUS_PER_SHARD" "$REPEATS" "$JOB_BUDGET_MINUTES"; do
+          for count in "$CORPUS_PER_SHARD" "$JOB_BUDGET_MINUTES"; do
             if ! [[ "$count" =~ ^[1-9][0-9]{0,3}$ ]]; then
-              echo "corpus_per_shard, repeats and job_budget_minutes are 1 through 9999" >&2
+              echo "corpus_per_shard and job_budget_minutes are 1 through 9999" >&2
               exit 1
             fi
           done
@@ -283,75 +270,47 @@ jobs:
             backend/bin
           key: qualify-${{ needs.plan.outputs.candidate_cache_key }}-${{ needs.plan.outputs.llama_cpp_build }}
 
-      # One shared step, and one workflow still to convert onto it. It sources
-      # the runtime install, which sources the pin, so this workflow spells no
-      # part of either - and every value it reads arrives through `env` rather
-      # than pasted into it. The three candidate refs used to be substituted
-      # straight into the download URL, which is text before it is a value
-      # (Guardrail #11).
+      # Two calls to one program, and neither is handed a URL, a filename or a
+      # digest: it reads the scratch config's own entry and fetches every file
+      # that entry declares. The three candidate refs used to be substituted
+      # straight into a download URL, which is text before it is a value.
       - name: Fetch the runtime and the candidate
         if: steps.weights.outputs.cache-hit != 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # An immutable revision in the path, never a branch name. A branch
-          # moves, and a candidate nobody can fetch again is a candidate nobody
-          # can reproduce.
-          WEIGHTS_REPO: ${{ needs.plan.outputs.candidate_repo }}
-          WEIGHTS_REVISION: ${{ needs.plan.outputs.candidate_revision }}
-          WEIGHTS_FILE: ${{ needs.plan.outputs.candidate_file }}
-          # The draft head, when the entry declares one. The server loads it at
-          # start-up, so a candidate that declares one and cannot find it does
-          # not serve at all.
-          DRAFT_REPO: ${{ needs.plan.outputs.candidate_draft_repo }}
-          DRAFT_REVISION: ${{ needs.plan.outputs.candidate_draft_revision }}
-          DRAFT_FILE: ${{ needs.plan.outputs.candidate_draft_file }}
-        run: bash .github/scripts/fetch-model-runtime.sh
+        run: |
+          set -euo pipefail
+          python3 backend/utilities/model_runtime.py install-runtime
+          python3 backend/utilities/model_runtime.py download-model-files \
+            --config-root backend/var/candidate-config
 
       # No `if:`. This runs on a cache hit too, because a restored entry is the
       # one case where nobody watched the bytes arrive. It sits before the
       # server starts, so wrong weights cost one step instead of a whole shard
       # of measurements filed under a model that never ran (Guardrail #10).
+      #
+      # It reads the declaration rather than a filename, so it checks every file
+      # the entry declares against that entry's own digest and declared size.
       - name: Verify the candidate bytes
-        env:
-          DRAFT_FILE: ${{ needs.plan.outputs.candidate_draft_file }}
-          DRAFT_SHA256: ${{ needs.plan.outputs.candidate_draft_sha256 }}
         run: |
           set -euo pipefail
-          WEIGHTS="backend/models/${{ needs.plan.outputs.candidate_file }}"
-          echo "${{ needs.plan.outputs.candidate_sha256 }}  ${WEIGHTS}" | sha256sum --check
-          if [ -n "${DRAFT_FILE}" ]; then
-            echo "${DRAFT_SHA256}  backend/models/${DRAFT_FILE}" | sha256sum --check
-          fi
-          OBSERVED=$(stat -c %s "$WEIGHTS")
-          # The entry's own declared size, cross-checking the DOCUMENT rather
-          # than the file - sha256 above already settles the bytes. Empty means
-          # the entry declares none, which is an entry nobody has fetched yet.
-          DECLARED="${{ needs.plan.outputs.candidate_byte_count }}"
-          if [ -n "$DECLARED" ] && [ "$OBSERVED" != "$DECLARED" ]; then
-            echo "candidate is ${OBSERVED} bytes; its entry declares ${DECLARED}" >&2
-            exit 1
-          fi
+          python3 backend/utilities/model_runtime.py verify-model-files \
+            --config-root backend/var/candidate-config
 
       - name: Start the candidate
-        env:
-          LLAMA_WEIGHTS: backend/models/${{ needs.plan.outputs.candidate_file }}
         run: |
           set -euo pipefail
-          chmod +x backend/bin/llama-server
-          mkdir -p backend/var
           # The scratch config's `models.summarize` IS the candidate, so the
-          # alias and every flag come from the same place the run is judged
-          # against. This step used to render the flag list from a second copy,
-          # which is how it went two changes without the context-shift refusal
-          # the daily run has had since PR #88.
-          python3 backend/utilities/llama_argv.py \
-            --config-root backend/var/candidate-config > backend/var/llama-argv
-          mapfile -d '' LLAMA_ARGV < backend/var/llama-argv
-          echo "starting: ${LLAMA_ARGV[*]}"
-          LD_LIBRARY_PATH=backend/bin nohup "${LLAMA_ARGV[@]}" > llama-server.log 2>&1 &
-          echo "$!" > llama-server.pid
+          # alias, every flag and the weights come from the same place the run
+          # is judged against. This step used to render the flag list from a
+          # second copy, which is how it went two changes without the
+          # context-shift refusal the daily run has had since PR #88.
+          python3 backend/utilities/model_runtime.py start-server \
+            --config-root backend/var/candidate-config
 
       - name: Check the candidate is the one serving
+        env:
+          CANDIDATE_ID: ${{ needs.plan.outputs.candidate_id }}
         run: |
           set -euo pipefail
           for _ in $(seq 1 180); do
@@ -364,8 +323,8 @@ jobs:
             exit 1
           }
           SERVED=$(curl -sf "http://127.0.0.1:${LLAMA_PORT}/v1/models" | jq -r '.data[0].id')
-          if [ "$SERVED" != "${{ needs.plan.outputs.candidate_id }}" ]; then
-            echo "the server answers to ${SERVED}, not ${{ needs.plan.outputs.candidate_id }}" >&2
+          if [ "$SERVED" != "$CANDIDATE_ID" ]; then
+            echo "the server answers to ${SERVED}, not ${CANDIDATE_ID}" >&2
             exit 1
           fi
 
@@ -388,15 +347,15 @@ jobs:
       - name: Freeze the corpus and replay it
         env:
           LLAMA_CPP_BUILD: ${{ needs.plan.outputs.llama_cpp_build }}
+          CANDIDATE_WEIGHTS: ${{ needs.plan.outputs.candidate_weights_path }}
         run: |
           python -m idhazh qualify \
             --config backend/var/candidate-config \
             --date "${{ needs.plan.outputs.date }}" \
             --shard "${{ matrix.shard }}" \
             --shards "${{ fromJSON(inputs.shards) }}" \
-            --repeats "${{ fromJSON(inputs.repeats) }}" \
             --corpus-per-shard "${{ fromJSON(inputs.corpus_per_shard) }}" \
-            --weights "backend/models/${{ needs.plan.outputs.candidate_file }}" \
+            --weights "$CANDIDATE_WEIGHTS" \
             --commit "${GITHUB_SHA}" \
             --runner ubuntu-latest
 

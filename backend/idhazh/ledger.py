@@ -203,6 +203,37 @@ DAY_VALIDATIONS_DIRNAME: Final = "day-validations"
 #: spelling of it would file a row under a day nobody can find it in.
 DATE_CELL: Final = "date"
 
+#: Every directory under `state/` this module owns a store in. `prune-state`
+#: subtracts it, and the few stores other modules own, from the children of
+#: `state/`; what is left is a trial run's tree, and that is how the prune finds
+#: a tree to empty without being told its name.
+#:
+#: Built from the constants above rather than from their text, so a store added
+#: through its own constant joins this set in the same commit. A name missing
+#: here reads as a trial root, which is why the subtraction is spelled out
+#: rather than guessed at.
+#:
+#: The nested names are deliberately absent: `shard-outcomes` and the judge's
+#: five are one level further down, inside a prefix already named here.
+STORE_DIRNAMES: Final[frozenset[str]] = frozenset(
+    {
+        SEEN_DIRNAME,
+        HEALTH_DIRNAME,
+        ITEM_HEALTH_DIRNAME,
+        HOST_FINGERPRINT_DIRNAME,
+        TELEMETRY_AGGREGATE_DIRNAME,
+        SPAN_ROLLUP_DIRNAME,
+        PUBLISHED_DIRNAME,
+        VISUAL_PRUNES_DIRNAME,
+        COUNTERFACTUAL_SCORES_DIRNAME,
+        VALIDATION_DIRNAME,
+        SCORES_DIRNAME,
+        SCORE_INDEX_DIRNAME,
+        COUNCIL_DIRNAME,
+        CONTENT_SIMILARITY_JUDGE_DIRNAME,
+    }
+)
+
 #: What makes two feed-health rows the same record. One feed, read once, in one
 #: run. The ledger always meant that - `docs/architecture/sources/health.md`
 #: opens on it - but nothing enforced it, so a second attempt at a run wrote a

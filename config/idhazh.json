@@ -93,6 +93,7 @@
       "no_text",
       "not_prose",
       "boilerplate",
+      "contaminated",
       "too_short",
       "unsupported_form"
     ],
@@ -155,7 +156,9 @@
     "golden_set_size": 20,
     "label_draw_per_decile": 6,
     "label_min_run_days": 10,
-    "labellers": [],
+    "labellers": [
+      "miztiik"
+    ],
     "lead_coverage_min": 0.3,
     "qualification_min_brief": 2,
     "qualification_min_over_cap": 2,
@@ -171,6 +174,8 @@
     "backoff_initial_seconds": 1.0,
     "backoff_multiplier": 2.0,
     "boilerplate_ratio_max": 0.4,
+    "corroboration_min_words": 100,
+    "corroboration_ratio_max": 2.0,
     "max_body_bytes": 2000000,
     "max_retries": 3,
     "min_source_words": 60,
@@ -185,6 +190,7 @@
     "prose_sentence_min": 3,
     "prose_sentence_words_min": 8,
     "reject_boilerplate": false,
+    "reject_contaminated": false,
     "reject_not_prose": false,
     "reject_too_short": false,
     "request_timeout_seconds": 20.0,
@@ -298,6 +304,7 @@
   "run": {
     "max_parallel": 4,
     "push_deadline_seconds": 300,
+    "qualification_repeats": 3,
     "qualify_on_the_production_path": true,
     "safety_ceiling_per_day": 400,
     "safety_ceiling_per_run": 80,

@@ -1593,6 +1593,36 @@ def prune_traces(
 # --- A trial run's ledgers ---------------------------------------------------
 
 
+#: The day a file under a trial root belongs to, read off its path. A trial root
+#: mirrors `state/`, so it carries every grammar the tree carries: a
+#: `<YYYY>/<MM>/<DD>.csv` day file, a `<YYYY>/<MM>/<DD>-<ordinal>-<shard>.jsonl`
+#: trace, a `<YYYY-MM-DD>-<execution>-<attempt>-<job>-<shard>.csv` segment, and a
+#: `<YYYY-MM>.csv` month head. One expression reads all four, because the thing
+#: they agree on is the date and the thing they disagree on is everything else.
+_TRIAL_DAY: Final = re.compile(r"(?P<year>\d{4})[/-](?P<month>\d{2})(?:[/-](?P<day>\d{2}))?")
+
+
+def trial_day(relpath: str) -> date | None:
+    """Which day this trial file records, or `None` when its path spells none.
+
+    A month head has no day of its own, so it takes the last day of its month:
+    a month is inside the window while any day in it is, which is the same
+    boundary `prune_telemetry` holds for the months it folds.
+    """
+    found = _TRIAL_DAY.search(relpath)
+    if found is None:
+        return None
+    year = int(found["year"])
+    month = int(found["month"])
+    if found["day"] is None:
+        last = date(year + month // 12, month % 12 + 1, 1) - timedelta(days=1)
+        return last
+    try:
+        return date(year, month, int(found["day"]))
+    except ValueError:
+        return None
+
+
 def prune_trial_state(
     state_dir: Path,
     *,
@@ -1601,7 +1631,7 @@ def prune_trial_state(
     within_days: int,
     dry_run: bool = False,
 ) -> TracePruneResult:
-    """Delete a trial run's day files past their window, whatever ledger wrote them.
+    """Delete a trial run's files past their window, whatever ledger wrote them.
 
     A trial run exercises production's code path and writes every ledger it
     would write, under `state/<dirname>/` instead of `state/`. Nothing reads
@@ -1615,6 +1645,19 @@ def prune_trial_state(
     every file under here is the same kind of thing - a day of a run nobody
     reads - and a per-ledger version would have to be edited every time a ledger
     is added.
+
+    **It walks to any depth, and that is what changed on 2026-09-22.** It used
+    to hand each child of the root to `day_shards.shard_files`, which expects a
+    day tree directly beneath it and raises on anything else. A trial run writes
+    `segments/<ledger>/<run-id>-...csv` two levels down and `traces/<YYYY>/<MM>/
+    <DD>-<ordinal>-<shard>.jsonl` under a name that is not a day file at all, so
+    the moment this prune was pointed at a real trial root it raised instead of
+    pruning. `trial_day` reads the date off the path instead.
+
+    **A file whose path spells no date is kept and counted, not refused.** A day
+    tree refuses a stray because a reader that skipped one would start missing
+    rows; nothing reads a trial root, so what a refusal costs here is the whole
+    nightly prune for a file nobody wanted (section 1a: degrade, do not fail).
 
     Reuses `TracePruneResult` rather than minting a shape with the same four
     fields and a different name.
@@ -1630,20 +1673,21 @@ def prune_trial_state(
     deleted: list[str] = []
     kept = 0
     freed = 0
-    # One ledger directory per child, each a day tree, so the walk is per ledger
-    # and `shard_files` refuses a stray the same way it does anywhere. Unbounded
-    # because the question is which of this run's days have aged out, and a
-    # window would leave the oldest ones standing for ever.
-    for ledger_root in sorted(child for child in root.iterdir() if child.is_dir()):
-        for path in day_shards.shard_files(ledger_root, days=UNBOUNDED_WINDOW):
-            written = date.fromisoformat(day_shards.date_of(path))
-            if (today - written).days < within_days:
-                kept += 1
-                continue
-            deleted.append(f"{ledger.STATE_DIRNAME}/{path.relative_to(state_dir).as_posix()}")
-            freed += path.stat().st_size
-            if not dry_run:
-                path.unlink()
+    # Unbounded because the question is which of this run's days have aged out,
+    # and a window would leave the oldest ones standing for ever.
+    for path in sorted(entry for entry in root.rglob("*") if entry.is_file()):
+        relative = path.relative_to(state_dir).as_posix()
+        written = trial_day(path.relative_to(root).as_posix())
+        if written is None or (today - written).days < within_days:
+            kept += 1
+            continue
+        deleted.append(f"{ledger.STATE_DIRNAME}/{relative}")
+        freed += path.stat().st_size
+        if not dry_run:
+            path.unlink()
+
+    if not dry_run:
+        _drop_empty_directories(root)
 
     return TracePruneResult(
         deleted=tuple(deleted),
@@ -1651,6 +1695,20 @@ def prune_trial_state(
         kept=kept,
         dry_run=dry_run,
     )
+
+
+def _drop_empty_directories(root: Path) -> None:
+    """Take the emptied trial tree away, root included.
+
+    Without this the child count under `state/` only ever rises: a trial that
+    ran once leaves a directory for ever, and a reader opening `state/` cannot
+    tell an empty husk from a tree still being written (Guardrail #12).
+    """
+    for directory in sorted((entry for entry in root.rglob("*") if entry.is_dir()), reverse=True):
+        if not any(directory.iterdir()):
+            directory.rmdir()
+    if not any(root.iterdir()):
+        root.rmdir()
 
 
 # --- The score ledger --------------------------------------------------------

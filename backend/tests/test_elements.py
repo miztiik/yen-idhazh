@@ -170,7 +170,7 @@ def test_the_corpus_the_oracle_runs_over_actually_carries_quantities() -> None:
         emitted += len(element_table(canary_article(canary), config=ELEMENTS).elements)
     for path in PAGES:
         emitted += len(element_table(page_article(path), config=ELEMENTS).elements)
-    assert emitted == 24, "the bounded fixtures carried 24 elements on 2026-09-15"
+    assert emitted == 83, "the bounded fixtures carried 83 elements on 2026-09-22"
 
 
 # --- The Oracle: two passes never hold the same character ------------------
@@ -205,7 +205,9 @@ def test_no_two_elements_of_one_table_hold_the_same_character() -> None:
 
     Pairwise is quadratic in one article's elements and bounded by
     `elements.max_per_article`, so it cannot grow with the archive (Guardrail #12).
-    The densest of these fixtures carries seven elements, which is 21 pairs.
+    The densest of these fixtures carried seven elements until a 3,818-word page
+    joined them on 2026-09-22; it carries 59, which is 1,711 pairs against the
+    32,640 the 256-element cap would allow.
     """
     for name, table in bounded_tables():
         for index, left in enumerate(table.elements):
@@ -219,8 +221,8 @@ def test_no_two_elements_of_one_table_hold_the_same_character() -> None:
 def test_the_bounded_fixtures_carry_both_kinds_so_the_pair_check_can_fail() -> None:
     """The counter-oracle. One pass emitting nothing makes every pair disjoint."""
     kinds = Counter(element.kind for _, table in bounded_tables() for element in table.elements)
-    assert kinds == {ElementKind.QUANTITY: 15, ElementKind.DATE: 9}, (
-        "the bounded fixtures carried 15 quantities and 9 years on 2026-09-15"
+    assert kinds == {ElementKind.QUANTITY: 68, ElementKind.DATE: 15}, (
+        "the bounded fixtures carried 68 quantities and 15 years on 2026-09-22"
     )
 
 

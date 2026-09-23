@@ -20,8 +20,12 @@
 # would pass for as long as those two pages stayed up and say nothing about
 # anything else the extractor meets.
 #
-# It publishes nothing. No step writes `frontend/public/`, no step commits, and
-# nothing here is on any reader's path. What the cases produced leaves as an
+# It publishes nothing a reader sees. No step writes `frontend/public/` and
+# nothing here is on any reader's path. It does commit one thing: a `commit` job
+# appends what the cases wrote under `state/pipeline-tests/`, the trial root
+# `validate.yml` and the bench already commit into and no console page reads.
+# The case job keeps `contents: read`; the write is the second job's alone. What
+# the cases produced - the article text included - still leaves only as an
 # artifact.
 #
 # It also answers "can this candidate model walk the real path", for the price
@@ -74,9 +78,18 @@ env:
 jobs:
   cases:
     runs-on: ubuntu-latest
+    # Said here rather than inherited. The `commit` job below takes the write,
+    # and a reader comparing the two has to be able to see that this one does
+    # not have it without first working out what the file-level default was.
+    permissions:
+      contents: read
     # The whole promise of this workflow, and `pipeline-tests.budget_minutes`
     # is where it is written. A test holds the two together.
     timeout-minutes: 140
+    # Whether anything was gathered to push. The job below is skipped when it is
+    # false, because `download-artifact` on a name nobody uploaded fails.
+    outputs:
+      ledgers: ${{ steps.ledgers.outputs.ledgers }}
     steps:
       - uses: actions/checkout@v6
 
@@ -120,7 +133,7 @@ jobs:
           CANDIDATE_MODELS_FILE: ${{ inputs.candidate_models_file }}
         run: |
           set -euo pipefail
-          python3 backend/utilities/model_refs.py candidate \
+          python3 backend/utilities/model_refs.py describe-trial-model \
             --prefix candidate_ \
             --models-file "$CANDIDATE_MODELS_FILE" \
             | tee /dev/stderr >> "$GITHUB_OUTPUT"
@@ -139,24 +152,24 @@ jobs:
           models_file: ${{ steps.models.outputs.candidate_models_file }}
           trial_state: pipeline-tests
 
-      # The build the fetch below is about to install, asked of the file that
+      # The build the install below is about to put down, asked of the file that
       # decides it. The cache key names the build and the cache step runs before
-      # the fetch, so the pin has to be readable here - and reading it from its
+      # the install, so the pin has to be readable here - and reading it from its
       # one home is what stops this workflow carrying a second copy that can
       # disagree with the binary it actually unpacks.
       - id: runtime
         name: Say which llama.cpp build this job installs
         run: |
           set -euo pipefail
-          bash .github/scripts/llama-cpp-pin.sh \
+          python3 backend/utilities/model_runtime.py print-pinned-build \
             | tee /dev/stderr >> "$GITHUB_OUTPUT"
 
       # The same key the daily run uses when nothing is named, so a dispatch on
       # a warm runner pays nothing for the weights, and a second entry only
-      # appears when a dispatch really does run other bytes. The key names every
-      # part of what it holds: the fetch below only runs on a miss, so a key
-      # missing one of them turns that step into dead code and serves whatever
-      # bytes are already there.
+      # appears when a dispatch really does run other bytes. The model half is a
+      # digest over every file the entry declares, which is exactly the set the
+      # download reads - so the key cannot name a smaller set than arrives, and
+      # a candidate that declares a companion cannot restore one that does not.
       - name: Cache weights and runtime
         id: weights
         uses: actions/cache@v6
@@ -164,44 +177,33 @@ jobs:
           path: |
             backend/models
             backend/bin
-          key: llm-${{ steps.models.outputs.candidate_file }}-${{ steps.models.outputs.candidate_revision }}-${{ steps.runtime.outputs.llama_cpp_build }}-v4
+          key: llm-${{ steps.models.outputs.candidate_cache_key }}-${{ steps.runtime.outputs.llama_cpp_build }}-v5
 
-      # One shared step, and four workflows still to convert onto it. It sources
-      # the pin, so this workflow spells no part of it - and every value it
-      # reads arrives through `env` rather than pasted into it.
+      # Two calls to one program. Neither is handed a URL, a filename or a
+      # digest: the program reads what the scratch config's own entry declares
+      # and fetches every file of it.
       - name: Fetch runtime and weights
         if: steps.weights.outputs.cache-hit != 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          WEIGHTS_REPO: ${{ steps.models.outputs.candidate_repo }}
-          WEIGHTS_REVISION: ${{ steps.models.outputs.candidate_revision }}
-          WEIGHTS_FILE: ${{ steps.models.outputs.candidate_file }}
-          DRAFT_REPO: ${{ steps.models.outputs.candidate_draft_repo }}
-          DRAFT_REVISION: ${{ steps.models.outputs.candidate_draft_revision }}
-          DRAFT_FILE: ${{ steps.models.outputs.candidate_draft_file }}
-        run: bash .github/scripts/fetch-model-runtime.sh
+        run: |
+          set -euo pipefail
+          python3 backend/utilities/model_runtime.py install-runtime
+          python3 backend/utilities/model_runtime.py download-model-files \
+            --config-root backend/var/candidate-config
 
       # No `if:`. A restored cache entry is the one case where nobody watched
       # the bytes arrive, so it is the case that most needs checking.
       #
-      # The digest is read out of the config root the cases are cut from, which
-      # IS the candidate's own entry - so a dispatch cannot check one model's
-      # bytes against another model's recorded digest.
+      # It reads the config root the cases are cut from, which IS the
+      # candidate's own entry - so a dispatch cannot check one model's bytes
+      # against another model's recorded digest - and it reads the declaration
+      # rather than a filename, so it covers every file the key digested.
       - name: Verify the weights
-        env:
-          DRAFT_FILE: ${{ steps.models.outputs.candidate_draft_file }}
-          DRAFT_SHA256: ${{ steps.models.outputs.candidate_draft_sha256 }}
         run: |
           set -euo pipefail
-          EXPECTED=$(python -c 'import json, pathlib; root = pathlib.Path("backend/var/candidate-config"); config = json.load(open(root / "idhazh.json", encoding="utf-8")); models = json.load(open(root / config["models_file"], encoding="utf-8")); print(models["summarize"]["sha256"] or "")')
-          if [ -z "$EXPECTED" ]; then
-            echo "config records no sha256 for models.summarize" >&2
-            exit 1
-          fi
-          echo "${EXPECTED}  backend/models/${{ steps.models.outputs.candidate_file }}" | sha256sum --check
-          if [ -n "${DRAFT_FILE}" ]; then
-            echo "${DRAFT_SHA256}  backend/models/${DRAFT_FILE}" | sha256sum --check
-          fi
+          python3 backend/utilities/model_runtime.py verify-model-files \
+            --config-root backend/var/candidate-config
 
       # One config root per case, cut from the scratch copy above and differing
       # only in what that case changes. The committed config is never edited: a
@@ -244,18 +246,14 @@ jobs:
 
       - name: Start the model
         env:
-          LLAMA_WEIGHTS: backend/models/${{ steps.models.outputs.candidate_file }}
+          MODEL_ALIAS: ${{ steps.models.outputs.candidate_id }}
         run: |
           set -euo pipefail
-          mkdir -p backend/var
-          # Every flag comes from the first case's config, so the server this case
-          # measures is the server that case's config describes (Guardrail #6).
-          python3 backend/utilities/llama_argv.py \
-            --config-root backend/var/cases/baseline/config > backend/var/llama-argv
-          mapfile -d '' LLAMA_ARGV < backend/var/llama-argv
-          echo "starting: ${LLAMA_ARGV[*]}"
-          LD_LIBRARY_PATH=backend/bin nohup "${LLAMA_ARGV[@]}" > llama-server.log 2>&1 &
-          echo "$!" > llama-server.pid
+          # Every flag, the alias and the weights come from the first case's
+          # config, so the server this case measures is the server that case's
+          # config describes (Guardrail #6).
+          python3 backend/utilities/model_runtime.py start-server \
+            --config-root backend/var/cases/baseline/config
           for _ in $(seq 1 120); do
             curl -sf "http://127.0.0.1:${LLAMA_PORT}/health" > /dev/null && break
             sleep 5
@@ -269,9 +267,9 @@ jobs:
           }
           # Healthy says a server answers. It does not say which weights it
           # answers for, and every case's numbers are read against case one's
-          # alias whether or not the server agrees. The alias comes from the
-          # same config the flags came from, so the two cannot disagree.
-          MODEL_ALIAS=$(python -c 'import json, pathlib; models = json.load(open(pathlib.Path("backend/var/cases/baseline/config") / json.load(open("backend/var/cases/baseline/config/idhazh.json", encoding="utf-8"))["models_file"], encoding="utf-8")); print(models["summarize"]["id"])')
+          # alias whether or not the server agrees. The alias is read by name
+          # rather than pasted into this program, and it comes from the entry
+          # the case's own config points at.
           curl -sf "http://127.0.0.1:${LLAMA_PORT}/v1/models" \
             | jq -e --arg alias "$MODEL_ALIAS" '[.data[].id] | index($alias) != null' > /dev/null || {
             echo "the server does not serve ${MODEL_ALIAS}" >&2
@@ -283,25 +281,23 @@ jobs:
       # calls, the visual decision on, one slot on the server. Every other case is
       # read against this one, so it runs first and it changes nothing.
       #
-      # `bash <path>`, which is what seven of the nine calls this repository
-      # already makes into `.github/scripts/` do. The bare path works only while
-      # the file carries the executable bit, a file mode is invisible to the
-      # tests that read this YAML and to the shellcheck step that reads the
-      # script, and the first dispatch of this workflow died on exactly that -
-      # exit 126, `Permission denied`, on a script committed 100644. Handing the
-      # file to bash asks nothing of the mode.
+      # `python3 <path>`, which is how this repository calls into
+      # `backend/utilities/`. A program is handed to an interpreter, so it asks
+      # nothing of a file mode - and the first dispatch of this workflow died on
+      # exactly that mode, exit 126 `Permission denied`, back when the case body
+      # was a script committed 100644.
       #
       # `!cancelled()` on every case, because a rig exists to say what happened.
       # On that first dispatch one broken call took all three cases with it, so
-      # the run read as a baseline problem where it had a script problem; three
+      # the run read as a baseline problem where it had a caller problem; three
       # cases failing the same way would have named the cause on the run page.
-      # A case still needs the one plan, and the script refuses by name without
+      # A case still needs the one plan, and the runner refuses by name without
       # it rather than summarizing nothing quietly.
       - name: Case baseline
         if: ${{ !cancelled() }}
         env:
           RUN_DATE: ${{ steps.plan.outputs.date }}
-        run: bash .github/scripts/run-pipeline-test-case.sh baseline "$RUN_DATE"
+        run: python3 backend/utilities/pipeline_test_case.py baseline "$RUN_DATE"
 
       # Case two. No picture is reachable, so the summarize-and-plan call comes
       # back with the summary alone and the plan's decode is not spent. The
@@ -312,7 +308,7 @@ jobs:
         if: ${{ !cancelled() }}
         env:
           RUN_DATE: ${{ steps.plan.outputs.date }}
-        run: bash .github/scripts/run-pipeline-test-case.sh no-visual-decision "$RUN_DATE"
+        run: python3 backend/utilities/pipeline_test_case.py no-visual-decision "$RUN_DATE"
 
       # The slot count is fixed when the process starts, so this case costs a
       # restart and a second model load. That load is itself one of the numbers
@@ -324,7 +320,7 @@ jobs:
         id: restart
         if: ${{ !cancelled() }}
         env:
-          LLAMA_WEIGHTS: backend/models/${{ steps.models.outputs.candidate_file }}
+          MODEL_ALIAS: ${{ steps.models.outputs.candidate_id }}
         run: |
           set -euo pipefail
           kill "$(cat llama-server.pid)" 2>/dev/null || true
@@ -333,12 +329,8 @@ jobs:
             sleep 1
           done
           mv llama-server.log backend/var/cases/baseline/llama-server.log
-          python3 backend/utilities/llama_argv.py \
-            --config-root backend/var/cases/parallel-2/config > backend/var/llama-argv
-          mapfile -d '' LLAMA_ARGV < backend/var/llama-argv
-          echo "restarting: ${LLAMA_ARGV[*]}"
-          LD_LIBRARY_PATH=backend/bin nohup "${LLAMA_ARGV[@]}" > llama-server.log 2>&1 &
-          echo "$!" > llama-server.pid
+          python3 backend/utilities/model_runtime.py start-server \
+            --config-root backend/var/cases/parallel-2/config
           for _ in $(seq 1 120); do
             curl -sf "http://127.0.0.1:${LLAMA_PORT}/health" > /dev/null && break
             sleep 5
@@ -351,7 +343,6 @@ jobs:
           # The same question the first start asks, and it matters more on a
           # restart: a second server can come up on stale flags or stale weights
           # and still answer 200.
-          MODEL_ALIAS=$(python -c 'import json, pathlib; models = json.load(open(pathlib.Path("backend/var/cases/parallel-2/config") / json.load(open("backend/var/cases/parallel-2/config/idhazh.json", encoding="utf-8"))["models_file"], encoding="utf-8")); print(models["summarize"]["id"])')
           curl -sf "http://127.0.0.1:${LLAMA_PORT}/v1/models" \
             | jq -e --arg alias "$MODEL_ALIAS" '[.data[].id] | index($alias) != null' > /dev/null || {
             echo "the server does not serve ${MODEL_ALIAS}" >&2
@@ -371,7 +362,7 @@ jobs:
         if: ${{ !cancelled() && steps.restart.conclusion == 'success' }}
         env:
           RUN_DATE: ${{ steps.plan.outputs.date }}
-        run: bash .github/scripts/run-pipeline-test-case.sh parallel-2 "$RUN_DATE"
+        run: python3 backend/utilities/pipeline_test_case.py parallel-2 "$RUN_DATE"
 
       - name: Stop the model
         if: always()
@@ -417,3 +408,99 @@ jobs:
           name: pipeline-tests-${{ github.run_id }}
           path: backend/var/cases/
           retention-days: 90
+
+      # The ledgers, separately from the tree above, because the `commit` job
+      # downloads this one into its own checkout and must never be handed the
+      # article text that tree carries (CLAUDE.md section 0a).
+      #
+      # Gathered into one fixed directory rather than uploaded by a glob over
+      # `state/`. An artifact's internal root is the common ancestor of what
+      # matched, so a glob would unpack one case's store at the depth three
+      # cases' stores sit at the moment two of them died.
+      # No `tee` into the log. This program prints what a person reads on
+      # stderr, which the log already shows, and keeps stdout for the one
+      # `key=value` line the step output takes. A `tee` here would copy the
+      # progress lines into `$GITHUB_OUTPUT` as well, and one line that is not
+      # `key=value` fails the step and loses the push.
+      - name: Gather the ledgers the cases wrote
+        id: ledgers
+        if: always()
+        run: |
+          set -euo pipefail
+          python3 backend/utilities/pipeline_test_ledgers.py gather \
+            --tree backend/var/trial-ledgers \
+            >> "$GITHUB_OUTPUT"
+
+      - name: Upload the ledgers the cases wrote
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: pipeline-tests-ledgers-${{ github.run_id }}
+          path: backend/var/trial-ledgers/
+          if-no-files-found: ignore
+          retention-days: 90
+
+  # The run's own measurements, kept. Until now every case wrote a span rollup
+  # and a trace for each item, and the runner was torn down with all of it - so a
+  # dispatch could only ever be read off its own run page.
+  #
+  # Its own job because it is the only thing here that writes to the repository.
+  # The cases read the open web; this one never does, and what crosses between
+  # them is read against the contracts before anything is staged.
+  commit:
+    needs: cases
+    # A case that failed still measured what it reached, and a dispatch that died
+    # on case three has two cases worth keeping. A dispatch that never started a
+    # case uploaded nothing, and downloading an artifact nobody made fails the
+    # step - so the job asks first.
+    if: always() && needs.cases.outputs.ledgers == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      # The check below reads the committed contracts, so it needs the package.
+      - name: Install
+        run: pip install -e .
+
+      # Into a scratch directory, never straight onto `state/`. The check has to
+      # read exactly what arrived, and a download unpacked over the checkout
+      # would be read together with rows that are already committed.
+      - name: Take the ledgers the cases wrote
+        uses: actions/download-artifact@v8
+        with:
+          pattern: pipeline-tests-ledgers-*
+          merge-multiple: true
+          path: backend/var/trial-ledgers
+
+      # The control, and the reason this job may hold a write at all. Every file
+      # is read through the contract that declares it and every directory name
+      # comes from committed config, so nothing the open web touched decides a
+      # path (Guardrail #11). A refusal ends the job before anything is staged.
+      - name: Check the ledgers against their contracts
+        run: |
+          set -euo pipefail
+          python3 backend/utilities/pipeline_test_ledgers.py check \
+            --tree backend/var/trial-ledgers
+
+      # `place` prints the roots to stage, and creates every declared one first.
+      # The commit script hands its arguments to `git add`, which aborts on a
+      # path the checkout does not hold and takes the whole step with it.
+      - name: Commit the ledgers the cases wrote
+        env:
+          COMMIT_MESSAGE: 'pipeline tests: what the cases wrote'
+          NOTHING_STAGED_MESSAGE: 'the cases wrote no ledger this dispatch has not already committed'
+          PUSH_FAILED_MESSAGE: 'the pipeline-test ledgers lost every push attempt'
+        run: |
+          set -euo pipefail
+          mapfile -t TRIAL_ROOTS < <(python3 backend/utilities/pipeline_test_ledgers.py place \
+            --tree backend/var/trial-ledgers)
+          bash .github/scripts/commit-and-push.sh "${TRIAL_ROOTS[@]}"

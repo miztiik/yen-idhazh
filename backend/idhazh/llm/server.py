@@ -434,9 +434,10 @@ def caches_the_prompt(server: Mapping[str, Any]) -> bool:
 def companion_path(weights: Path, companion: CompanionFile) -> Path:
     """Where a companion file lands: beside the weights, under its own name.
 
-    The one place that answers this. `backend/utilities/model_refs.py` imports
-    it rather than spelling the join a second time, because a config file cannot
-    write a runner path and two copies of the rule drift apart in silence.
+    The one place inside `idhazh` that answers this. The workflow side composes
+    the same landing from `backend/utilities/model_refs.py`, which imports
+    nothing from this package because it runs on a runner that has not installed
+    it - so the two are read together whenever either moves.
     """
     return weights.parent / companion.file
 
@@ -493,8 +494,7 @@ def server_argv(
     return argv
 
 
-def request_payload(
-    *,
+def request_payload(    *,
     model_id: str,
     system: str,
     user: str,

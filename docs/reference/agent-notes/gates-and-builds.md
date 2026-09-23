@@ -1,6 +1,6 @@
 # Agent Notes - Gates and Builds
 
-**Last Updated**: 2026-09-21
+**Last Updated**: 2026-09-22
 Traps in the commands that decide whether a change is done: the test selector,
 pytest, ruff, mypy, the schema drift gate, the build, the canary day, and the
 measurement recipes that run on top of them. Index and scope:
@@ -199,6 +199,10 @@ The traceback names `discover.py` importing `feedparser`, several frames below `
 
 **`python -m http.server` serves `.js` with the registry MIME type**, which on Windows is often `text/plain`, so the browser refuses the module and SvelteKit never hydrates - while the page still looks right and logs zero errors, and every post-hydration measurement reports the prerendered value. Assert `Object.keys(window).some(k => k.startsWith('__sveltekit'))` before reading a number, or serve through the project's own preview.
 
+**A captured page reduced to fixture size reproduces the symptom and quietly loses the signal.** A minimiser held to one invariant deletes whatever the other one needed: shrinking a 348 KB page to keep its 3,818-word over-extraction stripped the `<h1>` inside the article, so the reduced file reproduced the bug and the check under test read nothing on it - three witnesses all returning zero, which looks like broken code rather than a broken fixture. Hold the minimiser to **every** reading the fixture exists to demonstrate, assert each one on the file after it is written, and expect the cheap structural pass to fail too: stripping `class` and `id` collapsed the same page from 3,818 words to 1,034, because `favor_precision` reads them.
+
+**A synthetic page built from one sentence repeated extracts to one sentence.** trafilatura drops a duplicate paragraph, so `<p>` times ten is not ten paragraphs of prose and a word-count assertion on it fails for a reason the test never mentions. Vary every paragraph - a counter in the text is enough.
+
 ## Measurement recipes
 
 **Timing a `$lib/server/` module in plain Node** needs the alias resolved. Bundle it with the local esbuild and import the bundle, which works because the only `$lib` import in `payload.ts` is `import type` and esbuild erases that before resolving the alias. Two traps in the harness rather than the bundle: the environment variable holding the module path must be a `file://` URI or Node reads a Windows drive letter as a protocol, and `DIGEST_ROOT`, `STATE_ROOT` and `TELEMETRY_ROOT` must be set BEFORE the dynamic `import`, since the module reads them at evaluation. The one warning it prints about a missing base tsconfig is harmless.
@@ -214,6 +218,8 @@ A throwaway spec under `frontend/tests/` would be swept up by the shared selecto
 **`trafilatura` drops a repeated paragraph**, so a page built to a chosen length by repetition comes out short - about 150 words whether the page holds 30 copies or 3,000, and nothing errors. Give each copy an ordinal, and count the prefix you added: 320 unique 12-word sentences extracted to 3,783 words against 3,840 asked for, where the identical-sentence version of the same page gave 121.
 
 **Every performance number carries the hardware, the date and the spread** (`CLAUDE.md` Guardrail #10). Where the working matters, it lives in [../pipeline-cost.md](../pipeline-cost.md), not here.
+
+**A cache entry written on a feature branch is not restorable from `main`.** Actions restores from the current branch or the default branch and nowhere else, so **no dispatch can warm production** - measured 2026-09-22. A branch dispatch proves the key string resolves and the entry saves, and that is all; the first scheduled run after a key moves is cold on every shard at once. A second dispatch on the SAME branch is what proves a restore, and eviction between the two is likely once two multi-gigabyte entries are in play, so compare the two resolved key strings off the logs whether or not the second one hits.
 
 ## A clean merge is not a working merge
 
