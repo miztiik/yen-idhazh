@@ -24,6 +24,7 @@ from idhazh.contracts.knobs.collect import CollectConfig
 from idhazh.contracts.knobs.console import ConsoleConfig
 from idhazh.contracts.knobs.council import CouncilConfig
 from idhazh.contracts.knobs.evaluation import EvaluationConfig
+from idhazh.contracts.knobs.model_server import ModelServerConfig, resolve_base_url
 from idhazh.contracts.knobs.models import ModelsConfig
 from idhazh.contracts.knobs.observability import LoggingConfig, LogLevel, ObservabilityConfig
 from idhazh.contracts.knobs.placement import (
@@ -207,6 +208,56 @@ def test_the_alarm_point_and_the_pages_cap_stay_two_knobs() -> None:
 
     tuned = AppConfig.from_json(read_text(APP_CONFIG_EVERY_KNOB_DIFFERS)).retention
     assert (tuned.site_budget_mb, tuned.pages_hard_cap_mb) == (600, 900)
+
+
+@pytest.mark.parametrize(
+    ("declared", "fault"),
+    [
+        ("127.0.0.1:8080", "no scheme"),
+        ("http://:8080", "no host"),
+        ("http://a-box", "no port"),
+        ("http://a-box:99999", "a port above 65535"),
+        ("http://a-box:eighty", "a port that is not a number"),
+        ("http://a-box:8080/v1", "a path"),
+    ],
+    ids=lambda case: case if " " in str(case) else "-",
+)
+def test_an_address_that_is_not_a_scheme_a_host_and_a_port_is_refused(
+    declared: str, fault: str
+) -> None:
+    """Six ways to write an address a run cannot use, refused where it is declared.
+
+    Every string here is the test's own, never the committed value: a case read
+    out of `config/idhazh.json` would stop testing the grammar on the day an
+    operator points the run at their own server (`CLAUDE.md` section 13).
+
+    The port is the one a reader would not expect to be required. It is, because
+    the server command reads the port back out of this value to bind with, and
+    `http://a-box` parses cleanly while naming no port at all. A path is refused
+    rather than dropped: the other four routes are built by replacing the whole
+    path, so a prefix would hold on one of them and vanish from the rest, and a
+    wrong address is worse than a refused one.
+    """
+    with pytest.raises(ValidationError) as raised:
+        ModelServerConfig(base_url=declared)
+    assert declared in str(raised.value), f"the refusal for {fault} does not quote what it read"
+
+    with pytest.raises(ValueError, match=r"model_server\.base_url"):
+        resolve_base_url(declared)
+
+
+def test_an_address_a_run_can_use_is_taken_and_tidied() -> None:
+    """A trailing slash is an operator's habit, not a second address.
+
+    Dropped rather than refused, because nothing downstream can tell the two
+    apart and refusing would cost an operator a round trip to learn it. The
+    stored value is the tidied one, so every later reader sees one spelling.
+    """
+    assert ModelServerConfig().base_url == "http://127.0.0.1:8080", (
+        "a fresh clone talks to a server on its own machine"
+    )
+    assert ModelServerConfig(base_url="http://10.0.0.5:9001/").base_url == "http://10.0.0.5:9001"
+    assert ModelServerConfig(base_url="https://a-box:8443").base_url == "https://a-box:8443"
 
 
 def test_the_model_server_publishes_its_counters_without_being_asked_for() -> None:

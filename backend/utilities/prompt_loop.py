@@ -51,12 +51,12 @@ from idhazh.evals.metrics import (
     verbatim_run,
 )
 from idhazh.llm.server import (
-    DEFAULT_ENDPOINT,
     derive_turn_markers,
     post,
     props,
     request_payload,
     request_timeout_seconds,
+    resolve_endpoint,
 )
 
 REPO_ROOT: Final = Path(__file__).resolve().parents[2]
@@ -589,8 +589,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         default=None,
         help="Where to write the artefacts. Defaults to backend/var/prompt-loop/<timestamp>.",
     )
-    parser.add_argument("--endpoint", default=DEFAULT_ENDPOINT, help="Local model server endpoint.")
+    parser.add_argument("--endpoint", default=None, help="Model server endpoint.")
     args = parser.parse_args(argv)
+    endpoint: str = args.endpoint or resolve_endpoint(settings.app.model_server.base_url)
 
     articles, items = load_frozen_articles(args.frozen_set)
     if args.max_items > 0:
@@ -599,7 +600,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"no usable articles under {args.frozen_set}", file=sys.stderr)
         return 2
 
-    if not props(args.endpoint, timeout=5.0):
+    if not props(endpoint, timeout=5.0):
         print(
             "the local model server is not reachable, so the live run was skipped.\n"
             "the loop's gate and the disagreement oracle are proven by the fixture\n"
@@ -610,8 +611,8 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     incumbent_prompt = INCUMBENT_PROMPT_PATH.read_bytes().decode("utf-8")
     rubric = RUBRIC_PATH.read_bytes().decode("utf-8")
-    summarizer = LiveSummarizer(settings=settings, articles=articles, endpoint=args.endpoint)
-    judge = ModelJudge(settings=settings, endpoint=args.endpoint)
+    summarizer = LiveSummarizer(settings=settings, articles=articles, endpoint=endpoint)
+    judge = ModelJudge(settings=settings, endpoint=endpoint)
 
     result = run_loop(
         incumbent_prompt=incumbent_prompt,

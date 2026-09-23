@@ -49,11 +49,11 @@ from idhazh.fingerprint import (
     text_digest,
 )
 from idhazh.llm.server import (
-    DEFAULT_ENDPOINT,
     Completion,
     derive_turn_markers,
     props,
     request_timeout_seconds,
+    resolve_endpoint,
 )
 from idhazh.sanitize import SANITIZER_VERSION
 from idhazh.stages import common, two_calls
@@ -406,7 +406,7 @@ def stage_qualify(
     commit_sha: str,
     runner: str,
     fetcher: Fetcher | None = None,
-    model_endpoint: str = DEFAULT_ENDPOINT,
+    model_endpoint: str | None = None,
 ) -> QualificationShard:
     """Freeze this shard's slice of the corpus, then replay it N times.
 
@@ -416,6 +416,7 @@ def stage_qualify(
     only one model here now, and the same argument still holds against the three
     repeats.
     """
+    model_endpoint = model_endpoint or resolve_endpoint(settings.app.model_server.base_url)
     if scorer is None:
         raise SystemExit("a qualification without a faithfulness scorer measures nothing")
     if not isinstance(scorer, HhemScorer):

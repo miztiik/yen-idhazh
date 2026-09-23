@@ -42,10 +42,12 @@ command with the program in
 not type the flags: `server_argv` is the only place they are written, and a
 hand-typed copy here has already drifted once.
 
-The summarize stage talks to `127.0.0.1:8080` and nothing else. Set `LLAMA_PORT`
-before both commands to move it - the server command and the client read the
-same variable. There is no hosted inference anywhere in this project
-([../../CLAUDE.md](../../CLAUDE.md) section 0a).
+The summarize stage talks to the address in `config/idhazh.json` under
+`model_server.base_url`, which is `http://127.0.0.1:8080` as committed. To use a
+server on another machine, change that value to its scheme, host and port.
+Article text goes only to a model process the operator of this run controls
+([../../CLAUDE.md](../../CLAUDE.md) Guardrail #11). Every job in `.github/`
+starts its own server and probes it on loopback.
 
 ## Useful flags
 

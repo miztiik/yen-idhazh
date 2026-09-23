@@ -68,7 +68,6 @@ from idhazh.fingerprint import (
     file_digest,
     runtime_build,
 )
-from idhazh.llm.server import DEFAULT_ENDPOINT
 from idhazh.stages import (
     assemble as assemble_stage,
 )
@@ -528,15 +527,6 @@ def main(argv: Sequence[str] | None = None) -> int:
             "The operator's full pass over every committed shard, and the only one that "
             "costs more every month. `rebuild-score-index` rewrites every month's index "
             "rather than the months named."
-        ),
-    )
-    parser.add_argument(
-        "--base-url",
-        default=DEFAULT_ENDPOINT,
-        help=(
-            "The llama-server one judging shard talks to. Every route it needs is derived "
-            "from this one address, so a shard cannot ask one server for a tokenisation "
-            "and another for a verdict."
         ),
     )
     args = parser.parse_args(argv)

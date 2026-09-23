@@ -30,11 +30,13 @@ import platform
 import sys
 from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any, Final
 from urllib import error, request
 from urllib.parse import urlsplit, urlunsplit
 
-from idhazh.llm.server import DEFAULT_ENDPOINT
+from idhazh import config
+from idhazh.llm.server import resolve_endpoint
 
 #: The route that lists what each prefix-cache slot is holding.
 SLOTS_PATH: Final = "/slots"
@@ -189,18 +191,22 @@ def _describe_host() -> str:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--endpoint", default=DEFAULT_ENDPOINT)
+    parser.add_argument("--config-root", type=Path, default=Path("config"))
+    parser.add_argument("--endpoint", default=None)
     parser.add_argument("--repeats", type=int, default=3)
     parser.add_argument("--timeout", type=float, default=60.0)
     args = parser.parse_args(argv)
     if args.repeats < 1:
         raise SystemExit("--repeats must be 1 or more")
+    endpoint: str = args.endpoint or resolve_endpoint(
+        config.load(args.config_root).app.model_server.base_url
+    )
 
     print(f"taken {datetime.now(UTC).strftime('%Y-%m-%dT%H:%M:%SZ')} on {_describe_host()}")
-    print(f"endpoint {args.endpoint}")
+    print(f"endpoint {endpoint}")
 
     try:
-        props = _get(route(args.endpoint, PROPS_PATH), timeout=args.timeout)
+        props = _get(route(endpoint, PROPS_PATH), timeout=args.timeout)
     except (OSError, ValueError) as failure:
         print(f"no server answered /props: {failure}", file=sys.stderr)
         return 1

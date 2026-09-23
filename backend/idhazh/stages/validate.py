@@ -23,10 +23,10 @@ from idhazh.fingerprint import (
     text_digest,
 )
 from idhazh.llm.server import (
-    DEFAULT_ENDPOINT,
     TurnMarkers,
     derive_turn_markers,
     request_timeout_seconds,
+    resolve_endpoint,
 )
 from idhazh.stages import common
 from idhazh.stages.common import LOG, Fetcher, _ask_the_model, _fetch_one, _load_plan, silent_tracer
@@ -37,7 +37,7 @@ def _summarize_one(
     settings: config.Settings,
     *,
     markers: TurnMarkers,
-    endpoint: str = DEFAULT_ENDPOINT,
+    endpoint: str | None = None,
     run_id: str | None = None,
     tracer: telemetry.Tracer | None = None,
 ) -> Summary:
@@ -56,6 +56,7 @@ def _summarize_one(
     start-up question, and a server that died mid-run would report its death as
     an unread template instead of as the unreachable model it is.
     """
+    endpoint = endpoint or resolve_endpoint(settings.app.model_server.base_url)
     trace = tracer if tracer is not None else silent_tracer()
     request = settings.models.summarize.request
     model_id = settings.models.summarize.id
@@ -106,6 +107,7 @@ def stage_validate(
     leaderboard: float,
     scorer: object,
     fetcher: Fetcher | None = None,
+    model_endpoint: str | None = None,
 ) -> None:
     """Score the day's own planned articles with whichever model is served.
 
@@ -121,12 +123,13 @@ def stage_validate(
     if scorer is None:
         raise SystemExit("validation without a faithfulness scorer measures nothing")
 
+    model_endpoint = model_endpoint or resolve_endpoint(settings.app.model_server.base_url)
     read_url = fetcher or common.live_fetcher(settings)
     plan = _load_plan(date)
     model = settings.models.summarize
     model_id = model.id
     markers = derive_turn_markers(
-        entry=model, timeout=request_timeout_seconds(model.request)
+        model_endpoint, entry=model, timeout=request_timeout_seconds(model.request)
     )
     scores: list[float] = []
 
@@ -135,7 +138,7 @@ def stage_validate(
         if article.status is not ArticleStatus.OK:
             LOG.warning("validation article unavailable url=%s", item.canonical_url)
             continue
-        summary = _summarize_one(article, settings, markers=markers)
+        summary = _summarize_one(article, settings, markers=markers, endpoint=model_endpoint)
         if summary.status is not SummaryStatus.OK:
             LOG.warning("validation article did not summarize url=%s", item.canonical_url)
             continue
