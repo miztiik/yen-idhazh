@@ -450,6 +450,7 @@ it is collected over time.
 
 ## See also
 
+- [a-losing-push-rebuilds-rather-than-rebases.md](a-losing-push-rebuilds-rather-than-rebases.md) - why the rebase this page describes does no work, what should replace it, and the one guardrail exception that needs.
 - [../../reference/github-actions.md](../../reference/github-actions.md) - which workflows exist, when each runs, and what each does.
 - [../../concepts/partitions.md](../../concepts/partitions.md) - the three classes every committed path is one of, and the layout each one obliges its writer to keep.
 - [one-visual-one-file-and-the-race-between-two-runs.md](one-visual-one-file-and-the-race-between-two-runs.md) - why a raced chart is dropped rather than merged, refreshed or renamed.
