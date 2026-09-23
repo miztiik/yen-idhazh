@@ -37,7 +37,7 @@
 | **The rule this plan is built on** | **A program that starts its own server probes loopback. A stage that only talks to one reads the address from the settings it already holds. And a setting this project does not compute on is passed through, never mapped.** |
 | **What changes for the reader** | Nothing. No published file, no page, no column. |
 | **What changes in production** | Nothing, if `config/idhazh.json` and `config/models/*.json` are left as committed. The thirteen sampling values are the values llama.cpp is already applying. |
-| **Hard scope - in** | `model_server.base_url` as a config field; the two resolvers; the 18 default-argument sites resolved by their callers; `LLAMA_PORT` deleted; a refusal when a job starts a server on one address while the stage posts to another; the loopback literals outside `.github/` reduced to one function; `MODEL_FILE`; the dead role value deleted; one log record naming the server that answered; **the `request` block renamed to `sampling` and passed through whole; `models.<verb>` renamed to `models.<noun>`**; the run record stamping an unrecorded build when the address is not loopback; four sentences citing a rule that does not exist. |
+| **Hard scope - in** | `model_server.base_url` as a config field; the two resolvers; the 18 default-argument sites resolved by their callers; `LLAMA_PORT` deleted; a refusal when a job starts a server on one address while the stage posts to another; the loopback literals outside `.github/` reduced to one function; `MODEL_PATH`; the dead role value deleted; one log record naming the server that answered; **the `request` block renamed to `sampling` and passed through whole; `models.<verb>` renamed to `models.<noun>`**; the run record stamping an unrecorded build when the address is not loopback; four sentences citing a rule that does not exist. |
 | **Hard scope - out** | Table B. Four rows, each priced. |
 | **Supersedes** | The surviving half of row 21 of [`20260921-39-delete-the-scaffolding-plan.md`](20260921-39-delete-the-scaffolding-plan.md). Table C records what that row asked for and what happened to each part. |
 | **Depends on** | Nothing. [`20260922-44-the-model-file-is-the-fetch-interface-plan.md`](20260922-44-the-model-file-is-the-fetch-interface-plan.md) line 34 hands every process-boundary value to this plan by name. Its rows 1 to 5 have landed; **its one remaining row, row 6, replaces `commit-and-push.sh`, `take-state-from-the-tip.sh` and `push-rewritten-history.sh`, and this plan touches none of the three.** The two plans edit the same five workflow files and `_harness.py` on different lines, which git resolves and whoever lands second rebases. [`20260922-46-one-writer-for-the-corpus-plan.md`](20260922-46-one-writer-for-the-corpus-plan.md) is closed. |
@@ -393,7 +393,7 @@ The clash check compares key identity, and **every decode control on this build 
 
 | Now | After | Why |
 | --- | --- | --- |
-| `LLAMA_WEIGHTS` | `MODEL_FILE` | It is a path to a GGUF file. Every tool calls it the model: `--model` in llama.cpp and vLLM, `model_path` in Hugging Face. "Weights" means tensors |
+| `LLAMA_WEIGHTS` | `MODEL_PATH` | It is a path to a GGUF file. Every tool calls it the model: `--model` in llama.cpp and vLLM, `model_path` in Hugging Face. "Weights" means tensors. **`MODEL_FILE` was this row's first answer and is unusable**: `measure.yml` line 1046 already binds it to a bare filename, and `_harness.py` bans it inside `digest.yml` at any scope, so the verbatim rename turned `test_the_daily_run_writes_no_model_ref_of_its_own` red. `MODEL_PATH` is also the accurate noun - the value is `backend/models/<file>`, not a filename |
 | `LLAMA_PORT` | **deleted** | The port lives inside `base_url`. Nothing is left for a second value to disagree with. The `_harness.py` constants `LLAMA_PORT_ENV`, `LLAMA_PORT_VALUE` and `LLAMA_PORT_READ` follow it |
 | `LLAMA_ROLE` | **already gone** | Plan 44 row 3 deleted it with the shell script that set it. Nothing here to do |
 | `LLAMA_CPP_BUILD`, `LLAMA_CPP_ASSET`, `LLAMA_CPP_SHA`, `LLAMA_BIN`, `llama-cpp-pin.sh`, `install-llama-runtime.sh` | **unchanged** | They name llama.cpp because the thing is llama.cpp. Section 0b bans a vendor name used as this project's vocabulary, not the vendor's name for its own artefact |
@@ -576,19 +576,19 @@ One commit per row, in Reckoner order. A worker who follows it never writes an i
 
 ## 9. Row 7 - The model file name
 
-**Scope.** C13. `LLAMA_WEIGHTS` becomes `MODEL_FILE`. **`LLAMA_ROLE` is already gone** - plan 44 row 3 deleted it with the shell script that set it, so this row is the weights rename alone.
+**Scope.** C13. `LLAMA_WEIGHTS` becomes `MODEL_PATH`. **`LLAMA_ROLE` is already gone** - plan 44 row 3 deleted it with the shell script that set it, so this row is the model-path rename alone, plus the one dead line below.
 
 **Files.** `.github/workflows/digest.yml`, `backend/tests/workflows/test_model_server_jobs.py`. Two files; the name survives nowhere else.
 
-**Gates.** `pytest backend/tests/workflows/` green. The weights value still reaches `server_argv` as `--model`.
+**Gates.** `pytest backend/tests/workflows/` green. The model path still reaches `server_argv` as `--model`.
 
-**Oracle.** `git grep -n LLAMA_WEIGHTS` returns nothing.
+**Oracle.** `git grep -n LLAMA_WEIGHTS -- backend .github config docs frontend schemas` returns nothing. **Scoped, because this plan-doc's own prose carries the string** and an unscoped grep can never go quiet while the row that explains it exists.
 
 **What it cannot settle.** Nothing.
 
-**Decisions.** 7.1 `MODEL_FILE`, not `MODEL_WEIGHTS` - it is a path to a file, and "weights" means tensors in every other tool. 7.2 The llama.cpp build, asset, pin and binary names stay; they name the vendor's own artefacts.
+**Decisions.** 7.1 `MODEL_PATH`, not `MODEL_WEIGHTS` and not `MODEL_FILE` - "weights" means tensors in every other tool, and `MODEL_FILE` is taken twice over (C13). 7.2 The llama.cpp build, asset, pin and binary names stay; they name the vendor's own artefacts. 7.3 The `env` block on `The server proves the entry` is deleted rather than renamed: `prove_the_entry.py` reads no environment variable at all, so the line was set and never read. This is the "value nothing reads" in this row's own title, which `LLAMA_ROLE` was expected to be and no longer is.
 
-**Rejected.** Renaming every `LLAMA_*` name: six of them correctly name llama.cpp's own artefacts, and a blanket rename makes those six lie.
+**Rejected.** Renaming every `LLAMA_*` name: six of them correctly name llama.cpp's own artefacts, and a blanket rename makes those six lie. Amending `MODEL_ENV_NAMES` so `MODEL_FILE` could be used: it pays for a spelling by deleting a guard against exactly the drift the spelling would create (Fowler ruled, 2026-09-23).
 
 ---
 

@@ -90,9 +90,9 @@ LAUNCH_ROOTS: Final = (
     ("measure.yml", "budgets", "Start the tokenizer", "backend/var/candidate-config"),
 )
 
-#: The variable those five steps used to be handed the weights path in. Named
+#: The variable those five steps used to be handed the model path in. Named
 #: so it cannot come back: the config root already says which file.
-WEIGHTS_ENV: Final = "LLAMA_WEIGHTS"
+MODEL_PATH_ENV: Final = "MODEL_PATH"
 
 
 def test_every_job_that_starts_a_server_reaches_the_one_argv_builder() -> None:
@@ -618,7 +618,7 @@ def test_the_weights_path_a_launcher_derives_is_the_one_the_download_wrote(
         assert root_name in shell or root_name in str(
             _mapping(step.get("env"), f"{where} env").values()
         ), f"{where} reads its flags from some root other than {root_name}"
-        assert WEIGHTS_ENV not in shell, f"{where} is still told which weights to open"
+        assert MODEL_PATH_ENV not in shell, f"{where} is still told which model file to open"
 
         derived = model_refs.list_model_files(roots[root_name])[0].landed_path
         assert derived == landed, (
