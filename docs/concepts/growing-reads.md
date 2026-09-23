@@ -266,7 +266,7 @@ reads are here and not how many. These are `backend/`'s;
 | --- | --- | --- |
 | `evals.writer.recorded_observations` | `state/score-index/` and `state/score-archive/` | every observation identity, as 76-byte digests |
 | `stages.validate_days.stage_validate_days` | one `stat` a day, plus `state/day-validations.csv` | a receipt on payload length, digest and validator identity |
-| `ledger.append_counterfactual_scores` | one day file of `state/counterfactual-scores/` | one date, and inside it the run's own bounded pool - every item the run took plus `lens_weights.counterfactual_refused_per_desk` refused candidates a desk. A run's write costs the same on a five-year archive as on a fresh clone |
+| `ledger.write_segment` on `SegmentLedger.COUNTERFACTUAL_SCORES` | one writer file of `state/counterfactual-scores/` | one date, and inside it the run's own bounded pool - every item the run took plus `lens_weights.counterfactual_refused_per_desk` refused candidates a desk. A run's write costs the same on a five-year archive as on a fresh clone |
 | `ledger.load_settled_failures` | one item-health day file | one date |
 | `ledger.load_story_similarity_pairs` | one day file of `state/content-similarity-judge/scored-pairs/` | one date. The fold counts a date into `score-distribution.json` once and the fit then reads only that record, so the day tree is opened by name and never walked. It costs the same on the thousandth day as on the third |
 | `ledger.load_source_counts` | one item-health day file | one date |
