@@ -416,7 +416,7 @@ caller decides: hand it a date in a closed month and it has performed a correcti
 
 A derived partition needs no special case. The search index is rebuilt from the days
 on disk, so
-[a deleted day needs no cleanup](../architecture/publishing/layout.md#the-shard-is-derived-so-retention-needs-nothing) -
+[a deleted day needs no cleanup](../architecture/publishing/what-a-month-shard-holds-and-how-it-reaches-a-browser.md#the-shard-is-derived-so-retention-needs-nothing) -
 the next rebuild simply writes a shard that no longer names it. The obligation that
 remains is the one the layout doc states: every writer of a committed day payload owes
 its month a rebuild.
@@ -462,7 +462,7 @@ Authority: `CLAUDE.md` section 5, 2026-09-11.
 - [growing-reads.md](growing-reads.md) - the other half of this page: what a growing collection obliges a reader to declare, and why `-1` is an answer.
 - [../architecture/contracts/schemas.md](../architecture/contracts/schemas.md#a-ledger-partitions-only-when-its-read-carries-a-window) - why a ledger partitions at all, and which reads carry a window.
 - [../architecture/publishing/telemetry-series.md](../architecture/publishing/telemetry-series.md#published-shards) - the published projection of item health, one file a month.
-- [../architecture/publishing/layout.md](../architecture/publishing/layout.md#the-month-search-index) - the month search index, its ceilings, and what an unpublish owes each grain.
+- [../architecture/publishing/what-a-month-shard-holds-and-how-it-reaches-a-browser.md](../architecture/publishing/what-a-month-shard-holds-and-how-it-reaches-a-browser.md#the-month-search-index) - the month search index, its ceilings, and what an unpublish owes each grain.
 - [../architecture/sources/item-health.md](../architecture/sources/item-health.md) - the fastest-growing collection, and what would move it to a shorter period.
 - [../reference/repository-layout.md](../reference/repository-layout.md) - what each top-level directory holds and who writes it.
 - [../reference/data-growth.md](../reference/data-growth.md) - where growing work is heading, what a replacement owes before the old path goes, and the shortcuts that are not answers.

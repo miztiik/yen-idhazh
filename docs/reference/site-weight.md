@@ -872,7 +872,7 @@ is what a date-only feed date parses to and also what a story genuinely
 published at midnight parses to. That figure is why a midnight stamp still
 prints a clock: blanking it would hide the real midnight stories
 inside the same 1.0 percent, and the payload cannot say which they are
-([../architecture/publishing/layout.md](../architecture/publishing/layout.md#the-items-own-stamp-is-what-reads-it-and-what-it-can-and-cannot-say)).
+([../architecture/publishing/what-a-published-item-says-about-itself.md](../architecture/publishing/what-a-published-item-says-about-itself.md#the-items-own-stamp-is-what-reads-it-and-what-it-can-and-cannot-say)).
 
 ### A phone gets no rail column, and this is the number that decided it
 
@@ -1495,7 +1495,7 @@ from):
 | structural ceiling, 800 a day | 24,000 | **1.15 MB** | 5.72 MB |
 
 Both sit under the triggers written down in
-[../architecture/publishing/layout.md](../architecture/publishing/layout.md#when-to-reconsider-the-month):
+[../architecture/publishing/what-a-month-shard-holds-and-how-it-reaches-a-browser.md](../architecture/publishing/what-a-month-shard-holds-and-how-it-reaches-a-browser.md#when-to-reconsider-the-month):
 1.5 MB for the browse index and 8 MB for the vectors.
 
 ### What the summary would have cost
