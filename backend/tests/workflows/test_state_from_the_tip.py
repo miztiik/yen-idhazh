@@ -13,18 +13,17 @@ the one shape a rebase cannot settle.
 from __future__ import annotations
 
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
 
 from ._harness import (
-    TAKE_STATE_SCRIPT,
-    _bash,
+    TAKE_STATE_MODULE,
     _git,
     _isolated_env,
     _scripted_origin,
     _write,
-    requires_bash,
 )
 
 pytestmark = [pytest.mark.workflow, pytest.mark.slow]
@@ -41,10 +40,8 @@ OUTSIDE = "docs/unrelated.md"
 def _take_the_state(
     runner: Path, env: dict[str, str], *args: str
 ) -> subprocess.CompletedProcess[str]:
-    bash = _bash()
-    assert bash is not None
     return subprocess.run(
-        [bash, TAKE_STATE_SCRIPT.as_posix(), *args],
+        [sys.executable, str(TAKE_STATE_MODULE), *args],
         cwd=runner,
         env=env,
         capture_output=True,
@@ -78,7 +75,6 @@ def _a_stale_checkout(tmp_path: Path, env: dict[str, str]) -> tuple[Path, str, s
     return runner, trigger, _git(ahead, env, "rev-parse", "HEAD").strip()
 
 
-@requires_bash
 def test_a_segment_the_run_ahead_drained_is_gone_before_the_fold_can_read_it(
     tmp_path: Path,
 ) -> None:
@@ -103,7 +99,6 @@ def test_a_segment_the_run_ahead_drained_is_gone_before_the_fold_can_read_it(
     ).strip()
 
 
-@requires_bash
 def test_the_code_the_job_runs_stays_on_the_commit_that_triggered_it(
     tmp_path: Path,
 ) -> None:
@@ -124,7 +119,6 @@ def test_the_code_the_job_runs_stays_on_the_commit_that_triggered_it(
     assert (runner / OUTSIDE).read_text(encoding="ascii") == "seed\n"
 
 
-@requires_bash
 def test_the_path_to_take_is_required(tmp_path: Path) -> None:
     """A workflow edit that drops the argument must stop the job, not empty a tree.
 

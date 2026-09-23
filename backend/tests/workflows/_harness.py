@@ -178,11 +178,7 @@ SHELLCHECK_COMMAND: Final = "shellcheck --severity=style .github/scripts/*.sh"
 #: no owner while this list was being written. The list only ever shrinks: a row that deletes
 #: a script deletes its name in the same commit, and the test reads both directions, so
 #: neither a new file nor a forgotten name can pass.
-SHIPPED_SCRIPTS: Final = (
-    "commit-and-push.sh",
-    "push-rewritten-history.sh",
-    "take-state-from-the-tip.sh",
-)
+SHIPPED_SCRIPTS: Final = ("commit-and-push.sh",)
 
 # The ceiling, not the dispatch rule. Guardrail #2 allows 20 concurrent jobs; a regex
 # held the fan-out at four. The empty-input default below stays at four, because
@@ -635,16 +631,16 @@ COMMIT_STEPS: Final = {
 #: the plan is made against rows another run has already superseded.
 TAKE_STATE_STEP: Final = "Take the run state from the tip, not from the trigger commit"
 
-TAKE_STATE_SCRIPT: Final = SCRIPTS_DIR / "take-state-from-the-tip.sh"
+TAKE_STATE_MODULE: Final = REPO_ROOT / "backend" / "utilities" / "take_state_from_the_tip.py"
 
-TAKE_STATE_CALL: Final = ("bash", ".github/scripts/take-state-from-the-tip.sh", "state")
+TAKE_STATE_CALL: Final = ("python3", "backend/utilities/take_state_from_the_tip.py", "state")
 
-#: The prune's own push, in a script rather than inline so a test can drive it
+#: The prune's own push, in a program rather than inline so a test can drive it
 #: against a real repository. It is the one file in the repository that may
 #: force-push, and the one that may refuse to.
-PRUNE_PUSH_SCRIPT: Final = SCRIPTS_DIR / "push-rewritten-history.sh"
+PRUNE_PUSH_MODULE: Final = REPO_ROOT / "backend" / "utilities" / "push_rewritten_history.py"
 
-PRUNE_PUSH_CALL: Final = ("bash", ".github/scripts/push-rewritten-history.sh")
+PRUNE_PUSH_CALL: Final = ("python3", "backend/utilities/push_rewritten_history.py")
 
 #: The commit the prune checked out, remembered before the squash rewrites it.
 #: The push compares origin's tip against this, so a step that captured it after
