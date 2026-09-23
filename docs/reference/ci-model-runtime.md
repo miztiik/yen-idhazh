@@ -370,6 +370,23 @@ that declaration against the committed address. The probe address decides
 nothing about the words, so `idhazh.fingerprint` has nothing to classify and the
 run's recorded inputs do not move.
 
+### The batched bench reads a block no model file has
+
+`measure.yml`'s `batched` job reads its four window and threading numbers with
+`jq -er '.summarizer.inference.<name>'`. No committed model file carries an
+`inference` block - each entry spells those numbers in `server`, under the flag
+`llama-server` reads them as. `jq -er` exits non-zero on a path that is not
+there and the step runs under `set -e`, so that job stops before it benches
+anything. Found 2026-09-23 while the slot was renamed; the rename moved
+`summarize` to `summarizer` here and left the second half of the path alone,
+because fixing it is not a rename.
+
+Reading `server` directly is what the job cannot do: one function spells a
+`llama-server` flag and a test refuses a second spelling in any workflow script,
+so the step would have to be handed the numbers by code that imports that
+function. This job installs no package, so that costs an `Install` step before
+the read, plus a verb that prints the four values.
+
 ## See also
 
 - [github-actions.md](github-actions.md) - which workflows exist, when each runs, and what each does.

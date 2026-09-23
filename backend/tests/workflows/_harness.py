@@ -475,11 +475,6 @@ BENCH_CONFIG_FLAG: Final = "--config"
 
 BENCH_CORPUS_STEP: Final = "Build the fixed bench corpus"
 
-#: The step that copies production's window and threading onto the bench. It
-#: reads them out of the committed model file, so the names it reads under have
-#: to be the names that file spells.
-BENCH_SETTINGS_STEP: Final = "Read the production server settings"
-
 BENCH_FINGERPRINT_STEP: Final = "What machine this bench drew"
 
 #: The step that turns the probe's segment into the row the bench commits. The

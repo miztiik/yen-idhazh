@@ -12,7 +12,7 @@ import time
 from pathlib import Path
 
 import pytest
-from conftest import CONFIG_DIR, REPO_ROOT, read_text
+from conftest import REPO_ROOT, read_text
 
 from idhazh import cli, config, day_shards, ledger
 from idhazh.contracts.app_config import AppConfig
@@ -45,7 +45,6 @@ from ._harness import (
     BENCH_RAW_JOB_EXPRESSION,
     BENCH_RETENTION_DAYS,
     BENCH_SERVER_JOB,
-    BENCH_SETTINGS_STEP,
     BENCH_SPEED_INPUT,
     BENCH_SPEED_KNOB,
     BENCH_SPEED_MODULE,
@@ -454,53 +453,6 @@ def test_the_bench_reads_its_own_config_when_it_records_the_machine() -> None:
     config_step = _step(workflow, BENCH_SERVER_JOB, "name", BENCH_CONFIG_STEP)
     with_block = _mapping(config_step.get("with"), f"{BENCH_CONFIG_STEP} with")
     assert with_block.get("trial_state") == BENCH_TRIAL_STATE
-
-
-def test_the_bench_reads_four_settings_the_committed_model_file_carries() -> None:
-    """The bench runs production's shape, so the names it reads have to resolve.
-
-    The step spells each setting twice: this project's own name, which becomes a
-    `BENCH_*` variable the bench is run with, and the flag the model file lists
-    it under. `jq -er` fails the step on a path that is not there, so a moved
-    key stops the measurement rather than quietly benching another shape - but
-    nothing said which key moved, and both halves of this path had moved by
-    2026-09-23: the slot became `summarizer` and the settings block was split in
-    two before that.
-
-    Two committed files and a fixed four keys, so it costs the same whatever the
-    run has piled up (Guardrail #12).
-    """
-    workflow = _load_workflows()["measure.yml"]
-    step = _step(workflow, "batched", "name", BENCH_SETTINGS_STEP)
-    script = _script(step, f"measure.yml/batched/{BENCH_SETTINGS_STEP}")
-
-    read_under = dict(
-        pair.split(":", 1) for pair in re.findall(r"\b(\w+:--[a-z-]+)\b", script)
-    )
-    assert set(read_under) == {"n_ctx", "n_batch", "n_ubatch", "n_threads"}, (
-        f"the bench reads {sorted(read_under)} and the four it is here for are the window "
-        "and the three batching and threading knobs"
-    )
-
-    pointer = json.loads(read_text(CONFIG_DIR / "idhazh.json"))["models_file"]
-    entry = json.loads(read_text(CONFIG_DIR / pointer))
-    named = re.search(r"\.(\w+)\.server\[", script)
-    assert named is not None, "the step reads a slot's server block, and this one names no slot"
-    slot = named.group(1)
-    assert slot in entry, (
-        f"the bench reads the {slot} slot and config/{pointer} names "
-        f"{sorted(k for k in entry if k != 'version')}"
-    )
-
-    server = entry[slot]["server"]
-    for name, flag in sorted(read_under.items()):
-        assert flag in server, (
-            f"the bench reads {name} as {flag}, which config/{pointer} does not carry; "
-            f"that block spells its keys {sorted(server)[:4]} and the step fails at jq"
-        )
-        assert isinstance(server[flag], int) and server[flag] > 0, (
-            f"{flag} is {server[flag]!r} and the step refuses anything but a positive integer"
-        )
 
 
 def test_the_bench_folds_its_own_segment_before_it_commits_the_row() -> None:

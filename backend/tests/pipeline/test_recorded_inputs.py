@@ -144,47 +144,6 @@ def test_a_run_pointed_at_a_second_machine_records_no_build_for_it(
     assert manifest.runs[-1].inputs == recorded
 
 
-def test_a_run_pointed_at_a_second_machine_records_no_build_for_it(
-    tmp_path: Path, monkeypatch: MonkeyPatch
-) -> None:
-    """Every other field of this record describes the machine that ran the pipeline.
-
-    So a build tag read from this machine's environment, on a run whose weights
-    decoded on another one, is well formed, validates, and is false. The address
-    in `config/` is the only thing that moves here - the build is pinned in the
-    environment throughout, and the first assertion is what proves the sentinel
-    came from the address rather than from an environment naming nothing.
-
-    The record still has to survive the whole path: `_recorded_inputs` validates
-    the payload the shard wrote, and the run record carries the same object, so a
-    degraded field that broke any other one would fail here rather than publish.
-
-    **What it does not prove is that a second machine answered.** Nothing in this
-    repository binds a server off loopback, so the transport is pointed at the
-    recording server on this one and the first end-to-end reading is a person
-    running a server elsewhere by hand.
-    """
-    run_plan = plan()
-    isolate_ledgers(tmp_path, monkeypatch)
-    monkeypatch.setenv("LLAMA_CPP_BUILD", "b10598")
-    settings = a_config_pointing_at(tmp_path, "http://192.168.1.20:9090")
-    assert runtime_build(base_url="http://127.0.0.1:8080") == "b10598", (
-        "this machine pinned no build, so a sentinel below would say nothing about the address"
-    )
-
-    work_then_assemble(run_plan, settings)
-
-    recorded = _recorded_inputs(tmp_path / "run" / run_plan.date / "items")
-    year, month, day = run_plan.date.split("-")
-    manifest = RunManifest.from_json(
-        read_text(tmp_path / "public" / "digest" / year / month / day / "run.json")
-    )
-
-    assert recorded is not None
-    assert recorded.runtime_build == UNRECORDED_BUILD
-    assert manifest.runs[-1].inputs == recorded
-
-
 def test_a_second_run_over_the_same_inputs_reports_no_prose_change(
     tmp_path: Path, monkeypatch: MonkeyPatch
 ) -> None:

@@ -187,8 +187,8 @@ runs:
       shell: bash
       env:
         PROBE_URL: ${{ inputs.probe_url }}
-          MODEL_ALIAS: ${{ steps.model.outputs.summarizer_id }}
-          WEIGHTS_FILE: ${{ steps.model.outputs.summarizer_file }}
+        MODEL_ALIAS: ${{ steps.model.outputs.summarizer_id }}
+        WEIGHTS_FILE: ${{ steps.model.outputs.summarizer_file }}
       run: |
         set -euo pipefail
         for _ in $(seq 1 120); do
