@@ -203,7 +203,7 @@ The four deleted routes grow when the pipeline appends a day, so their numbers
 had to move when nobody wrote any code. The two that stay move only when a person
 edits source. What the four stood in for is asserted directly, and with no number
 in it, by `frontend/tests/payload-weight.spec.ts`. The reasoning is in
-[../concepts/config.md](../concepts/config.md) and
+[../concepts/config/run-limits.md](../concepts/config/run-limits.md) and
 [../how-to/run-the-gates.md](../how-to/run-the-gates.md#the-console-has-no-page-number).
 
 The three payload numbers were measured in the same runs and **none of them
@@ -980,7 +980,7 @@ produced this asked for a document growing with months and not with days, and
 that is not what the measurement says. The design was kept and the claim was
 corrected: reaching zero means not emitting a link for each published day, and a
 reader with no script would then reach seven days and no further
-([../architecture/publishing/frontend.md](../architecture/publishing/frontend.md#the-day-list-grows-with-months-on-the-page-and-with-days-in-the-document)).
+([../architecture/publishing/how-a-reader-finds-a-story.md](../architecture/publishing/how-a-reader-finds-a-story.md#the-day-list-grows-with-months-on-the-page-and-with-days-in-the-document)).
 
 **What a reader sees is the number that did change.** At 700 days the list is
 **18 rows** - seven days, nine months of the newest published year, and one row
@@ -1366,7 +1366,7 @@ knob rather than to this row.
 
 `retention.site_budget_mb` is the size at which a build logs a warning. It is an
 alarm and not a gate: it fails no build and deletes nothing
-([../concepts/config.md](../concepts/config.md)). The **cap** is the gate, and
+([../concepts/config/run-limits.md](../concepts/config/run-limits.md)). The **cap** is the gate, and
 they are different lines - see the design rationale in
 [../architecture/publishing/layout.md](../architecture/publishing/layout.md).
 This section is the only home for why the alarm sits where it does.
@@ -1708,5 +1708,5 @@ What a browser fetches before a reader does anything: the prerendered document, 
 - [../architecture/publishing/frontend.md](../architecture/publishing/frontend.md) - the reader's surface these figures were taken on.
 - [../architecture/publishing/console-site-size.md](../architecture/publishing/console-site-size.md) - the panel that draws this as a rate, so an operator sees the 1 GB cap coming rather than arriving.
 - [../how-to/run-the-gates.md](../how-to/run-the-gates.md) - the bundle gate that reads every ceiling here.
-- [../concepts/config.md](../concepts/config.md) - the knobs these numbers set.
+- [../concepts/config/run-limits.md](../concepts/config/run-limits.md) - the knobs these numbers set.
 - [../../CLAUDE.md](../../CLAUDE.md) - Guardrail #2 (the runner is the architecture) and #10 (measured, not estimated).

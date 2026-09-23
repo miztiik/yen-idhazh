@@ -178,7 +178,7 @@ jobs:
           fi
 
       # The one force-push in this repository, and the only step allowed to
-      # refuse one. The script re-reads origin's tip and compares it with the
+      # refuse one. The program re-reads origin's tip and compares it with the
       # commit remembered above: a tip that moved means another run pushed while
       # this job was rewriting, and forcing over it would delete that run's work.
       #
@@ -186,8 +186,8 @@ jobs:
       # against a ref this job fetched at checkout, and the rebase above has
       # already rewritten every commit the lease would name.
       #
-      # A script rather than inline shell, so a test can drive it against a real
+      # A program rather than inline shell, so a test can drive it against a real
       # repository and watch it refuse.
       - name: Push the rewritten history
         if: steps.due.outputs.due == 'true'
-        run: bash .github/scripts/push-rewritten-history.sh
+        run: python3 backend/utilities/push_rewritten_history.py

@@ -1,6 +1,6 @@
 # Classification
 
-**Last Updated**: 2026-09-13
+**Last Updated**: 2026-09-23
 
 Every label this project puts on an article: what the word means, who decided
 it, and whether a reader ever sees it.
@@ -58,7 +58,7 @@ down here so the next person meets it as a decision rather than as a surprise.
 
 How each mark is drawn - the chip, its tint, the four-child cap above the title,
 and why `reporting` and `analysis` carry no mark - is
-[../architecture/publishing/frontend.md](../architecture/publishing/frontend.md).
+[../architecture/publishing/what-a-story-shows-and-where-each-fact-sits.md](../architecture/publishing/what-a-story-shows-and-where-each-fact-sits.md).
 This page does not restate it.
 
 ## The rules a label obeys, and what each one is protecting
@@ -166,6 +166,14 @@ vectors were going to be written anyway. Rebuild the file with
 `python backend/utilities/build_taxonomy_vectors.py` after any edit to an active
 vertical or lens, and after the encoder weights move.
 
+**Nothing rebuilds it for you, and the day a fit moves a word that becomes a
+bug.** The tie between the vocabulary and the file is a refusal, not a build
+step: the run stops and names the file, and a person goes and types the command.
+That works while a person is the only thing that edits the vocabulary. An
+autotuned desk or lens has nobody to tell.
+[../architecture/publishing/autotune-desk-assignment.md](../architecture/publishing/autotune-desk-assignment.md)
+owns what a rebuild would have to become, and it is open there.
+
 **There is no knob, and that is deliberate rather than an omission.** The
 vocabulary is already config, so editing `config/taxonomy.json` and rebuilding
 changes what is measured. The width, the quantisation and the text template are
@@ -180,7 +188,7 @@ comparison and this record carries no comparison.
 
 **Why a register page at all.** The words are defined once in
 [taxonomy.md](taxonomy.md) and drawn once in
-[../architecture/publishing/frontend.md](../architecture/publishing/frontend.md),
+[../architecture/publishing/what-a-story-shows-and-where-each-fact-sits.md](../architecture/publishing/what-a-story-shows-and-where-each-fact-sits.md),
 and neither answers the question somebody actually arrives with: *this word is
 on this item - who put it there, and can I trust it?* That question crosses a
 config file, a matcher, a payload and a component, so it has no home in any of
@@ -218,7 +226,7 @@ label side is "name. definition", so a change to either is a change to both.
 ## See also
 
 - [taxonomy.md](taxonomy.md) - what a vertical, a desk, a lens and an event are, and how they differ.
-- [../architecture/publishing/frontend.md](../architecture/publishing/frontend.md) - how each mark is drawn, and the cap on how many an item may carry.
+- [../architecture/publishing/what-a-story-shows-and-where-each-fact-sits.md](../architecture/publishing/what-a-story-shows-and-where-each-fact-sits.md) - how each mark is drawn, and the cap on how many an item may carry.
 - [../architecture/sources/discovery.md](../architecture/sources/discovery.md) - why a lens and an entity never get a feed list of their own.
 - [../architecture/sources/trust-boundary.md](../architecture/sources/trust-boundary.md) - why fetched text is data and never instruction.
 - [digest.md](digest.md) - what a published day holds.

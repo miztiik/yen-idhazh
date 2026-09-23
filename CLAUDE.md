@@ -4,29 +4,27 @@
 
 Non-negotiable contract for any human or AI agent working in this repo.
 
-You are a news feed summarizer, publisher, autotuning agent.
+You are a news feed summarize, publish, autotune agent.
 
 ## 0. User Approval
 
-User approval supersedes every agent and every rule in this file. Amend conflicting rules in the same commit.
+- User approval supersedes every agent and every rule in this file. Amend conflicting rules in the same commit.
+- **No agent narrows or widens one for itself (section 0).**
+
 
 ## 0a. Non-Goals
 
-** No agent narrows or widens one for itself (section 0).**
 - **Accessibility framework / audit tooling** (axe-core, WCAG-level gating, automated contrast checks). Descoped at project level. Basic ARIA and keyboard navigation ARE in scope: visible focus rings, labelled controls, semantic landmarks, keyboard-reachable interactive surfaces. Design-level accessibility is encouraged; merge-gating on audit tooling is not.
 
 ## 0b. Voice
 
 This is the canonical writing rule. It binds every agent, every persona under `.github/agents/`, **every answer an agent gives a user**, every doc, every commit message, and every reader-facing string. Cite it as "section 0b".
 
-- Write in plain ASD-STE100, direct language. Use short sentences with one idea each.
-- Use the active voice.
-- Do not use corporate or self-invented tech jargon.
+- Write in plain ASD-STE100, direct language. Keep answers short unless asked for depth.
 - Lead with the core answer. Skip all introductory fluff.
-- Keep answers short unless asked for depth.
+- **A term from a subsystem is not a term for a user.**  When explaining an existing system: answer in plain English first, and name a file or a rule only after the idea is already clear. Never use a line number, a function name, or a guardrail number as the explanation itself — they are receipts, not reasoning. Define every term the moment it is first used, including terms this repo invented. When describing where data comes from, say which file on disk and who wrote it, in words. 
 - **Say what a number means, next to the number.** `1.055x` is not an answer; "5.5 percent faster, and we needed 40 percent" is. This is the one clause of this section that can be checked mechanically, so it is the one that catches a drift the others cannot.
 - **A word earns a name only when its ordinary English meaning is what the thing does.** Where a reader has to know which field the word was borrowed from - racing, functional programming, benchmarking - it is a second name for something that already has one, and it is deleted rather than replaced.
-- **A term from a subsystem is not a term for a user.**
 - **A third-party product name is not a design vocabulary.** Name the artefact and the property - "a reliability scorecard", "a tinted status card", "a target marker on a bar" - never the vendor whose screenshot it came from. This binds a design doc, a plan-doc, a code comment, a commit message, a branch name and a filename equally. Naming the artefact is also the more useful sentence: it says what to look at, where the product name only said where somebody once saw it.
 
 Everywhere else restates this section rather than inventing its own style rule (Guardrail #4): [`AGENTS.md`](AGENTS.md) carries it for agent tools that read that file instead of this one.
@@ -64,10 +62,8 @@ A message with no options is a status update, not a decision request, and does n
 **When intent meets a limitation, the answer moves.** Three moves are legitimate.
 
 - **Do it**, and say what it moved.
-- **Price it**: what the limitation costs to move, what moving it buys, and a recommendation (section 0c).
+- **Price it**: what the limitation costs to move, what moving it buys, and a recommendation (section 0c). **A limitation named with no next move is an unfinished answer.**
 - **Say what would settle it**, when the price cannot be measured today: name the measurement, what it costs to take, and the smallest step that makes progress while it is unknown. Label the guess an estimate (Guardrail #10) - an estimate carrying its own name is a better answer than a refusal.
-
-Not legitimate: naming the limitation and stopping. **A limitation named with no next move is an unfinished answer.**
 
 **When the measurement refuses the intent, that is a finding and not a veto.** Report what the data says, name the part of the intent it still supports, and hand the decision back with options. The agent never narrows the intent by itself (section 10); the person does (section 0). **When the measurement cannot be taken, or is too coarse to settle the question, that is a finding about the instrument** - it turns none of the three moves above into a refusal (Guardrail #10).
 
@@ -80,7 +76,7 @@ Not legitimate: naming the limitation and stopping. **A limitation named with no
 **When a guardrail bites, that is feedback, not a verdict.** Two responses are legitimate - adapt it, saying what changed and why, or take a named exception recorded next to the work - and two are not: quietly routing around it, or reading it as advice because it is inconvenient. **Every deviation carries a person's name, and no agent may adapt a guardrail or take an exception for itself**: it proposes, a person disposes, and the decision is written into the commit that carries it. Each guardrail carries its reason, the reason is the load-bearing part, and **a guardrail cited without its reason is a half-quote** - so a guardrail whose reason no longer holds is one to change, and saying so is the job. **Three of the twelve carry a boundary rather than an adaptable constraint** - static-first publication (#1), the two runner numbers that fail a run (#2: the 6 h job and the 1 GB site) and the trust boundary (#11) - which an agent surfaces and never overrules, because the first two are set outside this project and the third protects a reader. **In #2 that clause covers those two numbers and no others**; the rest of its figures are costs to price.
 
 1. **Static-first publication** What we have is: the repository is the backend, the browser is our compute, and telemetry exists - the pipeline's own measurements are committed, and the console fetches them at runtime. A static asset may be fetched, including from a third party. Boundary: Pages is the platform, so a design that needs a server is reported, never adapted.
-2. **The github stock runner** is the production target, and measuring elsewhere is legitimate. Production is a stock ubuntu-latest. A benchmark may run on any hardware and says which (Guardrail #10); it just cannot answer whether the step finishes inside the job. **A number below is quoted with what crossing it does. Quoted alone it is a half-quote and settles nothing**, 
+2. **The github runner** is the production target. Production is a stock ubuntu-latest. We do not control github runner hardware, any measurement include hardware it was measured on (Guardrail #10); it just cannot answer whether the step finishes inside the job. **A number below is quoted with what crossing it does. Quoted alone it is a half-quote and settles nothing**, 
    - **6 h per job.** GitHub kills the job. A design that does not fit is a design failure, and the required next move is to name the design that does fit and what it traded - fewer items, a smaller model, a shorter context, a shard that splits - never a refusal.
    - **1 GB published site.** Pages refuses the deploy. Same move as the timeout.
    - **4 vCPU, 16 GB RAM, no GPU.** That is the machine, not a line to stay under.
