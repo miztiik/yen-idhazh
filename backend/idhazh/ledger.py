@@ -2230,10 +2230,9 @@ def load_item_health(state_dir: Path, *, today: str, within_days: int) -> list[I
     A day the ledger never recorded has no entry, which is not a fault: a run
     that planned nothing that day wrote nothing that day.
 
-    A row that no longer parses is fatal here rather than skipped, which is the
-    opposite of `load_health` and deliberate: a census divides by these rows, so
-    a silently dropped one moves a ratio instead of costing a decision some
-    evidence.
+    A row that no longer parses stops the read, which is what every day-shard
+    read does: a census divides by these rows, so a silently dropped one moves a
+    ratio instead of costing a decision some evidence.
     """
     from idhazh import day_shards
 
@@ -2277,9 +2276,11 @@ def load_health(state_dir: Path, *, today: str, within_days: int) -> list[FeedHe
     N runs" without knowing that the file is append-ordered - which it is today,
     and which a rebased CI push could stop being tomorrow.
 
-    A row that no longer parses is skipped rather than fatal. This ledger is
-    diagnostic: losing a stale row costs a quarantine decision some evidence,
-    and refusing to start costs the reader the whole day.
+    A row that no longer parses stops the read rather than being skipped. Each
+    file is written whole by one writer from the contract's own columns, so a
+    row that will not read means the writer and this reader disagree about the
+    shape - `day_shards.parsed` says at length why that is the one ledger read
+    that does not degrade.
 
     `day_shards.settled_rows` names both the cover and the settlement, so a
     cover of `n` days reads the newest `n` RECORDED days and returns one row per
@@ -2288,14 +2289,12 @@ def load_health(state_dir: Path, *, today: str, within_days: int) -> list[FeedHe
     """
     from idhazh import day_shards
 
-    rows: list[FeedHealthRow] = []
-    for raw in day_shards.settled_rows(
-        state_dir / HEALTH_DIRNAME, FEED_HEALTH_KEY, FeedHealthRow, days=within_days
-    ):
-        try:
-            rows.append(FeedHealthRow.from_csv_row(raw))
-        except (KeyError, ValueError):
-            continue
+    rows = [
+        FeedHealthRow.from_csv_row(raw)
+        for raw in day_shards.settled_rows(
+            state_dir / HEALTH_DIRNAME, FEED_HEALTH_KEY, FeedHealthRow, days=within_days
+        )
+    ]
     rows.sort(key=lambda row: (row.date, _run_n(row.run_id)))
     return rows
 

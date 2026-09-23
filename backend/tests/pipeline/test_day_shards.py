@@ -175,6 +175,25 @@ def test_a_name_inside_a_day_directory_that_is_not_a_writers_stops_the_read(
         day_shards.settled_rows(tmp_path, ledger.SPAN_ROLLUP_KEY, SpanRollupRow, days=1)
 
 
+def test_a_row_the_contract_cannot_read_stops_the_read(tmp_path: Path) -> None:
+    """The one ledger read that does not degrade, asked from the side that loses rows.
+
+    Each file is written whole by one writer from the contract's own columns, so
+    a row that will not read means the writer and this reader disagree about the
+    shape. Skipping it would lose a column quietly, and quietly is the part that
+    costs: the count taken off the day would still look like an answer.
+    """
+    day = tmp_path / "2026" / "09" / "18"
+    day.mkdir(parents=True)
+    shard = day / "2026-09-18-1-1-work-01.csv"
+    shutil.copy(_root() / "2026" / "09" / "18" / "2026-09-18-1-1-work-01.csv", shard)
+    with shard.open("a", encoding="utf-8", newline="") as handle:
+        handle.write("1999-01-01,not-a-date,,,,,,\n")
+
+    with pytest.raises(ValueError, match="does not read as a SpanRollupRow"):
+        day_shards.settled_rows(tmp_path, ledger.SPAN_ROLLUP_KEY, SpanRollupRow, days=1)
+
+
 #: Every reader that left the day-file walk: the module, the exact call it used
 #: to make, and the `day_shards` call it makes instead. A module keeps its other
 #: day-file walks - `state/seen/`, `state/counterfactual-scores/` and the judge
