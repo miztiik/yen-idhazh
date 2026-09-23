@@ -485,7 +485,7 @@ def two_calls_one_item(
     # route and never to the chat one - which accepts `response_format` and
     # ignores it, losing the only control that survives an injection.
     rendered_endpoint = completion_url(endpoint)
-    timeout = request_timeout_seconds(model.request)
+    timeout = request_timeout_seconds(model)
     markers = derive_turn_markers(endpoint, entry=model, timeout=timeout)
     generated_at = assemble.utc_now()
     stamp = {
@@ -548,7 +548,7 @@ def two_calls_one_item(
                     table,
                     model_id=model_id,
                     server=model.server,
-                    request=model.request,
+                    sampling=model.sampling,
                     markers=markers,
                     prompt_config=settings.app.summarize,
                 )

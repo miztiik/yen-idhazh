@@ -20,7 +20,7 @@ import pytest
 from conftest import CONFIG_DIR, FIXTURES_DIR, read_text
 
 from idhazh.contracts.knobs.models import ModelsConfig
-from idhazh.llm.server import SETTING_KEYS, server_argv
+from idhazh.llm.server import server_argv
 from utilities import capture_server_argv
 
 pytestmark = pytest.mark.contract
@@ -97,8 +97,7 @@ def test_no_committed_entry_puts_a_sampling_value_on_the_command_line(path: Path
     config = ModelsConfig.model_validate_json(read_text(path))
 
     for name in SAMPLING_KEYS:
-        assert name in config.summarize.request, f"{name} left the request block"
-        assert SETTING_KEYS[name] not in golden
+        assert name in config.summarize.sampling, f"{name} left the sampling block"
         assert name not in golden
 
 

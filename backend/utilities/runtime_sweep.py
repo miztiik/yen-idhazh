@@ -68,10 +68,10 @@ CANDIDATE_UPDATES: dict[str, tuple[dict[str, Any], int]] = {
 }
 
 #: Entry keys a case may set that are not llama-server flags.
-ENTRY_KEYS = ("companion_files",)
+ENTRY_KEYS = ("companion_files", "request_timeout_minutes")
 
-#: What goes in a request body rather than on the command line (C1).
-REQUEST_KEYS = ("temperature", "top_p", "seed", "request_timeout_minutes")
+#: What goes in a request body rather than on the command line.
+SAMPLING_KEYS = ("temperature", "top_p", "seed")
 
 #: Two knobs whose value an operator types, so each is bounded where it is read.
 SIZED_BY_DISPATCH = ("threads", "threads_batch")
@@ -272,8 +272,8 @@ def write_config(label: str, update: dict[str, Any]) -> Path:
     for key, value in update.items():
         if key in ENTRY_KEYS:
             entry[key] = value
-        elif key in REQUEST_KEYS:
-            entry.setdefault("request", {})[key] = value
+        elif key in SAMPLING_KEYS:
+            entry.setdefault("sampling", {})[key] = value
         else:
             entry.setdefault("server", {})[key] = value
     # A speculation flag with no draft model is a server that refuses to start,

@@ -88,7 +88,7 @@ def stage_qualify_decide(
             *qualify.stratification(frozen.items, summarize=settings.app.summarize),
             *qualify.wording_spread(
                 frozen.observations,
-                request=settings.models.summarize.request,
+                sampling=settings.models.summarize.sampling,
                 repeats=frozen.repeats,
             ),
             *qualify.diagnostics(frozen, evaluation=evaluation),

@@ -46,7 +46,7 @@ from idhazh.contracts.qualification import (
     ItemScore,
     QualificationShard,
 )
-from idhazh.llm.server import setting, window
+from idhazh.llm.server import window
 
 #: The finish reason a complete reply carries. Anything else means the runtime
 #: stopped for its own reasons, and a summary cut off mid-sentence is not a
@@ -598,7 +598,7 @@ def _mean(values: Iterable[float]) -> float:
 
 
 def wording_spread(
-    observations: Sequence[ItemObservation], *, request: Mapping[str, Any], repeats: int
+    observations: Sequence[ItemObservation], *, sampling: Mapping[str, Any], repeats: int
 ) -> list[Diagnostic]:
     """How far apart the repeats of one item landed, above zero temperature.
 
@@ -614,7 +614,7 @@ def wording_spread(
     Empty at `temperature == 0`, where every repeat is the same words by
     construction and a row saying so is a row nobody can act on.
     """
-    temperature = setting(request, "temperature", 0)
+    temperature = sampling.get("temperature", 0)
     if temperature == 0:
         return []
     by_item: dict[str, set[str]] = {}

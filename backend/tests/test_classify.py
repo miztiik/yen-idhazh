@@ -162,7 +162,7 @@ def rebuilt_payloads(inputs: dict[str, Any]) -> tuple[dict[str, Any], dict[str, 
         table,
         model_id=inputs["model_id"],
         server=inputs["server"],
-        request=inputs["request"],
+        sampling=inputs["sampling"],
         markers=markers,
     )
     summarize_and_plan_call = build_summarize_and_plan_request(
@@ -687,7 +687,7 @@ class TestTheLabelCallPrompting:
             a_table(dense),
             model_id="m",
             server=entry.server,
-            request=entry.request,
+            sampling=entry.sampling,
             markers=committed_markers(),
         )
         markers = committed_markers()
@@ -1354,7 +1354,7 @@ def test_a_recorded_label_reply_labels_the_table_over_a_loopback_socket(
         table,
         model_id="m",
         server=entry.server,
-        request=entry.request,
+        sampling=entry.sampling,
         markers=committed_markers(),
     )
     body = (LABEL_REPLIES / "labelled.json").read_bytes()
@@ -1511,7 +1511,7 @@ class TestTheInstructionsSitInFrontOfTheArticle:
                 a_table(article),
                 model_id="m",
                 server=entry.server,
-                request=entry.request,
+                sampling=entry.sampling,
                 markers=committed_markers(),
                 prompt_config=ask,
             )

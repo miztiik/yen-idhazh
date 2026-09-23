@@ -861,7 +861,7 @@ unbreakable ceiling would leave no window for the article it is summarising.
 **A budget is also a clock, and this one is close to a bound.** At the 6.01
 tokens a second the configured summarizer decodes at on `ubuntu-latest`
 (2026-08-23), 4,735 tokens is 13.1 minutes, against a
-`models.summarize.request.request_timeout_minutes` of 22.1 and a
+`models.summarize.request_timeout_minutes` of 22.1 and a
 `run.shard_timeout_minutes` of 200. So a single reply that ran to the
 brake would not trip the request timeout, and fifteen of them would spend the
 whole shard. The grammar closes the object long before that on every

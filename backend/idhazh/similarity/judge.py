@@ -42,7 +42,6 @@ from idhazh.llm.server import (
     answer_span,
     grammar_completion_payload,
     one_reply,
-    setting,
     thinking_span,
 )
 from idhazh.similarity import prompt
@@ -262,7 +261,7 @@ def decode_settings(settings: config.Settings) -> Mapping[str, Any]:
     one case worth seeing.
     """
     tuning = settings.app.assemble.same_story.judging_knobs()
-    return entry_of(settings).request | {"temperature": tuning.judge_temperature}
+    return entry_of(settings).sampling | {"temperature": tuning.judge_temperature}
 
 
 def decode_body(
@@ -285,7 +284,7 @@ def decode_body(
         user=user,
         grammar=prompt.grammar(),
         server=entry_of(settings).server,
-        request=decode_settings(settings),
+        sampling=decode_settings(settings),
         markers=markers,
         max_answer_tokens=prompt.REPLY_TOKENS,
         first_token_alternatives=len(prompt.first_token_prefixes()),
@@ -332,7 +331,7 @@ def read_once(
             thinking_span(
                 answer,
                 markers=markers,
-                temperature=setting(entry.request, "temperature"),
+                temperature=entry.sampling.get("temperature"),
             )
         )
         reply = one_reply(

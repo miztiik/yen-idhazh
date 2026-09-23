@@ -139,7 +139,44 @@ def test_a_config_that_still_spells_the_old_settings_block_is_refused_by_name() 
 
     message = str(raised.value)
     assert "models.<role>.server" in message
-    assert "models.<role>.request" in message
+    assert "models.<role>.sampling" in message
+
+
+def test_a_config_still_spelling_the_request_block_is_refused_by_name() -> None:
+    """The read-side migration `CLAUDE.md` section 11 owes for the rename.
+
+    Silent acceptance is the failure here: the block is declared on `ModelRef`
+    as the shape an earlier run recorded, so an operator file still spelling it
+    would validate, the sampling block would be empty, and the run would decode
+    on llama.cpp's own defaults with nothing saying why.
+    """
+    payload = entry_with()
+    payload["summarize"]["request"] = {"temperature": 0.2}
+
+    with pytest.raises(ValidationError) as raised:
+        ModelsConfig.model_validate(payload)
+
+    assert "models.<role>.sampling" in str(raised.value)
+
+
+def test_a_sampling_key_a_route_sets_itself_is_refused_when_the_config_loads() -> None:
+    """Asked once at load, not on the first item of every shard at once.
+
+    `grammar_lazy` leaves `grammar` formally applied and never engaged, so the
+    decode control is off with its own key untouched. Left to the builders it
+    raises after each shard has restored the cache and loaded the weights, and
+    the message an operator reads then is about a request body rather than
+    about the file they edited.
+    """
+    raw = committed_models_raw()
+    raw["summarize"]["sampling"]["grammar_lazy"] = True
+
+    with pytest.raises(ValueError) as raised:
+        refuse_a_model_nothing_could_run("models/x.json", ModelsConfig.model_validate(raw))
+
+    message = str(raised.value)
+    assert "models.summarize.sampling" in message, "the refusal names the block"
+    assert "grammar_lazy" in message, "and the key inside it"
 
 
 def test_an_entry_that_dumps_and_reloads_is_not_refused_for_its_own_shape() -> None:
@@ -288,10 +325,10 @@ def test_an_entry_that_declares_no_window_is_refused_by_the_flag_name() -> None:
 def test_a_timeout_that_is_not_a_number_is_refused_at_load_rather_than_mid_item() -> None:
     """Four call sites multiply it by sixty, and none of them can say which key broke."""
     raw = committed_models_raw()
-    raw["summarize"]["request"]["request_timeout_minutes"] = "twenty two"
+    raw["summarize"]["request_timeout_minutes"] = "twenty two"
 
-    with pytest.raises(ValueError, match=re.escape("request_timeout_minutes")):
-        refuse_a_model_nothing_could_run("models/x.json", ModelsConfig.model_validate(raw))
+    with pytest.raises(ValidationError, match=re.escape("request_timeout_minutes")):
+        ModelsConfig.model_validate(raw)
 
 
 def test_the_one_shared_settings_block_is_refused_by_name() -> None:

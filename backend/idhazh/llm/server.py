@@ -56,9 +56,10 @@ LOG: Final = logging.getLogger("idhazh")
 # both routes ignore `response_format` outright and return unconstrained prose,
 # and both honour a top-level `json_schema`. On the native route that field is
 # the route's own; on the compatibility route it survives a layer whose job is
-# to rewrite this body, and that layer already drops `response_format`. No
-# workflow pins a llama.cpp build, so a build that started stripping it would
-# turn constrained decoding off for every item at once.
+# to rewrite this body, and that layer already drops `response_format`. The
+# build is pinned in `config/llama-cpp-pin.json`, so a build that started
+# stripping it arrives as a diff a person reads rather than as constrained
+# decoding turning off for every item at once.
 _COMPLETION_PATH: Final = "/completions"
 
 # The route an item is posted to, written once so nothing spells it twice.
@@ -386,6 +387,12 @@ class Completion:
 #: whole. Four of them are persisted under our names on the run record and drawn
 #: in words on a console panel, so a rename would move a published string and an
 #: alias does not.
+#:
+#: **Nothing that goes on the wire is here any more.** The sampling values used
+#: to be listed under their own spellings, which is a row that translates a name
+#: into itself and gates every unlisted key for nothing. They are splatted from
+#: the entry's `sampling` block instead, so naming one more of them is a key in
+#: the model file and no edit here.
 SETTING_KEYS: Final[Mapping[str, str]] = MappingProxyType(
     {
         "n_ctx": "--ctx-size",
@@ -394,10 +401,6 @@ SETTING_KEYS: Final[Mapping[str, str]] = MappingProxyType(
         "n_threads": "--threads",
         "n_parallel": "-np",
         "load_mode": "-lm",
-        "temperature": "temperature",
-        "top_p": "top_p",
-        "seed": "seed",
-        "request_timeout_minutes": "request_timeout_minutes",
     }
 )
 
@@ -412,9 +415,40 @@ def window(server: Mapping[str, Any]) -> int:
     return int(server[SETTING_KEYS["n_ctx"]])
 
 
-def request_timeout_seconds(request: Mapping[str, Any]) -> float:
-    """How long one POST may wait. Required: no server-side default bounds it."""
-    return float(request[SETTING_KEYS["request_timeout_minutes"]]) * 60
+def request_timeout_seconds(entry: ModelEntry) -> float:
+    """How long one POST may wait. Read off the entry, never off a settings block.
+
+    It is how long the client waits for an answer, so it never goes on the wire
+    and it is not a sampler. Held inside the block that is splatted into a
+    request body it would be sent to the server as a key llama.cpp has never
+    heard of.
+    """
+    return entry.request_timeout_minutes * 60
+
+
+#: What defeats a decode control on every route, whatever control that route
+#: sets. `logit_bias` re-weights tokens under any decoder, `ignore_eos` takes
+#: the stop away, and `samplers` reorders the chain every value is drawn
+#: through. None of the three is a synonym for anything, and each is enough on
+#: its own.
+_ALWAYS_REFUSED: Final[frozenset[str]] = frozenset({"logit_bias", "ignore_eos", "samplers"})
+
+
+def with_sampling(
+    body: dict[str, Any], sampling: Mapping[str, Any], disablers: frozenset[str]
+) -> dict[str, Any]:
+    """This route's own keys, plus every key the model file declares.
+
+    The refused set is whatever the route already put in `body`, plus the keys
+    declared beside the control this route sets, so a builder that changes its
+    control changes this check with it. The route wins the merge as well as the
+    check: a config key that reached a decode control would turn constrained
+    decoding into an option.
+    """
+    clash = sorted(sampling.keys() & (body.keys() | disablers | _ALWAYS_REFUSED))
+    if clash:
+        raise ValueError(f"sampling may not set {', '.join(clash)} - this route sets it")
+    return {**sampling, **body}
 
 
 def caches_the_prompt(server: Mapping[str, Any]) -> bool:
@@ -458,7 +492,7 @@ def server_argv(
 
     A flag this build does not accept is refused by llama-server at start-up,
     which names it and does not start. A sampling value cannot reach this list
-    at all, because it lives in the `request` block and nothing here reads one.
+    at all, because it lives in the `sampling` block and nothing here reads one.
 
     The four below stay in code because no key in the file produces them: the
     weights and the alias are the run's own, the port is the caller's, and the
@@ -498,12 +532,21 @@ def server_argv(
     return argv
 
 
+#: What re-spells or turns off `response_format`, the control the chat builder
+#: below sets. `max_tokens` is here because this route sends no cap by design: a
+#: cap from config makes the reply stop at `length`, and the item then fails
+#: `OUTPUT_TRUNCATED` before its content is read.
+CHAT_DISABLERS: Final[frozenset[str]] = frozenset(
+    {"json_schema", "grammar", "max_tokens", "n_predict"}
+)
+
+
 def request_payload(    *,
     model_id: str,
     system: str,
     user: str,
     output_schema: dict[str, Any],
-    request: Mapping[str, Any],
+    sampling: Mapping[str, Any],
     markers: TurnMarkers,
     schema_name: str = "summary",
 ) -> dict[str, Any]:
@@ -538,9 +581,6 @@ def request_payload(    *,
             {"role": "system", "content": system},
             {"role": "user", "content": user},
         ],
-        "temperature": setting(request, "temperature"),
-        "top_p": setting(request, "top_p"),
-        "seed": setting(request, "seed"),
         "stream": False,
         "response_format": {
             "type": "json_schema",
@@ -552,7 +592,15 @@ def request_payload(    *,
     # with a closing marker declared.
     if markers.thinking_kwarg is not None:
         payload["chat_template_kwargs"] = {markers.thinking_kwarg: markers.thinks}
-    return payload
+    return with_sampling(payload, sampling, CHAT_DISABLERS)
+
+
+#: What re-spells or turns off `json_schema`, the control the rendered-completion
+#: builder below sets. `response_format` is here although this route ignores it:
+#: a config key that set it would read as a shape control and bind nothing.
+COMPLETION_DISABLERS: Final[frozenset[str]] = frozenset(
+    {"response_format", "grammar", "grammar_lazy", "grammar_triggers", "max_tokens"}
+)
 
 
 def completion_payload(
@@ -562,7 +610,7 @@ def completion_payload(
     user: str,
     output_schema: dict[str, Any],
     server: Mapping[str, Any],
-    request: Mapping[str, Any],
+    sampling: Mapping[str, Any],
     markers: TurnMarkers,
     max_answer_tokens: int,
 ) -> dict[str, Any]:
@@ -596,17 +644,26 @@ def completion_payload(
     field that says which weights the body was built for, and a payload read out
     of a log with no model id cannot be attributed to a run.
     """
-    return {
-        "model": model_id,
-        "prompt": render_prompt(system=system, user=user, markers=markers),
-        "temperature": setting(request, "temperature"),
-        "top_p": setting(request, "top_p"),
-        "seed": setting(request, "seed"),
-        "n_predict": max_answer_tokens,
-        "stream": False,
-        "cache_prompt": caches_the_prompt(server),
-        "json_schema": output_schema,
-    }
+    return with_sampling(
+        {
+            "model": model_id,
+            "prompt": render_prompt(system=system, user=user, markers=markers),
+            "n_predict": max_answer_tokens,
+            "stream": False,
+            "cache_prompt": caches_the_prompt(server),
+            "json_schema": output_schema,
+        },
+        sampling,
+        COMPLETION_DISABLERS,
+    )
+
+
+#: What re-spells or turns off `grammar`, the control the builder below sets.
+#: `grammar_lazy` is the sharpest of them: it leaves `grammar` formally applied
+#: and never engaged, so the control is off with its own key untouched.
+GRAMMAR_DISABLERS: Final[frozenset[str]] = frozenset(
+    {"grammar_lazy", "grammar_triggers", "response_format", "json_schema", "max_tokens"}
+)
 
 
 def grammar_completion_payload(
@@ -616,7 +673,7 @@ def grammar_completion_payload(
     user: str,
     grammar: str,
     server: Mapping[str, Any],
-    request: Mapping[str, Any],
+    sampling: Mapping[str, Any],
     markers: TurnMarkers,
     max_answer_tokens: int,
     first_token_alternatives: int,
@@ -650,19 +707,53 @@ def grammar_completion_payload(
     build. Here the shared prefix is the system turn, which a day of pairs pays
     once instead of once a call.
     """
-    return {
-        "model": model_id,
-        "prompt": render_prompt(system=system, user=user, markers=markers),
-        "temperature": setting(request, "temperature"),
-        "top_p": setting(request, "top_p"),
-        "seed": setting(request, "seed"),
-        "n_predict": max_answer_tokens,
-        "n_probs": first_token_alternatives,
-        "post_sampling_probs": post_sampling_probs,
-        "stream": False,
-        "cache_prompt": caches_the_prompt(server),
-        "grammar": grammar,
+    return with_sampling(
+        {
+            "model": model_id,
+            "prompt": render_prompt(system=system, user=user, markers=markers),
+            "n_predict": max_answer_tokens,
+            "n_probs": first_token_alternatives,
+            "post_sampling_probs": post_sampling_probs,
+            "stream": False,
+            "cache_prompt": caches_the_prompt(server),
+            "grammar": grammar,
+        },
+        sampling,
+        GRAMMAR_DISABLERS,
+    )
+
+
+#: Every route's refused keys, named by the route that sets the control, so
+#: config load can ask all three before a run starts rather than letting the
+#: first item of every shard raise at once. It reads the sets declared beside
+#: each builder and declares none of its own, so a builder that changes its
+#: control changes this with it.
+#:
+#: **What a builder still catches that this cannot.** A sampling key colliding
+#: with a route's own plain body key - `prompt`, `messages`, `stream` - is known
+#: only to the builder that wrote it, so `with_sampling` refuses that one at the
+#: moment the body is built.
+ROUTE_DISABLERS: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
+    {
+        "chat": CHAT_DISABLERS | _ALWAYS_REFUSED,
+        "completion": COMPLETION_DISABLERS | _ALWAYS_REFUSED,
+        "grammar": GRAMMAR_DISABLERS | _ALWAYS_REFUSED,
     }
+)
+
+
+def refuse_a_sampling_key_a_route_sets(sampling: Mapping[str, Any]) -> str | None:
+    """Which route refuses this block, and why - or null if all three take it.
+
+    Asked once when config loads. The same comparison runs again inside every
+    builder against the body it just wrote, because only a builder knows the
+    plain keys it put there.
+    """
+    for route, disablers in ROUTE_DISABLERS.items():
+        clash = sorted(sampling.keys() & disablers)
+        if clash:
+            return f"the {route} route sets {', '.join(clash)} itself"
+    return None
 
 
 def thinking_span(
@@ -1622,7 +1713,7 @@ def prove_the_entry(
             user=PROBE_USER,
             output_schema=schema,
             server=model.server,
-            request=model.request,
+            sampling=model.sampling,
             markers=markers,
             max_answer_tokens=PROBE_OUTPUT_TOKENS,
         ),

@@ -245,6 +245,27 @@ class ModelEntry(ModelRef):
             "exists to make loud. Absent means an entry nobody has measured yet."
         ),
     )
+    sampling: dict[str, Any] = Field(
+        default_factory=dict,
+        description=(
+            "What decides which token is drawn, spelled exactly as the request body "
+            "spells it - `temperature`, `top_k`, `min_p`, `repeat_penalty`. Sent whole "
+            "and never translated, so naming one more sampler is a key here and no "
+            "edit anywhere else, and a key this runtime does not accept is refused at "
+            "request time with the key named. A sampling value cannot reach the "
+            "command line because the argv builder reads only the block above."
+        ),
+    )
+    request_timeout_minutes: float = Field(
+        gt=0.0,
+        description=(
+            "How long one POST may wait for an answer. Required, because llama-server "
+            "has no default that bounds it and this project multiplies it by sixty. It "
+            "sits beside the sampling block rather than inside it: it is how long the "
+            "client waits, so it never goes on the wire, and a key in the block that "
+            "is splatted into a request body would be sent to the server."
+        ),
+    )
 
     @property
     def thinks(self) -> bool:
@@ -315,11 +336,17 @@ class ModelEntry(ModelRef):
 #: server reads those markers off the template it renders through, so there is
 #: nothing left for a person to write down and nothing to point them at.
 #:
+#: `request` named the envelope rather than the setting, and held the client's
+#: own timeout beside three values that go on the wire. The wire values are the
+#: `sampling` block and the timeout is a field of its own.
+#:
 #: **This map refuses a config file and never a run record.** `ModelRef` is the
-#: shape an earlier run wrote and it still reads `inference` as a plain mapping.
+#: shape an earlier run wrote and it still reads `inference` and `request` as
+#: plain mappings.
 SUPERSEDED_ENTRY_NAMES: Final[Mapping[str, str]] = MappingProxyType(
     {
-        "inference": "models.<role>.server and models.<role>.request",
+        "inference": "models.<role>.server and models.<role>.sampling",
+        "request": "models.<role>.sampling and models.<role>.request_timeout_minutes",
         "draft": "models.<role>.companion_files and models.<role>.server",
         "turns": "",
     }
@@ -362,6 +389,11 @@ class ModelsConfig(Contract):
     __schema_stem__: ClassVar[str] = "models-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-23",
+            change="The request block becomes `sampling`; the client timeout becomes a field.",
+            why="A setting this project does not compute on is passed through, never mapped.",
+        ),
+        ChangelogEntry(
             version="2026-09-21T06:00",
             change="The turn block goes; two keys move onto the entry and a run still reads.",
             why="The markers are the model's own template, so the server reads them off it.",
@@ -375,11 +407,6 @@ class ModelsConfig(Contract):
             version="2026-09-21T04:00",
             change="The settings split into llama-server's own flags and the request values.",
             why="Nineteen keys existed only to be translated into a flag.",
-        ),
-        ChangelogEntry(
-            version="2026-09-21T03:00",
-            change="Both inference decode caps go; a run that pinned one still reads.",
-            why="Each sent a number where the runtime's own default is already unbounded.",
         ),
         ChangelogEntry(
             version="2026-09-21",

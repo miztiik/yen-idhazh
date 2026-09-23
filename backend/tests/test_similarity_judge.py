@@ -668,13 +668,13 @@ def test_the_decode_is_sent_at_the_judging_knob_and_not_the_entry() -> None:
     assert decodes, "no body was posted, so this proves nothing"
     assert tuning.judge_temperature == 0.0, "the committed judging knob is no longer greedy"
     entry = settings.models.summarize
-    assert entry.request["temperature"] != tuning.judge_temperature, (
+    assert entry.sampling["temperature"] != tuning.judge_temperature, (
         "the entry and the knob hold the same number, so this test cannot tell them apart"
     )
     for body in decodes:
         assert body["temperature"] == tuning.judge_temperature
-        assert body["top_p"] == entry.request["top_p"]
-        assert body["seed"] == entry.request["seed"]
+        assert body["top_p"] == entry.sampling["top_p"]
+        assert body["seed"] == entry.sampling["seed"]
 
 
 def test_a_reply_the_grammar_could_not_have_written_is_written_down(

@@ -58,7 +58,7 @@ def _summarize_one(
     """
     endpoint = endpoint or resolve_endpoint(settings.app.model_server.base_url)
     trace = tracer if tracer is not None else silent_tracer()
-    request = settings.models.summarize.request
+    sampling = settings.models.summarize.sampling
     model_id = settings.models.summarize.id
     with trace.span(telemetry.SpanName.SUMMARIZE) as stage_span:
         stage_span.set(telemetry.AttrKey.MODEL_ID, model_id)
@@ -66,7 +66,7 @@ def _summarize_one(
             payload = summarize.build_request(
                 article,
                 model_id=model_id,
-                request=request,
+                sampling=sampling,
                 markers=markers,
                 prompt_config=settings.app.summarize,
             )
@@ -79,7 +79,7 @@ def _summarize_one(
             article,
             model_id=model_id,
             endpoint=endpoint,
-            timeout=request_timeout_seconds(request),
+            timeout=request_timeout_seconds(settings.models.summarize),
             prompt_digest=prompt_digest,
             run_id=run_id,
             trace=trace,
@@ -129,7 +129,7 @@ def stage_validate(
     model = settings.models.summarize
     model_id = model.id
     markers = derive_turn_markers(
-        model_endpoint, entry=model, timeout=request_timeout_seconds(model.request)
+        model_endpoint, entry=model, timeout=request_timeout_seconds(model)
     )
     scores: list[float] = []
 

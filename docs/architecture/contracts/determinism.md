@@ -138,7 +138,7 @@ The model file spells llama-server's own flags, so the record enumerates flags r
 | Knob | Where it lands |
 | --- | --- |
 | `--ctx-size`, `--batch-size`, `--ubatch-size`, `--threads` | Their own fields, under this project's names for them. They change how the partial sums accumulate. |
-| `temperature`, `top_p`, `seed` | `sampling`, one key each. No span budget is in it, because no span carries one: the two decode caps left the settings on 2026-09-21, and what bounds a span is the window and the per-request timeout, both enumerated elsewhere. |
+| `temperature`, `top_p`, `seed`, and every other sampler the entry declares | `sampling`, one key each, and the whole block the request sent. Three were read by name until 2026-09-23 while the body carried thirteen, so ten keys could move the decode with this record unchanged. A key the file leaves out is a key that is absent: there is no list of every sampler to write a default against, and inventing one would file a guess as a measurement (Guardrail #10). No span budget is in it, because no span carries one: the two decode caps left the settings on 2026-09-21, and what bounds a span is the window and the per-request timeout, both enumerated elsewhere. |
 | `-ctk`, `-ctv`, `-fa`, `-np`, `-tb` and the cache and template switches | `runtime_flags`, one key each, under llama-server's own flag names. A quantised KV cache, another attention kernel, a second slot and a different prompt-thread count each change how the partial sums accumulate. |
 | The turn envelope | `turn_markers_sha256`, and `prompt_sha256` as well, because the prompt is rendered through the envelope. |
 

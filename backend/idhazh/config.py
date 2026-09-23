@@ -29,7 +29,7 @@ from idhazh.contracts.run_manifest import ConfigDigest
 from idhazh.contracts.sources import Sources
 from idhazh.contracts.taxonomy import Taxonomy
 from idhazh.contracts.watchlist import Watchlist
-from idhazh.llm.server import SETTING_KEYS
+from idhazh.llm.server import SETTING_KEYS, refuse_a_sampling_key_a_route_sets
 
 REPO_ROOT: Final = Path(__file__).resolve().parents[2]
 DEFAULT_CONFIG_DIR: Final = REPO_ROOT / "config"
@@ -44,19 +44,23 @@ _APPEARANCE_FILE: Final = "appearance.json"
 
 
 def refuse_a_model_nothing_could_run(models_file: str, models: ModelsConfig) -> None:
-    """Three questions asked once, before anything is fetched and before any server.
+    """Four questions asked once, before anything is fetched and before any server.
 
     The settings blocks are plain mappings, so llama-server refuses a flag it
-    does not accept and nothing here second-guesses it. These three are the ones
+    does not accept and nothing here second-guesses it. These four are the ones
     the binary cannot answer for.
 
-    **Two keys are required**, because this project computes on them and a
+    **The window is required**, because this project computes on it and a
     default of ours beside a default of the server's is two answers for one
-    value. The window is real arithmetic in `idhazh.classify.dag` and
+    value. It is real arithmetic in `idhazh.classify.dag` and
     `idhazh.evals.qualify`, and the published site reads it at build time. The
-    timeout is multiplied by sixty at four call sites and llama-server has no
-    default to fall back on, so it is coerced here - a string then raises naming
-    the key rather than inside a request mid-item.
+    per-request timeout is required too and the entry itself enforces that, so a
+    string there raises naming the key rather than inside a request mid-item.
+
+    **A sampling key that a route sets itself is refused here**, where an
+    operator is reading a message about the file they just edited. Left to the
+    builder it fires on the first item of every shard at once, after each has
+    already restored the cache and loaded the weights.
 
     **`declared_for` catches one specific edit**: a weights string changed in
     place with the settings left behind. Nothing else in the tree sees a
@@ -68,25 +72,20 @@ def refuse_a_model_nothing_could_run(models_file: str, models: ModelsConfig) -> 
     the pair.
     """
     for role, entry in models.entries():
-        for block, name in (
-            (entry.server, "n_ctx"),
-            (entry.request, "request_timeout_minutes"),
-        ):
-            key = SETTING_KEYS[name]
-            if key not in block:
-                raise ValueError(
-                    f"config/{models_file} is refused: models.{role} declares no {key}. "
-                    "This project computes on it, so there is no server-side default "
-                    "to fall back to"
-                )
-        timeout = SETTING_KEYS["request_timeout_minutes"]
-        try:
-            float(entry.request[timeout])
-        except (TypeError, ValueError) as error:
+        key = SETTING_KEYS["n_ctx"]
+        if key not in entry.server:
             raise ValueError(
-                f"config/{models_file} is refused: models.{role}.request.{timeout} is "
-                f"{entry.request[timeout]!r}, which is not a number of minutes"
-            ) from error
+                f"config/{models_file} is refused: models.{role} declares no {key}. "
+                "This project computes on it, so there is no server-side default "
+                "to fall back to"
+            )
+        taken = refuse_a_sampling_key_a_route_sets(entry.sampling)
+        if taken is not None:
+            raise ValueError(
+                f"config/{models_file} is refused: models.{role}.sampling is not free "
+                f"to set every key, and {taken}. A request key that re-spells or "
+                "disables constrained decoding is the route's own"
+            )
         if entry.declared_for != entry.sha256:
             raise ValueError(
                 f"config/{models_file} is refused: models.{role} is declared for "

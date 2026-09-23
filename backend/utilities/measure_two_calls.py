@@ -661,7 +661,7 @@ def run_item(
         table,
         model_id=model.id,
         server=model.server,
-        request=model.request,
+        sampling=model.sampling,
         markers=markers,
         prompt_config=app.summarize,
     )
@@ -732,7 +732,7 @@ def pick_samples(
             table,
             model_id=model.id,
             server=model.server,
-            request=model.request,
+            sampling=model.sampling,
             markers=markers,
             prompt_config=app.summarize,
         )
@@ -989,7 +989,7 @@ def main(argv: list[str] | None = None) -> int:
                     element_table(built.article, config=app.elements),
                     model_id=model.id,
                     server=model.server,
-                    request=model.request,
+                    sampling=model.sampling,
                     markers=markers,
                     prompt_config=app.summarize,
                 )["prompt"]

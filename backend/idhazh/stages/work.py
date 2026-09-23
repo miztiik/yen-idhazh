@@ -161,7 +161,7 @@ def _shard_cells(
         "weights_pinned": setting(model.server, "load_mode") == "mmap+mlock",
         "label_budget_tokens": calls.label_budget_tokens(),
         "summary_budget_tokens": calls.summarize_and_plan_budget_tokens(settings.app.summarize),
-        "temperature": setting(model.request, "temperature"),
+        "temperature": model.sampling.get("temperature"),
     }
 
 
@@ -309,15 +309,15 @@ def stage_work(
     )
     read_url = fetcher or common.live_fetcher(settings, tracer=tracer)
     model = settings.models.summarize
-    observed = props(model_endpoint, timeout=request_timeout_seconds(model.request))
+    observed = props(model_endpoint, timeout=request_timeout_seconds(model))
     markers = derive_turn_markers(
-        model_endpoint, entry=model, timeout=request_timeout_seconds(model.request)
+        model_endpoint, entry=model, timeout=request_timeout_seconds(model)
     )
     inputs = build_inputs(
         model=model,
         model_sha256=model.sha256,
         server=model.server,
-        request=model.request,
+        sampling=model.sampling,
         truncation_cap_tokens=settings.app.extract.truncation_cap_tokens,
         runtime_build=runtime_build(base_url=settings.app.model_server.base_url),
         chat_template=str(observed.get("chat_template") or UNRECORDED_TEMPLATE),

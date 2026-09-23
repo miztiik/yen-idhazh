@@ -110,7 +110,7 @@ Statuses: PENDING, IN PROGRESS, BLOCKED, DONE. A row's status is stamped by the 
 | 6 | The loopback literals outside the workflows become one function | 4 | A | DONE | p47w3 | - | W3 |
 | 7 | The model file, and the value nothing reads | 4 | A | DONE | p47w2 | - | W2 |
 | 8 | The run says which server answered | 3 | A | DONE | p47w3 | - | W3 |
-| 9 | Sampling settings pass through, unmapped | 8 | B | PENDING | - | - | - |
+| 9 | Sampling settings pass through, unmapped | 8 | B | DONE | p47w5 | - | W5 |
 | 10 | Model slots get nouns | 9 | B | PENDING | - | - | - |
 | 11 | The run record stops claiming a build it cannot see | 2 | C | DONE | p47w4 | - | W4 |
 

@@ -32,7 +32,7 @@ from conftest import (
     FIXTURES_DIR,
     REPO_ROOT,
     RecordedEndpoint,
-    a_request,
+    a_sampling,
     a_server,
     committed_markers,
     llama_server_flags,
@@ -201,7 +201,7 @@ def summarised(name: str, source: str = "ok") -> Summary:
 def test_the_system_prompt_never_carries_the_article() -> None:
     """Decision 1: article text goes in the user turn, or the fence means nothing."""
     payload = build_request(
-        article(), model_id="m", request=a_request(), markers=built_envelope()
+        article(), model_id="m", sampling=a_sampling(), markers=built_envelope()
     )
     system = payload["messages"][0]
     assert system["role"] == "system"
@@ -241,13 +241,114 @@ def test_decoding_parameters_come_from_config_and_nowhere_else() -> None:
         system="s",
         user="u",
         output_schema={},
-        request=a_request(),
+        sampling=a_sampling(),
         markers=built_envelope(),
     )
     assert payload["temperature"] == 0.0
     assert payload["top_p"] == 1.0
     assert payload["seed"] == 0
     assert payload["stream"] is False
+
+
+def test_a_sampler_no_code_of_ours_names_reaches_the_body_verbatim() -> None:
+    """The row's oracle. The block is splatted, so a new sampler costs no edit here.
+
+    Three keys were wired one at a time until 2026-09-23 and a fourth validated
+    and was dropped in silence. One key nothing in this repository mentions is
+    the whole check: a per-key gate cannot pass it under any spelling.
+    """
+    for body in three_bodies(a_sampling(top_n_sigma=1.5, dry_base=1.75)):
+        assert body["top_n_sigma"] == 1.5
+        assert body["dry_base"] == 1.75
+
+
+@pytest.mark.parametrize(
+    ("route", "taken"),
+    [("chat", "json_schema"), ("completion", "grammar"), ("grammar", "grammar_lazy")],
+)
+def test_a_route_refuses_a_sampling_key_it_sets_itself(route: str, taken: str) -> None:
+    """Each builder refuses from its own set, and the refusal names the key.
+
+    `grammar_lazy` is the sharpest of the three: it leaves `grammar` formally
+    applied and never engaged, so the control would be off with its own key
+    untouched and nothing in the body looking wrong.
+    """
+    with pytest.raises(ValueError, match=taken):
+        three_bodies(a_sampling(**{taken: True}), only=route)
+
+
+def test_a_key_the_route_wrote_itself_is_refused_even_where_no_set_names_it() -> None:
+    """The half a static list cannot hold: what a builder put in the body.
+
+    `prompt` is not a decode control and is on nobody's refused list. It is the
+    rendered bytes the route wrote, and a config key that replaced them would
+    send an article nobody wrote.
+    """
+    with pytest.raises(ValueError, match="prompt"):
+        three_bodies(a_sampling(prompt="whatever the file says"), only="completion")
+
+
+def test_the_derived_bodies_inherit_the_sampling_rather_than_splatting_it_again() -> None:
+    """The fourth builder is a derivation, so it must not run the check at all.
+
+    `continued_completion_payload` is `{**first, ...}` and `first` already
+    carries every sampling key, so a second splat would clash on all thirteen
+    and raise on every summarize-and-plan call.
+    """
+    first = three_bodies(a_sampling(top_k=40), only="completion")
+    second = continued_completion_payload(
+        first,
+        reply='{"title": "a bridge"}',
+        user="Now the picture.",
+        output_schema=output_schema(),
+        markers=built_envelope(),
+        max_answer_tokens=64,
+    )
+
+    assert second["top_k"] == 40, "the derivation inherits the block through the first body"
+    assert second["prompt"].startswith(first["prompt"])
+
+
+def three_bodies(sampling: dict[str, Any], *, only: str | None = None) -> Any:
+    """One sampling block through each constructing builder, or through one of them.
+
+    The three are asked together because the rule is the same rule on all three
+    and a case written against one of them says nothing about the other two.
+    """
+    built = {
+        "chat": lambda: request_payload(
+            model_id="m",
+            system="s",
+            user="u",
+            output_schema=output_schema(),
+            sampling=sampling,
+            markers=built_envelope(),
+        ),
+        "completion": lambda: completion_payload(
+            model_id="m",
+            system="s",
+            user="u",
+            output_schema=output_schema(),
+            server=a_server(),
+            sampling=sampling,
+            markers=built_envelope(),
+            max_answer_tokens=64,
+        ),
+        "grammar": lambda: grammar_completion_payload(
+            model_id="m",
+            system="s",
+            user="u",
+            grammar='root ::= "yes"',
+            server=a_server(),
+            sampling=sampling,
+            markers=built_envelope(),
+            max_answer_tokens=4,
+            first_token_alternatives=3,
+        ),
+    }
+    if only is not None:
+        return built[only]()
+    return [make() for make in built.values()]
 
 
 def test_the_chat_route_sends_no_token_cap_on_either_envelope() -> None:
@@ -260,13 +361,13 @@ def test_the_chat_route_sends_no_token_cap_on_either_envelope() -> None:
     no context shift, and what bounds the wait is the per-request timeout -
     both per item, both loud.
     """
-    request = a_request()
+    sampling = a_sampling()
     quiet = request_payload(
         model_id="m",
         system="s",
         user="u",
         output_schema={},
-        request=request,
+        sampling=sampling,
         markers=built_envelope(),
     )
     loud = request_payload(
@@ -274,7 +375,7 @@ def test_the_chat_route_sends_no_token_cap_on_either_envelope() -> None:
         system="s",
         user="u",
         output_schema={},
-        request=request,
+        sampling=sampling,
         markers=built_envelope(thinking_close="</think>"),
     )
 
@@ -290,7 +391,7 @@ def test_thinking_is_off_in_the_request() -> None:
         system="s",
         user="u",
         output_schema={},
-        request=a_request(),
+        sampling=a_sampling(),
         markers=committed_envelope(),
     )
     assert payload["chat_template_kwargs"] == {"enable_thinking": False}
@@ -303,7 +404,7 @@ def test_the_declared_closing_marker_is_what_asks_the_template_to_think() -> Non
         system="s",
         user="u",
         output_schema={},
-        request=a_request(),
+        sampling=a_sampling(),
         markers=built_envelope(thinking_close="</think>"),
     )
     assert payload["chat_template_kwargs"] == {"enable_thinking": True}
@@ -322,7 +423,7 @@ def test_a_template_that_reads_no_keyword_is_sent_none() -> None:
         system="s",
         user="u",
         output_schema={},
-        request=a_request(),
+        sampling=a_sampling(),
         markers=built_envelope(thinking_kwarg=None),
     )
     assert "chat_template_kwargs" not in payload
@@ -335,7 +436,7 @@ def test_the_keyword_the_request_carries_is_the_one_the_entry_names() -> None:
         system="s",
         user="u",
         output_schema={},
-        request=a_request(),
+        sampling=a_sampling(),
         markers=built_envelope(thinking_kwarg="reasoning"),
     )
     assert payload["chat_template_kwargs"] == {"reasoning": False}
@@ -348,7 +449,7 @@ def test_the_output_shape_is_enforced_by_the_decoder() -> None:
         system="s",
         user="u",
         output_schema=output_schema(),
-        request=a_request(),
+        sampling=a_sampling(),
         markers=built_envelope(),
     )
     assert payload["response_format"]["type"] == "json_schema"
@@ -1159,7 +1260,7 @@ def test_no_placeholder_survives_into_a_rendered_prompt() -> None:
 def test_a_recorded_brief_uses_the_brief_band_even_when_the_source_is_longer() -> None:
     source = article().model_copy(update={"brief": True, "word_count": 190})
     payload = build_request(
-        source, model_id="m", request=a_request(), markers=built_envelope()
+        source, model_id="m", sampling=a_sampling(), markers=built_envelope()
     )
     system = payload["messages"][0]["content"]
 
@@ -1184,7 +1285,7 @@ def test_a_cut_long_read_is_still_asked_for_a_long_read_summary() -> None:
         }
     )
     system = build_request(
-        source, model_id="m", request=a_request(), markers=built_envelope()
+        source, model_id="m", sampling=a_sampling(), markers=built_envelope()
     )["messages"][0]["content"]
     assert f"{top.target_words_min} to {top.target_words_max} words" in system
 
@@ -1194,7 +1295,7 @@ def test_an_article_written_before_the_field_keeps_its_post_cap_band() -> None:
     ask = SummarizeConfig()
     older = article().model_copy(update={"word_count": 1900, "source_word_count": None})
     system = build_request(
-        older, model_id="m", request=a_request(), markers=built_envelope()
+        older, model_id="m", sampling=a_sampling(), markers=built_envelope()
     )["messages"][0]["content"]
     band = ask.band_for(1900)
     assert f"{band.target_words_min} to {band.target_words_max} words" in system
@@ -1752,7 +1853,7 @@ class TestTwoSpansOnOneCall:
             user="U",
             output_schema=output_schema(),
             server=a_server(),
-            request=a_request(),
+            sampling=a_sampling(),
             markers=self.markers(),
             max_answer_tokens=ANSWER_BUDGET,
         )
@@ -1897,7 +1998,7 @@ class TestAConstrainedCallerGetsBothSpans:
             "user": "U",
             "grammar": 'root ::= "YES" | "NO" | "UNCLEAR"',
             "server": a_server(),
-            "request": a_request(),
+            "sampling": a_sampling(),
             "markers": self.markers(),
             "max_answer_tokens": 4,
             "first_token_alternatives": 3,
@@ -1911,7 +2012,7 @@ class TestAConstrainedCallerGetsBothSpans:
             user="U",
             output_schema=output_schema(),
             server=a_server(),
-            request=a_request(),
+            sampling=a_sampling(),
             markers=self.markers(),
             max_answer_tokens=ANSWER_BUDGET,
         )
@@ -1940,7 +2041,7 @@ class TestAConstrainedCallerGetsBothSpans:
         it repeats itself, and the repetition ends at the window rather than at
         the marker it is looping instead of writing.
         """
-        answer = self.grammar_body(request=a_request(temperature=0.0))
+        answer = self.grammar_body(sampling=a_sampling(temperature=0.0))
 
         stated = thinking_span(answer, markers=self.markers(), temperature=0.7)
         carried = thinking_span(answer, markers=self.markers())
@@ -2069,7 +2170,7 @@ class TestTheThinkingReachesNothing:
             user="U",
             output_schema=output_schema(),
             server=a_server(),
-            request=a_request(),
+            sampling=a_sampling(),
             markers=markers,
             max_answer_tokens=900,
         )

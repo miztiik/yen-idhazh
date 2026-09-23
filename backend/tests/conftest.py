@@ -227,15 +227,9 @@ def a_server(**flags: Any) -> dict[str, Any]:
     }
 
 
-def a_request(**values: Any) -> dict[str, Any]:
-    """The request half of the same thing, at the values a greedy decode uses."""
-    return {
-        "temperature": 0.0,
-        "top_p": 1.0,
-        "seed": 0,
-        "request_timeout_minutes": 22.1,
-        **values,
-    }
+def a_sampling(**values: Any) -> dict[str, Any]:
+    """The sampling half of the same thing, at the values a greedy decode uses."""
+    return {"temperature": 0.0, "top_p": 1.0, "seed": 0, **values}
 
 
 def llama_server_flags() -> frozenset[str]:
@@ -548,6 +542,6 @@ def label_payload(article: Article) -> dict[str, Any]:
         a_table(article),
         model_id="m",
         server=entry.server,
-        request=entry.request,
+        sampling=entry.sampling,
         markers=committed_markers(),
     )

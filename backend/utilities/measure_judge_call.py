@@ -354,7 +354,7 @@ def judge_calls(
     # inside a `partial`, so an unresolved address would raise there instead.
     base_url = base_url or resolve_endpoint(settings.app.model_server.base_url)
     entry = judge.entry_of(settings)
-    timeout = request_timeout_seconds(entry.request)
+    timeout = request_timeout_seconds(entry)
     prompt.first_token_openings(partial(token_pieces, base_url, timeout=timeout))
     markers = derive_turn_markers(base_url, entry=entry, timeout=timeout)
     client = partial(post, endpoint=completion_url(base_url), timeout=timeout)
