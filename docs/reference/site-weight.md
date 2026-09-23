@@ -980,7 +980,7 @@ produced this asked for a document growing with months and not with days, and
 that is not what the measurement says. The design was kept and the claim was
 corrected: reaching zero means not emitting a link for each published day, and a
 reader with no script would then reach seven days and no further
-([../architecture/publishing/frontend.md](../architecture/publishing/frontend.md#the-day-list-grows-with-months-on-the-page-and-with-days-in-the-document)).
+([../architecture/publishing/how-a-reader-finds-a-story.md](../architecture/publishing/how-a-reader-finds-a-story.md#the-day-list-grows-with-months-on-the-page-and-with-days-in-the-document)).
 
 **What a reader sees is the number that did change.** At 700 days the list is
 **18 rows** - seven days, nine months of the newest published year, and one row
