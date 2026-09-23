@@ -7,9 +7,9 @@ writers never share a filename there - `ledger.segment_name` spells the identity
 settlement is something a reader does rather than something a writer leaves
 behind.
 
-**The walk reads both shapes.** A `<DD>.csv` day file and a `<DD>/` day
-directory are each one recorded day, so a store whose committed history still
-holds the flat file reads back beside one that has moved.
+**A day is a directory and nothing else.** Every committed ledger here files
+that way, so a `<DD>.csv` beside a month's day directories is a name no writer
+spells and the walk refuses it with every other stray.
 
 **The fold is the compaction's, moved rather than copied.** `settle` runs the
 identical three cases `stages.compact` ran into a head - join, supersede, repeat
@@ -64,7 +64,8 @@ SETTLED_NAME: Final = "settled.csv"
 #: `GITHUB_RUN_ATTEMPT` starts at 1 and attempt 0 is a place no writer can take.
 SETTLED_ATTEMPT: Final = 0
 
-#: Every shard here is a CSV. Spelled once, used by both shapes of the walk.
+#: Every shard here is a CSV. Spelled once, so the walk and the refusal that
+#: catches a stray beside one cannot disagree about what a shard looks like.
 SUFFIX: Final = ".csv"
 
 #: The one non-key cell two rows may fill differently without disagreeing. It
@@ -103,10 +104,10 @@ def _refuse_stray(entry: Path, root: Path) -> NoReturn:
     """Nothing inside a day tree may be ignored, so an odd name stops the read."""
     raise ValueError(
         f"{root.parent.name}/{root.name} holds "
-        f"{entry.relative_to(root).as_posix()}, which is neither a YYYY/MM/DD day "
-        "file nor a writer's file inside a YYYY/MM/DD day directory. A file the "
-        "reader cannot place is how it starts missing rows, so it refuses the "
-        "read rather than skipping the file."
+        f"{entry.relative_to(root).as_posix()}, which is not a file inside a "
+        "YYYY/MM/DD day directory. A file the reader cannot place is how it "
+        "starts missing rows, so it refuses the read rather than skipping the "
+        "file."
     )
 
 
@@ -126,16 +127,11 @@ def _is_day(year: str, month: str, day: str) -> bool:
 
 
 def _one_day(entry: Path, root: Path, year: str, month: str) -> list[Path]:
-    """Every shard of one recorded day, whichever of the two shapes it is in.
+    """Every shard of one recorded day: each `.csv` in its directory, in name order.
 
-    A day file is one shard. A day directory is every `.csv` inside it, in name
-    order, and a directory holding none of them is refused rather than read as a
-    day that recorded nothing.
+    A directory holding none of them is refused rather than read as a day that
+    recorded nothing.
     """
-    if entry.is_file():
-        if entry.suffix != SUFFIX or not _is_day(year, month, entry.stem):
-            _refuse_stray(entry, root)
-        return [entry]
     if not (entry.is_dir() and _is_day(year, month, entry.name)):
         _refuse_stray(entry, root)
     shards = []
@@ -222,24 +218,12 @@ def dates_by_month(root: Path, *, days: int) -> dict[str, list[str]]:
     return months
 
 
-def _is_day_file(shard: Path) -> bool:
-    """Whether a shard is a `<DD>.csv` day file rather than a writer's file.
-
-    Read off the path and never the name: the grandparent of a day file is its
-    year and four digits wide, and the grandparent of a writer's file is its
-    month and two.
-    """
-    return day_partition.is_segment(shard.parent.parent.name, day_partition.YEAR_WIDTH)
-
-
 def date_of(shard: Path) -> str:
     """The `<YYYY-MM-DD>` a shard is filed under, read off its own path.
 
-    The peer of `day_partition.date_of`, and it answers for both shapes.
-    Nothing here opens the file.
+    The peer of `day_partition.date_of` for a ledger filed by day directory: the
+    three names above the file spell the date. Nothing here opens the file.
     """
-    if _is_day_file(shard):
-        return f"{shard.parent.parent.name}-{shard.parent.name}-{shard.stem}"
     day = shard.parent
     return f"{day.parent.parent.name}-{day.parent.name}-{day.name}"
 
@@ -250,13 +234,10 @@ def _carries_no_identity(shard: Path) -> bool:
     Three names are reserved, and each is declared where it is minted with its
     own removal condition beside it: `settled.csv` here for a closed day's fold,
     `ledger.BEFORE_PARTITION_NAME` for the bytes a committed head already held,
-    and `ledger.repair_name` for an operator's one add. A `<DD>.csv` day file is
-    a fourth shape with the same property - a fold somebody already settled.
+    and `ledger.repair_name` for an operator's one add.
     """
-    return (
-        shard.name in (SETTLED_NAME, ledger.BEFORE_PARTITION_NAME)
-        or ledger.is_repair(shard.name)
-        or _is_day_file(shard)
+    return shard.name in (SETTLED_NAME, ledger.BEFORE_PARTITION_NAME) or ledger.is_repair(
+        shard.name
     )
 
 
@@ -398,10 +379,9 @@ def one_day(root: Path, date: str) -> list[Path]:
     if not month.is_dir():
         return []
     entry = month / date[8:10]
-    if entry.is_dir():
-        return _one_day(entry, root, date[:4], date[5:7])
-    day_file = month / f"{date[8:10]}{SUFFIX}"
-    return [day_file] if day_file.is_file() else []
+    if not entry.is_dir():
+        return []
+    return _one_day(entry, root, date[:4], date[5:7])
 
 
 def settled_day(

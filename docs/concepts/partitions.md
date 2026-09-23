@@ -118,12 +118,13 @@ directory a later fold read into a `<DD>.csv` head, which meant every ledger had
 one path that two runs of one day both computed bytes for. Now the day directory
 *is* the ledger: the only thing that changed at the cutover was the parent.
 
-`idhazh.day_shards` is the walk, and it reads **both** shapes: a `<DD>.csv` day
-file and a `<DD>/` day directory are each one recorded day.
-`day_shards.shard_files(root, days=...)` yields every file of the newest `days`
-recorded days, and **the cover counts days rather than files**, so a day of five
-writers is still one day. `day_shards.date_of` reads the date off either shape
-without opening the file.
+`idhazh.day_shards` is the walk, and a day is a `<DD>/` directory and nothing
+else. `day_shards.shard_files(root, days=...)` yields every file of the newest
+`days` recorded days, and **the cover counts days rather than files**, so a day
+of five writers is still one day. `day_shards.date_of` reads the date off the
+three directory names above the file and opens nothing. A `<DD>.csv` beside a
+month's day directories is a name no writer spells, so the walk refuses it with
+every other stray.
 
 **The settlement is a read, not a write.** `day_shards.settled_rows` runs the
 three cases a compaction ran into a head - join, supersede, repeat - and

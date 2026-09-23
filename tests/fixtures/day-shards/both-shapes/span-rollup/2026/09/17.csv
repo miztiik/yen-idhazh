@@ -1,3 +1,0 @@
-version,date,run_id,shard,span_name,count,total_ms,unattributed_ms
-2026-09-06,2026-09-17,2026-09-17-1,0,item,8,2600,200
-2026-09-06,2026-09-17,2026-09-17-1,0,tag,8,90,

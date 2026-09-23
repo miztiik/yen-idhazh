@@ -471,30 +471,26 @@ the last day there was.
 | `similarity-holdout.mergeLineHoldoutScore` | through `readDayShards`, over `state/content-similarity-judge/merge-line-holdout-scores/` | its caller's `days`. The Judgement route hands it the widest window preset, worked out before the first file is opened |
 | `span-rollup.loadSpanRollup` | `state/span-rollup/` at both grains: through `readShards` over the month files, and through `readDayShards` over the day tree | the same 5 months for the month files, and the same 91 days for the day tree. Only one of the two shapes is ever on disk, so the sum is what is there |
 | `machine-counters.loadMachineCounters` | `state/host-fingerprint/` and `state/item-health/`, both through `readDayShards` | the day cover, for both |
-| `payload.itemHealthForDay` | one item-health day file | one date |
 | `payload.dayMetrics` | one record a date | the dates handed in |
 | `payload.telemetryMonths`, `payload.indexMonths` | one directory listing, sliced to the newest months | `LEDGER_WINDOW_MONTHS`, where the caller takes it |
 
-**A day is one file today and a directory of writer-owned files later, and the
-cover counts days either way.** Where more than one job writes a ledger there is
-no head to fold into, so the day holds one file per writer -
-`<run_id>-<attempt>-<job>-<shard>.csv`, and no two writers can name one file
-([partitions.md](partitions.md#what-counts-as-a-day-file)). `dayShardFiles`
-groups those files by their day before it takes the newest `days` of them, so
-`LEDGER_WINDOW_DAYS` keeps meaning 91 recorded days whatever shape the store is
-in. What moves is the file count inside the window, not the window.
+**A day is a directory of writer-owned files, and the cover counts days rather
+than files.** There is no head to fold into, so the day holds one file per
+writer - `<run_id>-<attempt>-<job>-<shard>.csv`, and no two writers can name one
+file ([partitions.md](partitions.md#what-counts-as-a-day-file)).
+`dayShardFiles` groups those files by their day before it takes the newest
+`days` of them, so `LEDGER_WINDOW_DAYS` keeps meaning 91 recorded days whatever
+the store holds. What moves is the file count inside the window, not the window.
 
 **What that costs, said rather than implied.** A live day costs one open per
 writer. On the two five-run days measured on 2026-09-17 and 2026-09-20 that is
 20 writers for item-health and 25 for host-fingerprint, against one file each
-today. A day whose writers have been folded to one `settled.csv` costs one open
-again. So the read is bounded by the number of days still unfolded times the
-writers a day, plus one file for every folded day in the window - and by nothing
-in the archive behind it. **Nothing writes a day directory yet**, so today every
-one of these reads opens exactly the files it opened before. The fold that puts
-the ceiling on the unfolded half is a later row of the same plan; until it
-lands, the unfolded half is every day in the 91-day window, which is the honest
-upper bound and the reason this paragraph says so instead of naming a knob.
+before the day directory landed. A day whose writers have been folded to one
+`settled.csv` costs one open again. So the read is bounded by the number of days
+still unfolded times the writers a day, plus one file for every folded day in
+the window - and by nothing in the archive behind it. The fold closes a day
+`run.settled_fold_after_days` behind the run's own date, so the unfolded half is
+that many days rather than the whole 91-day window.
 
 **The holdout read is the one on this page whose cover is a file rather than a
 number, and it is the one that reaches outside the window.** It asks whether the
