@@ -14,8 +14,8 @@ The workflows these jobs belong to are in
 
 The plan job, each work shard and the assemble job commit, then push in a loop
 bounded by a wall clock. The bench's `runtime` job does too. All of them
-run one script,
-[`.github/scripts/commit-and-push.sh`](../../../.github/scripts/commit-and-push.sh).
+run one program,
+[`backend/utilities/commit_and_push.py`](../../../backend/utilities/commit_and_push.py).
 Two copies of the loop were a loop no test could execute.
 
 **A ledger reaches the repository only when the job that wrote it stages it.** No
@@ -217,10 +217,12 @@ still names a file that is really in the tree. `DROP_RACED_ASSETS_COMMAND` witho
 commit the drops. Why it is a drop and not a merge side, a refresh or a rename is
 in [`../architecture/publishing/visuals.md`](visuals.md).
 
-**Every command in the loop is guarded.** An unguarded command ends the script
-inside attempt 1 under `bash -e`: no attempt 2, no failure message, no day, and a
-checkout left mid-rebase. A guarded failure says what it was, leaves no rebase in
-progress, and ends on the caller's own message plus the attempt it reached.
+**Every git call in the loop is checked, never raised through.** A raised
+exception ends the run inside attempt 1 exactly as `bash -e` did before the loop
+was Python: no attempt 2, no failure message, no day, and a checkout left
+mid-rebase. Every call passes `check=False` and its caller reads the return
+code, so a failure says what it was, leaves no rebase in progress, and ends on
+the caller's own message plus the attempt it reached.
 
 ## A conflicted path is settled by who wrote it, never by which side it came from
 
@@ -231,14 +233,14 @@ writer's identity is already in the filename instead.
 run, the try at that run, the job and the shard inside it, and GitHub allocates
 the execution number inside the run id, so no second writer can take that name.
 
-**The script looks for that identity anywhere in the name, not only at the
+**The program looks for that identity anywhere in the name, not only at the
 front.** A run id is `<date>-<execution>`, and the date is the plan job's to
 choose, so the runner never hands a commit step the whole of it. What the runner
 does hand over is the execution number, which is eleven digits nothing else in a
 committed filename produces - so the execution number with the attempt, the job
 and the shard behind it names one writer just as exactly as a match from the
 first character would. Off a runner there is no execution number at all, and the
-script answers "not mine" before it compares anything: a checkout that is not a
+program answers "not mine" before it compares anything: a checkout that is not a
 job owns nothing.
 
 So a conflicted filename that carries this job's own four values is this
@@ -258,10 +260,10 @@ next one into a message instead of a silent loss.
 **A file this job wrote that the tip has deleted stops the push too**, and that
 case needs a second read of the index to catch. Git's spelling for keeping one
 side of a conflict exits 0 and changes nothing when the side it is asked for is
-the deleted one, so the path is left unmerged with no error anywhere and
-`set -euo pipefail` walks straight past it into a rebase that cannot continue.
+the deleted one, so the path is left unmerged with no error anywhere and a
+return code of zero walks straight past it into a rebase that cannot continue.
 Nothing but retention, the closed-day fold or a person can have taken a file
-named for this job, so putting it back is not a resolution this script may make.
+named for this job, so putting it back is not a resolution this program may make.
 The message prints one identity, because one is all there is: a second field
 would always be empty.
 
@@ -331,14 +333,14 @@ into a directory that no longer exists, and the rebase stops with
 `CONFLICT (file location)` over a tree that was correct. The segment store was
 the first place this bit; deleting it moved the drain rather than removing it.
 
-So every rebase in the script runs with `-c merge.directoryRenames=false`. Proved
+So every rebase in the program runs with `-c merge.directoryRenames=false`. Proved
 in a scratch repository on 2026-09-22: the same replay conflicts with the guess
 on and reports `Successfully rebased` with it off, losing nothing. It is a
 per-invocation flag rather than a runner-wide setting, because the runner's
 config is not the repository's and a behaviour a reader cannot see from the
-script is one nobody will find.
+program is one nobody will find.
 
-A workflow contract test pins this shape, and executes the script against real
+A workflow contract test pins this shape, and executes the program against real
 local repositories - including a scripted origin that gains both another run of
 the same day and an unrelated pull-request merge while the job works, and one
 where both sides rendered a chart onto the same path. CI never runs `digest.yml`,

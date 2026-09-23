@@ -179,7 +179,6 @@ SHELLCHECK_COMMAND: Final = "shellcheck --severity=style .github/scripts/*.sh"
 #: a script deletes its name in the same commit, and the test reads both directions, so
 #: neither a new file nor a forgotten name can pass.
 SHIPPED_SCRIPTS: Final = (
-    "commit-and-push.sh",
     "push-rewritten-history.sh",
     "take-state-from-the-tip.sh",
 )
@@ -583,7 +582,7 @@ METRICS_FILE: Final = "llama-metrics.prom"
 METRICS_ENDPOINT: Final = "http://127.0.0.1:${LLAMA_PORT}/metrics"
 
 METRICS_SERIES: Final = ("llamacpp:n_busy_slots_per_decode", "llamacpp:n_tokens_max")
-# The one commit-and-push step both daily jobs run. They differ in what they
+# The one commit step both daily jobs run. They differ in what they
 # stage, in the strings they pass, and in whether they can rebuild what they
 # commit, which is what makes the retry behaviour executable by a test instead
 # of only greppable in YAML.
@@ -592,14 +591,9 @@ METRICS_SERIES: Final = ("llamacpp:n_busy_slots_per_decode", "llamacpp:n_tokens_
 # the day, and then the telemetry months the fold took out of full grain. The
 # second one has to come after the first (see the workflow's own comment), so
 # they cannot be one call.
-COMMIT_SCRIPT: Final = SCRIPTS_DIR / "commit-and-push.sh"
-
-COMMIT_SCRIPT_CALL: Final = ("bash", ".github/scripts/commit-and-push.sh")
-
-#: The retry loop itself, which every test below executes. The shell script
-#: above is still what the workflows run, and goes when they are re-pointed at
-#: this. One loop either way: the two never both existed as live code.
 COMMIT_PROGRAM: Final = REPO_ROOT / "backend" / "utilities" / "commit_and_push.py"
+
+COMMIT_PROGRAM_CALL: Final = ("python", "backend/utilities/commit_and_push.py")
 
 # Which workflow each label's step lives in. `bench` is dispatched by hand, many
 # times a day, and since 2026-09-17 it pushes the machine it drew.
@@ -794,9 +788,9 @@ REVIEW_COMMAND: Final = "python backend/utilities/review_queue.py"
 
 REVIEW_ARTIFACT: Final = "review"
 
-# The seed a fresh checkout must already carry, because `commit-and-push.sh`
-# runs `git add "$@"` under `set -euo pipefail` - a staged path that does not
-# exist yet aborts the whole commit step and costs the ledgers staged beside it.
+# The seed a fresh checkout must already carry, because the commit program runs
+# `git add` over every path a job owns in one call - a staged path that does not
+# exist yet fails that call and costs the ledgers staged beside it.
 CORPUS_SEED: Final = ("corpus/corpus.jsonl", "corpus/corpus.meta.json", "corpus/holdout.txt")
 
 # One committed file per console payload root, read off the working tree rather
@@ -884,13 +878,12 @@ WORK_PAYLOAD_ARTIFACTS: Final = (
 COMMIT_IDENTITY: Final = "miztiik <miztiik@users.noreply.github.com>"
 
 
-#: Every file that configures git before a job commits. A runner carries no
-#: identity of its own, so each of these has to set one, and three copies of a
-#: name drift in silence unless something reads all of them.
-GIT_IDENTITY_SOURCES: Final = (
-    SCRIPTS_DIR / "commit-and-push.sh",
-    WORKFLOWS_DIR / "prune.yml",
-)
+#: Every file that configures git before a job commits and that no test runs. A
+#: runner carries no identity of its own, so each of these has to set one, and a
+#: name nothing reads drifts in silence. The commit program is not here: a test
+#: runs it and reads the identity off the commit it pushed, which settles the
+#: same question by execution.
+GIT_IDENTITY_SOURCES: Final = (WORKFLOWS_DIR / "prune.yml",)
 
 # What a `${{ }}` expression stands in for when a test runs the real call site
 # outside Actions. `day_dir` is the digest date as a path, which is what lets the
@@ -1073,7 +1066,7 @@ def _stages_a_state_path(workflow: dict[str, object]) -> bool:
     roots = (ledger.STATE_DIRNAME, f"{ledger.STATE_DIRNAME}/")
     for body in _run_bodies(workflow):
         for line in body.replace("\\\n", " ").splitlines():
-            if "commit-and-push.sh" not in line and "git add" not in line:
+            if "commit_and_push.py" not in line and "git add" not in line:
                 continue
             if any(word == roots[0] or word.startswith(roots[1]) for word in line.split()):
                 return True
@@ -1924,21 +1917,55 @@ def _substitute(text: str) -> str:
 
 
 def _commit_call(label: str) -> tuple[list[str], dict[str, str]]:
-    """The paths and the strings one commit step hands the shared script."""
+    """The paths and the strings one commit step hands the shared program."""
     workflow = _load_workflows()[COMMIT_WORKFLOWS[label]]
     job_name = COMMIT_JOBS[label]
     step = _step(workflow, job_name, "name", COMMIT_STEPS[label])
     command = shlex.split(_script(step, f"job {job_name} commit step {label}"))
-    assert tuple(command[:2]) == COMMIT_SCRIPT_CALL, (
-        f"{label} must commit through {COMMIT_SCRIPT_CALL[1]}"
+    assert tuple(command[:2]) == COMMIT_PROGRAM_CALL, (
+        f"{label} must commit through {COMMIT_PROGRAM_CALL[1]}"
     )
     declared = _mapping(step.get("env"), f"job {job_name} commit env {label}")
     settings = {name: _substitute(str(value)) for name, value in declared.items()}
     return command[2:], settings
 
 
+def _git_calls(source: str) -> list[str]:
+    """Every git command a Python program issues, rendered as the line it runs.
+
+    The retry loop is Python, so its git calls are argument lists rather than
+    shell words. Rendering them back into command lines is what lets one rule
+    read a workflow body, a shipped script and the program with no case per
+    medium. Source order, not execution order - which is what the same rule
+    already got from a shell file, where the functions are defined above the
+    loop that calls them.
+
+    An argument that is not a string literal is rendered as its own source text,
+    so a path held in a variable still appears on the line.
+    """
+    issued = [
+        node
+        for node in ast.walk(ast.parse(source))
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "_git"
+    ]
+    return [
+        " ".join(
+            [
+                "git",
+                *(
+                    argument.value
+                    if isinstance(argument, ast.Constant) and isinstance(argument.value, str)
+                    else ast.unparse(argument)
+                    for argument in node.args
+                ),
+            ]
+        )
+        for node in sorted(issued, key=lambda node: (node.lineno, node.col_offset))
+    ]
+
+
 def _bash() -> str | None:
-    """A bash that can run the commit script, or None on a host without one."""
+    """A bash that can run a shipped script, or None on a host without one."""
     if os.name != "nt":
         return shutil.which("bash")
     candidates: list[Path] = []
@@ -1953,7 +1980,7 @@ def _bash() -> str | None:
 
 requires_bash: Final = pytest.mark.skipif(
     _bash() is None,
-    reason="no bash on this host to execute .github/scripts/commit-and-push.sh",
+    reason=f"no bash on this host to execute .github/scripts/{SHIPPED_SCRIPTS[0]}",
 )
 
 # The loop word-splits `REGENERATE_COMMAND` on spaces, exactly as the workflow's
@@ -1969,12 +1996,12 @@ requires_space_free_paths: Final = pytest.mark.skipif(
 def _isolated_env(tmp_path: Path) -> dict[str, str]:
     """Git with no machine identity and no machine config to fall back on.
 
-    The script sets its own committer, so the test must not supply one: an
-    inherited `user.name` would hide the day the script stopped setting it.
+    The commit program sets its own committer, so the test must not supply one:
+    an inherited `user.name` would hide the day it stopped setting it.
 
     `GITHUB_OUTPUT` goes for a second reason. CI runs this suite inside a step
-    that has one, so an inherited value would let the script append to the gates
-    step's own outputs - and the test that the script survives without the
+    that has one, so an inherited value would let the program append to the
+    gates step's own outputs - and the test that it survives without the
     variable would only be a real test on the machines that never had it.
     """
     home = tmp_path / "home"

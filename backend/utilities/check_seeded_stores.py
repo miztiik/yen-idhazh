@@ -1,10 +1,10 @@
 """Does this checkout carry the state stores a run stages before it has written one?
 
 Three ledgers ship with the contract rather than appearing on the first run that
-has something to put in them. `commit-and-push.sh` runs `git add "$@"` under
-`set -euo pipefail`, so a path that is not there aborts the whole commit step and
-takes every sibling ledger staged in the same call with it. A header-only file
-is what makes the path exist on day one.
+has something to put in them. `backend/utilities/commit_and_push.py` stages
+every path a job owns in one `git add`, so a path that is not there fails that
+call, stops the whole commit step, and takes every sibling ledger staged beside
+it. A header-only file is what makes the path exist on day one.
 
 This is a check on a clone, not a check on code. Nothing a commit can change
 makes it fail: it goes red on a short checkout, a sparse checkout, or a

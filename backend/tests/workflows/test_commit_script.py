@@ -1,10 +1,13 @@
-"""What does the shared commit script do when it loses the race to push?"""
+"""What does the shared commit program do when it loses the race to push?"""
 
 from __future__ import annotations
 
+import ast
 import json
 import re
+from collections.abc import Iterator, Sequence
 from pathlib import Path
+from typing import Final
 
 import pytest
 from conftest import read_text
@@ -12,10 +15,11 @@ from conftest import read_text
 from idhazh import ledger
 from idhazh.contracts.base import ServerJob
 from idhazh.evals import writer as score_writer
+from utilities import commit_and_push
 
 from ._harness import (
     COMMIT_IDENTITY,
-    COMMIT_SCRIPT,
+    COMMIT_PROGRAM,
     COMMIT_STEPS,
     GIT_IDENTITY_SOURCES,
     RACED_ASSET,
@@ -86,21 +90,23 @@ def test_every_committing_job_configures_the_same_identity() -> None:
     """The repository commits under one name, and it says so in one voice.
 
     A hosted runner carries no git identity, so a job that commits has to set
-    one or `git commit` refuses. Three files set it and only one of them is
-    executed by a test, so the others could drift to a different name and
-    nothing would notice until a reader wondered who the other authors were.
+    one or `git commit` refuses. The commit program is executed by the tests
+    below, which read the name off the commit it pushed - so what is left here
+    is every other file that sets an identity and that nothing runs. One of
+    those could drift to a different name and nothing would notice until a
+    reader wondered who the other authors were.
     """
-    found = {
-        path.name: (
-            re.search(r'git config user\.name "([^"]+)"', read_text(path)),
-            re.search(r'git config user\.email "([^"]+)"', read_text(path)),
-        )
-        for path in GIT_IDENTITY_SOURCES
-    }
+    assert f"{commit_and_push.COMMITTER_NAME} <{commit_and_push.COMMITTER_EMAIL}>" == (
+        COMMIT_IDENTITY
+    )
 
-    for name, (author, address) in found.items():
-        assert author is not None, f"{name} commits, so it must set user.name"
-        assert address is not None, f"{name} commits, so it must set user.email"
+    assert GIT_IDENTITY_SOURCES, "no file is read, so this test would pass on nothing"
+    for path in GIT_IDENTITY_SOURCES:
+        text = read_text(path)
+        author = re.search(r'git config user\.name "([^"]+)"', text)
+        address = re.search(r'git config user\.email "([^"]+)"', text)
+        assert author is not None, f"{path.name} commits, so it must set user.name"
+        assert address is not None, f"{path.name} commits, so it must set user.email"
         assert f"{author.group(1)} <{address.group(1)}>" == COMMIT_IDENTITY
 
 
@@ -296,7 +302,34 @@ def test_the_commit_script_still_runs_where_no_step_output_exists(tmp_path: Path
     assert _git(origin, env, "log", "-1", "--format=%s").strip() == settings["COMMIT_MESSAGE"]
 
 
-def test_every_way_out_of_the_commit_script_says_whether_it_rebased() -> None:
+#: Every way `main` hands a number back that is not a caller error. Three come
+#: back zero - nothing staged, the push landed, the rebuild produced nothing new
+#: - two cannot commit what the job produced, and one gives up on the clock. A
+#: caller error returns 2 and is deliberately outside this count.
+WAYS_OUT: Final = 6
+
+
+def _statement_blocks(node: ast.AST) -> Iterator[list[ast.stmt]]:
+    """Every list of statements under a node, so a return reads with its neighbours."""
+    for child in ast.walk(node):
+        for field in ("body", "orelse", "finalbody"):
+            block = getattr(child, field, None)
+            if isinstance(block, list) and all(isinstance(item, ast.stmt) for item in block):
+                yield block
+
+
+def _says_whether_it_rebased(before: Sequence[ast.stmt]) -> bool:
+    """Whether one of these statements is the call that writes the step output."""
+    return any(
+        isinstance(statement, ast.Expr)
+        and isinstance(statement.value, ast.Call)
+        and isinstance(statement.value.func, ast.Name)
+        and statement.value.func.id == "_report_rebased"
+        for statement in before
+    )
+
+
+def test_every_way_out_of_the_commit_program_says_whether_it_rebased() -> None:
     """Three exits return zero and a fixture reaches two of them.
 
     The third - origin already holding everything a rebuild produced - needs a
@@ -304,30 +337,31 @@ def test_every_way_out_of_the_commit_script_says_whether_it_rebased() -> None:
     whether the day's own gate reads a stale build. So the exits are checked
     where they are written instead.
 
-    The argument-error exits above the function are deliberately out of scope.
-    They fire before anything is committed, they fail the step, and a step that
-    failed has already stopped the rebuild.
+    A caller error returns 2 and is deliberately out of scope. Those fire before
+    anything is committed, they fail the step, and a step that failed has
+    already stopped the rebuild.
     """
-    lines = read_text(COMMIT_SCRIPT).splitlines()
-    defined = next(
-        index for index, line in enumerate(lines) if line.startswith("report_rebased()")
+    routine = next(
+        node
+        for node in ast.walk(ast.parse(read_text(COMMIT_PROGRAM)))
+        if isinstance(node, ast.FunctionDef) and node.name == "main"
     )
-
-    exits = [
-        index
-        for index, line in enumerate(lines)
-        if line.strip() in {"exit 0", "exit 1"} and index > defined
+    ways_out = [
+        (node.lineno, _says_whether_it_rebased(block[max(0, index - 3) : index]))
+        for block in _statement_blocks(routine)
+        for index, node in enumerate(block)
+        if isinstance(node, ast.Return)
+        and isinstance(node.value, ast.Constant)
+        and node.value.value in {0, 1}
     ]
-    assert len(exits) == 4, "three ways out with nothing wrong, and the one that gives up"
-    for index in exits:
-        before = [
-            line.strip()
-            for line in lines[max(0, index - 3) : index]
-            if line.strip() and not line.strip().startswith("#")
-        ]
-        assert any("report_rebased" in line for line in before), (
-            f"line {index + 1} leaves without saying whether the checkout was rewritten"
-        )
+
+    assert len(ways_out) == WAYS_OUT, (
+        "three ways out with nothing wrong, two that cannot commit, and the one that gives up"
+    )
+    silent = [line for line, said in ways_out if not said]
+    assert not silent, (
+        f"line(s) {silent} leave without saying whether the checkout was rewritten"
+    )
 
 
 def test_two_runs_writing_their_own_files_both_land(tmp_path: Path) -> None:

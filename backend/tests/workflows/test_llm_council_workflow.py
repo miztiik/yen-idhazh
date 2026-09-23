@@ -82,7 +82,7 @@ COUNCIL_VERBS: Final = ("council-prepare", "council-settle", "council-shard")
 #: The one commit call the night makes, and the guard that keeps it off a night
 #: with nothing to stage.
 COMMIT_STEP: Final = "Commit what the night's tenants wrote"
-COMMIT_SCRIPT: Final = ".github/scripts/commit-and-push.sh"
+COMMIT_PROGRAM: Final = "backend/utilities/commit_and_push.py"
 
 #: What a unit's output travels in, and what a date's selection travels in.
 METRICS_ARTIFACT: Final = "council-metrics-"
@@ -513,7 +513,7 @@ def test_no_shard_commits() -> None:
     shells = [_effective_shell(step) for step in _steps(_judges(), "judge")]
 
     assert [shell for shell in shells if shell], "the judging job runs no shell to search"
-    assert not [shell for shell in shells if Path(COMMIT_SCRIPT).name in shell]
+    assert not [shell for shell in shells if Path(COMMIT_PROGRAM).name in shell]
 
 
 def test_the_night_makes_one_commit_call_over_the_paths_its_tenants_named() -> None:
@@ -526,7 +526,7 @@ def test_the_night_makes_one_commit_call_over_the_paths_its_tenants_named() -> N
     calls = [
         _script(step, "a collect step")
         for step in _steps(_judges(), "collect")
-        if "run" in step and COMMIT_SCRIPT in _script(step, "a collect step")
+        if "run" in step and COMMIT_PROGRAM in _script(step, "a collect step")
     ]
     step = _step(_judges(), "collect", "name", COMMIT_STEP)
     environment = step.get("env")

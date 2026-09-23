@@ -1,6 +1,6 @@
 # Retention
 
-**Last Updated**: 2026-09-22
+**Last Updated**: 2026-09-23
 
 What may be deleted, when, and what bounds every collection a run appends to.
 Unpublishing a day, the state tree's own ceilings, and the score shards that
@@ -162,7 +162,7 @@ Every run appends one row to `state/visual-prunes.csv` describing the cleanup pa
 
 **The row lands on every run, including the runs where the policy is off and nothing is a candidate.** A ledger written only when something was deleted has no baseline: its first row would arrive on the day the deletion started working, with nothing to compare it against.
 
-One file rather than month shards, because the question it answers - is the backlog shrinking - carries no time bound, so every shard would be opened anyway ([../contracts/schemas.md](../contracts/schemas.md#a-ledger-partitions-only-when-its-read-carries-a-window)). It ships with its header committed for the reason `state/feed-retirements.csv` does: `commit-and-push.sh` runs `git add "$@"` under `set -euo pipefail`, so a path that appears only on the first interesting run would abort the whole commit step before then. The step that writes it commits through a call that stages `state` whole, which already covers it.
+One file rather than month shards, because the question it answers - is the backlog shrinking - carries no time bound, so every shard would be opened anyway ([../contracts/schemas.md](../contracts/schemas.md#a-ledger-partitions-only-when-its-read-carries-a-window)). It ships with its header committed for the reason `state/feed-retirements.csv` does: the commit program stages every path a job owns in one `git add`, so a path that appears only on the first interesting run would fail that call and stop the whole commit step before then. The step that writes it commits through a call that stages `state` whole, which already covers it.
 
 **Two things have to move with the deletion when plan 13 switches it on**, and neither is done here. The commit call after the cleanup step stages `state` and `frontend/public/telemetry`, so a deleted picture under `frontend/public/digest/` would be removed from the runner and never from the repository - `git add` records a removal only for a path it is handed. And the paragraph above about a scheduled workflow of its own has to be met or re-decided: the cleanup currently rides in the assemble job's `prune-state` step, which is safe only while it deletes nothing.
 
@@ -460,7 +460,7 @@ new blob of the current month.
 
 **The cost was named in advance and it was accurate.** The change touched
 `evals/writer.py`, `cli.py`, the `drift.yml` inline program, four utilities, the
-canary builder, `payload.ts`, `commit-and-push.sh`'s staged list,
+canary builder, `payload.ts`, the commit program's staged list,
 `REFRESH_PATHS`, the closed-world path map and the merge-driver test in
 `backend/tests/workflows/`, nine test modules, a fixture tree, and a migration of the
 committed file. It is a Level 4 change taken on an owner instruction, against a

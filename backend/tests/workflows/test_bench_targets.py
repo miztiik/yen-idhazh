@@ -55,7 +55,7 @@ from ._harness import (
     BENCH_TRIAL_STATE,
     BUDGETS_EMIT_STEP,
     BUDGETS_JOB,
-    COMMIT_SCRIPT,
+    COMMIT_PROGRAM,
     COMMIT_STAGED_PATHS,
     COMPACT_DATE_FLAG,
     FINGERPRINT_BENCH_JOB,
@@ -155,7 +155,7 @@ def test_the_budget_retake_is_its_own_target_and_writes_no_committed_file() -> N
         script = step.get("run")
         if not isinstance(script, str):
             continue
-        for committed in ("git commit", "git push", COMMIT_SCRIPT.name):
+        for committed in ("git commit", "git push", COMMIT_PROGRAM.name):
             assert committed not in script, (
                 f"{BUDGETS_JOB}/{step.get('name')} commits, and a measurement a workflow "
                 "committed would be a number a workflow decided"

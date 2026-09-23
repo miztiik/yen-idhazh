@@ -117,7 +117,7 @@ dev = [
     # Python 3.12: 34782285 installed bytes across 8 files, from an 8.0 MB
     # wheel. One observation, so no spread, and a Linux runner installs a
     # different wheel. The bytes are a statically linked Haskell binary.
-    # Beneficiary: the commit-and-push loop both daily jobs run.
+    # Beneficiary: the shell scripts still under `.github/scripts/`.
     "shellcheck-py>=0.10",
 ]
 # The faithfulness scorer. A 250M cross-encoder, but transformers plus torch is

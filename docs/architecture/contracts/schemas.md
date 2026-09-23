@@ -1,6 +1,6 @@
 # Contracts and Schemas
 
-**Last Updated**: 2026-09-22
+**Last Updated**: 2026-09-23
 
 The persisted-shape subsystem: where the models live, how the schemas and frontend types are generated from them, and the gate that stops the three from drifting apart. This is the operational home of Guardrail #3 (contracts before logic) and `CLAUDE.md` sections 1a and 11.
 
@@ -120,7 +120,7 @@ Everything under `state/` is a row contract rather than a file contract, because
 
 ### A new row ledger ships with its header, not with its first run
 
-`.github/scripts/commit-and-push.sh` runs under `set -euo pipefail` and stages every path a job owns in one `git add "$@"`. A path that is not in the checkout makes that call fail, and `set -e` then abandons the whole commit step - so a ledger that only appears once its producer has succeeded lets a broken producer cost the job the *other* ledgers it was staging beside it. `state/feed-retirements.csv` and `state/content-similarity-judge/holdout-pairs.csv` therefore ship as header-only files, and `backend/utilities/check_seeded_stores.py` asserts each committed header equals its contract's own `csv_columns`.
+`backend/utilities/commit_and_push.py` stages every path a job owns in one `git add`. A path that is not in the checkout makes that call fail, and the program then abandons the whole commit step - so a ledger that only appears once its producer has succeeded lets a broken producer cost the job the *other* ledgers it was staging beside it. `state/feed-retirements.csv` and `state/content-similarity-judge/holdout-pairs.csv` therefore ship as header-only files, and `backend/utilities/check_seeded_stores.py` asserts each committed header equals its contract's own `csv_columns`.
 
 That is not "pre-creating an empty module for later" (`CLAUDE.md` section 10). The file is the ledger, and its header is the contract's own column list; what is being avoided is a failure mode in the step that commits it.
 

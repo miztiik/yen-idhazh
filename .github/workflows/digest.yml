@@ -396,7 +396,7 @@ jobs:
           PUSH_FAILED_MESSAGE: "could not push what the plan saw"
           PUSH_DEADLINE_SECONDS: ${{ steps.bounds.outputs.push_deadline_seconds }}
         run: >-
-          bash .github/scripts/commit-and-push.sh
+          python backend/utilities/commit_and_push.py
           state
 
       # `error` rather than the default: `assemble` downloads this by name and
@@ -773,7 +773,7 @@ jobs:
           PUSH_DEADLINE_SECONDS: "120"
           SHARD: ${{ matrix.shard }}
         run: >-
-          bash .github/scripts/commit-and-push.sh
+          python backend/utilities/commit_and_push.py
           state
 
       - name: Prompt cache log summary
@@ -932,8 +932,8 @@ jobs:
       # this costs (Guardrail #2). See
       # docs/how-to/label-the-faithfulness-queue.md.
       #
-      # Never committed, and deliberately not named in any commit-and-push.sh
-      # call: an article body is not ours to republish (CLAUDE.md section 0a).
+      # Never committed, and deliberately not named in any commit call: an
+      # article body is not ours to republish (CLAUDE.md section 0a).
       - uses: actions/upload-artifact@v7
         with:
           name: evidence-${{ matrix.shard }}
@@ -955,9 +955,9 @@ jobs:
       # `logging.capture_prompts` and `logging.capture_replies` - and with both
       # off the directory is empty and this line is a green no-op.
       #
-      # Never committed, and deliberately not named in any commit-and-push.sh
-      # call: a rendered prompt carries the article body inside it, and an
-      # article body is not ours to republish (CLAUDE.md section 0a).
+      # Never committed, and deliberately not named in any commit call: a
+      # rendered prompt carries the article body inside it, and an article body
+      # is not ours to republish (CLAUDE.md section 0a).
       - uses: actions/upload-artifact@v7
         if: always()
         with:
@@ -1177,7 +1177,7 @@ jobs:
             python backend/utilities/drop_raced_assets.py
             --date ${{ needs.plan.outputs.date }}
         run: >-
-          bash .github/scripts/commit-and-push.sh
+          python backend/utilities/commit_and_push.py
           frontend/public/digest frontend/public/telemetry frontend/public/assist/index
           frontend/public/source-health.json frontend/public/console
           frontend/public/run-days frontend/public/day-metrics
@@ -1305,7 +1305,7 @@ jobs:
           PUSH_FAILED_MESSAGE: "could not push the folded telemetry"
           PUSH_DEADLINE_SECONDS: ${{ needs.plan.outputs.push_deadline_seconds }}
         run: >-
-          bash .github/scripts/commit-and-push.sh
+          python backend/utilities/commit_and_push.py
           state frontend/public/telemetry
 
       # The commit steps above rebase when the push loses a race, and the

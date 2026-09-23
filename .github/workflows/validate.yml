@@ -502,7 +502,7 @@ jobs:
           COMMIT_MESSAGE: "qualify: ${{ needs.plan.outputs.candidate_id }} ${{ needs.plan.outputs.date }}"
           NOTHING_STAGED_MESSAGE: "the gates wrote no ledger row"
           PUSH_FAILED_MESSAGE: "could not push the validation ledger"
-        run: bash .github/scripts/commit-and-push.sh state/pipeline-tests
+        run: python backend/utilities/commit_and_push.py state/pipeline-tests
 
       - uses: actions/upload-artifact@v7
         with:

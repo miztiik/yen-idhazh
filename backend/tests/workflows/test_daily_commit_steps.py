@@ -1,10 +1,12 @@
-"""Does the daily run ever commit from a dirty tree, and do its commit steps share one script?"""
+"""Does the daily run ever commit from a dirty tree, and do its commit steps share one program?"""
 
 from __future__ import annotations
 
+import ast
 import json
 import re
 import shlex
+import sys
 from pathlib import Path
 from typing import Final
 
@@ -17,7 +19,7 @@ from idhazh.contracts.base import ServerJob
 
 from ._harness import (
     COMMIT_JOBS,
-    COMMIT_SCRIPT,
+    COMMIT_PROGRAM,
     COMMIT_SCRIPT_ENV,
     COMMIT_STAGED_PATHS,
     COMMIT_STEPS,
@@ -33,6 +35,7 @@ from ._harness import (
     TOLERATED,
     _commit_call,
     _git,
+    _git_calls,
     _isolated_env,
     _load_workflows,
     _mapping,
@@ -139,8 +142,10 @@ def test_no_rebase_in_the_daily_run_starts_on_a_dirty_tree() -> None:
     sibling shard had just pushed it, and 303 measured rows went with the runner.
     So the loop clears both kinds, and the untracked half is narrow.
 
-    This reads the shared script and the workflow's own `run:` bodies, so an
-    inline loop written back into a step is still covered.
+    This reads the shared program and the workflow's own `run:` bodies, so an
+    inline loop written back into a step is still covered. The program's git
+    calls are argument lists rather than shell words, so they are rendered back
+    into command lines and read by the same rules.
     """
     workflow = _load_workflows()["digest.yml"]
     jobs = _mapping(workflow.get("jobs"), "jobs")
@@ -155,6 +160,12 @@ def test_no_rebase_in_the_daily_run_starts_on_a_dirty_tree() -> None:
         (path.relative_to(REPO_ROOT).as_posix(), read_text(path))
         for path in sorted(SCRIPTS_DIR.glob("*.sh"))
     ]
+    bodies.append(
+        (
+            COMMIT_PROGRAM.relative_to(REPO_ROOT).as_posix(),
+            "\n".join(_git_calls(read_text(COMMIT_PROGRAM))),
+        )
+    )
     scripts = [(where, body) for where, body in bodies if GIT_REBASE.search(body)]
     assert scripts, "the daily run must still push through a rebase-and-retry loop"
 
@@ -210,55 +221,6 @@ def test_no_rebase_in_the_daily_run_starts_on_a_dirty_tree() -> None:
             )
 
 
-def test_every_command_in_the_retry_loop_is_guarded() -> None:
-    """`set -e` plus one unguarded command is the whole defect.
-
-    `git pull --rebase origin main` was the only unguarded command in the loop,
-    so a conflicting rebase ended the script inside attempt 1 and left the
-    checkout mid-rebase. This reads the loop body and asserts every command in it
-    is either a condition, a guarded call, or an `echo`, which is what makes the
-    retries real. The Oracle tests prove the same thing by running it; this one
-    names the line when a new command arrives unguarded.
-
-    Two kinds of assignment are allowed because `set -e` has nothing to act on.
-    A literal one succeeds by definition. So does one whose whole right side is
-    arithmetic expansion: `$(( ))` evaluates in the shell itself and an
-    assignment carrying it reports the assignment's own status, never the
-    expression's. Both are still refused the moment a command substitution
-    appears inside them, because that IS a command and that is where the hazard
-    would come back.
-    """
-    lines = read_text(COMMIT_SCRIPT).splitlines()
-    start = next(index for index, line in enumerate(lines) if line.startswith("while :; do"))
-    end = next(index for index, line in enumerate(lines) if line.startswith("done"))
-    assert start < end
-
-    literal_assignment = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=[^\s`]*$")
-    arithmetic_assignment = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=\$\(\(.*\)\)$")
-    unguarded = []
-    for line in lines[start + 1 : end]:
-        stripped = line.strip()
-        if not stripped or stripped.startswith("#"):
-            continue
-        # What is left after the arithmetic openers go. Anything still spelling
-        # `$(` is a real command substitution.
-        substitutes = "$(" in stripped.replace("$((", "")
-        guarded = (
-            stripped.startswith(("if ", "elif ", "fi", "else", "echo ", "["))
-            or stripped in {"exit 0", "break", "continue", "then"}
-            or "||" in stripped
-            or (literal_assignment.match(stripped) is not None and not substitutes)
-            or (
-                arithmetic_assignment.match(stripped) is not None
-                and not substitutes
-                and "`" not in stripped
-            )
-        )
-        if not guarded:
-            unguarded.append(stripped)
-    assert unguarded == [], f"unguarded inside the retry loop: {unguarded}"
-
-
 def test_the_loop_is_bounded_by_a_clock_and_not_by_a_count() -> None:
     """A fixed number of attempts is spent at once however high the number is.
 
@@ -266,22 +228,24 @@ def test_the_loop_is_bounded_by_a_clock_and_not_by_a_count() -> None:
     spends its three and gives up while the tip keeps moving. A deadline with a
     jittered backoff converges in expectation at any commit rate.
 
-    Read off the script rather than run, because what this settles is that no
+    Read off the program rather than run, because what this settles is that no
     count is left anywhere in the loop. The Oracle below runs it.
     """
-    script = read_text(COMMIT_SCRIPT)
-    lines = script.splitlines()
-    start = next(index for index, line in enumerate(lines) if line.startswith("while :; do"))
-    end = next(index for index, line in enumerate(lines) if line.startswith("done"))
+    source = read_text(COMMIT_PROGRAM)
+    lines = source.splitlines()
+    loop = next(
+        node for node in ast.walk(ast.parse(source)) if isinstance(node, ast.While)
+    )
+    assert loop.end_lineno is not None
+    body = "\n".join(lines[loop.lineno - 1 : loop.end_lineno])
 
-    assert "for attempt in " not in script, "the retry count is what this row removed"
-    body = "\n".join(lines[start:end])
-    assert "deadline_us" in body, "the loop must stop on a clock"
-    assert "back_off " in body, "every loser of one race must not refetch in lockstep"
+    assert "for attempt in " not in source, "the retry count is what this row removed"
+    assert "deadline" in body, "the loop must stop on a clock"
+    assert "_back_off(" in body, "every loser of one race must not refetch in lockstep"
     # The deadline is a knob, and the one place its standing value is written
-    # down is the config file. The script's own fallback covers a caller with no
-    # config reader on its runner.
-    assert "PUSH_DEADLINE_SECONDS" in script
+    # down is the config file. The program's own fallback covers a caller with
+    # no config reader on its runner.
+    assert "PUSH_DEADLINE_SECONDS" in source
     committed = json.loads(read_text(CONFIG_DIR / "idhazh.json"))
     defaults = AppConfig.model_validate({})
     assert committed["run"]["push_deadline_seconds"] == defaults.run.push_deadline_seconds
@@ -305,10 +269,25 @@ def test_the_shard_keeps_a_shorter_deadline_than_the_rest_of_the_run() -> None:
     )
 
 
-def test_both_daily_commit_steps_run_the_one_shared_script() -> None:
-    """Two copies of a retry loop is one copy nobody can execute in a test."""
-    assert COMMIT_SCRIPT.is_file()
-    assert read_text(COMMIT_SCRIPT).startswith("#!/usr/bin/env bash\n")
+def test_both_daily_commit_steps_run_the_one_shared_program() -> None:
+    """Two copies of a retry loop is one copy nobody can execute in a test.
+
+    The program runs on a runner that has restored the checkout and nothing
+    else. Nine workflows call it, and four of them call it in a job that never
+    installs this project's dependencies, so an import of `idhazh` or of any
+    third-party package would fail the push rather than the install.
+    """
+    assert COMMIT_PROGRAM.is_file()
+    roots = {
+        (node.module or "").split(".")[0]
+        if isinstance(node, ast.ImportFrom)
+        else node.names[0].name.split(".")[0]
+        for node in ast.walk(ast.parse(read_text(COMMIT_PROGRAM)))
+        if isinstance(node, ast.Import | ast.ImportFrom)
+    }
+    assert roots, "no import was read, so this test would pass on nothing"
+    outside = roots - set(sys.stdlib_module_names) - {"__future__"}
+    assert not outside, f"the commit program must run on a bare checkout, but imports {outside}"
 
     for job_name in COMMIT_STEPS:
         staged_paths, settings = _commit_call(job_name)

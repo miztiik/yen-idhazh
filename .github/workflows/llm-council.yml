@@ -410,6 +410,6 @@ jobs:
         run: |
           set -euo pipefail
           # Word splitting is the point: the paths arrive as one space-separated
-          # value and the script takes them as separate arguments.
+          # value and the program takes them as separate arguments.
           # shellcheck disable=SC2086
-          bash .github/scripts/commit-and-push.sh $COMMITTED_PATHS
+          python backend/utilities/commit_and_push.py $COMMITTED_PATHS
