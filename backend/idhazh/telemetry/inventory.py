@@ -20,8 +20,10 @@ from __future__ import annotations
 from collections import Counter
 from pathlib import Path
 
-from idhazh import ledger
+from idhazh import day_shards, ledger
 from idhazh.assemble import month_of
+from idhazh.contracts.item_health import ItemHealthRow
+from idhazh.contracts.span_rollup import SpanRollupRow
 
 
 def _day_files(state_root: Path, date: str) -> list[Path]:
@@ -29,9 +31,13 @@ def _day_files(state_root: Path, date: str) -> list[Path]:
 
     A glob keyed on the date rather than a list of stores, so a store added
     tomorrow is reported without an edit here (Guardrail #6). Every day-sharded
-    ledger writes `<store>/<YYYY>/<MM>/<DD>` with its own suffix - `.csv` for the
-    ledgers, `.json` for day-metrics, `<DD>-<ordinal>-<shard>.jsonl` for a
-    committed trace - so the stem is the whole of what they share.
+    ledger writes `<store>/<YYYY>/<MM>/<DD>` with its own suffix, so the stem is
+    the whole of what they share.
+
+    **A day is a file in some stores and a directory of writer-owned files in
+    others**, and the directory is opened rather than weighed. A directory's own
+    `st_size` is the size of the entry, not of what is in it, so reporting one
+    would print a number that looks like bytes and is not.
 
     **Two depths, because a store may nest.** A one-segment glob misses
     `<group>/<store>/<YYYY>/<MM>/<DD>` and says nothing about the miss, so a
@@ -39,7 +45,14 @@ def _day_files(state_root: Path, date: str) -> list[Path]:
     """
     year, month, day = date.split("-")
     stem = f"{year}/{month}/{day}*"
-    return sorted(set(state_root.glob(f"*/{stem}")) | set(state_root.glob(f"*/*/{stem}")))
+    found = set(state_root.glob(f"*/{stem}")) | set(state_root.glob(f"*/*/{stem}"))
+    files: set[Path] = set()
+    for entry in found:
+        if entry.is_dir():
+            files.update(child for child in entry.iterdir() if child.is_file())
+        else:
+            files.add(entry)
+    return sorted(files)
 
 
 def _month_files(state_root: Path, date: str) -> list[Path]:
@@ -76,11 +89,22 @@ def files(state_root: Path, *, date: str) -> list[str]:
 def outcomes(state_root: Path, *, date: str) -> list[str]:
     """How this date's items ended, counted by stage, outcome and failure code.
 
-    One day's item-health shard and nothing else. A day the ledger never
-    recorded has no file, which is not a fault: a run that planned nothing that
-    day wrote nothing that day.
+    One day of the census, settled, and nothing else. Every work shard of a run
+    leaves its own file in the day directory, so the count is over all of them
+    and a re-run's second attempt does not add its items a second time.
+
+    A day the ledger never recorded has no file, which is not a fault: a run that
+    planned nothing that day wrote nothing that day.
     """
-    rows = ledger.load_item_health_shard(ledger.item_health_path(state_root, date))
+    rows = [
+        ItemHealthRow.from_csv_row(cells)
+        for cells in day_shards.settled_day(
+            state_root / ledger.ITEM_HEALTH_DIRNAME,
+            date,
+            ledger.ITEM_HEALTH_KEY,
+            ItemHealthRow,
+        )
+    ]
     if not rows:
         return [f"{date}: the item-health ledger recorded no item"]
 
@@ -99,12 +123,20 @@ def outcomes(state_root: Path, *, date: str) -> list[str]:
 def spans(state_root: Path, *, date: str) -> list[str]:
     """How long this date's spans took, totalled by span name across every shard.
 
-    The rollup is sharded by month, so the shard is opened and filtered to the
-    date. `total_ms` is a total and not a mean precisely so that it re-sums
-    across shards, which is what this adds up.
+    One day of the rollup, settled. Each writer files its rows under the day
+    their own `date` cell names, so the day directory holds this date's rows and
+    nothing else, and `total_ms` is a total rather than a mean precisely so that
+    it re-sums across the writers this adds up.
     """
-    path = ledger.span_rollup_path(state_root, month_of(date))
-    rows = [row for row in ledger.load_span_rollup_shard(path) if row.date == date]
+    rows = [
+        SpanRollupRow.from_csv_row(cells)
+        for cells in day_shards.settled_day(
+            state_root / ledger.SPAN_ROLLUP_DIRNAME,
+            date,
+            ledger.SPAN_ROLLUP_KEY,
+            SpanRollupRow,
+        )
+    ]
     if not rows:
         return [f"{date}: the span rollup recorded no span"]
 

@@ -475,7 +475,9 @@ jobs:
       # worth having.
       - name: Fold the verdict into its day
         if: always()
-        run: python -m idhazh compact --config backend/var/candidate-config
+        run: >-
+          python -m idhazh compact --config backend/var/candidate-config
+          --date "${{ needs.plan.outputs.date }}"
 
       # The ten gates, failures first. `if: always()` because the step above
       # exits non-zero on an ESCALATE, and that is precisely the verdict a

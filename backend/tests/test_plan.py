@@ -23,9 +23,9 @@ from datetime import timedelta
 from pathlib import Path
 
 import pytest
-from conftest import CONFIG_DIR, FIXTURES_DIR, read_text, seed_item_health
+from conftest import CONFIG_DIR, FIXTURES_DIR, read_text, seed_feed_health, seed_item_health
 
-from idhazh import cli, config, fetch, ledger
+from idhazh import cli, config, day_shards, fetch, ledger
 from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.feed_health import (
     FeedHealthRow,
@@ -1285,7 +1285,10 @@ def test_the_same_run_planned_twice_still_leaves_one_row_per_feed() -> None:
     rows = health_after(state)
     assert len(rows) == 3
     assert sorted(row.feed_id for row in rows) == ["community", "lab-blog", "trade-press"]
-    assert ledger.repeated_keys(ledger.health_path(state, DATE), ledger.FEED_HEALTH_KEY) == {}
+    for path in day_shards.one_day(state / ledger.HEALTH_DIRNAME, DATE):
+        assert ledger.repeated_keys(path, ledger.FEED_HEALTH_KEY) == {}, (
+            f"{path.name} holds one feed's verdict twice"
+        )
 
 
 def test_reading_a_history_that_was_never_written_is_empty_not_an_error() -> None:
@@ -1293,39 +1296,40 @@ def test_reading_a_history_that_was_never_written_is_empty_not_an_error() -> Non
     assert ledger.load_health(Path(tempfile.mkdtemp()), today=DATE, within_days=30) == []
 
 
-def test_a_row_that_no_longer_parses_is_skipped_rather_than_fatal() -> None:
-    """This ledger is diagnostic. Losing a stale row costs evidence; refusing to start costs the day."""
-    state = Path(tempfile.mkdtemp())
-    plan([LAB, TRADE, COMMUNITY], state=state)
-    path = ledger.health_path(state, DATE)
-    with path.open("a", encoding="utf-8", newline="") as handle:
-        handle.write("1999-01-01,not-a-date,,,,,,\n")
-    assert len(health_after(state)) == 3
-
-
 # --- quarantine --------------------------------------------------------------
 
 
-def seed_failures(state: Path, feed_id: str, runs: int) -> None:
-    """A history of nothing but failed reads, on days before the one under test."""
-    ledger.append_health(
-        state,
-        DATE,
-        [
-            FeedHealthRow(
-                version=FeedHealthRow.schema_version(),
-                run_id=f"{DATE}-{n}",
-                date=DATE,
-                feed_id=feed_id,
-                checked_at=f"2026-08-22T0{n}:00:00Z",
-                outcome=FetchOutcome.TRANSIENT,
-                status=503,
-                items=0,
-                detail="HTTP 503",
-            )
-            for n in range(1, runs + 1)
-        ],
+def a_failed_read(feed_id: str, run_n: int) -> FeedHealthRow:
+    """One run's account of one feed that would not answer."""
+    return FeedHealthRow(
+        version=FeedHealthRow.schema_version(),
+        run_id=f"{DATE}-{run_n}",
+        date=DATE,
+        feed_id=feed_id,
+        checked_at=f"2026-08-22T0{run_n}:00:00Z",
+        outcome=FetchOutcome.TRANSIENT,
+        status=503,
+        items=0,
+        detail="HTTP 503",
     )
+
+
+def seed_failures(state: Path, feed_id: str, runs: int) -> None:
+    """A history of nothing but failed reads, filed the way the runs that made it would.
+
+    One run writes one file holding every feed it read, so a second feed's
+    history joins the runs already on disk rather than replacing them.
+    """
+    for run_n in range(1, runs + 1):
+        run_id = f"{DATE}-{run_n}"
+        already = [
+            FeedHealthRow.from_csv_row(cells)
+            for cells in day_shards.settled_day(
+                state / ledger.HEALTH_DIRNAME, DATE, ledger.FEED_HEALTH_KEY, FeedHealthRow
+            )
+            if cells["run_id"] == run_id
+        ]
+        seed_feed_health(state, DATE, [*already, a_failed_read(feed_id, run_n)], run_id=run_id)
 
 
 def failures_to_rest() -> int:
@@ -1409,7 +1413,7 @@ def test_quarantine_never_touches_the_committed_source_list() -> None:
 
 def seed_gone(state: Path, feed: FeedDef, runs: int) -> None:
     """A history of nothing but `410 Gone`, one row per run, keyed on the address."""
-    ledger.append_health(
+    seed_feed_health(
         state,
         DATE,
         [
@@ -1512,7 +1516,7 @@ def test_a_permanent_failure_that_is_not_gone_never_retires_an_address() -> None
     noticing it went.
     """
     state = Path(tempfile.mkdtemp())
-    ledger.append_health(
+    seed_feed_health(
         state,
         DATE,
         [
@@ -1605,7 +1609,7 @@ def test_a_history_with_no_endpoint_key_can_never_retire_anything() -> None:
     writer started filling it. This is that rule, at the stage that files.
     """
     state = Path(tempfile.mkdtemp())
-    ledger.append_health(
+    seed_feed_health(
         state,
         DATE,
         [

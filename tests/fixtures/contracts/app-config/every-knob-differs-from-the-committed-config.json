@@ -353,6 +353,7 @@
     "rows_per_split_min": 150
   },
   "retention": {
+    "day_validation_keep_months": 9,
     "dry_run": true,
     "image_months": 12,
     "max_deletes_per_run": 50,
@@ -367,6 +368,7 @@
     "qualify_on_the_production_path": false,
     "safety_ceiling_per_day": 640,
     "safety_ceiling_per_run": 120,
+    "settled_fold_after_days": 5,
     "shard_size": 3,
     "shard_timeout_minutes": 90,
     "shard_wrap_up_minutes": 7,

@@ -9,7 +9,7 @@
       "why": "`validate-days` re-read every committed day on every publication."
     }
   ],
-  "description": "One row of `state/day-validations.csv`: one frozen day, one validator.",
+  "description": "One row of `state/day-validations/`: one frozen day, one validator.",
   "properties": {
     "date": {
       "description": "The published day this row is about.",

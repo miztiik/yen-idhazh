@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 
 from idhazh import day_partition, ledger
+from idhazh.contracts.base import ServerJob
 from idhazh.contracts.counterfactual_score import CounterfactualScoreRow
 from idhazh.contracts.knobs.collect import CollectConfig
 from idhazh.contracts.knobs.observability import ObservabilityConfig
@@ -160,10 +161,14 @@ def test_a_dry_run_names_the_day_file_and_leaves_it(tmp_path: Path) -> None:
 
 
 def _counterfactual_day(state: Path, day: str, rows: int = 1) -> Path:
-    """One day of the counterfactual ledger, written by the real appender."""
-    ledger.append_counterfactual_scores(
+    """One day of the counterfactual ledger, written by the real producer.
+
+    The day directory comes back, because that is what the ledger files now: one
+    file per writer inside it, and the prune deletes the files.
+    """
+    ledger.write_segment(
         state,
-        day,
+        ledger.SegmentLedger.COUNTERFACTUAL_SCORES,
         [
             CounterfactualScoreRow(
                 version=CounterfactualScoreRow.schema_version(),
@@ -180,8 +185,24 @@ def _counterfactual_day(state: Path, day: str, rows: int = 1) -> Path:
             )
             for n in range(rows)
         ],
+        run_id=f"{day}-1",
+        attempt=1,
+        job=ServerJob.PLAN,
+        shard=0,
     )
     return ledger.counterfactual_scores_path(state, day)
+
+
+def _counterfactual_file(day: str) -> str:
+    """What the writer above named its file, spelled by the producer's own helper."""
+    return ledger.day_shard_relpath(
+        ledger.SegmentLedger.COUNTERFACTUAL_SCORES,
+        date=day,
+        run_id=f"{day}-1",
+        attempt=1,
+        job=ServerJob.PLAN,
+        shard=0,
+    )
 
 
 def test_a_counterfactual_day_outside_the_window_goes_and_says_what_it_weighed(
@@ -198,13 +219,13 @@ def test_a_counterfactual_day_outside_the_window_goes_and_says_what_it_weighed(
     window = LensWeightsConfig().window_days
     today = TODAY.isoformat()
     stale = _counterfactual_day(state, "2024-01-15", rows=3)
-    weight = stale.stat().st_size
+    weight = sum(path.stat().st_size for path in stale.iterdir())
     kept = _counterfactual_day(state, today)
 
     result = prune_counterfactual_scores(state, today=today, within_days=window)
 
-    assert result.deleted == ("state/counterfactual-scores/2024/01/15.csv",)
-    assert result.kept == (f"state/counterfactual-scores/{today[:4]}/{today[5:7]}/{today[8:10]}.csv",)
+    assert result.deleted == (_counterfactual_file("2024-01-15"),)
+    assert result.kept == (_counterfactual_file(today),)
     assert result.bytes_freed == weight
     assert not stale.exists()
     assert kept.exists()
@@ -219,7 +240,7 @@ def test_a_counterfactual_dry_run_names_the_day_file_and_leaves_it(tmp_path: Pat
         state, today=TODAY.isoformat(), within_days=LensWeightsConfig().window_days, dry_run=True
     )
 
-    assert result.deleted == ("state/counterfactual-scores/2024/01/15.csv",)
+    assert result.deleted == (_counterfactual_file("2024-01-15"),)
     assert result.dry_run
     assert stale.exists()
 
@@ -269,7 +290,7 @@ def test_the_stage_deletes_the_counterfactual_days_nobody_reads(
         )
 
     assert not stale.exists()
-    assert "removed state/counterfactual-scores/2024/01/15.csv" in caplog.text
+    assert f"removed {_counterfactual_file('2024-01-15')}" in caplog.text
 
 
 def test_the_stage_says_so_when_every_seen_day_is_inside_the_window(

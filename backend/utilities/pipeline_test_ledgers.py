@@ -7,12 +7,12 @@ trees onto and off that artifact, and what reads them before anything is staged.
 
 **The check is the control, not the job split.** Every byte here is downstream of
 text this project did not write (Guardrail #11). Two shapes may be in the tree
-and nothing else: `<root>/segments/<ledger>/<name>.csv`, read row by row through
-the contract `ledger.segment_contract` names, and
-`<root>/traces/<YYYY>/<MM>/<name>.jsonl`, one JSON object a line. `<root>` has to
-be the trial root of a case `config/pipeline-tests.json` declares and `<ledger>`
-a `SegmentLedger` member, so every directory name comes from committed config
-rather than from the artifact.
+and nothing else: `<root>/<ledger>/<YYYY>/<MM>/<DD>/<name>.csv`, read row by row
+through the contract `ledger.segment_contract` names, and
+`<root>/traces/<YYYY>/<MM>/<DD>/<name>.jsonl`, one JSON object a line. `<root>`
+has to be the trial root of a case `config/pipeline-tests.json` declares and
+`<ledger>` a `SegmentLedger` member, so every directory name comes from committed
+config rather than from the artifact.
 
 **Gather and place are here rather than in the workflow** because both need the
 same two facts the check needs - which cases are declared, and what each one's
@@ -40,7 +40,10 @@ from pathlib import Path
 from idhazh import day_shards, ledger
 from idhazh.contracts.pipeline_tests import PipelineTestsConfig
 
-SEGMENTS = ledger.SEGMENTS_DIRNAME
+#: How deep a writer's file sits below a trial root: the store, a year, a month,
+#: a day, and the filename. A ledger row and a trace share the grammar, so they
+#: share the number.
+DAY_SHARD_PARTS = 5
 TRACES = "traces"
 
 #: What `gather` prints for the step output the commit job reads. A dispatch that
@@ -57,15 +60,11 @@ def _roots(config_root: Path) -> list[str]:
     return [case.trial_state_dirname for case in settings.cases]
 
 
-def _refuse_segment(path: Path, relative: str) -> list[str]:
-    """Every row of one segment, read through the contract its ledger declares."""
+def _refuse_segment(path: Path, relative: str, which: ledger.SegmentLedger) -> list[str]:
+    """Every row of one day shard, read through the contract its ledger declares."""
     parts = relative.split("/")
-    if len(parts) != 3 or path.suffix != ".csv":
-        return [f"{relative} is not {SEGMENTS}/<ledger>/<name>.csv"]
-    try:
-        which = ledger.SegmentLedger(parts[1])
-    except ValueError:
-        return [f"{relative} names {parts[1]}, which is no ledger a segment may drain into"]
+    if len(parts) != DAY_SHARD_PARTS or path.suffix != ".csv":
+        return [f"{relative} is not <ledger>/<YYYY>/<MM>/<DD>/<name>.csv"]
     model = ledger.segment_contract(which)
     found: list[str] = []
     for lineno, row in day_shards.rows_of(path):
@@ -79,8 +78,8 @@ def _refuse_segment(path: Path, relative: str) -> list[str]:
 def _refuse_trace(path: Path, relative: str) -> list[str]:
     """Every line of one trace file, each of which has to be one span object."""
     parts = relative.split("/")
-    if len(parts) != 4 or path.suffix != ".jsonl":
-        return [f"{relative} is not {TRACES}/<YYYY>/<MM>/<name>.jsonl"]
+    if len(parts) != DAY_SHARD_PARTS or path.suffix != ".jsonl":
+        return [f"{relative} is not {TRACES}/<YYYY>/<MM>/<DD>/<name>.jsonl"]
     found: list[str] = []
     for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
         if not line.strip():
@@ -105,12 +104,15 @@ def refusals(tree: Path, *, roots: frozenset[str]) -> list[str]:
             found.append(f"{relative} is filed under {parts[0]}, which no declared case names")
         elif len(parts) < 3:
             found.append(f"{relative} sits directly under a trial root and names no store")
-        elif parts[1] == SEGMENTS:
-            found += _refuse_segment(path, "/".join(parts[1:]))
         elif parts[1] == TRACES:
             found += _refuse_trace(path, "/".join(parts[1:]))
         else:
-            found.append(f"{relative} names {parts[1]}, which a case run does not write")
+            try:
+                which = ledger.SegmentLedger(parts[1])
+            except ValueError:
+                found.append(f"{relative} names {parts[1]}, which a case run does not write")
+            else:
+                found += _refuse_segment(path, "/".join(parts[1:]), which)
     return found
 
 

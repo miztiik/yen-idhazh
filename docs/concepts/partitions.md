@@ -104,13 +104,19 @@ as `test_the_month_readers_all_agree_on_what_a_month_is` does one grain over.
 Authority: Guardrail #5, 2026-09-11. `day_partition` is a **peer** of `month_partition`
 rather than a replacement: both grains are live, so both modules are.
 
-## A day can be a directory, and the settlement moves to the reader
+## The day directory is the ledger, and the settlement moves to the reader
 
-**Where more than one job writes one ledger, the day is a directory and every
-file in it carries its writer's name.** `state/<ledger>/<YYYY>/<MM>/<DD>/` holds
-one `<run_id>-<attempt>-<job>-<shard>.csv` per writer, spelled once in
-`ledger._segment_name`. Two writers cannot name one file, so two runs pushing at
+**Every ledger more than one job writes files its rows in a day directory, and
+every file in it carries its writer's name.** `state/<ledger>/<YYYY>/<MM>/<DD>/`
+holds one `<run_id>-<attempt>-<job>-<shard>.csv` per writer, spelled once in
+`ledger.segment_name`. Two writers cannot name one file, so two runs pushing at
 once cannot collide on it - which is the whole reason the shape exists.
+
+**Since 2026-09-22 there is no head above it.** A producer writes the final day
+path directly, and `state/segments/` is gone. The shape used to be a staging
+directory a later fold read into a `<DD>.csv` head, which meant every ledger had
+one path that two runs of one day both computed bytes for. Now the day directory
+*is* the ledger: the only thing that changed at the cutover was the parent.
 
 `idhazh.day_shards` is the walk, and it reads **both** shapes: a `<DD>.csv` day
 file and a `<DD>/` day directory are each one recorded day.
@@ -131,7 +137,15 @@ spanning two days would otherwise have no total order at all.
 is what a closed-day fold leaves behind, and it reads at attempt 0 - a writer's
 attempt is the run's own `GITHUB_RUN_ATTEMPT`, which starts at 1, so 0 is a
 place no writer can take. It is also the right place: its rows have already won
-a settlement, and a straggler beside it is later.
+a settlement, and a straggler beside it is later. The fold is what stops one
+file per writer per day becoming unbounded growth, and what it costs is
+[in growing-reads.md](growing-reads.md#the-closed-day-fold-is-guardrail-12-applied-to-a-write-2026-09-22).
+
+**`before-partition.csv` is the other.** It is what the 2026-09-22 migration
+wrote, one per day, because a committed head is many runs already merged and so
+has no writer identity to stamp. It reads at attempt 0 beside `settled.csv` and
+it sorts first. Removal condition: it goes when the oldest committed day is
+newer than the migration date.
 
 **A day directory holding no readable file stops the read.** That is the same
 rule as the stray above and not a new one: a day nothing wrote has no directory,
@@ -139,26 +153,41 @@ so an empty one is a writer that made the directory and lost its rows. Reading
 it as a day that recorded nothing would draw an empty panel on a passing build.
 
 **`day_partition.day_files` is not taught the directory shape, on purpose.** It
-keeps its callers over `state/published/` and `state/visual-prunes/`, which stay
-one file a day, and its loud refusal of a directory is the tripwire that catches
-a store arriving in the new shape without a plan.
+keeps its callers over the union-safe stores - `state/published/`, `state/seen/`
+and `state/visual-prunes/` - which stay one file a day, and its loud refusal of
+a directory is the tripwire that catches a store arriving in the new shape
+without a plan.
 
 Authority: Fowler, 2026-09-22.
 
 ## How a collection changes grain
 
-**One utility moves a store from month files to day files, and it refuses to write a
-tree it cannot read back.** `backend/utilities/migrate_to_day_shards.py` takes
-`--directory`, the store, and `--date-column`, the cell that says which day a row
-belongs to. Each ledger's own change runs it once on its own directory; committing the
-utility migrates nothing.
+**One utility moves a store to a finer grain, and it refuses to write a tree it
+cannot read back.** `backend/utilities/migrate_to_day_shards.py` takes
+`--directory`, the store, `--shape`, the move, and `--date-column`, the cell
+that says which day a row belongs to. Each ledger's own change runs it once on
+its own directory; committing the utility migrates nothing.
 
-It builds the whole day tree in a temporary directory beside the store, walks it with
-`day_partition.day_files` - the pipeline's own reader rather than a second opinion - and
-compares it row for row against what came out of the month shards. Only then does it
-rename the year directories into place and unlink the month shards. **A migration that
-writes an empty tree and unlinks its source is a delete with exit 0**, so the read-back
-is the point and the ordering is the guarantee.
+**Four shapes, because a store arrives at the day directory from four places.**
+`month-to-day` splits `<YYYY-MM>.csv` into `<YYYY>/<MM>/<DD>.csv`.
+`day-to-directory` turns each of those day files into a `<DD>/` directory
+holding one `before-partition.csv`. `flat-to-day-directory` does both at once
+for a ledger that was one file for the whole archive, and it names the store the
+file becomes, so `--directory state/day-validations` reads
+`state/day-validations.csv`. `traces` splits a day prefix off a trace filename
+and leaves the rest of the name alone, because a trace carries no date cell to
+file by.
+
+It builds the whole new tree in a temporary directory beside the store, walks it
+with the pipeline's own reader rather than a second opinion - `day_files` for a
+day-file tree, `day_shards.shard_files` for a day-directory tree,
+`telemetry.trace_date` for a trace - and compares it **row for row, keyed by
+day**, against what came out of the old heads. Keyed rather than pooled: a
+partition that filed every row under one day would pass a check over the lines
+alone. Only then does it rename the year directories into place and unlink the
+source. **A migration that writes an empty tree and unlinks its source is a
+delete with exit 0**, so the read-back is the point and the ordering is the
+guarantee. On any fault the parked years are renamed back.
 
 **A row it cannot place stops the run before a byte is written.** An empty date cell and
 a date cell that is not a date are what a real ledger eventually holds - a run
@@ -168,7 +197,8 @@ measurement that stops having happened.
 **A store holding a month shard and anything else is refused**, and that is not
 tidiness. `day_files` refuses a name it cannot place, so a month shard sitting beside a
 year directory stops every read of that store: a half-migrated store is already
-unreadable by the pipeline. The repair is a restore from the trunk rather than a second
+unreadable by the pipeline. A flat ledger sitting beside its own directory is
+refused for the same reason. The repair is a restore from the trunk rather than a second
 pass, because a second pass cannot know which rows the first one had already moved.
 
 **Which cell names the day, and why `state/seen/` files by `first_seen_run`.** The day
@@ -210,12 +240,12 @@ Authority: owner, 2026-09-06.
 
 | Collection | Path pattern | Writer | What makes a partition closed |
 | --- | --- | --- | --- |
-| Eval ledger | `state/scores/<YYYY>/<MM>/<DD>.csv` | `evals.writer.append` | Partitioned by **day** since 2026-09-13. It files each row by the row's own `date`, so a day is closed once no row being written names it. A run either side of midnight writes two day files and neither is wrong. The day grain buys what it buys for `state/item-health/`: two runs collide on a file only when they are the same day, and taking a day back is one `rm`. It had a monthly mirror under `frontend/public/scores/` until 2026-09-16; nothing fetched it, so there is no published grain to keep in step. |
-| Score index | `state/score-index/<YYYY>/<MM>/<DD>.csv` | `evals.writer.append`, refilled by `refresh_index` | Partitioned by **day** since 2026-09-13, and it files by the ledger's day rather than a grain of its own: `refresh_index` fills a partition with no index from the partition beside it, so two grains in one relationship would be a mapping somebody maintains. Its rows carry no date at all, which is why the committed history was **regenerated** by `idhazh rebuild-score-index` rather than split - nothing in the file said which day a row belonged to. Closed when the day beside it is. |
-| Item health | `state/item-health/<YYYY>/<MM>/<DD>.csv` | `ledger.append_item_health` | Partitioned by **day** since 2026-09-13. It takes one date and appends to that day alone, filtering against `ITEM_HEALTH_KEY` in that one file. Closed once the run's date leaves the day. The day grain buys the two things `state/published/` buys: two runs collide on a file only when they are the same day, and taking a day back is one `rm` rather than an edit inside a shared shard, which no merge driver can express. |
-| Feed health | `state/feed-health/<YYYY>/<MM>/<DD>.csv` | `ledger.append_health` | Partitioned by **day** since 2026-09-13. The same one-date append, then it settles that one day file against `FEED_HEALTH_KEY`. Closed once the run's date leaves the day. The day grain buys what it buys for `state/item-health/`: two runs collide on a file only when they are the same day, and taking a day back is one `rm` rather than an edit inside a shared shard. It had a monthly mirror under `frontend/public/feed-health/` until 2026-09-16; nothing fetched it, so there is no published grain to keep in step. |
+| Eval ledger | `state/scores/<YYYY>/<MM>/<DD>/` | `evals.writer.append` | Partitioned by **day** since 2026-09-13 and a **day directory** since 2026-09-22. It files each row by the row's own `date`, so a day is closed once no row being written names it. A run either side of midnight writes two day files and neither is wrong. The day grain buys what it buys for `state/item-health/`: two runs collide on a file only when they are the same day, and taking a day back is one `rm`. It had a monthly mirror under `frontend/public/scores/` until 2026-09-16; nothing fetched it, so there is no published grain to keep in step. |
+| Score index | `state/score-index/<YYYY>/<MM>/<DD>/` | `evals.writer.append` | Partitioned by **day** since 2026-09-13 and a **day directory** since 2026-09-22, and it files by the ledger's day rather than a grain of its own: two grains in one relationship would be a mapping somebody maintains. Its rows carry no date at all, which is why the committed history was **regenerated** by `idhazh rebuild-score-index` rather than split - nothing in the file said which day a row belonged to. Closed when the day beside it is. |
+| Item health | `state/item-health/<YYYY>/<MM>/<DD>/` | `ledger.append_item_health` | Partitioned by **day** since 2026-09-13 and a **day directory** since 2026-09-22. It takes one date and writes its own file under that day alone. Closed once the run's date leaves the day. The day grain buys the two things `state/published/` buys: two runs collide on a file only when they are the same day, and taking a day back is one `rm` rather than an edit inside a shared shard, which no merge driver can express. |
+| Feed health | `state/feed-health/<YYYY>/<MM>/<DD>/` | `ledger.append_health` | Partitioned by **day** since 2026-09-13 and a **day directory** since 2026-09-22. The same one-date write, settled against `FEED_HEALTH_KEY` at read time. Closed once the run's date leaves the day. The day grain buys what it buys for `state/item-health/`: two runs collide on a file only when they are the same day, and taking a day back is one `rm` rather than an edit inside a shared shard. It had a monthly mirror under `frontend/public/feed-health/` until 2026-09-16; nothing fetched it, so there is no published grain to keep in step. |
 | Seen addresses | `state/seen/<YYYY>/<MM>/<DD>.csv` | `ledger.append_seen` | Partitioned by **day** since 2026-09-13. The same one-date append, and the date is the run's own digest date - which is why `first_seen_run[:10]` names the file every row inside it sits in. Closed once the run's date leaves the day. It has no published mirror at all, so unlike the two health ledgers there is no second grain anywhere near it. |
-| Counterfactual scores | `state/counterfactual-scores/<YYYY>/<MM>/<DD>.csv` | `ledger.append_counterfactual_scores` | Partitioned by **day** since 2026-09-14. The plan stage appends the run's own digest date and nothing else, so the day closes when the day's last run finishes. It is the one collection here whose day file is created even when the run has no rows for it: the plan job's commit step names the directory, and `git add` under `set -e` aborts on a path that is not there. Its only reader opens a trailing window, and `retention.prune_counterfactual_scores` deletes what falls below it. |
+| Counterfactual scores | `state/counterfactual-scores/<YYYY>/<MM>/<DD>/` | `ledger.append_counterfactual_scores` | Partitioned by **day** since 2026-09-14 and a **day directory** since 2026-09-22. The plan stage appends the run's own digest date and nothing else, so the day closes when the day's last run finishes. It is the one collection here whose day file is created even when the run has no rows for it: the plan job's commit step names the directory, and `git add` under `set -e` aborts on a path that is not there. Its only reader opens a trailing window, and `retention.prune_counterfactual_scores` deletes what falls below it. |
 | Telemetry projection | `frontend/public/telemetry/<YYYY-MM>.csv` | `telemetry.publish.public_telemetry.publish` | It writes only the months a caller names as changed, and rewrites a named month only when its projected bytes differ from the committed shard - so a closed month is neither read nor rewritten once nothing targets it. Frozen since row 19 of the constant-cost-reads plan (#484). |
 | Folded item health | `state/telemetry-aggregate/<YYYY-MM>.csv` | `retention.compact_month`, written by `ledger.write_telemetry_aggregate` | Written once, when the item-health month passes `observability.item_health_full_grain_months` (14). It stays **monthly** while the ledger below it files by day, because it summarises a month and a day file of a month's totals is a shape nothing consumes - so the fold is where the two grains meet, reading at most 31 day files and writing one. Closed the moment it is written; the days it summarises are gone, so there is nothing left to append. No file is committed yet. |
 | Score archive | `state/score-archive/<YYYY-MM>.json` | `evals.archive`, driven by `retention.prune_scores` | Written once, when the scores month passes `observability.scores_full_grain_months` (14), and only after it reconciles against a second reading of that month's day files. It stays **monthly** while the ledger below it files by day, for the reason the folded item health gives: it summarises a month. Closed the moment it is written. No file is committed yet. |
@@ -228,7 +258,10 @@ Authority: owner, 2026-09-06.
 | Council shard outcomes | `state/llm-council/shard-outcomes/<YYYY>/<MM>/<DD>.csv` | none yet | Partitioned by **day**, and it is the one collection here whose day is **not** the day its writer ran: a row files by the digest date it judged, so one night's run appends to every date its plan covered and a day is closed once no later night still names it. Nested one directory deeper than `state/` for the reason the adaptive merge line is - everything the council records about itself hangs off one prefix, so a commit step stages one path. Two directory levels and no more: the day inventory globs one level and two, so a third would be invisible to it and the miss would be silent. The shape, the path and the header ship ahead of the step that appends to them (Guardrail #3). |
 | Content-similarity judge metrics | `state/content-similarity-judge/metrics/<YYYY>/<MM>/<DD>.csv` | none yet | Partitioned by **day**, and it files by the digest date the shard judged rather than the day the run started - the same grain as the council record beside it, so a reader holding one night's units of work against one night's readings opens one day file in each. Nested one directory deeper than `state/` under a prefix named for the judge rather than the venue it ran in: what a reading is ABOUT decides where it is filed, never what executed it, so this store stays put on the day the council stops hosting this judge. Two directory levels and no more, for the reason the council record gives. The shape, the path and the header ship ahead of the step that appends to them (Guardrail #3). |
 | Merge-line holdout scores | `state/content-similarity-judge/merge-line-holdout-scores/<YYYY>/<MM>/<DD>.csv` | `stages.score_merge_line_holdout`, run by a person | Partitioned by **day**, filing by the day the line was scored - not by either of the two dates the labelled pair names, which the holdout row carries itself. One row a day, for the reason the fitted line files by day: a read that carries a window over the newest rows, and one `rm` to take a day's reading back off the record. It sits under the judge's prefix and holds no judge's reading at all: the shipped scoring calls no model, so the row carries no call stamp. Closed once the run's date leaves the day. **No job writes it and no job stages it**: a person runs `idhazh score-merge-line-holdout` and commits the row, the way the marked file beside it is committed. |
-| Model validation | `state/<run.trial_state_dirname>/validation/<YYYY>/<MM>/<DD>.csv` | `stages.compact.stage_compact`, folding the segment `stages.qualify_decide` or `stages.decide` writes | Partitioned by **day** since 2026-09-18, where it was `state/validation-<date>.csv` at the root of `state/`. The old path was a hardcoded string joined to the repository root, so no config could move it and a trial dispatch wrote production state. Closed once the run's date leaves the day. Two candidates can be dispatched at once, so neither opens the day file: each writes its own segment and the fold settles them against `VALIDATION_KEY`. |
+| Model validation | `state/<run.trial_state_dirname>/validation/<YYYY>/<MM>/<DD>/` | `stages.qualify_decide` or `stages.decide`, one file each | Partitioned by **day** since 2026-09-18, where it was `state/validation-<date>.csv` at the root of `state/`, and a **day directory** since 2026-09-22. The old path was a hardcoded string joined to the repository root, so no config could move it and a trial dispatch wrote production state. There is no `state/validation/` tree: the store lands under whatever `common.STATE_ROOT` names, which a pipeline-tests dispatch points at `state/pipeline-tests/`. Closed once the run's date leaves the day. Two candidates can be dispatched at once, so neither opens a shared file: each writes its own and `VALIDATION_KEY` settles them at read time. |
+| Span rollup | `state/span-rollup/<YYYY>/<MM>/<DD>/` | `telemetry.spans` | Partitioned by **month** until 2026-09-22 and a **day directory** since. It is the one store here that made both moves in one pass, because a month shard is a file every run of that month appends to - the exact shape the day directory exists to end. Its published mirror under `frontend/public/span-rollup/` stays monthly, which is the split [a store and its mirror](#a-store-and-its-mirror-may-file-at-different-grains) describes. |
+| Day validations | `state/day-validations/<YYYY>/<MM>/<DD>/` | `stages.validate_days` | One flat `state/day-validations.csv` until 2026-09-22 and a **day directory** since. It files by the day the receipt is **about**, so a re-validation of an old day lands beside the first reading rather than at the end of one growing file. `retention.day_validation_keep_months`, default 14, deletes a receipt for a day the archive no longer holds, because such a receipt cannot be read. |
+| Traces | `state/traces/<YYYY>/<MM>/<DD>/` | `telemetry.traces` | Partitioned by **day** the whole time, and a **day directory** since 2026-09-22 - the day used to be a prefix on the filename. A trace carries no date cell, so the run id is what says which day it belongs under. It is JSON lines rather than CSV, which is the whole of what it does differently, and `retention.prune_traces` deletes whole files past `observability.trace_window_days` rather than folding them: a trace is a lookup, and a fold of it would invent a total nobody reads. |
 
 The two collections with nothing committed are not aspirational. Both writers ship and
 both are tested; neither has fired, because the oldest committed month is `2026-08` and

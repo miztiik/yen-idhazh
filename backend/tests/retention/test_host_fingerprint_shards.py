@@ -7,9 +7,10 @@ from pathlib import Path
 import pytest
 from conftest import REPO_ROOT, read_text
 
-from idhazh import day_partition, ledger
+from idhazh import day_shards, ledger
 from idhazh.contracts.app_config import AppConfig
-from idhazh.contracts.knobs.collect import CollectConfig
+from idhazh.contracts.base import ServerJob
+from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW, CollectConfig
 from idhazh.contracts.knobs.observability import ObservabilityConfig
 from idhazh.contracts.knobs.retention import RetentionConfig
 from idhazh.retention import oldest_month_kept, prune_host_fingerprint
@@ -38,8 +39,21 @@ def committed_window() -> int:
 
 
 def host_fingerprint_days(state_dir: Path) -> list[Path]:
-    """Every host-fingerprint day file, oldest first, through the pipeline's own walk."""
-    return list(day_partition.day_files(state_dir / ledger.HOST_FINGERPRINT_DIRNAME))
+    """Every host-fingerprint file, oldest first, through the pipeline's own walk."""
+    return list(
+        day_shards.shard_files(state_dir / ledger.HOST_FINGERPRINT_DIRNAME, days=UNBOUNDED_WINDOW)
+    )
+
+
+def the_file_the_fixture_wrote(date: str) -> str:
+    """Where the fixture's one plan job filed the machine it ran on for `date`.
+
+    Built from the identity grammar rather than typed, so a change to how a
+    writer names its file fails here with the grammar rather than passing on a
+    string this test froze.
+    """
+    name = ledger.segment_name(run_id=f"{date}-1", attempt=1, job=ServerJob.PLAN, shard=0)
+    return f"{ledger.host_fingerprint_relpath(date)}/{name}"
 
 
 def test_the_host_fingerprint_prune_takes_the_expired_day_and_keeps_the_day_beside_it(
@@ -69,11 +83,11 @@ def test_the_host_fingerprint_prune_takes_the_expired_day_and_keeps_the_day_besi
     assert not expired_path.exists(), "the expired day is still there, so nothing was pruned"
     assert kept_path.exists(), "the day inside the window was deleted"
     assert list(result.deleted) == [expired_day[:7]]
-    assert list(result.days_removed) == [ledger.host_fingerprint_relpath(expired_day)]
+    assert list(result.days_removed) == [the_file_the_fixture_wrote(expired_day)]
     assert host_fingerprint_months(state) == [kept_day[:7]]
     assert result.bytes_freed > 0, "a deleted day file weighed nothing, so nothing was measured"
-    # The emptied month and year directories go with their files, for the reason
-    # the feed-health prune gives: `day_files` walks every directory it finds.
+    # The emptied month and day directories go with their files, for the reason
+    # the feed-health prune gives: the walk reads every directory it finds.
     assert not expired_path.parent.exists()
 
 

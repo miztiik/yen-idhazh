@@ -30,8 +30,9 @@ from collections.abc import Collection
 from pathlib import Path
 from typing import Final
 
-from idhazh import config, day_partition, ledger
+from idhazh import config, day_shards, ledger
 from idhazh.contracts.item_health import ItemHealthRow
+from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
 from idhazh.contracts.public_telemetry import FORBIDDEN_COLUMNS, PublicTelemetryRow
 
 PUBLIC_COLUMNS: Final[tuple[str, ...]] = PublicTelemetryRow.csv_columns()
@@ -68,26 +69,19 @@ def shard_relpath(month: str) -> str:
     return f"frontend/public/{PUBLIC_TELEMETRY_DIRNAME}/{month}.csv"
 
 
-#: What a file has to carry to be an item-health census at all: the columns
-#: `ItemHealthRow` declares without a default. Every other column is nullable
-#: there, so its absence from an older day file is "not recorded" and not a
-#: broken file. Requiring the *current* column list instead would be a fuse: it
-#: goes red the day the contract gains a column, on every day file already
-#: written, for a projection that never reads the new one.
-REQUIRED_SOURCE_COLUMNS: Final[frozenset[str]] = frozenset(
-    name for name, field in ItemHealthRow.model_fields.items() if field.is_required()
-)
+def _settled_day(source_dir: Path, date: str) -> list[PublicTelemetryRow]:
+    """One day of the census, settled, as the rows a reader is allowed to see.
 
-
-def _read(path: Path) -> list[PublicTelemetryRow]:
-    with path.open("r", encoding="utf-8", newline="") as handle:
-        reader = csv.DictReader(handle)
-        if reader.fieldnames is None:
-            return []
-        missing = REQUIRED_SOURCE_COLUMNS - set(reader.fieldnames)
-        if missing:
-            raise ValueError(f"{path.as_posix()} misses item-health columns: {sorted(missing)}")
-        return [PublicTelemetryRow.from_csv_row(row) for row in reader]
+    `day_shards.settled_day` reads every row through `ItemHealthRow` first, so a
+    file missing a column the census promises is refused there by name and this
+    never has to check the header itself.
+    """
+    return [
+        PublicTelemetryRow.from_csv_row(cells)
+        for cells in day_shards.settled_day(
+            source_dir, date, ledger.ITEM_HEALTH_KEY, ItemHealthRow
+        )
+    ]
 
 
 def read_shard(path: Path) -> list[PublicTelemetryRow]:
@@ -176,8 +170,11 @@ def publish(
     re-run does not.
 
     **The ledger files by day and this mirror files by month**, so a month is
-    folded from that month's day files through `day_partition.days_by_month`. Its
-    input is one month, so a named month opens at most 31 files.
+    folded from that month's days through `day_shards.dates_by_month`, and each
+    of those days is settled. Settled rather than concatenated, because a day is
+    a directory of writer-owned files: a re-run's second attempt sits beside the
+    first, and publishing both would show a reader one item twice. Its input is
+    one month, so a named month opens at most 31 days.
 
     Cover: the months the caller names. The daily caller passes the one month it
     appended to, so an ordinary run reads one month's days whatever the ledger
@@ -195,12 +192,12 @@ def publish(
     source_dir = state_root / ledger.ITEM_HEALTH_DIRNAME
     public_root.mkdir(parents=True, exist_ok=True)
     written: list[Path] = []
-    by_month = day_partition.days_by_month(source_dir)
+    by_month = day_shards.dates_by_month(source_dir, days=UNBOUNDED_WINDOW)
     for month in sorted(by_month):
         target = shard_path(public_root, month)
         if months is not None and month not in months and target.exists():
             continue
-        rows = [row for day in by_month[month] for row in _read(day)]
+        rows = [row for date in by_month[month] for row in _settled_day(source_dir, date)]
         if _write_if_changed(target, rows):
             written.append(target)
     if ensure_month is not None and all(path.stem != ensure_month for path in written):

@@ -607,7 +607,12 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "Name --state-root as well, or read the committed tree."
             )
         state_dir = common.STATE_ROOT if args.state_root is None else args.state_root
-        return validate_days.stage_validate_days(args.digest_root, args.day, state_dir=state_dir)
+        return validate_days.stage_validate_days(
+            args.digest_root,
+            args.day,
+            state_dir=state_dir,
+            run_id=plan_stage._run_id(args.date or _today(), args.execution),
+        )
 
     if args.stage == "score-merge-line-holdout":
         # Above the fetcher for the reason validate-days is: it reads the marked
@@ -691,13 +696,16 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.stage == "compact":
         # Above the fetcher because it reads and rewrites committed files only.
-        # It is also the catch-up for a run that died before its own assemble
-        # drained the store, so a step that opened a socket here would read the
-        # open web to decide what to fold.
         #
-        # No --date. The head a row lands in is named by the row's own date cell,
-        # and a run three days dead is exactly the one this has to reach.
-        compact.stage_compact(common.STATE_ROOT if args.state_root is None else args.state_root)
+        # `--date` says which run this fold belongs to, and the knob says how far
+        # behind that date a day has to be before it is closed. A day a run is
+        # still writing is never touched, so the two together are what keep this
+        # off a file somebody else holds open.
+        compact.stage_compact(
+            common.STATE_ROOT if args.state_root is None else args.state_root,
+            date=args.date or _today(),
+            after_days=settings.app.run.settled_fold_after_days,
+        )
         return 0
 
     if args.stage == "rebuild-score-index":

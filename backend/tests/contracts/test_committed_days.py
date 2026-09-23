@@ -16,8 +16,10 @@ from typing import Any, Final
 import pytest
 from conftest import CONTRACT_FIXTURES_DIR, REPO_ROOT, read_text
 
+from idhazh import day_shards, ledger
 from idhazh.cli import main
 from idhazh.contracts.digest_day import DigestDay, DigestVerticalRef
+from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
 from idhazh.contracts.knobs.ui import UiConfig
 from idhazh.stages import common
 from idhazh.stages.validate_days import stage_validate_days
@@ -37,6 +39,10 @@ DESK_SHORTFALL = ("considered", "too_old", "below_feed_floor")
 #: constant for both, because a payload whose date and path disagree is a day no
 #: run could have written.
 BUILT_DATE: Final = "2026-08-30"
+
+#: The run the gate files its receipt under. These cases ask what the gate says
+#: about a day, never who ran it, so one identity serves them all.
+A_RUN: Final = f"{BUILT_DATE}-1"
 
 
 def a_day_longer_than_the_seed(seed: int) -> dict[str, Any]:
@@ -122,12 +128,12 @@ def test_a_story_past_the_seed_is_the_one_this_gate_exists_for(
     day = a_day_longer_than_the_seed(seed)
     assert len(day["items"]) > seed, "a day no longer than the seed proves nothing here"
 
-    assert stage_validate_days(a_tree_holding(tmp_path / "whole", day)) == 0
+    assert stage_validate_days(a_tree_holding(tmp_path / "whole", day), run_id=A_RUN) == 0
 
     day["items"][-1]["key_points"] = []
     root = a_tree_holding(tmp_path / "past-the-seed", day)
     with caplog.at_level(logging.ERROR):
-        assert stage_validate_days(root) == 1
+        assert stage_validate_days(root, run_id=A_RUN) == 1
     assert BUILT_DATE in caplog.text, "the failing day has to be named"
     assert "digest-view.schema.json" in caplog.text, "which contract refused it"
 
@@ -139,14 +145,14 @@ def test_a_day_that_is_not_json_at_all_is_named_rather_than_thrown(tmp_path: Pat
     broken.mkdir(parents=True)
     (broken / "digest.json").write_text("{ not json", encoding="utf-8")
 
-    assert stage_validate_days(root) == 1
+    assert stage_validate_days(root, run_id=A_RUN) == 1
 
 
 def test_a_tree_with_no_committed_day_fails_rather_than_passes(tmp_path: Path) -> None:
     """A run over nothing prints the same line as a run over every day."""
     empty = tmp_path / "digest"
     empty.mkdir()
-    assert stage_validate_days(empty) == 1
+    assert stage_validate_days(empty, run_id=A_RUN) == 1
 
 
 def test_the_gate_defaults_to_the_one_committed_tree(
@@ -191,11 +197,10 @@ def test_a_tree_that_is_not_the_committed_one_has_to_name_its_own_receipts(
     refused. `frontend/tests/malformed-day.spec.ts` was making exactly that
     call, so the control case that exists because a guard which only ever refuses
     proves nothing was passing on a receipt about a different file - and the
-    receipts it filed about its scratch trees landed in the tracked
-    `state/day-validations.csv`, which `frontend/scripts/build-state.ts`
-    fingerprints, so the `publishing` group changed one of its own build's
-    inputs while it ran. That was defect 20, and this is what stops the next
-    caller repeating it.
+    receipts it filed about its scratch trees landed in the tracked receipt
+    store, which `frontend/scripts/build-state.ts` fingerprints, so the
+    `publishing` group changed one of its own build's inputs while it ran. That
+    was defect 20, and this is what stops the next caller repeating it.
 
     Bounded by construction: one fabricated day under `tmp_path`, no archive
     walk, and nothing here can age out.
@@ -217,7 +222,12 @@ def test_a_tree_that_is_not_the_committed_one_has_to_name_its_own_receipts(
 
     store = tmp_path / "receipts"
     assert main(["validate-days", "--digest-root", str(copy), "--state-root", str(store)]) == 0
-    assert (store / "day-validations.csv").is_file(), "the receipt belongs beside the tree it is about"
+    filed = list(
+        day_shards.shard_files(
+            store / ledger.DAY_VALIDATIONS_DIRNAME, days=UNBOUNDED_WINDOW
+        )
+    )
+    assert filed, "the receipt belongs beside the tree it is about"
 
 
 def test_a_committed_day_reads_an_absent_ranking_field_as_unknown() -> None:

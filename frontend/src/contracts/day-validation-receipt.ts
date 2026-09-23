@@ -2,7 +2,7 @@
 // Never hand-edited: the drift gate regenerates it and fails on any diff
 // (CLAUDE.md section 1a). Edit the Pydantic model instead.
 
-/** One row of `state/day-validations.csv`: one frozen day, one validator. */
+/** One row of `state/day-validations/`: one frozen day, one validator. */
 export interface DayValidationReceipt {
 	version?: string;
 

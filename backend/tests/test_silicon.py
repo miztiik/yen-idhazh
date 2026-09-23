@@ -6,13 +6,12 @@ import time
 from pathlib import Path
 
 import pytest
-from conftest import FIXTURES_DIR
+from conftest import FIXTURES_DIR, fold
 
-from idhazh import config, ledger
+from idhazh import config, day_shards, ledger
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.run_plan import RunPlan
-from idhazh.stages import compact as compact_stage
 from idhazh.telemetry import silicon
 
 #: One committed capture of llama-server's own log, so the four-field stamp the
@@ -23,6 +22,29 @@ SERVER_LOG = FIXTURES_DIR / "runtime" / "2026-08-29-3-shard-0.server-head.txt"
 #: prompt counters on the host row are read from a real scrape for the same
 #: reason: the wire names are llama.cpp's, not ours.
 SERVER_METRICS = FIXTURES_DIR / "runtime" / "2026-08-26-5-shard-0.prom"
+
+#: The day every plan below runs on, so the day the files land under and the day
+#: the fold is asked for cannot drift apart.
+FINGERPRINT_DAY = "2026-09-16"
+
+
+def writer_files(state: Path) -> list[Path]:
+    """Every file of the fingerprint day that one writer owns.
+
+    The fold's own `settled.csv` is left out, because a test asking what a
+    writer left is asking what the fold has not taken yet.
+    """
+    root = state / ledger.HOST_FINGERPRINT_DIRNAME
+    return [
+        path
+        for path in day_shards.one_day(root, FINGERPRINT_DAY)
+        if path.name != day_shards.SETTLED_NAME
+    ]
+
+
+def settled_fingerprint(state: Path) -> Path:
+    """The fold of the fingerprint day, which is the file every reader opens."""
+    return ledger.host_fingerprint_path(state, FINGERPRINT_DAY) / day_shards.SETTLED_NAME
 
 
 def a_plan() -> RunPlan:
@@ -47,6 +69,7 @@ def a_probe() -> config.Settings:
     settings.app.observability.host_fingerprint = True
     settings.app.observability.host_fingerprint_bandwidth_floor_mib = 0
     return settings
+
 
 CPUINFO_XEON = """processor\t: 0
 vendor_id\t: GenuineIntel
@@ -309,17 +332,19 @@ def test_the_stage_writes_this_job_its_own_segment_and_never_the_day_file(
     )
 
     assert row is not None
-    assert not ledger.host_fingerprint_path(tmp_path, "2026-09-16").exists(), (
+    assert not settled_fingerprint(tmp_path).exists(), (
         "the probe writes a segment; the head has one writer and it is the compaction"
     )
-    written = ledger.segment_files(tmp_path, ledger.SegmentLedger.HOST_FINGERPRINT)
+    written = writer_files(tmp_path)
     assert [path.name for path in written] == ["2026-09-16-1-1-work-02.csv"]
 
-    compact_stage.stage_compact(tmp_path)
-    head = ledger.host_fingerprint_path(tmp_path, "2026-09-16")
+    fold(tmp_path, FINGERPRINT_DAY)
+    head = settled_fingerprint(tmp_path)
     assert head.exists(), "a fingerprint nobody stored answers nothing next month"
-    assert head.parts[-3:] == ("2026", "09", "16.csv"), "the tree has to be day sharded"
-    assert not ledger.segment_files(tmp_path), "a folded segment is removed, not left behind"
+    assert head.parts[-4:] == ("2026", "09", "16", day_shards.SETTLED_NAME), (
+        "the tree has to be day sharded"
+    )
+    assert not writer_files(tmp_path), "a folded segment is removed, not left behind"
 
 
 def test_a_second_attempt_at_one_shard_writes_beside_the_first_and_wins(
@@ -337,14 +362,14 @@ def test_a_second_attempt_at_one_shard_writes_beside_the_first_and_wins(
     monkeypatch.setenv("GITHUB_RUN_ATTEMPT", "2")
     silicon.stage_fingerprint(plan, settings=settings, state_root=tmp_path, shard=0)
 
-    written = ledger.segment_files(tmp_path, ledger.SegmentLedger.HOST_FINGERPRINT)
+    written = writer_files(tmp_path)
     assert [path.name for path in written] == [
         "2026-09-16-1-1-work-00.csv",
         "2026-09-16-1-2-work-00.csv",
     ]
 
-    compact_stage.stage_compact(tmp_path)
-    lines = ledger.host_fingerprint_path(tmp_path, "2026-09-16").read_text(encoding="utf-8")
+    fold(tmp_path, FINGERPRINT_DAY)
+    lines = settled_fingerprint(tmp_path).read_text(encoding="utf-8")
     assert lines.count("\n") == 2, "one machine, one row, however many attempts drew it"
 
 
@@ -359,9 +384,9 @@ def test_a_second_call_in_one_attempt_rewrites_the_one_segment(tmp_path: Path) -
         plan, settings=settings, state_root=tmp_path, shard=0, job=ServerJob.WORK
     )
 
-    assert len(ledger.segment_files(tmp_path)) == 1, "one writer, one path, one file"
-    compact_stage.stage_compact(tmp_path)
-    lines = ledger.host_fingerprint_path(tmp_path, "2026-09-16").read_text(encoding="utf-8")
+    assert len(writer_files(tmp_path)) == 1, "one writer, one path, one file"
+    fold(tmp_path, FINGERPRINT_DAY)
+    lines = settled_fingerprint(tmp_path).read_text(encoding="utf-8")
     assert lines.count("\n") == 2, "one header and one row, however many times the stage ran"
 
 
@@ -373,8 +398,8 @@ def test_the_switch_being_off_writes_nothing_and_still_returns(tmp_path: Path) -
     row = silicon.stage_fingerprint(a_plan(), settings=settings, state_root=tmp_path, shard=0)
 
     assert row is None
-    assert not ledger.segment_files(tmp_path)
-    assert not ledger.host_fingerprint_path(tmp_path, "2026-09-16").exists()
+    assert not writer_files(tmp_path)
+    assert not settled_fingerprint(tmp_path).exists()
 
 
 def test_a_row_survives_the_round_trip_through_the_ledger_shape(tmp_path: Path) -> None:
@@ -386,7 +411,7 @@ def test_a_row_survives_the_round_trip_through_the_ledger_shape(tmp_path: Path) 
     """
     silicon.stage_fingerprint(a_plan(), settings=a_probe(), state_root=tmp_path, shard=0)
 
-    path = ledger.segment_files(tmp_path, ledger.SegmentLedger.HOST_FINGERPRINT)[0]
+    path = writer_files(tmp_path)[0]
     header, body = path.read_text(encoding="utf-8").splitlines()[:2]
     read = HostFingerprintRow.from_csv_row(
         dict(zip(header.split(","), body.split(","), strict=True))
@@ -427,7 +452,7 @@ def test_a_day_file_written_before_the_two_prompt_cells_still_folds(tmp_path: Pa
         cpu_model="AMD EPYC 7763 64-Core Processor",
         job_seconds=5550,
     )
-    path = ledger.host_fingerprint_path(tmp_path, "2026-09-16")
+    path = settled_fingerprint(tmp_path)
     path.parent.mkdir(parents=True, exist_ok=True)
     cells = yesterday.csv_row()
     path.write_text(
@@ -443,16 +468,14 @@ def test_a_day_file_written_before_the_two_prompt_cells_still_folds(tmp_path: Pa
         metrics_path=SERVER_METRICS,
     )
 
-    compact_stage.stage_compact(tmp_path)
+    fold(tmp_path, FINGERPRINT_DAY)
 
     header, *body = path.read_text(encoding="utf-8").splitlines()
     columns = header.split(",")
     assert columns == list(HostFingerprintRow.csv_columns())
     rows = {
         cells["shard"]: cells
-        for cells in (
-            dict(zip(columns, line.split(","), strict=True)) for line in body
-        )
+        for cells in (dict(zip(columns, line.split(","), strict=True)) for line in body)
     }
     assert rows["0"]["server_prompt_tokens"] == "", "a reading nobody took is empty, not zero"
     assert rows["0"]["job_seconds"] == "5550", "the widening may not cost the cells already there"
@@ -461,8 +484,8 @@ def test_a_day_file_written_before_the_two_prompt_cells_still_folds(tmp_path: Pa
 
 
 def _head_row(state_dir: Path, date: str = "2026-09-16") -> dict[str, str]:
-    """The one row of the compacted day file, by column name."""
-    path = ledger.host_fingerprint_path(state_dir, date)
+    """The one row of the day's settled file, by column name."""
+    path = ledger.host_fingerprint_path(state_dir, date) / day_shards.SETTLED_NAME
     header, *body = path.read_text(encoding="utf-8").splitlines()
     assert len(body) == 1, f"one machine, one row, and the head holds {len(body)}"
     return dict(zip(header.split(","), body[0].split(","), strict=True))
@@ -507,7 +530,7 @@ def test_the_probe_and_the_job_clock_fold_into_one_row(tmp_path: Path) -> None:
         "the two halves must fill different cells, or the fold has to choose between them"
     )
 
-    compact_stage.stage_compact(tmp_path)
+    fold(tmp_path, FINGERPRINT_DAY)
     row = _head_row(tmp_path)
 
     assert row["fingerprint"] == probe.fingerprint
@@ -527,7 +550,7 @@ def test_a_job_that_died_before_its_clock_leaves_a_usable_half_row(tmp_path: Pat
     """
     silicon.stage_fingerprint(a_plan(), settings=a_probe(), state_root=tmp_path, shard=0)
 
-    compact_stage.stage_compact(tmp_path)
+    fold(tmp_path, FINGERPRINT_DAY)
     row = _head_row(tmp_path)
 
     assert row["job_seconds"] == ""
@@ -575,7 +598,7 @@ def test_the_clock_half_lands_in_the_probes_own_segment(
         plan, settings=settings, state_root=tmp_path, shard=0, job_started_at=int(time.time()) - 60
     )
 
-    written = ledger.segment_files(tmp_path, ledger.SegmentLedger.HOST_FINGERPRINT)
+    written = writer_files(tmp_path)
     assert [path.name for path in written] == ["2026-09-16-1-1-work-00.csv"]
     assert written[0].read_text(encoding="utf-8").count("\n") == 3, "one header and two halves"
 
@@ -590,7 +613,7 @@ def test_the_switch_being_off_records_no_clock_either(tmp_path: Path) -> None:
     )
 
     assert clock is None
-    assert not ledger.segment_files(tmp_path)
+    assert not writer_files(tmp_path)
 
 
 def test_the_job_clock_and_the_model_load_are_decoded_off_a_real_capture() -> None:

@@ -928,6 +928,9 @@ export interface RetentionConfig {
 
 	dry_run?: boolean;
 
+	/** How many months of day-validation receipts are kept under state/day-validations/. A receipt says one published day passed the rules as they stood, and it is consulted only to skip re-reading that day - so a receipt for a day the published archive no longer holds cannot be read and answers nothing. Fourteen matches the published windows the console reads, so the receipts outlive the days by a month rather than going first and costing a full re-validation. */
+	day_validation_keep_months?: number;
+
 	/** The fuse. An off-by-one in a date parse must not eat the archive. */
 	max_deletes_per_run?: number;
 
@@ -942,6 +945,9 @@ export interface RetentionConfig {
 }
 
 export interface RunConfig {
+	/** How many days behind the run's own date a day has to be before its writer files are folded into one settled file. Every job writes its own file under the day its rows name, which is what stops two jobs conflicting - and it leaves about a hundred small files in a busy day. Folding a day nobody will write again costs nothing and changes no answer, because a reader settles the rows either way. Seven days rather than one, because a day can still gain rows: a re-run reaches back, and a shard that died can be re-dispatched. Raise it if a late writer is ever seen landing in a folded day; lower it only to save files, and it saves none the day after it is lowered. */
+	settled_fold_after_days?: number;
+
 	/** What one run may hand the workers. It protects a worker from its own timeout: this number sizes the worst case a work shard and the route stage have to finish, and a worker killed at run.shard_timeout_minutes uploads nothing, so the items it held are lost. It is a guardrail and it only ever refuses - it never chooses content, ranks it, or reorders it. It began as a crash guard against a mis-parsed feed and supply overtook it: items_planned has been exactly this number on every run since 2026-08-25. Owner decision, 2026-09-05: 80, down from 160. What it is NOT is a bound on the day - the day runs five times, so 80 here publishes about 400. safety_ceiling_per_day is the one that answers that. */
 	safety_ceiling_per_run?: number;
 

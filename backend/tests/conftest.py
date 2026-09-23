@@ -7,34 +7,38 @@ import json
 import threading
 import time
 from collections.abc import Iterable
+from datetime import date as date_type
+from datetime import timedelta
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, Final
 
 import pytest
 
-from idhazh import config, ledger
+from idhazh import config, day_shards, ledger
 from idhazh.classify.calls import build_label_request
 from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.article import Article
-from idhazh.contracts.base import derive_output_digest, derive_url_key
+from idhazh.contracts.base import ServerJob, derive_output_digest, derive_url_key
 from idhazh.contracts.digest_day import DigestDay
 from idhazh.contracts.element import ElementTable
 from idhazh.contracts.eval_row import EvalRow
-from idhazh.contracts.feed_health import FetchOutcome
+from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome
 from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.knobs.extract import ElementsConfig
 from idhazh.contracts.knobs.models import ModelsConfig
+from idhazh.contracts.knobs.run import RunConfig
 from idhazh.contracts.run_plan import PlannedItem
 from idhazh.contracts.span_rollup import SpanRollupRow
 from idhazh.contracts.summary import Summary
 from idhazh.contracts.taxonomy import SourceTier
 from idhazh.corpus import Published
 from idhazh.elements import element_table
+from idhazh.evals import writer as eval_writer
 from idhazh.extract import to_article_with_source
 from idhazh.fetch import FetchResult
 from idhazh.llm.server import TurnMarkers, server_argv
-from idhazh.stages import common
+from idhazh.stages import common, compact
 from utilities.capture_request_bodies import RENDERINGS, markers_for
 
 REPO_ROOT: Final = Path(__file__).resolve().parents[2]
@@ -65,10 +69,13 @@ def seed_item_health(state_dir: Path, date: str, rows: Iterable[ItemHealthRow]) 
     contract's own reader, and then the first row for an `ITEM_HEALTH_KEY` wins:
     a row repeating a key already in the file is dropped rather than appended.
 
+    The file is the day's own `settled.csv`, which is the name the fold writes
+    and the one name in a day directory no writer can take.
+
     Returns the rows the file gained, so a caller that asserted on the old
     writer's count asserts on the same number.
     """
-    path = ledger.item_health_path(state_dir, date)
+    path = ledger.item_health_path(state_dir, date) / day_shards.SETTLED_NAME
     columns = ItemHealthRow.csv_columns()
     ledger.settle_header(
         path, columns, ledger.refiler(ItemHealthRow), carried=ledger.ITEM_HEALTH_CARRIED
@@ -95,12 +102,11 @@ def seed_item_health(state_dir: Path, date: str, rows: Iterable[ItemHealthRow]) 
 
 
 def seed_span_rollup(state_dir: Path, date: str, rows: Iterable[SpanRollupRow]) -> int:
-    """Put a month's span fold on disk the way a finished run leaves it.
+    """Put a day's span fold on disk the way a finished run leaves it.
 
     The same fixture builder as `seed_item_health`, for the same reason: a work
-    shard writes its fold to a segment and `stage_compact` merges it into the
-    month head, so no one call reaches a settled month file any more. A caller
-    here wants the month ALREADY folded - it is checking what a listing, a
+    shard writes its fold to its own file in the day directory and the caller
+    here wants the day ALREADY folded - it is checking what a listing, a
     projection or a prune does with the record - so the fold itself stays in
     `tests/pipeline/test_compact.py` and this puts the finished file there.
 
@@ -112,7 +118,7 @@ def seed_span_rollup(state_dir: Path, date: str, rows: Iterable[SpanRollupRow]) 
     Returns the rows the file gained, so a caller that asserted on the old
     writer's count asserts on the same number.
     """
-    path = ledger.span_rollup_path(state_dir, date[:7])
+    path = ledger.span_rollup_path(state_dir, date) / day_shards.SETTLED_NAME
     columns = SpanRollupRow.csv_columns()
     ledger.settle_header(path, columns, ledger.refiler(SpanRollupRow))
     held = ledger.recorded_span_rollup(path)
@@ -134,6 +140,69 @@ def seed_span_rollup(state_dir: Path, date: str, rows: Iterable[SpanRollupRow]) 
             out.writeheader()
         out.writerows({name: cells[name] for name in columns} for cells in kept)
     return len(kept)
+
+
+def seed_feed_health(
+    state_dir: Path,
+    date: str,
+    rows: Iterable[FeedHealthRow],
+    *,
+    run_id: str | None = None,
+    attempt: int = 1,
+    job: ServerJob = ServerJob.PLAN,
+    shard: int = 0,
+) -> int:
+    """Put feed verdicts on disk the way the plan job leaves them.
+
+    The real producer, not a copy of it: the plan job is the only writer of this
+    tree and it writes one file of its own inside the day directory. A caller
+    that needs two writers on one day calls this twice with two identities.
+
+    `run_id` defaults to the first run of the date, which is what a caller that
+    does not care about identity wants.
+    """
+    return ledger.write_segment(
+        state_dir,
+        ledger.SegmentLedger.HEALTH,
+        list(rows),
+        run_id=run_id if run_id is not None else f"{date}-1",
+        attempt=attempt,
+        job=job,
+        shard=shard,
+    )
+
+
+def seed_scores(
+    state_dir: Path,
+    rows: Iterable[EvalRow],
+    *,
+    run_id: str,
+    attempt: int = 1,
+    job: ServerJob = ServerJob.ASSEMBLE,
+    shard: int = 0,
+) -> int:
+    """Put measurements on disk the way a finished run leaves them, index and all.
+
+    The real writer, so the index beside the rows is written too - a test that
+    put rows down without one would find every measurement offered again as new.
+    `run_id` has no default because the index is filed under the run's own day.
+    """
+    return eval_writer.append_segment(
+        state_dir, rows, run_id=run_id, attempt=attempt, job=job, shard=shard
+    )
+
+
+def fold(state_dir: Path, date: str) -> compact.CompactionReport:
+    """Fold `date` and every earlier day of every tree into one settled file each.
+
+    A test writes a day and wants it folded in the next line. Production only
+    folds a day already closed, so this names a later date rather than moving
+    `after_days` to zero - a zero there would fold a day a shard could still be
+    writing, which is not a shape a run can reach.
+    """
+    after_days = RunConfig().settled_fold_after_days
+    closed = date_type.fromisoformat(date) + timedelta(days=after_days + 1)
+    return compact.stage_compact(state_dir, date=closed.isoformat(), after_days=after_days)
 
 
 def read_text(path: Path) -> str:

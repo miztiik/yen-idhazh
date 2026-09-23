@@ -11,6 +11,7 @@ from typing import Final
 import pytest
 
 from idhazh import telemetry
+from idhazh.contracts.base import ServerJob
 from idhazh.contracts.knobs.collect import CollectConfig
 from idhazh.contracts.knobs.observability import ObservabilityConfig
 from idhazh.contracts.knobs.retention import RetentionConfig
@@ -34,7 +35,9 @@ def _write_trace(state: Path, run_id: str, shard: int = 0, *, spans: int = 45) -
     a per-run size the byte-bound test reads off the fixture is the size a run
     actually writes rather than a number this test invented.
     """
-    path = telemetry.committed_trace_path(state, run_id, shard)
+    path = telemetry.committed_trace_path(
+        state, run_id=run_id, attempt=1, job=ServerJob.WORK, shard=shard
+    )
     path.parent.mkdir(parents=True, exist_ok=True)
     record = telemetry.Span(
         trace_id="unattributed",
@@ -72,8 +75,18 @@ def test_a_trace_past_the_window_is_gone_and_a_recent_one_stays(tmp_path: Path) 
     assert not edge_gone.exists(), "a trace seven days back was inside the window"
     assert not oldest.exists()
     assert result.kept == 2
-    assert telemetry.committed_trace_relpath("2026-07-30-1", 0) in result.deleted
-    assert telemetry.committed_trace_relpath("2026-08-20-1", 0) not in result.deleted
+    assert (
+        telemetry.committed_trace_relpath(
+            run_id="2026-07-30-1", attempt=1, job=ServerJob.WORK, shard=0
+        )
+        in result.deleted
+    )
+    assert (
+        telemetry.committed_trace_relpath(
+            run_id="2026-08-20-1", attempt=1, job=ServerJob.WORK, shard=0
+        )
+        not in result.deleted
+    )
 
 
 def test_the_window_bounds_the_tree_by_construction(tmp_path: Path) -> None:
@@ -126,7 +139,12 @@ def test_a_dry_run_names_the_trace_and_leaves_it(tmp_path: Path) -> None:
         dry_run=True,
     )
 
-    assert telemetry.committed_trace_relpath("2026-07-30-1", 0) in result.deleted
+    assert (
+        telemetry.committed_trace_relpath(
+            run_id="2026-07-30-1", attempt=1, job=ServerJob.WORK, shard=0
+        )
+        in result.deleted
+    )
     assert result.dry_run
     assert stale.exists()
 
@@ -143,7 +161,12 @@ def test_a_trace_newer_than_the_date_it_was_handed_is_never_deleted(tmp_path: Pa
 
     assert live.exists(), "a trace ahead of the handed date was deleted"
     assert not stale.exists()
-    assert telemetry.committed_trace_relpath("2026-01-01-1", 0) in result.deleted
+    assert (
+        telemetry.committed_trace_relpath(
+            run_id="2026-01-01-1", attempt=1, job=ServerJob.WORK, shard=0
+        )
+        in result.deleted
+    )
 
 
 def test_the_stage_reports_the_trace_window_it_measured(

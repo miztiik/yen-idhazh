@@ -14,61 +14,76 @@ from datetime import date
 from pathlib import Path
 from typing import Final
 
-from idhazh.ledger import STATE_DIRNAME
+from idhazh.contracts.base import ServerJob
+from idhazh.ledger import STATE_DIRNAME, segment_name
 
 #: The committed trace tree, a child of `state/`.
 TRACES_DIRNAME: Final = "traces"
 
+#: A trace is JSON lines rather than CSV, and that is the whole of what this
+#: tree does differently from a ledger day tree.
+TRACE_SUFFIX: Final = ".jsonl"
 
-def _trace_parts(run_id: str) -> tuple[str, str, str, str]:
-    """Split a run id into its date and ordinal: `2026-08-21-1` -> (2026, 08, 21, 1).
+
+def _trace_day(run_id: str) -> tuple[str, str, str]:
+    """The three path segments a run id names: `2026-08-21-1` -> (2026, 08, 21).
 
     A `RunId` is `<YYYY>-<MM>-<DD>-<ordinal>` and the ordinal carries no dash, so
-    a plain split gives exactly four parts. The date is spelled once in the path -
-    as the `<YYYY>/<MM>/` directories and the `<DD>` filename prefix - so the run
-    slot in the file name is the ordinal alone, not the whole id, which already
-    spells the date.
+    a plain split gives exactly four parts. A trace carries no date cell of its
+    own, so the run id is what says which day the file belongs under.
     """
     parts = run_id.split("-")
     if len(parts) != 4:
         raise ValueError(f"run id {run_id!r} is not <YYYY>-<MM>-<DD>-<ordinal>")
-    year, month, day, ordinal = parts
-    return year, month, day, ordinal
+    year, month, day, _ = parts
+    return year, month, day
 
 
-def committed_trace_relpath(run_id: str, shard: int) -> str:
-    """The POSIX relpath one shard's committed trace is filed under.
+def committed_trace_relpath(
+    *, run_id: str, attempt: int, job: ServerJob, shard: int
+) -> str:
+    """The POSIX relpath one writer's committed trace is filed under.
 
-    `state/traces/<YYYY>/<MM>/<DD>-<ordinal>-<shard>.jsonl` (section 2: relative,
-    POSIX, minimal). The shard is zero-padded to match the run's other per-shard
-    file names.
+    `state/traces/<YYYY>/<MM>/<DD>/<run_id>-<attempt>-<job>-<shard>.jsonl`
+    (section 2: relative, POSIX, minimal). The day is a directory and the file
+    carries the four elements that make it this writer's own, which is the
+    grammar every day tree under `state/` uses - `ledger.segment_name` spells
+    it, so a trace and a ledger row cannot name one writer two ways.
     """
-    year, month, day, ordinal = _trace_parts(run_id)
-    return f"{STATE_DIRNAME}/{TRACES_DIRNAME}/{year}/{month}/{day}-{ordinal}-{shard:02d}.jsonl"
+    year, month, day = _trace_day(run_id)
+    name = segment_name(
+        run_id=run_id, attempt=attempt, job=job, shard=shard, suffix=TRACE_SUFFIX
+    )
+    return f"{STATE_DIRNAME}/{TRACES_DIRNAME}/{year}/{month}/{day}/{name}"
 
 
-def committed_trace_path(state_dir: Path, run_id: str, shard: int) -> Path:
-    """The file one shard's committed trace is written to and pruned from."""
-    year, month, day, ordinal = _trace_parts(run_id)
-    return state_dir / TRACES_DIRNAME / year / month / f"{day}-{ordinal}-{shard:02d}.jsonl"
+def committed_trace_path(
+    state_dir: Path, *, run_id: str, attempt: int, job: ServerJob, shard: int
+) -> Path:
+    """The file one writer's committed trace is written to and pruned from."""
+    year, month, day = _trace_day(run_id)
+    name = segment_name(
+        run_id=run_id, attempt=attempt, job=job, shard=shard, suffix=TRACE_SUFFIX
+    )
+    return state_dir / TRACES_DIRNAME / year / month / day / name
 
 
 def trace_date(path: Path, traces_root: Path) -> date | None:
     """The published day a committed trace path encodes, or None if it is not one.
 
-    The reverse of `committed_trace_path`: the year and month come from the
-    `<YYYY>/<MM>/` directories and the day from the `<DD>-...` file name. None for
-    a path the shape does not recognise, so a stray file under the tree is left
-    alone rather than deleted - the rule `retention.month_shards` keeps.
+    The reverse of `committed_trace_path`: all three parts come from the
+    `<YYYY>/<MM>/<DD>/` directories, so the file name says nothing about the day
+    and a trace written before traces carried identity is read by exactly the
+    same rule as one written after. None for a path the shape does not
+    recognise, so a stray file under the tree is left alone rather than deleted.
     """
     try:
         rel = path.relative_to(traces_root)
     except ValueError:
         return None
-    if len(rel.parts) != 3:
+    if len(rel.parts) != 4:
         return None
-    year, month, name = rel.parts
-    day = name.split("-", 1)[0]
+    year, month, day, _ = rel.parts
     try:
         return date(int(year), int(month), int(day))
     except ValueError:

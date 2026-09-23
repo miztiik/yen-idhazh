@@ -25,15 +25,32 @@
  */
 
 import { expect, test, type Page } from '@playwright/test';
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { readShards } from '../src/lib/server/payload';
+import { dayShardFiles, readDayShards, type CsvTable } from '../src/lib/server/payload';
 import { foldRollup, subStepReadout, SPAN_RECORD_STARTS } from '../src/lib/server/span-rollup';
 
 /** The canary state tree the browser suite is built from. */
 const CANARY = resolve(process.cwd(), '..', 'backend', 'var', 'canary', 'state');
 const ROLLUP = join(CANARY, 'span-rollup');
+
+/** The canary rollup, read the way the page reads it.
+ *
+ * The store is `state/span-rollup/<YYYY>/<MM>/<DD>/<writer>.csv`, so a reader
+ * names the store and lets the walk find the files. Naming a file inside it
+ * pins a date and a grain, and both have already moved once.
+ *
+ * Called inside each test and never at module scope: a fixture opened while the
+ * module loads fails before any test owns the failure.
+ */
+function rollup(): CsvTable {
+	const table = readDayShards(ROLLUP);
+	expect(table.rows.length, 'the canary rollup carries no row - the fixture is missing').toBeGreaterThan(
+		0
+	);
+	return table;
+}
 
 /** The track the pixel rule is measured against, which is `console.chart_width`.
  * The same 760 `chart.width_px` carries, so a console page has one answer to how
@@ -53,10 +70,7 @@ function committed(): {
 	residualMs: number | null;
 	shards: number;
 } {
-	const rows = readShards(ROLLUP).rows;
-	expect(rows.length, 'the canary rollup carries no row - the fixture is missing').toBeGreaterThan(
-		0
-	);
+	const rows = rollup().rows;
 	// The newest run, by the same rule the reader sorts by: latest date, then the
 	// higher run ordinal.
 	const keyed = rows.map((row) => ({
@@ -260,7 +274,7 @@ test.describe('a band under one pixel is a printed figure, not a segment', () =>
 
 test.describe('the reader folds the committed rollup', () => {
 	test('the canary rollup folds to one run whose figures reconcile', () => {
-		const runs = foldRollup(readShards(ROLLUP));
+		const runs = foldRollup(rollup());
 		expect(runs.length, 'the canary rollup folded to no run').toBeGreaterThan(0);
 
 		const view = subStepReadout(runs[0], TRACK_PX);
@@ -293,15 +307,21 @@ test.describe('the reader folds the committed rollup', () => {
 
 test.describe('an empty rollup is a named empty state, never a blank readout', () => {
 	test('a rollup truncated to its header folds to an empty readout that names the record start', () => {
-		// The real state the readout is in every day until a traced run commits: the
-		// file exists with its header and no data rows. Read it back the way the
+		// The real state the readout is in every day until a traced run commits: one
+		// writer's file carries its header and no data rows. Read it back the way the
 		// reader does and the readout is empty - and still carries the day the
 		// record begins, which is the whole of what the empty state prints.
-		const header = readFileSync(join(ROLLUP, '2026-09.csv'), 'utf8').split('\n')[0];
+		const shards = dayShardFiles(ROLLUP);
+		expect(shards.length, 'the canary rollup carries no shard - the fixture is missing').toBeGreaterThan(
+			0
+		);
+		const header = readFileSync(shards[0].path, 'utf8').split('\n')[0];
 		const dir = mkdtempSync(join(tmpdir(), 'span-rollup-header-'));
-		writeFileSync(join(dir, '2026-09.csv'), header + '\n');
+		const day = join(dir, '2026', '09', '06');
+		mkdirSync(day, { recursive: true });
+		writeFileSync(join(day, '2026-09-06-1-1-assemble-00.csv'), header + '\n');
 
-		const runs = foldRollup(readShards(dir));
+		const runs = foldRollup(readDayShards(dir));
 		expect(runs.length, 'a header-only rollup folded to a run').toBe(0);
 
 		const view = subStepReadout(runs[0] ?? null, TRACK_PX);

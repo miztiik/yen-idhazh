@@ -16,6 +16,7 @@ from conftest import CONFIG_DIR, REPO_ROOT, read_text
 from pydantic import ValidationError
 
 from idhazh import config, ledger
+from idhazh.contracts.base import ServerJob
 from idhazh.contracts.pipeline_tests import (
     MINIMUM_CANDIDATES,
     TRIAL_STATE_PREFIX,
@@ -23,6 +24,7 @@ from idhazh.contracts.pipeline_tests import (
 )
 from idhazh.contracts.run_plan import RunPlan
 from idhazh.llm.server import setting, window
+from idhazh.telemetry import traces
 from utilities import candidate_pointer, model_refs, pipeline_test_ledgers
 
 from ._harness import (
@@ -510,10 +512,45 @@ def test_the_check_reads_the_download_before_anything_is_staged() -> None:
     )
 
 
+#: The one writer the downloaded tree carries, spelled through the producers a
+#: case run uses. `GITHUB_RUN_ID` is GitHub's eleven-digit execution number, so
+#: the run id is the project's `<date>-<execution>` rather than that number
+#: alone.
+CASE_DATE: str = "2026-09-22"
+CASE_RUN_ID: str = f"{CASE_DATE}-40000000001"
+CASE_ATTEMPT: int = 1
+CASE_JOB: ServerJob = ServerJob.WORK
+CASE_SHARD: int = 0
+CASE_DAY_PATH: str = CASE_DATE.replace("-", "/")
+CASE_WRITER: str = ledger.segment_name(
+    run_id=CASE_RUN_ID, attempt=CASE_ATTEMPT, job=CASE_JOB, shard=CASE_SHARD
+)
+CASE_TRACE: str = ledger.segment_name(
+    run_id=CASE_RUN_ID,
+    attempt=CASE_ATTEMPT,
+    job=CASE_JOB,
+    shard=CASE_SHARD,
+    suffix=traces.TRACE_SUFFIX,
+)
+
+
 def _a_downloaded_tree(root: Path, *, case: str) -> Path:
-    """One case's ledgers as the artifact carries them: a segment and a trace."""
+    """One case's ledgers as the artifact carries them: a day shard and a trace.
+
+    Both paths are built by the producers a case run uses, so a grammar that
+    moves takes this fixture with it rather than leaving it green against a
+    shape nothing writes.
+    """
     rows = ledger.segment_contract(ledger.SegmentLedger.SPAN_ROLLUP).csv_columns()
-    segment = root / case / "segments" / "span-rollup" / "2026-09-22-40000000001-1-work-00.csv"
+    segment = ledger.day_shard_path(
+        root / case,
+        ledger.SegmentLedger.SPAN_ROLLUP,
+        date=CASE_DATE,
+        run_id=CASE_RUN_ID,
+        attempt=CASE_ATTEMPT,
+        job=CASE_JOB,
+        shard=CASE_SHARD,
+    )
     segment.parent.mkdir(parents=True, exist_ok=True)
     segment.write_text(
         ",".join(rows)
@@ -521,9 +558,9 @@ def _a_downloaded_tree(root: Path, *, case: str) -> Path:
         + ",".join(
             {
                 "version": "2026-09-06T15:00",
-                "date": "2026-09-22",
-                "run_id": "2026-09-22-40000000001",
-                "shard": "0",
+                "date": CASE_DATE,
+                "run_id": CASE_RUN_ID,
+                "shard": str(CASE_SHARD),
                 "span_name": "item",
                 "count": "2",
                 "total_ms": "9000",
@@ -533,14 +570,20 @@ def _a_downloaded_tree(root: Path, *, case: str) -> Path:
         + "\n",
         encoding="utf-8",
     )
-    trace = root / case / "traces" / "2026" / "09" / "22-40000000001-00.jsonl"
+    trace = traces.committed_trace_path(
+        root / case,
+        run_id=CASE_RUN_ID,
+        attempt=CASE_ATTEMPT,
+        job=CASE_JOB,
+        shard=CASE_SHARD,
+    )
     trace.parent.mkdir(parents=True, exist_ok=True)
     trace.write_text('{"kind":"span","name":"item","duration_ms":1}\n', encoding="utf-8")
     return root
 
 
 def test_the_check_passes_the_two_shapes_a_case_really_writes(tmp_path: Path) -> None:
-    """A segment and a trace, filed under a declared case's own trial root."""
+    """A day shard and a trace, filed under a declared case's own trial root."""
     case = _settings().cases[0]
     tree = _a_downloaded_tree(tmp_path / "trial-ledgers", case=case.trial_state_dirname)
 
@@ -550,10 +593,10 @@ def test_the_check_passes_the_two_shapes_a_case_really_writes(tmp_path: Path) ->
 @pytest.mark.parametrize(
     ("relative", "because"),
     [
-        ("a-tenant/segments/span-rollup/2026-09-22-40000000001-1-work-00.csv", "no declared case"),
+        (f"a-tenant/span-rollup/{CASE_DAY_PATH}/{CASE_WRITER}", "no declared case"),
         ("{case}/items/ai-0000000001.summary.json", "a store a case run does not write"),
-        ("{case}/segments/summaries/2026-09-22-40000000001-1-work-00.csv", "no such ledger"),
-        ("{case}/traces/2026/09/22-40000000001-00.jsonl", "a line that is not a span"),
+        (f"{{case}}/summaries/{CASE_DAY_PATH}/{CASE_WRITER}", "no such ledger"),
+        (f"{{case}}/traces/{CASE_DAY_PATH}/{CASE_TRACE}", "a line that is not a span"),
     ],
 )
 def test_the_check_refuses_what_no_case_producer_wrote(
@@ -648,7 +691,9 @@ def test_every_declared_case_is_placed_whether_or_not_it_wrote_anything(tmp_path
     assert len(staged) == len(cases)
     for case in cases:
         assert (state / case.trial_state_dirname).is_dir()
-    assert (state / cases[0].trial_state_dirname / "segments").is_dir()
+    assert (
+        state / cases[0].trial_state_dirname / ledger.SegmentLedger.SPAN_ROLLUP.value
+    ).is_dir()
 
 
 def test_the_address_list_can_still_answer_a_draw() -> None:

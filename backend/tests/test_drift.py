@@ -28,7 +28,9 @@ import yaml  # type: ignore[import-untyped]
 from conftest import CONFIG_DIR, REPO_ROOT, read_text
 from pydantic import ValidationError
 
+from idhazh import ledger as segment_ledger
 from idhazh.contracts.app_config import AppConfig
+from idhazh.contracts.base import ServerJob
 from idhazh.contracts.knobs.evaluation import DriftConfig
 from idhazh.drift import (
     Alert,
@@ -44,7 +46,6 @@ from idhazh.drift import (
     report,
     shortfall,
 )
-from idhazh.evals.writer import ledger_path
 
 # `workflow`, because the program `.github/workflows/drift.yml` ships is asserted here.
 pytestmark = pytest.mark.workflow
@@ -513,13 +514,30 @@ def ledger(directory: Path, *, recent: int, baseline: int) -> None:
     )
 
 
+def a_days_file(directory: Path, date: str) -> Path:
+    """Where the assemble job files a day's measurements.
+
+    Raw cells rather than the writer, because half these cases are a cell the
+    contract would refuse and the review has to be the one that reports it.
+    """
+    return segment_ledger.day_shard_path(
+        directory / "state",
+        segment_ledger.SegmentLedger.SCORES,
+        date=date,
+        run_id=f"{date}-1",
+        attempt=1,
+        job=ServerJob.ASSEMBLE,
+        shard=0,
+    )
+
+
 def write_rows(directory: Path, records: list[dict[str, str]]) -> None:
     grouped: dict[Path, list[dict[str, str]]] = {}
     if not records:
         yesterday = datetime.datetime.now(datetime.UTC).date() - datetime.timedelta(days=1)
-        grouped[ledger_path(directory / "state", yesterday.isoformat())] = []
+        grouped[a_days_file(directory, yesterday.isoformat())] = []
     for record in records:
-        grouped.setdefault(ledger_path(directory / "state", record["date"]), []).append(record)
+        grouped.setdefault(a_days_file(directory, record["date"]), []).append(record)
     for shard, values in grouped.items():
         shard.parent.mkdir(parents=True, exist_ok=True)
         with shard.open("w", encoding="utf-8", newline="") as handle:
@@ -657,8 +675,8 @@ def test_the_reader_uses_completed_utc_days_and_only_relevant_days(tmp_path: Pat
     At day grain the window's own arithmetic excludes the incomplete day and the
     day after it, so those two files are never opened at all - where the month
     shard holding them used to be opened and its rows filtered. The stray
-    `2024-01.csv` is a month-shaped name at the root of a day tree, which no
-    `ledger_path` can produce and which is therefore never named.
+    `2024-01.csv` is a month-shaped name at the root of a day tree, which no day
+    a run files can produce and which is therefore never named.
     """
     anchor = datetime.date(2026, 1, 5)
     write_rows(

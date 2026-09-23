@@ -13,9 +13,10 @@ from pathlib import Path
 import pytest
 from conftest import CONTRACT_FIXTURES_DIR, read_text
 
-from idhazh import day_partition
+from idhazh import day_partition, day_shards, ledger
+from idhazh.contracts.base import ServerJob
 from idhazh.contracts.eval_row import ConfidenceBand, EvalRow
-from idhazh.contracts.knobs.collect import CollectConfig
+from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW, CollectConfig
 from idhazh.contracts.knobs.observability import ObservabilityConfig
 from idhazh.contracts.knobs.retention import RetentionConfig
 from idhazh.evals import archive as score_archive
@@ -75,13 +76,17 @@ def score_row(*, day: str, run: int, number: int) -> EvalRow:
 
 
 def score_history(state_dir: Path, months: list[str]) -> None:
-    """Two real score days a month, written through the real appender."""
+    """Two real score days a month, written through the real producer."""
     for index, month in enumerate(months):
         for day_of_month in (4, 17):
             day = f"{month}-{day_of_month:02d}"
-            score_writer.append(
+            score_writer.append_segment(
                 state_dir,
                 [score_row(day=day, run=1, number=index * 100 + offset) for offset in range(6)],
+                run_id=f"{day}-1",
+                attempt=1,
+                job=ServerJob.ASSEMBLE,
+                shard=0,
             )
 
 
@@ -92,12 +97,14 @@ def a_score_tree(tmp_path: Path) -> Path:
 
 
 def score_months(state: Path) -> list[str]:
-    """The months the score ledger's day files fall in, oldest first."""
-    return sorted(day_partition.days_by_month(state / score_writer.LEDGER_DIRNAME))
+    """The months the score ledger's day shards fall in, oldest first."""
+    return sorted(
+        day_shards.shards_by_month(state / score_writer.LEDGER_DIRNAME, days=UNBOUNDED_WINDOW)
+    )
 
 
 def score_bytes(state: Path) -> dict[str, bytes]:
-    """Every score day file's bytes, keyed by its `<YYYY>/<MM>/<DD>.csv` path."""
+    """Every score shard's bytes, keyed by its path below the state tree."""
     return {
         day.relative_to(state).as_posix(): day.read_bytes()
         for day in score_writer.ledger_days(state)
@@ -112,9 +119,9 @@ def test_a_score_month_past_the_window_is_summarised_and_then_deleted(tmp_path: 
     doomed = [month for month in score_months(state) if month < boundary]
     assert doomed, "the fixture has to reach past the window or this proves nothing"
     taken = [
-        score_writer.ledger_relpath(f"{month}-{day.stem}")
-        for month in doomed
-        for day in day_partition.days_by_month(state / score_writer.LEDGER_DIRNAME)[month]
+        f"{ledger.STATE_DIRNAME}/{shard.relative_to(state).as_posix()}"
+        for shard in score_writer.ledger_days(state)
+        if day_shards.date_of(shard)[:7] in doomed
     ]
 
     result = prune_scores(state, config, TODAY)
@@ -192,7 +199,14 @@ def test_a_month_with_real_volume_summarises_to_a_fraction_of_its_shard(tmp_path
     """
     state = tmp_path / "state"
     day = "2025-01-09"
-    score_writer.append(state, [score_row(day=day, run=1, number=n) for n in range(200)])
+    score_writer.append_segment(
+        state,
+        [score_row(day=day, run=1, number=n) for n in range(200)],
+        run_id=f"{day}-1",
+        attempt=1,
+        job=ServerJob.ASSEMBLE,
+        shard=0,
+    )
     days = score_writer.ledger_days(state)
     source_bytes = sum(path.stat().st_size for path in days)
 
@@ -306,7 +320,9 @@ def test_an_archive_that_does_not_reconcile_leaves_its_days(
     state = a_score_tree(tmp_path)
     config = ObservabilityConfig()
     boundary = oldest_month_kept(TODAY, config.scores_full_grain_months)
-    by_month = day_partition.days_by_month(state / score_writer.LEDGER_DIRNAME)
+    by_month = day_shards.shards_by_month(
+        state / score_writer.LEDGER_DIRNAME, days=UNBOUNDED_WINDOW
+    )
     doomed = [day for month, days in by_month.items() if month < boundary for day in days]
     assert doomed
     honest = score_archive.read
@@ -381,7 +397,9 @@ def test_the_oracle_an_archived_month_reconciles_and_is_still_refused_as_a_repea
     state = a_score_tree(tmp_path)
     config = ObservabilityConfig()
     boundary = oldest_month_kept(TODAY, config.scores_full_grain_months)
-    by_month = day_partition.days_by_month(state / score_writer.LEDGER_DIRNAME)
+    by_month = day_shards.shards_by_month(
+        state / score_writer.LEDGER_DIRNAME, days=UNBOUNDED_WINDOW
+    )
     month = next(name for name in sorted(by_month) if name < boundary)
     days = sorted(by_month[month])
     raw = [
@@ -422,9 +440,17 @@ def test_the_oracle_an_archived_month_reconciles_and_is_still_refused_as_a_repea
         EvalRow.model_validate({key: value for key, value in row.items() if value != ""})
         for row in doomed
     ]
-    assert score_writer.append(state, replayed) == 0, (
-        "a deleted month made its measurements new again"
-    )
+    assert (
+        score_writer.append_segment(
+            state,
+            replayed,
+            run_id=f"{month}-28-9",
+            attempt=1,
+            job=ServerJob.ASSEMBLE,
+            shard=0,
+        )
+        == 0
+    ), "a deleted month made its measurements new again"
     assert not any(day.exists() for day in days), (
         "the replay recreated a day file the archive replaced"
     )
@@ -440,7 +466,7 @@ def test_the_index_goes_with_the_rows_it_describes(tmp_path: Path) -> None:
     state = a_score_tree(tmp_path)
     config = ObservabilityConfig()
     boundary = oldest_month_kept(TODAY, config.scores_full_grain_months)
-    before = {day.parent.parent.name + "-" + day.parent.name for day in score_writer.index_days(state)}
+    before = {day_shards.date_of(shard)[:7] for shard in score_writer.index_days(state)}
     assert any(month < boundary for month in before), "the fixture never reaches past the window"
 
     dry = prune_scores(state, config, TODAY, dry_run=True)
@@ -451,10 +477,45 @@ def test_the_index_goes_with_the_rows_it_describes(tmp_path: Path) -> None:
     assert live.index_days_removed == dry.index_days_removed, (
         "the index files a live run removed are not the ones a dry run named"
     )
-    after = {day.parent.parent.name + "-" + day.parent.name for day in score_writer.index_days(state)}
+    after = {day_shards.date_of(shard)[:7] for shard in score_writer.index_days(state)}
     assert after == {month for month in before if month >= boundary}
     # Every measurement the deleted index held is still refused, because the
     # archive beside it carries the same digests.
+    assert score_writer.recorded_observations(state)
+
+
+def test_an_index_day_no_archive_covers_is_left_alone(tmp_path: Path) -> None:
+    """The guard on the drop, asked from the side that would lose a record.
+
+    A day file removed by hand, or by a prune whose archive would not reconcile,
+    leaves the index as the only thing that remembers those measurements.
+    Dropping it there would silently make every one of them new again, so the
+    drop is guarded on the archive being on disk rather than on the rows being
+    gone.
+    """
+    state = a_score_tree(tmp_path)
+    config = ObservabilityConfig()
+    orphan = "2020-03-04"
+    score_writer.append_segment(
+        state,
+        [score_row(day=orphan, run=1, number=1)],
+        run_id=f"{orphan}-1",
+        attempt=1,
+        job=ServerJob.ASSEMBLE,
+        shard=0,
+    )
+    for day in day_shards.one_day(state / score_writer.LEDGER_DIRNAME, orphan):
+        day.unlink()
+        day_partition.drop_empty_day_dirs(day)
+    assert day_shards.one_day(state / score_writer.INDEX_DIRNAME, orphan), (
+        "the index for the orphaned day was never written, so this proves nothing"
+    )
+
+    prune_scores(state, config, TODAY)
+
+    assert day_shards.one_day(state / score_writer.INDEX_DIRNAME, orphan), (
+        "the last record of those measurements went, and no archive carries them"
+    )
     assert score_writer.recorded_observations(state)
 
 
@@ -475,10 +536,15 @@ def test_the_stage_names_the_score_day_files_a_live_run_would_remove(
     months = months_back(TODAY, config.scores_full_grain_months + 1)
     score_history(state, months)
     expired = months[0]
-    days = day_partition.days_by_month(state / score_writer.LEDGER_DIRNAME)[expired]
+    days = day_shards.shards_by_month(
+        state / score_writer.LEDGER_DIRNAME, days=UNBOUNDED_WINDOW
+    )[expired]
+    index_days = day_shards.shards_by_month(
+        state / score_writer.INDEX_DIRNAME, days=UNBOUNDED_WINDOW
+    )[expired]
     doomed = sorted(
-        [score_writer.ledger_relpath(f"{expired}-{day.stem}") for day in days]
-        + [score_writer.index_relpath(f"{expired}-{day.stem}") for day in days]
+        f"{ledger.STATE_DIRNAME}/{shard.relative_to(state).as_posix()}"
+        for shard in [*days, *index_days]
     )
     assert len(days) > 1, "one day a month would not separate a path from a synthesis"
 

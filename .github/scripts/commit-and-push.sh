@@ -183,7 +183,7 @@ clear_what_the_tip_will_write_over() {
   rm -f -- "${blocked[@]}" || return 1
 }
 
-# The identity this job's own files carry. `ledger.segment_path` names a
+# The identity this job's own files carry. `ledger.segment_name` names a
 # writer's file `<run_id>-<attempt>-<job>-<shard>`, and this project's run id is
 # itself `<date>-<execution>` - so a committed name reads
 # `2026-09-22-35743751882-1-work-03.csv`. That leading date is why the match
@@ -498,12 +498,12 @@ while :; do
   # `merge.directoryRenames=false` on both spellings below. Git guesses that a
   # directory whose files all moved away was RENAMED to wherever they went, and
   # it applies that guess to a file the other side added into the emptied
-  # directory. The fold already drains `state/segments/`, so a sibling adding a
-  # brand-new segment there is read as adding into a directory that no longer
-  # exists, and the rebase stops with `CONFLICT (file location)` over a tree
-  # that was correct. Proved in a scratch repository on 2026-09-22: the same
-  # replay conflicts with the guess on and reports `Successfully rebased` with
-  # it off, losing nothing.
+  # directory. The closed-day fold replaces a day's writer files with one
+  # settled file, so a sibling adding a new writer file into that day is read as
+  # adding into a directory that no longer exists, and the rebase stops with
+  # `CONFLICT (file location)` over a tree that was correct. Proved in a scratch
+  # repository on 2026-09-22: the same replay conflicts with the guess on and
+  # reports `Successfully rebased` with it off, losing nothing.
   if ! git -c merge.directoryRenames=false rebase FETCH_HEAD; then
     settled=false
     if resolve_what_this_job_owns FETCH_HEAD && GIT_EDITOR=true git -c merge.directoryRenames=false rebase --continue; then

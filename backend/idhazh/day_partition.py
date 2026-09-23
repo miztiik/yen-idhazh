@@ -130,11 +130,17 @@ def date_of(day_file: Path) -> str:
 
 
 def drop_empty_day_dirs(day: Path) -> None:
-    """Remove the month and year directory a deleted day file leaves behind.
+    """Remove every date directory a deleted file leaves empty behind it.
 
     Not tidiness: `day_files` above walks every year and month directory it
     finds, so a deletion that left them would make the walk cost more each year
     while removing the rows that walk exists to read.
+
+    It climbs while the directory's own name is a date segment, which is what
+    makes one helper answer for both shapes. A `<DD>.csv` day file leaves a month
+    and a year; a writer's file inside a `<DD>/` day directory leaves a day, a
+    month and a year, one level deeper. A store root is never a date segment, so
+    the climb stops there without being told where there is.
 
     Here rather than beside any one caller, because every store that deletes a
     day file owes the same thing to the same walk. It was spelled twice until
@@ -143,11 +149,17 @@ def drop_empty_day_dirs(day: Path) -> None:
     rather than the other way round. A shape's rule belongs with the shape, and
     both of those modules already import this one.
     """
-    for directory in (day.parent, day.parent.parent):
+    directory = day.parent
+    for _ in range(3):
+        if not (
+            is_segment(directory.name, SEGMENT_WIDTH) or is_segment(directory.name, YEAR_WIDTH)
+        ):
+            return
         try:
             directory.rmdir()
         except OSError:
             return
+        directory = directory.parent
 
 
 def days_by_month(root: Path) -> dict[str, list[Path]]:

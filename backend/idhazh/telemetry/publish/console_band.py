@@ -50,7 +50,7 @@ from datetime import date
 from pathlib import Path
 from typing import Final
 
-from idhazh import assemble, day_partition, discover, ledger
+from idhazh import assemble, day_partition, day_shards, discover, ledger
 from idhazh.contracts.console_band import (
     BandRun,
     BandSize,
@@ -1323,10 +1323,9 @@ def publish(
     back any panel on any route can draw. Nothing here opens a day payload.
 
     The three compaction figures are handed in by the caller that ran the fold.
-    Nothing here lists `state/segments/`, because the fold runs before this step
-    and a listing taken now is always empty - the fields could then never be
-    anything but zero, and a warning with no reachable state teaches an operator
-    that no warning means nothing is wrong.
+    Nothing here walks a day tree to count what is waiting, because the fold runs
+    in a later step of the same job and a count taken now would be about the tree
+    before it.
     """
     widest = max(console.window_presets)
     months = months_a_window_can_touch(widest)
@@ -1449,21 +1448,20 @@ def _machine_rows(
     matrix nobody dispatched. `machine.PUBLISHED_JOB` carries the same reason for
     the published series.
 
-    One file a day over `within_days`, which is `max(console.window_presets)`, so
-    the cost is set by a committed knob and not by how much the archive has
+    The files of one day over `within_days`, which is `max(console.window_presets)`,
+    so the cost is set by a committed knob and not by how much the archive has
     accumulated (Guardrail #12). A day nothing wrote opens nothing.
     """
     found: list[Mapping[str, str]] = []
+    root = state_root / ledger.HOST_FINGERPRINT_DIRNAME
     for day in day_partition.days_in_window(anchor, within_days):
-        source = ledger.host_fingerprint_path(state_root, day)
-        if not source.is_file():
-            continue
-        with source.open("r", encoding="utf-8", newline="") as handle:
-            found.extend(
-                row
-                for row in csv.DictReader(handle)
-                if (row.get("job") or machine.PUBLISHED_JOB) == machine.PUBLISHED_JOB
-            )
+        for source in day_shards.one_day(root, day):
+            with source.open("r", encoding="utf-8", newline="") as handle:
+                found.extend(
+                    row
+                    for row in csv.DictReader(handle)
+                    if (row.get("job") or machine.PUBLISHED_JOB) == machine.PUBLISHED_JOB
+                )
     return found
 
 

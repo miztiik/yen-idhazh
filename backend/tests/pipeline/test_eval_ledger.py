@@ -11,9 +11,8 @@ from __future__ import annotations
 import csv
 from pathlib import Path
 
-import pytest
-
-from idhazh import day_partition
+from idhazh import day_partition, day_shards
+from idhazh.contracts.base import ServerJob
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.evals import archive as score_archive
 from idhazh.evals import writer
@@ -22,13 +21,27 @@ from ._builders import (
     row,
 )
 
+#: The writer every case below files as. `assemble` is the job that scores a
+#: whole day, and it runs one shard, so this is the identity a finished run
+#: leaves. A case that needs two writers names its own second one.
+A_RUN = "2026-08-21-1"
 
-def test_the_ledger_writes_its_header_once(tmp_path: Path) -> None:
+
+def put(
+    state: Path, rows: list[EvalRow], *, run_id: str = A_RUN, attempt: int = 1
+) -> int:
+    """One writer's measurements, filed the way a finished run files them."""
+    return writer.append_segment(
+        state, rows, run_id=run_id, attempt=attempt, job=ServerJob.ASSEMBLE, shard=0
+    )
+
+
+def test_one_writers_rows_for_a_day_share_one_file_with_one_header(tmp_path: Path) -> None:
+    """A writer owns its file, so its whole slice of a day is written at once."""
     state = tmp_path / "state"
-    assert writer.append(state, [row()]) == 1
-    assert writer.append(state, [row(item_id="ai-02", output_digest="b" * 64)]) == 1
+    assert put(state, [row(), row(item_id="ai-02", output_digest="b" * 64)]) == 2
     days = writer.ledger_days(state)
-    assert len(days) == 1, "both rows are the same day, so they share a file"
+    assert len(days) == 1, "one writer, one day, one file"
     with days[0].open(encoding="utf-8") as handle:
         lines = list(csv.reader(handle))
     assert len(lines) == 3
@@ -45,9 +58,9 @@ def test_two_days_of_rows_land_in_two_files(tmp_path: Path) -> None:
     august = row()
     september = row(date="2026-09-01", run_id="2026-09-01-1", url_key="e" * 64)
 
-    assert writer.append(state, [september, august]) == 2
+    assert put(state, [september, august]) == 2
 
-    assert [day_partition.date_of(day) for day in writer.ledger_days(state)] == [
+    assert [day_shards.date_of(day) for day in writer.ledger_days(state)] == [
         august.date,
         september.date,
     ]
@@ -62,9 +75,9 @@ def test_a_re_observation_of_the_same_measurement_writes_no_row(tmp_path: Path) 
     instrument, and the second row would only inflate the denominator.
     """
     state = tmp_path / "state"
-    assert writer.append(state, [row()]) == 1
+    assert put(state, [row()]) == 1
     again = row(date="2026-08-22", run_id="2026-08-22-1", item_id="ai-07")
-    assert writer.append(state, [again]) == 0
+    assert put(state, [again], run_id="2026-08-22-1") == 0
     with writer.ledger_days(state)[0].open(encoding="utf-8") as handle:
         assert len(list(csv.reader(handle))) == 2
 
@@ -78,18 +91,18 @@ def test_a_re_observation_in_a_later_month_still_writes_no_row(tmp_path: Path) -
     """
     state = tmp_path / "state"
     held = row()
-    assert writer.append(state, [held]) == 1
+    assert put(state, [held]) == 1
 
     later = row(date="2026-09-14", run_id="2026-09-14-1", item_id="ai-07")
 
-    assert writer.append(state, [later]) == 0
-    assert [day_partition.date_of(day) for day in writer.ledger_days(state)] == [held.date]
+    assert put(state, [later], run_id="2026-09-14-1") == 0
+    assert [day_shards.date_of(day) for day in writer.ledger_days(state)] == [held.date]
 
 
 def test_one_batch_cannot_carry_the_same_measurement_twice(tmp_path: Path) -> None:
     """The guard reads the batch as well as the file, or a fresh ledger dodges it."""
-    ledger = tmp_path / "state"
-    assert writer.append(ledger, [row(), row(item_id="ai-09")]) == 1
+    state = tmp_path / "state"
+    assert put(state, [row(), row(item_id="ai-09")]) == 1
 
 
 def test_a_measurement_whose_month_was_archived_is_still_not_new(tmp_path: Path) -> None:
@@ -103,39 +116,40 @@ def test_a_measurement_whose_month_was_archived_is_still_not_new(tmp_path: Path)
     items, which is the one thing this ledger promises it is not.
     """
     state = tmp_path / "state"
-    assert writer.append(state, [row()]) == 1
+    assert put(state, [row()]) == 1
     days = writer.ledger_days(state)
-    month = day_partition.month_of(days[0])
+    month = day_shards.date_of(days[0])[:7]
     summary = score_archive.summarise(
         days, month=month, observation_key=writer.OBSERVATION_KEY
     )
     score_archive.write(score_archive.archive_path(state, month), summary)
     for day in days:
         day.unlink()
+        day_partition.drop_empty_day_dirs(day)
 
     assert not writer.ledger_days(state)
-    assert writer.append(state, [row(date="2026-09-14", run_id="2026-09-14-1")]) == 0
+    assert put(state, [row(date="2026-09-14", run_id="2026-09-14-1")], run_id="2026-09-14-1") == 0
     assert not writer.ledger_days(state), "the archived measurement was written again"
 
 
 def test_a_changed_output_is_a_new_measurement(tmp_path: Path) -> None:
     """Identical inputs and different words is the defect the ledger exists to catch."""
-    ledger = tmp_path / "state"
-    writer.append(ledger, [row()])
-    assert writer.append(ledger, [row(output_digest="c" * 64)]) == 1
+    state = tmp_path / "state"
+    put(state, [row()])
+    assert put(state, [row(output_digest="c" * 64)], attempt=2) == 1
 
 
 def test_a_changed_scorer_is_a_new_measurement(tmp_path: Path) -> None:
     """Same words read by a different instrument is a reading worth keeping."""
-    ledger = tmp_path / "state"
-    writer.append(ledger, [row()])
-    assert writer.append(ledger, [row(scorer_version="hhem-2.2-open@cccccccc")]) == 1
+    state = tmp_path / "state"
+    put(state, [row()])
+    assert put(state, [row(scorer_version="hhem-2.2-open@cccccccc")], attempt=2) == 1
 
 
 def test_writing_nothing_creates_nothing(tmp_path: Path) -> None:
-    ledger = tmp_path / "state"
-    assert writer.append(ledger, []) == 0
-    assert not ledger.exists()
+    state = tmp_path / "state"
+    assert put(state, []) == 0
+    assert not state.exists()
 
 
 def test_the_ledger_columns_match_the_contract() -> None:
@@ -161,15 +175,3 @@ def test_a_row_older_than_the_premise_column_records_its_absence(tmp_path: Path)
     migrated = EvalRow.model_validate(old)
 
     assert migrated.source_digest is None
-
-
-def test_appending_under_a_stale_header_fails_loudly(tmp_path: Path) -> None:
-    """Silent corruption is the alternative, and it is unrecoverable once shipped."""
-    state = tmp_path / "state"
-    writer.append(state, [row()])
-    day = writer.ledger_days(state)[0]
-    kept = day.read_text(encoding="utf-8").split("\n")
-    kept[0] = ",".join(writer.columns()[:-1])
-    day.write_text("\n".join(kept), encoding="utf-8")
-    with pytest.raises(ValueError, match="Migrate the ledger"):
-        writer.append(state, [row(item_id="ai-02")])
