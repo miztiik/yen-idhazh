@@ -14,7 +14,7 @@ Wrap the three gates measured as CPU-bound, and nothing else:
     python backend/utilities/gate_lock.py -- npm run build
     python backend/utilities/gate_lock.py -- npm run test:browser
 
-`ruff`, `mypy`, `svelte-check`, `shellcheck` and `bundle-gate` stay unwrapped.
+`ruff`, `mypy`, `svelte-check` and `bundle-gate` stay unwrapped.
 Serialising a gate that finishes in seconds only adds waiting.
 
 How it works. One lock file in the user temp directory. The record is written to

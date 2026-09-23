@@ -41,7 +41,6 @@ from ._harness import (
     SAMPLER_START_CALL,
     SAMPLER_SUMMARY_CALL,
     SCRAPE_STEP,
-    SCRIPTS_DIR,
     SERVER_LOG_FILE,
     SERVER_STARTER_MODULES,
     START_SERVER_MODULE,
@@ -142,12 +141,9 @@ def test_every_job_that_starts_a_server_reaches_the_one_argv_builder() -> None:
     # The other side of the same Oracle: no command a runner executes renders
     # the list itself. Only `run:` scripts are read, because a dispatch-form
     # description that names `-tb` tells an operator what an input tunes and
-    # starts nothing. The shipped shell under .github/scripts/ is read too - a
-    # flag moved out of a workflow into a script is still a second spelling.
+    # starts nothing.
     flags = llama_server_flags()
-    executed: list[tuple[str, str]] = [
-        (path.name, read_text(path)) for path in sorted(SCRIPTS_DIR.glob("*.sh"))
-    ]
+    executed: list[tuple[str, str]] = []
     for filename, workflow in sorted(workflows.items()):
         for job_name in _mapping(workflow.get("jobs"), "jobs"):
             for step in _steps(workflow, job_name):

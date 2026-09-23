@@ -36,7 +36,7 @@ from idhazh.contracts.span_rollup import SpanRollupRow
 from idhazh.telemetry import cli as telemetry_cli
 from idhazh.telemetry import inventory
 
-from ._harness import SCRIPTS_DIR, _load_workflows, _run_bodies
+from ._harness import _load_workflows, _run_bodies
 
 pytestmark = pytest.mark.workflow
 
@@ -63,9 +63,6 @@ def _invoked() -> dict[str, set[str]]:
         for body in _run_bodies(workflow):
             for verb in _verbs(body):
                 found.setdefault(filename, set()).add(verb)
-    for script in sorted(SCRIPTS_DIR.glob("*.sh")):
-        for verb in _verbs(read_text(script)):
-            found.setdefault(script.name, set()).add(verb)
     return found
 
 

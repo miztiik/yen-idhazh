@@ -111,7 +111,7 @@ jobs:
           PUSH_FAILED_MESSAGE: 'the repaired days could not be pushed'
         run: |
           set -euo pipefail
-          bash .github/scripts/commit-and-push.sh frontend/public/digest frontend/public/assist/index
+          python backend/utilities/commit_and_push.py frontend/public/digest frontend/public/assist/index
 
       # The commit step rebases when the push loses a race, which leaves
       # `frontend/build` describing the tree this job started from rather than

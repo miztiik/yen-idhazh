@@ -503,4 +503,4 @@ jobs:
           set -euo pipefail
           mapfile -t TRIAL_ROOTS < <(python3 backend/utilities/pipeline_test_ledgers.py place \
             --tree backend/var/trial-ledgers)
-          bash .github/scripts/commit-and-push.sh "${TRIAL_ROOTS[@]}"
+          python backend/utilities/commit_and_push.py "${TRIAL_ROOTS[@]}"

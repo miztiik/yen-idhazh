@@ -92,28 +92,18 @@ every other step in the repository starts with, so a crash inside the comparison
 now turns the step red instead of passing through `tee` as a success and
 skipping the issue step on `if: success`.
 
-### The linter reads scripts, and the test reads the rest
+### Nothing lints a `run:` body
 
-CI runs `shellcheck --severity=style.github/scripts/*.sh` in the gates job.
-`ruff` and `mypy` stop at Python, and that directory holds the retry loop both
-daily commit steps run - the one whose failure costs a whole day's digest - and
-since 2026-09-17 the llama.cpp pin and the fetch that reads it.
-`--severity=style` is the strictest level, so a warning fails the build rather
-than becoming a note somebody scrolls past.
+`ruff` and `mypy` stop at Python, and no linter reads the shell a workflow
+writes inline: a `run:` body is a string inside YAML, not a file. The tool that
+can read one is `actionlint`, a Go binary this repository does not fetch. The
+inline shell is held by the contract tests in `backend/tests/workflows/`
+instead, which execute the real steps rather than grep them.
 
-It arrives as `shellcheck-py` in the `dev` extra, pinned by the same manifest
-that pins `ruff` and `mypy`. A CI step that downloaded the binary would be an
-unpinned fetch, which is the shape this repository has already had to remove
-once. Measured 2026-08-27 on Python 3.12: 34,782,285 installed
-bytes from an 8.0 MB wheel - a statically linked Haskell binary, and about
-48 times the size of the next-largest dev dependency. One observation, so no
-spread, and a Linux runner installs a different wheel.
-
-**`shellcheck` cannot read a `run:` body**, because a `run:` body is a string
-inside YAML, not a file. The tool that can read one is `actionlint`, a Go binary
-this repository does not fetch. The inline shell is held by the contract tests
-in `backend/tests/workflows/` instead, which execute the real steps
-rather than grep them.
+CI ran `shellcheck` over `.github/scripts/*.sh` in the gates job until
+2026-09-23. That directory is gone, and the linter, the `shellcheck-py` dev
+dependency and a glob with nothing left to read went with it
+([repository-layout.md](repository-layout.md)).
 
 ## See also
 

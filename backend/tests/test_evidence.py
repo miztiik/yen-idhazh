@@ -239,7 +239,7 @@ class TestTheArticleBodyIsNeverCommitted:
         assert "name: evidence-${{ matrix.shard }}" in workflow
         assert "path: backend/var/evidence/${{ needs.plan.outputs.date }}/" in workflow
         for line in workflow.splitlines():
-            if "commit-and-push.sh" in line or line.strip().startswith("state/"):
+            if "commit_and_push.py" in line or line.strip().startswith("state/"):
                 assert "evidence" not in line, "an uncommittable path reached the commit step"
 
 

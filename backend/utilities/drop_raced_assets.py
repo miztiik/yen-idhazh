@@ -1,6 +1,6 @@
 """Delete this run's copy of any rendered asset origin already published.
 
-`.github/scripts/commit-and-push.sh` pipes `git ls-tree` over the tip the push
+`backend/utilities/commit_and_push.py` pipes `git ls-tree` over the tip the push
 wants into this, once per attempt, before it rebases. Everything it decides is
 in `idhazh.render.drop_raced_assets`; this file only turns a tree listing into
 that call, so the naming contract stays in the module that owns it.

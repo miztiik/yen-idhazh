@@ -22,7 +22,6 @@ from ._harness import (
     PINNED_LLAMA_BUILD,
     PINNED_LLAMA_SHA256,
     RELEASE_LOOKUP_FORM,
-    SCRIPTS_DIR,
     WEIGHTS_FETCH_FORM,
     WORKFLOWS_DIR,
     _action_references,
@@ -90,26 +89,17 @@ def test_the_pin_file_is_the_one_home_of_the_build_for_every_caller_on_it() -> N
     assert PINNED_LLAMA_BUILD in PINNED_LLAMA_ASSET, "the asset does not name the build it holds"
 
     # The list endpoint hands back a different binary on every cache eviction.
-    # The scripts and the install program as well as the workflows, because a
-    # fetch that was extracted is still a fetch.
+    # The install program as well as the workflows, because a fetch that was
+    # extracted is still a fetch.
     installer = read_text(REPO_ROOT / MODEL_RUNTIME_MODULE)
     named = (
         *WORKFLOWS_DIR.glob("*.yml"),
         *WORKFLOWS_DIR.glob("*.yaml"),
-        *SCRIPTS_DIR.glob("*.sh"),
         REPO_ROOT / MODEL_RUNTIME_MODULE,
     )
     assert named, "nothing ships here, so this is checking nothing"
     for path in sorted(named):
         assert "releases?per_page" not in read_text(path), path.name
-
-    # No shipped script spells a pin for itself. The install moved into Python
-    # and the scripts that carried it are gone, so what this guards now is a
-    # shell file bringing one back.
-    for script in sorted(SCRIPTS_DIR.glob("*.sh")):
-        text = read_text(script)
-        for name in LLAMA_PIN_NAMES:
-            assert f"{name}=" not in text, f"{script.name} spells {name} for itself"
 
     # The install reads the pin rather than repeating it, asks for one tag, and
     # checks the archive it got against the digest that file declares.

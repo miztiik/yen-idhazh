@@ -28,7 +28,6 @@ from ._harness import (
     REVIEW_ARTIFACT,
     REVIEW_COMMAND,
     REVIEW_STEP,
-    SCRIPTS_DIR,
     SUBSTITUTED_DATE,
     SUBSTITUTED_DAY_DIR,
     TOLERATED,
@@ -164,7 +163,7 @@ def test_the_fold_ships_in_dry_run_because_the_history_it_deletes_from_is_rewrit
 def test_the_fold_stages_the_browser_copy_it_deletes() -> None:
     """A deletion reaches a commit only for a path `git add` is handed.
 
-    `commit-and-push.sh` runs `git add "$@"` under `set -euo pipefail`. The fold
+    The commit program runs `git add` over every path a job owns in one call. The fold
     unlinks `frontend/public/telemetry/<YYYY-MM>.csv` in the same step it folds
     the ledger behind it, so a commit that staged `state` alone would push the
     fold and leave the published copy of a month whose source is gone - the one
@@ -352,7 +351,6 @@ def test_only_the_scheduled_prune_may_force_push() -> None:
                 if isinstance(script, str) and FORCE_PUSH.search(script):
                     forcing.add(f"{filename} step {step.get('name')}")
     executable = (
-        *SCRIPTS_DIR.glob("*.sh"),
         *(REPO_ROOT / "backend" / "utilities").glob("*.py"),
         *(REPO_ROOT / "backend" / "idhazh").rglob("*.py"),
     )

@@ -191,10 +191,9 @@ and want the answer now.** The commands are below, and none of them is the
 default: blocking on a 25-minute local suite before every push, for a change CI
 clears in 90 seconds, costs far more than it finds.
 
-Two exceptions where local is still the only place to run it. A published-site change needs
-the browser smoke in `CLAUDE.md` section 12, which is a real browser on your
-machine. And a change to a workflow's own shell needs `shellcheck`, which is
-seconds either way.
+One exception where local is still the only place to run it. A published-site
+change needs the browser smoke in `CLAUDE.md` section 12, which is a real
+browser on your machine.
 
 ## Set up the backend environment
 
@@ -224,7 +223,7 @@ Two extras are declared. Install only what you need:
 
 | Extra | Pulls | When |
 | --- | --- | --- |
-| `dev` | `ruff`, `mypy`, `pytest`, `PyYAML`, `shellcheck-py` | always - this is the gate set |
+| `dev` | `ruff`, `mypy`, `pytest`, `PyYAML` | always - this is the gate set |
 | `faithfulness` | `torch`, `transformers` | the HHEM scorer; multi-gigabyte, and it downgrades `tokenizers` |
 
 `faithfulness` is the heavy one, and it is the only one a gate does not need. No
@@ -254,7 +253,7 @@ python backend/utilities/gate_lock.py -- npm run build
 python backend/utilities/gate_lock.py -- npm run test:browser
 ```
 
-`ruff`, `mypy`, `svelte-check`, `shellcheck` and `bundle-gate` stay unwrapped:
+`ruff`, `mypy`, `svelte-check` and `bundle-gate` stay unwrapped:
 serialising a gate that finishes in seconds only adds waiting. The tool reads no
 configuration and imports nothing from `idhazh`, so any supported Python runs it
 from a fresh clone. **CI never takes it** - a runner is one job alone on its own
@@ -349,13 +348,12 @@ make this slower.
 
 ## The backend gates
 
-Run all four from the repository root. Each must be clean.
+Run all three from the repository root. Each must be clean.
 
 ```powershell
 .\.venv\Scripts\python.exe -m ruff check.
 .\.venv\Scripts\python.exe -m mypy
 .\.venv\Scripts\python.exe -m pytest
-.\.venv\Scripts\shellcheck.exe --severity=style (Get-ChildItem.github/scripts/*.sh).FullName
 ```
 
 **There is no schema export and no drift gate.** Both went on 2026-09-23 with
@@ -363,17 +361,12 @@ the two generated trees they checked. What the frontend copies by hand is held
 in step by three tests in `backend/tests/contracts/`, which `pytest` above runs
 ([../architecture/contracts/schemas.md](../architecture/contracts/schemas.md)).
 
-**`shellcheck` is the same binary CI runs**, installed by the `dev` extra rather
-than downloaded, so the local gate and the CI gate cannot disagree about a
-version. CI writes the same command with a bare `.github/scripts/*.sh`, because
-bash expands a glob and PowerShell does not - hand shellcheck the literal
-pattern and it reports `openBinaryFile: invalid argument`, which reads like a
-broken install. It prints nothing on a pass, and a silent run is the pass.
-
-It reads files, so it covers `.github/scripts/` and nothing else. The shell
-written inline in a workflow `run:` body is held by the contract tests in
-`backend/tests/workflows/`
-([../reference/ci-dispatch-inputs.md](../reference/ci-dispatch-inputs.md#the-linter-reads-scripts-and-the-test-reads-the-rest)).
+**There is no shell linter either.** `shellcheck` went on 2026-09-23 with
+`.github/scripts/`, the last shell this repository shipped as a file, and
+`shellcheck-py` left the `dev` extra with it. No linter reads a workflow's
+inline shell, because a `run:` body is a string inside YAML rather than a file;
+the contract tests in `backend/tests/workflows/` execute the real steps instead
+([../reference/ci-dispatch-inputs.md](../reference/ci-dispatch-inputs.md#nothing-lints-a-run-body)).
 
 **`ruff format` is not a gate.** `ruff format --check.` reports dozens of files
 it would rewrite, all of them

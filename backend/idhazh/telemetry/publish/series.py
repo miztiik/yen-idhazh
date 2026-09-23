@@ -67,9 +67,9 @@ MONTH_SERIES: Final[tuple[tuple[str, str], ...]] = (
 )
 
 #: Every directory a fresh checkout must already hold, because
-#: `.github/scripts/commit-and-push.sh` runs `git add "$@"` under
-#: `set -euo pipefail` and a path that is not there aborts the whole step - and
-#: takes every sibling ledger staged in the same call with it.
+#: `backend/utilities/commit_and_push.py` stages every path a job owns in one
+#: `git add`, and a path that is not there fails that call - which stops the
+#: push and takes every sibling ledger staged beside it.
 PUBLISHED_ROOTS: Final[tuple[str, ...]] = (
     CONSOLE_DIRNAME,
     RUN_DAYS_DIRNAME,

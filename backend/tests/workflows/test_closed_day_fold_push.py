@@ -25,6 +25,7 @@ from __future__ import annotations
 import csv
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 from typing import Final
 
@@ -36,7 +37,7 @@ from idhazh.contracts.base import ServerJob
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.stages import compact
 
-from ._harness import COMMIT_SCRIPT, _bash, _git, _isolated_env, requires_bash
+from ._harness import COMMIT_PROGRAM, _git, _isolated_env
 
 pytestmark = [pytest.mark.workflow, pytest.mark.slow]
 
@@ -198,7 +199,6 @@ def test_two_branches_that_both_fold_one_day_merge_without_being_asked(
 # --- The fold that read a different day ----------------------------------------
 
 
-@requires_bash
 def test_a_fold_that_read_a_straggler_the_tip_did_not_stops_the_push(
     tmp_path: Path,
 ) -> None:
@@ -213,8 +213,6 @@ def test_a_fold_that_read_a_straggler_the_tip_did_not_stops_the_push(
     deletion a conflict - and the straggler's rows would then be in no file at
     exit 0.
     """
-    bash = _bash()
-    assert bash is not None
     env = _isolated_env(tmp_path)
 
     # The base every side starts from: the two quiet days already folded, the
@@ -272,7 +270,7 @@ def test_a_fold_that_read_a_straggler_the_tip_did_not_stops_the_push(
     _git(seed, env, "push", "--quiet", "origin", "main")
 
     refused = subprocess.run(
-        [bash, COMMIT_SCRIPT.as_posix(), ledger.STATE_DIRNAME],
+        [sys.executable, COMMIT_PROGRAM.as_posix(), ledger.STATE_DIRNAME],
         cwd=runner,
         env={
             **env,

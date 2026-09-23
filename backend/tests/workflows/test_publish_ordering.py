@@ -8,7 +8,7 @@ from typing import Final, cast
 import pytest
 
 from ._harness import (
-    COMMIT_SCRIPT_CALL,
+    COMMIT_PROGRAM_CALL,
     PUBLISHING_SITE_JOBS,
     VALIDATE_DAYS_CALL,
     VALIDATE_DAYS_JOBS,
@@ -215,7 +215,7 @@ def test_the_weight_gate_reads_a_build_of_the_tree_that_was_pushed(
 ) -> None:
     """One tree's pages may not be weighed against another tree's ceilings.
 
-    `commit-and-push.sh` rebases when the push loses a race, and that brings
+    `commit_and_push.py` rebases when the push loses a race, and that brings
     main's tip into the checkout - its frontend source and its
     `config/idhazh.json` ceilings with it. `frontend/build` still holds the
     build made before the commit, so the gate would read limits the build it
@@ -242,7 +242,7 @@ def test_the_weight_gate_reads_a_build_of_the_tree_that_was_pushed(
     commits = [
         index
         for index, step in enumerate(steps)
-        if COMMIT_SCRIPT_CALL[1] in str(step.get("run", ""))
+        if COMMIT_PROGRAM_CALL[1] in str(step.get("run", ""))
     ]
     gate = next(
         index

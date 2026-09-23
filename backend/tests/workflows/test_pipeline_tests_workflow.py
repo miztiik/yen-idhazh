@@ -28,7 +28,7 @@ from idhazh.telemetry import traces
 from utilities import candidate_pointer, model_refs, pipeline_test_ledgers
 
 from ._harness import (
-    COMMIT_SCRIPT_CALL,
+    COMMIT_PROGRAM_CALL,
     DOWNLOAD_MODEL_FILES,
     INSTALL_RUNTIME_CALL,
     MODEL_RUNTIME_MODULE,
@@ -431,7 +431,7 @@ def test_it_publishes_nothing_a_reader_sees_and_writes_only_the_trial_roots() ->
 
     Spelled against the two jobs rather than against the words `git commit`. The
     file carried that pair of assertions until 2026-09-22 and they would have
-    stayed green through this change by accident, because `commit-and-push.sh`
+    stayed green through this change by accident, because the commit program
     contains neither word.
     """
     workflow = _load_workflows()[WORKFLOW]
@@ -468,8 +468,8 @@ def test_the_commit_job_stages_the_declared_trial_roots_and_nothing_wider() -> N
     body = _script(_step(workflow, COMMIT_JOB, "name", COMMIT_STEP), "the commit step")
 
     assert f"{LEDGER_MODULE} place" in body, "the roots to stage are printed, never spelled"
-    assert " ".join(COMMIT_SCRIPT_CALL) in body, "it commits through the shared script"
-    staged = re.search(r"commit-and-push\.sh (?P<paths>.+)", body)
+    assert " ".join(COMMIT_PROGRAM_CALL) in body, "it commits through the shared program"
+    staged = re.search(rf"{re.escape(COMMIT_PROGRAM_CALL[1])} (?P<paths>.+)", body)
     assert staged is not None
     assert staged["paths"].strip() == '"${TRIAL_ROOTS[@]}"', (
         f"the commit step stages a path of its own: {staged['paths']}"
