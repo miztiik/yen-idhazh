@@ -41,7 +41,7 @@ Every colour, space, radius, shadow, font, easing and duration is a CSS custom p
 - **Colour** - `bg` and elevated surfaces; `text` primary / secondary / tertiary; `accent`; the **confidence ramp**, one token per band, which is the only semantic colour set the digest needs; the **fill ramp**, `--fill-high` / `--fill-medium` / `--fill-low`, which is the same three meanings weighted to be filled rather than read; and the **chart ramp**, `--chart-1` to `--chart-8`, which is categorical and carries no verdict.
 - **Tints** - `--tint-accent`, `--tint-info`, `--tint-good`, `--tint-warn`, `--tint-bad`, `--tint-neutral`. A panel takes the hue of what it means, at 7 to 9 percent in light and roughly double that in dark.
 - **Gradients** - `--gradient-wordmark`, `--gradient-wash`, `--gradient-panel`. Chrome and identity only.
-- **Frame** - `--frame-reading`, `--frame-console`, `--measure`, `--gutter`. Defaults live in the token file and `config/appearance.json` overrides them at build time ([config.md](config.md)).
+- **Frame** - `--frame-reading`, `--frame-console`, `--measure`, `--gutter`. Defaults live in the token file and `config/appearance.json` overrides them at build time ([config/appearance.md](config/appearance.md)).
 - **Motion** - one ease and a short duration scale.
 
 **The two colour ramps may not be swapped for each other.** The confidence ramp

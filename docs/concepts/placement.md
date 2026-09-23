@@ -113,7 +113,7 @@ only one of the two would have a test pointing at it.
 ### Every number the order depends on, and where it lives
 
 Each row is one number a person can change without touching Python
-([config.md](config.md)). `backend/tests/test_order_of_the_day.py` reads this
+([config/appearance.md](config/appearance.md)). `backend/tests/test_order_of_the_day.py` reads this
 table off this page and looks each setting up in the live config file, so a
 number here that stops matching the real one fails the build rather than
 quietly going stale.

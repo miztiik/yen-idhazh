@@ -337,7 +337,7 @@ been folded away is a rate nobody can check, and a source month with no publishe
 copy is a window the console cannot draw. Since 2026-09-03 the two files go
 together: `retention.prune_telemetry` folds the ledger month, unlinks the shard,
 and unlinks this copy of it in the same step
-([../../concepts/config.md](../../concepts/config.md#every-store-names-its-own-cleanup-age)).
+([../../concepts/config/retention-ages.md](../../concepts/config/retention-ages.md#every-store-names-its-own-cleanup-age)).
 
 Three things about that deletion are worth stating on this page rather than only
 on the pruner's:

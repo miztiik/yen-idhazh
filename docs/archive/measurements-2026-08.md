@@ -2306,7 +2306,7 @@ and is the reading to take next.
 **This is a fact about the guard, not a proposal about the number.** What it
 costs the reader, and whether 200 should move, is a `config/` question that this
 page does not answer - see
-[../concepts/config.md](../concepts/config.md) on why a guard sitting in the
+[../concepts/config/run-limits.md](../concepts/config/run-limits.md) on why a guard sitting in the
 working range stops being a guard.
 
 ## See also

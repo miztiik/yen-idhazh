@@ -66,7 +66,7 @@ and `/console/` grows with the item-telemetry rows inside the page's window. A
 day page and the home page weigh whatever the day published, so they are
 measured and reported and never failed - a ceiling on either would cap the news
 rather than catch a regression
-([../../concepts/config.md](../../concepts/config.md)).
+([../../concepts/config/run-limits.md](../../concepts/config/run-limits.md)).
 
 The item-health viewport has three parts, in this order:
 

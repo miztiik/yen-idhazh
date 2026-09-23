@@ -61,6 +61,6 @@ Extremely low-bit quantisations (1-2 bit) have been published for several open-w
 
 - [evaluate-new-summarizer-model.md](evaluate-new-summarizer-model.md) - evaluate and adopt different summary weights.
 - [`test-models-locally.md`](test-models-locally.md) - compare two GGUF files and sweep thread counts.
-- [../concepts/config.md](../concepts/config.md) - where model references, quantisation and inference knobs live.
+- [../concepts/config/model-file.md](../concepts/config/model-file.md) - where model references, quantisation and inference knobs live.
 - [../concepts/pipeline-loop.md](../concepts/pipeline-loop.md) - what the Summarize stage does with the model.
 - [../../CLAUDE.md](../../CLAUDE.md) - Guardrail #2 (the runner is the architecture), Guardrail #10 (measured, not estimated).

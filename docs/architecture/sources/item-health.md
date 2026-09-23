@@ -904,7 +904,7 @@ default. Only a paywall, an unsupported form, or genuine missing text stops
 extract. Authority: Owner override O3.
 
 Each of the four has a switch that closes it, all four false
-([../../concepts/config.md](../../concepts/config.md)). O3 is what the DEFAULT
+([../../concepts/config/summary-length.md](../../concepts/config/summary-length.md)). O3 is what the DEFAULT
 says, not what the code can express, and the difference matters: a curator who
 turns one on is taking a decision O3 left them, not overriding it.
 `reject_too_short` additionally never fires on a feed registered as `abstract`,

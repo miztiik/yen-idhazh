@@ -242,7 +242,7 @@ checked against, because a smaller run is a smaller worst shard, and **a worker
 killed at that bound uploads nothing**.
 
 What still bounds the number from above is the worst case the `work` and `visuals`
-jobs both have to finish ([../../concepts/config.md](../../concepts/config.md)).
+jobs both have to finish ([../../concepts/config/run-limits.md](../../concepts/config/run-limits.md)).
 What it is *for* has changed, and this paragraph is the record of that change
 rather than a quiet re-derivation.
 

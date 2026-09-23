@@ -439,7 +439,7 @@ window. Authority: Andre, Guardrail #10.
 
 - [evaluation.md](evaluation.md) - the other instrument: whether a summary is faithful to its article.
 - [digest.md](digest.md) - what a reader is searching over.
-- [config.md](config.md) - `assist.recall_min` and the similarity floor.
+- [config/appearance.md](config/appearance.md) - `assist.recall_min` and the similarity floor.
 - [../architecture/publishing/frontend.md](../architecture/publishing/frontend.md) - the search control and what it downloads.
 - [../reference/site-weight.md](../reference/site-weight.md) - the index weight and the recall series.
 - [../../CLAUDE.md](../../CLAUDE.md) - Guardrail #10 (measured, not estimated).
