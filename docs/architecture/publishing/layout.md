@@ -23,8 +23,8 @@ frontend/public/digest/<YYYY>/<MM>/<DD>/<item_id>.json  optional visual, drawn i
 frontend/public/digest/<YYYY>/<MM>/<DD>/<item_id>.json that visual's data, for a browser to draw
 frontend/public/assist/index/<YYYY-MM>.json one month of items, for browsing and search
 frontend/public/assist/index/<YYYY-MM>.bin that month's vectors, raw int8
-state/scores/<YYYY>/<MM>/<DD>.csv the ledger - one row per measurement, never published twice
-state/score-index/<YYYY>/<MM>/<DD>.csv the identity of every measurement that day holds, 76 bytes each
+state/scores/<YYYY>/<MM>/<DD>/ the ledger - one row per measurement, never published twice
+state/score-index/<YYYY>/<MM>/<DD>/ the identity of every measurement that day holds, 76 bytes each
 state/score-archive/<YYYY-MM>.json a score month past its full-grain window, as totals plus a dedupe index
 ```
 

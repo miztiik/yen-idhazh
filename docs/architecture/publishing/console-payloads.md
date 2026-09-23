@@ -134,7 +134,7 @@ day the run is publishing, and every projection's body stays in its own module
 | `run_days.py` | `run-days/<YYYY-MM>.json` | one month of committed `run.json` and `digest.json` |
 | `day_metrics.py` `publish_public` | `day-metrics/<YYYY-MM>.json` | one month of `state/day-metrics/<YYYY>/<MM>/` |
 | `machine.py` | `machine/<YYYY-MM>.csv` | one month of `state/item-health/<YYYY>/<MM>/` and of `state/host-fingerprint/<YYYY>/<MM>/` |
-| `span_rollup.py` | `span-rollup/<YYYY-MM>.csv` | `state/span-rollup/<YYYY-MM>.csv` |
+| `span_rollup.py` | `span-rollup/<YYYY-MM>.csv` | `state/span-rollup/<YYYY>/<MM>/<DD>/` |
 | `run_timeline.py` | `run-timeline/<YYYY-MM>.csv` | one month of `state/item-health/<YYYY>/<MM>/` |
 
 `scores.py` and `feed_health.py` were two more rows of that table until

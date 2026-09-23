@@ -126,7 +126,7 @@ A cover in days would let a January
 observation back in February and turn *how many measurements do we hold* into
 *how many times did the pipeline look*, which is the one thing the eval ledger
 promises it is not. So the memory stayed complete and the representation got
-cheaper: `state/score-index/<YYYY>/<MM>/<DD>.csv` holds one 76-byte digest an
+cheaper: `state/score-index/<YYYY>/<MM>/<DD>/` holds one 76-byte digest an
 observation beside the day file it describes. Counted over the committed shards on
 2026-09-07 - 7,636 measurements, 819.6 bytes a row - that is 566.8 KB against
 6,111.8 KB, so the read is **10.8 times smaller and 90.7 percent of it is gone**,

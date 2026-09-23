@@ -48,7 +48,7 @@ HUMAN SOURCE REVIEW (after at least 30 days of evidence)
 
 ## Every feed, every run, one row
 
-`state/feed-health/<YYYY>/<MM>/<DD>.csv`, appended by the Collect stage. One row per feed per run, carrying the run id, the date, the feed id, the outcome, the HTTP status, how many items came back, and a short detail.
+`state/feed-health/<YYYY>/<MM>/<DD>/`, appended by the Collect stage. One row per feed per run, carrying the run id, the date, the feed id, the outcome, the HTTP status, how many items came back, and a short detail.
 
 It is written **whether the run publishes or not**. The days a source is worth measuring on are the days the run went badly, and a ledger that only records good runs measures nothing.
 
@@ -125,7 +125,7 @@ result was one file with two headers. Taking the upstream shards whole and runni
 the utility over them again was the resolution.
 
 **The utility was deleted on 2026-09-13**, when the ledger moved to
-`state/feed-health/<YYYY>/<MM>/<DD>.csv`. It read month shards, so after the move
+`state/feed-health/<YYYY>/<MM>/<DD>/`. It read month shards, so after the move
 there was no file it could ever open again - and every committed row already
 carries the wide header. `git show` on the 2026-09-02 commit holds the tool and
 its output together.

@@ -254,8 +254,8 @@ three of twenty within hours. The correct fix is frozen validated Article
 payloads, not a permanent URL list.
 
 `validate` writes one result file per model under `backend/var/validation/`.
-`decide` applies the arithmetic and writes a segment, which `idhazh compact` folds
-into `state/<run.trial_state_dirname>/validation/<YYYY>/<MM>/<DD>.csv` - or into
+`decide` applies the arithmetic and writes a segment into
+`state/<run.trial_state_dirname>/validation/<YYYY>/<MM>/<DD>/` - or into
 `state/validation/...` when the config names no trial directory, which the
 committed one does not.
 

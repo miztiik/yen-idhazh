@@ -138,9 +138,9 @@ ledger contract sit under `state/`:
 | --- | --- | --- |
 | `state/seen/<YYYY>/<MM>/<DD>.csv` | Collect | How old is this article, when its feed gave no date? |
 | `state/published/<YYYY>/<MM>/<DD>.csv` | Assemble | Have we already published this address? |
-| `state/feed-health/<YYYY>/<MM>/<DD>.csv` | Collect | What did every feed do, on every run? |
+| `state/feed-health/<YYYY>/<MM>/<DD>/` | Collect | What did every feed do, on every run? |
 | `state/feed-retirements.csv` | Collect | Is this address gone for good? |
-| `state/item-health/<YYYY>/<MM>/<DD>.csv` | the worker, then Assemble | What did every planned item do in this run? |
+| `state/item-health/<YYYY>/<MM>/<DD>/` | the worker, then Assemble | What did every planned item do in this run? |
 
 Three rules hold for all of them:
 
@@ -148,16 +148,15 @@ Three rules hold for all of them:
 - **The stage that can honestly answer is the stage that writes.** Assemble writes the published ledger, not Collect - until a digest is committed, nothing was published, and a run that dies mid-way must not leave a claim that it finished. It is also why the worker writes the item-health row for an item it settled, as soon as it settles: it can answer for that item, and by the time Assemble runs the answer may already have been thrown away with the run. A row is one planned item on one run, so the two writers cannot count the same item twice.
 - **Nothing under `state/` is ever served.** The console reads it at build time and bakes the numbers into the page. A reader gets the figures, never the file.
 
-**A ledger more than one job writes gets its rows through `state/segments/`.** A
+**A ledger more than one job writes gives every writer its own file.** A
 writer writes one file named for its run, its attempt at that run, its job and
-its shard, so no two writers of one ledger ever share a path - which is what a
-lost push race needs in order to cost a merge rather than the rows. `idhazh
-compact` folds each waiting segment into the head its own rows name and deletes
-it. Two callers: `assemble`, before it publishes anything, and the next run's
-`plan` job, which is the only thing that reaches a segment left by a run that
-died before its assemble.
+its shard, inside the day directory its own rows name - so no two writers of one
+ledger ever share a path, which is what a
+lost push race needs in order to cost a merge rather than the rows. Nothing has
+to be folded first: the file a writer closes is already the ledger, and
+`day_shards.settled_rows` decides what two rows of one key mean at read time.
 
-`state/host-fingerprint/` is the first ledger through it, from 2026-09-17. Ten
+`state/host-fingerprint/` was the first ledger through it, from 2026-09-17. Ten
 jobs of one run each draw a machine and each record it, and on 2026-09-16 those
 ten pushes raced and left the day file with nothing but its header.
 
@@ -171,9 +170,12 @@ of rows in a day feeds a feed's share of the day and the day's own metrics.
 are written once a job rather than once an item, and both had every work shard
 opening one head.
 
-The compaction is the one writer here that rewrites a head rather than appending
-to it, and the segment store is what makes that safe: a rewrite is a race only
-when two jobs can do it, and only the compaction can.
+**A staging directory sat above all of them until 2026-09-22 and is gone.** A
+writer filed into `state/segments/` and a later fold read it into a `<DD>.csv`
+head, which left every ledger with one path two runs of one day both computed
+bytes for. Now the day directory is the ledger. `idhazh compact` still runs, but
+only over a day no run will write again: it folds that day's writer files into
+one `settled.csv` to save files, and it changes no answer.
 
 See [../architecture/sources/freshness.md](../architecture/sources/freshness.md) for the first two and [../architecture/sources/health.md](../architecture/sources/health.md) for the third.
 
