@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 from conftest import CONTRACT_FIXTURES_DIR, read_text
 
-from idhazh import day_shards, ledger
+from idhazh import day_partition, day_shards, ledger
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.eval_row import ConfidenceBand, EvalRow
 from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW, CollectConfig
@@ -481,6 +481,41 @@ def test_the_index_goes_with_the_rows_it_describes(tmp_path: Path) -> None:
     assert after == {month for month in before if month >= boundary}
     # Every measurement the deleted index held is still refused, because the
     # archive beside it carries the same digests.
+    assert score_writer.recorded_observations(state)
+
+
+def test_an_index_day_no_archive_covers_is_left_alone(tmp_path: Path) -> None:
+    """The guard on the drop, asked from the side that would lose a record.
+
+    A day file removed by hand, or by a prune whose archive would not reconcile,
+    leaves the index as the only thing that remembers those measurements.
+    Dropping it there would silently make every one of them new again, so the
+    drop is guarded on the archive being on disk rather than on the rows being
+    gone.
+    """
+    state = a_score_tree(tmp_path)
+    config = ObservabilityConfig()
+    orphan = "2020-03-04"
+    score_writer.append_segment(
+        state,
+        [score_row(day=orphan, run=1, number=1)],
+        run_id=f"{orphan}-1",
+        attempt=1,
+        job=ServerJob.ASSEMBLE,
+        shard=0,
+    )
+    for day in day_shards.one_day(state / score_writer.LEDGER_DIRNAME, orphan):
+        day.unlink()
+        day_partition.drop_empty_day_dirs(day)
+    assert day_shards.one_day(state / score_writer.INDEX_DIRNAME, orphan), (
+        "the index for the orphaned day was never written, so this proves nothing"
+    )
+
+    prune_scores(state, config, TODAY)
+
+    assert day_shards.one_day(state / score_writer.INDEX_DIRNAME, orphan), (
+        "the last record of those measurements went, and no archive carries them"
+    )
     assert score_writer.recorded_observations(state)
 
 

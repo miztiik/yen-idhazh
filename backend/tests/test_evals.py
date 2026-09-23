@@ -15,7 +15,7 @@ import hashlib
 import json
 import shutil
 import statistics
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from pathlib import Path
 from typing import Any, Final
 
@@ -23,7 +23,7 @@ import pytest
 from conftest import CONTRACT_FIXTURES_DIR, FIXTURES_DIR, REPO_ROOT, read_text
 from pydantic import ValidationError
 
-from idhazh import cli, day_partition, ledger
+from idhazh import cli, day_shards, ledger
 from idhazh.contracts.article import Article
 from idhazh.contracts.base import ServerJob, derive_url_key
 from idhazh.contracts.eval_row import ConfidenceBand, EvalRow
@@ -62,22 +62,35 @@ from idhazh.extract import to_article_with_source
 from idhazh.fetch import FetchResult
 from idhazh.stages.rebuild_score_index import stage_rebuild_score_index
 
+
 #: The writer every case below files as. `assemble` is the job that scores a
 #: whole day and it runs one shard, so this is what a finished run leaves. A
 #: case that needs a second writer names its own.
-A_SCORING_RUN = "2026-08-21-1"
+def a_scoring_run(date: str) -> str:
+    """The run that scored one day.
+
+    A run scores the day it is assembling, so its id opens with that day. The
+    index rows carry no date cell of their own and are filed under the run's
+    day, which is only the day beside the rows while that holds.
+    """
+    return f"{date}-1"
 
 
 def put(
     state: Path,
     rows: Sequence[EvalRow],
     *,
-    run_id: str = A_SCORING_RUN,
+    run_id: str | None = None,
     attempt: int = 1,
 ) -> int:
     """One writer's measurements, filed the way a finished run files them."""
     return writer.append_segment(
-        state, rows, run_id=run_id, attempt=attempt, job=ServerJob.ASSEMBLE, shard=0
+        state,
+        rows,
+        run_id=run_id if run_id is not None else a_scoring_run(rows[0].date),
+        attempt=attempt,
+        job=ServerJob.ASSEMBLE,
+        shard=0,
     )
 
 
@@ -1265,6 +1278,33 @@ def _measurement(number: int) -> EvalRow:
     )
 
 
+def _a_days_file(
+    state: Path, which: ledger.SegmentLedger, date: str, *, shard: int = 0
+) -> Path:
+    """Where this section's one writer files a day of rows or of digests.
+
+    A day is a directory of writer-owned files, so a test that builds one by
+    hand names the file inside it. Every case here files as the run that scored
+    that day; a case that needs a second writer names its own shard.
+    """
+    return ledger.day_shard_path(
+        state,
+        which,
+        date=date,
+        run_id=a_scoring_run(date),
+        attempt=1,
+        job=ServerJob.ASSEMBLE,
+        shard=shard,
+    )
+
+
+def _cells_in(day: list[Path]) -> Iterator[dict[str, str]]:
+    """Every row of every file one day holds, in reading order."""
+    for path in day:
+        with path.open("r", encoding="utf-8", newline="") as handle:
+            yield from csv.DictReader(handle)
+
+
 def _seeded(state: Path, rows: list[EvalRow], *, copies: int = 1) -> None:
     """A ledger holding `rows`, with each row written `copies` times.
 
@@ -1273,15 +1313,15 @@ def _seeded(state: Path, rows: list[EvalRow], *, copies: int = 1) -> None:
     it folds. It is also the case that separates "the read grows with the rows"
     from "the read grows with the measurements".
     """
-    shard = writer.ledger_path(state, rows[0].date)
+    shard = _a_days_file(state, ledger.SegmentLedger.SCORES, rows[0].date)
     shard.parent.mkdir(parents=True, exist_ok=True)
     _write_shard(shard, [row for row in rows for _ in range(copies)])
 
 
 def _indexed(state: Path, date: str) -> set[str]:
-    """The digests one day's index holds, read from that file rather than the union."""
-    with writer.index_path(state, date).open("r", encoding="utf-8", newline="") as handle:
-        return {record["observation_digest"] for record in csv.DictReader(handle)}
+    """The digests one day's index holds, read from that day rather than the union."""
+    day = day_shards.one_day(state / writer.INDEX_DIRNAME, date)
+    return {record["observation_digest"] for record in _cells_in(day)}
 
 
 def _day_digests(state: Path, date: str) -> set[str]:
@@ -1290,8 +1330,20 @@ def _day_digests(state: Path, date: str) -> set[str]:
     The one read of the score rows in this section, and it is here so a test can
     say what the index is supposed to mirror without asking the index.
     """
-    with writer.ledger_path(state, date).open("r", encoding="utf-8", newline="") as handle:
-        return {writer.observation_digest(record) for record in csv.DictReader(handle)}
+    day = day_shards.one_day(state / writer.LEDGER_DIRNAME, date)
+    return {writer.observation_digest(record) for record in _cells_in(day)}
+
+
+def _index_bytes(state: Path, date: str) -> bytes:
+    """Every byte one day's index holds, oldest file first."""
+    day = day_shards.one_day(state / writer.INDEX_DIRNAME, date)
+    return b"".join(path.read_bytes() for path in day)
+
+
+def _index_size(state: Path, date: str) -> int:
+    """What one day's index costs on disk, across every file in it."""
+    day = day_shards.one_day(state / writer.INDEX_DIRNAME, date)
+    return sum(path.stat().st_size for path in day)
 
 
 def test_a_repeat_is_still_refused_when_the_index_is_the_only_thing_read(tmp_path: Path) -> None:
@@ -1322,16 +1374,16 @@ def test_the_writers_read_does_not_grow_with_the_rows_the_day_holds(
     rows = [_measurement(number) for number in range(200)]
     lean = tmp_path / "lean" / "state"
     fat = tmp_path / "fat" / "state"
-    _seeded(lean, rows)
-    _seeded(fat, rows, copies=10)
     for state in (lean, fat):
-        writer.recorded_observations(state)  # the first read fills the index
+        put(state, rows)  # the rows and the index the writer minted beside them
+    _seeded(fat, rows, copies=10)  # the same 200 measurements, ten times the rows
 
     thin = _opened_bytes(monkeypatch, lean, lambda: writer.recorded_observations(lean))
     thick = _opened_bytes(monkeypatch, fat, lambda: writer.recorded_observations(fat))
 
     day = writer.ledger_path(fat, rows[0].date).relative_to(fat).as_posix()
-    assert day not in thick, f"the writer opened {day}, which is what this row removes"
+    opened_there = [name for name in thick if name.startswith(f"{day}/") or name == f"{day}.csv"]
+    assert not opened_there, f"the writer opened {opened_there}, which is what this row removes"
     assert thin == thick, (
         "the writer's read moved with the rows: "
         f"{sum(thin.values())} B against {sum(thick.values())} B over the same 200 measurements"
@@ -1365,28 +1417,28 @@ def test_an_archived_month_whose_rows_are_gone_still_refuses_its_observations(
 def test_a_tree_with_rows_and_no_index_answers_the_same_as_one_with_an_index(
     tmp_path: Path,
 ) -> None:
-    """The read-side migration, stated as an equality rather than as a procedure.
+    """The migration for a day written before the index existed, as an equality.
 
-    The first run after this lands meets rows and no index. It has to refuse
-    exactly what it refuses today, and it has to leave an index behind so the
-    second run does not read the rows either.
+    Nothing on the write path fills a day that has rows and no index - filling
+    it means reading the rows, which is the bill the index exists to remove - so
+    `rebuild_index` is the one thing that does, and an operator runs it over the
+    days it names. After it, the two trees have to refuse the same measurements
+    and hold the same digests.
     """
     rows = [_measurement(number) for number in range(5)]
     fresh = tmp_path / "fresh" / "state"
     carried = tmp_path / "carried" / "state"
     _seeded(fresh, rows)
-    _seeded(carried, rows)
-    writer.recorded_observations(carried)  # this one already has its index
+    put(carried, rows)  # this one was written through the writer, index and all
 
     assert not writer.index_days(fresh), "the fresh tree was not the un-migrated one"
+    assert put(fresh, rows) == 5, "a tree with no index refused a measurement it cannot see"
+
+    writer.rebuild_index(fresh, [rows[0].date])
+
     assert writer.recorded_observations(fresh) == writer.recorded_observations(carried)
-    assert put(fresh, rows) == 0, "the migrated tree let a held measurement back in"
-    assert [path.name for path in writer.index_days(fresh)] == [
-        path.name for path in writer.index_days(carried)
-    ]
-    assert writer.index_path(fresh, rows[0].date).read_bytes() == (
-        writer.index_path(carried, rows[0].date).read_bytes()
-    )
+    assert put(fresh, rows) == 0, "the repaired tree let a held measurement back in"
+    assert _indexed(fresh, rows[0].date) == _indexed(carried, rows[0].date)
 
 
 def test_an_append_leaves_the_index_holding_every_observation_its_day_holds(
@@ -1394,10 +1446,10 @@ def test_an_append_leaves_the_index_holding_every_observation_its_day_holds(
 ) -> None:
     """The invariant the pair rests on, asserted over the files rather than a return value.
 
-    `refresh_index` fills a day with no index and never looks at one that
-    exists, so keeping the two in step is `append`'s job: it writes the rows and
-    the digests it minted in one call, and every writer of `state/scores/` in
-    this repository goes through it.
+    Nothing on the read path compares an index against the rows beside it, so
+    keeping the two in step is the append's job: it writes the rows and the
+    digests it minted in one call, and every writer of `state/scores/` in this
+    repository goes through it.
 
     Held over the day files after several calls and two days in different months,
     because the two ways to break it are silent. A row filed under one day whose
@@ -1413,9 +1465,10 @@ def test_an_append_leaves_the_index_holding_every_observation_its_day_holds(
     ]
 
     assert put(state, january) == 4
-    assert put(state, [*january, *february]) == 2, "a held measurement came back as new"
+    assert put(state, january) == 0, "a held measurement came back as new"
+    assert put(state, february) == 2
 
-    days = [day_partition.date_of(day) for day in writer.ledger_days(state)]
+    days = [day_shards.date_of(day) for day in writer.ledger_days(state)]
     assert days == ["2026-01-09", "2026-02-03"], f"both days were not written: {days}"
     for date in days:
         assert _indexed(state, date) == _day_digests(state, date), (
@@ -1433,85 +1486,47 @@ def test_an_index_left_behind_its_rows_is_put_right_by_dropping_it(tmp_path: Pat
     removes.
 
     So the writer under-reports, and this pins both halves of that. The repeat
-    lands, `ledger.drop_repeated_rows` settles it against `OBSERVATION_KEY`, and
-    the ledger is left counting the measurement once - which is the promise the
-    file makes. Under-reporting is the safe direction precisely because it has a
-    repair; over-reporting would leave a digest whose row nothing ever wrote.
+    lands, the day settles against `OBSERVATION_KEY`, and the ledger is left
+    counting the measurement once - which is the promise the file makes.
+    Under-reporting is the safe direction precisely because it has a repair;
+    over-reporting would leave a digest whose row nothing ever wrote.
 
-    The repair for the index itself is one deletion: dropping the day puts it
-    back into the case `refresh_index` does cover, and the refill reads the rows
-    once. The second tree is the same defect with that repair applied.
+    The repair for the index itself is `rebuild_index`, which adds the digests
+    the rows produce and the index does not hold. The second tree is the same
+    defect with that repair applied.
     """
     held = [_measurement(number) for number in range(4)]
     behind = [_measurement(70), _measurement(71)]
     date = held[0].date
+    a_scores_day = ledger.SegmentLedger.SCORES
 
     stale = tmp_path / "stale" / "state"
     assert put(stale, held) == 4
-    _write_shard(writer.ledger_path(stale, date), [*held, *behind])
+    _write_shard(_a_days_file(stale, a_scores_day, date, shard=1), behind)
 
-    assert put(stale, behind) == 2, (
+    assert put(stale, behind, attempt=2) == 2, (
         "an index behind its rows refused a measurement it has never seen, "
         "so this tree was not the stale one"
     )
-    dropped = ledger.drop_repeated_rows(writer.ledger_path(stale, date), writer.OBSERVATION_KEY)
-    rows = list(writer.records(stale))
-    assert dropped == 2, f"the settle dropped {dropped} of the 2 repeated rows"
-    assert len(rows) == len(_day_digests(stale, date)) == 6, (
-        f"the settled ledger holds {len(rows)} rows for "
+    written = list(writer.records(stale))
+    settled = day_shards.settled_day(
+        stale / writer.LEDGER_DIRNAME, date, writer.OBSERVATION_KEY, EvalRow
+    )
+    assert len(written) == 8, f"the repeat did not land: {len(written)} rows on disk"
+    assert len(settled) == len(_day_digests(stale, date)) == 6, (
+        f"the settled day holds {len(settled)} rows for "
         f"{len(_day_digests(stale, date))} measurements"
     )
 
     repaired = tmp_path / "repaired" / "state"
     assert put(repaired, held) == 4
-    _write_shard(writer.ledger_path(repaired, date), [*held, *behind])
-    writer.index_path(repaired, date).unlink()
+    _write_shard(_a_days_file(repaired, a_scores_day, date, shard=1), behind)
+    writer.rebuild_index(repaired, [date])
 
-    assert put(repaired, behind) == 0, "the refilled index let a held measurement back in"
+    assert put(repaired, behind, attempt=2) == 0, (
+        "the repaired index let a held measurement back in"
+    )
     assert _indexed(repaired, date) == _day_digests(repaired, date)
-
-
-def test_a_month_that_became_an_archive_drops_its_live_index(tmp_path: Path) -> None:
-    """Two records of one month's identities is one too many.
-
-    The archive carries them for ever; the live index carries them while the
-    rows do. The moment the rows go the live copy is redundant, and leaving it
-    would double the 11.9 MB a year this index is supposed to cost.
-
-    A live index is only ever dropped when the archive that supersedes it is on
-    disk. Nothing here removes the last record of a measurement.
-    """
-    state = tmp_path / "state"
-    rows = [_measurement(number) for number in range(3)]
-    assert put(state, rows) == 3
-    date = rows[0].date
-    assert writer.index_path(state, date).exists()
-
-    days = writer.ledger_days(state)
-    built = score_archive.summarise(days, month=date[:7], observation_key=writer.OBSERVATION_KEY)
-    score_archive.write(score_archive.archive_path(state, date[:7]), built)
-    for day in days:
-        day.unlink()
-    held = writer.recorded_observations(state)
-
-    assert not writer.index_path(state, date).exists(), "two copies of one day survived"
-    assert held == writer.recorded_observations(state), "dropping the copy moved the answer"
-
-
-def test_a_live_index_with_no_rows_and_no_archive_is_left_alone(tmp_path: Path) -> None:
-    """The guard on the drop, asserted from the side that would lose a record.
-
-    A day file removed by hand, or by a prune whose archive would not reconcile,
-    leaves the index as the only thing that remembers it. Dropping it there would
-    silently make every measurement in it new again.
-    """
-    state = tmp_path / "state"
-    rows = [_measurement(number) for number in range(3)]
-    assert put(state, rows) == 3
-    writer.ledger_days(state)[0].unlink()
-
-    assert put(state, rows) == 0, "the last record of those measurements was dropped"
-    assert writer.index_path(state, rows[0].date).exists()
 
 
 def test_the_index_costs_a_fixed_number_of_bytes_an_observation(tmp_path: Path) -> None:
@@ -1524,13 +1539,12 @@ def test_the_index_costs_a_fixed_number_of_bytes_an_observation(tmp_path: Path) 
     state = tmp_path / "state"
     rows = [_measurement(number) for number in range(10)]
     put(state, rows)
-    index = writer.index_path(state, rows[0].date)
 
     header = ",".join(ObservationIndexRow.csv_columns()) + "\n"
     a_row = len(ObservationIndexRow.schema_version()) + 1 + 64 + 1
 
     assert ObservationIndexRow.csv_columns() == ("version", "observation_digest")
-    assert index.stat().st_size == len(header) + 10 * a_row
+    assert _index_size(state, rows[0].date) == len(header) + 10 * a_row
     assert a_row == 76
 
 
@@ -1561,17 +1575,22 @@ ROLLED_BACK: Final = "f" * 64
 
 
 def _index_rows(state: Path, date: str) -> list[dict[str, str]]:
-    with writer.index_path(state, date).open("r", encoding="utf-8", newline="") as handle:
-        return sorted(csv.DictReader(handle), key=lambda row: row["observation_digest"])
+    day = day_shards.one_day(state / writer.INDEX_DIRNAME, date)
+    return sorted(_cells_in(day), key=lambda row: row["observation_digest"])
 
 
 def _write_index(state: Path, date: str, rows: Sequence[dict[str, str]]) -> None:
-    """One day's index, written to the file rather than through the writer.
+    """One day's whole index, written to a file rather than through the writer.
 
     The writer can only mint a digest its own rows produce, and a digest the rows
-    cannot produce is half of what this section is about.
+    cannot produce is half of what this section is about. Whatever the day held
+    goes first, because these rows are the day's index and not an addition to it.
     """
-    with writer.index_path(state, date).open("w", encoding="utf-8", newline="") as handle:
+    for path in day_shards.one_day(state / writer.INDEX_DIRNAME, date):
+        path.unlink()
+    target = _a_days_file(state, ledger.SegmentLedger.SCORE_INDEX, date)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    with target.open("w", encoding="utf-8", newline="") as handle:
         out = csv.DictWriter(handle, fieldnames=writer.index_columns(), lineterminator="\n")
         out.writeheader()
         out.writerows(rows)
@@ -1604,13 +1623,15 @@ def _rows_produce(state: Path, days: Sequence[str]) -> set[str]:
     """
     held: set[str] = set()
     for date in days:
-        with writer.ledger_path(state, date).open("r", encoding="utf-8", newline="") as handle:
-            held |= {writer.observation_digest(row) for row in csv.DictReader(handle)}
+        day = day_shards.one_day(state / writer.LEDGER_DIRNAME, date)
+        held |= {writer.observation_digest(row) for row in _cells_in(day)}
     return held
 
 
-def test_a_rebuilt_index_holds_exactly_the_digests_the_rows_produce(tmp_path: Path) -> None:
-    """No more and no fewer, asserted in both directions.
+def test_a_rebuilt_index_holds_every_digest_the_rows_produce_and_keeps_the_rest(
+    tmp_path: Path,
+) -> None:
+    """Both directions are asked and only one is repaired, which is the trade.
 
     Two partitions, each spoilt in one direction, and both defects are real:
     `2026-01-09`'s index carries a digest no row of that day can produce, which
@@ -1620,8 +1641,12 @@ def test_a_rebuilt_index_holds_exactly_the_digests_the_rows_produce(tmp_path: Pa
 
     **A one-directional assertion passes on an index that only ever grows**, and
     an index that only grows is what a repeated dedupe over a re-scored item
-    looks like. So the fixture is checked as wrong both ways before the rebuild,
-    and the equality is asserted both ways after it.
+    looks like. So the fixture is checked as wrong both ways before the rebuild.
+
+    The repair adds and never rewrites, because taking a row out of a committed
+    day is a rebase git cannot apply and the removal would stop the push. So the
+    extra digest survives, and what it costs is one measurement that is never
+    taken again - which is what the day's rows already say happened.
     """
     state = _drifted_tree(tmp_path)
     produced = _rows_produce(state, REBUILD_DAYS)
@@ -1633,13 +1658,10 @@ def test_a_rebuilt_index_holds_exactly_the_digests_the_rows_produce(tmp_path: Pa
     writer.rebuild_index(state, REBUILD_DAYS)
 
     after = {digest for date in REBUILD_DAYS for digest in _indexed(state, date)}
-    assert not after - produced, (
-        f"the rebuilt index holds {len(after - produced)} digests the rows cannot produce"
-    )
     assert not produced - after, (
         f"the rebuilt index lacks {len(produced - after)} digests the rows do produce"
     )
-    assert after == produced
+    assert after == produced | (before - produced)
 
 
 def test_the_rebuild_names_what_each_day_had_wrong(tmp_path: Path) -> None:
@@ -1674,13 +1696,13 @@ def test_rebuilding_one_day_opens_and_rewrites_only_that_day(
     opens the archive.
     """
     state = _drifted_tree(tmp_path)
-    untouched = writer.index_path(state, "2026-01-09").read_bytes()
+    untouched = _index_bytes(state, "2026-01-09")
 
     opened = _opened_bytes(monkeypatch, state, lambda: writer.rebuild_index(state, ["2026-02-11"]))
 
     assert "scores/2026/01/09.csv" not in opened, f"a day nobody named was read: {sorted(opened)}"
     assert "scores/2026/02/11.csv" in opened, "the rows of the named day were never read"
-    assert writer.index_path(state, "2026-01-09").read_bytes() == untouched
+    assert _index_bytes(state, "2026-01-09") == untouched
     assert _indexed(state, "2026-02-11") == _rows_produce(state, ["2026-02-11"])
 
 
@@ -1694,14 +1716,14 @@ def test_a_day_with_no_committed_rows_is_refused_by_name(tmp_path: Path) -> None
     the index they had.
     """
     state = _drifted_tree(tmp_path)
-    before = writer.index_path(state, "2026-02-11").read_bytes()
+    before = _index_bytes(state, "2026-02-11")
 
     with pytest.raises(FileNotFoundError, match="2026-03-01"):
         writer.rebuild_index(state, ["2026-02-11", "2026-03-01"])
     with pytest.raises(ValueError, match="no day"):
         writer.rebuild_index(state, [])
 
-    assert writer.index_path(state, "2026-02-11").read_bytes() == before, (
+    assert _index_bytes(state, "2026-02-11") == before, (
         "a refused rebuild rewrote a day anyway"
     )
 
@@ -1742,7 +1764,7 @@ def test_the_rebuild_is_an_operator_command_and_no_scheduled_stage_calls_it(
     callers = sorted(
         path.relative_to(REPO_ROOT).as_posix()
         for path in (REPO_ROOT / "backend" / "idhazh").rglob("*.py")
-        if "rebuild_index" in read_text(path)
+        if "rebuild_index(" in read_text(path)
     )
     assert callers == [
         "backend/idhazh/evals/writer.py",

@@ -11,7 +11,7 @@ from __future__ import annotations
 import csv
 from pathlib import Path
 
-from idhazh import day_shards
+from idhazh import day_partition, day_shards
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.evals import archive as score_archive
@@ -125,6 +125,7 @@ def test_a_measurement_whose_month_was_archived_is_still_not_new(tmp_path: Path)
     score_archive.write(score_archive.archive_path(state, month), summary)
     for day in days:
         day.unlink()
+        day_partition.drop_empty_day_dirs(day)
 
     assert not writer.ledger_days(state)
     assert put(state, [row(date="2026-09-14", run_id="2026-09-14-1")], run_id="2026-09-14-1") == 0
