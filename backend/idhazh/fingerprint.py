@@ -90,7 +90,7 @@ def file_digest(path: Path) -> str:
 def runtime_build(environ: Mapping[str, str] | None = None) -> str:
     """The llama.cpp release that decoded the weights, as the job pinned it.
 
-    `.github/scripts/llama-cpp-pin.sh` decides the build, the job that installs
+    `config/llama-cpp-pin.json` decides the build, the job that installs
     it reads that file, and the step running this stage is handed the same
     answer as `LLAMA_CPP_BUILD` - so the tag the stamp carries and the bytes
     that ran are named in one place.

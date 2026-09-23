@@ -219,6 +219,8 @@ A throwaway spec under `frontend/tests/` would be swept up by the shared selecto
 
 **Every performance number carries the hardware, the date and the spread** (`CLAUDE.md` Guardrail #10). Where the working matters, it lives in [../pipeline-cost.md](../pipeline-cost.md), not here.
 
+**A cache entry written on a feature branch is not restorable from `main`.** Actions restores from the current branch or the default branch and nowhere else, so **no dispatch can warm production** - measured 2026-09-22. A branch dispatch proves the key string resolves and the entry saves, and that is all; the first scheduled run after a key moves is cold on every shard at once. A second dispatch on the SAME branch is what proves a restore, and eviction between the two is likely once two multi-gigabyte entries are in play, so compare the two resolved key strings off the logs whether or not the second one hits.
+
 ## A clean merge is not a working merge
 
 **A branch that deletes a name merges without conflict and fails at import.** Git compares text; nothing checks that the symbol another branch started calling still exists. A branch can replace `cli.INDEX_ROOT` with a function and `main` added eleven tests that patch the constant - a clean `ort` merge, then eleven failures naming one attribute. Whoever merges second owns the semantic conflict, whichever branch introduced it, and the replacement has to be checked rather than assumed to resolve to the same value.

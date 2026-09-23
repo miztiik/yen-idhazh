@@ -1,6 +1,6 @@
 # The model on a runner
 
-**Last Updated**: 2026-09-21
+**Last Updated**: 2026-09-22
 
 How a job gets the inference runtime and the weights, and how it proves it got
 the ones it asked for. Every value here is exact: a pin, a cache key, a digest,
@@ -22,54 +22,78 @@ unpacks anything, and each goes on to download weights.
 The SHA-256 is the release API's own `digest` for that asset. It was confirmed
 on 2026-08-25 by downloading the 16,377,727-byte archive and hashing it.
 
-### Where the three values are written, and how many places that still is
+### Where the model file is read, and how many places that is
 
-**One file decides the build: `.github/scripts/llama-cpp-pin.sh`.** Source it
-and it assigns all three; run it and it prints the build as `key=value`, which
-is what a cache key reads - the key names the build, the cache step runs before
-the fetch, so the pin has to be readable without downloading anything.
+**One place. `backend/utilities/model_refs.py` is the only reader of a model
+file**, and `backend/utilities/model_runtime.py` is the only program that acts
+on what it says - the pin, the runtime install, the download, the check and the
+server start, as five verbs of one program.
 
-Two shared scripts read it, and the split is about what a job actually needs.
-`.github/scripts/install-llama-runtime.sh` sources the pin, installs the build
-and checks the archive; that is the runtime half on its own.
-`.github/scripts/fetch-model-runtime.sh` sources that one and then downloads the
-weights the calling step names through `env`, so the pin lands in the same shell
-both halves run in. Folding the two together would need a `WEIGHTS_FILE` allowed
-to be empty, which would make the refusals every caller depends on optional.
+| Verb | What it answers |
+| --- | --- |
+| `print-pinned-build` | which llama.cpp build this run installs, as `key=value` for a step to publish |
+| `install-runtime` | put that build in `backend/bin`, archive digest checked before anything unpacks |
+| `download-model-files` | fetch every file the model declares, in declared order, each proved before it counts |
+| `verify-model-files` | check every declared file against its recorded digest and its declared size |
+| `start-server` | start llama-server against one config root and prove the process survived |
 
-**`digest.yml`, `idhazh-pipeline-tests.yaml` and `validate.yml` are on those
-scripts.** `measure.yml` is the one still declaring the three variables
-in its own `env:` block and fetching the build itself.
+**The pin is `config/llama-cpp-pin.json`** - three keys, `build`, `asset` and
+`sha256`. It is a tunable that changes on an upgrade, so it lives in `config/`
+(Guardrail #6). A workflow step that needs the build runs `print-pinned-build`;
+the cache key names the build and the cache step runs before anything is
+installed, so the pin has to be readable without downloading anything.
 
-So the three values are written in **two places today: the pin file and one
+**A step spells no URL, no filename, no digest and no flag.** It passes a config
+root and, where the platform will not let a program read it, a token. What used
+to travel instead: a plan job read the model file, published seven job outputs,
+and a composite action took ten inputs to carry them to a download - four hops,
+every one of them a place a value could be pasted into a command.
+
+**`measure.yml` is the one file still declaring the three pin values in its own
+`env:` block**, and its four inline download arms are what read them. A workflow
+`env:` block cannot read a file, and two of those jobs have no Python set up at
+all, so moving it means adding a step to jobs that cannot run one. A test holds
+the two copies equal instead, so the second cannot drift from the first.
+
+So the three pin values are written in **two places: the pin file and that one
 `env:` block.** It was six until 2026-09-17, and converting `measure.yml` takes
 it to one.
 
-Nothing read those places against each other before. A contract test now pins
-the three variables in every workflow that still spells them and refuses any
-copy of them in a workflow that has been converted, so a conversion is one line
-in that test's `LLAMA_SCRIPT_CALLERS` set and the check tightens rather than
-being rewritten. What a converted caller is refused is the VALUE, not the name:
-a job whose stage records which build decoded the bytes has to put
-`LLAMA_CPP_BUILD` in that step's environment, and taking it from the step that
-published the pin reads the one home rather than copying it. The digest check on
-every fetch path and the build inside every runtime cache key are held by the
-same file.
+What a converted caller is refused is the VALUE, not the name: a job whose stage
+records which build decoded the bytes has to put `LLAMA_CPP_BUILD` in that
+step's environment, and taking it from the step that published the pin reads the
+one home rather than copying it.
 
 ### What the cache key holds
 
-The weights cache key names the build: `llm-<weights>-<revision>-<build>-v4` in
-the two `digest.yml` jobs and in `idhazh-pipeline-tests.yaml`,
-`qualify-<candidate>-<build>` in `validate.yml`. The `digest.yml` suffix
-moved to `v4` when the weights half stopped coming from a workflow variable, so
-the first run after that refetched once rather than restoring an entry nobody
-could attribute.
+The weights cache key is `llm-<digest over every declared file>-<build>-v5`,
+written in the shared action and in `idhazh-pipeline-tests.yaml`.
 
-A converted caller reads `<build>` off the step that ran the pin, never off a
-workflow variable. In `digest.yml` and `validate.yml` that step is in the `plan`
-job and the build travels as a job output, because `needs` resolves before a
-worker's first step and `steps` does not - which is the same reason the model
-refs travel that way.
+The digest covers `repo`, `revision`, `file` and `sha256` **per file, in
+declared order** - the weights first, then every companion. It does not cover a
+file's `flag`, which reaches the server command line and would throw several
+gigabytes away over an edit that changed no byte on disk, and it does not cover
+the config root, which is how the files were found rather than part of what they
+are. That last exclusion is what lets a trial dispatch reading a scratch config
+restore the entry the daily run already paid to download.
+
+**Three key formats sit over `backend/models`, in six steps, and they are
+deliberately different.**
+
+| Format | Where | Why it is its own format |
+| --- | --- | --- |
+| `llm-` | the shared action, and `idhazh-pipeline-tests.yaml` | the production entry. Written twice because one is reached through a composite action and one is not, so the two are held equal by what they RESOLVE to |
+| `qualify-` | `validate.yml` | a candidate under qualification. Production must not share an entry with it |
+| `bench-` | `measure.yml`, three steps | a bench candidate, same reason |
+
+An equality across all six would be false by construction, so only `llm-` carries
+one.
+
+**The suffix is the manual eviction handle.** It moved to `v5` when the model
+half became a digest over the whole declared set. It exists for the three things
+the digest cannot see: an entry already poisoned, a llama.cpp release re-uploaded
+under one tag, and a runtime-install change that alters `backend/bin`, which is
+in `path:` and in no key component.
 
 **The key matters more than the pin.** The fetch step runs only on a cache
 miss. Keyed on the weights alone, the cache froze one binary and then served a
@@ -78,12 +102,11 @@ following the newest release with none of its freshness, and no record on the
 run of which build served the day. A throughput number measured in `measure.yml`
 now describes the binary that writes the digest (Guardrail #10).
 
-**The key is not a hash of the script that fetches, and that is deliberate.** A
+**The key is not a hash of the program that fetches, and that is deliberate.** A
 hashed key moves when a comment moves, which throws a multi-gigabyte entry away
-for an edit that changed no byte of what it holds. That is why the pin file
-prints the build rather than being hashed.
+for an edit that changed no byte of what it holds.
 
-The run manifest records `runtime_build` as the build the `plan` job read out of
+The run manifest records `runtime_build` as the build the plan job read out of
 the pin and handed to the work step, so a published day names the binary that
 decoded it. A run with nothing pinned - a developer machine - records
 `build-not-recorded` rather than inventing a tag.
@@ -94,6 +117,28 @@ sitting unread while newer saves push the repository past its cache limit, since
 eviction takes the oldest last-access first. Either way the next run refetches
 the weights and reinstalls the runtime, on the publishing path. Both rules are
 in [ci-environment.md](ci-environment.md#platform-limits-that-shape-the-workflows).
+
+#### Design rationale
+
+**The cache key is computed inside the action, from the model file, not passed
+in by the caller.** Decided 2026-09-22.
+
+The real alternative is what every caller did until this change: a plan job read
+the model file, published the filename and the revision as job outputs, and the
+action composed the key from two inputs. It worked, and it cost four things. The
+key named two fields where the download read a whole file set, so an entry that
+gained a companion kept its old name and restored complete with a file missing.
+The action resolved a deleted input to the empty string with no error, so any
+change to those inputs could silently key every model on one string. Two callers
+had to hand over the same six values and could disagree. And the key could not
+be proved to describe the set the download would read, because the two were
+composed in different places from different reads.
+
+Computed inside the action it costs zero lines in both callers, it is provably
+the set the download reads, and the caller hands over only the build - the one
+half the model file does not decide. **Reversing it costs every caller a full
+re-download**, because the key string changes, and it crosses the
+workflow-to-action boundary, which is why it is written down here.
 
 ### What the build accepts is recorded, not re-asked
 
@@ -112,58 +157,74 @@ new pin.
 
 ## Every download fails loudly, and every weight is checked
 
-Every download in every workflow is spelled `curl -fsSL --retry 3
---retry-all-errors`, and the release lookups that find the llama.cpp archive are
-spelled `curl -fsS`. `-f` is the letter that matters. Without it curl treats a
-403 or a 502 as a successful transfer: it writes the HTTP error body into the
-output file and exits 0. Nothing downstream looks at the file until a server
-tries to open it.
+**One function fetches bytes: `_download` in `model_runtime.py`.** It is the
+only thing in the repository's model path that touches the network for a file,
+so a change of transport is a change to one function.
 
-In the daily run that is worse than a failed step, because `backend/models` is a
-cache path. A rate-limited minute writes a page of error text where the weights
-should be, `actions/cache` saves it under the pinned key, and every later run
-restores that same page until the entry is evicted. The retries are the cheap
-half of the fix; `-f` is the half that stops the bad file being written at all.
+| Clause | What it buys |
+| --- | --- |
+| **no request header at all** | CPython's redirect handler copies every header onto a cross-host redirect target with no host check. Both the hub and the release CDN redirect, so a bearer token added here would follow the redirect to somebody else's server. Only the release lookup sets one, and a test asserts exactly one function does |
+| `urlopen` raises on any non-2xx | that is `curl -f` for free. An HTTP error body can never be written into a weights file and then saved under a cache key |
+| a socket timeout of 60 s | it bounds one blocking read. It is **not** a bound on the transfer, which is why the next two exist |
+| a wall-clock deadline of 30 min per file | a shard is killed at `run.shard_timeout_minutes`, 200 today, and a download that holds it to that ceiling costs the day a shard of stories |
+| a throughput floor of 1 MB/s, measured over the last 30 s after the first 60 | a connection that ran at full speed and then stopped keeps a healthy average for a long time. Measuring the last window catches a stall in thirty seconds, and a socket timeout catches it never |
+| 3 attempts, each from byte zero, on a reset, a short read, a timeout, a 5xx, a 408 or a 429 - **never on a 4xx** | a 4xx is the server saying the request was wrong, and asking again three times is three ways to be wrong about the same thing |
+| the bytes land on a `.part` and the caller renames | `curl -o` wrote straight to the destination, so a job killed mid-transfer left half a file under the cache key for every later run to restore |
+
+**This path has never resumed, and restarting from zero is parity rather than a
+loss.** The `curl` call this replaces carried no `--continue-at`.
+
+In the daily run a bad file is worse than a failed step, because `backend/models`
+is a cache path. A rate-limited minute that wrote a page of error text where the
+weights should be would be saved under the pinned key and restored by every
+later run until the entry is evicted.
 
 The digest check is what catches the other failure, a transfer that dies
-mid-body. That is a 200 response, so curl has nothing to retry and the file on
-disk is simply short. Every job that downloads weights therefore runs
-`sha256sum --check` against a recorded digest, after the fetch and before
-anything reads the file. **No check carries an `if:`.** The fetch step is
-skipped on a cache hit, and a restored entry is the one case where nobody
-watched the bytes arrive - so it is the case that most needs the check.
+mid-body. That is a 200 response, so there is nothing to retry and the file on
+disk is simply short. **Every declared file is checked against its recorded
+digest, after the fetch and before anything reads it, and the check reads the
+declaration rather than being handed a filename** - so it cannot cover fewer
+files than the cache key digested. **No check carries an `if:`.** The fetch step
+is skipped on a cache hit, and a restored entry is the one case where nobody
+watched the bytes arrive.
 
 | Workflow and job | Weights | Digest read from |
 | --- | --- | --- |
-| `digest.yml` / `work` | the summarizer | `models.summarize.sha256` |
-| `measure.yml` / `runtime` | the bench candidate | the `models` job's `candidate_sha256` |
-| `measure.yml` / `batched` | the summarizer | `models.summarize.sha256` |
-| `validate.yml` / `qualify` | the candidate | the `plan` job's `candidate_sha256` |
+| every job on the shared download | whatever its config root declares | that root's own `models.summarize.sha256` and each companion's, read by `verify-model-files` |
+| `measure.yml`'s four inline arms | the bench candidate, or the summarizer | the `models` job's republished `candidate_sha256`, or `models.summarize.sha256` |
 
-The two config digests are the same field, `ModelRef.sha256` in the file
-`config/idhazh.json`'s `models_file` points at. The other two are the exception,
-and deliberately: an operator can point the bench and the validation case at a
-model config does not name, so each resolves the digest once - from the dispatch
-input, or from config when there is none - and republishes it as a job output
-the whole run reads. The bench's raw case checks the same digest a step earlier,
-inside `measure_llm.py`, against the Hub's own record for that commit.
+The four inline arms are the exception, and deliberately: an operator can point
+the bench at a model config does not name, so that job resolves the digest once
+- from the dispatch input, or from config when there is none - and republishes
+it as a job output the whole run reads. The bench's raw case checks the same
+digest a step earlier, inside `measure_llm.py`, against the Hub's own record for
+that commit.
 
 The workflow contract test that holds this open is closed-world. It finds the
 downloads by reading every workflow file rather than by consulting a list, and
-fails when the set it finds differs from the set it pins. A tenth workflow that
-downloads weights fails the test until it carries the same pair of steps.
+fails when the set it finds differs from the set it pins. **It matches the hub
+host and the download verb**, because the download is a program now and a
+workflow that calls it names no host: matching only the host would have dropped
+four of the eight jobs the day the download moved, and every check written over
+that search would have gone on passing.
+
+The production entry is **5.68 GB** (`5,680,522,464` bytes). The 57-to-338-second
+figures in
+[what-a-bench-dispatch-costs.md](benchmarks/what-a-bench-dispatch-costs.md) were
+taken on the 4.28 GB bench arm, not on this file.
 
 ### The digest settles the bytes, and the declared size settles the document
 
-`sha256sum` says the file on disk is the file the entry named. It says nothing
-about whether the entry is internally consistent, so both arms that resolve a
-candidate also compare `stat -c %s` against the entry's own `byte_count`. An
-entry that declares no size skips the check, because that is an entry nobody has
-fetched yet rather than an entry that disagrees with itself.
+A digest says the file on disk is the file the entry named. It says nothing
+about whether the entry is internally consistent, so **every check also compares
+the file's size against the entry's own `byte_count`**, for the weights and for
+each companion. An entry that declares no size skips the check, because that is
+an entry nobody has fetched yet rather than an entry that disagrees with itself.
 
-`validate.yml` has done this since it was written and `measure.yml` had not. The
-drift was found on 2026-09-15 by diffing the two files, which is the same way the
-last one was found and the reason both are now held by one test.
+It used to be two arms doing this and two not. `validate.yml` had done it since
+it was written and `measure.yml` had not; the drift was found on 2026-09-15 by
+diffing the two files. Both halves are inside one verb now, so there is no
+second place for one of them to be missing from.
 
 ### Healthy says a server replied, not which weights replied
 
@@ -230,21 +291,44 @@ whatever was uploaded last, so the bytes can move under a config that still
 records the old `sha256`; the run would then fail a check nobody had changed, or
 in `measure.yml`, which had no checksum step, quietly measure a different model.
 
-The revision is in the weights cache key for the same reason the build is. The
-fetch step runs only on a cache miss, so a key that cannot tell two uploads of
-one filename apart would hold a repinned config on a hit whose bytes fail the
-checksum on every run until the entry expires.
+The revision is inside the weights cache key for the same reason the build is.
+The fetch step runs only on a cache miss, so a key that cannot tell two uploads
+of one filename apart would hold a repinned config on a hit whose bytes fail the
+check on every run until the entry expires.
 
-The `models` step asserts each value is one bare word before it writes it. Every
-ref is substituted straight into a shell command downstream, and that step is the
-only point between config and those commands where a value carrying a space, a
-quote or a newline can be stopped.
+**Every value the reader publishes passes a closed grammar before it is
+written**, because each one is substituted straight into a shell command
+downstream and nothing after that point can stop a value carrying a space, a
+quote or a newline. "One bare word" was the old rule and it refused whitespace
+and nothing else, so `../../x.gguf`, `x.gguf$(id)` and a branch name in place of
+a commit all passed it.
 
-`measure.yml` and `validate.yml` keep their own candidate variables on purpose:
+| Value | Rule |
+| --- | --- |
+| `repo` | `<owner>/<name>`, each starting alphanumeric, then letters, digits, `.`, `_`, `-` |
+| `revision` | 40 lowercase hex characters - a commit, never a branch |
+| the weights `file` | one path segment ending `.gguf` |
+| a companion `file` | the same segment rule without the suffix - it may be a projector, an adapter or a vocoder |
+| `sha256`, weights and every companion | 64 lowercase hex characters, required, no exception |
+| `id` | a slug, held equal to `SLUG_PATTERN` in the contracts |
+| `quantisation` | letters, digits, `.`, `_`, `-` |
+| `byte_count` | empty, or a positive whole number |
+| `flag` | empty, or one or two leading dashes then a flag name. One dash is legal: llama.cpp's short form for a draft model is `-md` |
+| every emitted value, last | empty, or printable ASCII with no space. Empty is legal for exactly `flag` and `byte_count` |
+
+The backstop is a character class rather than `str.isprintable()`, which admits
+a combining accent and DIVISION SLASH - either of which builds a hub URL that is
+not the one a reviewer read.
+
+A refusal names four things in this order: the models file, where in it, the
+rule in plain words, and the offending value. Never the regex.
+
+`measure.yml` and `validate.yml` keep their own candidate inputs on purpose:
 benching or validating a model means naming one that is deliberately not in
-config yet. Each keys its own weights entry on the candidate digest rather than
-on the production ref, so the two never share an entry with the daily run and a
-dispatch that names nothing simply keys on the configured model's digest.
+config yet. Each keys its own weights entry on the candidate's declared set
+rather than on the production one, so the two never share an entry with the
+daily run and a dispatch that names nothing simply keys on the configured
+model's.
 
 ## One function builds the server command, and one variable says the port
 

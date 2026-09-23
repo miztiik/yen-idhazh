@@ -74,13 +74,6 @@ jobs:
       dates: ${{ steps.fanout.outputs.dates }}
       committed_paths: ${{ steps.fanout.outputs.committed_paths }}
       shard_timeout_minutes: ${{ steps.bounds.outputs.shard_timeout_minutes }}
-      summarize_repo: ${{ steps.models.outputs.summarize_repo }}
-      summarize_revision: ${{ steps.models.outputs.summarize_revision }}
-      summarize_file: ${{ steps.models.outputs.summarize_file }}
-      draft_repo: ${{ steps.models.outputs.draft_repo }}
-      draft_revision: ${{ steps.models.outputs.draft_revision }}
-      draft_file: ${{ steps.models.outputs.draft_file }}
-      draft_sha256: ${{ steps.models.outputs.draft_sha256 }}
       llama_cpp_build: ${{ steps.runtime.outputs.llama_cpp_build }}
     steps:
       - uses: actions/checkout@v6
@@ -161,22 +154,18 @@ jobs:
           python -m idhazh.council.run_identity --platform-run-id "$PLATFORM_RUN_ID" \
             | tee /dev/stderr >> "$GITHUB_OUTPUT"
 
-      # The model refs, read once from config and published to every unit. They
-      # travel as job OUTPUTS rather than as `env`, because `needs` resolves
-      # before a job's first step and `steps` does not - and the weights cache
-      # key below has to name the file it holds.
-      - id: models
-        run: |
-          set -euo pipefail
-          python3 backend/utilities/model_refs.py configured >> "$GITHUB_OUTPUT"
-
       # The build every unit is about to install, asked once of the file that
-      # decides it. A job output for the same reason the refs are.
+      # decides it. A job OUTPUT because `needs` resolves before a unit's first
+      # step and `steps` does not, and the weights cache key names the build.
+      #
+      # The model's own refs used to travel the same way, read here and relayed
+      # through seven job outputs to the step that downloaded them. The download
+      # reads the file itself now, so there is nothing left to relay.
       - id: runtime
         name: Say which llama.cpp build this run installs
         run: |
           set -euo pipefail
-          bash .github/scripts/llama-cpp-pin.sh \
+          python3 backend/utilities/model_runtime.py print-pinned-build \
             | tee /dev/stderr >> "$GITHUB_OUTPUT"
 
       # How long one unit may take, read from the one file that says so. A job
@@ -308,14 +297,7 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           port: ${{ env.LLAMA_PORT }}
-          weights_repo: ${{ needs.draw.outputs.summarize_repo }}
-          weights_revision: ${{ needs.draw.outputs.summarize_revision }}
-          weights_file: ${{ needs.draw.outputs.summarize_file }}
           llama_cpp_build: ${{ needs.draw.outputs.llama_cpp_build }}
-          draft_repo: ${{ needs.draw.outputs.draft_repo }}
-          draft_revision: ${{ needs.draw.outputs.draft_revision }}
-          draft_file: ${{ needs.draw.outputs.draft_file }}
-          draft_sha256: ${{ needs.draw.outputs.draft_sha256 }}
 
       # One cell is one tenant, so the in-process deadline the verb computes is
       # about this tenant's span and nobody else's. Two tenants in one job would

@@ -174,7 +174,7 @@ legal keys, because the model is gone and that is not a typo.
 **The refusal only covers a reader that goes through the contract.** A
 workflow step reading the raw JSON, or resolving a `models` key by attribute
 name, sees the file and not the model - so `digest.yml`, `measure.yml` and
-`.github/scripts/start-llama-server.sh` move with the key rather than relying on
+`backend/utilities/model_runtime.py` move with the key rather than relying on
 the contract. Retiring a key without moving those readers breaks the next
 scheduled run. The same applies to the pointer: those readers follow
 `models_file` to the model's own file rather than naming that file, so a swap

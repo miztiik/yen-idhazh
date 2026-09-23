@@ -4,15 +4,18 @@ from __future__ import annotations
 
 import os
 import re
+import shutil
 import subprocess
+import sys
 from pathlib import Path
 from typing import Final
 
 import pytest
-from conftest import REPO_ROOT, llama_server_flags, read_text
+from conftest import CONFIG_DIR, REPO_ROOT, llama_server_flags, read_text
 
 from idhazh.llm.server import DEFAULT_ENDPOINT, DEFAULT_PORT
 from idhazh.telemetry import silicon
+from utilities import candidate_pointer, model_refs, pipeline_case_config
 
 from ._harness import (
     ACTIONS_DIR,
@@ -39,7 +42,7 @@ from ._harness import (
     SCRIPTS_DIR,
     SERVER_LOG_FILE,
     SERVER_STARTER_MODULES,
-    START_SERVER_SCRIPT,
+    START_SERVER_MODULE,
     WORKFLOWS_DIR,
     _action_call,
     _artifact_upload,
@@ -50,6 +53,7 @@ from ._harness import (
     _local_action_inputs,
     _mapping,
     _model_server_callers,
+    _published,
     _script,
     _server_starters,
     _starter_shell,
@@ -64,6 +68,31 @@ pytestmark = pytest.mark.workflow
 #: The step that prints what it found in llama-server's own log, and how much of
 #: the log that was.
 LOG_SUMMARY_STEP: Final = "Prompt cache log summary"
+
+#: Every place a server is started, and the config root that start reads its
+#: flags from. Five roots and three shapes: the committed tree, the scratch copy
+#: the candidate action cuts, and the per-case copies cut from that one.
+LAUNCH_ROOTS: Final = (
+    ("digest.yml", "work", "Start the model", "config"),
+    ("validate.yml", "qualify", "Start the candidate", "backend/var/candidate-config"),
+    (
+        "idhazh-pipeline-tests.yaml",
+        "cases",
+        "Start the model",
+        "backend/var/cases/baseline/config",
+    ),
+    (
+        "idhazh-pipeline-tests.yaml",
+        "cases",
+        "Restart the model with two slots",
+        "backend/var/cases/parallel-2/config",
+    ),
+    ("measure.yml", "budgets", "Start the tokenizer", "backend/var/candidate-config"),
+)
+
+#: The variable those five steps used to be handed the weights path in. Named
+#: so it cannot come back: the config root already says which file.
+WEIGHTS_ENV: Final = "LLAMA_WEIGHTS"
 
 
 def test_every_job_that_starts_a_server_reaches_the_one_argv_builder() -> None:
@@ -89,7 +118,9 @@ def test_every_job_that_starts_a_server_reaches_the_one_argv_builder() -> None:
     # llama-server flag, and a second spelling anywhere is the defect.
     for relative in SERVER_STARTER_MODULES:
         source = read_text(REPO_ROOT / relative)
-        assert "from idhazh.llm.server import server_argv" in source, relative
+        assert re.search(r"^\s*from idhazh\.llm\.server import .*\bserver_argv\b", source, re.M), (
+            relative
+        )
 
     for (filename, job_name), declared in sorted(starters.items()):
         for step_name in declared:
@@ -103,8 +134,9 @@ def test_every_job_that_starts_a_server_reaches_the_one_argv_builder() -> None:
             script = _starter_shell(_step(workflows[filename], job_name, "name", step_name))
             assert ARGV_MODULE_CALL in script, where
             assert "--config-root " in script, f"{where} names no config root"
-            # NUL-separated, so a flag value carrying a space stays one argument.
-            assert "mapfile -d '' LLAMA_ARGV" in script, where
+            # No weights argument. The config root's own entry names the file,
+            # and a second way of saying which bytes is a second answer.
+            assert "--weights" not in script, f"{where} is told its weights twice"
 
     # The other side of the same Oracle: no command a runner executes renders
     # the list itself. Only `run:` scripts are read, because a dispatch-form
@@ -184,7 +216,17 @@ def test_the_model_block_is_one_action_with_a_contract_its_callers_can_read() ->
 
     for filename, job_name in sorted(calling):
         given = _action_call(workflows[filename], job_name, MODEL_SERVER_ACTION)
-        assert set(given) == set(declared), f"{filename}/{job_name} hands over {sorted(given)}"
+        required = {name for name, body in declared.items() if body.get("required") == "true"}
+        # Required in, declared out. An optional input carries a default, so a
+        # caller that leaves it out is taking that default - and forcing every
+        # caller to spell it would be the default written twice.
+        assert required <= set(given), (
+            f"{filename}/{job_name} never passes {sorted(required - set(given))}"
+        )
+        assert set(given) <= set(declared), (
+            f"{filename}/{job_name} hands over {sorted(set(given) - set(declared))}, "
+            "which resolves to nothing"
+        )
         names = [
             str(step.get("name") or step.get("uses") or "")
             for step in _declared_steps(workflows[filename], job_name)
@@ -209,29 +251,32 @@ def test_the_model_block_is_one_action_with_a_contract_its_callers_can_read() ->
 @pytest.mark.parametrize(
     ("argv", "message"),
     [
-        ([], "usage:"),
-        (["summarize"], "usage:"),
-        (["gibberish", "llama-server"], "unknown role"),
+        ([], "required: verb"),
+        (["summarize"], "invalid choice"),
+        (["start-server", "--role", "gibberish"], "unrecognized arguments"),
     ],
 )
 
 
-def test_the_start_script_refuses_a_call_it_cannot_serve(
+def test_the_launcher_refuses_a_call_it_cannot_serve(
     argv: list[str], message: str, tmp_path: Path
 ) -> None:
     """Run it, do not read it.
 
-    Two jobs share this script and each passes a role and a filename. A typo in
-    either used to be impossible, because the shell was written out per job; now
-    it is one string in a workflow, so the script says no rather than starting a
+    Five call sites hand this program a verb and a config root. A typo in either
+    used to be impossible, because the shell was written out per job; now it is
+    one string in a workflow, so the program says no rather than starting a
     server for the wrong model or writing a log nobody later reads.
+
+    `--role` is one of the two arguments this row deleted. One role exists, the
+    builder already defaults to it, and the old script carried a `case` block
+    refusing a value nothing could produce - so a call that still passes it is
+    a caller that was never converted.
     """
-    shell = _bash()
-    assert shell is not None
     completed = subprocess.run(
-        [shell, START_SERVER_SCRIPT.as_posix(), *argv],
+        [sys.executable, str(START_SERVER_MODULE), *argv],
         cwd=tmp_path,
-        env={**_isolated_env(tmp_path), "LLAMA_WEIGHTS": "w.gguf", "LLAMA_PORT": "8080"},
+        env={**_isolated_env(tmp_path), "LLAMA_PORT": "8080"},
         capture_output=True,
         text=True,
         check=False,
@@ -432,12 +477,12 @@ def test_the_loopback_port_is_one_number_wherever_it_is_written() -> None:
     """A server on one port and a stage posting to another is every item failing.
 
     Every workflow that stands a llama-server up declares the port once at
-    workflow level, `start-llama-server.sh` refuses to start without it, and
+    workflow level, the shared launcher reads it back from the environment, and
     `idhazh.llm.server` builds the address the stage posts to out of the same
     variable. Until 2026-09-09 the measurement harness was a fifth party: it
     starts its server from an inline python block rather than through the shared
-    script, and it held its own `SERVER_PORT = 8080`. It reads the variable now,
-    so the number is declared and never spelled.
+    launcher, and it held its own `SERVER_PORT = 8080`. It reads the variable
+    now, so the number is declared and never spelled.
 
     The declaration is the only place a runtime workflow may write the digits.
     Asserted line by line on a whole-token match rather than as "the file holds
@@ -482,29 +527,43 @@ def test_the_loopback_port_is_one_number_wherever_it_is_written() -> None:
                     f"reading {LLAMA_PORT_ENV} back"
                 )
 
-    assert f'"${{{LLAMA_PORT_ENV}:?' in read_text(START_SERVER_SCRIPT), (
-        f"{START_SERVER_SCRIPT.name} must refuse to start without {LLAMA_PORT_ENV}"
+    assert f'PORT_ENV: Final = "{LLAMA_PORT_ENV}"' in read_text(START_SERVER_MODULE), (
+        f"{START_SERVER_MODULE.name} must read {LLAMA_PORT_ENV} rather than hold a port"
     )
-    # The one starter that does not go through the shared script. It sweeps a
+    # The one starter that does not go through the shared launcher. It sweeps a
     # setting over per-candidate config roots and holds the process object to
-    # sample its memory, neither of which the script can do - so it keeps its own
-    # start sequence and reads the port the workflow declared. It moved out of
-    # `measure.yml` into a module on 2026-09-15; the rule did not move with it.
+    # sample its memory, neither of which the launcher can do - so it keeps its
+    # own start sequence and reads the port the workflow declared. It moved out
+    # of `measure.yml` into a module on 2026-09-15; the rule did not move with it.
     assert f'PORT_ENV = "{LLAMA_PORT_ENV}"' in read_text(
         REPO_ROOT / "backend" / "utilities" / "runtime_sweep.py"
     ), f"the measurement harness must read {LLAMA_PORT_ENV} rather than hold a port"
 
 
-def test_every_reader_of_a_server_log_reads_the_one_the_start_call_wrote() -> None:
-    """One name, given once on a command line, read by five later steps.
+def _launched_stem(script: str) -> str:
+    """The log and pid stem a start call leaves behind, named or defaulted.
 
-    The start script takes the log stem as its second argument, so the filename
-    exists in the workflow exactly once as an argument and four more times as a
-    literal in steps that read it. Every one of those readers ends `|| true` or
-    `if: always()`, so a stem that no longer matches costs the job its runtime
-    identity, its failure tail and its whole prompt-cache summary, and fails
-    nothing. `visual-planner` and `visual_planner` are one character apart and
-    the second is the role name in the same command.
+    A step that names none takes the launcher's own default, so the default is
+    read out of the program rather than retyped here - otherwise this test would
+    hold one answer and the runner another.
+    """
+    named = re.search(r"--name\s+(\S+)", script)
+    if named:
+        return named.group(1)
+    default = re.search(r'"--name",\s*\n\s*default="([^"]+)"', read_text(START_SERVER_MODULE))
+    assert default, f"{START_SERVER_MODULE.name} names no default log stem"
+    return default.group(1)
+
+
+def test_every_reader_of_a_server_log_reads_the_one_the_start_call_wrote() -> None:
+    """One name, decided once at the start call, read by five later steps.
+
+    The launcher writes `<name>.log` and `<name>.pid`, so the stem exists in the
+    workflow once - as an argument or as the program's own default - and four
+    more times as a literal in steps that read it. Every one of those readers
+    ends `|| true` or `if: always()`, so a stem that no longer matches costs the
+    job its runtime identity, its failure tail and its whole prompt-cache
+    summary, and fails nothing.
     """
     workflow = _load_workflows()["digest.yml"]
     starters = _server_starters({"digest.yml": workflow})
@@ -513,16 +572,20 @@ def test_every_reader_of_a_server_log_reads_the_one_the_start_call_wrote() -> No
     )
     for job_name, (log_file, weights_output) in sorted(RUNTIME_IDENTITY_JOBS.items()):
         ((start_step,)) = starters[("digest.yml", job_name)]
-        call = re.search(r"start-llama-server\.sh (\S+) (\S+)", _digest_step(job_name, start_step))
-        assert call, f"{job_name} must start its server through the shared script"
-        assert f"{call.group(2)}.log" == log_file, (
-            f"{job_name} starts a server logging to {call.group(2)}.log "
-            f"and its readers read {log_file}"
+        script = _script(_step(workflow, job_name, "name", start_step), start_step)
+        assert ARGV_MODULE_CALL in script, f"{job_name} must start through the shared launcher"
+        stem = _launched_stem(script)
+        assert f"{stem}.log" == log_file, (
+            f"{job_name} starts a server logging to {stem}.log and its readers read {log_file}"
         )
 
         identity = _digest_step(job_name, RUNTIME_IDENTITY_STEP)
         assert log_file in identity, f"{RUNTIME_IDENTITY_STEP} in {job_name} must read {log_file}"
-        assert f"needs.plan.outputs.{weights_output}" in identity, (
+        given = _mapping(
+            _step(workflow, job_name, "name", RUNTIME_IDENTITY_STEP).get("env"),
+            f"{RUNTIME_IDENTITY_STEP} env",
+        )
+        assert any(weights_output in str(value) for value in given.values()), (
             f"{RUNTIME_IDENTITY_STEP} in {job_name} must name the weights it ran"
         )
         assert "sha256sum backend/bin/llama-server" in identity, (
@@ -569,3 +632,63 @@ def _uncommented(text: str) -> str:
     return "\n".join(
         line for line in text.splitlines() if not line.lstrip().startswith("#")
     )
+
+
+def _the_five_roots(tmp_path: Path) -> dict[str, Path]:
+    """The five config roots a server is started from, built the way the jobs build them.
+
+    Three of the five do not exist in this repository at all: a job cuts them at
+    run time, one from `config/` and two from that copy. Reading them off disk
+    would check nothing, so the real builders are driven here instead - which is
+    also what makes a builder that starts moving the weights file turn this red.
+    """
+    committed = CONFIG_DIR
+    scratch = tmp_path / "candidate-config"
+    shutil.copytree(committed, scratch)
+    pointer = _published(model_refs.trial_rows(committed, "", prefix=""))["models_file"]
+    candidate_pointer.point_at(pointer, scratch=scratch)
+
+    cases = tmp_path / "cases"
+    pipeline_case_config.main(["--config-root", str(scratch), "--cases-root", str(cases)])
+
+    return {
+        "config": committed,
+        "backend/var/candidate-config": scratch,
+        "backend/var/cases/baseline/config": cases / "baseline" / "config",
+        "backend/var/cases/parallel-2/config": cases / "parallel-2" / "config",
+    }
+
+
+def test_the_weights_path_a_launcher_derives_is_the_one_the_download_wrote(
+    tmp_path: Path,
+) -> None:
+    """A path composed twice can differ; composed once from the root the flags come from, it cannot.
+
+    Every one of these five steps used to be handed the weights path as text,
+    through five expression hops from a job output, while reading its flags from
+    a config root whose own entry already named the file. Two answers to one
+    question, and the second one travelled.
+
+    What remains is the property that made deleting the first one safe: the root
+    each step names declares the same file the download fetched. A builder that
+    starts moving the weights file turns this red before a server starts against
+    bytes nobody downloaded.
+    """
+    workflows = _load_workflows()
+    roots = _the_five_roots(tmp_path)
+    landed = _published(model_refs.pinned_rows(CONFIG_DIR))["summarize_weights_path"]
+
+    for filename, job_name, step_name, root_name in LAUNCH_ROOTS:
+        where = f"{filename}/{job_name}/{step_name}"
+        step = _step(workflows[filename], job_name, "name", step_name)
+        shell = _starter_shell(step)
+        assert ARGV_MODULE_CALL in shell, f"{where} starts a server some other way"
+        assert root_name in shell or root_name in str(
+            _mapping(step.get("env"), f"{where} env").values()
+        ), f"{where} reads its flags from some root other than {root_name}"
+        assert WEIGHTS_ENV not in shell, f"{where} is still told which weights to open"
+
+        derived = model_refs.list_model_files(roots[root_name])[0].landed_path
+        assert derived == landed, (
+            f"{root_name} declares {derived} and the download wrote {landed}"
+        )

@@ -32,7 +32,7 @@ correction from that run: on build 10598 the named state is
 default verbosity, one at `-lv 9`, and three each at `-lv 4` with no flag, with
 `-fa on` and with `-fa off`. The argv is built by
 `idhazh.llm.server.server_argv` from the committed `models.summarize` block, the
-way `.github/scripts/start-llama-server.sh` builds it, so what ran is the
+way `backend/utilities/model_runtime.py` builds it, so what ran is the
 process the pipeline starts and not a hand-written command line. Absolute paths
 below are rewritten to their repository-relative form.
 

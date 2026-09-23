@@ -203,7 +203,9 @@ def test_the_unit_reaches_the_model_through_the_one_shared_action() -> None:
     """
     assert (FILENAME, "judge") in _model_server_callers(_load_workflows())
     given = _action_call(_judges(), "judge", MODEL_SERVER_ACTION)
-    assert set(given) == set(_local_action_inputs(MODEL_SERVER_ACTION))
+    declared = _local_action_inputs(MODEL_SERVER_ACTION)
+    required = {name for name, body in declared.items() if body.get("required") == "true"}
+    assert required <= set(given) <= set(declared), sorted(given)
 
     spelled = [
         str(step.get("name"))

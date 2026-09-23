@@ -109,6 +109,7 @@ UNMARKED_MODULES: Final = frozenset(
         "test_merge_line_holdout",
         "test_metrics_sink",
         "test_migrate_to_day_shards",
+        "test_model_runtime",
         "test_night_plan",
         "test_notebooks",
         "test_order_of_the_day",

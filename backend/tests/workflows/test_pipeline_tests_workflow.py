@@ -27,8 +27,9 @@ from utilities import candidate_pointer, model_refs, pipeline_test_ledgers
 
 from ._harness import (
     COMMIT_SCRIPT_CALL,
-    LLAMA_PIN_SCRIPT,
-    LLAMA_RUNTIME_SCRIPT,
+    DOWNLOAD_MODEL_FILES,
+    INSTALL_RUNTIME_CALL,
+    MODEL_RUNTIME_MODULE,
     PINNED_LLAMA_BUILD,
     SCRIPTS_DIR,
     WORKFLOWS_DIR,
@@ -42,7 +43,6 @@ from ._harness import (
     _pin_output_name,
     _run_bodies,
     _script,
-    _script_closure,
     _step,
     _steps,
     _strings,
@@ -122,12 +122,8 @@ SCRATCH_CONFIG: str = "backend/var/candidate-config"
 #: sits beside the rows the console reads.
 TRIAL_STATE: str = "pipeline-tests"
 
-RUNTIME_SCRIPT: Path = SCRIPTS_DIR / LLAMA_RUNTIME_SCRIPT
-
-PIN_SCRIPT: Path = SCRIPTS_DIR / LLAMA_PIN_SCRIPT
-
-#: What the fetch step publishes for the cache key to read, read off the pin
-#: script itself so this file cannot name an output the pin does not print.
+#: What the pin step publishes for the cache key to read, read off the program
+#: itself so this file cannot name an output the program does not print.
 PIN_OUTPUT: str = _pin_output_name()
 
 FETCH_STEP: str = "Fetch runtime and weights"
@@ -861,12 +857,15 @@ def test_the_shell_it_runs_is_linted_like_every_other_script() -> None:
     That is most of why the case body is a script at all, so the file has to be
     where the linter looks and it has to be executable shell rather than a
     fragment somebody pasted.
+
+    One script, where there were three. The pin, the install and the download
+    are a Python program now, and a program is read by `ruff` and `mypy`
+    instead.
     """
-    for script in (CASE_SCRIPT, RUNTIME_SCRIPT, PIN_SCRIPT):
-        assert script.parent == SCRIPTS_DIR
-        text = read_text(script)
-        assert text.startswith("#!/usr/bin/env bash\n"), script.name
-        assert "set -euo pipefail" in text, script.name
+    assert CASE_SCRIPT.parent == SCRIPTS_DIR
+    text = read_text(CASE_SCRIPT)
+    assert text.startswith("#!/usr/bin/env bash\n"), CASE_SCRIPT.name
+    assert "set -euo pipefail" in text, CASE_SCRIPT.name
 
 
 def _scratch(tmp_path: Path, *, models_file: str | None) -> Path:
@@ -894,10 +893,10 @@ def test_a_dispatch_that_names_nothing_runs_the_model_config_already_names() -> 
     """
     empty = dict(
         row.split("=", 1)
-        for row in model_refs.candidate_rows(CONFIG_DIR, "", prefix="candidate_")
+        for row in model_refs.trial_rows(CONFIG_DIR, "", prefix="candidate_")
     )
     configured = dict(
-        row.split("=", 1) for row in model_refs.configured_rows(CONFIG_DIR, with_draft=False)
+        row.split("=", 1) for row in model_refs.pinned_rows(CONFIG_DIR)
     )
 
     pointer = json.loads(read_text(CONFIG_DIR / "idhazh.json"))["models_file"]
@@ -972,46 +971,44 @@ def test_no_step_opens_the_committed_models_file_once_a_candidate_may_be_named()
     assert names.index(build.get("name")) < names.index(CASE_CONFIG_STEP)
 
 
-def test_the_fetch_step_hands_the_script_every_value_it_refuses_to_run_without() -> None:
-    """Read the script's own guards, never a list beside them.
+def test_the_fetch_step_is_two_calls_and_reads_the_config_the_cases_run_under() -> None:
+    """One token through `env`, one config root on the command line, and nothing else.
 
-    A script that refuses a missing value and a caller that never passes it is a
-    step that fails after the cache step, on a runner, with the weights half
-    downloaded. The guards are the interface, so they are what the call site is
-    held to - and a guard added later is one this test enforces from that commit
-    without being edited.
+    The step used to hand a script seven values through `env` - a repository, a
+    commit, a filename and a draft head's three - each of them a copy of a fact
+    the models file already held. The program reads that file itself, so the
+    step passes the root and the token and nothing a copy could be made of.
 
-    The whole call chain, because the runtime install is now its own script: a
-    guard that moved one file further away is still a guard this step has to
-    satisfy, and reading only the top file would have gone green on a step that
-    no longer passes `GITHUB_TOKEN`.
-
-    Through `env`, never pasted: a value pasted into a program is text before it
-    is a value (Guardrail #11).
+    The root is the scratch copy the cases are cut from, not the committed one.
+    Checking a candidate against the committed config's digest is the failure
+    this dispatch exists to catch, so a step that read `config` here would
+    verify the wrong model's bytes and pass.
     """
-    required = _required_environment(_script_closure(read_text(RUNTIME_SCRIPT)))
-    assert "GITHUB_TOKEN" in required and "WEIGHTS_FILE" in required, (
-        f"the script no longer guards what it needs: {sorted(required)}"
-    )
-
     fetch = _step(_load_workflows()[WORKFLOW], JOB, "name", FETCH_STEP)
-    assert _script(fetch, FETCH_STEP).strip() == f"bash .github/scripts/{LLAMA_RUNTIME_SCRIPT}"
+    body = _script(fetch, FETCH_STEP)
+    assert INSTALL_RUNTIME_CALL in body, "the step must install the pinned build"
+    assert DOWNLOAD_MODEL_FILES in body, "the step must fetch what the model declares"
+    assert f"--config-root {SCRATCH_CONFIG}" in body, f"the download must read {SCRATCH_CONFIG}"
+
     supplied = fetch.get("env")
     assert isinstance(supplied, dict)
-    assert required <= set(supplied), f"the step never passes {sorted(required - set(supplied))}"
+    assert set(supplied) == {"GITHUB_TOKEN"}, (
+        f"the step hands over more than the token it cannot read itself: {sorted(supplied)}"
+    )
 
 
-def test_the_cache_key_names_the_build_the_script_is_about_to_install() -> None:
-    """The key holds the runtime, so a key naming another build serves the wrong one.
+def test_the_cache_key_names_the_build_and_the_file_set_it_holds() -> None:
+    """The key holds the runtime and the weights, so a key naming less serves the wrong bytes.
 
-    The fetch runs only on a miss. A key that could name a build the script does
-    not install would restore one binary under the name of another and never
-    fetch again, which is the instability of following the newest release with
-    none of its freshness.
+    The fetch runs only on a miss. A key that could name a build the install
+    does not put down would restore one binary under the name of another and
+    never fetch again, which is the instability of following the newest release
+    with none of its freshness.
 
-    So the key reads the pin off the script rather than repeating it, and the
-    weights half names the candidate rather than the committed model - or a
-    dispatch checking one model would be served the other from cache.
+    The model half is a digest over every file the entry declares rather than a
+    filename and a commit. Two builds of one model share a name, and an entry
+    that gains a companion keeps both - so the old key restored a
+    complete-looking entry with a file missing.
     """
     workflow = _load_workflows()[WORKFLOW]
     cache = _step(workflow, JOB, "name", CACHE_STEP)
@@ -1019,28 +1016,24 @@ def test_the_cache_key_names_the_build_the_script_is_about_to_install() -> None:
     assert isinstance(with_block, dict)
     key = str(with_block.get("key"))
     assert f"steps.runtime.outputs.{PIN_OUTPUT}" in key, key
-    assert "steps.models.outputs.candidate_file" in key, key
-    assert "steps.models.outputs.candidate_revision" in key, key
+    assert "steps.models.outputs.candidate_cache_key" in key, key
 
     names = [step.get("name") for step in _steps(workflow, JOB)]
     assert names.index(PIN_STEP) < names.index(CACHE_STEP), "the key cannot read a later step"
 
 
-@requires_bash
-def test_the_pin_script_prints_the_build_the_cache_key_reads(tmp_path: Path) -> None:
+def test_the_pin_verb_prints_the_build_the_cache_key_reads(tmp_path: Path) -> None:
     """Run it, do not read it (Guardrail #7).
 
-    The build is a constant in one file, the fetch sources that file, and the
-    cache key is built from what that file prints. This is the one place the
-    printed value and the pinned value are compared, and it is what makes the
-    extraction safe: an upgrade that moved the constant and not the print would
-    key the cache on the old build and restore the old binary forever.
+    The build is one value in one file, the install reads that file, and the
+    cache key is built from what the program prints out of it. This is the one
+    place the printed value and the pinned value are compared, and it is what
+    makes the extraction safe: an upgrade that moved the value and not the print
+    would key the cache on the old build and restore the old binary forever.
     """
-    shell = _bash()
-    assert shell is not None
     completed = subprocess.run(
-        [shell, PIN_SCRIPT.as_posix()],
-        cwd=tmp_path,
+        [sys.executable, str(REPO_ROOT / MODEL_RUNTIME_MODULE), "print-pinned-build"],
+        cwd=REPO_ROOT,
         env=_isolated_env(tmp_path),
         capture_output=True,
         text=True,

@@ -733,8 +733,8 @@ hundreds of lines across two dozen steps in four workflows - `digest.yml`,
 
 The pin itself - `LLAMA_CPP_BUILD`, its asset name and its SHA-256 - was spelled
 in more than a dozen places that had to change together. It is now in
-`.github/scripts/llama-cpp-pin.sh`, plus `measure.yml`'s `env:` block, which is
-the one caller still to convert.
+`config/llama-cpp-pin.json`, plus `measure.yml`'s `env:` block, which is the one
+caller still to convert.
 
 **The property is what mattered: every copy of the pin had to change at once, and
 nothing in the tree compared them.** Change all but one and a qualification runs
@@ -758,7 +758,7 @@ disliked.
 | --- | --- |
 | One commit converting all five | A revert takes four working conversions out with the fifth, and the daily run is in that set - so the blast radius of a mistake is a published day |
 | Leave the pin copied, add a test that compares the copies | The test goes green on five agreeing copies and says nothing about the sixth place somebody adds next |
-| One script with an optional `WEIGHTS_FILE` | Every caller's weights refusals become optional to satisfy one caller that opens no weights. Converting the weightless job first forced the question "what does a job that opens no weights need" to be answered before any weights-carrying caller moved, and the answer was a second script, `install-llama-runtime.sh`, which `fetch-model-runtime.sh` sources |
+| One script with an optional `WEIGHTS_FILE` | Every caller's weights refusals become optional to satisfy one caller that opens no weights. Converting the weightless job first forced the question "what does a job that opens no weights need" to be answered before any weights-carrying caller moved, and the answer was two shell scripts, one sourcing the other. Both are gone: the install and the download are two verbs of one program, and a verb takes no arguments it does not need |
 
 #### The model block is a block, and counting its inputs says the wrong thing
 

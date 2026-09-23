@@ -49,6 +49,13 @@ DEFAULT_CONFIG_ROOT: Final = Path("config")
 POINTER_FILE = "idhazh.json"
 POINTER_KEY = "models_file"
 
+#: The two verbs a workflow step calls. They say what they answer rather than
+#: which of two states a caller is in: `configured` and `candidate` read as a
+#: pair of modes, and a step asking for the pinned model beside a trial one was
+#: then reading `candidate --also-configured`.
+PINNED_VERB: Final = "describe-pinned-model"
+TRIAL_VERB: Final = "describe-trial-model"
+
 # The grammar. Every pattern keeps its anchors AND is applied with `re.fullmatch`,
 # because `$` matches before a trailing newline, so `re.match` admits a value the
 # anchors look like they refuse. Nothing here is imported: `measure_llm.py` runs
@@ -286,9 +293,9 @@ def _row(declared: _Declared, prefix: str, key: str, value: str, at: str) -> str
 def _draft_rows(declared: _Declared, files: Sequence[ModelFile], *, prefix: str) -> list[str]:
     """The one companion's four refs, or four empty strings where there is none.
 
-    The keys stay `draft_*` because two workflows read them under those names.
-    Delete these four when `digest.yml:99-102`, `:563-566`, `llm-council.yml:80-83`
-    and `:315-318` go; nothing else reads them.
+    The keys stay `draft_*` because `measure.yml`'s four inline download steps
+    read them under those names, at the trial prefix. Delete these four when
+    those steps reach the shared download; nothing else reads them.
 
     Two companions are refused rather than truncated. This publishes the first
     while the cache key digests all of them, so an entry declaring two keyed on
@@ -346,27 +353,24 @@ def _values(declared: _Declared, files: Sequence[ModelFile]) -> dict[str, tuple[
     return values
 
 
-def configured_rows(config_root: Path, *, with_draft: bool) -> list[str]:
-    """The pinned entry's refs, and its head where the caller publishes one.
+def pinned_rows(config_root: Path) -> list[str]:
+    """What the daily run needs about the model config pins: its refs and where they land.
 
-    The daily run needs the head because it fetches it. A measuring dispatch
-    publishes the pinned refs only as the control it holds against, and fetches
-    the trial entry's head rather than this one - so it asks for the fetch fields
-    and would be confused by four more.
+    No companion refs. The run used to publish four `draft_*` keys here so a
+    shell could pass them to a download; the download reads the declaration
+    itself now, so a second copy of one companion's facts is a second answer to
+    a question nobody asks any more.
     """
     declared = _declared(config_root, "")
     files = _model_files(declared)
     values = _values(declared, files)
-    rows = [
+    return [
         _row(declared, "summarize_", name, *values[name])
         for name in (*CONFIGURED_FIELDS, *CONFIGURED_EXTRA)
     ]
-    if with_draft:
-        rows += _draft_rows(declared, files, prefix="")
-    return rows
 
 
-def candidate_rows(config_root: Path, named: str, *, prefix: str) -> list[str]:
+def trial_rows(config_root: Path, named: str, *, prefix: str) -> list[str]:
     """What a measuring dispatch publishes about the model it was handed.
 
     One argument, so the two copies of a trial entry's facts cannot disagree. A
@@ -388,7 +392,7 @@ def candidate_rows(config_root: Path, named: str, *, prefix: str) -> list[str]:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("mode", choices=("configured", "candidate"))
+    parser.add_argument("mode", choices=(PINNED_VERB, TRIAL_VERB))
     parser.add_argument(
         "--models-file",
         default="",
@@ -406,19 +410,19 @@ def main(argv: list[str] | None = None) -> int:
         help="Directory holding the pointer file and the models it names.",
     )
     parser.add_argument(
-        "--also-configured",
+        "--also-pinned",
         action="store_true",
-        help="Publish the configured entry's refs beside the candidate's.",
+        help="Publish the pinned entry's refs beside the trial entry's.",
     )
     args = parser.parse_args(argv)
 
     rows: list[str] = []
-    if args.mode == "configured":
-        rows += configured_rows(args.config_root, with_draft=True)
+    if args.mode == PINNED_VERB:
+        rows += pinned_rows(args.config_root)
     else:
-        if args.also_configured:
-            rows += configured_rows(args.config_root, with_draft=False)
-        rows += candidate_rows(args.config_root, args.models_file, prefix=args.prefix)
+        if args.also_pinned:
+            rows += pinned_rows(args.config_root)
+        rows += trial_rows(args.config_root, args.models_file, prefix=args.prefix)
     sys.stdout.write("\n".join(rows) + "\n")
     return 0
 
