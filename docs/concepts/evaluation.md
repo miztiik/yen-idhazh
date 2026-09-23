@@ -2,7 +2,7 @@
 
 **Last Updated**: 2026-09-22
 
-How a published summary is judged, and how the judgement is kept honest. This page fixes the vocabulary; the tunable bands live in [config.md](config.md).
+How a published summary is judged, and how the judgement is kept honest. This page fixes the vocabulary; the tunable bands live in [config/summary-length.md](config/summary-length.md).
 
 **It is one of three, and a person arrives holding one question of the three:**
 
@@ -307,7 +307,7 @@ promotion - which is the whole reason a model is allowed to propose at all.
 
 ## Bands, not raw numbers
 
-Scores are bucketed into a small number of confidence bands, and the band - not the number - is what drives behaviour: what gets retried, what publishes with a visible low-confidence marker, and what a reader sees. Bands are tunable ([config.md](config.md)) and are re-calibrated against the human spot-checks rather than being fixed by taste.
+Scores are bucketed into a small number of confidence bands, and the band - not the number - is what drives behaviour: what gets retried, what publishes with a visible low-confidence marker, and what a reader sees. Bands are tunable ([config/summary-length.md](config/summary-length.md)) and are re-calibrated against the human spot-checks rather than being fixed by taste.
 
 The absolute summary gate starts at
 `summarize.length_policy.absolute_floor_words = 25`. That lets the brief band ask
@@ -1096,7 +1096,7 @@ that list. The first files it would take are the day files under
 - [../how-to/evaluate-new-summarizer-model.md](../how-to/evaluate-new-summarizer-model.md) - the controlled procedure for testing and adopting a challenger.
 - [pipeline-loop.md](pipeline-loop.md) - where the Evaluate stage sits.
 - [digest.md](digest.md) - how a confidence band reaches a reader.
-- [config.md](config.md) - the band thresholds and retry budget.
+- [config/summary-length.md](config/summary-length.md) - the band thresholds and retry budget.
 - [growing-reads.md](growing-reads.md) - what the observation index costs, and the cover every read over a growing collection declares.
 - [partitions.md](partitions.md) - what a partition file is called, and what a name the rule does not recognise does.
 - [principles.md](principles.md) - principle 6, the belief this page implements.

@@ -58,7 +58,7 @@ down here so the next person meets it as a decision rather than as a surprise.
 
 How each mark is drawn - the chip, its tint, the four-child cap above the title,
 and why `reporting` and `analysis` carry no mark - is
-[../architecture/publishing/frontend.md](../architecture/publishing/frontend.md).
+[../architecture/publishing/what-a-story-shows-and-where-each-fact-sits.md](../architecture/publishing/what-a-story-shows-and-where-each-fact-sits.md).
 This page does not restate it.
 
 ## The rules a label obeys, and what each one is protecting
@@ -188,7 +188,7 @@ comparison and this record carries no comparison.
 
 **Why a register page at all.** The words are defined once in
 [taxonomy.md](taxonomy.md) and drawn once in
-[../architecture/publishing/frontend.md](../architecture/publishing/frontend.md),
+[../architecture/publishing/what-a-story-shows-and-where-each-fact-sits.md](../architecture/publishing/what-a-story-shows-and-where-each-fact-sits.md),
 and neither answers the question somebody actually arrives with: *this word is
 on this item - who put it there, and can I trust it?* That question crosses a
 config file, a matcher, a payload and a component, so it has no home in any of
@@ -226,7 +226,7 @@ label side is "name. definition", so a change to either is a change to both.
 ## See also
 
 - [taxonomy.md](taxonomy.md) - what a vertical, a desk, a lens and an event are, and how they differ.
-- [../architecture/publishing/frontend.md](../architecture/publishing/frontend.md) - how each mark is drawn, and the cap on how many an item may carry.
+- [../architecture/publishing/what-a-story-shows-and-where-each-fact-sits.md](../architecture/publishing/what-a-story-shows-and-where-each-fact-sits.md) - how each mark is drawn, and the cap on how many an item may carry.
 - [../architecture/sources/discovery.md](../architecture/sources/discovery.md) - why a lens and an entity never get a feed list of their own.
 - [../architecture/sources/trust-boundary.md](../architecture/sources/trust-boundary.md) - why fetched text is data and never instruction.
 - [digest.md](digest.md) - what a published day holds.

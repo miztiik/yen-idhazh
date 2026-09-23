@@ -540,7 +540,7 @@ for; with no group it would cost that worker's own run instead.
 record for it disagree.** [The qualification budget](../archive/measurements-2026-08.md#the-qualification-budget-derived-2026-08-26)
 puts a 40-item 9B worker at about 130 minutes, from a live production
 observation; the older length-interpolation and decode-ratio derivations quoted
-in [../concepts/config.md](../concepts/config.md) put it at 254 and 276. The
+in [../concepts/config/run-limits.md](../concepts/config/run-limits.md) put it at 254 and 276. The
 first fits this bound and the second two do not. Neither is a measurement of a
 9B worker, so neither may move a live bound (Guardrail #10). The 2026-08-26
 qualification run measured a 95.2-minute job, but that job replayed 30 frozen

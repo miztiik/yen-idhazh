@@ -27,7 +27,7 @@ looks like.
 
 ## One ask per article length
 
-`config.summarizer.bands` holds one length ask per article size, ordered by
+`config.summarize.bands` holds one length ask per article size, ordered by
 `min_source_words`. `band_for` picks the longest band the article reaches,
 unless extraction recorded the item as brief. A brief item always uses band 0.
 
