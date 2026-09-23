@@ -45,11 +45,11 @@ from idhazh.fingerprint import (
     text_digest,
 )
 from idhazh.llm.server import (
-    DEFAULT_ENDPOINT,
     Completion,
     completion_url,
     derive_turn_markers,
     request_timeout_seconds,
+    resolve_endpoint,
     window,
 )
 from idhazh.render import asset_relpath, render_planned_visual
@@ -428,7 +428,7 @@ def two_calls_one_item(
     settings: config.Settings,
     *,
     date: str,
-    endpoint: str = DEFAULT_ENDPOINT,
+    endpoint: str | None = None,
     run_id: str | None = None,
     tracer: telemetry.Tracer | None = None,
     recorder: ItemRecorder | None = None,
@@ -476,6 +476,7 @@ def two_calls_one_item(
     and still could not be read lands as `bad_shape`. Both lose the item, and
     both are a cell in the census rather than a silence.
     """
+    endpoint = endpoint or resolve_endpoint(settings.app.model_server.base_url)
     trace = tracer if tracer is not None else silent_tracer()
     kept = recorder if recorder is not None else _silent_recorder()
     model = settings.models.summarize

@@ -44,10 +44,10 @@ from idhazh.fingerprint import (
     runtime_build,
 )
 from idhazh.llm.server import (
-    DEFAULT_ENDPOINT,
     derive_turn_markers,
     props,
     request_timeout_seconds,
+    resolve_endpoint,
     setting,
     window,
 )
@@ -295,9 +295,10 @@ def stage_work(
     shard: int = 0,
     shards: int = 1,
     fetcher: Fetcher | None = None,
-    model_endpoint: str = DEFAULT_ENDPOINT,
+    model_endpoint: str | None = None,
 ) -> None:
     """Fetch, extract, summarize and score one item at a time, writing as it goes."""
+    model_endpoint = model_endpoint or resolve_endpoint(settings.app.model_server.base_url)
     shard_started = time.monotonic()
     tracing = settings.app.observability.tracing_enabled
     collector = telemetry.CollectingSink()
