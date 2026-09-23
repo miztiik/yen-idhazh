@@ -265,6 +265,8 @@ $runs = gh run list --repo <owner/repo> --branch <branch> --limit 10 --json name
 gh api repos/<owner>/<repo>/commits/<sha>/check-runs --jq '.check_runs[]|.name+"="+((.conclusion)//"running")'
 ```
 
+**A skipped gate does not just hide a break - it parks one on `main`.** Measured 2026-09-23: a commit that split a documentation page broke a browser test and went red. The next two commits were documentation only, so `scope` skipped `browser`, `site`, `robots` and `whole-day`, and both runs reported success. `main` then looked green for three commits while carrying a failing test, and the break surfaced on the next pull request that touched code - where it reads like the author's fault. When a run goes red, check whether the commits after it actually re-ran the job that failed before believing the green.
+
 **No log of any kind is readable while the run is going.** `gh run view <runId> --job <jobId> --log` and the run-level form both exit 1 with `logs will be available when it is complete`, even for a job that finished twenty minutes ago - and redirecting makes it worse, because the file is then 82 bytes of that sentence. What IS readable mid-run is the artifacts: `gh run download <runId> --name plan` gives the run plan, and each `items-<n>` appears as its shard finishes.
 
 **A completed run fails the other way round, so keep both commands.** `gh run view <runId> --log` can exit 0 and wrote a zero-byte file while `gh api repos/<owner>/<repo>/actions/jobs/<jobId>/logs` returned the whole log. Neither endpoint is the reliable one; when the first answer is empty, ask the other.
