@@ -22,6 +22,8 @@
 
 **The standing rule this leaves.** A review finds defects. A defect is a correction to fold in. Only the owner may turn a defect into a smaller plan.
 
+**Re-measured 2026-09-23, after plan 44 rows 3 to 5 landed.** Two files this plan named are gone: `.github/scripts/start-llama-server.sh` and `backend/utilities/llama_argv.py`. [`backend/utilities/model_runtime.py`](../backend/utilities/model_runtime.py) replaced both, and it is a better home for row 5 than either - its `start_server` verb holds the config root and the port in one scope, and **all five** workflows reach it, where the shell script reached two. `LLAMA_ROLE` is already deleted, so row 7 loses half its work. Every count in Table D below is from this re-measure, not from the day the plan was written.
+
 ---
 
 ## 0. Operating contract
@@ -38,7 +40,7 @@
 | **Hard scope - in** | `model_server.base_url` as a config field; the two resolvers; the 18 default-argument sites resolved by their callers; `LLAMA_PORT` deleted; a refusal when a job starts a server on one address while the stage posts to another; the loopback literals outside `.github/` reduced to one function; `MODEL_FILE`; the dead role value deleted; one log record naming the server that answered; **the `request` block renamed to `sampling` and passed through whole; `models.<verb>` renamed to `models.<noun>`**; the run record stamping an unrecorded build when the address is not loopback; four sentences citing a rule that does not exist. |
 | **Hard scope - out** | Table B. Four rows, each priced. |
 | **Supersedes** | The surviving half of row 21 of [`20260921-39-delete-the-scaffolding-plan.md`](20260921-39-delete-the-scaffolding-plan.md). Table C records what that row asked for and what happened to each part. |
-| **Depends on** | Nothing. [`20260922-44-the-model-file-is-the-fetch-interface-plan.md`](20260922-44-the-model-file-is-the-fetch-interface-plan.md) line 34 hands every process-boundary value to this plan by name, and shares `backend/idhazh/llm/server.py`, the workflow files, `backend/utilities/llama_argv.py` and `.github/scripts/start-llama-server.sh`. Run either side of plan 44's workflow pull request, never beside it. The commit-and-push plan landed on 2026-09-23 and shared nothing with this one; its surviving row is [`20260923-48-the-corpus-ref-move-plan.md`](20260923-48-the-corpus-ref-move-plan.md), which also shares nothing. |
+| **Depends on** | Nothing. [`20260922-44-the-model-file-is-the-fetch-interface-plan.md`](20260922-44-the-model-file-is-the-fetch-interface-plan.md) line 34 hands every process-boundary value to this plan by name. Its rows 1 to 5 have landed; **its one remaining row, row 6, replaces `commit-and-push.sh`, `take-state-from-the-tip.sh` and `push-rewritten-history.sh`, and this plan touches none of the three.** The two plans edit the same five workflow files and `_harness.py` on different lines, which git resolves and whoever lands second rebases. [`20260922-46-one-writer-for-the-corpus-plan.md`](20260922-46-one-writer-for-the-corpus-plan.md) is closed. |
 | **ESCALATE triggers** | Seven, below Table D. |
 | **Execution** | Three pull requests, serial. **Peak one worker.** `server.py` is the hub of eight of the eleven rows, so the parallelism is not there to find and manufacturing it would buy a scheduling bug. |
 
@@ -49,7 +51,7 @@
 3. **Stop** if any row would read `config/idhazh.json` with no config root. Three workflows run production stages against `backend/var/candidate-config`, so a zero-argument load returns the wrong file and the run posts to an address nobody chose.
 4. **Stop** if the sampling pass-through would let a config key replace or disable a decode control. C10 is the control and it is per-builder, not a central list.
 5. **Stop** if rows 9 or 10 would change the shape or the values of a payload an earlier run already wrote. C11 and C12 exist because both rows nearly did.
-6. **Stop** if PR A is ready at the same time as plan 44's workflow pull request. Either order, never together.
+6. **Stop** if plan 44 row 6 turns out to touch `backend/utilities/model_runtime.py` or any line this plan edits. It does not today - its three scripts and their ten call sites are disjoint from everything here - so the two plans rebase rather than serialise. Re-check before opening PR A.
 7. **Stop** if any row would raise a runner budget figure. The 6 hour job limit and the 1 GB site limit are GitHub's and cannot be moved (Guardrail #2).
 
 ### Table B - Hard scope - out
@@ -87,9 +89,9 @@
 | D9 | Committed request-body goldens that move when the splat lands | 5 files across 4 routes | `tests/fixtures/request-bodies/*.json`. Regenerated, not hand-edited. |
 | D10 | Places the role string `"summarize"` is read | ~24 non-test files, ~110 test reads, plus 5 `.github/` files | Row 10's real size. It is listed, not estimated. |
 | D11 | Committed run records carrying `"role": "summarize"` | 127 occurrences across 35 files | This is why the enum **value** is pinned and only the python name and config key move. |
-| D12 | Reads of `LLAMA_ROLE` | 0 | Set by `start-llama-server.sh` line 59, read nowhere; the role arrives as `--role`. Row 7 deletes it. |
-| D13 | Occurrences of `LLAMA_PORT` | 69 lines in 19 files, excluding `TODO/` | Row 4 deletes the name rather than renaming it: the port lives inside `base_url`. |
-| D14 | Workflows reaching `.github/scripts/start-llama-server.sh` | 2 of 5 | Only `digest.yml` and `llm-council.yml`, through the composite action. The other three spawn the binary inline. This is why row 5's refusal lives in `llama_argv.py`, which all five reach. |
+| D12 | Reads of `LLAMA_ROLE` | **0, and the name itself is already gone** | Plan 44 row 3 deleted it with the shell script that set it. Row 7 is now the weights rename alone. |
+| D13 | Occurrences of `LLAMA_PORT` | 62 lines in 14 files | Row 4 deletes the name rather than renaming it: the port lives inside `base_url`. `backend/utilities/model_runtime.py` line 78 declares `PORT_ENV` and line 544 reads it. |
+| D14 | Workflows reaching the one program that starts a server | **5 of 5** | `backend/utilities/model_runtime.py start-server`, from `actions/model-server/action.yml` line 182 for `digest.yml` and `llm-council.yml`, and directly from `idhazh-pipeline-tests.yaml` lines 255 and 332, `measure.yml` line 972 and `validate.yml` line 308. This is why row 5's refusal lives there. |
 | D15 | Workflows running a production stage against a config root that is not `config/` | 3 of 5 | `validate.yml`, `measure.yml` and the pipeline-test case script. Escalation trigger 3. |
 
 ---
@@ -124,7 +126,7 @@ Statuses: PENDING, IN PROGRESS, BLOCKED, DONE. A row's status is stamped by the 
 
 **File lists, disjoint by wave.**
 
-- **PR A**: `backend/idhazh/llm/__init__.py`, `backend/idhazh/llm/server.py`, `backend/idhazh/cli.py`, `backend/idhazh/contracts/app_config.py`, `backend/idhazh/contracts/knobs/model_server.py` (new), `config/idhazh.json`, `schemas/app-config.schema.json`, `frontend/src/contracts/app-config.ts`, `backend/idhazh/stages/{judge_item_pairs,qualify,qualify_canaries,two_calls,validate,work}.py`, `backend/utilities/{llama_argv,slot_probe,prompt_loop,prove_the_entry,runtime_sweep,measure_probability_mode,measure_two_calls,measure_budgets,measure_judge_call}.py`, all five `.github/` workflow files plus `actions/model-server/action.yml` and `scripts/start-llama-server.sh`, `backend/tests/{test_summarize.py,workflows/_harness.py,workflows/test_model_server_jobs.py}`, `docs/how-to/{run-the-pipeline,test-models-locally}.md`, `docs/reference/{ci-model-runtime,github-actions}.md`.
+- **PR A**: `backend/idhazh/llm/__init__.py`, `backend/idhazh/llm/server.py`, `backend/idhazh/cli.py`, `backend/idhazh/contracts/app_config.py`, `backend/idhazh/contracts/knobs/model_server.py` (new), `config/idhazh.json`, `schemas/app-config.schema.json`, `frontend/src/contracts/app-config.ts`, `backend/idhazh/stages/{judge_item_pairs,qualify,qualify_canaries,two_calls,validate,work}.py`, `backend/utilities/{model_runtime,slot_probe,prompt_loop,prove_the_entry,runtime_sweep,measure_probability_mode,measure_two_calls,measure_budgets,measure_judge_call}.py`, all five `.github/` workflow files plus `actions/model-server/action.yml`, `backend/tests/{test_summarize.py,workflows/_harness.py,workflows/test_model_server_jobs.py}`, `docs/how-to/{run-the-pipeline,test-models-locally}.md`, `docs/reference/{ci-model-runtime,github-actions}.md`.
 - **PR B**: the full lists are C7 and C12, because they are the two rows whose size was previously guessed at rather than counted.
 - **PR C**: `backend/idhazh/fingerprint.py`, `backend/idhazh/cli.py`, `backend/idhazh/stages/{work,qualify}.py`, `backend/tests/test_fingerprint.py`, `docs/architecture/contracts/determinism.md`.
 
@@ -203,7 +205,7 @@ Without this row, rows 2 and 4 ship a field, a schema, a frontend type and a val
 | --- | --- | --- | --- |
 | **The eight in `server.py`** - `post`, `props_url`, `completion_url`, `apply_template_url`, `tokenize_url`, `props`, `derive_turn_markers`, `prove_the_entry` | lines 959, 984, 989, 994, 999, 1004, 1436, 1537 | **Required. No default, no sentinel.** The address is always the caller's | **Two**: `stages/validate.py` line 128 and `utilities/prove_the_entry.py` line 19 |
 | **The seven in stages and one utility** - `stage_judge_item_pairs`, `stage_qualify`, `stage_qualify_canaries`, `two_calls_one_item`, `_summarize_one`, `stage_work`, `judge_calls` | `judge_item_pairs.py:111`, `qualify.py:409`, `qualify_canaries.py:49`, `two_calls.py:431`, `validate.py:40`, `work.py:301`, `measure_judge_call.py:334` | `str \| None = None`, resolved on the **first line**: `endpoint = model_endpoint or resolve_endpoint(settings.app.model_server.base_url)` | none |
-| **The three argparse defaults** | `cli.py:518`, `prompt_loop.py:592`, `slot_probe.py:192` | `default=None`, resolved after the parse. `slot_probe.py` gains a `--config-root`, following `llama_argv.py` and `prove_the_entry.py` | none |
+| **The three argparse defaults** | `cli.py:518`, `prompt_loop.py:592`, `slot_probe.py:192` | `default=None`, resolved after the parse. `slot_probe.py` gains a `--config-root`, following `model_runtime.py` and `prove_the_entry.py` | none |
 
 **First-line resolution is mandatory.** Two `functools.partial` sites bind the endpoint eagerly - `judge_item_pairs.py:148` and `measure_judge_call.py:357` both do `partial(post, endpoint=completion_url(base_url), ...)`. A `None` travelling further raises `TypeError` inside `_sibling`.
 
@@ -238,11 +240,12 @@ All three instruments already import from `idhazh.llm.server`, so this adds no d
 
 The control that makes escalation trigger 1 enforceable: a job that starts a server on loopback while the stage posts elsewhere fails at start-up, not after the weights load.
 
-**It goes in `backend/utilities/llama_argv.py`, inside `argv_for`.** Not `action.yml`, which sees neither fact. Not `start-llama-server.sh`, which two of five workflows reach. `argv_for` is reached by all five and already calls `config.load(config_root)` on **the root this job will actually run under**.
+**It goes in `backend/utilities/model_runtime.py`, inside `start_server`.** Not `action.yml`, which sees neither fact. That function is the one program in the repository that starts a server, **all five workflows reach it**, and it already holds both halves of the question: `config.load(config_root)` at line 538 reads **the root this job will actually run under**, and `os.environ[PORT_ENV]` at line 544 is the port about to be bound.
 
 ```python
-    settings = config.load(config_root)
-    declared = resolve_base_url(settings.app.model_server.base_url)
+    entry_settings = config.load(config_root)
+    declared = resolve_base_url(entry_settings.app.model_server.base_url)
+    port = int(os.environ[PORT_ENV])
     if declared != loopback_url(port):
         raise SystemExit(
             f"this job binds {loopback_url(port)} and the stage posts to {declared}. "
@@ -252,7 +255,9 @@ The control that makes escalation trigger 1 enforceable: a job that starts a ser
         )
 ```
 
-The three self-spawning instruments bypass `argv_for`, take `loopback_url(port)` and get no refusal.
+It sits before `server_argv` is called, so the refusal lands before the weights path is resolved. `resolve_base_url` and `loopback_url` are imported inside the function, beside the two imports already there - `start_server` deliberately imports nothing from `idhazh` at module scope, because the two download verbs run in a job that has not installed the package.
+
+The three self-spawning instruments never call `start_server`; they take `loopback_url(port)` and get no refusal.
 
 ### C6 - the log record
 
@@ -382,7 +387,7 @@ The clash check compares key identity, and **every decode control on this build 
 | --- | --- |
 | `models.summarize` | `models.summarizer` |
 
-**Files, counted rather than estimated.** All five `config/models/*.json`; `backend/idhazh/contracts/knobs/models.py`; `backend/idhazh/contracts/knobs/finetune.py:87`; `backend/idhazh/contracts/knobs/placement.py:289` (a help string citing `models.summarize.inference`, already two renames stale); `backend/idhazh/contracts/app_config.py`; `config/idhazh.json`; `backend/idhazh/config.py`; `backend/idhazh/cli.py:196`; `backend/idhazh/similarity/judge.py:247`; `backend/idhazh/stages/{assemble.py:371, common.py:526-532, decide.py:38, qualify_decide.py, two_calls.py, validate.py}`; `backend/idhazh/evals/qualify.py:412`; `backend/utilities/{model_refs,measure_two_calls,measure_ledgers,measure_probability_mode,prompt_loop,prove_the_entry,runtime_sweep,llama_argv,capture_server_argv,pipeline_case_config}.py`; and in `.github/`: `actions/model-server/action.yml` lines 136, 138, 159, 183, `scripts/start-llama-server.sh` lines 16, 31, 33, `workflows/idhazh-pipeline-tests.yaml` lines 196, 198, 274, 354, `workflows/measure.yml` lines 1140, 1172, 1174. Plus the five `tests/fixtures/server-argv/*.json` goldens, because `capture_server_argv.py:74` names the role.
+**Files, counted rather than estimated.** All five `config/models/*.json`; `backend/idhazh/contracts/knobs/models.py`; `backend/idhazh/contracts/knobs/finetune.py:87`; `backend/idhazh/contracts/knobs/placement.py:289` (a help string citing `models.summarize.inference`, already two renames stale); `backend/idhazh/contracts/app_config.py`; `config/idhazh.json`; `backend/idhazh/config.py`; `backend/idhazh/cli.py:196`; `backend/idhazh/similarity/judge.py:247`; `backend/idhazh/stages/{assemble.py:371, common.py:526-532, decide.py:38, qualify_decide.py, two_calls.py, validate.py}`; `backend/idhazh/evals/qualify.py:412`; `backend/utilities/{model_refs,model_runtime,measure_two_calls,measure_ledgers,measure_probability_mode,prompt_loop,prove_the_entry,runtime_sweep,capture_server_argv,pipeline_case_config}.py` - **`model_runtime.py` line 538 is the one that starts every server, so miss it and no job runs**; and in `.github/`: `actions/model-server/action.yml`, `workflows/idhazh-pipeline-tests.yaml`, `workflows/measure.yml`, `workflows/validate.yml`. Plus the five `tests/fixtures/server-argv/*.json` goldens, because `capture_server_argv.py:74` names the role. **Re-run the census before slicing this row**: plan 44 moved these sites once already.
 
 ### C13 - the model file, and the value nothing reads
 
@@ -390,7 +395,7 @@ The clash check compares key identity, and **every decode control on this build 
 | --- | --- | --- |
 | `LLAMA_WEIGHTS` | `MODEL_FILE` | It is a path to a GGUF file. Every tool calls it the model: `--model` in llama.cpp and vLLM, `model_path` in Hugging Face. "Weights" means tensors |
 | `LLAMA_PORT` | **deleted** | The port lives inside `base_url`. Nothing is left for a second value to disagree with. The `_harness.py` constants `LLAMA_PORT_ENV`, `LLAMA_PORT_VALUE` and `LLAMA_PORT_READ` follow it |
-| `LLAMA_ROLE` | **deleted** | Set once, read nowhere |
+| `LLAMA_ROLE` | **already gone** | Plan 44 row 3 deleted it with the shell script that set it. Nothing here to do |
 | `LLAMA_CPP_BUILD`, `LLAMA_CPP_ASSET`, `LLAMA_CPP_SHA`, `LLAMA_BIN`, `llama-cpp-pin.sh`, `install-llama-runtime.sh` | **unchanged** | They name llama.cpp because the thing is llama.cpp. Section 0b bans a vendor name used as this project's vocabulary, not the vendor's name for its own artefact |
 
 ### C14 - the four sentences row 1 deletes
@@ -513,13 +518,14 @@ One commit per row, in Reckoner order. A worker who follows it never writes an i
 
 **Scope.** Delete `LLAMA_PORT` and `DEFAULT_PORT`. `server_argv` reads the port back out of the base URL.
 
-**Files.** `backend/idhazh/llm/server.py`, `backend/utilities/{llama_argv,runtime_sweep,measure_probability_mode,slot_probe}.py`, `.github/scripts/start-llama-server.sh`, `.github/actions/model-server/action.yml`, the five workflow files, `backend/tests/{test_summarize.py,workflows/_harness.py,workflows/test_model_server_jobs.py}`, `docs/how-to/{run-the-pipeline,test-models-locally}.md`, `docs/reference/{ci-model-runtime,github-actions}.md`.
+**Files.** `backend/idhazh/llm/server.py`, `backend/utilities/{model_runtime,runtime_sweep,measure_probability_mode,slot_probe}.py`, `.github/actions/model-server/action.yml`, the five workflow files, `backend/tests/{test_summarize.py,workflows/_harness.py,workflows/test_model_server_jobs.py}`, `docs/how-to/{run-the-pipeline,test-models-locally}.md`, `docs/reference/{ci-model-runtime,github-actions}.md`.
 
 **Gates.**
 
-- `pytest backend/tests/workflows/` green. `shellcheck` clean on `start-llama-server.sh`.
-- `test_model_server_jobs.py` asserts the literal `PORT_ENV = "LLAMA_PORT"` exists inside `runtime_sweep.py`; that assertion **moves with the name**, it is not deleted.
-- `runtime_sweep.py` reads `int(os.environ[PORT_ENV])` twice and `measure_probability_mode.py` passes `port=DEFAULT_PORT`. Both are hard failures after the delete. **The sweep's port afterwards is its own `--port` argument, defaulted from the resolved base URL.**
+- `pytest backend/tests/workflows/` green.
+- `test_model_server_jobs.py` carries 19 of the 62 `LLAMA_PORT` lines, including an assertion that the literal `PORT_ENV = "LLAMA_PORT"` exists inside `runtime_sweep.py`; that assertion **moves with the name**, it is not deleted.
+- `backend/utilities/model_runtime.py` line 78 declares `PORT_ENV` and line 544 reads it into `server_argv`. Both move to the port read back out of `base_url`.
+- `runtime_sweep.py` and `measure_probability_mode.py` each read the environment value once. Both are hard failures after the delete. **The sweep's port afterwards is its own `--port` argument, defaulted from the resolved base URL.**
 - `slot_probe.py` line 16's shell example moves off `LLAMA_PORT`.
 
 **Oracle.** `git grep -n LLAMA_PORT` returns nothing. `git grep -n DEFAULT_PORT -- backend` returns nothing.
@@ -534,17 +540,17 @@ One commit per row, in Reckoner order. A worker who follows it never writes an i
 
 ## 7. Row 5 - A job refuses to start a server nobody will talk to
 
-**Scope.** C5, inside `argv_for`.
+**Scope.** C5, inside `model_runtime.start_server`.
 
-**Files.** `backend/utilities/llama_argv.py`, `backend/tests/workflows/test_model_server_jobs.py`.
+**Files.** `backend/utilities/model_runtime.py`, `backend/tests/workflows/test_model_server_jobs.py`.
 
-**Gates.** A unit test from a fixture config root: matching addresses build an argv, a non-loopback `base_url` raises `SystemExit` naming both addresses. The refusal fires before any weights are read - proved by call order, not by timing. `pytest backend/tests/workflows/` green.
+**Gates.** A unit test from a fixture config root: matching addresses build an argv, a non-loopback `base_url` raises `SystemExit` naming both addresses. The refusal fires **before `server_argv` is called**, so it lands before the weights path is resolved - proved by call order, not by timing. `pytest backend/tests/workflows/` green.
 
-**Oracle.** A fixture root with `base_url: "http://192.168.1.20:9090"` refuses; the committed root builds today's argv unchanged.
+**Oracle.** A fixture root with `base_url: "http://192.168.1.20:9090"` refuses; the committed root starts the server exactly as today.
 
-**What it cannot settle.** Nothing outstanding. All five workflows reach `argv_for`: two through the shell script, three directly.
+**What it cannot settle.** Nothing outstanding. All five workflows reach `start_server`: two through the composite action, three directly.
 
-**Decisions.** 5.1 It lives in `argv_for` - the only place where the port about to be bound and the address the stage will post to are both in scope, and the only one all five workflows reach. 5.2 It reads the config root it was given, because three workflows run against a candidate root. 5.3 The three self-spawning instruments are exempt; they probe the server they started.
+**Decisions.** 5.1 It lives in `start_server` - the only place where the port about to be bound and the address the stage will post to are both in scope, and the one program in the repository that starts a server. 5.2 It reads the config root it was given, because three workflows run against a candidate root. 5.3 The two resolvers are imported inside the function, beside the two imports already there: `start_server` imports nothing from `idhazh` at module scope because the download verbs run before the package is installed. 5.4 The three self-spawning instruments never call it and get no refusal; they probe the server they started.
 
 **Rejected.** Having the workflow probes read `base_url`: escalation trigger 1, and unimplementable anyway - the action declares no outputs and two of five workflows use it. No refusal at all: the mismatch is then found after the cache restores and the weights load, on every shard at once.
 
@@ -568,17 +574,17 @@ One commit per row, in Reckoner order. A worker who follows it never writes an i
 
 ---
 
-## 9. Row 7 - The model file, and the value nothing reads
+## 9. Row 7 - The model file name
 
-**Scope.** C13. `LLAMA_WEIGHTS` becomes `MODEL_FILE`; `LLAMA_ROLE` is deleted.
+**Scope.** C13. `LLAMA_WEIGHTS` becomes `MODEL_FILE`. **`LLAMA_ROLE` is already gone** - plan 44 row 3 deleted it with the shell script that set it, so this row is the weights rename alone.
 
-**Files.** `.github/scripts/start-llama-server.sh`, `.github/actions/model-server/action.yml`, `backend/utilities/llama_argv.py`, the workflow files that set the weights value, and the workflow tests that read it.
+**Files.** `.github/workflows/digest.yml`, `backend/tests/workflows/test_model_server_jobs.py`. Two files; the name survives nowhere else.
 
-**Gates.** `pytest backend/tests/workflows/` green. `shellcheck` clean. The weights value still reaches `server_argv` as `--model`.
+**Gates.** `pytest backend/tests/workflows/` green. The weights value still reaches `server_argv` as `--model`.
 
-**Oracle.** `git grep -n LLAMA_WEIGHTS` and `git grep -n LLAMA_ROLE` both return nothing.
+**Oracle.** `git grep -n LLAMA_WEIGHTS` returns nothing.
 
-**What it cannot settle.** Nothing. `LLAMA_ROLE` has one occurrence and no reader.
+**What it cannot settle.** Nothing.
 
 **Decisions.** 7.1 `MODEL_FILE`, not `MODEL_WEIGHTS` - it is a path to a file, and "weights" means tensors in every other tool. 7.2 The llama.cpp build, asset, pin and binary names stay; they name the vendor's own artefacts.
 
