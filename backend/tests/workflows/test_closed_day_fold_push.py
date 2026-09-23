@@ -23,21 +23,22 @@ produced.
 from __future__ import annotations
 
 import csv
-import os
 import shutil
 import subprocess
 from pathlib import Path
 from typing import Final
 
 import pytest
-from conftest import FIXTURES_DIR, REPO_ROOT
+from conftest import FIXTURES_DIR
 
 from idhazh import day_shards, ledger
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.stages import compact
 
-pytestmark = [pytest.mark.contract, pytest.mark.slow]
+from ._harness import COMMIT_SCRIPT, _bash, _git, _isolated_env, requires_bash
+
+pytestmark = [pytest.mark.workflow, pytest.mark.slow]
 
 #: The tree the fixture was written with, and the day the two jobs fight over.
 FIXTURE: Final = FIXTURES_DIR / "day-shards" / "closed-day"
@@ -54,75 +55,12 @@ AFTER_DAYS: Final = 7
 #: jobs can disagree about is the one the test is about.
 BEFORE_THE_CONTESTED_DAY: Final = "2026-09-14"
 
-COMMIT_SCRIPT: Final = REPO_ROOT / ".github" / "scripts" / "commit-and-push.sh"
-
 #: The job the runner plays, spelled once. The commit script builds the identity
 #: it matches a conflicted filename against out of these four.
 JOB_RUN_ID: Final = "40000000001"
 JOB_ATTEMPT: Final = "1"
 JOB_NAME: Final = "assemble"
 JOB_SHARD: Final = "0"
-
-
-def a_bash() -> str | None:
-    """A bash that can run the commit script, or None on a host without one."""
-    if os.name != "nt":
-        return shutil.which("bash")
-    candidates: list[Path] = []
-    git = shutil.which("git")
-    if git is not None:
-        candidates.append(Path(git).resolve().parent.parent / "bin" / "bash.exe")
-    for variable in ("ProgramFiles", "ProgramW6432", "ProgramFiles(x86)"):
-        root = os.environ.get(variable)
-        if root:
-            candidates.append(Path(root) / "Git" / "bin" / "bash.exe")
-    return next((str(path) for path in candidates if path.is_file()), None)
-
-
-requires_bash: Final = pytest.mark.skipif(
-    a_bash() is None,
-    reason="no bash on this host to execute .github/scripts/commit-and-push.sh",
-)
-
-
-def an_isolated_env(tmp_path: Path) -> dict[str, str]:
-    """Git with no machine identity and no machine config to fall back on.
-
-    The script sets its own committer, so the test must not supply one: an
-    inherited `user.name` would hide the day the script stopped setting it.
-    `GITHUB_OUTPUT` goes because CI runs this suite inside a step that has one,
-    and an inherited value would let the script append to that step's outputs.
-    """
-    home = tmp_path / "home"
-    home.mkdir(exist_ok=True)
-    return {
-        **{name: value for name, value in os.environ.items() if name != "GITHUB_OUTPUT"},
-        "HOME": str(home),
-        "USERPROFILE": str(home),
-        "GIT_CONFIG_GLOBAL": str(home / "gitconfig"),
-        "GIT_CONFIG_NOSYSTEM": "1",
-        "GIT_TERMINAL_PROMPT": "0",
-    }
-
-
-def git(repo: Path, env: dict[str, str], *args: str) -> str:
-    """One git command, with an identity of its own so the script's is visible."""
-    done = subprocess.run(
-        [
-            "git",
-            "-c",
-            "user.name=Scripted Origin",
-            "-c",
-            "user.email=origin@example.invalid",
-            *args,
-        ],
-        cwd=repo,
-        env=env,
-        capture_output=True,
-        text=True,
-        check=True,
-    )
-    return done.stdout
 
 
 def the_fixture_on(root: Path) -> Path:
@@ -226,23 +164,23 @@ def test_two_branches_that_both_fold_one_day_merge_without_being_asked(
     is the claim the pipeline actually rests on - two assemble jobs of one night
     both fold, both push, and neither run waits for the other.
     """
-    env = an_isolated_env(tmp_path)
+    env = _isolated_env(tmp_path)
     repo = tmp_path / "repo"
     state = the_fixture_on(repo)
-    git(repo, env, "init", "--initial-branch=main", "--quiet")
-    git(repo, env, "add", "--", ledger.STATE_DIRNAME)
-    git(repo, env, "commit", "--quiet", "-m", "the day before either job folded")
+    _git(repo, env, "init", "--initial-branch=main", "--quiet")
+    _git(repo, env, "add", "--", ledger.STATE_DIRNAME)
+    _git(repo, env, "commit", "--quiet", "-m", "the day before either job folded")
 
-    git(repo, env, "checkout", "--quiet", "-b", "first-job")
+    _git(repo, env, "checkout", "--quiet", "-b", "first-job")
     fold(state)
-    git(repo, env, "add", "--all", "--", ledger.STATE_DIRNAME)
-    git(repo, env, "commit", "--quiet", "-m", "the first job folds the day")
+    _git(repo, env, "add", "--all", "--", ledger.STATE_DIRNAME)
+    _git(repo, env, "commit", "--quiet", "-m", "the first job folds the day")
 
-    git(repo, env, "checkout", "--quiet", "main")
-    git(repo, env, "checkout", "--quiet", "-b", "second-job")
+    _git(repo, env, "checkout", "--quiet", "main")
+    _git(repo, env, "checkout", "--quiet", "-b", "second-job")
     fold(state)
-    git(repo, env, "add", "--all", "--", ledger.STATE_DIRNAME)
-    git(repo, env, "commit", "--quiet", "-m", "the second job folds the day")
+    _git(repo, env, "add", "--all", "--", ledger.STATE_DIRNAME)
+    _git(repo, env, "commit", "--quiet", "-m", "the second job folds the day")
 
     merged = subprocess.run(
         ["git", "-c", "user.name=t", "-c", "user.email=t@example.invalid", "merge", "first-job"],
@@ -253,7 +191,7 @@ def test_two_branches_that_both_fold_one_day_merge_without_being_asked(
     )
 
     assert merged.returncode == 0, merged.stdout + merged.stderr
-    assert not git(repo, env, "diff", "--name-only", "--diff-filter=U").strip()
+    assert not _git(repo, env, "diff", "--name-only", "--diff-filter=U").strip()
     assert machines_in(day_dir(state, CONTESTED_DAY) / day_shards.SETTLED_NAME)
 
 
@@ -275,15 +213,15 @@ def test_a_fold_that_read_a_straggler_the_tip_did_not_stops_the_push(
     deletion a conflict - and the straggler's rows would then be in no file at
     exit 0.
     """
-    bash = a_bash()
+    bash = _bash()
     assert bash is not None
-    env = an_isolated_env(tmp_path)
+    env = _isolated_env(tmp_path)
 
     # The base every side starts from: the two quiet days already folded, the
     # contested day still holding its writer files. Folded first so the only
     # path the two jobs can disagree about is the one this is about.
     origin = tmp_path / "origin.git"
-    git(tmp_path, env, "init", "--bare", "--initial-branch=main", "--quiet", str(origin))
+    _git(tmp_path, env, "init", "--bare", "--initial-branch=main", "--quiet", str(origin))
     seed = tmp_path / "seed"
     seed_state = the_fixture_on(seed)
     fold(seed_state, date=BEFORE_THE_CONTESTED_DAY)
@@ -291,11 +229,11 @@ def test_a_fold_that_read_a_straggler_the_tip_did_not_stops_the_push(
     assert day_shards.SETTLED_NAME not in {path.name for path in contested.iterdir()}, (
         "the contested day was folded before the test started"
     )
-    git(seed, env, "init", "--initial-branch=main", "--quiet")
-    git(seed, env, "remote", "add", "origin", str(origin))
-    git(seed, env, "add", "--", ledger.STATE_DIRNAME)
-    git(seed, env, "commit", "--quiet", "-m", "the quiet days folded, the contested day open")
-    git(seed, env, "push", "--quiet", "origin", "main")
+    _git(seed, env, "init", "--initial-branch=main", "--quiet")
+    _git(seed, env, "remote", "add", "origin", str(origin))
+    _git(seed, env, "add", "--", ledger.STATE_DIRNAME)
+    _git(seed, env, "commit", "--quiet", "-m", "the quiet days folded, the contested day open")
+    _git(seed, env, "push", "--quiet", "origin", "main")
 
     # What the tip will hold: an earlier job's fold of the contested day WITHOUT
     # the straggler. Folded from its own copy of the base, so the two sides
@@ -308,12 +246,12 @@ def test_a_fold_that_read_a_straggler_the_tip_did_not_stops_the_push(
     # The straggler lands first, so the runner's checkout carries it.
     straggler = a_straggler(seed_state, CONTESTED_DAY)
     straggler_relpath = straggler.relative_to(seed).as_posix()
-    git(seed, env, "add", "--", ledger.STATE_DIRNAME)
-    git(seed, env, "commit", "--quiet", "-m", "a re-run's shard lands on a day two jobs will fold")
-    git(seed, env, "push", "--quiet", "origin", "main")
+    _git(seed, env, "add", "--", ledger.STATE_DIRNAME)
+    _git(seed, env, "commit", "--quiet", "-m", "a re-run's shard lands on a day two jobs will fold")
+    _git(seed, env, "push", "--quiet", "origin", "main")
 
     runner = tmp_path / "runner"
-    git(tmp_path, env, "clone", "--quiet", str(origin), str(runner))
+    _git(tmp_path, env, "clone", "--quiet", str(origin), str(runner))
     runner_state = runner / ledger.STATE_DIRNAME
     assert (runner / straggler_relpath).exists(), "the runner did not check the straggler out"
     folded = fold(runner_state)
@@ -329,9 +267,9 @@ def test_a_fold_that_read_a_straggler_the_tip_did_not_stops_the_push(
         if path != straggler:
             path.unlink()
     (seed / settled_relpath).write_bytes(tip_settled)
-    git(seed, env, "add", "--all", "--", ledger.STATE_DIRNAME)
-    git(seed, env, "commit", "--quiet", "-m", "an earlier job folds the day it could see")
-    git(seed, env, "push", "--quiet", "origin", "main")
+    _git(seed, env, "add", "--all", "--", ledger.STATE_DIRNAME)
+    _git(seed, env, "commit", "--quiet", "-m", "an earlier job folds the day it could see")
+    _git(seed, env, "push", "--quiet", "origin", "main")
 
     refused = subprocess.run(
         [bash, COMMIT_SCRIPT.as_posix(), ledger.STATE_DIRNAME],
@@ -364,7 +302,7 @@ def test_a_fold_that_read_a_straggler_the_tip_did_not_stops_the_push(
     # Nothing the tip held went with the refusal. Its own fold is still there,
     # and so is the straggler this job's commit would have deleted.
     after = tmp_path / "after"
-    git(tmp_path, env, "clone", "--quiet", str(origin), str(after))
+    _git(tmp_path, env, "clone", "--quiet", str(origin), str(after))
     assert (after / settled_relpath).read_bytes() == tip_settled
     assert (after / straggler_relpath).exists(), (
         "the straggler's rows are in no file, which is what the refusal exists to stop"
