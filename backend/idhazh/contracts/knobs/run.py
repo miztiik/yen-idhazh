@@ -144,7 +144,7 @@ class RunConfig(Model):
             "names 120 s in its own env block, because the whole of what it keeps back "
             "for everything after its last item is shard_wrap_up_minutes, which is 12 "
             "minutes - 300 s would be 5 of them. What would move this is the "
-            "`push attempt=` line the loop prints, over twenty runs: a first-push "
+            "`push attempt` record the loop publishes, over twenty runs: a first-push "
             "success rate above 95 percent means the deadline is almost never spent "
             "and the number can rise, and below 80 percent means no deadline is the "
             "right answer for what is going wrong."

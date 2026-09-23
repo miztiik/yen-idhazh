@@ -140,9 +140,9 @@ dependency that turned out bigger than it looked: the Python source alone is
 30,496 bytes of bytecode pip generates and 9,142 bytes of packaging metadata
 (counted per file on the developer box, below).
 
-In absolute terms it is **7.3 percent of PyYAML's 728,341 installed bytes** and
-**0.15 percent of shellcheck-py's 34,782,285**, both of which are already
-dependencies nobody has argued about.
+In absolute terms it is **7.3 percent of PyYAML's 728,341 installed bytes**, a
+dependency nobody has argued about, and **0.15 percent of the 34,782,285 that
+`shellcheck-py` held while it was one.**
 
 **The installed figure is the baseline, and the wheel figure is not.** Owner
 ruling, 2026-09-02, on reading the two numbers above: `protego` is inside the

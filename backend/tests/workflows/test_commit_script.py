@@ -1,10 +1,13 @@
-"""What does the shared commit script do when it loses the race to push?"""
+"""What does the shared commit program do when it loses the race to push?"""
 
 from __future__ import annotations
 
+import ast
 import json
 import re
+from collections.abc import Iterator, Sequence
 from pathlib import Path
+from typing import Final
 
 import pytest
 from conftest import read_text
@@ -12,10 +15,11 @@ from conftest import read_text
 from idhazh import ledger
 from idhazh.contracts.base import ServerJob
 from idhazh.evals import writer as score_writer
+from utilities import commit_and_push
 
 from ._harness import (
     COMMIT_IDENTITY,
-    COMMIT_SCRIPT,
+    COMMIT_PROGRAM,
     COMMIT_STEPS,
     GIT_IDENTITY_SOURCES,
     RACED_ASSET,
@@ -43,7 +47,6 @@ from ._harness import (
     _step_outputs,
     _tracked,
     _write,
-    requires_bash,
     requires_space_free_paths,
 )
 
@@ -87,25 +90,26 @@ def test_every_committing_job_configures_the_same_identity() -> None:
     """The repository commits under one name, and it says so in one voice.
 
     A hosted runner carries no git identity, so a job that commits has to set
-    one or `git commit` refuses. Three files set it and only one of them is
-    executed by a test, so the others could drift to a different name and
-    nothing would notice until a reader wondered who the other authors were.
+    one or `git commit` refuses. The commit program is executed by the tests
+    below, which read the name off the commit it pushed - so what is left here
+    is every other file that sets an identity and that nothing runs. One of
+    those could drift to a different name and nothing would notice until a
+    reader wondered who the other authors were.
     """
-    found = {
-        path.name: (
-            re.search(r'git config user\.name "([^"]+)"', read_text(path)),
-            re.search(r'git config user\.email "([^"]+)"', read_text(path)),
-        )
-        for path in GIT_IDENTITY_SOURCES
-    }
+    assert f"{commit_and_push.COMMITTER_NAME} <{commit_and_push.COMMITTER_EMAIL}>" == (
+        COMMIT_IDENTITY
+    )
 
-    for name, (author, address) in found.items():
-        assert author is not None, f"{name} commits, so it must set user.name"
-        assert address is not None, f"{name} commits, so it must set user.email"
+    assert GIT_IDENTITY_SOURCES, "no file is read, so this test would pass on nothing"
+    for path in GIT_IDENTITY_SOURCES:
+        text = read_text(path)
+        author = re.search(r'git config user\.name "([^"]+)"', text)
+        address = re.search(r'git config user\.email "([^"]+)"', text)
+        assert author is not None, f"{path.name} commits, so it must set user.name"
+        assert address is not None, f"{path.name} commits, so it must set user.email"
         assert f"{author.group(1)} <{address.group(1)}>" == COMMIT_IDENTITY
 
 
-@requires_bash
 @requires_space_free_paths
 @pytest.mark.parametrize("job_name", sorted(COMMIT_STEPS))
 def test_the_commit_step_pushes_what_it_staged(tmp_path: Path, job_name: str) -> None:
@@ -128,10 +132,13 @@ def test_the_commit_step_pushes_what_it_staged(tmp_path: Path, job_name: str) ->
     )
     # The script sets the committer itself, and the test supplies none.
     assert _git(origin, env, "log", "-1", "--format=%an <%ae>").strip() == COMMIT_IDENTITY
+    # And it adds no attribution tag (CLAUDE.md section 8). Nothing refused one
+    # until now, so the day a tool starts writing `Co-authored-by` into a commit
+    # body it would reach the permanent record with no test in the way.
+    assert "Co-authored-by" not in _git(origin, env, "log", "-1", "--format=%B")
     assert _git(runner, env, "status", "--porcelain").strip() == ""
 
 
-@requires_bash
 def test_the_commit_step_says_so_and_stops_when_nothing_changed(tmp_path: Path) -> None:
     staged_paths, settings = _commit_call("plan")
     env = _isolated_env(tmp_path)
@@ -146,7 +153,6 @@ def test_the_commit_step_says_so_and_stops_when_nothing_changed(tmp_path: Path) 
     assert _git(runner, env, "rev-parse", "HEAD").strip() == before
 
 
-@requires_bash
 def test_the_commit_step_rebases_past_a_racing_commit(tmp_path: Path) -> None:
     """The whole point of the loop: a push that loses a race still lands."""
     staged_paths, settings = _commit_call("plan")
@@ -173,7 +179,6 @@ def test_the_commit_step_rebases_past_a_racing_commit(tmp_path: Path) -> None:
     assert _git(runner, env, "status", "--porcelain", "--untracked-files=no").strip() == ""
 
 
-@requires_bash
 @requires_space_free_paths
 def test_a_rebase_is_not_blocked_by_an_untracked_file_the_tip_carries(tmp_path: Path) -> None:
     """Run `35152132574`: an untracked file stopped the rebase and cost a shard its rows.
@@ -222,7 +227,6 @@ def test_a_rebase_is_not_blocked_by_an_untracked_file_the_tip_carries(tmp_path: 
     assert (runner / "llama-server.log").is_file()
 
 
-@requires_bash
 def test_a_push_that_landed_first_try_reports_no_rebase(tmp_path: Path) -> None:
     """What the rebuild step reads. A clean push left the tree it was handed.
 
@@ -243,7 +247,6 @@ def test_a_push_that_landed_first_try_reports_no_rebase(tmp_path: Path) -> None:
     assert _step_outputs(written) == {"rebased": "false"}
 
 
-@requires_bash
 def test_a_commit_that_staged_nothing_reports_no_rebase(tmp_path: Path) -> None:
     """Nothing was pushed, so there is no new tree for a later step to read."""
     staged_paths, settings = _commit_call("plan")
@@ -258,7 +261,6 @@ def test_a_commit_that_staged_nothing_reports_no_rebase(tmp_path: Path) -> None:
     assert _step_outputs(written) == {"rebased": "false"}
 
 
-@requires_bash
 def test_a_push_that_lost_the_race_reports_the_rebase(tmp_path: Path) -> None:
     """The rebase replaced the checkout, so the build made before it is stale.
 
@@ -280,7 +282,6 @@ def test_a_push_that_lost_the_race_reports_the_rebase(tmp_path: Path) -> None:
     assert _step_outputs(written) == {"rebased": "true"}
 
 
-@requires_bash
 def test_the_commit_script_still_runs_where_no_step_output_exists(tmp_path: Path) -> None:
     """The guard on the write, and it is what lets one copy of the script serve both.
 
@@ -301,7 +302,34 @@ def test_the_commit_script_still_runs_where_no_step_output_exists(tmp_path: Path
     assert _git(origin, env, "log", "-1", "--format=%s").strip() == settings["COMMIT_MESSAGE"]
 
 
-def test_every_way_out_of_the_commit_script_says_whether_it_rebased() -> None:
+#: Every way `main` hands a number back that is not a caller error. Three come
+#: back zero - nothing staged, the push landed, the rebuild produced nothing new
+#: - two cannot commit what the job produced, and one gives up on the clock. A
+#: caller error returns 2 and is deliberately outside this count.
+WAYS_OUT: Final = 6
+
+
+def _statement_blocks(node: ast.AST) -> Iterator[list[ast.stmt]]:
+    """Every list of statements under a node, so a return reads with its neighbours."""
+    for child in ast.walk(node):
+        for field in ("body", "orelse", "finalbody"):
+            block = getattr(child, field, None)
+            if isinstance(block, list) and all(isinstance(item, ast.stmt) for item in block):
+                yield block
+
+
+def _says_whether_it_rebased(before: Sequence[ast.stmt]) -> bool:
+    """Whether one of these statements is the call that writes the step output."""
+    return any(
+        isinstance(statement, ast.Expr)
+        and isinstance(statement.value, ast.Call)
+        and isinstance(statement.value.func, ast.Name)
+        and statement.value.func.id == "_report_rebased"
+        for statement in before
+    )
+
+
+def test_every_way_out_of_the_commit_program_says_whether_it_rebased() -> None:
     """Three exits return zero and a fixture reaches two of them.
 
     The third - origin already holding everything a rebuild produced - needs a
@@ -309,33 +337,33 @@ def test_every_way_out_of_the_commit_script_says_whether_it_rebased() -> None:
     whether the day's own gate reads a stale build. So the exits are checked
     where they are written instead.
 
-    The argument-error exits above the function are deliberately out of scope.
-    They fire before anything is committed, they fail the step, and a step that
-    failed has already stopped the rebuild.
+    A caller error returns 2 and is deliberately out of scope. Those fire before
+    anything is committed, they fail the step, and a step that failed has
+    already stopped the rebuild.
     """
-    lines = read_text(COMMIT_SCRIPT).splitlines()
-    defined = next(
-        index for index, line in enumerate(lines) if line.startswith("report_rebased()")
+    routine = next(
+        node
+        for node in ast.walk(ast.parse(read_text(COMMIT_PROGRAM)))
+        if isinstance(node, ast.FunctionDef) and node.name == "main"
+    )
+    ways_out = [
+        (node.lineno, _says_whether_it_rebased(block[max(0, index - 3) : index]))
+        for block in _statement_blocks(routine)
+        for index, node in enumerate(block)
+        if isinstance(node, ast.Return)
+        and isinstance(node.value, ast.Constant)
+        and node.value.value in {0, 1}
+    ]
+
+    assert len(ways_out) == WAYS_OUT, (
+        "three ways out with nothing wrong, two that cannot commit, and the one that gives up"
+    )
+    silent = [line for line, said in ways_out if not said]
+    assert not silent, (
+        f"line(s) {silent} leave without saying whether the checkout was rewritten"
     )
 
-    exits = [
-        index
-        for index, line in enumerate(lines)
-        if line.strip() in {"exit 0", "exit 1"} and index > defined
-    ]
-    assert len(exits) == 4, "three ways out with nothing wrong, and the one that gives up"
-    for index in exits:
-        before = [
-            line.strip()
-            for line in lines[max(0, index - 3) : index]
-            if line.strip() and not line.strip().startswith("#")
-        ]
-        assert any("report_rebased" in line for line in before), (
-            f"line {index + 1} leaves without saying whether the checkout was rewritten"
-        )
 
-
-@requires_bash
 def test_two_runs_writing_their_own_files_both_land(tmp_path: Path) -> None:
     """Two writers, two files, one rebase, and nothing has to choose.
 
@@ -377,7 +405,6 @@ def test_two_runs_writing_their_own_files_both_land(tmp_path: Path) -> None:
     assert not _mid_rebase(runner)
 
 
-@requires_bash
 def test_a_rebase_it_cannot_finish_still_ends_the_script_cleanly(tmp_path: Path) -> None:
     """The guard, proved by running it: no command in the loop can exit early.
 
@@ -410,7 +437,6 @@ def test_a_rebase_it_cannot_finish_still_ends_the_script_cleanly(tmp_path: Path)
     assert not _mid_rebase(runner)
 
 
-@requires_bash
 def test_a_push_rejected_more_times_than_the_old_loop_allowed_still_lands(
     tmp_path: Path,
 ) -> None:
@@ -440,7 +466,7 @@ def test_a_push_rejected_more_times_than_the_old_loop_allowed_still_lands(
     assert _git(origin, env, "log", "-1", "--format=%s").strip() == settings["COMMIT_MESSAGE"]
 
     attempts = _push_attempts(result.stdout)
-    assert [row["attempt"] for row in attempts] == ["1", "2", "3", "4", "5"]
+    assert [row["attempt"] for row in attempts] == [1, 2, 3, 4, 5]
     assert [row["outcome"] for row in attempts] == [
         *["rejected"] * 4,
         "landed",
@@ -448,9 +474,9 @@ def test_a_push_rejected_more_times_than_the_old_loop_allowed_still_lands(
     # Attempt 1 has no window in the retry sense: nothing fetches before the
     # first push, so its exposure is the whole job rather than a retry
     # parameter, and its zero is the truth about it.
-    assert attempts[0]["window_ms"] == "0"
-    assert all(int(row["window_ms"]) > 0 for row in attempts[1:])
-    assert sum(int(row["window_ms"]) for row in attempts) < deadline * 1000
+    assert attempts[0]["window_ms"] == 0
+    assert all(row["window_ms"] > 0 for row in attempts[1:])
+    assert sum(row["window_ms"] for row in attempts) < deadline * 1000
     # Six stamps, because one figure cannot tell a slow rebuild from a slow push.
     for row in attempts:
         assert set(row) == {
@@ -468,7 +494,6 @@ def test_a_push_rejected_more_times_than_the_old_loop_allowed_still_lands(
     assert not _mid_rebase(runner)
 
 
-@requires_bash
 def test_a_push_nothing_will_take_gives_up_on_the_clock_and_says_what_it_spent(
     tmp_path: Path,
 ) -> None:
@@ -498,7 +523,6 @@ def test_a_push_nothing_will_take_gives_up_on_the_clock_and_says_what_it_spent(
     assert not _mid_rebase(runner)
 
 
-@requires_bash
 def test_a_new_file_in_a_drained_directory_still_rebases(tmp_path: Path) -> None:
     """Row 2's Oracle, run rather than read: the B6 shape, at exit 0.
 
@@ -551,7 +575,6 @@ def test_a_new_file_in_a_drained_directory_still_rebases(tmp_path: Path) -> None
     assert not _mid_rebase(runner)
 
 
-@requires_bash
 @requires_space_free_paths
 def test_the_day_publishes_when_origin_moved_under_it(tmp_path: Path) -> None:
     """The Oracle: a stale base is answered by a current base, not by a text merge.
@@ -636,7 +659,6 @@ def test_the_day_publishes_when_origin_moved_under_it(tmp_path: Path) -> None:
     assert not _mid_rebase(runner)
 
 
-@requires_bash
 @requires_space_free_paths
 def test_two_runs_that_rendered_one_item_still_publish_the_day(tmp_path: Path) -> None:
     """The Oracle above, with the one thing it never had: both sides create the path.
@@ -711,7 +733,6 @@ def test_two_runs_that_rendered_one_item_still_publish_the_day(tmp_path: Path) -
     assert _git(origin, env, "show", "main:docs/unrelated.md") == "merged by a pull request\n"
 
 
-@requires_bash
 @requires_space_free_paths
 def test_a_rebuild_that_fails_spends_the_attempts_and_says_which(tmp_path: Path) -> None:
     """A producer that cannot run is a lost day, said out loud, not a half-rebased tree."""

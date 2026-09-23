@@ -1,6 +1,6 @@
 # Console Payloads
 
-**Last Updated**: 2026-09-20
+**Last Updated**: 2026-09-23
 The operator console reads ten datasets. Nine of them come from `state/`,
 which is never served, so each one crosses a trust boundary and each crossing
 needs a contract (Guardrail #11). This page is the list. The machine-readable copy is
@@ -220,9 +220,9 @@ from either builds locally and never reaches the site. The staged path list on
 the same step still moves with a new payload root.
 
 **Every new payload root ships with a committed file.**
-`.github/scripts/commit-and-push.sh` runs `git add "$@"` under
-`set -euo pipefail`, so a path that does not exist aborts the whole commit step
-and takes every sibling ledger staged in the same call with it.
+`backend/utilities/commit_and_push.py` stages every path a job owns in one
+`git add`, so a path that does not exist fails that call, stops the whole commit
+step, and takes every sibling ledger staged beside it.
 `test_every_path_the_day_stages_exists_in_a_fresh_checkout` asks the working
 tree for each one.
 

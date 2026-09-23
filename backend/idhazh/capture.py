@@ -9,8 +9,8 @@ because the only copy of the text was in a runner that had already been deleted.
 **This is a run artifact and never a commit.** A rendered prompt carries the
 article body inside it, and republishing an article body is a non-goal
 (CLAUDE.md section 0a). `digest.yml` uploads the directory with a retention
-window and nothing in `commit-and-push.sh` names it, which is exactly how the
-faithfulness evidence already handles the same problem.
+window and no commit call names it, which is exactly how the faithfulness
+evidence already handles the same problem.
 
 **The digest is recorded whether or not the text is.** `sha256` and a character
 count cost nothing, survive both flags being off, and answer the one question a
