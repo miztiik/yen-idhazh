@@ -356,15 +356,19 @@ one nobody diffed. `validate.yml` never needed the utility - its `Install`
 already ran before its server started - so for two changes it qualified
 candidates on a server the daily run does not run.
 
-**The port is one `env: LLAMA_PORT` per workflow.** It was nine literals in
-`digest.yml` and three in `validate.yml`, and all of them had to move together
-or the job failed in a way that reads as an unreachable model (Guardrail #6).
-`server_argv` takes it as an argument; every `/health`, `/v1/models`, `/props`
-and `/metrics` probe reads it; and `idhazh.llm.server` reads the same variable
-for the address the summarize stage posts to, so the server and its client
-cannot end up on different ports. It is not a config field. It decides nothing
-about the words, so `idhazh.fingerprint` has nothing to classify and the run's
-recorded inputs do not move.
+**The port lives inside `model_server.base_url`, and a workflow declares only
+where its own probes ask.** It was nine literals in `digest.yml` and three in
+`validate.yml`, then one `env: LLAMA_PORT` per workflow, and since 2026-09-23 it
+is one committed config value (Guardrail #6). The server command reads the port
+back out of the config root the job runs under, and every stage posts to that
+same address, so the server and its client cannot end up on different ports.
+What a workflow still names is `env: MODEL_SERVER_PROBE`, the loopback address
+every `/health`, `/v1/models`, `/props` and `/metrics` probe reads - a probe is
+a curl against a server that job just started on that runner, and three of the
+five workflows run against a scratch config root it cannot read. A test holds
+that declaration against the committed address. The probe address decides
+nothing about the words, so `idhazh.fingerprint` has nothing to classify and the
+run's recorded inputs do not move.
 
 ## See also
 

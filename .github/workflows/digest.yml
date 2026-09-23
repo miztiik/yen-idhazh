@@ -87,10 +87,11 @@ permissions:
 # its cache key names and the build its run manifest records are one answer and
 # cannot drift apart.
 env:
-  # The one place this workflow says which port. `server_argv` binds it, every
-  # probe below reads it, and `idhazh.llm.server` reads it for the address the
-  # stage posts to - so the three cannot disagree (Guardrail #6).
-  LLAMA_PORT: '8080'
+  # Where this job's own probes ask. It is not where the stage posts - that is
+  # `model_server.base_url`, and the server command binds the port inside it.
+  # This is the one place this workflow writes an address, and it is always
+  # loopback because the server is on this runner (Guardrail #6).
+  MODEL_SERVER_PROBE: 'http://127.0.0.1:8080'
 
 jobs:
   plan:
@@ -517,7 +518,7 @@ jobs:
         id: model_server
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          port: ${{ env.LLAMA_PORT }}
+          probe_url: ${{ env.MODEL_SERVER_PROBE }}
           llama_cpp_build: ${{ needs.plan.outputs.llama_cpp_build }}
 
       # Healthy says a server answers and the step above says which file it
@@ -652,7 +653,7 @@ jobs:
         if: always()
         continue-on-error: true
         run: |
-          curl -sf --max-time 30 "http://127.0.0.1:${LLAMA_PORT}/metrics" -o llama-metrics.prom || true
+          curl -sf --max-time 30 "${MODEL_SERVER_PROBE}/metrics" -o llama-metrics.prom || true
           if [ -s llama-metrics.prom ]; then
             # The whole counter set, so a llama.cpp rename is visible rather than
             # silently absent, and then the four a reader names: the two a run is
