@@ -31,13 +31,13 @@ from ._harness import (
     METRICS_SERIES,
     MODEL_SERVER_ACTION,
     MODEL_SERVER_STEPS,
-    PYTHON_PROCS_FIELDS,
     PYTHON_PROCS_FILE,
     RSS_SAMPLE_FILE,
     RUNTIME_IDENTITY_JOBS,
     RUNTIME_IDENTITY_STEP,
     SAMPLE_MEMORY_STEP,
-    SAMPLE_SCRIPT,
+    SAMPLER_START_CALL,
+    SAMPLER_SUMMARY_CALL,
     SCRAPE_STEP,
     SCRIPTS_DIR,
     SERVER_LOG_FILE,
@@ -316,48 +316,6 @@ def _run_work_step(name: str, tmp_path: Path) -> str:
 @requires_bash
 
 
-def test_the_operator_print_finds_its_columns_wherever_the_sampler_puts_them(
-    tmp_path: Path,
-) -> None:
-    """Run the print over a reordered header, not over a table restating the order.
-
-    It used to read `rss-samples.tsv` by POSITION, and a column inserted
-    anywhere but the end shifted every field after it - the job log then
-    reported `python_procs`, a count of three, as a peak in kilobytes. Nothing
-    failed and the number was out by six orders of magnitude.
-
-    The agreement was held by a mapping written down in the test file, so the
-    sampler and its reader agreed with a third copy rather than with each other.
-    Reading the header by name kills the class: this drives the real step over
-    the same samples in two different column orders and expects one answer.
-    """
-    columns = _sample_header()
-    sample = {name: 1000 + index * 111 for index, name in enumerate(columns)}
-    sample["ts"] = 1
-
-    def _reading(order: list[str]) -> str:
-        rows = ["\t".join(order), "\t".join(str(sample[name]) for name in order)]
-        (tmp_path / RSS_SAMPLE_FILE).write_text("\n".join(rows) + "\n", encoding="utf-8")
-        return _run_work_step(MEMORY_SUMMARY_STEP, tmp_path)
-
-    written = _reading(columns)
-    reordered = _reading([columns[0], *reversed(columns[1:])])
-
-    expected = (
-        f"peak llama VmHWM {sample['llama_vmhwm_kb']} kB, "
-        f"peak python VmHWM {sample['python_vmhwm_kb']} kB, "
-        f"most the two held at once {sample['llama_vmrss_kb'] + sample['python_vmrss_kb']} kB"
-    )
-    assert expected in written, written
-    assert expected in reordered, (
-        f"{MEMORY_SUMMARY_STEP} reads {RSS_SAMPLE_FILE} by position, so moving a "
-        f"column moved the number it reports:\n{reordered}"
-    )
-
-
-@requires_bash
-
-
 def test_the_log_summary_says_how_much_of_the_log_it_matched(tmp_path: Path) -> None:
     """The count that would have caught a pattern matching one line in forty.
 
@@ -389,88 +347,62 @@ def test_the_log_summary_says_how_much_of_the_log_it_matched(tmp_path: Path) -> 
         assert line in printed, f"the step would not print {line!r}"
 
 
-def _sample_header() -> list[str]:
-    """The columns the memory sampler writes, in the order it writes them."""
-    script = read_text(SAMPLE_SCRIPT)
-    header = re.search(rf"printf '([^']*)' > {re.escape(RSS_SAMPLE_FILE)}", script)
-    assert header, f"{SAMPLE_SCRIPT.name} must printf a header row into {RSS_SAMPLE_FILE}"
-    return header.group(1).removesuffix("\\n").split("\\t")
+def test_the_work_job_launches_the_sampler_detached_and_names_the_loop() -> None:
+    """One step writes a pid and the next samples it, and nothing backgrounds anything.
 
+    The sampler was a heredoc until 2026-09-12, a shell script until 2026-09-23,
+    and is a module now. What this has protected across all three is the same
+    agreement: the job hands the sampler the pid file its own start step wrote,
+    so a copy-paste that left another job's name here would sample a process
+    that never existed and record nothing, silently.
 
-def test_both_model_server_jobs_sample_memory_with_the_one_shared_script() -> None:
-    """Two copies of a sampler is one copy nobody looked at this week.
-
-    It was a heredoc inside the work job's own step until 2026-09-12, which was
-    fine while one job took the reading. The visuals job needs the same one -
-    `peak_rss_bytes` is one of the four figures the visual planner has never
-    had - and pasting fifty lines of shell into a second `run:` body is the
-    thing `.github/scripts/` exists to stop (`CLAUDE.md` section 3). Moving it
-    also puts it under `shellcheck`, which cannot read a `run:` body at all.
-
-    Each job hands it the pid file its own server wrote, so a copy-paste that
-    left the work job's name in the visuals step would sample a process that
-    never existed and record nothing, silently.
+    It used to assert the literal `nohup`, and neither half of that survives.
+    The program launches the loop into its own session itself, which is strictly
+    more detached than `nohup`. What must not come back is the `&` that went
+    with it: the shell recorded `$!`, the pid of the backgrounded *shell* rather
+    than of the sampler, so a loop that died at once left a pid file naming a
+    live shell and a step that passed.
     """
-    assert SAMPLE_SCRIPT.is_file()
-    assert read_text(SAMPLE_SCRIPT).startswith("#!/usr/bin/env bash\n")
+    script = _work_step(SAMPLE_MEMORY_STEP)
 
-    launched = {
-        "work": (_work_step(SAMPLE_MEMORY_STEP), "llama-server.pid"),
-    }
-    for job_name, (script, pid_file) in launched.items():
-        assert f"bash {SAMPLE_SCRIPT.relative_to(REPO_ROOT).as_posix()}" in script, (
-            f"the {job_name} job must run the shared sampler"
-        )
-        assert f"cat {pid_file}" in script, (
-            f"the {job_name} job must sample the server its own start step wrote"
-        )
-        assert "nohup" in script, f"the {job_name} sampler must outlive its own step"
+    assert SAMPLER_START_CALL in script, "the work job must launch the shared sampler"
+    assert "cat llama-server.pid" in script, (
+        "the work job must sample the server its own start step wrote"
+    )
+    assert not script.rstrip().endswith("&"), (
+        "the sampler detaches itself, so a step that backgrounds it again records "
+        "the shell's pid rather than the loop's"
+    )
+    assert "nohup" not in script, "nohup is what the launch shape replaced"
 
 
-def test_the_sampler_names_every_python_process_it_counts() -> None:
-    """A count of three cannot say which three, and here two of them are not ours.
+def test_the_memory_summary_reads_what_the_sampler_wrote() -> None:
+    """One writer, one reader, and both files reach the artifact.
 
-    Over the four captures of run `2026-08-29-3` the peak lands at three python
-    processes on every shard, and two of those three are already running at the
-    first sample - taken before this job's own python starts. So the recorded
-    python figure carries about 66 MB that belongs to something the job did not
-    launch, and no cell on the row or the artifact says what. The roll-call is
-    what turns the next run into the answer.
+    The operator print was an `awk` program inside the step, reading a
+    tab-separated file whose columns it named. It and the sampler agreed through
+    a third copy of the column order written down in this file rather than with
+    each other, which is how the step once reported `python_procs` - a count of
+    three - as a peak in kilobytes, out by six orders of magnitude with nothing
+    failing anywhere.
 
-    Two things are asserted because two things can disagree. The roll-call has
-    to be written by the SAME loop that produces the count, or it names a
-    different set from the one the sum was taken over; and the operator print
-    reads the roll-call by POSITION, so a column inserted anywhere but the end
-    silently reports a process id as a size in kilobytes.
+    The summary is a verb on the module that wrote the records now, so there is
+    no second reader to disagree with and no column position left to get wrong.
+    What a workflow test still owes is that the step calls it, and that the
+    roll-call behind the sum can be downloaded: a roll-call nobody can fetch
+    answers nothing.
     """
-    script = read_text(SAMPLE_SCRIPT)
-    header = re.search(rf"printf '([^']*)' > {re.escape(PYTHON_PROCS_FILE)}", script)
-    assert header, f"{SAMPLE_SCRIPT.name} must printf a header row into {PYTHON_PROCS_FILE}"
-    columns = header.group(1).removesuffix("\\n").split("\\t")
-    assert columns[0] == "ts", columns
-    assert len(columns) == len(set(columns)), f"a column name is written twice: {columns}"
-
-    # One loop, one filter. The count and the roll-call have to come off the
-    # same pass over `/proc`, or the sum is over a set the roll-call never named.
-    loop = re.search(r"for proc in /proc/\[0-9\]\*; do\n(.*?)\n *done\n", script, re.DOTALL)
-    assert loop, f"{SAMPLE_SCRIPT.name} must walk /proc once per sample"
-    body = loop.group(1)
-    assert "python_n=$((python_n + 1))" in body, "the count must be taken inside that walk"
-    assert f">> {PYTHON_PROCS_FILE}" in body, "the roll-call must be written inside that walk"
-    assert body.count("python*)") == 1, "one filter decides what counts as python, not two"
-
     operator = _work_step(MEMORY_SUMMARY_STEP)
-    assert PYTHON_PROCS_FILE in operator, f"{MEMORY_SUMMARY_STEP} must read {PYTHON_PROCS_FILE}"
-    for field, column in sorted(PYTHON_PROCS_FIELDS.items()):
-        assert f"${field}" in operator, f"{MEMORY_SUMMARY_STEP} no longer reads field {field}"
-        assert columns[field - 1] == column, (
-            f"{MEMORY_SUMMARY_STEP} reads field {field} as {column}, "
-            f"and the sampler now writes {columns[field - 1]} there"
-        )
+    assert SAMPLER_SUMMARY_CALL in operator, (
+        f"{MEMORY_SUMMARY_STEP} must read the records through the module that wrote them"
+    )
 
-    upload = _artifact_upload(_load_workflows()["digest.yml"], "work", "runtime-log-${{ matrix.shard }}")
+    upload = _artifact_upload(
+        _load_workflows()["digest.yml"], "work", "runtime-log-${{ matrix.shard }}"
+    )
     uploaded = str(_mapping(upload.get("with"), "runtime log upload").get("path"))
-    assert PYTHON_PROCS_FILE in uploaded, "a roll-call nobody can download answers nothing"
+    for name in (RSS_SAMPLE_FILE, PYTHON_PROCS_FILE):
+        assert name in uploaded, f"{name} is written every sample and never uploaded"
 
 
 def test_the_loopback_port_is_one_number_wherever_it_is_written() -> None:
