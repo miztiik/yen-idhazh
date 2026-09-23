@@ -1,6 +1,6 @@
 # How a run's rows reach the repository
 
-**Last Updated**: 2026-09-22
+**Last Updated**: 2026-09-23
 
 Ten jobs of one run commit to one branch, and every one of them can lose the
 push race. This page owns what they run to win it: the rebase loop and the clock
@@ -95,14 +95,19 @@ segment store by a catch-up fold, so two jobs that folded the same segments
 wrote the same head from different bases - two derived versions of one file,
 which is the shape no rebase can settle and no merge rule should. The gap that
 made it possible is not a race at all: `actions/checkout` restores the commit
-the run was TRIGGERED at, the `digest` concurrency group then holds a queued run
-until the run ahead of it has finished, and nothing bounds the distance between
-those two moments. Run `35660521768` is the record. It was created at 22:02 and
+the run was TRIGGERED at, and nothing bounds how far origin moves before the job
+starts. Run `35660521768` is the record. It was created at 22:02 and
 started here at 22:48, five commits behind, and one of those five was the run
 ahead's own fold. It re-folded segments that run had already folded and deleted,
 rewrote the five heads it had already written, and the rebase then held two
 versions of each with no way to choose. The whole day went at the push. **The
 head is what made that possible, and the head is gone.**
+
+That 46-minute gap was a wait in a concurrency group this workflow no longer has
+([below](#two-runs-of-one-day-work-at-the-same-time-and-nothing-queues-them)).
+The gap itself did not go with it. It is now whatever a run working alongside
+this one has committed since the trigger, which is why the step below still
+runs.
 
 The answer is a current base rather than a merge rule. The job runs
 [`.github/scripts/take-state-from-the-tip.sh`](../../../.github/scripts/take-state-from-the-tip.sh)
@@ -391,6 +396,45 @@ Four wider fixes were considered and none is taken.
 | Extend `CLAUDE.md` section 11 to cover every payload under `backend/var/` | It would close the hole rather than report it - a rename would ship a reader for the old shape and the straddling run would publish. The cost is that every rename on those shapes becomes expand-migrate-contract, two commits and a window of hours where both shapes are read. That is a change to a persisted-contract rule, so it is Level 5 and the owner's, not a fix PR's. What shipped above is the one case that needs none of that: the old shape is already declared, and reading it is a deletion rather than a second reader |
 | Re-run the producer instead of the assembler | `assemble` is what merges the day with what is already published, so skipping it is not an option, and re-running the whole day costs the run again |
 | Degrade the item, as section 1a would otherwise reach for | The three cases that principle names are all the outside world failing; this is the build and the disk disagreeing. Degrading would publish a day quietly missing N items because somebody merged a rename, and nothing would come back to correct it |
+
+## Two runs of one day work at the same time, and nothing queues them
+
+`digest.yml` declares no `concurrency` group. Two content refresh runs of the
+same day may work at once, and that is what everything above is for.
+
+**What makes it safe is the filename.** Every committed path a job of this
+workflow writes carries that run's own identity -
+`state/<ledger>/<YYYY>/<MM>/<DD>/<run>-<attempt>-<job>-<shard>.csv`, and
+`state/digest-fragments/<YYYY>/<MM>/<DD>/<run>.json` for the published day. Two
+runs at once therefore name two files rather than one, the rebase applies both
+whole, and the read settles them: a ledger through its day directory, the
+published day by folding one block per run in `("completed_at", "run_id")`
+order. Nothing derived is left on a shared path, and a conflicted path is
+resolved only by the job whose identity the name carries.
+
+**The group it replaced bought no safety, and it cost two things.** GitHub keeps
+one pending run per group and cancels the older, so a dispatch fired while a run
+was going disappeared with no error in the run list - the operator saw a
+cancelled run and no reason. And a run that did wait read a store its own wait
+had made stale: run `35660521768` waited 46 minutes, folded a 46-minute-old
+store and lost the whole day at the push, which is the incident this page is
+largely about. A queue that manufactures staleness is not a guard.
+
+**A narrower group per date was considered and rejected.** Two runs of one day
+are exactly the case that has to work: five scheduled runs share a day and each
+one adds to it. A group per date would queue precisely the pair this design is
+for. A lock file was rejected too, for a plainer reason - two jobs read "free"
+from their own stale checkouts and both take it. The only compare-and-swap this
+platform offers is the ref update itself, and the push loop already uses it.
+
+**What is proved here, and what a person watches.**
+[`backend/tests/workflows/test_triggers.py`](../../../backend/tests/workflows/test_triggers.py)
+holds that no group comes back, at the workflow level or on any job, and that
+every other workflow committing a ledger still declares one. What no test can
+take is the live pair: two runs dispatched to overlap both reaching a green
+`assemble`, both publishing, and neither losing a block. That is an observation
+on the schedule, and the attempt line the push loop prints is where the cost of
+it is collected over time.
 
 ## See also
 

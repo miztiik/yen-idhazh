@@ -1,13 +1,13 @@
 """Does the plan job fold the segment store origin has, or the one its trigger had?
 
-`actions/checkout` restores the commit a run was triggered at. The `digest`
-concurrency group then holds a queued run until the run ahead of it has
-finished, and nothing bounds that wait. Every step in between that only APPENDS
-survives a stale base, because a rebase applies two appends whole. The catch-up
-fold does not: it derives a day head from the segment store, so a stale store
-makes it re-fold rows another run has already folded and rewrite a head that run
-has already written. Two derived versions of one file is the one shape a rebase
-cannot settle.
+`actions/checkout` restores the commit a run was triggered at. The run then
+waits for a runner, and another run may commit under `state/` the whole time,
+so nothing bounds the distance between those two moments. Every step in between
+that only APPENDS survives a stale base, because a rebase applies two appends
+whole. The catch-up fold does not: it derives a day head from the segment store,
+so a stale store makes it re-fold rows another run has already folded and
+rewrite a head that run has already written. Two derived versions of one file is
+the one shape a rebase cannot settle.
 """
 
 from __future__ import annotations

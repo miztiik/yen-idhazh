@@ -1,6 +1,6 @@
 # What the pipeline records about the machine it ran on
 
-**Last Updated**: 2026-09-21
+**Last Updated**: 2026-09-23
 
 Every column of the host fingerprint, what it means, and what it is for. One row
 a job, by every job that draws its own runner - written in two halves, one at job
@@ -506,9 +506,10 @@ opened before. Authority: Fowler, 2026-09-17.
 **A bench dispatch folds its own segment.** `measure.yml` has no `assemble` job,
 so the step after its probe runs `idhazh compact --config
 backend/var/candidate-config` and the commit stages the day file as it always
-did. It is the one state writer with no concurrency group at all, which is why it
-gets the segment rather than being left on the shared path. Authority: Carmack,
-2026-09-17.
+did. When this was decided it was the one state writer with no concurrency group
+at all, which is why it gets the segment rather than being left on the shared
+path. It groups per target now, and a day file is still shared by every dispatch
+of one target. Authority: Carmack, 2026-09-17.
 
 ## See also
 

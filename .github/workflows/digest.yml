@@ -61,9 +61,20 @@ on:
 permissions:
   contents: write
 
-concurrency:
-  group: digest
-  cancel-in-progress: false
+# No concurrency group, and the absence is the decision. Two runs of this
+# workflow are meant to overlap.
+#
+# Every committed path a job here writes carries that run's own identity in the
+# filename, so two runs at once name two files rather than one and the rebase
+# applies both whole. A group on top of that bought no safety. It bought a
+# queue, and the queue cost two things. GitHub keeps ONE pending run per group
+# and cancels the older without an error anywhere, so a dispatch fired during a
+# run disappeared. And a run that did wait then read a store its own wait had
+# made stale: run 35660521768 waited 46 minutes and folded a 46-minute-old
+# store, then lost the whole day at the push.
+#
+# Re-adding a group brings both back. What settles two writers here is the
+# filename and the read that settles it, not a queue.
 
 # No model ref lives here. `config/idhazh.json` is the only place one is written
 # and the model block reads it where it is used, so every job below reads one

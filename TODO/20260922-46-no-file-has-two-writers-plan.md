@@ -322,7 +322,7 @@ Measured 2026-09-22 from GitHub job step timestamps.
 | 12 | A closed day folds to one file | C | 11 | 4 | DONE | 3 | p46c | - | GitHub Copilot |
 | 15 | The plan job's own ledgers stop being shared files | C | 11 | 4 | DONE | 3 | p46c | - | GitHub Copilot |
 | 13 | The head goes | D | 11, 12 | 5 | DONE | 3 | p46d | - | GitHub Copilot |
-| 14 | The concurrency group goes | I | 7, 9, 13, 15 | 6 | PENDING | 4 | - | - | - |
+| 14 | The concurrency group goes | I | 7, 9, 13, 15 | 6 | DONE | 4 | p46i | - | GitHub Copilot |
 
 Rows are listed in wave order. **Row 3 keeps its number and runs first**: it is the incident fix, it is four lines, and holding it behind a rewrite of the commit script is holding the only thing that stops today's failure.
 

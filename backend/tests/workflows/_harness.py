@@ -61,6 +61,11 @@ MODEL_SERVER_STEPS: Final = (
     "Check model health",
 )
 
+#: The workflows whose own runs may overlap, so they declare no group at all.
+#: Every other workflow that commits a ledger has to say which of its runs may
+#: run together; these say it by being written down here instead.
+RUNS_MAY_OVERLAP: Final = frozenset({"digest.yml"})
+
 EXPECTED_WORKFLOWS: Final = {
     "backfill.yml": ("Vector backfill", frozenset({"workflow_dispatch"})),
     "ci.yml": ("CI", frozenset({"pull_request", "push", "workflow_dispatch"})),
@@ -625,9 +630,9 @@ COMMIT_STEPS: Final = {
 }
 
 #: The step that gives this job a current state root to read. `actions/checkout`
-#: restores the commit the run was triggered at, and the `digest` concurrency
-#: group can hold a queued run for hours after that, so without this the plan is
-#: made against rows another run has already superseded.
+#: restores the commit the run was triggered at, and another run commits under
+#: `state/` while this one waits for a runner and while it works, so without this
+#: the plan is made against rows another run has already superseded.
 TAKE_STATE_STEP: Final = "Take the run state from the tip, not from the trigger commit"
 
 TAKE_STATE_SCRIPT: Final = SCRIPTS_DIR / "take-state-from-the-tip.sh"
