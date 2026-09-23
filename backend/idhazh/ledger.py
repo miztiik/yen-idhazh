@@ -1106,66 +1106,6 @@ def migrate_header(
     return moved
 
 
-def settle_header(
-    path: Path,
-    columns: tuple[str, ...],
-    read: Callable[[dict[str, str]], dict[str, str]],
-    *,
-    carried: Collection[str] = (),
-) -> tuple[int, list[str]]:
-    """Fold a file carrying more than one header back onto one. Never raises.
-
-    The scan `migrate_header` stopped doing, moved to the one place that can see
-    what it is looking for. Every day file under `state/` carried a union merge
-    driver until 2026-09-19 (`.gitattributes`), and that driver resolved one
-    physical line at a time: two runs appending
-    different rows merge correctly, and two runs appending under different
-    headings leave both header blocks in the file while git calls the merge
-    clean. Measured on this repository
-    2026-09-15, `state/item-health/2026/09/14.csv` held 394 rows under the
-    current header and 71 under the one before it.
-
-    Nothing can make that shape now: no two writers share a file, so no file
-    here is ever merged. The bytes that already hold it are committed, and this
-    is what repairs one when a reader meets it. A row whose width does not match
-    its
-    own header block is repaired here too: the contract's reader fills what a
-    short row left out, and an empty cell is what an absent optional already
-    means.
-
-    **It never raises, and it writes all of the repair or none of it.** An abort
-    here would cost the run every ledger row staged beside the file it was
-    fixing, so a line it cannot read comes back as a complaint instead - and the
-    file is left byte-identical, because a header written over a line that did
-    not move is a header that lies about its own rows, and the next append reads
-    that width as the one the contract asked for. A file carrying headings this
-    contract's reader does not know is left alone for the same reason.
-    `migrate_header` refuses on both conditions too; it raises where this
-    returns.
-
-    Returns how many rows were re-filed, and a complaint for each line the caller
-    should print.
-    """
-    if not path.exists():
-        return 0, []
-    with path.open("r", encoding="utf-8", newline="") as handle:
-        lines = handle.readlines()
-    if not lines:
-        return 0, []
-    unplaceable = _unplaceable(lines, columns, carried)
-    if unplaceable:
-        return 0, [
-            f"{path.name} carries {len(unplaceable)} heading(s) this build cannot place "
-            f"({', '.join(unplaceable[:5])}); it was left as it was"
-        ]
-    kept, moved, refused = _refile(lines, columns, read)
-    if refused:
-        return 0, refused
-    if kept != lines:
-        path.write_text("".join(kept), encoding="utf-8", newline="")
-    return moved, refused
-
-
 def extend_ledger_file(path: Path, columns: tuple[str, ...], rows: Sequence[CsvRecord]) -> int:
     """Write every row it is handed. This path does not deduplicate, on purpose.
 

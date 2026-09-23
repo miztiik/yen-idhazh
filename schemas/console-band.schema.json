@@ -279,6 +279,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "The two lag readings are fixed at 0 and covers_through is the run's own day.",
+      "version": "2026-09-23",
+      "why": "Every writer files its own day, so no run finds a backlog to fold."
+    },
+    {
       "change": "The band carries compaction_lag_days, rows_uncompacted and covers_through.",
       "version": "2026-09-19",
       "why": "A page brought current by this run looked the same as one two days behind."
@@ -298,7 +303,7 @@
   "properties": {
     "compaction_lag_days": {
       "default": 0,
-      "description": "Whole days between the oldest segment the compaction found waiting and the date it ran. 0 when it found none, which is every normal run.",
+      "description": "Always 0. Nothing waits to be compacted, because every writer files its rows under the day those rows name. A payload written before that change can still carry a higher reading.",
       "minimum": 0,
       "title": "Compaction Lag Days",
       "type": "integer"
@@ -314,7 +319,7 @@
         }
       ],
       "default": null,
-      "description": "The newest date every head is compacted through after this run. Null when nothing waited, because then this run moved no head.",
+      "description": "The day this run assembled. That is the newest day the record can cover, because this run is the one writing it. Null only on a payload written before the field was always filled.",
       "title": "Covers Through"
     },
     "generated_at": {
@@ -341,7 +346,7 @@
     },
     "rows_uncompacted": {
       "default": 0,
-      "description": "Rows this run folded in from segments an earlier run left behind. It is what the record was short by until this run, not what it is short by now.",
+      "description": "Always 0, for the reason compaction_lag_days is. A payload written before that change can still carry a higher reading.",
       "minimum": 0,
       "title": "Rows Uncompacted",
       "type": "integer"
@@ -353,7 +358,7 @@
       "$ref": "#/$defs/BandVerdict"
     },
     "version": {
-      "default": "2026-09-19",
+      "default": "2026-09-23",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -378,5 +383,5 @@
   ],
   "title": "ConsoleBand",
   "type": "object",
-  "version": "2026-09-19"
+  "version": "2026-09-23"
 }

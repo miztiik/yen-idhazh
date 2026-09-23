@@ -633,12 +633,14 @@ the width alone would have called it clean.
 
 That is a failed scheduled run, not a failed lint. **This is the one ledger that
 migrates itself, and the reason is that it is the one that has retired a
-heading.** `stage_compact` reads the head's line 1 before it folds a row into
-it, and calls `ledger.settle_header`, which re-files
-every row through `ItemHealthRow.from_csv_row` and writes the file back under
-the current column list. The migration ships in the same commit as the contract
-(`CLAUDE.md` section 11) because that function IS the migration, not because a
-utility has to be run by hand.
+heading.** `stages.compact` folds a day by reading every file in it through
+`ItemHealthRow.from_csv_row`, which maps by name and carries a retired heading to
+the column it moved to, then writes the day whole from the contract's current
+column list. A day the fold touches comes back under the current header, so the
+migration ships in the same commit as the contract (`CLAUDE.md` section 11)
+rather than as a step somebody runs by hand. A day the fold does not touch is
+widened through `backend/utilities/widen_ledger_header.py`, which is the one door
+onto `ledger.migrate_header`.
 
 Three things follow, and the first is the one most often got wrong:
 
@@ -654,9 +656,9 @@ Three things follow, and the first is the one most often got wrong:
 3. **A removed column must be named in `ledger.ITEM_HEALTH_CARRIED`, in the same
  commit.** `migrate_header` refuses any heading that is neither a current
  column nor one the reader carries, rather than dropping cells silently - so a
- retired column with no entry there raises on the first append to every
- committed day file, and takes every ledger staged beside it down with it.
- `runner_name` and `cgroup_peak_bytes` are in that set for exactly this reason.
+ retired column with no entry there makes the widening above refuse the file
+ and leave it byte-identical. `runner_name` and `cgroup_peak_bytes` are in that
+ set for exactly this reason.
 
 **The committed day files are not rewritten by the pull request.** Each one is
 re-filed by the first run that appends to it. A branch that rewrote a day file

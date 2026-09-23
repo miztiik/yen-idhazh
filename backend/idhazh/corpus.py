@@ -161,6 +161,32 @@ def census(rows: Sequence[CorpusRow], *, previous: CorpusMeta, prompt_digest: st
     )
 
 
+def refuse_a_miscounted_census(rows: Sequence[CorpusRow], meta: CorpusMeta) -> None:
+    """Refuse a census that does not count the window it is about to be written beside.
+
+    `census` recounts from the window, so the pair agrees by construction today.
+    The check is here because `harvest` is the last place anything holds both
+    files at once. A counted field that stopped being recounted - one added to
+    `CorpusMeta` and not to `census` - would otherwise ride the committed meta
+    through and be trusted by every later reader.
+    """
+    dates = sorted(row.date for row in rows)
+    readings: tuple[tuple[str, object, object], ...] = (
+        ("rows", meta.rows, len(rows)),
+        ("verticals", sum(meta.verticals.values()), len(rows)),
+        ("models", sum(meta.models.values()), len(rows)),
+        ("first_date", meta.first_date, dates[0] if dates else None),
+        ("last_date", meta.last_date, dates[-1] if dates else None),
+    )
+    wrong = [
+        f"{name} says {said} and the window says {found}"
+        for name, said, found in readings
+        if said != found
+    ]
+    if wrong:
+        raise ValueError(f"the census does not count its own window: {'; '.join(wrong)}")
+
+
 # --- The due checks --------------------------------------------------------
 
 
@@ -484,6 +510,7 @@ def harvest(
         previous=read_meta(corpus_dir).model_copy(update={"harvested_date": date}),
         prompt_digest=derive_text_digest(summarize.prompt_inputs(prompt_config)),
     )
+    refuse_a_miscounted_census(kept, meta)
     write(corpus_dir, kept, meta)
     LOG.info(
         "harvested date=%s offered=%s kept=%s window=%s evicted=%s",

@@ -77,7 +77,7 @@ def seed_item_health(state_dir: Path, date: str, rows: Iterable[ItemHealthRow]) 
     """
     path = ledger.item_health_path(state_dir, date) / day_shards.SETTLED_NAME
     columns = ItemHealthRow.csv_columns()
-    ledger.settle_header(
+    ledger.migrate_header(
         path, columns, ledger.refiler(ItemHealthRow), carried=ledger.ITEM_HEALTH_CARRIED
     )
     held = ledger.recorded_item_health(path)
@@ -120,7 +120,7 @@ def seed_span_rollup(state_dir: Path, date: str, rows: Iterable[SpanRollupRow]) 
     """
     path = ledger.span_rollup_path(state_dir, date) / day_shards.SETTLED_NAME
     columns = SpanRollupRow.csv_columns()
-    ledger.settle_header(path, columns, ledger.refiler(SpanRollupRow))
+    ledger.migrate_header(path, columns, ledger.refiler(SpanRollupRow))
     held = ledger.recorded_span_rollup(path)
     kept: list[dict[str, str]] = []
     for row in rows:

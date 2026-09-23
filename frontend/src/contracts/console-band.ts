@@ -113,12 +113,12 @@ export interface ConsoleBand {
 	/** Every month a payload shard exists for, oldest first. The console asks for a month by name, so this is the list it picks from - and it is here rather than in a file of its own so the first month is the second hop and not the third. */
 	months?: string[];
 
-	/** Whole days between the oldest segment the compaction found waiting and the date it ran. 0 when it found none, which is every normal run. */
+	/** Always 0. Nothing waits to be compacted, because every writer files its rows under the day those rows name. A payload written before that change can still carry a higher reading. */
 	compaction_lag_days?: number;
 
-	/** Rows this run folded in from segments an earlier run left behind. It is what the record was short by until this run, not what it is short by now. */
+	/** Always 0, for the reason compaction_lag_days is. A payload written before that change can still carry a higher reading. */
 	rows_uncompacted?: number;
 
-	/** The newest date every head is compacted through after this run. Null when nothing waited, because then this run moved no head. */
+	/** The day this run assembled. That is the newest day the record can cover, because this run is the one writing it. Null only on a payload written before the field was always filled. */
 	covers_through?: string | null;
 }

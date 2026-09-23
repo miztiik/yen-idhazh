@@ -27,7 +27,6 @@ from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.article import Article
 from idhazh.contracts.corpus import ChatRole, ChatTurn, CorpusMeta, CorpusRow
 from idhazh.contracts.eval_row import EvalRow
-from idhazh.contracts.knobs.finetune import FinetuneConfig
 from idhazh.contracts.knobs.models import ModelsConfig
 from idhazh.contracts.summary import Summary, SummaryStatus
 
@@ -711,25 +710,19 @@ def test_stamping_the_prune_moves_one_field_and_no_other(tmp_path: Path) -> None
     assert after.pruned_date == DATE
 
 
-def test_the_committed_window_loads_and_agrees_with_its_own_census() -> None:
-    """The corpus in the repository, read by the shipped reader.
+def test_a_census_that_lost_count_is_refused() -> None:
+    """The harvest is the last place anything holds the window and its census.
 
-    It ships seeded rather than absent because `commit-and-push.sh` runs
-    `git add "$@"` under `set -euo pipefail`, so a staged path that does not exist
-    yet aborts the commit step and takes the day's ledgers with it. What is
-    asserted here is the stronger property: whatever the window holds, the census
-    beside it counts the same rows, so nothing can quietly drift.
+    Driven directly, because `census` recounts from the window and so cannot
+    disagree with it through `harvest`. The shape being refused is a counted
+    field that stopped being recounted, which is a change to code.
     """
-    seed = Path(corpus.__file__).resolve().parents[2] / corpus.CORPUS_ROOT_RELPATH
-    rows = corpus.read_rows(seed)
-    meta = corpus.read_meta(seed)
+    rows = [row_at("2026-08-01", "a"), row_at("2026-08-02", "b")]
+    counted = corpus.census(
+        rows, previous=CorpusMeta(version=CorpusMeta.schema_version()), prompt_digest="d"
+    )
 
-    assert meta.rows == len(rows)
-    assert sum(meta.verticals.values()) == len(rows)
-    assert sum(meta.models.values()) == len(rows)
-    assert len({row.url_key for row in rows}) == len(rows), "one article, one row"
-    assert len(rows) <= FinetuneConfig().corpus_rows
-    if rows:
-        dates = sorted(row.date for row in rows)
-        assert meta.first_date == dates[0]
-        assert meta.last_date == dates[-1]
+    corpus.refuse_a_miscounted_census(rows, counted)
+
+    with pytest.raises(ValueError, match="verticals says 1 and the window says 2"):
+        corpus.refuse_a_miscounted_census(rows, counted.model_copy(update={"verticals": {"ai": 1}}))

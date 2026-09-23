@@ -69,7 +69,7 @@ export interface CompactionLag {
 	days: number;
 	/** Rows the run folded in from segments an earlier run left behind. */
 	rows: number;
-	/** The newest date every ledger head is compacted through now. */
+	/** The day the run that wrote this band assembled. */
 	coversThrough: string | null;
 }
 
