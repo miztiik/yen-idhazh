@@ -281,25 +281,23 @@ jobs:
       # calls, the visual decision on, one slot on the server. Every other case is
       # read against this one, so it runs first and it changes nothing.
       #
-      # `bash <path>`, which is how this repository calls into
-      # `.github/scripts/`. The bare path works only while the file carries the
-      # executable bit, a file mode is invisible to the tests that read this
-      # YAML and to the shellcheck step that reads the script, and the first
-      # dispatch of this workflow died on exactly that - exit 126,
-      # `Permission denied`, on a script committed 100644. Handing the file to
-      # bash asks nothing of the mode.
+      # `python3 <path>`, which is how this repository calls into
+      # `backend/utilities/`. A program is handed to an interpreter, so it asks
+      # nothing of a file mode - and the first dispatch of this workflow died on
+      # exactly that mode, exit 126 `Permission denied`, back when the case body
+      # was a script committed 100644.
       #
       # `!cancelled()` on every case, because a rig exists to say what happened.
       # On that first dispatch one broken call took all three cases with it, so
-      # the run read as a baseline problem where it had a script problem; three
+      # the run read as a baseline problem where it had a caller problem; three
       # cases failing the same way would have named the cause on the run page.
-      # A case still needs the one plan, and the script refuses by name without
+      # A case still needs the one plan, and the runner refuses by name without
       # it rather than summarizing nothing quietly.
       - name: Case baseline
         if: ${{ !cancelled() }}
         env:
           RUN_DATE: ${{ steps.plan.outputs.date }}
-        run: bash .github/scripts/run-pipeline-test-case.sh baseline "$RUN_DATE"
+        run: python3 backend/utilities/pipeline_test_case.py baseline "$RUN_DATE"
 
       # Case two. No picture is reachable, so the summarize-and-plan call comes
       # back with the summary alone and the plan's decode is not spent. The
@@ -310,7 +308,7 @@ jobs:
         if: ${{ !cancelled() }}
         env:
           RUN_DATE: ${{ steps.plan.outputs.date }}
-        run: bash .github/scripts/run-pipeline-test-case.sh no-visual-decision "$RUN_DATE"
+        run: python3 backend/utilities/pipeline_test_case.py no-visual-decision "$RUN_DATE"
 
       # The slot count is fixed when the process starts, so this case costs a
       # restart and a second model load. That load is itself one of the numbers
@@ -364,7 +362,7 @@ jobs:
         if: ${{ !cancelled() && steps.restart.conclusion == 'success' }}
         env:
           RUN_DATE: ${{ steps.plan.outputs.date }}
-        run: bash .github/scripts/run-pipeline-test-case.sh parallel-2 "$RUN_DATE"
+        run: python3 backend/utilities/pipeline_test_case.py parallel-2 "$RUN_DATE"
 
       - name: Stop the model
         if: always()

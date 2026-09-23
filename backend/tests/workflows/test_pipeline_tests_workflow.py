@@ -31,9 +31,7 @@ from ._harness import (
     INSTALL_RUNTIME_CALL,
     MODEL_RUNTIME_MODULE,
     PINNED_LLAMA_BUILD,
-    SCRIPTS_DIR,
     WORKFLOWS_DIR,
-    _bash,
     _declared_dispatch_inputs,
     _isolated_env,
     _job,
@@ -47,7 +45,6 @@ from ._harness import (
     _steps,
     _strings,
     _triggers,
-    requires_bash,
 )
 
 pytestmark = [pytest.mark.workflow, pytest.mark.slow]
@@ -106,7 +103,11 @@ RESTART_STEP: str = "Restart the model with two slots"
 
 REPORT_STEP: str = "Say what the three cases measured"
 
-CASE_SCRIPT: Path = SCRIPTS_DIR / "run-pipeline-test-case.sh"
+#: The program a case step runs, spelled as a step spells it, and the path this
+#: module drives. Running the shipped file rather than a copy is Guardrail #7.
+CASE_MODULE: str = "backend/utilities/pipeline_test_case.py"
+
+CASE_RUNNER: Path = REPO_ROOT / CASE_MODULE
 
 #: The one dispatch input, the action that acts on it, and the scratch root that
 #: action writes. Named here so a second way of reaching a candidate has to be
@@ -233,7 +234,7 @@ def test_the_cases_run_in_sequence_in_one_job_on_one_runner() -> None:
     assert job.get("runs-on") == "ubuntu-latest"
     assert _job(workflow, COMMIT_JOB).get("needs") == JOB, "nothing commits before the cases run"
     for text in _strings(_job(workflow, COMMIT_JOB)):
-        assert "run-pipeline-test-case.sh" not in text, "the committing job runs no case"
+        assert CASE_MODULE not in text, "the committing job runs no case"
 
 
 def test_the_job_bound_is_the_budget_config_declares() -> None:
@@ -296,7 +297,7 @@ def test_every_case_runs_the_one_plan_and_nothing_else_writes_one() -> None:
     case_steps = [
         step
         for step in steps
-        if isinstance(step.get("run"), str) and CASE_SCRIPT.name in str(step.get("run"))
+        if isinstance(step.get("run"), str) and CASE_MODULE in str(step.get("run"))
     ]
     assert [step.get("name") for step in case_steps] == [
         f"Case {case.id}" for case in settings.cases
@@ -304,7 +305,7 @@ def test_every_case_runs_the_one_plan_and_nothing_else_writes_one() -> None:
 
     for case, step in zip(settings.cases, case_steps, strict=True):
         body = _script(step, f"{WORKFLOW}/{JOB}/{step.get('name')}")
-        assert f"{CASE_SCRIPT.name} {case.id} " in body, "the step runs the case it is named for"
+        assert f"{CASE_MODULE} {case.id} " in body, "the step runs the case it is named for"
         assert "steps.plan.outputs.date" in str(step.get("env")), (
             "a case reads the day the one plan was written for"
         )
@@ -796,7 +797,23 @@ def test_the_plan_step_writes_a_plan_the_work_stage_can_open(tmp_path: Path) -> 
     assert plan.feeds_read == 0, "this plan came off a config list, so no feed was asked"
 
 
-@requires_bash
+def _ran_a_case(tmp_path: Path, argv: list[str]) -> subprocess.CompletedProcess[str]:
+    """Run the shipped case runner against a fixture tree (Guardrail #7).
+
+    A fixture tree rather than the committed one, because what is being read is
+    the exit code and the exit code is the same for two articles as for none
+    (CLAUDE.md section 13).
+    """
+    return subprocess.run(
+        [sys.executable, str(CASE_RUNNER), *argv],
+        cwd=tmp_path,
+        env={**_isolated_env(tmp_path), "PYTHONPATH": str(REPO_ROOT / "backend")},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
 @pytest.mark.parametrize(
     ("argv", "message"),
     [
@@ -805,7 +822,7 @@ def test_the_plan_step_writes_a_plan_the_work_stage_can_open(tmp_path: Path) -> 
         (["not-a-case", "2026-09-14"], "unknown case"),
     ],
 )
-def test_the_case_script_refuses_a_call_it_cannot_serve(
+def test_the_case_runner_refuses_a_call_it_cannot_serve(
     argv: list[str], message: str, tmp_path: Path
 ) -> None:
     """Run it, do not read it (Guardrail #7).
@@ -814,22 +831,12 @@ def test_the_case_script_refuses_a_call_it_cannot_serve(
     committed config under another case's name, and the report would file that
     case's number against a config it never used.
     """
-    shell = _bash()
-    assert shell is not None
-    completed = subprocess.run(
-        [shell, CASE_SCRIPT.as_posix(), *argv],
-        cwd=tmp_path,
-        env=_isolated_env(tmp_path),
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    completed = _ran_a_case(tmp_path, argv)
     assert completed.returncode == 2
     assert message in completed.stderr
 
 
-@requires_bash
-def test_the_case_script_refuses_to_run_without_the_plan_the_cases_share(tmp_path: Path) -> None:
+def test_the_case_runner_refuses_to_run_without_the_plan_the_cases_share(tmp_path: Path) -> None:
     """A case with no plan is a case that would summarize nothing and say so quietly.
 
     `idhazh work` with an absent plan is a failure four steps later about a file
@@ -837,35 +844,38 @@ def test_the_case_script_refuses_to_run_without_the_plan_the_cases_share(tmp_pat
     which step writes it.
     """
     (tmp_path / "backend" / "var" / "cases" / "baseline" / "config").mkdir(parents=True)
-    shell = _bash()
-    assert shell is not None
-    completed = subprocess.run(
-        [shell, CASE_SCRIPT.as_posix(), "baseline", "2026-09-14"],
-        cwd=tmp_path,
-        env=_isolated_env(tmp_path),
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    completed = _ran_a_case(tmp_path, ["baseline", "2026-09-14"])
     assert completed.returncode == 2
     assert "no plan to run" in completed.stderr
 
 
-def test_the_shell_it_runs_is_linted_like_every_other_script() -> None:
-    """A script under `.github/scripts/` is read by shellcheck; a `run:` body is not.
+def test_a_case_whose_pipeline_failed_is_not_reported_as_a_call_it_could_not_serve(
+    tmp_path: Path,
+) -> None:
+    """The other half of the exit-code contract, and the half nothing has held.
 
-    That is most of why the case body is a script at all, so the file has to be
-    where the linter looks and it has to be executable shell rather than a
-    fragment somebody pasted.
+    `2` says this program was asked for something it cannot serve. A pipeline
+    that ran and failed returns its own code, so a person reading the run page
+    tells a typo in a case id from a case that really failed. Driven by handing
+    the pipeline a config root with nothing in it, which is a real failure of
+    the real program rather than a stub that returns a number.
 
-    One script, where there were three. The pin, the install and the download
-    are a Python program now, and a program is read by `ruff` and `mypy`
-    instead.
+    The half-written run goes with it: a case that failed leaves no `run`
+    directory for the report to read as a measurement.
     """
-    assert CASE_SCRIPT.parent == SCRIPTS_DIR
-    text = read_text(CASE_SCRIPT)
-    assert text.startswith("#!/usr/bin/env bash\n"), CASE_SCRIPT.name
-    assert "set -euo pipefail" in text, CASE_SCRIPT.name
+    case_root = tmp_path / "backend" / "var" / "cases" / "baseline"
+    (case_root / "config").mkdir(parents=True)
+    plan = tmp_path / "backend" / "var" / "pipeline-tests" / "plan.json"
+    plan.parent.mkdir(parents=True)
+    plan.write_text("{}", encoding="utf-8")
+
+    completed = _ran_a_case(tmp_path, ["baseline", "2026-09-14"])
+    assert completed.returncode != 0, "a failed pipeline fails the step that ran it"
+    assert completed.returncode != 2, (
+        "2 is reserved for a call this program cannot serve, so a failed "
+        f"pipeline may not spell it: {completed.stderr}"
+    )
+    assert not (case_root / "run").exists(), "nothing is filed under a case that did not finish"
 
 
 def _scratch(tmp_path: Path, *, models_file: str | None) -> Path:
