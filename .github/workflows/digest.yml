@@ -543,8 +543,6 @@ jobs:
       # copied here, so the grammar case is held to the shape this run really
       # sends (`docs/architecture/summarize/model-boundary.md`).
       - name: The server proves the entry
-        env:
-          LLAMA_WEIGHTS: ${{ steps.model_server.outputs.weights_path }}
         run: |
           set -euo pipefail
           python3 backend/utilities/prove_the_entry.py --config-root config
@@ -558,7 +556,7 @@ jobs:
         if: always()
         env:
           LLAMA_CPP_BUILD: ${{ needs.plan.outputs.llama_cpp_build }}
-          LLAMA_WEIGHTS: ${{ steps.model_server.outputs.weights_path }}
+          MODEL_PATH: ${{ steps.model_server.outputs.weights_path }}
         run: |
           echo "pinned llama.cpp build: ${LLAMA_CPP_BUILD}"
           grep -m1 'model name' /proc/cpuinfo || true
@@ -566,7 +564,7 @@ jobs:
           grep -m1 'system_info' llama-server.log || true
           LD_LIBRARY_PATH=backend/bin backend/bin/llama-server --version 2>&1 | head -3 || true
           sha256sum backend/bin/llama-server || true
-          sha256sum "${LLAMA_WEIGHTS}" || true
+          sha256sum "${MODEL_PATH}" || true
 
       # Neither of the two runs this shape was read from measured memory at all,
       # and the runner has 16 GB (Guardrail #2). `measure.yml` already samples exactly
