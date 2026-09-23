@@ -385,7 +385,7 @@ one. Before that, an alternative sat unvalidated until the day somebody switched
 to it - and that day is a pipeline run.
 
 **A second set of weights that drafts ahead of the first is not offered.** It
-was until 2026-09-21, as `models.summarize.draft`, and the mechanism's whole
+was until 2026-09-21, as `models.summarizer.draft`, and the mechanism's whole
 claim is that it cannot change a word: the target verifies every drafted token
 and rejects any it would not itself have produced. Two paired dispatches refused
 that claim on nine articles of nine - each case reproduced its own summaries
@@ -532,7 +532,7 @@ Model](../../how-to/evaluate-new-summarizer-model.md) is the procedure.
 - [throughput.md](throughput.md) - what a call costs, and where the time goes.
 - [../contracts/schemas.md](../contracts/schemas.md) - how a persisted shape is declared, versioned and migrated.
 - [../contracts/determinism.md](../contracts/determinism.md) - what the run stamp records, and what it cannot see.
-- [../../concepts/config.md](../../concepts/config.md) - the config shape and every knob on it.
+- [../../concepts/config/model-file.md](../../concepts/config/model-file.md) - the runtime settings and turn markers declared for one set of weights.
 - [../../how-to/evaluate-new-summarizer-model.md](../../how-to/evaluate-new-summarizer-model.md) - the runbook for benchmarking, adopting and reverting.
 - [../../how-to/fine-tune-a-model.md](../../how-to/fine-tune-a-model.md) - the training corpus, and what a base swap does to an adapter.
 - [../../reference/pipeline-cost.md](../../reference/pipeline-cost.md) - the instrument log.

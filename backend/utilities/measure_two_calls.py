@@ -84,6 +84,7 @@ from idhazh.llm.server import (
     TurnMarkers,
     completion_url,
     derive_turn_markers,
+    loopback_url,
     post,
     props,
     server_argv,
@@ -106,7 +107,7 @@ def wait_for_health(port: int, *, deadline_seconds: float) -> None:
     started = time.monotonic()
     while time.monotonic() - started < deadline_seconds:
         try:
-            with urllib.request.urlopen(f"http://127.0.0.1:{port}/health", timeout=2.0):
+            with urllib.request.urlopen(loopback_url(port) + "/health", timeout=2.0):
                 return
         except (urllib.error.URLError, OSError):
             time.sleep(1.0)
@@ -125,7 +126,7 @@ def weights_digest(weights: Path) -> str:
     return digest.hexdigest()
 
 
-def refuse_undeclared_weights(weights: Path, models: ModelsConfig, role: str = "summarize") -> str:
+def refuse_undeclared_weights(weights: Path, models: ModelsConfig, role: str = "summarizer") -> str:
     """Hash the file and compare it with the entry that configures it.
 
     `declared_for` is the sha256 the entry's settings and markers were derived
@@ -653,14 +654,14 @@ def run_item(
     markers: TurnMarkers,
 ) -> Reading:
     article = sample.article
-    model = models.summarize
+    model = models.summarizer
     table = element_table(article, config=app.elements)
     first = build_label_request(
         article,
         table,
         model_id=model.id,
         server=model.server,
-        request=model.request,
+        sampling=model.sampling,
         markers=markers,
         prompt_config=app.summarize,
     )
@@ -722,7 +723,7 @@ def pick_samples(
     prompt is tokenised by the server that will answer it, so "fits" is a fact
     rather than a words-to-tokens rule of thumb.
     """
-    model = models.summarize
+    model = models.summarizer
     chosen: list[tuple[Sample, int]] = []
     for seen, sample in enumerate(samples, start=1):
         table = element_table(sample.article, config=app.elements)
@@ -731,7 +732,7 @@ def pick_samples(
             table,
             model_id=model.id,
             server=model.server,
-            request=model.request,
+            sampling=model.sampling,
             markers=markers,
             prompt_config=app.summarize,
         )
@@ -894,7 +895,7 @@ def main(argv: list[str] | None = None) -> int:
     settings = config.load(REPO_ROOT / "config")
     app = settings.app
     models = settings.models
-    model = models.summarize
+    model = models.summarizer
     try:
         digest = refuse_undeclared_weights(args.weights, models)
     except WrongWeightsError as refusal:
@@ -923,7 +924,7 @@ def main(argv: list[str] | None = None) -> int:
     system_tokens: int | None = None
     try:
         wait_for_health(args.server_port, deadline_seconds=args.startup_seconds)
-        base = f"http://127.0.0.1:{args.server_port}"
+        base = loopback_url(args.server_port)
         endpoint = completion_url(base)
         timeout = args.request_minutes * 60.0
         tokenizer = Tokenizer(base=base, timeout=60.0)
@@ -988,7 +989,7 @@ def main(argv: list[str] | None = None) -> int:
                     element_table(built.article, config=app.elements),
                     model_id=model.id,
                     server=model.server,
-                    request=model.request,
+                    sampling=model.sampling,
                     markers=markers,
                     prompt_config=app.summarize,
                 )["prompt"]

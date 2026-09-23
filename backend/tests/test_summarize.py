@@ -15,9 +15,11 @@ from __future__ import annotations
 import ast
 import dataclasses
 import json
+import logging
 import re
 import socket
 import threading
+from collections.abc import Callable
 from dataclasses import replace
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -31,7 +33,7 @@ from conftest import (
     FIXTURES_DIR,
     REPO_ROOT,
     RecordedEndpoint,
-    a_request,
+    a_sampling,
     a_server,
     committed_markers,
     llama_server_flags,
@@ -200,7 +202,7 @@ def summarised(name: str, source: str = "ok") -> Summary:
 def test_the_system_prompt_never_carries_the_article() -> None:
     """Decision 1: article text goes in the user turn, or the fence means nothing."""
     payload = build_request(
-        article(), model_id="m", request=a_request(), markers=built_envelope()
+        article(), model_id="m", sampling=a_sampling(), markers=built_envelope()
     )
     system = payload["messages"][0]
     assert system["role"] == "system"
@@ -240,13 +242,114 @@ def test_decoding_parameters_come_from_config_and_nowhere_else() -> None:
         system="s",
         user="u",
         output_schema={},
-        request=a_request(),
+        sampling=a_sampling(),
         markers=built_envelope(),
     )
     assert payload["temperature"] == 0.0
     assert payload["top_p"] == 1.0
     assert payload["seed"] == 0
     assert payload["stream"] is False
+
+
+def test_a_sampler_no_code_of_ours_names_reaches_the_body_verbatim() -> None:
+    """The row's oracle. The block is splatted, so a new sampler costs no edit here.
+
+    Three keys were wired one at a time until 2026-09-23 and a fourth validated
+    and was dropped in silence. One key nothing in this repository mentions is
+    the whole check: a per-key gate cannot pass it under any spelling.
+    """
+    for body in three_bodies(a_sampling(top_n_sigma=1.5, dry_base=1.75)):
+        assert body["top_n_sigma"] == 1.5
+        assert body["dry_base"] == 1.75
+
+
+@pytest.mark.parametrize(
+    ("route", "taken"),
+    [("chat", "json_schema"), ("completion", "grammar"), ("grammar", "grammar_lazy")],
+)
+def test_a_route_refuses_a_sampling_key_it_sets_itself(route: str, taken: str) -> None:
+    """Each builder refuses from its own set, and the refusal names the key.
+
+    `grammar_lazy` is the sharpest of the three: it leaves `grammar` formally
+    applied and never engaged, so the control would be off with its own key
+    untouched and nothing in the body looking wrong.
+    """
+    with pytest.raises(ValueError, match=taken):
+        three_bodies(a_sampling(**{taken: True}), only=route)
+
+
+def test_a_key_the_route_wrote_itself_is_refused_even_where_no_set_names_it() -> None:
+    """The half a static list cannot hold: what a builder put in the body.
+
+    `prompt` is not a decode control and is on nobody's refused list. It is the
+    rendered bytes the route wrote, and a config key that replaced them would
+    send an article nobody wrote.
+    """
+    with pytest.raises(ValueError, match="prompt"):
+        three_bodies(a_sampling(prompt="whatever the file says"), only="completion")
+
+
+def test_the_derived_bodies_inherit_the_sampling_rather_than_splatting_it_again() -> None:
+    """The fourth builder is a derivation, so it must not run the check at all.
+
+    `continued_completion_payload` is `{**first, ...}` and `first` already
+    carries every sampling key, so a second splat would clash on all thirteen
+    and raise on every summarize-and-plan call.
+    """
+    first = three_bodies(a_sampling(top_k=40), only="completion")
+    second = continued_completion_payload(
+        first,
+        reply='{"title": "a bridge"}',
+        user="Now the picture.",
+        output_schema=output_schema(),
+        markers=built_envelope(),
+        max_answer_tokens=64,
+    )
+
+    assert second["top_k"] == 40, "the derivation inherits the block through the first body"
+    assert second["prompt"].startswith(first["prompt"])
+
+
+def three_bodies(sampling: dict[str, Any], *, only: str | None = None) -> Any:
+    """One sampling block through each constructing builder, or through one of them.
+
+    The three are asked together because the rule is the same rule on all three
+    and a case written against one of them says nothing about the other two.
+    """
+    built: dict[str, Callable[[], dict[str, Any]]] = {
+        "chat": lambda: request_payload(
+            model_id="m",
+            system="s",
+            user="u",
+            output_schema=output_schema(),
+            sampling=sampling,
+            markers=built_envelope(),
+        ),
+        "completion": lambda: completion_payload(
+            model_id="m",
+            system="s",
+            user="u",
+            output_schema=output_schema(),
+            server=a_server(),
+            sampling=sampling,
+            markers=built_envelope(),
+            max_answer_tokens=64,
+        ),
+        "grammar": lambda: grammar_completion_payload(
+            model_id="m",
+            system="s",
+            user="u",
+            grammar='root ::= "yes"',
+            server=a_server(),
+            sampling=sampling,
+            markers=built_envelope(),
+            max_answer_tokens=4,
+            first_token_alternatives=3,
+        ),
+    }
+    if only is not None:
+        return built[only]()
+    return [make() for make in built.values()]
 
 
 def test_the_chat_route_sends_no_token_cap_on_either_envelope() -> None:
@@ -259,13 +362,13 @@ def test_the_chat_route_sends_no_token_cap_on_either_envelope() -> None:
     no context shift, and what bounds the wait is the per-request timeout -
     both per item, both loud.
     """
-    request = a_request()
+    sampling = a_sampling()
     quiet = request_payload(
         model_id="m",
         system="s",
         user="u",
         output_schema={},
-        request=request,
+        sampling=sampling,
         markers=built_envelope(),
     )
     loud = request_payload(
@@ -273,7 +376,7 @@ def test_the_chat_route_sends_no_token_cap_on_either_envelope() -> None:
         system="s",
         user="u",
         output_schema={},
-        request=request,
+        sampling=sampling,
         markers=built_envelope(thinking_close="</think>"),
     )
 
@@ -289,7 +392,7 @@ def test_thinking_is_off_in_the_request() -> None:
         system="s",
         user="u",
         output_schema={},
-        request=a_request(),
+        sampling=a_sampling(),
         markers=committed_envelope(),
     )
     assert payload["chat_template_kwargs"] == {"enable_thinking": False}
@@ -302,7 +405,7 @@ def test_the_declared_closing_marker_is_what_asks_the_template_to_think() -> Non
         system="s",
         user="u",
         output_schema={},
-        request=a_request(),
+        sampling=a_sampling(),
         markers=built_envelope(thinking_close="</think>"),
     )
     assert payload["chat_template_kwargs"] == {"enable_thinking": True}
@@ -321,7 +424,7 @@ def test_a_template_that_reads_no_keyword_is_sent_none() -> None:
         system="s",
         user="u",
         output_schema={},
-        request=a_request(),
+        sampling=a_sampling(),
         markers=built_envelope(thinking_kwarg=None),
     )
     assert "chat_template_kwargs" not in payload
@@ -334,7 +437,7 @@ def test_the_keyword_the_request_carries_is_the_one_the_entry_names() -> None:
         system="s",
         user="u",
         output_schema={},
-        request=a_request(),
+        sampling=a_sampling(),
         markers=built_envelope(thinking_kwarg="reasoning"),
     )
     assert payload["chat_template_kwargs"] == {"reasoning": False}
@@ -347,7 +450,7 @@ def test_the_output_shape_is_enforced_by_the_decoder() -> None:
         system="s",
         user="u",
         output_schema=output_schema(),
-        request=a_request(),
+        sampling=a_sampling(),
         markers=built_envelope(),
     )
     assert payload["response_format"]["type"] == "json_schema"
@@ -358,7 +461,6 @@ def test_the_output_shape_is_enforced_by_the_decoder() -> None:
 def test_the_server_is_started_from_config_not_by_hand() -> None:
     """Four flags are written in code and the rest are the entry's, emitted in order."""
     from idhazh.contracts.knobs.models import ModelRef
-    from idhazh.llm.server import DEFAULT_PORT
 
     binary = Path("bin/llama-server")
     weights = Path("models/w.gguf")
@@ -367,6 +469,7 @@ def test_the_server_is_started_from_config_not_by_hand() -> None:
         weights=weights,
         model=ModelRef(id="m", repo="r", file="w.gguf", quantisation="Q4_K_M"),
         server=a_server(**{"--metrics": None}),
+        port=8181,
     )
     assert argv == [
         str(binary),
@@ -376,7 +479,7 @@ def test_the_server_is_started_from_config_not_by_hand() -> None:
         "m",
         "--no-context-shift",
         "--port",
-        str(DEFAULT_PORT),
+        "8181",
         "--ctx-size",
         "8192",
         "--batch-size",
@@ -402,6 +505,7 @@ def test_the_server_refuses_an_oversized_prompt_rather_than_shifting_it() -> Non
         weights=Path("models/w.gguf"),
         model=ModelRef(id="m", repo="r", file="w.gguf", quantisation="Q4_K_M"),
         server=a_server(**{"--metrics": None}),
+        port=8181,
     )
 
     assert "--no-context-shift" in argv
@@ -422,6 +526,7 @@ def test_no_speculative_flag_reaches_the_server() -> None:
         weights=Path("models/w.gguf"),
         model=ModelRef(id="m", repo="r", file="w.gguf", quantisation="Q4_K_M"),
         server=a_server(**{"--metrics": None}),
+        port=8181,
     )
 
     assert not [flag for flag in argv if flag.startswith(("--spec-", "--draft"))]
@@ -450,22 +555,14 @@ def test_an_entry_a_person_writes_is_refused_for_naming_a_draft_head() -> None:
 
 
 def test_server_argv_names_the_port_it_was_given() -> None:
-    """One declaration reaches the flag, both client addresses and the probes.
+    """The port a caller hands the builder is the port the flag carries.
 
-    `DEFAULT_PORT` is what `LLAMA_PORT` sets, so the test reads it rather than
-    restating 8080 - a second literal here is the defect this row removed. Both
-    routes are checked: one server answers the chat shape and the rendered shape
-    on the same port, and an address that drifted would fail every item as
-    "model unreachable".
+    There is no default to fall back on. The one production caller reads the
+    port out of `model_server.base_url`, so a default here would be a second
+    answer to which port the run uses. The address itself is checked by
+    `test_every_route_is_derived_from_the_one_address_a_caller_was_given`.
     """
     from idhazh.contracts.knobs.models import ModelRef
-    from idhazh.llm.server import (
-        DEFAULT_COMPLETION_ENDPOINT,
-        DEFAULT_ENDPOINT,
-        DEFAULT_PORT,
-        completion_url,
-        props_url,
-    )
 
     argv = server_argv(
         binary=Path("bin/llama-server"),
@@ -474,20 +571,186 @@ def test_server_argv_names_the_port_it_was_given() -> None:
         server=a_server(**{"--metrics": None}),
         port=8181,
     )
+    elsewhere = server_argv(
+        binary=Path("bin/llama-server"),
+        weights=Path("models/w.gguf"),
+        model=ModelRef(id="m", repo="r", file="w.gguf", quantisation="Q4_K_M"),
+        server=a_server(**{"--metrics": None}),
+        port=9090,
+    )
 
     assert argv[argv.index("--port") + 1] == "8181"
-    assert f":{DEFAULT_PORT}/" in DEFAULT_ENDPOINT
-    assert f":{DEFAULT_PORT}/" in DEFAULT_COMPLETION_ENDPOINT
-    assert completion_url(DEFAULT_ENDPOINT) == DEFAULT_COMPLETION_ENDPOINT
+    assert elsewhere[elsewhere.index("--port") + 1] == "9090"
+
+
+def test_every_route_is_derived_from_the_one_address_a_caller_was_given() -> None:
+    """One server answers all five routes, or the run is reconciling two processes.
+
+    The address is the test's own string rather than the committed value, so
+    this keeps checking the derivation on the day an operator points the run
+    somewhere else (`CLAUDE.md` section 13). The host is one no committed file
+    names, which is what makes a route that ignored its argument visible.
+    """
+    from idhazh.llm.server import (
+        apply_template_url,
+        completion_url,
+        props_url,
+        resolve_endpoint,
+        tokenize_url,
+    )
+
+    elsewhere = "http://192.168.1.20:9090"
+    posts_to = resolve_endpoint(elsewhere)
+
+    assert posts_to == f"{elsewhere}/v1/chat/completions"
+    assert resolve_endpoint(f"{elsewhere}/") == posts_to, "a trailing slash is not a second server"
+    for route in (props_url, completion_url, apply_template_url, tokenize_url):
+        assert route(posts_to).startswith(f"{elsewhere}/"), (
+            f"{route.__name__} left the server the caller named"
+        )
+    # One server answers the chat shape and the rendered shape, so a route
+    # derived from either reaches the same place.
     assert completion_url("http://127.0.0.1:8181") == "http://127.0.0.1:8181/completions"
-    assert props_url(DEFAULT_COMPLETION_ENDPOINT) == props_url(DEFAULT_ENDPOINT)
+    assert props_url(completion_url(posts_to)) == props_url(posts_to)
+
+
+def test_a_program_that_started_its_own_server_probes_that_one() -> None:
+    """`loopback_url` takes a port and looks nothing up.
+
+    The three instruments that spawn a server measure the process they started.
+    Reading `model_server.base_url` there would point a measurement at whichever
+    server the config names, and a reading taken against a binary this process
+    did not start is a number about the wrong binary.
+
+    So the settings are handed in here and must make no difference. A config
+    naming another machine is the sharpest case, because that is the one where
+    a lookup would be visible.
+    """
+    from idhazh.contracts.knobs.model_server import ModelServerConfig
+    from idhazh.llm.server import loopback_url
+
+    elsewhere = ModelServerConfig(base_url="http://192.168.1.20:9090")
+
+    assert loopback_url(9090) == "http://127.0.0.1:9090"
+    assert elsewhere.base_url == "http://192.168.1.20:9090", "the config is unread, not rewritten"
+    assert loopback_url(8181).endswith(":8181"), "the port is the caller's and nothing else is"
+
+
+#: Every module allowed to write the loopback host, and what each one is. A set
+#: rather than a count, because a count falling by one names nothing and a count
+#: rising by one is read as "somebody added a test". Anything not here is a
+#: second address a config value cannot move, which is the state
+#: `model_server.base_url` exists to end.
+LOOPBACK_IS_WRITTEN_IN: Final = {
+    # The committed default, and the changelog line that quotes it.
+    "backend/idhazh/contracts/knobs/model_server.py",
+    "backend/idhazh/contracts/app_config.py",
+    # The body of `loopback_url`, which is the one home for the literal.
+    "backend/idhazh/llm/server.py",
+    # Two hand-run instruments whose `--base` default is a literal. Neither
+    # starts a server, so by this project's own rule both should read the
+    # address out of a config root - `slot_probe.py` was given one on
+    # 2026-09-23 and these two were missed. Listed rather than hidden.
+    "backend/utilities/measure_budgets.py",
+    "backend/utilities/measure_judge_call.py",
+}
+
+
+def test_the_loopback_host_is_written_in_five_named_places() -> None:
+    """Survivors, not zero. Zero is the wrong answer and an earlier draft claimed it.
+
+    `loopback_url` has to write the host somewhere, and the committed default
+    has to say it. What must not happen is a sixth module quietly spelling an
+    address again, which is what the three self-spawning instruments did until
+    2026-09-23 - six literals between them, each one a place a moved port could
+    be left behind.
+
+    A source census, so its cost is the size of the codebase and not the size of
+    anything a run appends to (Guardrail #12).
+    """
+    roots = (REPO_ROOT / "backend" / "idhazh", REPO_ROOT / "backend" / "utilities")
+    writing = {
+        path.relative_to(REPO_ROOT).as_posix()
+        for root in roots
+        for path in root.rglob("*.py")
+        if "127.0.0.1" in path.read_text(encoding="utf-8")
+    }
+
+    assert writing == LOOPBACK_IS_WRITTEN_IN, (
+        "these modules write the loopback host and are not on the list: "
+        f"{sorted(writing - LOOPBACK_IS_WRITTEN_IN)}; "
+        f"and these are listed and no longer write it: {sorted(LOOPBACK_IS_WRITTEN_IN - writing)}"
+    )
+
+
+def test_the_run_says_which_server_answered_and_never_says_a_credential(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """The one thing a finished run can be read for: which machine produced the output.
+
+    Scheme, host and port, because a URL's authority carries userinfo:
+    `http://user:token@box:8080` written whole would put a credential in a log
+    line, and a log line is the artefact somebody pastes into an issue
+    (Guardrail #11).
+
+    Nothing in this repository builds a credentialed address, and the point is
+    what happens if something one day does - so the URL is the test's own and it
+    goes to the function `post` reads an endpoint apart with. No socket opens.
+    """
+    from idhazh.llm.server import _note_origin, _origin_of
+
+    credentialed = "http://user:token@box:8080/v1/chat/completions"
+    assert _origin_of(credentialed) == "http://box:8080"
+
+    _note_origin.cache_clear()
+    with caplog.at_level(logging.INFO, logger="idhazh"):
+        _note_origin(_origin_of(credentialed))
+
+    said = caplog.text
+    assert "model server origin=http://box:8080" in said, said
+    assert "token" not in said and "user" not in said, f"a credential reached the log: {said}"
+
+
+def test_one_server_is_named_once_however_many_items_are_sent(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A day is thousands of items and this answers the same question once.
+
+    Driven through `post` rather than through `_note_origin`, because the record
+    existing and the record being written are two different claims and only the
+    second one is worth anything. `RecordedEndpoint` is a server, not a mock
+    (Guardrail #7): it binds a port the operating system picked this second, so
+    the address in the log can only have come from the endpoint `post` was
+    given.
+
+    The cache is keyed on the origin rather than the endpoint, because the
+    qualification process posts to two routes on one server and an endpoint key
+    would write the identical line twice. `lru_cache` is process-global, so the
+    clear is what makes this a statement about the code rather than about
+    whatever ran before it.
+    """
+    from idhazh.llm.server import _note_origin, completion_url
+
+    reply = read_text(RENDERED_REPLY).encode("utf-8")
+    _note_origin.cache_clear()
+    with caplog.at_level(logging.INFO, logger="idhazh"), RecordedEndpoint(
+        200, reply, reply
+    ) as served:
+        post({}, endpoint=served.endpoint, timeout=5.0)
+        post({}, endpoint=completion_url(served.endpoint), timeout=5.0)
+
+    origins = [line for line in caplog.text.splitlines() if "model server origin=" in line]
+    assert len(origins) == 1, f"two routes on one server wrote {len(origins)} records: {origins}"
+    assert served.endpoint.startswith(origins[0].split("origin=")[-1]), (
+        f"the record does not name the server that answered: {origins[0]}"
+    )
 
 
 class TestTheRenderedCompletionEnvelope:
     """The second shape `parse_completion` reads, from a reply a server really sent.
 
     Recorded 2026-09-12 by posting the committed label prompt to llama-server
-    build b10444-5f754ea0e on the weights `models.summarize` declares, over its
+    build b10444-5f754ea0e on the weights `models.summarizer` declares, over its
     rendered-completion route. Nothing is hand-written: the route names its
     fields differently from the chat route, and a fake would agree with whatever
     the reader happened to expect (Guardrail #7).
@@ -884,6 +1147,7 @@ def test_runtime_sweep_flags_are_emitted_only_when_configured() -> None:
                 "--metrics": None,
             }
         ),
+        port=8181,
     )
 
     assert argv[-17:] == [
@@ -925,6 +1189,7 @@ def test_the_server_is_asked_to_describe_itself_only_when_configured() -> None:
         weights=Path("models/w.gguf"),
         model=model,
         server=a_server(),
+        port=8181,
     )
     assert "-lv" not in quiet
 
@@ -933,6 +1198,7 @@ def test_the_server_is_asked_to_describe_itself_only_when_configured() -> None:
         weights=Path("models/w.gguf"),
         model=model,
         server=a_server(**{"-lv": 4}),
+        port=8181,
     )
     assert loud[loud.index("-lv") + 1] == "4"
 
@@ -952,6 +1218,7 @@ def test_every_committed_role_starts_a_server_that_names_its_own_settings() -> N
             weights=Path(f"models/{entry.file}"),
             model=entry,
             server=entry.server,
+            port=8181,
         )
         assert argv[argv.index("-lv") + 1] == "4", f"{role} starts a server that says nothing"
 
@@ -994,7 +1261,7 @@ def test_no_placeholder_survives_into_a_rendered_prompt() -> None:
 def test_a_recorded_brief_uses_the_brief_band_even_when_the_source_is_longer() -> None:
     source = article().model_copy(update={"brief": True, "word_count": 190})
     payload = build_request(
-        source, model_id="m", request=a_request(), markers=built_envelope()
+        source, model_id="m", sampling=a_sampling(), markers=built_envelope()
     )
     system = payload["messages"][0]["content"]
 
@@ -1019,7 +1286,7 @@ def test_a_cut_long_read_is_still_asked_for_a_long_read_summary() -> None:
         }
     )
     system = build_request(
-        source, model_id="m", request=a_request(), markers=built_envelope()
+        source, model_id="m", sampling=a_sampling(), markers=built_envelope()
     )["messages"][0]["content"]
     assert f"{top.target_words_min} to {top.target_words_max} words" in system
 
@@ -1029,7 +1296,7 @@ def test_an_article_written_before_the_field_keeps_its_post_cap_band() -> None:
     ask = SummarizeConfig()
     older = article().model_copy(update={"word_count": 1900, "source_word_count": None})
     system = build_request(
-        older, model_id="m", request=a_request(), markers=built_envelope()
+        older, model_id="m", sampling=a_sampling(), markers=built_envelope()
     )["messages"][0]["content"]
     band = ask.band_for(1900)
     assert f"{band.target_words_min} to {band.target_words_max} words" in system
@@ -1587,7 +1854,7 @@ class TestTwoSpansOnOneCall:
             user="U",
             output_schema=output_schema(),
             server=a_server(),
-            request=a_request(),
+            sampling=a_sampling(),
             markers=self.markers(),
             max_answer_tokens=ANSWER_BUDGET,
         )
@@ -1732,7 +1999,7 @@ class TestAConstrainedCallerGetsBothSpans:
             "user": "U",
             "grammar": 'root ::= "YES" | "NO" | "UNCLEAR"',
             "server": a_server(),
-            "request": a_request(),
+            "sampling": a_sampling(),
             "markers": self.markers(),
             "max_answer_tokens": 4,
             "first_token_alternatives": 3,
@@ -1746,7 +2013,7 @@ class TestAConstrainedCallerGetsBothSpans:
             user="U",
             output_schema=output_schema(),
             server=a_server(),
-            request=a_request(),
+            sampling=a_sampling(),
             markers=self.markers(),
             max_answer_tokens=ANSWER_BUDGET,
         )
@@ -1775,7 +2042,7 @@ class TestAConstrainedCallerGetsBothSpans:
         it repeats itself, and the repetition ends at the window rather than at
         the marker it is looping instead of writing.
         """
-        answer = self.grammar_body(request=a_request(temperature=0.0))
+        answer = self.grammar_body(sampling=a_sampling(temperature=0.0))
 
         stated = thinking_span(answer, markers=self.markers(), temperature=0.7)
         carried = thinking_span(answer, markers=self.markers())
@@ -1904,7 +2171,7 @@ class TestTheThinkingReachesNothing:
             user="U",
             output_schema=output_schema(),
             server=a_server(),
-            request=a_request(),
+            sampling=a_sampling(),
             markers=markers,
             max_answer_tokens=900,
         )
@@ -3129,7 +3396,7 @@ class TestTheServerSettlesTheEntry:
 
     def test_an_entry_that_declares_no_architecture_is_refused_at_load(self) -> None:
         document = json.loads(read_text(CONFIG_DIR / "models" / "qwen3.5-9b-q4km.json"))
-        del document["summarize"]["arch"]
+        del document["summarizer"]["arch"]
 
         with pytest.raises(ValidationError, match="arch"):
             ModelsConfig.model_validate(document)

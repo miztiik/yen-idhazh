@@ -42,7 +42,6 @@ from idhazh.stages import common, compact
 from utilities.capture_request_bodies import RENDERINGS, markers_for
 
 REPO_ROOT: Final = Path(__file__).resolve().parents[2]
-SCHEMAS_DIR: Final = REPO_ROOT / "schemas"
 CONFIG_DIR: Final = REPO_ROOT / "config"
 STATE_DIR: Final = REPO_ROOT / "state"
 FIXTURES_DIR: Final = REPO_ROOT / "tests" / "fixtures"
@@ -227,15 +226,9 @@ def a_server(**flags: Any) -> dict[str, Any]:
     }
 
 
-def a_request(**values: Any) -> dict[str, Any]:
-    """The request half of the same thing, at the values a greedy decode uses."""
-    return {
-        "temperature": 0.0,
-        "top_p": 1.0,
-        "seed": 0,
-        "request_timeout_minutes": 22.1,
-        **values,
-    }
+def a_sampling(**values: Any) -> dict[str, Any]:
+    """The sampling half of the same thing, at the values a greedy decode uses."""
+    return {"temperature": 0.0, "top_p": 1.0, "seed": 0, **values}
 
 
 def llama_server_flags() -> frozenset[str]:
@@ -248,13 +241,14 @@ def llama_server_flags() -> frozenset[str]:
     """
     emitted: set[str] = set()
     for path in sorted((CONFIG_DIR / "models").glob("*.json")):
-        entry = ModelsConfig.from_json(read_text(path)).summarize
+        entry = ModelsConfig.from_json(read_text(path)).summarizer
         emitted |= set(
             server_argv(
                 binary=Path("bin/llama-server"),
                 weights=Path("models/w.gguf"),
                 model=entry,
                 server=entry.server,
+                port=8080,
             )
         )
     # llama-bench and the image bench take these two under the same spelling,
@@ -494,6 +488,16 @@ class RecordedEndpoint:
     def endpoint(self) -> str:
         return f"http://127.0.0.1:{self._server.server_port}/v1/chat/completions"
 
+    @property
+    def base_url(self) -> str:
+        """The origin, in the shape `model_server.base_url` takes.
+
+        The port is whichever one the operating system handed out this second,
+        so a test that writes this into a config proves the address reached the
+        wire from there - no constant in the tree could name it.
+        """
+        return f"http://127.0.0.1:{self._server.server_port}"
+
     def __enter__(self) -> RecordedEndpoint:
         self._thread.start()
         return self
@@ -531,12 +535,12 @@ def committed_markers(model_file: str = INCUMBENT_MODEL) -> TurnMarkers:
 
 
 def label_payload(article: Article) -> dict[str, Any]:
-    entry = config.load(CONFIG_DIR).models.summarize
+    entry = config.load(CONFIG_DIR).models.summarizer
     return build_label_request(
         article,
         a_table(article),
         model_id="m",
         server=entry.server,
-        request=entry.request,
+        sampling=entry.sampling,
         markers=committed_markers(),
     )

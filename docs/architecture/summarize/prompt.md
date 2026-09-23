@@ -17,7 +17,7 @@ owns the prompt.
 
 `backend/idhazh/prompts/summarize.txt` holds no numbers. It holds
 `$target_words_min`, `$title_words_max`, `$max_verbatim_words` and their
-siblings, and `system_prompt` substitutes them from `config.summarize` at
+siblings, and `system_prompt` substitutes them from `config.summarizer` at
 render time (Guardrail #6).
 
 Substitution uses `substitute` and never `safe_substitute`. A renamed knob
@@ -293,8 +293,8 @@ and both apply unchanged to the single rung at 4000 they collapsed into.
 and count **distinct findings**: a fact a reader could act on that the other
 summary does not contain. If the longer summary names no more findings on two
 thirds of them, the rung buys padding and it should be withdrawn. It is a count,
-not a score, so it needs no labels and no grader (`CLAUDE.md` section 0a forbids
-a model grading a model). Second observation to take at the same time: if the
+not a score, so it needs no labels and no grader at all - cheaper and steadier
+than asking a model, whatever `CLAUDE.md` section 1a now permits. Second observation to take at the same time: if the
 still-cut pieces draw every fact from the first 40 percent of what the model
 read, the extra words went into elaborating the opening, and those items belong
 a rung lower.
@@ -461,7 +461,7 @@ with no number is a valid summary. The ban now names the job it belongs to.
 ### What is in the prompt bytes, and who wrote each part
 
 Three strings open and close a turn, and they live on the model entry that names
-the weights - `models.summarize.turns`, in the file `config/idhazh.json` points
+the weights - `models.summarizer.turns`, in the file `config/idhazh.json` points
 `models_file` at.
 They are model-shaped text and they move when the model does, so they belong
 beside the weights rather than in a package this project writes: held apart, a
@@ -861,7 +861,7 @@ unbreakable ceiling would leave no window for the article it is summarising.
 **A budget is also a clock, and this one is close to a bound.** At the 6.01
 tokens a second the configured summarizer decodes at on `ubuntu-latest`
 (2026-08-23), 4,735 tokens is 13.1 minutes, against a
-`models.summarize.request.request_timeout_minutes` of 22.1 and a
+`models.summarizer.request_timeout_minutes` of 22.1 and a
 `run.shard_timeout_minutes` of 200. So a single reply that ran to the
 brake would not trip the request timeout, and fifteen of them would spend the
 whole shard. The grammar closes the object long before that on every
@@ -952,10 +952,10 @@ loses to a better-worded one.
 
 **A copy.** `verbatim_run` measures the longest unbroken stretch our summary
 lifted from the article. Above `evaluation.verbatim_reject_ceiling` the item is
-refused with `copied_source`. Republishing an article body is a non-goal
-(`CLAUDE.md` section 0a), so this is a rule and not a score: the levers that make
+refused with `copied_source`. An article body is never republished to a reader,
+so this is a rule and not a score: the levers that make
 a copy less likely - a longer target, a higher source floor - only change the
-odds, and a non-goal is not a tuning target.
+odds, and a rule is not a tuning target.
 
 The check reads `article.text`, which is the text the model was shown. For a
 brief that is the whole article. On a truncated item it is less, so a run
@@ -1085,10 +1085,10 @@ are the cases that move. A model judge remains banned
 ## Model compatibility is mechanical
 
 The chat route sends `chat_template_kwargs` with one key, and the key is named
-by `models.summarize.turns.thinking_kwarg` rather than spelled in this project's
+by `models.summarizer.turns.thinking_kwarg` rather than spelled in this project's
 source - it is a variable in somebody else's Jinja template, so it moves when
 the model does. On the configured weights it is `enable_thinking`, and its value
-is whether `models.summarize.turns.thinking_close` is declared, which on the
+is whether `models.summarizer.turns.thinking_close` is declared, which on the
 incumbent it is not. An entry may declare the keyword null, which means the
 template reads no variables and the request sends no `chat_template_kwargs` at
 all. The two calls the digest run makes render their own prompt bytes and send

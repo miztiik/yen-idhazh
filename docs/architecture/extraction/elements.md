@@ -85,9 +85,10 @@ module, and a label a census row persists has to be declared at or below the
 row's own level.
 
 **Counts and a label cross, never article text.** `span_excerpt` stays inside
-the process that cut it (`CLAUDE.md` section 0a), and the browser-safe telemetry
-projection is untouched: the console reads the day's totals from the day record,
-one file per date, rather than three more cells on every published row for ever.
+the process that cut it - an article body is never republished to a reader - and
+the browser-safe telemetry projection is untouched: the console reads the day's
+totals from the day record, one file per date, rather than three more cells on
+every published row for ever.
 
 **`elements` is capped and `candidates_found` is not.** How many candidates a
 producer keeps is a tunable (`elements.max_per_article`, 256), so the length of
@@ -498,7 +499,7 @@ claiming one address is settled by keeping the first.
 
 ### A quote's excerpt is article text, and it stops at the element table
 
-`CLAUDE.md` section 0a says article bodies are never republished to a reader. A
+An article body is never republished to a reader. A
 `quote` or a `claim` element carries a run of the item's own sentences, so it is
 the one element kind whose excerpt is a paragraph of somebody's page rather than
 a figure or a name.
@@ -507,7 +508,7 @@ It may go where the table goes: into the labelled table the summarize-and-plan c
 eval row, into a log line, into a fixture. **It may not reach a reader-facing
 page**, and neither may a fragment of it. What publishes is the link and our own
 summary. A later row that wants to show a quotation is proposing a change to
-section 0a and has to take it there, not to this page.
+that rule and has to take it to the owner, not to this page.
 
 ### Two failures no anchoring check can see, recorded rather than papered over
 
@@ -569,9 +570,9 @@ and code cuts at it.
 
 **"Read time" is the moment a consumer reads a table it did not build, and
 there is still no such consumer.** Nothing writes an element table to disk:
-`span_excerpt` is article body text, which no published payload may carry
-(`CLAUDE.md` section 0a), so the pass stays a pure function over one payload and
-the check is a function a later stage calls against the text it already holds.
+`span_excerpt` is article body text, which no published payload may carry, so
+the pass stays a pure function over one payload and the check is a function a
+later stage calls against the text it already holds.
 It is correct for that and for a payload from an earlier run if one ever lands,
 because it takes the text as an argument and reads nothing else.
 
@@ -788,7 +789,7 @@ behaviour is byte-identical until the second call lands.
 
 ## See also
 
-- [../contracts/schemas.md](../contracts/schemas.md) - the contract subsystem: the base model, the generated schemas, and the drift gate over both.
+- [../contracts/schemas.md](../contracts/schemas.md) - the contract subsystem: the base model, the registry, and what binds the frontend's hand copy.
 - [../publishing/visuals.md](../publishing/visuals.md) - the picture, which is decided from this table.
 - [../../concepts/growing-reads.md](../../concepts/growing-reads.md) - what a read over a growing collection has to declare.
 - [../../../CLAUDE.md](../../../CLAUDE.md) - Guardrail #3 (contracts before logic), Guardrail #6 (no hardcoding), Guardrail #11 (fetched text is data), section 11 (schema versioning).

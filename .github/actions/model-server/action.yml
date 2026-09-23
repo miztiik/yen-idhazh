@@ -7,13 +7,14 @@ inputs:
       Looks the pinned llama.cpp release up. A composite action cannot read
       `secrets`, so the caller hands it over.
     required: true
-  port:
+  probe_url:
     description: >-
-      The loopback port the server binds and the health probe reads, taken from
-      the LLAMA_PORT the calling workflow declares. An input rather than an
-      inherited variable: the port keeps its one home in the caller, and this is
-      what carries it across the boundary, where an inherited value would be a
-      dependency nothing declares.
+      Where this job's own health probes ask, as scheme, host and port. It is
+      not `model_server.base_url`: the server is on this runner and the probes
+      must reach the one this job started, so the address is the caller's and
+      is always loopback. An input rather than an inherited variable: it keeps
+      its one home in the caller, and this is what carries it across the
+      boundary, where an inherited value would be a dependency nothing declares.
     required: true
   llama_cpp_build:
     description: >-
@@ -57,13 +58,13 @@ inputs:
 outputs:
   weights_path:
     description: 'The landed relative path of the weights, as the reader composed it.'
-    value: ${{ steps.model.outputs.summarize_weights_path }}
+    value: ${{ steps.model.outputs.summarizer_weights_path }}
   model_id:
     description: 'The alias the served model answers under.'
-    value: ${{ steps.model.outputs.summarize_id }}
+    value: ${{ steps.model.outputs.summarizer_id }}
   weights_file:
     description: 'The bare weights filename, for a loaded-path assertion.'
-    value: ${{ steps.model.outputs.summarize_file }}
+    value: ${{ steps.model.outputs.summarizer_file }}
 
 runs:
   using: composite
@@ -86,7 +87,7 @@ runs:
         set -euo pipefail
         PUBLISHED=$(python3 backend/utilities/model_refs.py describe-pinned-model \
           --config-root "$CONFIG_ROOT")
-        echo "$PUBLISHED" | grep -Eq '^summarize_cache_key=[0-9a-f]{64}$' || {
+        echo "$PUBLISHED" | grep -Eq '^summarizer_cache_key=[0-9a-f]{64}$' || {
           echo "the reader published no 64-character cache key" >&2
           echo "$PUBLISHED" >&2
           exit 1
@@ -115,7 +116,7 @@ runs:
         path: |
           backend/models
           backend/bin
-        key: llm-${{ steps.model.outputs.summarize_cache_key }}-${{ inputs.llama_cpp_build }}-v5
+        key: llm-${{ steps.model.outputs.summarizer_cache_key }}-${{ inputs.llama_cpp_build }}-v5
 
     # Two calls to one program, and neither is handed a URL, a filename or a
     # digest. It reads what the model declares and fetches every file of it -
@@ -171,12 +172,12 @@ runs:
     #
     # The weights are not named here. The config root's own entry says which
     # file, and the flags come from that same entry, so the server this starts
-    # is the one that config describes.
+    # is the one that config describes. The port is not named here either: the
+    # command reads it back out of that root's `model_server.base_url`.
     - name: Start the model
       shell: bash
       env:
         CONFIG_ROOT: ${{ inputs.config_root }}
-        LLAMA_PORT: ${{ inputs.port }}
       run: |
         set -euo pipefail
         python3 backend/utilities/model_runtime.py start-server \
@@ -185,19 +186,19 @@ runs:
     - name: Check model health
       shell: bash
       env:
-        LLAMA_PORT: ${{ inputs.port }}
-        MODEL_ALIAS: ${{ steps.model.outputs.summarize_id }}
-        WEIGHTS_FILE: ${{ steps.model.outputs.summarize_file }}
+        PROBE_URL: ${{ inputs.probe_url }}
+        MODEL_ALIAS: ${{ steps.model.outputs.summarizer_id }}
+        WEIGHTS_FILE: ${{ steps.model.outputs.summarizer_file }}
       run: |
         set -euo pipefail
         for _ in $(seq 1 120); do
-          curl -sf "http://127.0.0.1:${LLAMA_PORT}/health" && break
+          curl -sf "${PROBE_URL}/health" && break
           sleep 5
         done
         # Assert it, do not hope. Without this the loop simply ends, every unit
         # of work fails as "model unreachable", and the job produces an empty
         # result that reads as a quiet day.
-        curl -sf "http://127.0.0.1:${LLAMA_PORT}/health" > /dev/null || {
+        curl -sf "${PROBE_URL}/health" > /dev/null || {
           echo "llama-server never became healthy" >&2
           tail -50 llama-server.log >&2
           exit 1
@@ -205,15 +206,15 @@ runs:
         # Healthy says a server answers. It does not say which weights it
         # answers for, and every row downstream is filed under the config alias
         # whether or not the server agrees.
-        curl -sf "http://127.0.0.1:${LLAMA_PORT}/v1/models" \
+        curl -sf "${PROBE_URL}/v1/models" \
           | jq -e --arg alias "$MODEL_ALIAS" '[.data[].id] | index($alias) != null' > /dev/null || {
           echo "the server does not serve ${MODEL_ALIAS}" >&2
-          curl -s "http://127.0.0.1:${LLAMA_PORT}/v1/models" >&2 || true
+          curl -s "${PROBE_URL}/v1/models" >&2 || true
           exit 1
         }
-        curl -sf "http://127.0.0.1:${LLAMA_PORT}/props" \
+        curl -sf "${PROBE_URL}/props" \
           | jq -e --arg file "${WEIGHTS_FILE}" '[.. | strings | select(endswith($file))] | length > 0' > /dev/null || {
           echo "the loaded weights are not ${WEIGHTS_FILE}" >&2
-          curl -s "http://127.0.0.1:${LLAMA_PORT}/props" >&2 || true
+          curl -s "${PROBE_URL}/props" >&2 || true
           exit 1
         }

@@ -831,7 +831,7 @@ def _record(
         inputs=_inputs(date),
         models=[
             ModelUse(
-                role=ModelRole.SUMMARIZE,
+                role=ModelRole.SUMMARIZER,
                 model_ref=ModelRef(
                     id="canary",
                     repo="canary/none",

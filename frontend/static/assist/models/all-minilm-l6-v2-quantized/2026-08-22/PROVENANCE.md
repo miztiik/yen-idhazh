@@ -79,4 +79,4 @@ stated to them before anything is fetched.
 ## See also
 
 - [`../../../../../../docs/architecture/publishing/visuals.md`](../../../../../../docs/architecture/publishing/visuals.md) - the other build-time renderer.
-- [`../../../../../../CLAUDE.md`](../../../../../../CLAUDE.md) - Guardrail #1 and section 0a.
+- [`../../../../../../CLAUDE.md`](../../../../../../CLAUDE.md) - Guardrail #1, which is why the weights are committed and served from our own origin.

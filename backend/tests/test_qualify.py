@@ -13,7 +13,7 @@ import json
 from typing import Any
 
 import pytest
-from conftest import a_request, a_server
+from conftest import a_sampling, a_server
 from pydantic import ValidationError
 
 from idhazh import cli
@@ -37,7 +37,7 @@ from idhazh.llm.server import window
 
 EVALUATION = EvaluationConfig()
 SERVER = a_server()
-REQUEST = a_request()
+SAMPLING = a_sampling()
 RUN = RunConfig()
 SUMMARIZE = SummarizeConfig()
 
@@ -533,7 +533,7 @@ def test_the_spread_diagnostic_counts_wordings_rather_than_violations() -> None:
     """
     drifted = with_one_bad_call(a_passing_shard(), output_digest="9" * 64)
     rows = qualify.wording_spread(
-        drifted.observations, request=a_request(temperature=0.2), repeats=drifted.repeats
+        drifted.observations, sampling=a_sampling(temperature=0.2), repeats=drifted.repeats
     )
 
     named = {row.name: row for row in rows}
@@ -550,7 +550,7 @@ def test_at_zero_temperature_the_spread_diagnostic_says_nothing() -> None:
     shard = a_passing_shard()
 
     assert qualify.wording_spread(
-        shard.observations, request=REQUEST, repeats=shard.repeats
+        shard.observations, sampling=SAMPLING, repeats=shard.repeats
     ) == []
 
 

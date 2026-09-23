@@ -203,7 +203,7 @@ The four deleted routes grow when the pipeline appends a day, so their numbers
 had to move when nobody wrote any code. The two that stay move only when a person
 edits source. What the four stood in for is asserted directly, and with no number
 in it, by `frontend/tests/payload-weight.spec.ts`. The reasoning is in
-[../concepts/config.md](../concepts/config.md) and
+[../concepts/config/run-limits.md](../concepts/config/run-limits.md) and
 [../how-to/run-the-gates.md](../how-to/run-the-gates.md#the-console-has-no-page-number).
 
 The three payload numbers were measured in the same runs and **none of them
@@ -872,7 +872,7 @@ is what a date-only feed date parses to and also what a story genuinely
 published at midnight parses to. That figure is why a midnight stamp still
 prints a clock: blanking it would hide the real midnight stories
 inside the same 1.0 percent, and the payload cannot say which they are
-([../architecture/publishing/layout.md](../architecture/publishing/layout.md#the-items-own-stamp-is-what-reads-it-and-what-it-can-and-cannot-say)).
+([../architecture/publishing/what-a-published-item-says-about-itself.md](../architecture/publishing/what-a-published-item-says-about-itself.md#the-items-own-stamp-is-what-reads-it-and-what-it-can-and-cannot-say)).
 
 ### A phone gets no rail column, and this is the number that decided it
 
@@ -980,7 +980,7 @@ produced this asked for a document growing with months and not with days, and
 that is not what the measurement says. The design was kept and the claim was
 corrected: reaching zero means not emitting a link for each published day, and a
 reader with no script would then reach seven days and no further
-([../architecture/publishing/frontend.md](../architecture/publishing/frontend.md#the-day-list-grows-with-months-on-the-page-and-with-days-in-the-document)).
+([../architecture/publishing/how-a-reader-finds-a-story.md](../architecture/publishing/how-a-reader-finds-a-story.md#the-day-list-grows-with-months-on-the-page-and-with-days-in-the-document)).
 
 **What a reader sees is the number that did change.** At 700 days the list is
 **18 rows** - seven days, nine months of the newest published year, and one row
@@ -1366,7 +1366,7 @@ knob rather than to this row.
 
 `retention.site_budget_mb` is the size at which a build logs a warning. It is an
 alarm and not a gate: it fails no build and deletes nothing
-([../concepts/config.md](../concepts/config.md)). The **cap** is the gate, and
+([../concepts/config/run-limits.md](../concepts/config/run-limits.md)). The **cap** is the gate, and
 they are different lines - see the design rationale in
 [../architecture/publishing/layout.md](../architecture/publishing/layout.md).
 This section is the only home for why the alarm sits where it does.
@@ -1495,7 +1495,7 @@ from):
 | structural ceiling, 800 a day | 24,000 | **1.15 MB** | 5.72 MB |
 
 Both sit under the triggers written down in
-[../architecture/publishing/layout.md](../architecture/publishing/layout.md#when-to-reconsider-the-month):
+[../architecture/publishing/what-a-month-shard-holds-and-how-it-reaches-a-browser.md](../architecture/publishing/what-a-month-shard-holds-and-how-it-reaches-a-browser.md#when-to-reconsider-the-month):
 1.5 MB for the browse index and 8 MB for the vectors.
 
 ### What the summary would have cost
@@ -1708,5 +1708,5 @@ What a browser fetches before a reader does anything: the prerendered document, 
 - [../architecture/publishing/frontend.md](../architecture/publishing/frontend.md) - the reader's surface these figures were taken on.
 - [../architecture/publishing/console-site-size.md](../architecture/publishing/console-site-size.md) - the panel that draws this as a rate, so an operator sees the 1 GB cap coming rather than arriving.
 - [../how-to/run-the-gates.md](../how-to/run-the-gates.md) - the bundle gate that reads every ceiling here.
-- [../concepts/config.md](../concepts/config.md) - the knobs these numbers set.
+- [../concepts/config/run-limits.md](../concepts/config/run-limits.md) - the knobs these numbers set.
 - [../../CLAUDE.md](../../CLAUDE.md) - Guardrail #2 (the runner is the architecture) and #10 (measured, not estimated).

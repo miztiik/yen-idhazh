@@ -23,7 +23,7 @@ This is a reading surface before it is anything else. Measure, leading, hierarch
 
 The DOM state is the single source of truth for the view. Nothing is styled imperatively: **state is reflected by toggling a class or a `data-` attribute, and CSS reacts declaratively.**
 
-- **State classes** carry the look: `loading`, `empty`, `degraded`, `truncated`, `low-confidence`. `loading` is a global class in [../../frontend/src/styles/app.css](../../frontend/src/styles/app.css) rather than a component's scoped one, because the surface it belongs to switches every block on at once from one ancestor - see [the reserved box](console-design.md#a-console-panel-reserves-its-room-and-names-which-nothing-it-is-holding).
+- **State classes** carry the look: `loading`, `empty`, `degraded`, `truncated`, `low-confidence`. `loading` is a global class in [../../frontend/src/styles/app.css](../../frontend/src/styles/app.css) rather than a component's scoped one, because the surface it belongs to switches every block on at once from one ancestor - see [the reserved box](console-design/the-mark-shapes-a-panel-may-reach-for.md#a-console-panel-reserves-its-room-and-names-which-nothing-it-is-holding).
 - **Data-attribute styling** carries variants: an item keys its treatment off `data-visual` (the visual's state - `rendered`, `render_failed` or `absent`) and `data-band` (the confidence band from [evaluation.md](evaluation.md)).
 - **No inline styles** except genuinely dynamic values. Everything else is a token or a class.
 
@@ -41,7 +41,7 @@ Every colour, space, radius, shadow, font, easing and duration is a CSS custom p
 - **Colour** - `bg` and elevated surfaces; `text` primary / secondary / tertiary; `accent`; the **confidence ramp**, one token per band, which is the only semantic colour set the digest needs; the **fill ramp**, `--fill-high` / `--fill-medium` / `--fill-low`, which is the same three meanings weighted to be filled rather than read; and the **chart ramp**, `--chart-1` to `--chart-8`, which is categorical and carries no verdict.
 - **Tints** - `--tint-accent`, `--tint-info`, `--tint-good`, `--tint-warn`, `--tint-bad`, `--tint-neutral`. A panel takes the hue of what it means, at 7 to 9 percent in light and roughly double that in dark.
 - **Gradients** - `--gradient-wordmark`, `--gradient-wash`, `--gradient-panel`. Chrome and identity only.
-- **Frame** - `--frame-reading`, `--frame-console`, `--measure`, `--gutter`. Defaults live in the token file and `config/appearance.json` overrides them at build time ([config.md](config.md)).
+- **Frame** - `--frame-reading`, `--frame-console`, `--measure`, `--gutter`. Defaults live in the token file and `config/appearance.json` overrides them at build time ([config/appearance.md](config/appearance.md)).
 - **Motion** - one ease and a short duration scale.
 
 **The two colour ramps may not be swapped for each other.** The confidence ramp
@@ -397,7 +397,7 @@ An item's visual has no column of its own, and the reason is arithmetic rather t
 
 What the figure did give back is height. A fixed 16:10 box reserved space the chart never used: an 825 x 437 chart inside an 890 x 556 box left 85px of empty band above and below it. An SVG carries its own width and height, so `width: 100%; height: auto` reserves the right box from the markup and still cannot shift the page as the image loads.
 
-**And since 2026-09-05 the drawing takes its colours from these tokens like everything else on the card.** A story holds the SVG itself rather than a link to it - the build puts it there for the stories a prerendered document carries, and the browser fetches it for the rest - so the page's stylesheet reaches the marks: the bars take `--chart-1`, the axis type takes `--color-text-secondary`, the ticks and the axis line take `--chart-axis` and the grid takes `--chart-grid`. Nothing was added to the file to make that work - a presentation attribute is the lowest priority in the cascade, so `fill="#000"` loses to any rule. What the drawing brought with it, and what it cost, are in [../architecture/publishing/frontend.md](../architecture/publishing/frontend.md#the-browser-draws-the-chart-so-the-chart-reads-the-page-it-is-printed-on).
+**And since 2026-09-05 the drawing takes its colours from these tokens like everything else on the card.** A story holds the SVG itself rather than a link to it - the build puts it there for the stories a prerendered document carries, and the browser fetches it for the rest - so the page's stylesheet reaches the marks: the bars take `--chart-1`, the axis type takes `--color-text-secondary`, the ticks and the axis line take `--chart-axis` and the grid takes `--chart-grid`. Nothing was added to the file to make that work - a presentation attribute is the lowest priority in the cascade, so `fill="#000"` loses to any rule. What the drawing brought with it, and what it cost, are in [../architecture/publishing/how-a-story-chart-is-drawn-and-what-refuses-one.md](../architecture/publishing/how-a-story-chart-is-drawn-and-what-refuses-one.md#the-browser-draws-the-chart-so-the-chart-reads-the-page-it-is-printed-on).
 
 ### Every fact a drawing shows is reachable without a pointer
 
@@ -499,7 +499,7 @@ that keeps moving on no measurement is a bar that is making it up.
 
 The console is the third and it is the one that gets the skeleton, because it is
 the only surface here whose panels have nothing at all to show until a fetch
-lands. What it draws is [a reserved box with the axis frame in it](console-design.md#a-console-panel-reserves-its-room-and-names-which-nothing-it-is-holding).
+lands. What it draws is [a reserved box with the axis frame in it](console-design/the-mark-shapes-a-panel-may-reach-for.md#a-console-panel-reserves-its-room-and-names-which-nothing-it-is-holding).
 
 **A day payload gets no byte readout, and that is the same rule read the other
 way.** A compressed response reports its compressed length, so a bar drawn on
@@ -562,7 +562,7 @@ Source is [Lucide](https://lucide.dev) under the ISC licence; only the icons in 
 
 ## Charts are static first, enhanced only when interaction earns it
 
-An item's chart is compiled at build time into data and its shape, and **the reader's browser draws it** - owner ruling 2026-09-13, [../architecture/publishing/visuals.md](../architecture/publishing/visuals.md). Nothing is rendered in the pipeline and no drawing is committed. Every chart on the dashboard is hand-written markup over a committed CSV or the published telemetry projection.
+An item's chart is compiled at build time into data and its shape, and **the reader's browser draws it** - owner ruling 2026-09-13, [../architecture/publishing/where-a-drawing-becomes-pixels.md](../architecture/publishing/where-a-drawing-becomes-pixels.md). Nothing is rendered in the pipeline and no drawing is committed. Every chart on the dashboard is hand-written markup over a committed CSV or the published telemetry projection.
 
 **No chart ENGINE on a reader's route, and that half is settled.** The arithmetic is a different question and is answered below: `d3-scale` and `d3-array` reach the reader and nothing else does.
 

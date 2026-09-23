@@ -54,7 +54,7 @@ A number from another build is a separate measurement.
 
 Every URL names a commit rather than a branch. A branch hands back whatever was
 uploaded last, so a download from one is not the file the active model file
-records the SHA-256 of. The commit below is `models.summarize.revision` in that
+records the SHA-256 of. The commit below is `models.summarizer.revision` in that
 file - copy it from there rather than from
 here, because there it is the value the pipeline itself fetches.
 
@@ -131,7 +131,7 @@ from idhazh import config
 from idhazh.llm.server import server_argv
 
 settings = config.load(Path("config"))
-model = settings.models.summarize
+model = settings.models.summarizer
 print(" ".join(server_argv(
  binary=Path("backend/bin/llama-server"),
  weights=Path("backend/models") / model.file,
@@ -153,10 +153,13 @@ through config.
 
 `digest.yml`, `validate.yml` and `measure.yml` all start their servers from that
 same function, and a test fails if any of them renders the list a second way.
-The port is the same story: each workflow declares `LLAMA_PORT` once and the
-argv, every health probe and the client all read it. **`--no-warmup` is no longer
-passed** - the page fault is paid either way, so the workflow now pays it during
-`pip install` instead of inside the first request.
+The port is not the same story any more: it lives inside
+`model_server.base_url` in `config/idhazh.json`, the server command reads it
+back out of the config root it runs under, and each workflow declares only
+`MODEL_SERVER_PROBE` - the loopback address its own health probes ask.
+**`--no-warmup` is no longer passed** - the page fault is paid either way, so
+the workflow now pays it during `pip install` instead of inside the first
+request.
 
 **Use `--threads 4` when reproducing the current runner baseline.** GitHub gives
 the VM four scheduler-visible CPUs. That does not mean four physical cores plus

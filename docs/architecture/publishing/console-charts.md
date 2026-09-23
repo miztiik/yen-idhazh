@@ -66,7 +66,7 @@ and `/console/` grows with the item-telemetry rows inside the page's window. A
 day page and the home page weigh whatever the day published, so they are
 measured and reported and never failed - a ceiling on either would cap the news
 rather than catch a regression
-([../../concepts/config.md](../../concepts/config.md)).
+([../../concepts/config/run-limits.md](../../concepts/config/run-limits.md)).
 
 The item-health viewport has three parts, in this order:
 
@@ -666,7 +666,7 @@ a second copy of a fact, which is a thing that can disagree with itself.
 a user (`CLAUDE.md` section 0b). `SETTING_WORDS` in
 `$lib/console/settings-moved` holds one phrase per recorded input, in the order
 the contract declares them, and `frontend/tests/settings-moved.spec.ts` reads
-`schemas/run-manifest.schema.json` and fails on a field with no words or words
+`RunManifest` and fails on a field with no words or words
 with no field - so a field added to `PipelineInputs` next month fails a test
 rather than going unnamed on the page for a year.
 

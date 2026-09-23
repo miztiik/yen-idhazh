@@ -3,12 +3,13 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { machineRecordDays } from '../src/lib/server/host-fingerprint';
-import { dayShardFiles, readDayShards } from '../src/lib/server/payload';
+import { dayShardFiles, readDayShards, settledCensus } from '../src/lib/server/payload';
 
 /**
  * The server-side day walk: a day is a `<DD>/` directory of writer-owned files,
  * the cover counts days rather than files, and a name the walk cannot place is
- * skipped rather than thrown over.
+ * skipped rather than thrown over. Plus the settlement the census read applies
+ * to what that walk hands back, because two writers describe every item.
  *
  * All in plain Node against fixtures, so nothing depends on the committed
  * archive (`CLAUDE.md` section 13). The claim the cover carries is Guardrail #12:
@@ -119,6 +120,97 @@ test('a day directory with no readable file stops the read rather than drawing n
 		mkdirSync(join(root, 'scores', '2026', '09'), { recursive: true });
 		writeFileSync(join(root, 'scores', '2026', '09', 'notes.txt'), '', 'utf8');
 		expect(dayShardFiles(join(root, 'scores'), -1)).toEqual([]);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+/**
+ * The settlement `itemHealthRows` applies to what the walk above hands back.
+ *
+ * A day directory holds one file per writer, and two writers describe every
+ * item: the work shard as the item settles, and assemble over the whole day
+ * afterwards. Both files are the same day to the walk, so both accounts of one
+ * item reach a reader that does not settle them - which is a doubled count on
+ * every console panel and a repeated key in every list drawn per item.
+ *
+ * `ledger.ITEM_HEALTH_KEY` and `ledger.ITEM_HEALTH_RULE` are the backend twins.
+ * Rows are built here rather than read from the archive, so the cost of this
+ * cannot follow what the pipeline has piled up (`CLAUDE.md` section 13).
+ */
+function census(cells: Record<string, string> = {}): Record<string, string> {
+	return {
+		date: '2026-09-23',
+		run_id: '2026-09-23-1',
+		item_id: 'ai-one',
+		job: 'work',
+		shard: '3',
+		outcome: 'ok',
+		...cells
+	};
+}
+
+test('two jobs describing one item settle to one row', () => {
+	// The shape the committed ledger holds on the day a run is publishing:
+	// assemble re-states the row the shard sealed, cell for cell.
+	const rows = [census({ job: 'assemble', shard: '0' }), census()];
+
+	expect(settledCensus(rows)).toHaveLength(1);
+	// The defect this closes: a list keyed by item id draws one story twice.
+	expect(settledCensus(rows).map((entry) => entry.item_id)).toEqual(['ai-one']);
+});
+
+test('each cell of the key separates two records rather than collapsing them', () => {
+	// Three rows that repeat the item id and differ in one key cell each. None of
+	// them is a repeat, so a settlement keyed on the item id alone would report
+	// one run's work as three days of it - or three runs as one.
+	const rows = [
+		census(),
+		census({ date: '2026-09-22' }),
+		census({ run_id: '2026-09-23-2' }),
+		census({ item_id: 'ai-two' })
+	];
+
+	expect(settledCensus(rows)).toHaveLength(4);
+});
+
+test('the row that names the job beats the row that does not, whichever arrived first', () => {
+	// `job` and `shard` are the one moment either is known: a shard's rebuild
+	// carries them, and assemble's rebuild leaves both empty because it ran on a
+	// machine that read none of the items. The identity is better evidence than
+	// its absence, so arrival order does not decide.
+	const named = census({ job: 'work', shard: '3' });
+	const anonymous = census({ job: '', shard: '' });
+
+	expect(settledCensus([anonymous, named])).toEqual([named]);
+	expect(settledCensus([named, anonymous])).toEqual([named]);
+});
+
+test('the settlement reads the day the walk built, not a list somebody handed it', () => {
+	const root = mkdtempSync(join(tmpdir(), 'item-health-'));
+	try {
+		const date = '2026-09-23';
+		const dir = join(root, 'item-health', '2026', '09', '23');
+		mkdirSync(dir, { recursive: true });
+		const columns = 'date,run_id,item_id,job,shard,outcome';
+		const settledBy = (job: string, shard: string) =>
+			`${date},${date}-1,ai-one,${job},${shard},ok`;
+		// Sorted by name, so `assemble` is read before `work` - the order the
+		// arrival of the two files used to decide by.
+		writeFileSync(
+			join(dir, `${date}-1-assemble-00.csv`),
+			[columns, settledBy('assemble', '0')].join('\n'),
+			'utf8'
+		);
+		writeFileSync(
+			join(dir, `${date}-1-work-03.csv`),
+			[columns, settledBy('work', '3')].join('\n'),
+			'utf8'
+		);
+
+		const table = readDayShards(join(root, 'item-health'), -1);
+		expect(table.rows, 'the day really does hold both writers').toHaveLength(2);
+		expect(settledCensus(table.rows)).toHaveLength(1);
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}

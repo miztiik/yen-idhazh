@@ -75,7 +75,7 @@ The placeholder then reads as two thousand years old, so the age gate refuses it
 
 `rank.appeared_at` returns the time **and** the clock that produced it, and both travel to the reader. Three answers: `feed`, `first_seen`, and `unknown` where neither had a time. The label leaves the function with the value rather than being derived again downstream, because once the two are in one field nothing can tell them apart - a stamp we wrote and a stamp a publisher wrote are the same kind of string.
 
-This is the fix for a real hazard, not tidiness. Both fallbacks above - an undated article and a date too far ahead - replace the publisher's time with ours **silently**. A page that prints the time without the label is repeating our own clock as though it were the source's, which is the same class of mistake as forwarding a feed's future stamp. What the published field means and what an absent one means is [../publishing/layout.md](../publishing/layout.md#an-item-says-why-it-is-here-and-whose-clock-its-time-is).
+This is the fix for a real hazard, not tidiness. Both fallbacks above - an undated article and a date too far ahead - replace the publisher's time with ours **silently**. A page that prints the time without the label is repeating our own clock as though it were the source's, which is the same class of mistake as forwarding a feed's future stamp. What the published field means and what an absent one means is [../publishing/what-a-published-item-says-about-itself.md](../publishing/what-a-published-item-says-about-itself.md#an-item-says-why-it-is-here-and-whose-clock-its-time-is).
 
 ## Publishing twice is prevented by a record, not by a window
 
@@ -242,7 +242,7 @@ checked against, because a smaller run is a smaller worst shard, and **a worker
 killed at that bound uploads nothing**.
 
 What still bounds the number from above is the worst case the `work` and `visuals`
-jobs both have to finish ([../../concepts/config.md](../../concepts/config.md)).
+jobs both have to finish ([../../concepts/config/run-limits.md](../../concepts/config/run-limits.md)).
 What it is *for* has changed, and this paragraph is the record of that change
 rather than a quiet re-derivation.
 
@@ -443,7 +443,7 @@ refused it.
 
 | Why it was refused | The evidence |
 | --- | --- |
-| The bound it adds already exists one stage later, and it is a clock rather than a count | `cli.stage_visual_planner` stopped its loop at `run.visual_planner_budget_minutes` (40 minutes), inside the `visuals` job's 50-minute timeout. A count has to be set for the worst host, so the number that fits a slow host leaves a fast one idle. The planner-side version of the same proposal was refused for the same reason - see [../publishing/visuals.md](../publishing/visuals.md). Both that stage and its clock retired on 2026-09-13; the shard timeout is the bound now, and it is still a clock. |
+| The bound it adds already exists one stage later, and it is a clock rather than a count | `cli.stage_visual_planner` stopped its loop at `run.visual_planner_budget_minutes` (40 minutes), inside the `visuals` job's 50-minute timeout. A count has to be set for the worst host, so the number that fits a slow host leaves a fast one idle. The planner-side version of the same proposal was refused for the same reason - see [../publishing/what-drawing-costs-and-what-has-been-retired-for-it.md](../publishing/what-drawing-costs-and-what-has-been-retired-for-it.md). Both that stage and its clock retired on 2026-09-13; the shard timeout is the bound now, and it is still a clock. |
 | The loss it answered is already prevented | The `visuals` artifact upload in `.github/workflows/digest.yml` carries `if: always`. A visuals stage that runs out of clock still hands over every decision it made. What cost four of the six runs on 2026-08-24/25 their visuals was a cancelled job skipping an upload step that had no condition on it. That step has one now. |
 | The number behind it is contaminated | The 20.7 s and 40.3 s per-item planning figures were measured over 703 items that all ran with `diagram` in `visuals.enabled_kinds`, so the model was asked about every one of them: `asked=False` appears zero times in all 703. `diagram` is off now, and with it off a measured 68 of 145 items (46.9 percent) never reach the model at all. |
 | It throttles the wrong stage, and a reader pays for it | A plan-stage budget bounds what `summarize` is handed, in order to protect `visuals`. `summarize` runs as four worker jobs by default, eight at the ceiling, and has no stage clock at all - its only bound is the `work` job's timeout, which is `run.shard_timeout_minutes` and is 200 minutes. `visuals` is one job with a 40-minute stage clock. On 2026-08-24 the committed digest carries **731 items**; a 59-item budget over five runs caps that day at 295 and deletes about 436 of them. |
@@ -500,7 +500,7 @@ and guessing it is what this refusal is about.
 - [../../reference/pipeline-cost.md](../../reference/pipeline-cost.md) - the ledger sizes, the read cost, and the ceiling measurement quoted above.
 - [health.md](health.md) - the record of what every feed did, and the quarantine that reads it.
 - [../contracts/determinism.md](../contracts/determinism.md) - the recorded input manifest that makes "this re-run changed nothing" checkable.
-- [../publishing/visuals.md](../publishing/visuals.md) - what a picture costs, and the picture-side version of the budget refused above.
+- [../publishing/what-drawing-costs-and-what-has-been-retired-for-it.md](../publishing/what-drawing-costs-and-what-has-been-retired-for-it.md) - what a picture costs, and the picture-side version of the budget refused above.
 - [../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md) - the stages, and which of them see the whole day.
 - [../../concepts/config.md](../../concepts/config.md) - where these knobs live and the knob-versus-fact rule.
 - [../../reference/github-actions.md](../../reference/github-actions.md) - workflow names and exact triggers.

@@ -61,7 +61,7 @@ python backend/utilities/prune_artifacts.py --collection workflow-runs --no-dry-
 ```
 
 `--record` writes the pass as a `collection-prune-row` payload
-(`schemas/collection-prune-row.schema.json`). Nothing reads it by default; it is
+(`CollectionPruneRow`). Nothing reads it by default; it is
 there for a workflow that wants to upload or commit what a pass did.
 
 ### Exit codes
@@ -108,5 +108,5 @@ Which stores this may be pointed at, which two are refused by name, and why
 
 - [../concepts/atomic-deletes.md](../concepts/atomic-deletes.md) - what atomic means here, and why a range is not one.
 - [../architecture/publishing/retention.md](../architecture/publishing/retention.md) - what bounds each tree, and which store carries which window.
-- [../concepts/config.md](../concepts/config.md) - every knob, including the `prune` block.
+- [../concepts/config/retention-ages.md](../concepts/config/retention-ages.md) - the ages the `prune` block spends.
 - [run-the-gates.md](run-the-gates.md) - the checks to run after a change to either command.

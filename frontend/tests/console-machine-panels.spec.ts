@@ -17,6 +17,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { WATCHED_FLAG } from '../src/lib/server/host-fingerprint';
 
 const REPO = resolve(process.cwd(), '..');
 
@@ -24,11 +25,13 @@ const APPEARANCE = JSON.parse(
 	readFileSync(join(REPO, 'config', 'appearance.json'), 'utf8')
 ) as { console: { fleet_min_rows: number; machine_colour_stops: number; window_presets: number[] } };
 
-const WATCHED = (
-	JSON.parse(readFileSync(join(REPO, 'schemas', 'machine-panels.schema.json'), 'utf8')) as {
-		$defs: { WatchedFlag: { enum: string[] } };
-	}
-).$defs.WatchedFlag.enum;
+/** The flags a card has to draw a chip for.
+ *
+ * The one copy, bound to the Python enum by
+ * `backend/tests/contracts/test_frontend_vocabularies.py`, so this is the
+ * contract's list and not a second one typed here.
+ */
+const WATCHED: readonly string[] = WATCHED_FLAG;
 
 /** Every row of one canary ledger, read straight off its day tree.
  *

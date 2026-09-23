@@ -49,11 +49,11 @@ from idhazh.fingerprint import (
     text_digest,
 )
 from idhazh.llm.server import (
-    DEFAULT_ENDPOINT,
     Completion,
     derive_turn_markers,
     props,
     request_timeout_seconds,
+    resolve_endpoint,
 )
 from idhazh.sanitize import SANITIZER_VERSION
 from idhazh.stages import common, two_calls
@@ -406,7 +406,7 @@ def stage_qualify(
     commit_sha: str,
     runner: str,
     fetcher: Fetcher | None = None,
-    model_endpoint: str = DEFAULT_ENDPOINT,
+    model_endpoint: str | None = None,
 ) -> QualificationShard:
     """Freeze this shard's slice of the corpus, then replay it N times.
 
@@ -416,6 +416,7 @@ def stage_qualify(
     only one model here now, and the same argument still holds against the three
     repeats.
     """
+    model_endpoint = model_endpoint or resolve_endpoint(settings.app.model_server.base_url)
     if scorer is None:
         raise SystemExit("a qualification without a faithfulness scorer measures nothing")
     if not isinstance(scorer, HhemScorer):
@@ -423,13 +424,13 @@ def stage_qualify(
 
     started = time.monotonic()
     read_url = fetcher or common.live_fetcher(settings)
-    model = settings.models.summarize
-    observed = props(model_endpoint, timeout=request_timeout_seconds(model.request))
+    model = settings.models.summarizer
+    observed = props(model_endpoint, timeout=request_timeout_seconds(model))
     inputs = build_inputs(
         model=model,
         model_sha256=candidate.sha256_observed,
         server=model.server,
-        request=model.request,
+        sampling=model.sampling,
         truncation_cap_tokens=settings.app.extract.truncation_cap_tokens,
         runtime_build=candidate.runtime_build,
         chat_template=str(observed.get("chat_template") or UNRECORDED_TEMPLATE),
@@ -439,7 +440,7 @@ def stage_qualify(
         extractor_version=extract.EXTRACTOR_VERSION,
         sanitizer_version=SANITIZER_VERSION,
         markers=derive_turn_markers(
-            model_endpoint, entry=model, timeout=request_timeout_seconds(model.request)
+            model_endpoint, entry=model, timeout=request_timeout_seconds(model)
         ),
     )
 

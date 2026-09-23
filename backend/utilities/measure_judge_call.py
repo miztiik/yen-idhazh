@@ -52,13 +52,13 @@ from idhazh.contracts.base import derive_text_digest, derive_url_key
 from idhazh.contracts.digest_day import DigestDay, DigestItem
 from idhazh.contracts.knobs.placement import SECONDS_A_CALL
 from idhazh.llm.server import (
-    DEFAULT_ENDPOINT,
     Completion,
     TurnMarkers,
     completion_url,
     derive_turn_markers,
     post,
     request_timeout_seconds,
+    resolve_endpoint,
     token_pieces,
 )
 from idhazh.similarity import judge, prompt
@@ -331,7 +331,7 @@ def judge_calls(
     pairs: Sequence[PairToJudge],
     *,
     settings: config.Settings,
-    base_url: str = DEFAULT_ENDPOINT,
+    base_url: str | None = None,
     limit: int = DEFAULT_CALLS,
     budget_seconds: float = DEFAULT_BUDGET_MINUTES * 60.0,
 ) -> Iterator[CallReading]:
@@ -350,8 +350,11 @@ def judge_calls(
     mass, so `first_token_margin` reports a gap between the other two, and a
     measurement taken through a broken instrument is worse than none.
     """
+    # Resolved here rather than deeper: the client below binds a derived route
+    # inside a `partial`, so an unresolved address would raise there instead.
+    base_url = base_url or resolve_endpoint(settings.app.model_server.base_url)
     entry = judge.entry_of(settings)
-    timeout = request_timeout_seconds(entry.request)
+    timeout = request_timeout_seconds(entry)
     prompt.first_token_openings(partial(token_pieces, base_url, timeout=timeout))
     markers = derive_turn_markers(base_url, entry=entry, timeout=timeout)
     client = partial(post, endpoint=completion_url(base_url), timeout=timeout)
@@ -716,7 +719,7 @@ def conditions_of(
     difference between our candidate models. It reads None off a machine with no
     `/proc/cpuinfo`, and the page then says so rather than printing a blank.
     """
-    entry = settings.models.summarize
+    entry = settings.models.summarizer
     return {
         "Processor": silicon.host_cpu_model() or "not reported by this host",
         "Runner": args.runner,

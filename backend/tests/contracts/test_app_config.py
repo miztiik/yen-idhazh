@@ -24,6 +24,7 @@ from idhazh.contracts.knobs.collect import CollectConfig
 from idhazh.contracts.knobs.console import ConsoleConfig
 from idhazh.contracts.knobs.council import CouncilConfig
 from idhazh.contracts.knobs.evaluation import EvaluationConfig
+from idhazh.contracts.knobs.model_server import ModelServerConfig, is_loopback, resolve_base_url
 from idhazh.contracts.knobs.models import ModelsConfig
 from idhazh.contracts.knobs.observability import LoggingConfig, LogLevel, ObservabilityConfig
 from idhazh.contracts.knobs.placement import (
@@ -209,6 +210,87 @@ def test_the_alarm_point_and_the_pages_cap_stay_two_knobs() -> None:
     assert (tuned.site_budget_mb, tuned.pages_hard_cap_mb) == (600, 900)
 
 
+@pytest.mark.parametrize(
+    ("declared", "fault"),
+    [
+        ("127.0.0.1:8080", "no scheme"),
+        ("http://:8080", "no host"),
+        ("http://a-box", "no port"),
+        ("http://a-box:99999", "a port above 65535"),
+        ("http://a-box:eighty", "a port that is not a number"),
+        ("http://a-box:8080/v1", "a path"),
+    ],
+    ids=lambda case: case if " " in str(case) else "-",
+)
+def test_an_address_that_is_not_a_scheme_a_host_and_a_port_is_refused(
+    declared: str, fault: str
+) -> None:
+    """Six ways to write an address a run cannot use, refused where it is declared.
+
+    Every string here is the test's own, never the committed value: a case read
+    out of `config/idhazh.json` would stop testing the grammar on the day an
+    operator points the run at their own server (`CLAUDE.md` section 13).
+
+    The port is the one a reader would not expect to be required. It is, because
+    the server command reads the port back out of this value to bind with, and
+    `http://a-box` parses cleanly while naming no port at all. A path is refused
+    rather than dropped: the other four routes are built by replacing the whole
+    path, so a prefix would hold on one of them and vanish from the rest, and a
+    wrong address is worse than a refused one.
+    """
+    with pytest.raises(ValidationError) as raised:
+        ModelServerConfig(base_url=declared)
+    assert declared in str(raised.value), f"the refusal for {fault} does not quote what it read"
+
+    with pytest.raises(ValueError, match=r"model_server\.base_url"):
+        resolve_base_url(declared)
+
+
+def test_an_address_a_run_can_use_is_taken_and_tidied() -> None:
+    """A trailing slash is an operator's habit, not a second address.
+
+    Dropped rather than refused, because nothing downstream can tell the two
+    apart and refusing would cost an operator a round trip to learn it. The
+    stored value is the tidied one, so every later reader sees one spelling.
+    """
+    assert ModelServerConfig().base_url == "http://127.0.0.1:8080", (
+        "a fresh clone talks to a server on its own machine"
+    )
+    assert ModelServerConfig(base_url="http://10.0.0.5:9001/").base_url == "http://10.0.0.5:9001"
+    assert ModelServerConfig(base_url="https://a-box:8443").base_url == "https://a-box:8443"
+
+
+@pytest.mark.parametrize(
+    ("declared", "this_machine"),
+    [
+        ("http://127.0.0.1:8080", True),
+        ("http://127.0.0.5:8080", True),
+        ("http://[::1]:8080", True),
+        ("http://localhost:8080", True),
+        ("http://LocalHost:8080", True),
+        ("http://192.168.1.20:9090", False),
+        ("http://a-box:8080", False),
+        ("http://ip6-localhost:8080", False),
+    ],
+)
+def test_only_a_loopback_literal_or_localhost_answers_for_this_machine(
+    declared: str, this_machine: bool
+) -> None:
+    """Who may answer for this machine, settled without asking a resolver.
+
+    A name lookup would make the answer depend on something nobody wrote down,
+    and a hosts entry can point `127.0.0.1` at a tunnel to a second machine - so
+    `a-box` is not this machine even on a host where it resolves to one, and
+    `ip6-localhost` is a Debian hosts convention rather than a reserved name.
+    `localhost` is in because RFC 6761 reserves it, and the mixed-case spelling
+    is here because the host is read as a host rather than off the authority.
+
+    The reader is `runtime_build`, which writes what this answers into the run
+    record, so a wrong yes is a published falsehood rather than a failed call.
+    """
+    assert is_loopback(ModelServerConfig(base_url=declared).base_url) is this_machine
+
+
 def test_the_model_server_publishes_its_counters_without_being_asked_for() -> None:
     """A run that did not count is a run that cannot say how close it came.
 
@@ -230,8 +312,8 @@ def test_the_model_server_publishes_its_counters_without_being_asked_for() -> No
         entry["declared_for"] = None
     fresh = ModelsConfig.model_validate(models)
 
-    assert "--metrics" in fresh.summarize.server, "a fresh clone must count"
-    assert "--metrics" in committed.summarize.server, "the committed config must count"
+    assert "--metrics" in fresh.summarizer.server, "a fresh clone must count"
+    assert "--metrics" in committed.summarizer.server, "the committed config must count"
 
 
 def test_the_committed_window_is_one_a_measurement_widened() -> None:
@@ -249,10 +331,10 @@ def test_the_committed_window_is_one_a_measurement_widened() -> None:
     """
     models = committed_models()
 
-    assert window(models.summarize.server) > UNMEASURED_WINDOW, (
+    assert window(models.summarizer.server) > UNMEASURED_WINDOW, (
         "the summarizer is the one role a measurement widened"
     )
-    assert models.summarize.server["-fa"] == "on"
+    assert models.summarizer.server["-fa"] == "on"
 
 
 #: What the summarize prompt costs before a word of the article reaches it, and
@@ -300,7 +382,7 @@ def test_the_longest_article_the_cap_allows_still_fits_the_window() -> None:
     from word count and can undercount the rendered prompt.
     """
     committed = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json"))
-    n_ctx = window(committed_models().summarize.server)
+    n_ctx = window(committed_models().summarizer.server)
     worst_prompt, worst_sequence = _worst_sequence_tokens(committed)
     answer = summarize_and_plan_budget_tokens(committed.summarize)
 
@@ -309,7 +391,7 @@ def test_the_longest_article_the_cap_allows_still_fits_the_window() -> None:
         f"({committed.extract.truncation_cap_tokens}) lets through is "
         f"{worst_prompt} prompt tokens, and {answer} of answer "
         f"puts the sequence at {worst_sequence} against a window of {n_ctx}. "
-        "Raise --ctx-size in models.summarize.server beside the cap, or lower the cap."
+        "Raise --ctx-size in models.summarizer.server beside the cap, or lower the cap."
     )
 
 
@@ -372,7 +454,7 @@ def test_the_two_calls_fit_the_window_at_the_cap() -> None:
     that could exhaust the window and truncate the summary or visual plan.
     """
     committed = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json"))
-    n_ctx = window(committed_models().summarize.server)
+    n_ctx = window(committed_models().summarizer.server)
     prompt, sequence = _worst_two_call_sequence_tokens(committed)
 
     assert sequence <= n_ctx, (
@@ -383,7 +465,7 @@ def test_the_two_calls_fit_the_window_at_the_cap() -> None:
         f"reply, the {SUMMARIZE_AND_PLAN_SEAM_TOKENS}-token seam and the summarize-and-plan call's "
         f"{summarize_and_plan_budget_tokens(committed.summarize)}-token reply put the pair at "
         f"{sequence} against a window of {n_ctx}, over by "
-        f"{sequence - n_ctx}. Raise --ctx-size in models.summarize.server, or "
+        f"{sequence - n_ctx}. Raise --ctx-size in models.summarizer.server, or "
         "lower extract.truncation_cap_tokens or elements.max_per_article beside it. "
         "KV is 32 KiB a token on the configured weights, so a doubling is about a "
         "gigabyte and docs/reference/pipeline-cost.md says what the runner had free."
@@ -588,10 +670,9 @@ def test_moving_a_rare_event_threshold_in_the_config_moves_what_resolves(
 def test_the_rare_event_thresholds_are_knobs_the_frontend_agrees_with() -> None:
     """The same three-copies problem the chart size has, four fields along.
 
-    `frontend/src/contracts/appearance-config.ts` is generated and the drift
-    gate holds it. The `ConsoleConfig` interface in `config.ts` is not: it is
-    what a clone with no `config/` renders from, so a field missing there is a
-    console drawing a threshold nobody set.
+    The `ConsoleConfig` interface in `config.ts` is what a clone with no
+    `config/` renders from, so a field missing there is a console drawing a
+    threshold nobody set.
     """
     drawn = AppearanceConfig.from_json(read_text(CONFIG_DIR / "appearance.json")).console
     fresh = ConsoleConfig()

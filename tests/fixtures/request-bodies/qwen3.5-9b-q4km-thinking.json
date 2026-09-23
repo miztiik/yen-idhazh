@@ -3,6 +3,8 @@
     "chat_template_kwargs": {
       "enable_thinking": true
     },
+    "dry_multiplier": 0.0,
+    "frequency_penalty": 0.0,
     "messages": [
       {
         "content": "You summarize one article.",
@@ -13,7 +15,12 @@
         "role": "user"
       }
     ],
+    "min_p": 0.05,
+    "mirostat": 0,
     "model": "qwen3-5-9b-q4-k-m-thinking",
+    "presence_penalty": 0.0,
+    "repeat_last_n": 64,
+    "repeat_penalty": 1.0,
     "response_format": {
       "json_schema": {
         "name": "summary",
@@ -36,10 +43,15 @@
     "seed": 0,
     "stream": false,
     "temperature": 0.2,
-    "top_p": 1.0
+    "top_k": 40,
+    "top_p": 1.0,
+    "typical_p": 1.0,
+    "xtc_probability": 0.0
   },
   "completion": {
     "cache_prompt": true,
+    "dry_multiplier": 0.0,
+    "frequency_penalty": 0.0,
     "json_schema": {
       "additionalProperties": false,
       "properties": {
@@ -52,16 +64,26 @@
       ],
       "type": "object"
     },
+    "min_p": 0.05,
+    "mirostat": 0,
     "model": "qwen3-5-9b-q4-k-m-thinking",
     "n_predict": 512,
+    "presence_penalty": 0.0,
     "prompt": "<|im_start|>system\nYou summarize one article.<|im_end|>\n<|im_start|>user\nAn article about a bridge.<|im_end|>\n<|im_start|>assistant\n<think>\n",
+    "repeat_last_n": 64,
+    "repeat_penalty": 1.0,
     "seed": 0,
     "stream": false,
     "temperature": 0.2,
-    "top_p": 1.0
+    "top_k": 40,
+    "top_p": 1.0,
+    "typical_p": 1.0,
+    "xtc_probability": 0.0
   },
   "continued": {
     "cache_prompt": true,
+    "dry_multiplier": 0.0,
+    "frequency_penalty": 0.0,
     "json_schema": {
       "additionalProperties": false,
       "properties": {
@@ -74,38 +96,66 @@
       ],
       "type": "object"
     },
+    "min_p": 0.05,
+    "mirostat": 0,
     "model": "qwen3-5-9b-q4-k-m-thinking",
     "n_predict": 1024,
+    "presence_penalty": 0.0,
     "prompt": "<|im_start|>system\nYou summarize one article.<|im_end|>\n<|im_start|>user\nAn article about a bridge.<|im_end|>\n<|im_start|>assistant\n<think>\n{\"title\": \"a bridge\"}<|im_end|>\n<|im_start|>user\nNow the picture.<|im_end|>\n<|im_start|>assistant\n<think>\n",
+    "repeat_last_n": 64,
+    "repeat_penalty": 1.0,
     "seed": 0,
     "stream": false,
     "temperature": 0.2,
-    "top_p": 1.0
+    "top_k": 40,
+    "top_p": 1.0,
+    "typical_p": 1.0,
+    "xtc_probability": 0.0
   },
   "grammar": {
     "cache_prompt": true,
+    "dry_multiplier": 0.0,
+    "frequency_penalty": 0.0,
     "grammar": "root ::= \"same\" | \"different\" | \"unclear\"",
+    "min_p": 0.05,
+    "mirostat": 0,
     "model": "qwen3-5-9b-q4-k-m-thinking",
     "n_predict": 512,
     "n_probs": 3,
     "post_sampling_probs": false,
+    "presence_penalty": 0.0,
     "prompt": "<|im_start|>system\nYou summarize one article.<|im_end|>\n<|im_start|>user\nAn article about a bridge.<|im_end|>\n<|im_start|>assistant\n<think>\n",
+    "repeat_last_n": 64,
+    "repeat_penalty": 1.0,
     "seed": 0,
     "stream": false,
     "temperature": 0.2,
-    "top_p": 1.0
+    "top_k": 40,
+    "top_p": 1.0,
+    "typical_p": 1.0,
+    "xtc_probability": 0.0
   },
   "thinking_span": {
     "cache_prompt": true,
+    "dry_multiplier": 0.0,
+    "frequency_penalty": 0.0,
+    "min_p": 0.05,
+    "mirostat": 0,
     "model": "qwen3-5-9b-q4-k-m-thinking",
     "n_predict": -1,
+    "presence_penalty": 0.0,
     "prompt": "<|im_start|>system\nYou summarize one article.<|im_end|>\n<|im_start|>user\nAn article about a bridge.<|im_end|>\n<|im_start|>assistant\n<think>\n",
+    "repeat_last_n": 64,
+    "repeat_penalty": 1.0,
     "seed": 0,
     "stop": [
       "\n</think>\n\n"
     ],
     "stream": false,
     "temperature": 0.2,
-    "top_p": 1.0
+    "top_k": 40,
+    "top_p": 1.0,
+    "typical_p": 1.0,
+    "xtc_probability": 0.0
   }
 }

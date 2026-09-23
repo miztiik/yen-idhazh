@@ -2,14 +2,6 @@
 # whether the content is text; text uses LF and binary content stays untouched.
 * text=auto eol=lf
 
-# Generated contract artifacts and their source schemas are always LF so the
-# contract drift gate (regenerate + `git diff --exit-code`) is byte-stable
-# across operating systems and every contributor's core.autocrlf setting. The
-# Pydantic exporter and the frontend type generator both emit LF; these
-# attributes make the stored blob and every checkout match.
-schemas/*.schema.json text eol=lf
-frontend/src/contracts/*.ts text eol=lf
-
 # Human-edited tunables. A config file whose bytes shift with the checkout would
 # change the hash the run manifest records for it.
 config/*.json text eol=lf

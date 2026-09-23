@@ -190,7 +190,7 @@ The three levers this page already names - encode efficiently, honour the visual
 
 Total 7,815,628 bytes over 8 files. **All three of the ledgers this table exists to watch moved inside a day**, and the shares moved further than the bytes did, so the shares are the ones to re-take rather than to quote. Against 2026-08-30: `state/` as a whole fell 17.6 percent, because `state/seen/` shed its address column and fell 43.8 percent from 5,166,315. `state/scores.csv` grew 14.4 percent from 2,359,230 in the same day - so its share went from 24.9 to 34.6 percent while it was the only file nobody had touched, and it is now 204,202 bytes short of being the largest file in the tree.
 
-**The fold covers `state/item-health/`, its browser copy, and `state/feed-health/`.** A month older than `observability.item_health_full_grain_months` is read whole - since 2026-09-13 that means that month's day files, at most 31 of them - folded to one row per `(date, stage)` in `state/telemetry-aggregate/<YYYY-MM>.csv`, the day files are deleted with the month and year directories they emptied, and `frontend/public/telemetry/<YYYY-MM>.csv` goes with them - in that order, with the aggregate read back before anything is unlinked, so a fold that cannot be written leaves every file where it was. **The boundary stays a month even though the files below it are days**, because a day file of a month's totals is a shape nothing consumes. Fourteen months, and the fourteenth is not spare: `console.max_window_days` is 366, `ledger.shards_in_window` walks 367 inclusive days, and a window ending on the first of a month starts on the last day of another - so a read can open 14 months. The knob carried 13 until 2026-09-02, because the check behind it compared `13 * 30` against 366 rather than against the shards that window selects. Measured over all 146,097 end dates of one 400-year Gregorian cycle, 13 deletes a shard the console still opens on 3,636 of them, 2.5 percent ([../../concepts/config.md](../../concepts/config.md#why-14-and-not-13)).
+**The fold covers `state/item-health/`, its browser copy, and `state/feed-health/`.** A month older than `observability.item_health_full_grain_months` is read whole - since 2026-09-13 that means that month's day files, at most 31 of them - folded to one row per `(date, stage)` in `state/telemetry-aggregate/<YYYY-MM>.csv`, the day files are deleted with the month and year directories they emptied, and `frontend/public/telemetry/<YYYY-MM>.csv` goes with them - in that order, with the aggregate read back before anything is unlinked, so a fold that cannot be written leaves every file where it was. **The boundary stays a month even though the files below it are days**, because a day file of a month's totals is a shape nothing consumes. Fourteen months, and the fourteenth is not spare: `console.max_window_days` is 366, `ledger.shards_in_window` walks 367 inclusive days, and a window ending on the first of a month starts on the last day of another - so a read can open 14 months. The knob carried 13 until 2026-09-02, because the check behind it compared `13 * 30` against 366 rather than against the shards that window selects. Measured over all 146,097 end dates of one 400-year Gregorian cycle, 13 deletes a shard the console still opens on 3,636 of them, 2.5 percent ([../../concepts/config/retention-ages.md](../../concepts/config/retention-ages.md#why-14-and-not-13)).
 
 **Feed health is deleted rather than folded, and that is a decision.** `state/feed-health/<YYYY>/<MM>/<DD>/` is one row per feed per run. The quarantine reads 31 days and the console reaches at most 366, so no summary of a month past `observability.feed_health_keep_months` has a reader - and a shape nothing consumes, persisted for ever, is the cost of inventing one. **The ledger files by day and that age is still a month**, so the prune takes a month's day files whole and names each one it removed, deleting the month and year directories they empty. `state/feed-retirements.csv` sits beside that directory and is never a candidate: it carries no time window, and a run that forgot a retired address would start asking a dead one again.
 
@@ -423,6 +423,40 @@ reports and deletes nothing.
 is one paragraph here and not a second retention design. A collection is three
 callables - list, describe, delete - and everything else is shared.
 
+### Design rationale: the pipeline test's prose stays an artifact (2026-09-23)
+
+A pipeline-test dispatch runs two models over the same articles across three
+cases and writes, per item, the model's summary, its score, the fetched article
+and a visual decision. All of it uploads as an artifact at 90 days. Only the CSV
+day-ledgers are committed, into `state/pipeline-tests/`. After day 90 the prose
+is gone and the numbers remain: the ledger says an item scored 0.62 and cannot
+say what the model wrote to earn it.
+
+**It stays that way.** Nobody has asked the question a committed record would
+answer, and 90 days covers the window in which a prompt change is argued.
+Production keeps less: the premise-and-summary payload a human labeller reads is
+a 14-day artifact, chosen deliberately, so a dispatch already keeps its prose six
+times longer than the instrument the labelling loop runs on.
+
+Two costs make committing it the worse trade. Measured 2026-09-23: model output
+alone is about 19 KB a dispatch and everything is about 48 KB, and **neither has
+a prune path** - `day_shards.shard_files` refuses a stray, and a `.summary.json`
+is not a day shard, so committing either needs a new one built first. And the
+article payload sits in the same directory as the prose, so committing the
+directory commits `article.text`, which the corpus carve-out permits only for
+training data nobody renders and which the prune rewrites.
+
+Raising the retention is not an option that exists: GitHub caps artifact
+retention at 90 days for a public repository.
+
+**What would reopen it:** the first time somebody moves the scorer or the model
+pin and asks to re-score a dispatch older than 90 days. Re-running is not a
+substitute - it re-fetches pages that have changed, which is the premise
+mismatch `backend/idhazh/contracts/evidence.py` already refuses - and a
+committed article would pin the premise but not the generator, so only the
+article and the prose together make a valid comparison. Authority: Fowler and
+Andre, owner ruling 2026-09-23.
+
 ## `state/scores/` became a directory, and that bounds nothing on its own (2026-08-31)
 
 **The eval ledger moved from `state/scores.csv` to `state/scores/<YYYY-MM>.csv` on
@@ -556,7 +590,7 @@ somebody wants them.
 ## See also
 
 - [layout.md](layout.md) - what a run writes, and the addresses a reader reaches.
-- [../../concepts/config.md](../../concepts/config.md) - the retention knobs and their defaults.
+- [../../concepts/config/retention-ages.md](../../concepts/config/retention-ages.md) - the retention knobs and their defaults.
 - [../../concepts/growing-reads.md](../../concepts/growing-reads.md) - Guardrail #12's escape hatch, and what a growing read has to declare.
 - [../../reference/site-weight.md](../../reference/site-weight.md) - the site's weight, its growth rate and the alarm point.
 - [../../how-to/run-the-gates.md](../../how-to/run-the-gates.md) - the page ceilings and what to do when one fires.

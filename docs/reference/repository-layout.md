@@ -21,7 +21,7 @@ question, and the four answers do not mix.
 | Answer | Directory |
 | --- | --- |
 | A person writes it, by hand | `.claude/`, `.github/`, `config/`, `docs/`, `notebooks/`, `tests/`, `TODO/` |
-| A tool generates it, and it is committed | `schemas/`, `state/`, `frontend/public/digest/` |
+| A tool generates it, and it is committed | `state/`, `frontend/public/digest/` |
 | A tool generates it, and it is thrown away | `backend/var/`, `frontend/build/` |
 | It is downloaded, not authored | `backend/models/`, `backend/bin/` |
 
@@ -31,7 +31,6 @@ question, and the four answers do not mix.
 | --- | --- | --- | --- |
 | `config/` | The tunable knobs: `idhazh.json`, `appearance.json`, `sources.json`, `taxonomy.json`, `watchlist.json`, and one whole model per file under `config/models/` | a person | only the slice the site is handed |
 | `corpus/` | The rolling training window: source text as training samples, its census and its holdout. **`corpus/reference-dataset-1/` is a second collection in the same directory and a different thing entirely**: a frozen, hand-labelled set for measuring the article classifier, written once by hand and never by a run. The two must not share an article, and `build_reference_dataset.py verify` is what says so. **`corpus/reference-dataset-2/` is a third**: a collection built from a URL list supplied by hand, for a later balanced classification sample, with its own settings in `config.json` and its own `scratch/` subtree ignored by git | a run, in CI; `reference-dataset-1/` and `reference-dataset-2/` by a person | **never** |
-| `schemas/` | One generated JSON Schema per contract. **A configuration file this project authors has none** (`CLAUDE.md` Guardrail #3): `config/models/<name>.json` is validated in Python and generates nothing, because a schema of a file only this repository writes and reads restates its own reader | `python -m idhazh.contracts.export` | no |
 | `backend/` | The build-time producer. Not a service, ever. `backend/idhazh/` is the package, `backend/idhazh/contracts/` the Pydantic models, `backend/idhazh/contracts/knobs/` one module per block of `config/idhazh.json`, `backend/idhazh/stages/` one module per pipeline stage, `backend/utilities/` the operator tooling, `backend/tests/` its tests | a person | no |
 | `.github/workflows/` | CI, the measurement harness, the daily pipeline, and the Pages deploy | a person | no |
 | `.github/scripts/` | A shell step two or more workflow jobs run | a person | no |
@@ -54,7 +53,7 @@ These exist on a developer machine and in CI. None is ever committed.
 | `backend/models/` | GGUF weights. 2.4 GB and 4.8 GB, against a 100 MB per-file ceiling |
 | `backend/bin/` | llama.cpp binaries, ~45 MB. Downloaded, not authored |
 | `backend/var/` | Run intermediates and caches. The committed record of a run is the digest plus the `state/` rows, never the workings |
-| `backend/var/evidence/` | Inside `backend/var/`, and named here because a person has to find it. One file per scored item, holding the article text and the summary a human labeller must read. Article bodies are not ours to republish (`CLAUDE.md` section 0a), so this one is uncommittable on principle rather than on size |
+| `backend/var/evidence/` | Inside `backend/var/`, and named here because a person has to find it. One file per scored item, holding the article text and the summary a human labeller must read. Article bodies are not ours to republish, so this one is uncommittable on principle rather than on size |
 | `backend/var/council/` | Inside `backend/var/`, and named here for the same reason. **Everything one judging night carries between its jobs, and the only thing it carries**: the workflow uploads this directory and nothing else, so a file a tenant writes outside it is thrown away with the runner. One date a directory, and inside it a slot each for what was picked, what was judged, what the units measured and how each unit ended. A file is named `<date>-<tenant>-<unit>`, so eight units cannot land on one path and a file merged out of eight artifacts still says who wrote it. Nothing here is ever committed - a drawn row carries no verdict yet and the units rewrite it, while a row reaches `state/content-similarity-judge/scored-pairs/` once, already judged, and is never edited afterwards |
 | `frontend/build/` | The built bundle. Pages rebuilds it from source on every deploy |
 | `frontend/static/digest/` | Staged from `frontend/public/digest/` at build time. A copy is not a source |
@@ -81,7 +80,7 @@ time by `backend/utilities/label_queue.py`. It sits with the other ledgers
 because it is read the same way - joined to `state/scores.csv` on
 `output_digest`, never served, and it must survive a fresh checkout. It is the
 one exception to "written by a machine", and it is deliberate: the point of the
-file is that no machine wrote it (`CLAUDE.md` section 0a). See
+file is that no machine wrote it. See
 [../concepts/evaluation.md](../concepts/evaluation.md).
 
 `state/content-similarity-judge/holdout-pairs.csv` is the second, and it is the same
@@ -103,9 +102,9 @@ none of it - which is the intended cost. See
 [../how-to/label-the-faithfulness-queue.md](../how-to/label-the-faithfulness-queue.md).
 
 **`corpus/` holds that same article text, committed, and it is the one place in
-this repository that does.** `CLAUDE.md` section 0a permits it by name, on an
-owner decision taken 2026-08-28: what the non-goal protects is the published
-surface, and nothing renders the corpus, links to it, or serves it. Two
+this repository that does.** That is an owner decision taken 2026-08-28: what
+the rule protects is the published surface, and nothing renders the corpus,
+links to it, or serves it. Two
 consequences follow and neither is hidden. This repository is public, so those
 bytes are readable by anyone. And because git history is append-only, bounding
 the repository means rewriting history - which is what
@@ -123,18 +122,14 @@ The Pages workflow uploads `frontend/build` and nothing else, so `state/` cannot
 reach a reader even by accident. The console reads it at build time and bakes
 the numbers into the page ([../concepts/pipeline-loop.md](../concepts/pipeline-loop.md)).
 
-**`schemas/` is top-level because it is neither half's property.** It is
-generated from `backend/idhazh/contracts/` and read by the frontend's payload
-types. Filing it under either half would make the other half import across the
-boundary that section 4 forbids. At the top, both sides read a neutral artifact
-and neither owns it.
-
-The frontend end of that arrow is generated too. `python -m idhazh.contracts.export`
-writes `schemas/` and `frontend/src/contracts/` from one list of models, and the
-drift gate regenerates both and fails on any diff
+**Nothing sits between the two halves any more.** `schemas/` did until
+2026-09-23: 66 generated JSON Schemas, top-level because neither half owned
+them. It went with `frontend/src/contracts/`, and what crosses the boundary now
+is six names copied by hand into two `frontend/src/lib/server/` modules, held in
+step by three backend tests
 ([../architecture/contracts/schemas.md](../architecture/contracts/schemas.md)).
-`frontend/src/lib/payload/types.ts` is the one mirror still written by hand, and
-that page says why it has not moved yet.
+`frontend/src/lib/payload/types.ts` is the larger mirror, still written by hand,
+and that page says what binds it.
 
 **`frontend/public/` is committed pipeline output, not source.** The backend is
 its only writer; the site only renders what is already there. That is the whole
@@ -160,7 +155,7 @@ never ships a runner detail.
 
 ## Design rationale
 
-Splitting committed machine output (`state/`, `schemas/`, `frontend/public/`)
+Splitting committed machine output (`state/`, `frontend/public/`)
 from committed human input (`config/`, `docs/`, `tests/`) is the decision the
 rest of this page falls out of. The alternative - one directory holding both -
 means a run appends to a file a person is editing, and every run risks a
@@ -226,7 +221,7 @@ filename and you know what the code inside answers, whoever calls it.
 | --- | --- |
 | Ledgers under `backend/var/` | Gitignored. The next run would start with no memory at all. |
 | Ledgers under `frontend/public/` | Published to a reader, and counted against the 1 GB site cap, for data no reader wants. |
-| `schemas/` inside `backend/` | The frontend would import across the boundary section 4 draws between the halves. |
+| A top-level `schemas/` of generated JSON Schemas | Deleted 2026-09-23. It held 66 files, 61 of which were read by nothing but the gate that checked they had been generated, and it put a regenerated diff in front of about one reviewer in ten. |
 | Keeping `evals/` as its own top-level directory | A second answer to a question `state/` already answered. |
 | Renaming the `/evals/` route when the folder was folded | A reader's bookmark is a promise. A directory name is not. |
 | A shared workflow step under `backend/utilities/` | `backend/` is the producer, and a step only GitHub Actions runs is not producer code. Filing it there puts a runner detail inside the installable package and hides it from the workflow that calls it. |
@@ -240,7 +235,7 @@ filename and you know what the code inside answers, whoever calls it.
 
 - [documentation-structure.md](documentation-structure.md) - the tiers inside `docs/` and where a new statement goes.
 - [../concepts/pipeline-loop.md](../concepts/pipeline-loop.md) - what one run leaves for the next, and why nothing under `state/` is served.
-- [../architecture/contracts/schemas.md](../architecture/contracts/schemas.md) - what generates `schemas/` and the drift gate over it.
+- [../architecture/contracts/schemas.md](../architecture/contracts/schemas.md) - where a persisted shape is declared, and what binds the frontend's copy of one.
 - [../architecture/publishing/layout.md](../architecture/publishing/layout.md) - the shape inside `frontend/public/digest/`.
 - [../how-to/run-the-pipeline.md](../how-to/run-the-pipeline.md) - which of these paths a local run touches.
 - [../../CLAUDE.md](../../CLAUDE.md) - section 3 (topology), section 4 (dependency rules), Guardrail #1.

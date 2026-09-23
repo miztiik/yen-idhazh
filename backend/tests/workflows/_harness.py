@@ -179,10 +179,7 @@ SHELLCHECK_COMMAND: Final = "shellcheck --severity=style .github/scripts/*.sh"
 #: no owner while this list was being written. The list only ever shrinks: a row that deletes
 #: a script deletes its name in the same commit, and the test reads both directions, so
 #: neither a new file nor a forgotten name can pass.
-SHIPPED_SCRIPTS: Final = (
-    "push-rewritten-history.sh",
-    "take-state-from-the-tip.sh",
-)
+SHIPPED_SCRIPTS: Final = ()
 
 # The ceiling, not the dispatch rule. Guardrail #2 allows 20 concurrent jobs; a regex
 # held the fan-out at four. The empty-input default below stays at four, because
@@ -334,7 +331,7 @@ WEIGHTS_CHECKS: Final = {
         "Download the summarizer weights",
         "Verify the weights",
         "Benchmark parallel decode",
-        '["summarize"]["sha256"]',
+        '["summarizer"]["sha256"]',
     ),
     # The one candidate whose digest is not a config field: the plan job decides
     # it once, from the dispatch input or from config, and republishes it.
@@ -350,9 +347,9 @@ WEIGHTS_CHECKS: Final = {
 # block reads `config/idhazh.json` where the model is used, so the workflow
 # holds no model repo, no weights filename and no upload of those weights.
 MODEL_REF_OUTPUTS: Final = (
-    "summarize_repo",
-    "summarize_revision",
-    "summarize_file",
+    "summarizer_repo",
+    "summarizer_revision",
+    "summarizer_file",
 )
 
 MODEL_REF_FIELDS: Final = ("repo", "revision", "file")
@@ -371,7 +368,7 @@ MODEL_ENV_NAMES: Final = frozenset(
 )
 
 # The weights cache jobs, and the config role each one serves.
-WEIGHTS_CACHE_ROLES: Final = {"work": "summarize"}
+WEIGHTS_CACHE_ROLES: Final = {"work": "summarizer"}
 
 #: The one cache-key format written in two places, so the two have to resolve to
 #: one string. `qualify-` in `validate.yml` and `bench-` in `measure.yml` are
@@ -519,15 +516,15 @@ RUNTIME_IDENTITY_JOBS: Final = {
 
 RUNTIME_IDENTITY_STEP: Final = "What this runner is"
 
-# One loopback port per workflow, declared once. `server_argv` binds it, every
-# probe reads it, and `idhazh.llm.server` reads it for the address the stage
-# posts to - so a moved port cannot leave a server on one and a client on
-# another (Guardrail #6).
-LLAMA_PORT_ENV: Final = "LLAMA_PORT"
+# One probe address per workflow, declared once and read by every probe in the
+# job. It is always loopback, because the server is on the runner the probe
+# runs on. Where the stage POSTS is `model_server.base_url`, and the server
+# command binds the port it reads back out of that - so a moved port cannot
+# leave a server on one and a client on another (Guardrail #6).
+PROBE_URL_ENV: Final = "MODEL_SERVER_PROBE"
 
-LLAMA_PORT_VALUE: Final = "8080"
+PROBE_URL_VALUE: Final = "http://127.0.0.1:8080"
 
-LLAMA_PORT_READ: Final = "http://127.0.0.1:${LLAMA_PORT}"
 #: The starters that are not steps. `measure.yml`'s runtime case starts a server
 #: too, but it does it inside a module rather than inside a heredoc - so the
 #: Oracle reads the module. It is held here, beside the steps, because the thing
@@ -580,7 +577,7 @@ PYTHON_PROCS_FILE: Final = "python-procs.jsonl"
 # ggml-org/llama.cpp on 2026-08-25.
 METRICS_FILE: Final = "llama-metrics.prom"
 
-METRICS_ENDPOINT: Final = "http://127.0.0.1:${LLAMA_PORT}/metrics"
+METRICS_ENDPOINT: Final = "${MODEL_SERVER_PROBE}/metrics"
 
 METRICS_SERIES: Final = ("llamacpp:n_busy_slots_per_decode", "llamacpp:n_tokens_max")
 # The one commit step both daily jobs run. They differ in what they
@@ -635,16 +632,16 @@ COMMIT_STEPS: Final = {
 #: the plan is made against rows another run has already superseded.
 TAKE_STATE_STEP: Final = "Take the run state from the tip, not from the trigger commit"
 
-TAKE_STATE_SCRIPT: Final = SCRIPTS_DIR / "take-state-from-the-tip.sh"
+TAKE_STATE_MODULE: Final = REPO_ROOT / "backend" / "utilities" / "take_state_from_the_tip.py"
 
-TAKE_STATE_CALL: Final = ("bash", ".github/scripts/take-state-from-the-tip.sh", "state")
+TAKE_STATE_CALL: Final = ("python3", "backend/utilities/take_state_from_the_tip.py", "state")
 
-#: The prune's own push, in a script rather than inline so a test can drive it
+#: The prune's own push, in a program rather than inline so a test can drive it
 #: against a real repository. It is the one file in the repository that may
 #: force-push, and the one that may refuse to.
-PRUNE_PUSH_SCRIPT: Final = SCRIPTS_DIR / "push-rewritten-history.sh"
+PRUNE_PUSH_MODULE: Final = REPO_ROOT / "backend" / "utilities" / "push_rewritten_history.py"
 
-PRUNE_PUSH_CALL: Final = ("bash", ".github/scripts/push-rewritten-history.sh")
+PRUNE_PUSH_CALL: Final = ("python3", "backend/utilities/push_rewritten_history.py")
 
 #: The commit the prune checked out, remembered before the squash rewrites it.
 #: The push compares origin's tip against this, so a step that captured it after

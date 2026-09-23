@@ -182,7 +182,7 @@ See [../architecture/sources/freshness.md](../architecture/sources/freshness.md)
 ## What never happens in the loop
 
 - No stage fetches at read time. Everything here is build time (Guardrail #1).
-- No article body is committed or served. The link and our summary are the output (see [../../CLAUDE.md](../../CLAUDE.md) section 0a).
+- No article body is served to a reader, and `corpus/` is the one place one is committed. The link and our summary are the output.
 - No fetched text becomes an instruction, a shell argument, a file path, or a URL to fetch (Guardrail #11).
 - No stage silently drops data. Truncation, degradation and failure are all recorded on the item.
 

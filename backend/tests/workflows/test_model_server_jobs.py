@@ -2,35 +2,37 @@
 
 from __future__ import annotations
 
-import os
+import json
 import re
 import shutil
 import subprocess
 import sys
 from pathlib import Path
 from typing import Final
+from urllib.parse import urlsplit
 
 import pytest
 from conftest import CONFIG_DIR, REPO_ROOT, llama_server_flags, read_text
+from pytest import MonkeyPatch
 
-from idhazh.llm.server import DEFAULT_ENDPOINT, DEFAULT_PORT
+from idhazh.contracts.app_config import AppConfig
+from idhazh.contracts.base import canonical_json
 from idhazh.telemetry import silicon
-from utilities import candidate_pointer, model_refs, pipeline_case_config
+from utilities import candidate_pointer, model_refs, model_runtime, pipeline_case_config
 
 from ._harness import (
     ACTIONS_DIR,
     ARGV_MODULE_CALL,
     COUNTERS_FLAG,
     JOB_CLOCK_STEP,
-    LLAMA_PORT_ENV,
-    LLAMA_PORT_READ,
-    LLAMA_PORT_VALUE,
     MEMORY_SUMMARY_STEP,
     METRICS_ENDPOINT,
     METRICS_FILE,
     METRICS_SERIES,
     MODEL_SERVER_ACTION,
     MODEL_SERVER_STEPS,
+    PROBE_URL_ENV,
+    PROBE_URL_VALUE,
     PYTHON_PROCS_FILE,
     RSS_SAMPLE_FILE,
     RUNTIME_IDENTITY_JOBS,
@@ -59,7 +61,6 @@ from ._harness import (
     _starter_shell,
     _step,
     _steps,
-    _strings,
     requires_bash,
 )
 
@@ -90,9 +91,9 @@ LAUNCH_ROOTS: Final = (
     ("measure.yml", "budgets", "Start the tokenizer", "backend/var/candidate-config"),
 )
 
-#: The variable those five steps used to be handed the weights path in. Named
+#: The variable those five steps used to be handed the model path in. Named
 #: so it cannot come back: the config root already says which file.
-WEIGHTS_ENV: Final = "LLAMA_WEIGHTS"
+MODEL_PATH_ENV: Final = "MODEL_PATH"
 
 
 def test_every_job_that_starts_a_server_reaches_the_one_argv_builder() -> None:
@@ -237,7 +238,7 @@ def test_the_model_block_is_one_action_with_a_contract_its_callers_can_read() ->
             f"{filename}/{job_name} calls the action before it has the tree"
         )
 
-    # The role is `models.summarize` and no caller chooses it, which is why the
+    # The role is `models.summarizer` and no caller chooses it, which is why the
     # two can share one cache entry - so naming it is correct. Naming a CALLER
     # is not: a block that knows who called it is a block one caller cannot be
     # built or tested without.
@@ -276,7 +277,7 @@ def test_the_launcher_refuses_a_call_it_cannot_serve(
     completed = subprocess.run(
         [sys.executable, str(START_SERVER_MODULE), *argv],
         cwd=tmp_path,
-        env={**_isolated_env(tmp_path), "LLAMA_PORT": "8080"},
+        env=_isolated_env(tmp_path),
         capture_output=True,
         text=True,
         check=False,
@@ -408,68 +409,135 @@ def test_the_memory_summary_reads_what_the_sampler_wrote() -> None:
 def test_the_loopback_port_is_one_number_wherever_it_is_written() -> None:
     """A server on one port and a stage posting to another is every item failing.
 
-    Every workflow that stands a llama-server up declares the port once at
-    workflow level, the shared launcher reads it back from the environment, and
-    `idhazh.llm.server` builds the address the stage posts to out of the same
-    variable. Until 2026-09-09 the measurement harness was a fifth party: it
-    starts its server from an inline python block rather than through the shared
-    launcher, and it held its own `SERVER_PORT = 8080`. It reads the variable
-    now, so the number is declared and never spelled.
+    There is one port in this project and it lives inside
+    `model_server.base_url`. The server command reads it back out of the config
+    root the job runs under, and every stage posts to that same value, so the
+    two cannot disagree by construction.
 
-    The declaration is the only place a runtime workflow may write the digits.
-    Asserted line by line on a whole-token match rather than as "the file holds
-    it once", so a hex digest that happens to carry `8080` inside it does not
-    read as a second port.
+    What a workflow still has to name is where its OWN probes ask, because a
+    probe is a curl against a server that job just started on that runner and it
+    can read no config - three of the five run against a scratch config root.
+    Each workflow declares that address once at workflow level and every probe
+    reads it back.
 
-    The Python side carries a fallback literal for a developer running the stage
-    by hand, and that literal is the one a port move would leave behind: the
-    workflows set the variable, so nothing in CI would ever reach the fallback
-    and nothing would say it had gone stale.
+    So this holds two properties. The declaration matches the committed
+    `model_server.base_url`, which is a statement about two committed files and
+    going red means somebody committed a probe that will never reach the server
+    the stage talks to. And the declaration is the only place a workflow may
+    write a loopback address at all: any other line naming the host, or the
+    port as a whole token, has to read the variable back. Checked on the host
+    rather than only on the port, because a second probe written at `:8081`
+    carries neither the committed address nor the committed digits and is
+    exactly the drift this is here for.
     """
-    expected = os.environ.get(LLAMA_PORT_ENV) or LLAMA_PORT_VALUE
-    assert str(DEFAULT_PORT) == expected, (
-        f"{LLAMA_PORT_ENV} is {expected} and idhazh.llm.server answers {DEFAULT_PORT}"
-    )
-    address = LLAMA_PORT_READ.replace("${" + LLAMA_PORT_ENV + "}", expected)
-    assert DEFAULT_ENDPOINT.startswith(f"{address}/"), (
-        f"the stage posts to {DEFAULT_ENDPOINT} and the workflow probes {address}"
+    posts_to = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json")).model_server.base_url
+    assert posts_to == PROBE_URL_VALUE, (
+        f"the stage posts to {posts_to} and the workflows probe {PROBE_URL_VALUE}"
     )
 
     declaring = set()
     for filename, workflow in sorted(_load_workflows().items()):
         env = workflow.get("env")
-        declared = env.get(LLAMA_PORT_ENV) if isinstance(env, dict) else None
+        declared = env.get(PROBE_URL_ENV) if isinstance(env, dict) else None
         if declared is not None:
             declaring.add(filename)
-            assert str(declared) == LLAMA_PORT_VALUE, (
-                f"{filename} declares {LLAMA_PORT_ENV}={declared}, "
-                f"and the fallback in idhazh.llm.server is {LLAMA_PORT_VALUE}"
+            assert str(declared) == PROBE_URL_VALUE, (
+                f"{filename} declares {PROBE_URL_ENV}={declared}, "
+                f"and the committed address is {PROBE_URL_VALUE}"
             )
-        for text in _strings(workflow):
-            assert f"127.0.0.1:{LLAMA_PORT_VALUE}" not in text, (
-                f"{filename} writes the port into an address instead of reading it back"
-            )
-    assert declaring, "no workflow declares the port, so this is checking nothing"
+    assert declaring, "no workflow declares the probe address, so this is checking nothing"
 
-    for filename in sorted(declaring):
+    probed = urlsplit(PROBE_URL_VALUE)
+    host, port = str(probed.hostname), str(probed.port)
+    for filename in sorted(_load_workflows()):
         for line in read_text(WORKFLOWS_DIR / filename).splitlines():
-            if re.search(rf"\b{LLAMA_PORT_VALUE}\b", line):
-                assert LLAMA_PORT_ENV in line, (
-                    f"{filename} spells the port at `{line.strip()}` rather than "
-                    f"reading {LLAMA_PORT_ENV} back"
+            if host in line or re.search(rf"\b{port}\b", line):
+                assert PROBE_URL_ENV in line, (
+                    f"{filename} spells an address at `{line.strip()}` rather than "
+                    f"reading {PROBE_URL_ENV} back"
                 )
 
-    assert f'PORT_ENV: Final = "{LLAMA_PORT_ENV}"' in read_text(START_SERVER_MODULE), (
-        f"{START_SERVER_MODULE.name} must read {LLAMA_PORT_ENV} rather than hold a port"
+
+def _a_config_root_posting_to(root: Path, base_url: str) -> Path:
+    """A whole `config/` of the test's own, naming one server.
+
+    The whole tree, because `config.load` reads five files and cross-checks two
+    of them. The committed file is the starting point rather than the subject:
+    what is asserted is the value written here, so this keeps testing the
+    refusal on the day an operator points the run at their own server
+    (`CLAUDE.md` section 13). `backend/tests/pipeline/test_model_server_address.py`
+    builds its own the same way, for the stage side of the same question.
+    """
+    target = root / "config"
+    shutil.copytree(CONFIG_DIR, target)
+    payload = json.loads(read_text(target / "idhazh.json"))
+    payload["model_server"]["base_url"] = base_url
+    (target / "idhazh.json").write_text(canonical_json(payload), encoding="utf-8", newline="\n")
+    return target
+
+
+def test_a_job_refuses_to_start_a_server_the_stage_will_never_reach(tmp_path: Path) -> None:
+    """The control behind escalation trigger 1 of the plan this row comes from.
+
+    Point `model_server.base_url` at another machine and leave a job starting a
+    server here, and every probe passes: a healthy server answers on loopback
+    while every item goes somewhere else and fails as unreachable. The readiness
+    check cannot catch it - it asks the server this job just started, which is
+    exactly the one that is fine.
+
+    So the refusal reads the config root the job was GIVEN, because three of the
+    five workflows run a production stage against a scratch root and a
+    zero-argument load would read the wrong file.
+    """
+    elsewhere = _a_config_root_posting_to(tmp_path, "http://192.168.1.20:9090")
+
+    with pytest.raises(SystemExit) as refused:
+        model_runtime.start_server(elsewhere, "llama-server")
+
+    said = str(refused.value)
+    assert "http://127.0.0.1:9090" in said, f"the refusal does not say what this job binds: {said}"
+    assert "http://192.168.1.20:9090" in said, (
+        f"the refusal does not say where the stage posts: {said}"
     )
-    # The one starter that does not go through the shared launcher. It sweeps a
-    # setting over per-candidate config roots and holds the process object to
-    # sample its memory, neither of which the launcher can do - so it keeps its
-    # own start sequence and reads the port the workflow declared. It moved out
-    # of `measure.yml` into a module on 2026-09-15; the rule did not move with it.
-    assert f'PORT_ENV = "{LLAMA_PORT_ENV}"' in read_text(
-        REPO_ROOT / "backend" / "utilities" / "runtime_sweep.py"
-    ), f"the measurement harness must read {LLAMA_PORT_ENV} rather than hold a port"
+    assert elsewhere.as_posix() in said, f"the refusal does not name the root to edit: {said}"
+
+
+def test_the_refusal_runs_before_the_server_is_built(
+    tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    """Proved by call order, not by a clock.
+
+    A root that agrees about the address gets past the refusal and stops at the
+    next thing `start_server` does, which is to make the llama-server binary
+    executable. Run from a directory that holds no `backend/bin`, that is a
+    `FileNotFoundError` on every machine - so the two cases differ only in the
+    address, and which exception comes back says which line read it.
+
+    The point is what a real job is spared: the weights path is resolved, the
+    5.68 GB file is opened and the process is spawned after this line, and on a
+    dispatch that is a cache restore and a load on every shard at once before
+    anything says the address was wrong.
+    """
+    agreeing = _a_config_root_posting_to(tmp_path, PROBE_URL_VALUE)
+    monkeypatch.chdir(tmp_path)
+
+    with pytest.raises(FileNotFoundError):
+        model_runtime.start_server(agreeing, "llama-server")
+
+    # Both starters read the port back out of the address rather than holding
+    # one. The launcher is how every workflow starts a production server; the
+    # sweep is the one that does not go through it, because it sweeps a setting
+    # over per-candidate config roots and holds the process object to sample its
+    # memory. Neither can the launcher do, so it keeps its own start sequence -
+    # and the rule that the port has one home did not move with it.
+    for module in (
+        START_SERVER_MODULE,
+        REPO_ROOT / "backend" / "utilities" / "runtime_sweep.py",
+    ):
+        assert "port_of_base_url(" in read_text(module), (
+            f"{module.name} must read the port back out of model_server.base_url "
+            "rather than hold one"
+        )
 
 
 def _launched_stem(script: str) -> str:
@@ -608,7 +676,7 @@ def test_the_weights_path_a_launcher_derives_is_the_one_the_download_wrote(
     """
     workflows = _load_workflows()
     roots = _the_five_roots(tmp_path)
-    landed = _published(model_refs.pinned_rows(CONFIG_DIR))["summarize_weights_path"]
+    landed = _published(model_refs.pinned_rows(CONFIG_DIR))["summarizer_weights_path"]
 
     for filename, job_name, step_name, root_name in LAUNCH_ROOTS:
         where = f"{filename}/{job_name}/{step_name}"
@@ -618,7 +686,7 @@ def test_the_weights_path_a_launcher_derives_is_the_one_the_download_wrote(
         assert root_name in shell or root_name in str(
             _mapping(step.get("env"), f"{where} env").values()
         ), f"{where} reads its flags from some root other than {root_name}"
-        assert WEIGHTS_ENV not in shell, f"{where} is still told which weights to open"
+        assert MODEL_PATH_ENV not in shell, f"{where} is still told which model file to open"
 
         derived = model_refs.list_model_files(roots[root_name])[0].landed_path
         assert derived == landed, (

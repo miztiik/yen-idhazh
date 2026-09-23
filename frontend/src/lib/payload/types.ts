@@ -1,4 +1,4 @@
-/** Shapes the published payload carries, mirroring `schemas/digest-day.schema.json`. */
+/** Shapes the published payload carries, mirroring `DigestDay`. */
 
 export type ConfidenceBand = 'high' | 'medium' | 'low';
 export type SourceForm = 'article' | 'abstract';
@@ -42,7 +42,7 @@ export interface DigestVisual {
 	alt: string | null;
 }
 
-/** One thing a drawing puts on the page, mirroring `schemas/visual-data.schema.json`.
+/** One thing a drawing puts on the page, mirroring `VisualData`.
  *
  * A mark is one entry in one channel - a bar's name or a bar's length, never
  * both halves of a bar - which is what gives a channel a length of its own.
@@ -88,7 +88,7 @@ export interface VisualData {
 /** A visual as the build hands it to a component: the committed fields, plus
  * the drawing itself for the stories a prerendered document carries.
  *
- * `markup` is not in `schemas/digest-day.schema.json` and is not meant to be.
+ * `markup` is not in `DigestDay` and is not meant to be.
  * `dayShell()` reads the file off disk for the seed alone and attaches it here,
  * so the field exists between that loader and `ItemVisual` and nowhere else. It
  * is separate from `DigestVisual` because that type mirrors the committed
@@ -272,7 +272,7 @@ export interface DigestDay {
 }
 
 /** The rendered chart as a served item carries it, mirroring
- * `schemas/digest-view.schema.json`. `kind` is a build-time field of the
+ * `DigestView`. `kind` is a build-time field of the
  * committed tree and never reaches a browser. */
 export type DigestViewVisual = Pick<DigestVisual, 'state' | 'path' | 'alt'>;
 
@@ -282,7 +282,7 @@ export type DigestViewVisual = Pick<DigestVisual, 'state' | 'path' | 'alt'>;
  * Derived from `DigestItem` rather than restated, so a field cannot mean one
  * thing in the committed payload and another on the wire. The allow-list that
  * decides which names are here lives in `project.ts`, and the shape is a
- * contract: `schemas/digest-view.schema.json`, from
+ * contract: `DigestView`, from
  * `backend/idhazh/contracts/digest_view.py`.
  *
  * `same_story_as` joined the list on 2026-09-16, when the page started folding a
@@ -378,7 +378,7 @@ export interface DayForPage {
 }
 
 /** One published story as the archive's list reads it, mirroring
- * `schemas/search-index.schema.json`.
+ * `SearchIndex`.
  *
  * No summary, no source and no band: the entry is what a list needs to name a
  * story, and everything else is one click away on the day page it links to.

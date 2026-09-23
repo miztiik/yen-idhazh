@@ -267,7 +267,7 @@
     "reference_rows": 300,
     "reference_test_rows": 100,
     "sequence_length": 4096,
-    "teacher": "summarize",
+    "teacher": "summarizer",
     "train_rows": 1000
   },
   "lens_weights": {
@@ -282,6 +282,9 @@
     "level": "DEBUG",
     "stage_lines": false,
     "waiting_heartbeat_seconds": 5
+  },
+  "model_server": {
+    "base_url": "http://10.0.0.5:9001"
   },
   "models_file": "models/qwen3-8b-q4km.json",
   "observability": {

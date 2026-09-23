@@ -44,6 +44,7 @@ from idhazh.contracts.knobs.council import CouncilConfig
 from idhazh.contracts.knobs.evaluation import DriftConfig, EvaluationConfig
 from idhazh.contracts.knobs.extract import ElementsConfig, ExtractConfig
 from idhazh.contracts.knobs.finetune import FinetuneConfig, ReferenceDatasetConfig
+from idhazh.contracts.knobs.model_server import ModelServerConfig
 from idhazh.contracts.knobs.models import SUPERSEDED_MODELS_NAMES, ModelsConfig
 from idhazh.contracts.knobs.observability import LoggingConfig, ObservabilityConfig
 from idhazh.contracts.knobs.page_weight import PageWeightConfig
@@ -99,6 +100,11 @@ class AppConfig(Contract):
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-23",
+            change="model_server.base_url, additive, default http://127.0.0.1:8080.",
+            why="The address a stage posts to was three python constants and no config value.",
+        ),
+        ChangelogEntry(
             version="2026-09-22T16:00",
             change="run.qualification_repeats, additive, default 3, floor 3, ceiling 10.",
             why="The replay count is a knob with a floor, not a dispatch input that could be 1.",
@@ -112,11 +118,6 @@ class AppConfig(Contract):
             version="2026-09-22T12:00",
             change="run.push_deadline_seconds, additive, default 300.",
             why="The push loop is bounded by a clock now, not by three attempts.",
-        ),
-        ChangelogEntry(
-            version="2026-09-22",
-            change="bench.repeats, additive, default 3 and at least 2.",
-            why="Both numbers the bench job's timeout is spent on now sit in one file.",
         ),
         ChangelogEntry(
             version="2026-08-21",
@@ -159,6 +160,7 @@ class AppConfig(Contract):
     finetune: FinetuneConfig = Field(default_factory=FinetuneConfig)
     reference_dataset: ReferenceDatasetConfig = Field(default_factory=ReferenceDatasetConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
+    model_server: ModelServerConfig = Field(default_factory=ModelServerConfig)
     observability: ObservabilityConfig = Field(default_factory=ObservabilityConfig)
 
     @model_validator(mode="before")
@@ -200,17 +202,19 @@ class AppConfig(Contract):
         Checked here because `FinetuneConfig` cannot see `models` and a typo
         would otherwise surface on a GPU somebody is paying for, hours later.
 
-        A role still naming a retired one is answered by name. `visual_planner`
-        and its older spelling `route` are the two that were legal, and the
-        difference matters to whoever is reading the failure: they did not
-        misspell a key, the model is gone.
+        A role still naming a retired or renamed one is answered by name, and
+        the answer is read off `SUPERSEDED_MODELS_NAMES` rather than written
+        again here. The difference matters to whoever is reading the failure:
+        they did not misspell a key, the key moved or the model is gone.
         """
         roles = set(ModelsConfig.roles())
         named = self.finetune.teacher
         if named in SUPERSEDED_MODELS_NAMES:
+            went = SUPERSEDED_MODELS_NAMES[named]
+            where = f"now {went}" if went else "a model that was retired with the visuals stage"
             raise ValueError(
-                f"finetune.teacher names {named}, a model that was retired with the "
-                "visuals stage. Name one of models: " + ", ".join(sorted(roles))
+                f"finetune.teacher names {named}, which is {where}. "
+                "Name one of models: " + ", ".join(sorted(roles))
             )
         if named not in roles:
             spelled = ", ".join(sorted(roles))

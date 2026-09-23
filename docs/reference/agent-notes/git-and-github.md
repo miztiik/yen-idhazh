@@ -209,7 +209,7 @@ One width for every row and one header per shard, or repair on the trunk. What t
 
 **Line endings are pinned, so do not hand-normalise.** `.gitattributes` defaults every path to `text=auto eol=lf`, then marks known binary formats. A blanket normalise pass rewrites files you never touched and produces a phantom diff of hundreds of lines.
 
-**That normalisation happens at `git add`, and the gates run before it.** `test_repo_text_is_ascii_and_lf` reads the WORKING-TREE bytes under `schemas/`, `config/` and the fixture directories, so a new JSON file authored on Windows fails on a file you just wrote. The same CRLF also breaks a byte-identical round trip, so the drift gate reports a diff in a file whose content never changed. Write new files LF explicitly:
+**That normalisation happens at `git add`, and the gates run before it.** `test_repo_text_is_ascii_and_lf` reads the WORKING-TREE bytes under `config/` and the fixture directories, so a new JSON file authored on Windows fails on a file you just wrote. The same CRLF also breaks a byte-identical round trip, so a fixture's round-trip test reports a diff in a file whose content never changed. Write new files LF explicitly:
 
 ```powershell
 [System.IO.File]::WriteAllText($path, ($text -replace "`r`n", "`n"), [System.Text.UTF8Encoding]::new($false))
@@ -264,6 +264,8 @@ $runs = gh run list --repo <owner/repo> --branch <branch> --limit 10 --json name
 ```powershell
 gh api repos/<owner>/<repo>/commits/<sha>/check-runs --jq '.check_runs[]|.name+"="+((.conclusion)//"running")'
 ```
+
+**A skipped gate does not just hide a break - it parks one on `main`.** Measured 2026-09-23: a commit that split a documentation page broke a browser test and went red. The next two commits were documentation only, so `scope` skipped `browser`, `site`, `robots` and `whole-day`, and both runs reported success. `main` then looked green for three commits while carrying a failing test, and the break surfaced on the next pull request that touched code - where it reads like the author's fault. When a run goes red, check whether the commits after it actually re-ran the job that failed before believing the green.
 
 **No log of any kind is readable while the run is going.** `gh run view <runId> --job <jobId> --log` and the run-level form both exit 1 with `logs will be available when it is complete`, even for a job that finished twenty minutes ago - and redirecting makes it worse, because the file is then 82 bytes of that sentence. What IS readable mid-run is the artifacts: `gh run download <runId> --name plan` gives the run plan, and each `items-<n>` appears as its shard finishes.
 

@@ -37,7 +37,7 @@ export interface RecordedRunDay {
  * in the order the contract writes them rather than in an order that changes
  * with the data. The keys must cover that contract exactly -
  * `frontend/tests/console-settings-moved.spec.ts` reads
- * `schemas/run-manifest.schema.json` and fails on a field with no words or
+ * `RunManifest` and fails on a field with no words or
  * words with no field, so a field added next month cannot go unnamed.
  *
  * The words are not the field names. `n_ctx` is what the runtime calls it and

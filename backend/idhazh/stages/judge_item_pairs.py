@@ -33,11 +33,11 @@ from idhazh.contracts.council_shard_outcome import ShardOutcome
 from idhazh.contracts.digest_day import DigestItem
 from idhazh.contracts.story_similarity_pair import SameStoryVerdict, StorySimilarityPair
 from idhazh.llm.server import (
-    DEFAULT_ENDPOINT,
     completion_url,
     derive_turn_markers,
     post,
     request_timeout_seconds,
+    resolve_endpoint,
     token_pieces,
 )
 from idhazh.similarity import judge, prompt, stamps
@@ -102,7 +102,7 @@ def stage_judge_item_pairs(
     draw_path: Path,
     verdict_path: Path,
     deadline: float,
-    base_url: str = DEFAULT_ENDPOINT,
+    base_url: str | None = None,
 ) -> ShardReport:
     """Judge the rows this shard owns and write them as they are judged.
 
@@ -131,8 +131,11 @@ def stage_judge_item_pairs(
     the job that counts them, so where each one sits is the council's answer
     rather than this stage's.
     """
+    # Resolved here rather than deeper: the client below binds a derived route
+    # inside a `partial`, so an unresolved address would raise there instead.
+    base_url = base_url or resolve_endpoint(settings.app.model_server.base_url)
     entry = judge.entry_of(settings)
-    timeout = request_timeout_seconds(entry.request)
+    timeout = request_timeout_seconds(entry)
     stamp = stamps.judge_inputs(settings)
     flush_every = settings.app.assemble.same_story.judging_knobs().flush_every_pairs
     drawn = _rows_this_shard_owns(draw_path, shard=shard, shards=shards)

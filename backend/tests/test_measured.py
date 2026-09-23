@@ -22,7 +22,7 @@ pytestmark = pytest.mark.contract
 
 def configured_weights() -> str:
     """The sha256 of the weights `config/` currently names for summarizing."""
-    declared = config.load(CONFIG_DIR).models.summarize.sha256
+    declared = config.load(CONFIG_DIR).models.summarizer.sha256
     assert declared is not None, "the configured summarizer names no weights digest"
     return declared
 

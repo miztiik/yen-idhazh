@@ -94,4 +94,4 @@ it was.
 - [../architecture/publishing/retention.md](../architecture/publishing/retention.md) - what bounds each committed tree, and the named prune over a store's day files.
 - [../how-to/prune-a-collection.md](../how-to/prune-a-collection.md) - the steps for running one.
 - [growing-reads.md](growing-reads.md) - why a read whose cost grows with the archive needs a window.
-- [config.md](config.md) - where the `prune` knobs live.
+- [config/retention-ages.md](config/retention-ages.md) - where the `prune` knobs live.

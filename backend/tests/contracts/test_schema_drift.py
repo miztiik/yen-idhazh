@@ -1,7 +1,12 @@
-"""Do the committed schemas still match the models that generate them?
+"""Does every persisted shape still read back the way it was written?
 
-The drift gate, the round trip through every fixture, and the version stamp a
-writer inherits when it omits one."""
+The round trip through every fixture, the version stamp a writer inherits when
+it omits one, and the release blocker section 11 names: a payload yesterday's
+run wrote has to load today.
+
+The schema each contract describes is computed here rather than read off disk.
+`schemas/` held a generated copy of it until 2026-09-23, and the gate that kept
+the copy honest was most of what the copy was for."""
 
 from __future__ import annotations
 
@@ -11,11 +16,11 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from conftest import CONTRACT_FIXTURES_DIR, FIXTURES_DIR, SCHEMAS_DIR, read_text
+from conftest import CONTRACT_FIXTURES_DIR, FIXTURES_DIR, read_text
 from pydantic import ValidationError
 
+from idhazh.contracts import CONTRACTS
 from idhazh.contracts.base import Contract
-from idhazh.contracts.export import CONTRACTS, expected_filenames, export
 from idhazh.contracts.knobs.models import ModelsConfig
 from idhazh.contracts.run_manifest import RunManifest
 
@@ -50,23 +55,9 @@ def test_every_contract_has_at_least_one_fixture() -> None:
     assert covered == set(BY_STEM), "a contract without a fixture has never been proven to load"
 
 
-def test_committed_schemas_match_the_models(tmp_path: Path) -> None:
-    export(tmp_path)
-    for contract in CONTRACTS:
-        name = contract.schema_filename()
-        assert read_text(SCHEMAS_DIR / name) == read_text(tmp_path / name), (
-            f"{name} is stale - edit the Pydantic model and regenerate, never the schema"
-        )
-
-
-def test_schemas_directory_holds_exactly_the_generated_files() -> None:
-    on_disk = {path.name for path in SCHEMAS_DIR.glob("*.json")}
-    assert on_disk == expected_filenames()
-
-
 @pytest.mark.parametrize("contract", CONTRACTS, ids=lambda c: c.__schema_stem__)
 def test_schema_is_self_describing(contract: type[Contract]) -> None:
-    schema: dict[str, Any] = json.loads(read_text(SCHEMAS_DIR / contract.schema_filename()))
+    schema: dict[str, Any] = contract.json_schema()
     assert schema["$id"] == contract.schema_filename(), "$id is a relative filename, never a URL"
     assert schema["version"] == schema["changelog"][0]["version"]
     versions = [entry["version"] for entry in schema["changelog"]]
@@ -213,7 +204,7 @@ def test_a_config_file_that_names_the_retired_settings_block_is_refused_by_name(
     reads.
     """
     raw = committed_models_raw()
-    raw["summarize"]["inference"] = {"n_ctx": 4096}
+    raw["summarizer"]["inference"] = {"n_ctx": 4096}
 
     with pytest.raises(ValidationError, match=re.escape("models.<role>.server")):
         ModelsConfig.model_validate(raw)

@@ -7,9 +7,9 @@ If they are the model's own distribution the signal is real and readable.
 
 It stands the server up through `idhazh.llm.server.server_argv` off the entry
 `config/` names, so the flags are the ones production uses and a reading cannot
-be taken against weights the config no longer declares. The port comes from
-`LLAMA_PORT`, read back through `idhazh.llm.server.DEFAULT_PORT` - this file
-spells no llama-server flag of its own (Guardrail #6).
+be taken against weights the config no longer declares. The port comes out of
+that same config root's `model_server.base_url` - this file spells no
+llama-server flag of its own (Guardrail #6).
 
 No fixture can answer this: what a build does with a request field is a property
 of that build, so it takes a server. The reading it prints belongs in
@@ -30,12 +30,14 @@ from pathlib import Path
 from typing import Any
 
 from idhazh import config
+from idhazh.contracts.knobs.model_server import port_of_base_url
 from idhazh.llm.server import (
-    DEFAULT_PORT,
     completion_url,
     derive_turn_markers,
+    loopback_url,
     props_url,
     render_prompt,
+    resolve_endpoint,
     server_argv,
 )
 
@@ -150,7 +152,6 @@ def measure(
     weights: Path,
     config_root: Path,
     role: str,
-    port: int,
     runs: int,
     alternatives: int,
 ) -> dict[str, Any]:
@@ -162,14 +163,16 @@ def measure(
             f"config names {Path(entry.file).name} and the command line names {weights.name} - "
             "a reading taken against weights the config does not declare is not a reading"
         )
+    port = port_of_base_url(settings.app.model_server.base_url)
     argv = server_argv(
         binary=binary, weights=weights, model=entry, server=entry.server, port=port
     )
     # Both routes are derived from one address, so the port the server was
-    # started on and the port a request goes to cannot disagree.
-    base = f"http://127.0.0.1:{port}/v1/chat/completions"
+    # started on and the port a request goes to cannot disagree. Loopback, not
+    # `model_server.base_url`: this process started that server.
+    base = resolve_endpoint(loopback_url(port))
     endpoint = completion_url(base)
-    health = f"http://127.0.0.1:{port}/health"
+    health = loopback_url(port) + "/health"
     record: dict[str, Any] = {
         "weights": weights.name,
         "sha256": entry.sha256,
@@ -224,7 +227,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--binary", type=Path, default=Path("backend/bin/llama-server"))
     parser.add_argument("--weights", type=Path, required=True)
     parser.add_argument("--config-root", type=Path, default=Path("config"))
-    parser.add_argument("--role", default="summarize")
+    parser.add_argument("--role", default="summarizer")
     parser.add_argument("--runs", type=int, default=3)
     parser.add_argument("--alternatives", type=int, default=25)
     parser.add_argument("--out", type=Path, default=None)
@@ -236,7 +239,6 @@ def main(argv: list[str] | None = None) -> int:
         weights=args.weights,
         config_root=args.config_root,
         role=args.role,
-        port=DEFAULT_PORT,
         runs=args.runs,
         alternatives=args.alternatives,
     )

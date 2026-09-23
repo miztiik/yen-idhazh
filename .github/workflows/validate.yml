@@ -78,10 +78,11 @@ concurrency:
 # build the binary it unpacks disagrees with. A qualification on a different
 # runtime than production is not qualifying production.
 env:
-  # The one place this workflow says which port. `server_argv` binds it, every
-  # probe below reads it, and `idhazh.llm.server` reads it for the address the
-  # stage posts to - so the three cannot disagree (Guardrail #6).
-  LLAMA_PORT: '8080'
+  # Where this job's own probes ask. It is not where the stage posts - that is
+  # `model_server.base_url`, and the server command binds the port inside it.
+  # This is the one place this workflow writes an address, and it is always
+  # loopback because the candidate runs on this runner (Guardrail #6).
+  MODEL_SERVER_PROBE: 'http://127.0.0.1:8080'
 
 jobs:
   # One plan, read once, for every shard. A long run can cross UTC midnight, so
@@ -300,7 +301,7 @@ jobs:
       - name: Start the candidate
         run: |
           set -euo pipefail
-          # The scratch config's `models.summarize` IS the candidate, so the
+          # The scratch config's `models.summarizer` IS the candidate, so the
           # alias, every flag and the weights come from the same place the run
           # is judged against. This step used to render the flag list from a
           # second copy, which is how it went two changes without the
@@ -314,15 +315,15 @@ jobs:
         run: |
           set -euo pipefail
           for _ in $(seq 1 180); do
-            curl -sf "http://127.0.0.1:${LLAMA_PORT}/health" > /dev/null && break
+            curl -sf "${MODEL_SERVER_PROBE}/health" > /dev/null && break
             sleep 5
           done
-          curl -sf "http://127.0.0.1:${LLAMA_PORT}/health" > /dev/null || {
+          curl -sf "${MODEL_SERVER_PROBE}/health" > /dev/null || {
             echo "the candidate never became healthy" >&2
             tail -50 llama-server.log >&2
             exit 1
           }
-          SERVED=$(curl -sf "http://127.0.0.1:${LLAMA_PORT}/v1/models" | jq -r '.data[0].id')
+          SERVED=$(curl -sf "${MODEL_SERVER_PROBE}/v1/models" | jq -r '.data[0].id')
           if [ "$SERVED" != "$CANDIDATE_ID" ]; then
             echo "the server answers to ${SERVED}, not ${CANDIDATE_ID}" >&2
             exit 1

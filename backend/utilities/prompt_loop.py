@@ -51,12 +51,12 @@ from idhazh.evals.metrics import (
     verbatim_run,
 )
 from idhazh.llm.server import (
-    DEFAULT_ENDPOINT,
     derive_turn_markers,
     post,
     props,
     request_payload,
     request_timeout_seconds,
+    resolve_endpoint,
 )
 
 REPO_ROOT: Final = Path(__file__).resolve().parents[2]
@@ -362,11 +362,11 @@ class LiveSummarizer:
 
     def summarize(self, prompt: str, items: Sequence[FrozenItem]) -> list[ItemSummary]:
         ask = self._settings.app.summarize
-        entry = self._settings.models.summarize
-        request = entry.request
+        entry = self._settings.models.summarizer
+        sampling = entry.sampling
         model_id = entry.id
         markers = derive_turn_markers(
-            self._endpoint, entry=entry, timeout=request_timeout_seconds(request)
+            self._endpoint, entry=entry, timeout=request_timeout_seconds(entry)
         )
         produced: list[ItemSummary] = []
         for item in items:
@@ -374,7 +374,7 @@ class LiveSummarizer:
             payload = summarize.build_request(
                 article,
                 model_id=model_id,
-                request=request,
+                sampling=sampling,
                 markers=markers,
                 prompt_config=ask,
             )
@@ -382,7 +382,7 @@ class LiveSummarizer:
                 prompt, ask, source_words=article.band_source_words, brief=article.brief
             )
             completion = post(
-                payload, endpoint=self._endpoint, timeout=request_timeout_seconds(request)
+                payload, endpoint=self._endpoint, timeout=request_timeout_seconds(entry)
             )
             draft = summarize.parse_draft(
                 completion.content,
@@ -460,21 +460,20 @@ class ModelJudge:
         return bool(reply.get("prefers_candidate", False))
 
     def _call(self, user: str, schema: dict[str, object], schema_name: str) -> dict[str, object]:
-        entry = self._settings.models.summarize
-        request = entry.request
+        entry = self._settings.models.summarizer
         payload = request_payload(
             model_id=entry.id,
             system=_JUDGE_SYSTEM,
             user=user,
             output_schema=schema,
-            request=request,
+            sampling=entry.sampling,
             markers=derive_turn_markers(
-                self._endpoint, entry=entry, timeout=request_timeout_seconds(request)
+                self._endpoint, entry=entry, timeout=request_timeout_seconds(entry)
             ),
             schema_name=schema_name,
         )
         completion = post(
-            payload, endpoint=self._endpoint, timeout=request_timeout_seconds(request)
+            payload, endpoint=self._endpoint, timeout=request_timeout_seconds(entry)
         )
         parsed = json.loads(completion.content)
         if not isinstance(parsed, dict):
@@ -589,8 +588,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         default=None,
         help="Where to write the artefacts. Defaults to backend/var/prompt-loop/<timestamp>.",
     )
-    parser.add_argument("--endpoint", default=DEFAULT_ENDPOINT, help="Local model server endpoint.")
+    parser.add_argument("--endpoint", default=None, help="Model server endpoint.")
     args = parser.parse_args(argv)
+    endpoint: str = args.endpoint or resolve_endpoint(settings.app.model_server.base_url)
 
     articles, items = load_frozen_articles(args.frozen_set)
     if args.max_items > 0:
@@ -599,7 +599,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"no usable articles under {args.frozen_set}", file=sys.stderr)
         return 2
 
-    if not props(args.endpoint, timeout=5.0):
+    if not props(endpoint, timeout=5.0):
         print(
             "the local model server is not reachable, so the live run was skipped.\n"
             "the loop's gate and the disagreement oracle are proven by the fixture\n"
@@ -610,8 +610,8 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     incumbent_prompt = INCUMBENT_PROMPT_PATH.read_bytes().decode("utf-8")
     rubric = RUBRIC_PATH.read_bytes().decode("utf-8")
-    summarizer = LiveSummarizer(settings=settings, articles=articles, endpoint=args.endpoint)
-    judge = ModelJudge(settings=settings, endpoint=args.endpoint)
+    summarizer = LiveSummarizer(settings=settings, articles=articles, endpoint=endpoint)
+    judge = ModelJudge(settings=settings, endpoint=endpoint)
 
     result = run_loop(
         incumbent_prompt=incumbent_prompt,

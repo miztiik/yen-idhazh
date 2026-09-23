@@ -510,17 +510,17 @@ def _one_call(
     runs one decode where the digest's runs two: there is no prompt of ours to
     stop at a marker and continue under a grammar.
     """
-    request = settings.models.summarize.request
+    sampling = settings.models.summarizer.sampling
     markers = derive_turn_markers(
         endpoint,
-        entry=settings.models.summarize,
-        timeout=request_timeout_seconds(request),
+        entry=settings.models.summarizer,
+        timeout=request_timeout_seconds(settings.models.summarizer),
     )
-    model_id = settings.models.summarize.id
+    model_id = settings.models.summarizer.id
     payload = summarize.build_request(
         article,
         model_id=model_id,
-        request=request,
+        sampling=sampling,
         markers=markers,
         prompt_config=settings.app.summarize,
     )
@@ -529,7 +529,7 @@ def _one_call(
     no_reply = FailureCode.MODEL_UNREACHABLE
     try:
         completion = post(
-            payload, endpoint=endpoint, timeout=request_timeout_seconds(request)
+            payload, endpoint=endpoint, timeout=request_timeout_seconds(settings.models.summarizer)
         )
     except HTTPError as error:
         body = error.read().decode("utf-8", errors="replace")

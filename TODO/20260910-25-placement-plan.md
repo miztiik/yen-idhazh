@@ -58,11 +58,10 @@ Every row's acceptance gate names one or more of these sets **and then lists wha
 .\.venv\Scripts\python.exe -m pytest -n 0 backend/tests/<the modules this row names>
 ```
 
-**`GATE-SCHEMA`** - every row that edits a model under `backend/idhazh/contracts/`. This is the contract drift gate and a non-empty diff fails it:
+**`GATE-SCHEMA`** - every row that edits a model under `backend/idhazh/contracts/`. There is no generated layer to regenerate: the model is the only copy of its shape, and `Contract.json_schema()` computes a schema from it on demand. Four tests hold the frontend's hand copies against the models and refuse the generator coming back:
 
 ```powershell
-.\.venv\Scripts\python.exe -m idhazh.contracts.export
-git diff --exit-code -- schemas/
+.\.venv\Scripts\python.exe -m pytest backend/tests/contracts/test_frontend_field_set.py backend/tests/contracts/test_frontend_vocabularies.py backend/tests/contracts/test_frontend_console_lists.py backend/tests/contracts/test_no_generated_layer.py
 ```
 
 **`GATE-SUITE`** - the whole backend suite, which is what CI runs. Run it locally only when you cannot push:
@@ -921,7 +920,7 @@ The threshold is **config, and the project already has the number**: `collect.so
   - both schemas carry today's `version` and a `changelog` entry, and the day-metrics fields are **optional**, because 22 committed day records do not carry them;
   - `backend/tests/test_marks.py` passes, so the new module is classified;
   - `docs/concepts/placement.md` gains the target and the divergence, on the page row #2 created.
-- **A second plan writes the same three files, and so do three more rows of it.** [`20260910-23-article-classification-plan.md`](20260910-23-article-classification-plan.md) row #14 adds a `DayTaxonomy` block to `backend/idhazh/contracts/day_metrics.py`, `schemas/day-metrics.schema.json` and `backend/idhazh/publish_day_metrics.py`, and a block to the same `state/day-metrics/<YYYY>/<MM>/<DD>.json`. **Its rows #13, #1a and #1b also edit that model and that schema** - the encoder alarm's counter, the fingerprint relaxed, the fingerprint removed - which an earlier form of this note did not say. **Neither plan blocks the other and every one of the five rows may land**, because the blocks are disjoint and each is declared optional against the day files already on disk. **Whichever lands after another re-runs `python -m idhazh.contracts.export` and reads the previous `changelog` entry before adding its own**, because the drift gate fails on a byte and two entries dated the same day need the minute form (`CLAUDE.md` section 11). Found 2026-09-11; neither plan named it before.
+- **A second plan writes the same two files, and so do three more rows of it.** [`20260910-23-article-classification-plan.md`](20260910-23-article-classification-plan.md) row #14 adds a `DayTaxonomy` block to `backend/idhazh/contracts/day_metrics.py` and `backend/idhazh/publish_day_metrics.py`, and a block to the same `state/day-metrics/<YYYY>/<MM>/<DD>.json`. **Its rows #13, #1a and #1b also edit that model** - the encoder alarm's counter, the fingerprint relaxed, the fingerprint removed - which an earlier form of this note did not say. **Neither plan blocks the other and every one of the five rows may land**, because the blocks are disjoint and each is declared optional against the day files already on disk. **Whichever lands after another reads the previous `changelog` entry before adding its own**, because two entries dated the same day need the minute form (`CLAUDE.md` section 11). Found 2026-09-11; neither plan named it before, and a later note named a generated schema that no longer exists.
 - **Oracle:** **A day drawn exactly to the target scores zero, and moving one story from the largest desk to the smallest strictly lowers the score.** Both halves on a built fixture. The first is the identity every divergence must satisfy and it catches a normalisation that is off; the second is monotonicity and it catches a measure that rewards the concentration it is meant to report. **Built rather than sampled**, because no committed day is drawn to a target that did not exist when it published.
 - **What this row does not do:** **it changes no order.** It reports. The divergence reaches no score, and ESCALATE trigger 8 fires on a row that wires it into the ranker.
 

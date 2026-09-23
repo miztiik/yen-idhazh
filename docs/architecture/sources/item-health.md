@@ -85,7 +85,7 @@ Three files carry one item-health row, and each owns one thing:
 | Where | What it owns |
 | --- | --- |
 | `backend/idhazh/contracts/item_health.py` | the shape: field order, types, enums, the validator, and `csv_columns` |
-| `schemas/item-health-row.schema.json` | the generated schema. Never hand-edited (Guardrail #3) |
+| `ItemHealthRow` | the contract. Every column is declared here first (Guardrail #3) |
 | `backend/idhazh/ledger.py` | the header guard, `write_segment`, and the writer file path |
 | `backend/idhazh/day_shards.py` | the walk over a day, and the settlement a reader gets |
 
@@ -187,6 +187,13 @@ record the same item: each writes its own file under the day, and
 row for the key. Where the two rows disagree the one that names a job wins, for
 the reason the next section gives - `assemble` runs once for the whole day and
 cannot say which machine an item was for.
+
+**Every reader settles, including the one outside this package.** The console
+opens this ledger at build time through `itemHealthRows` in
+`frontend/src/lib/server/payload.ts`, which restates the key and the rule rather
+than reading the files raw - because a reader that does not settle counts the
+newest day's items twice and draws each of them twice
+([../publishing/console-payloads.md](../publishing/console-payloads.md)).
 
 **A worker records only settled items.** It writes an article payload for every
 item it reaches and a summary payload for every item that got as far as the
@@ -492,7 +499,7 @@ stage that did the work.
 `CollectConfig.settled_failure_codes`, and - the one that is easy to miss -
 `ItemHealthRow._state_is_complete`, which lists the codes an `ok` row may carry.
 Miss the fifth on a signal that publishes and nothing goes red until a real row
-is built: the enum, the schema and the drift gate are all satisfied, and the
+is built: the enum and the contract are both satisfied, and the
 failure is a `ValidationError` raised inside the census. Then the committed
 `config/idhazh.json` names the settled list again, this page enumerates the
 neutral split twice, and `backend/tests/test_telemetry.py` needs a fixture
@@ -904,7 +911,7 @@ default. Only a paywall, an unsupported form, or genuine missing text stops
 extract. Authority: Owner override O3.
 
 Each of the four has a switch that closes it, all four false
-([../../concepts/config.md](../../concepts/config.md)). O3 is what the DEFAULT
+([../../concepts/config/summary-length.md](../../concepts/config/summary-length.md)). O3 is what the DEFAULT
 says, not what the code can express, and the difference matters: a curator who
 turns one on is taking a decision O3 left them, not overriding it.
 `reject_too_short` additionally never fires on a feed registered as `abstract`,
@@ -1005,7 +1012,7 @@ by the row identity above. Authority: Fowler, over Carmack's original ruling.
   carries it into this row.
 - [health.md](health.md) - the feed-grain ledger.
 - [../summarize/throughput.md](../summarize/throughput.md) - what the two model rates mean, and why the spread inside a run is wide.
-- [../publishing/visuals.md](../publishing/visuals.md) - what the picture costs, which this ledger deliberately does not carry.
+- [../publishing/what-drawing-costs-and-what-has-been-retired-for-it.md](../publishing/what-drawing-costs-and-what-has-been-retired-for-it.md) - what the picture costs, which this ledger deliberately does not carry.
 - [trust-boundary.md](trust-boundary.md) - how fetched bytes become sanitized text.
 - [../contracts/schemas.md](../contracts/schemas.md) - the contract and schema rules.
 - [../../concepts/telemetry.md](../../concepts/telemetry.md) - logs as evidence, ledgers as records.

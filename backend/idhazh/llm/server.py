@@ -1,7 +1,9 @@
 """Talk to a local llama-server over the two routes it answers on.
 
-Nothing here is hosted - `CLAUDE.md` section 0a forbids that. Two transports,
-and which one a caller takes is decided by whether the prompt bytes are ours.
+The address is a committed config value and defaults to loopback. Nothing in
+this module starts a server, and nothing here reads the config - every caller
+brings the address it means. Two transports, and which one a caller takes is
+decided by whether the prompt bytes are ours.
 
 **The chat-completions shape** hands the server a message array and lets the
 model's own chat template render the prompt. It is the one wire format every
@@ -24,10 +26,11 @@ recorded (`docs/architecture/contracts/determinism.md`).
 from __future__ import annotations
 
 import json
-import os
+import logging
 from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from enum import StrEnum
+from functools import cache
 from pathlib import Path
 from string import Template
 from types import MappingProxyType
@@ -36,23 +39,16 @@ from urllib import request
 from urllib.parse import urlsplit, urlunsplit
 
 from idhazh.contracts.base import derive_text_digest
+from idhazh.contracts.knobs.model_server import resolve_base_url
 from idhazh.contracts.knobs.models import CompanionFile, ModelEntry, ModelRef
 from idhazh.sanitize import why_a_forged_turn_would_survive
 
-# One port per job. A workflow declares it once as `LLAMA_PORT`, and both halves
-# read it here: the argv the server binds with, and the address the stage posts
-# to. Two answers would leave a server listening on one port and a summarizer
-# posting to another, and every item would fail as "model unreachable".
-# It is a process-boundary value, not a tunable, so it is not a config field and
-# `idhazh.fingerprint` has nothing to classify (Guardrail #6, `CLAUDE.md` section 11).
-DEFAULT_PORT: Final = int(os.environ.get("LLAMA_PORT") or 8080)
-DEFAULT_ENDPOINT: Final = f"http://127.0.0.1:{DEFAULT_PORT}/v1/chat/completions"
-DEFAULT_HEALTH: Final = f"http://127.0.0.1:{DEFAULT_PORT}/health"
+LOG: Final = logging.getLogger("idhazh")
 
 # The route that takes a prompt string. It is a consequence of which builder
 # rendered the payload rather than a dial anybody turns - a chat body posted
-# here is broken, not differently tuned - so it sits beside the port for the
-# same reason the port does, and `idhazh.fingerprint` has nothing to classify
+# here is broken, not differently tuned - so it is a constant rather than a
+# config field, and `idhazh.fingerprint` has nothing to classify
 # (Guardrail #6, `CLAUDE.md` section 11).
 #
 # llama-server's own `/completions` rather than the OpenAI-compatible
@@ -60,11 +56,14 @@ DEFAULT_HEALTH: Final = f"http://127.0.0.1:{DEFAULT_PORT}/health"
 # both routes ignore `response_format` outright and return unconstrained prose,
 # and both honour a top-level `json_schema`. On the native route that field is
 # the route's own; on the compatibility route it survives a layer whose job is
-# to rewrite this body, and that layer already drops `response_format`. No
-# workflow pins a llama.cpp build, so a build that started stripping it would
-# turn constrained decoding off for every item at once.
+# to rewrite this body, and that layer already drops `response_format`. The
+# build is pinned in `config/llama-cpp-pin.json`, so a build that started
+# stripping it arrives as a diff a person reads rather than as constrained
+# decoding turning off for every item at once.
 _COMPLETION_PATH: Final = "/completions"
-DEFAULT_COMPLETION_ENDPOINT: Final = f"http://127.0.0.1:{DEFAULT_PORT}{_COMPLETION_PATH}"
+
+# The route an item is posted to, written once so nothing spells it twice.
+_CHAT_PATH: Final = "/v1/chat/completions"
 
 # The four read-only routes the start-up probe asks, beside the one it posts
 # completions to. Paths rather than addresses, because every one of them is
@@ -388,6 +387,12 @@ class Completion:
 #: whole. Four of them are persisted under our names on the run record and drawn
 #: in words on a console panel, so a rename would move a published string and an
 #: alias does not.
+#:
+#: **Nothing that goes on the wire is here any more.** The sampling values used
+#: to be listed under their own spellings, which is a row that translates a name
+#: into itself and gates every unlisted key for nothing. They are splatted from
+#: the entry's `sampling` block instead, so naming one more of them is a key in
+#: the model file and no edit here.
 SETTING_KEYS: Final[Mapping[str, str]] = MappingProxyType(
     {
         "n_ctx": "--ctx-size",
@@ -396,10 +401,6 @@ SETTING_KEYS: Final[Mapping[str, str]] = MappingProxyType(
         "n_threads": "--threads",
         "n_parallel": "-np",
         "load_mode": "-lm",
-        "temperature": "temperature",
-        "top_p": "top_p",
-        "seed": "seed",
-        "request_timeout_minutes": "request_timeout_minutes",
     }
 )
 
@@ -414,9 +415,40 @@ def window(server: Mapping[str, Any]) -> int:
     return int(server[SETTING_KEYS["n_ctx"]])
 
 
-def request_timeout_seconds(request: Mapping[str, Any]) -> float:
-    """How long one POST may wait. Required: no server-side default bounds it."""
-    return float(request[SETTING_KEYS["request_timeout_minutes"]]) * 60
+def request_timeout_seconds(entry: ModelEntry) -> float:
+    """How long one POST may wait. Read off the entry, never off a settings block.
+
+    It is how long the client waits for an answer, so it never goes on the wire
+    and it is not a sampler. Held inside the block that is splatted into a
+    request body it would be sent to the server as a key llama.cpp has never
+    heard of.
+    """
+    return entry.request_timeout_minutes * 60
+
+
+#: What defeats a decode control on every route, whatever control that route
+#: sets. `logit_bias` re-weights tokens under any decoder, `ignore_eos` takes
+#: the stop away, and `samplers` reorders the chain every value is drawn
+#: through. None of the three is a synonym for anything, and each is enough on
+#: its own.
+_ALWAYS_REFUSED: Final[frozenset[str]] = frozenset({"logit_bias", "ignore_eos", "samplers"})
+
+
+def with_sampling(
+    body: dict[str, Any], sampling: Mapping[str, Any], disablers: frozenset[str]
+) -> dict[str, Any]:
+    """This route's own keys, plus every key the model file declares.
+
+    The refused set is whatever the route already put in `body`, plus the keys
+    declared beside the control this route sets, so a builder that changes its
+    control changes this check with it. The route wins the merge as well as the
+    check: a config key that reached a decode control would turn constrained
+    decoding into an option.
+    """
+    clash = sorted(sampling.keys() & (body.keys() | disablers | _ALWAYS_REFUSED))
+    if clash:
+        raise ValueError(f"sampling may not set {', '.join(clash)} - this route sets it")
+    return {**sampling, **body}
 
 
 def caches_the_prompt(server: Mapping[str, Any]) -> bool:
@@ -448,7 +480,7 @@ def server_argv(
     weights: Path,
     model: ModelRef,
     server: Mapping[str, Any],
-    port: int = DEFAULT_PORT,
+    port: int,
 ) -> list[str]:
     """The exact process the run stands up.
 
@@ -460,7 +492,7 @@ def server_argv(
 
     A flag this build does not accept is refused by llama-server at start-up,
     which names it and does not start. A sampling value cannot reach this list
-    at all, because it lives in the `request` block and nothing here reads one.
+    at all, because it lives in the `sampling` block and nothing here reads one.
 
     The four below stay in code because no key in the file produces them: the
     weights and the alias are the run's own, the port is the caller's, and the
@@ -468,6 +500,12 @@ def server_argv(
     it the server silently drops the middle of an oversized prompt and answers
     about a document it no longer holds, which scores as a hallucination and
     names the wrong cause.
+
+    **The port is required and has no default.** The one production caller reads
+    it out of `model_server.base_url`, so a default here would be a second
+    answer to which port the run uses, which is the fault the deleted port
+    variable had. A missing one is a type error rather than a server on the
+    wrong port.
 
     A companion file that declares a flag is emitted last, with the path it
     landed at - the one argument a config file cannot spell for itself.
@@ -494,12 +532,21 @@ def server_argv(
     return argv
 
 
+#: What re-spells or turns off `response_format`, the control the chat builder
+#: below sets. `max_tokens` is here because this route sends no cap by design: a
+#: cap from config makes the reply stop at `length`, and the item then fails
+#: `OUTPUT_TRUNCATED` before its content is read.
+CHAT_DISABLERS: Final[frozenset[str]] = frozenset(
+    {"json_schema", "grammar", "max_tokens", "n_predict"}
+)
+
+
 def request_payload(    *,
     model_id: str,
     system: str,
     user: str,
     output_schema: dict[str, Any],
-    request: Mapping[str, Any],
+    sampling: Mapping[str, Any],
     markers: TurnMarkers,
     schema_name: str = "summary",
 ) -> dict[str, Any]:
@@ -534,9 +581,6 @@ def request_payload(    *,
             {"role": "system", "content": system},
             {"role": "user", "content": user},
         ],
-        "temperature": setting(request, "temperature"),
-        "top_p": setting(request, "top_p"),
-        "seed": setting(request, "seed"),
         "stream": False,
         "response_format": {
             "type": "json_schema",
@@ -548,7 +592,15 @@ def request_payload(    *,
     # with a closing marker declared.
     if markers.thinking_kwarg is not None:
         payload["chat_template_kwargs"] = {markers.thinking_kwarg: markers.thinks}
-    return payload
+    return with_sampling(payload, sampling, CHAT_DISABLERS)
+
+
+#: What re-spells or turns off `json_schema`, the control the rendered-completion
+#: builder below sets. `response_format` is here although this route ignores it:
+#: a config key that set it would read as a shape control and bind nothing.
+COMPLETION_DISABLERS: Final[frozenset[str]] = frozenset(
+    {"response_format", "grammar", "grammar_lazy", "grammar_triggers", "max_tokens"}
+)
 
 
 def completion_payload(
@@ -558,7 +610,7 @@ def completion_payload(
     user: str,
     output_schema: dict[str, Any],
     server: Mapping[str, Any],
-    request: Mapping[str, Any],
+    sampling: Mapping[str, Any],
     markers: TurnMarkers,
     max_answer_tokens: int,
 ) -> dict[str, Any]:
@@ -592,17 +644,26 @@ def completion_payload(
     field that says which weights the body was built for, and a payload read out
     of a log with no model id cannot be attributed to a run.
     """
-    return {
-        "model": model_id,
-        "prompt": render_prompt(system=system, user=user, markers=markers),
-        "temperature": setting(request, "temperature"),
-        "top_p": setting(request, "top_p"),
-        "seed": setting(request, "seed"),
-        "n_predict": max_answer_tokens,
-        "stream": False,
-        "cache_prompt": caches_the_prompt(server),
-        "json_schema": output_schema,
-    }
+    return with_sampling(
+        {
+            "model": model_id,
+            "prompt": render_prompt(system=system, user=user, markers=markers),
+            "n_predict": max_answer_tokens,
+            "stream": False,
+            "cache_prompt": caches_the_prompt(server),
+            "json_schema": output_schema,
+        },
+        sampling,
+        COMPLETION_DISABLERS,
+    )
+
+
+#: What re-spells or turns off `grammar`, the control the builder below sets.
+#: `grammar_lazy` is the sharpest of them: it leaves `grammar` formally applied
+#: and never engaged, so the control is off with its own key untouched.
+GRAMMAR_DISABLERS: Final[frozenset[str]] = frozenset(
+    {"grammar_lazy", "grammar_triggers", "response_format", "json_schema", "max_tokens"}
+)
 
 
 def grammar_completion_payload(
@@ -612,7 +673,7 @@ def grammar_completion_payload(
     user: str,
     grammar: str,
     server: Mapping[str, Any],
-    request: Mapping[str, Any],
+    sampling: Mapping[str, Any],
     markers: TurnMarkers,
     max_answer_tokens: int,
     first_token_alternatives: int,
@@ -646,19 +707,53 @@ def grammar_completion_payload(
     build. Here the shared prefix is the system turn, which a day of pairs pays
     once instead of once a call.
     """
-    return {
-        "model": model_id,
-        "prompt": render_prompt(system=system, user=user, markers=markers),
-        "temperature": setting(request, "temperature"),
-        "top_p": setting(request, "top_p"),
-        "seed": setting(request, "seed"),
-        "n_predict": max_answer_tokens,
-        "n_probs": first_token_alternatives,
-        "post_sampling_probs": post_sampling_probs,
-        "stream": False,
-        "cache_prompt": caches_the_prompt(server),
-        "grammar": grammar,
+    return with_sampling(
+        {
+            "model": model_id,
+            "prompt": render_prompt(system=system, user=user, markers=markers),
+            "n_predict": max_answer_tokens,
+            "n_probs": first_token_alternatives,
+            "post_sampling_probs": post_sampling_probs,
+            "stream": False,
+            "cache_prompt": caches_the_prompt(server),
+            "grammar": grammar,
+        },
+        sampling,
+        GRAMMAR_DISABLERS,
+    )
+
+
+#: Every route's refused keys, named by the route that sets the control, so
+#: config load can ask all three before a run starts rather than letting the
+#: first item of every shard raise at once. It reads the sets declared beside
+#: each builder and declares none of its own, so a builder that changes its
+#: control changes this with it.
+#:
+#: **What a builder still catches that this cannot.** A sampling key colliding
+#: with a route's own plain body key - `prompt`, `messages`, `stream` - is known
+#: only to the builder that wrote it, so `with_sampling` refuses that one at the
+#: moment the body is built.
+ROUTE_DISABLERS: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
+    {
+        "chat": CHAT_DISABLERS | _ALWAYS_REFUSED,
+        "completion": COMPLETION_DISABLERS | _ALWAYS_REFUSED,
+        "grammar": GRAMMAR_DISABLERS | _ALWAYS_REFUSED,
     }
+)
+
+
+def refuse_a_sampling_key_a_route_sets(sampling: Mapping[str, Any]) -> str | None:
+    """Which route refuses this block, and why - or null if all three take it.
+
+    Asked once when config loads. The same comparison runs again inside every
+    builder against the body it just wrote, because only a builder knows the
+    plain keys it put there.
+    """
+    for route, disablers in ROUTE_DISABLERS.items():
+        clash = sorted(sampling.keys() & disablers)
+        if clash:
+            return f"the {route} route sets {', '.join(clash)} itself"
+    return None
 
 
 def thinking_span(
@@ -952,14 +1047,52 @@ def parse_completion(body: str, *, answer_at: int = 0) -> Completion:
     )
 
 
+def _origin_of(endpoint: str) -> str:
+    """Scheme, host and port of the server an endpoint names, and nothing else.
+
+    Read apart rather than taken whole. The authority of a URL carries userinfo,
+    so `http://user:token@box:8080` taken as one piece would write a credential
+    into a log line verbatim, and a log line is the artefact somebody pastes
+    into an issue (Guardrail #11). A host and a port cannot carry one.
+    """
+    parts = urlsplit(endpoint)
+    return urlunsplit((parts.scheme, f"{parts.hostname}:{parts.port}", "", "", ""))
+
+
+@cache
+def _note_origin(origin: str) -> None:
+    """Say once which server this run is talking to.
+
+    Keyed on the origin rather than the endpoint: the qualification process
+    posts to the chat route and to the rendered-completion route on one server,
+    and an endpoint key would write the identical line twice.
+
+    The cache is process-global, so a test that asserts "once" calls
+    `_note_origin.cache_clear()` first.
+    """
+    LOG.info("model server origin=%s", origin)
+
+
 def post(
     payload: dict[str, Any],
     *,
-    endpoint: str = DEFAULT_ENDPOINT,
+    endpoint: str,
     timeout: float,
     answer_at: int = 0,
 ) -> Completion:
-    """The only place an item is sent for summarizing. Loopback only, by construction."""
+    """The only place an item is sent for summarizing.
+
+    One address for the whole run, and `_note_origin` says once which one. The
+    scheme, host and port are read apart rather than taken as the authority,
+    because the authority carries userinfo and would write a credential into a
+    log line verbatim (Guardrail #11).
+
+    Two other functions in this module send. `_ask` carries only this module's
+    own probe constants to routes derived from an address a caller already
+    named. `token_pieces` would send whatever it is handed and has no caller -
+    so whoever gives it one brings this constraint with them.
+    """
+    _note_origin(_origin_of(endpoint))
     outbound = request.Request(
         endpoint,
         data=json.dumps(payload).encode("utf-8"),
@@ -980,27 +1113,47 @@ def _sibling(endpoint: str, path: str) -> str:
     return urlunsplit((parts.scheme, parts.netloc, path, "", ""))
 
 
-def props_url(endpoint: str = DEFAULT_ENDPOINT) -> str:
+def resolve_endpoint(base_url: str) -> str:
+    """Where an item is posted, on the server a base URL names."""
+    return resolve_base_url(base_url) + _CHAT_PATH
+
+
+def loopback_url(port: int) -> str:
+    """The address of a server started on this machine.
+
+    Deliberately ignores `model_server.base_url`: the caller started this server
+    and must probe that one, not whichever one the config names. An instrument
+    measuring a server it is not running reports a number about the wrong
+    binary.
+
+    This is where the loopback host is written. One home for the literal, with
+    the reason beside it, is not a hardcoded value; thirty copies are
+    (Guardrail #6).
+    """
+    return f"http://127.0.0.1:{port}"
+
+
+def props_url(endpoint: str) -> str:
     """The `/props` address on the server a chat-completions endpoint names."""
     return _sibling(endpoint, _PROPS_PATH)
 
 
-def completion_url(endpoint: str = DEFAULT_ENDPOINT) -> str:
+def completion_url(endpoint: str) -> str:
     """The rendered-completion address on the server an endpoint names."""
     return _sibling(endpoint, _COMPLETION_PATH)
 
 
-def apply_template_url(endpoint: str = DEFAULT_ENDPOINT) -> str:
+def apply_template_url(endpoint: str) -> str:
     """Where the server renders a conversation with the model's own chat template."""
     return _sibling(endpoint, _APPLY_TEMPLATE_PATH)
 
 
-def tokenize_url(endpoint: str = DEFAULT_ENDPOINT) -> str:
+def tokenize_url(endpoint: str) -> str:
     """Where the server turns a string into the token ids it would really read."""
     return _sibling(endpoint, _TOKENIZE_PATH)
 
 
-def props(endpoint: str = DEFAULT_ENDPOINT, *, timeout: float) -> dict[str, Any]:
+def props(endpoint: str, *, timeout: float) -> dict[str, Any]:
     """What the running server says about itself, including its chat template.
 
     The template is the model's own Jinja source, which the server applies to
@@ -1432,7 +1585,7 @@ _DERIVED: Final[dict[tuple[str, str, str | None, str | None], TurnMarkers]] = {}
 
 
 def derive_turn_markers(
-    endpoint: str = DEFAULT_ENDPOINT,
+    endpoint: str,
     *,
     entry: ModelEntry,
     timeout: float,
@@ -1533,7 +1686,7 @@ def prove_the_entry(
     *,
     model: ModelEntry,
     output_schema: Mapping[str, Any],
-    endpoint: str = DEFAULT_ENDPOINT,
+    endpoint: str,
     timeout: float,
 ) -> None:
     """Read this model's markers off its own template, then prove the decoder is bound.
@@ -1560,7 +1713,7 @@ def prove_the_entry(
             user=PROBE_USER,
             output_schema=schema,
             server=model.server,
-            request=model.request,
+            sampling=model.sampling,
             markers=markers,
             max_answer_tokens=PROBE_OUTPUT_TOKENS,
         ),

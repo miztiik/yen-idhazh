@@ -21,7 +21,6 @@
 
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import type { ConsolePanelGroup } from '../../contracts/appearance-config';
 import { REPO_ROOT } from './payload';
 
 export interface UiConfig {
@@ -303,8 +302,16 @@ export interface ConsoleConfig {
  * `consoleConfig()` returns is inlined into all five prerendered console
  * documents, and a route has no use for another route's running order. Each
  * route reads its own list through `panelGroupsFor`.
+ *
+ * `ConsolePanelGroup` in `backend/idhazh/contracts/appearance_config.py`, which
+ * is where what each key means is written.
  */
-export type { ConsolePanelGroup };
+export interface ConsolePanelGroup {
+	id: string;
+	title: string;
+	panels: string[];
+}
+
 type PanelGroups = Record<string, ConsolePanelGroup[]>;
 
 /** What on-device archive search reads, keeps and shows.
@@ -661,7 +668,7 @@ interface RawConfig {
  * carries: an entry's `server` block is the flags the binary is started with,
  * emitted verbatim. */
 interface RawModels {
-	summarize?: { server?: Record<string, unknown> };
+	summarizer?: { server?: Record<string, unknown> };
 }
 
 /** Keys the `digest` block carries that no page reads.
@@ -940,7 +947,7 @@ export function visualsConfig(): VisualsConfig {
 }
 
 export function inferenceConfig(): InferenceConfig {
-	const declared = models().summarize?.server?.['--ctx-size'];
+	const declared = models().summarizer?.server?.['--ctx-size'];
 	return typeof declared === 'number' ? { n_ctx: declared } : { ...INFERENCE_DEFAULTS };
 }
 

@@ -99,7 +99,7 @@ Two consequences worth stating plainly:
 
 - **`version` is a field of the shape and never a cell.** The header check below
  is a prefix, so one more name at position zero would shift every position the
- console reads. `schemas/public-telemetry.schema.json` is where the stamp lives.
+ console reads. `PublicTelemetryRow` is where the stamp lives.
 - **A published shard has to load, not merely parse.** `public_telemetry
  --migrate` reads every committed shard back through the contract and rewrites
  it, and a test runs the same round trip on a copy of the committed files. Run
@@ -176,7 +176,7 @@ the browser needs the rows the seed deliberately does not carry. The two offered
 options were refused for measured reasons - seeding buys back the 176,753 bytes
 above, and dropping the seeded months puts a 244 KB fetch behind the first click
 of the window control and leaves the section blank until it lands
-([console.md](console.md#it-follows-the-windows-length-not-a-pan)).
+([what-the-pipelines-route-draws.md](what-the-pipelines-route-draws.md#it-follows-the-windows-length-not-a-pan)).
 
 The two options remain open for a panel that genuinely needs a panned answer.
 Nothing on the page needs one today.
@@ -337,7 +337,7 @@ been folded away is a rate nobody can check, and a source month with no publishe
 copy is a window the console cannot draw. Since 2026-09-03 the two files go
 together: `retention.prune_telemetry` folds the ledger month, unlinks the shard,
 and unlinks this copy of it in the same step
-([../../concepts/config.md](../../concepts/config.md#every-store-names-its-own-cleanup-age)).
+([../../concepts/config/retention-ages.md](../../concepts/config/retention-ages.md#every-store-names-its-own-cleanup-age)).
 
 Three things about that deletion are worth stating on this page rather than only
 on the pruner's:

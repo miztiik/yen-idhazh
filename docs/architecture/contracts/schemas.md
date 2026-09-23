@@ -2,31 +2,29 @@
 
 **Last Updated**: 2026-09-23
 
-The persisted-shape subsystem: where the models live, how the schemas and frontend types are generated from them, and the gate that stops the three from drifting apart. This is the operational home of Guardrail #3 (contracts before logic) and `CLAUDE.md` sections 1a and 11.
+The persisted-shape subsystem: where the models live, how a schema is obtained from one, the small hand copy the frontend carries, and the tests that stop the two drifting apart. This is the operational home of Guardrail #3 (contracts before logic) and `CLAUDE.md` sections 1a and 11.
 
 Concept-level *why* lives in [../../concepts/principles.md](../../concepts/principles.md) (principle 4). This page is the *shape*.
 
-## One source of truth, two generated outputs
+## One source of truth, and nothing generated from it
 
 ```
 backend/idhazh/contracts/*.py <- Pydantic models. HAND-WRITTEN. The source of truth.
  |
- +--> schemas/*.schema.json <- GENERATED. Never hand-edited.
+ +--> Contract.json_schema() <- computed on demand. Nothing writes it to disk.
  |
- +--> frontend/src/contracts/*.ts <- GENERATED. Never hand-edited.
+ +--> six names copied by hand into two frontend modules, bound by two tests.
 ```
 
-The direction is one-way and never reversed. To change a persisted shape you edit the Pydantic model and regenerate; editing a generated artifact is an anti-pattern (`CLAUDE.md` section 10) and the drift gate will fail it anyway.
+To change a persisted shape you edit the Pydantic model. Where the frontend copies something, you edit the copy in the same change, and the two tests below fail if you do not.
 
-**One command writes both trees.** `python -m idhazh.contracts.export` walks one list of models and emits the schema and the TypeScript from it, so there is no second command a person can forget to run. That matters more than it sounds: the gap a hand-written mirror lives in is exactly the gap between two commands.
+**A contract produces its own schema.** `Contract.json_schema()` is `model_json_schema()` plus this project's canonicalisation - the `$id`, the `$schema` dialect, the version stamp and the changelog. A reader outside Python is handed one when it asks.
 
-## What the TypeScript carries
+## What the frontend carries
 
-The emitter reads the generated JSON Schema rather than the model, so the schema and the TypeScript cannot describe two different shapes. One module per contract, named for the schema stem: `schemas/host-fingerprint-row.schema.json` and `frontend/src/contracts/host-fingerprint-row.ts`.
+**Two modules import a contract shape, and both type it by hand.** `frontend/src/lib/server/config.ts` declares `ConsolePanelGroup`; `frontend/src/lib/server/host-fingerprint.ts` declares `HostFingerprintRow` and the two closed sets `SERVER_JOB` and `WATCHED_FLAG`. What each field means stays on the Pydantic model, which is the one place it is written.
 
-Each module carries the root interface, one declaration per `$defs` entry, and the field descriptions as JSDoc, so a frontend developer reads the contract's own words on hover rather than opening the Python.
-
-**A closed vocabulary ships twice: as a frozen array and as the union that array's members form.**
+**A closed vocabulary is copied as a frozen array, and the union its members form.**
 
 ```ts
 export const SERVER_JOB = ['plan', 'work', 'assemble', 'visuals', 'runtime', 'decide'] as const;
@@ -34,23 +32,33 @@ export const SERVER_JOB = ['plan', 'work', 'assemble', 'visuals', 'runtime', 'de
 export type ServerJob = (typeof SERVER_JOB)[number];
 ```
 
-The union alone cannot be tested against at run time, and a reader that has to narrow a CSV cell would otherwise retype the members - which is the drift the generator exists to remove. `frontend/src/lib/server/host-fingerprint.ts` narrows the `job` column against that array and `watchedFlags()` hands back `WATCHED_FLAG`, so no list of jobs and no list of instruction-set flags is typed anywhere in the frontend.
+The union alone cannot be tested against at run time, and a reader that has to narrow a CSV cell would otherwise retype the members. `host-fingerprint.ts` narrows the `job` column against that array and `watchedFlags()` hands back `WATCHED_FLAG`, so no second list of jobs and no second list of instruction-set flags is typed anywhere in the frontend.
 
-**An optional field is emitted optional.** Pydantic marks a field with a default as not required, so `cpu_model?: string | null` is what the contract says: the key may be absent, and present-but-null is the reading nobody took. A reader that fills every key says so by deriving from the generated type - `Required<HostFingerprintRow>` - rather than by declaring a second interface.
+**An optional field is copied optional.** Pydantic marks a field with a default as not required, so `cpu_model?: string | null` is what the contract says: the key may be absent, and present-but-null is the reading nobody took. A reader that fills every key says so by deriving from the copied type - `Required<HostFingerprintRow>` - rather than by declaring a second interface.
 
-**A column added to a model becomes a compile error in the reader that builds the row.** That is the whole point: before this, adding a column moved `schemas/` and moved nothing in `frontend/`.
+## What holds the copy in step
 
-## What is still hand-written
+Three tests in `backend/tests/contracts/`, each named for what it proves.
 
-`frontend/src/lib/payload/types.ts` mirrors `schemas/digest-day.schema.json`, `digest-view`, `search-index` and `visual-data` by hand, and the published reading surface is typed from it. It is not converted yet: several of its types narrow the contract on purpose (`DigestViewItem` is a `Pick`, and `markup` is a build-time field that is deliberately not in the schema), so replacing it is a design change to the reading path rather than a rename. The chart view models under `frontend/src/lib/charts/` that share a name with a `machine-panels` definition are the same kind of case - `console-machine-panels.spec.ts` checks them against the schema at run time instead.
+| File | What it proves |
+| --- | --- |
+| `test_frontend_field_set.py` | the hand-written `HostFingerprintRow` names exactly the columns the Pydantic one declares, in the same order, with the same TypeScript type for each. Types are computed from `json_schema()` by a narrow mapper that refuses a node kind it has not met, so a field with an unfamiliar shape fails rather than passes |
+| `test_frontend_vocabularies.py` | `SERVER_JOB` and `WATCHED_FLAG` hold exactly their Python enums' members, in order |
+| `test_frontend_console_lists.py` | five console lists still name what their contracts declare - the eval panel's column map, the settings vocabulary, the doubt reasons, the bandwidth margin and the prompt-reuse column grammar |
 
-## The model file has no generated schema
+A fourth, `test_no_generated_layer.py`, refuses the generated trees coming back one file at a time.
 
-`config/models/<name>.json` is validated by `ModelsConfig` and is deliberately absent from `contracts/export.py`, so no `models-config.schema.json` and no `frontend/src/contracts/models-config.ts` exist. **A configuration file this project authors needs no declared shape** (`CLAUDE.md` Guardrail #3, owner ruling 2026-09-21): nothing but this repository writes one and nothing but this repository reads one, so a generated schema restates a model that is already its only reader, and a generated frontend type restates a file the frontend opens by hand.
+## What is still hand-written elsewhere
 
-What the entry still declares is what this project's own code names: the weights, the architecture, the two turn-envelope strings no template can answer, and the digest the settings were derived against. **What it does not declare is the settings themselves.** The `server` block is llama-server's own flags, spelled as the binary spells them and emitted verbatim, and the `request` block is the four values that go in a request body. A typed field for a value this project hands straight to another program is a second spelling somebody has to keep in step - and llama-server refuses a flag it does not accept at every server start, which names it and does not start.
+`frontend/src/lib/payload/types.ts` mirrors `DigestDay`, `DigestView`, `SearchIndex` and `VisualData` by hand, and the published reading surface is typed from it. Several of its types narrow the contract on purpose (`DigestViewItem` is a `Pick`, and `markup` is a build-time field that is deliberately not in the shape), so it is a design change to the reading path rather than a rename. **No test binds it to its contracts**, which is the largest hand copy in the repository with nothing holding it in step. The chart view models under `frontend/src/lib/charts/` that share a name with a `machine-panels` definition are the same kind of case.
 
-Two keys are required and both are refused by name at configuration load, in `idhazh.config.refuse_a_model_nothing_could_run`: `server["--ctx-size"]`, because this project does real arithmetic on the window and the published site reads it at build time, and `request["request_timeout_minutes"]`, because four call sites multiply it by sixty and llama-server has no default to fall back on. Everything else is optional, and absent means the server's own default.
+## The model file has no declared shape
+
+`config/models/<name>.json` is validated by `ModelsConfig`, which is deliberately absent from `contracts.CONTRACTS`. **A configuration file this project authors needs no declared shape** (`CLAUDE.md` Guardrail #3, owner ruling 2026-09-21): nothing but this repository writes one and nothing but this repository reads one, so a schema of it restates a model that is already its only reader.
+
+What the entry still declares is what this project's own code names: the weights, the architecture, the two turn-envelope strings no template can answer, how long one request may wait, and the digest the settings were derived against. **What it does not declare is the settings themselves.** The `server` block is llama-server's own flags, spelled as the binary spells them and emitted verbatim, and the `sampling` block is every value that decides which token is drawn, spelled as the request body spells it. A typed field for a value this project hands straight to another program is a second spelling somebody has to keep in step - and llama-server refuses a flag it does not accept at every server start, which names it and does not start.
+
+Two values are required. `server["--ctx-size"]` is refused by name at configuration load, in `idhazh.config.refuse_a_model_nothing_could_run`, because this project does real arithmetic on the window and the published site reads it at build time. `request_timeout_minutes` is a typed field of the entry, so the contract refuses a missing or non-numeric one first and names the role doing it; it sits outside the sampling block because it is how long the client waits and never goes on the wire. Everything else is optional, and absent means the server's own default.
 
 **The recorded shape keeps the old key.** `ModelRef.inference` is a plain mapping so a `run.json` an earlier run wrote - carrying a weights digest, a decode cap and option names no build declares now - still reads (section 11).
 
@@ -62,13 +70,12 @@ A JSON Schema is a good interchange format and a poor authoring format: it canno
 
 | Path | Holds |
 | --- | --- |
-| `backend/idhazh/contracts/base.py` | The shared string types, the canonical serializer, and the two base models: `Model` for a nested shape and `Contract` for a top-level persisted document. `Contract` owns the `version` date-stamp, the `changelog` tuple, the invariant that `version` equals the newest changelog entry, the `<stem>.schema.json` name, and the JSON Schema emitter. |
+| `backend/idhazh/contracts/base.py` | The shared string types, the canonical serializer, and the two base models: `Model` for a nested shape and `Contract` for a top-level persisted document. `Contract` owns the `version` date-stamp, the `changelog` tuple, the invariant that `version` equals the newest changelog entry, the stable stem, and `json_schema()`. |
+| `backend/idhazh/contracts/__init__.py` | `CONTRACTS`, the registry of every top-level persisted document. What a check over all of them iterates. |
 | `backend/idhazh/contracts/<name>.py` | One module per persisted shape. |
-| `backend/idhazh/contracts/export.py` | Walks the models and writes both generated trees. Also the list of what each of them is allowed to contain. |
-| `backend/idhazh/contracts/typescript.py` | Turns one contract's generated JSON Schema into one TypeScript module. |
-| `schemas/<name>.schema.json` | Generated. One flat file per model. |
-| `frontend/src/contracts/<name>.ts` | Generated. One module per model, named for the same stem. |
-| `frontend/src/lib/payload/types.ts` | The published payload's TypeScript shapes, mirroring `schemas/digest-day.schema.json`. Hand-written, and the one mirror left. |
+| `frontend/src/lib/server/host-fingerprint.ts` | The hand copy of `HostFingerprintRow`, `ServerJob` and `WatchedFlag`. |
+| `frontend/src/lib/server/config.ts` | The hand copy of `ConsolePanelGroup`. |
+| `frontend/src/lib/payload/types.ts` | The published payload's TypeScript shapes, mirroring `DigestDay`. Hand-written, and bound by nothing. |
 
 The shapes, and where each one lives once written:
 
@@ -83,7 +90,7 @@ The shapes, and where each one lives once written:
 | `Article` | `article` | one file per item under the run directory |
 | `Summary` | `summary` | one file per item under the run directory |
 | `VisualDecision` | `visual-decision` | one file per item under the run directory |
-| `VisualPlan` | `visual-plan` | not persisted yet - the shape lands ahead of its producers (Guardrail #3), and what a plan may not carry is as much of it as what it holds ([../publishing/visuals.md](../publishing/visuals.md)) |
+| `VisualPlan` | `visual-plan` | not persisted yet - the shape lands ahead of its producers (Guardrail #3), and what a plan may not carry is as much of it as what it holds ([../publishing/what-a-visual-plan-may-say-and-what-happens-to-one-that-is-refused.md](../publishing/what-a-visual-plan-may-say-and-what-happens-to-one-that-is-refused.md)) |
 | `ElementTable` | `element-table` | not persisted yet - the shape lands ahead of its producers (Guardrail #3), and where an article's elements are written is settled by the row that writes them |
 | `EvalRow` | `eval-row` | one row of `state/scores/<YYYY>/<MM>/<DD>/`, in the file its writer owns |
 | `ObservationIndexRow` | `observation-index-row` | one row of `state/score-index/<YYYY>/<MM>/<DD>/`, the identity of one measurement the day beside it holds |
@@ -147,7 +154,7 @@ keeps `version` off the row is what is left once that hazard is gone: a cell in
 every row of a payload the reader downloads, which no panel reads.
 
 The stamp is not lost: it is a field of the shape, and
-`schemas/public-telemetry.schema.json` is where a reader of an old shard looks it
+`PublicTelemetryRow` is where a reader of an old shard looks it
 up. What the row loses is the ability to say which *row* predates a change, which
 is the thing `state/scores/` needs and this file does not - the console reads the
 projection for rates and never branches on a row's age.
@@ -309,13 +316,17 @@ The rewrite is small enough to be reviewed as a diff rather than run as a utilit
 
 `backend/utilities/widen_ledger_header.py` is the operator's door onto `ledger.migrate_header`. Until 2026-09-21 nothing in the repository could widen a header from a command line: `migrate_header` was reached only from the compaction verb, which folds a segment into a head and takes no store argument. So every widening before it shipped its own utility - one for the feed-health header, another for the item-health header - each one a new file doing what the engine already did. Both are deleted; this door is what re-files either store now.
 
-One utility is possible because the two things it needs are already registered elsewhere. The store comes from the prune vocabulary, so a word means the same store in every command an operator types. The contract that reads a row comes from `ledger.keyed_paths`, which already pairs a committed file with its reader for the post-merge settlement. Neither list is restated in the utility, so neither can drift from it, and a store that ships before its writer reports nothing rather than failing.
+One utility is possible because the two things it needs are already registered elsewhere. The store comes from the prune vocabulary, so a word means the same store in every command an operator types. The contract that reads a row comes from whichever of the two reader registries holds that store: `ledger._TREE_SHAPES` through `segment_contract` and `segment_carried` for a day tree, and `ledger.keyed_paths` for a store the post-merge settlement covers. No list is restated in the utility, so none can drift from it, and a store that ships before its writer reports nothing rather than failing.
+
+**Asking both registries is not defensive, it is the repair for a measured outage.** The door shipped asking `keyed_paths` alone, and on 2026-09-22 five day trees left that registry when each became a day directory - `item-health`, `feed-health`, `host-fingerprint`, `counterfactual-scores` and `span-rollup`, joined there by `scores` and `score-index`. Two files that no writer can both open need no settlement to tell them apart, so the registry was right to drop them; the door was never repointed. Measured 2026-09-23: four of the fourteen stores in the vocabulary resolved and ten were refused. The refusal read as correct because refusing a store with no reader IS correct - it is the same sentence for a store that never had one and a store that lost one, and nothing in the utility could tell them apart. What made it invisible for a day was the test suite: every case drove `content-similarity-judge-scored-pairs`, which stayed in `keyed_paths`, and the one test watching a refusal was watching `scores`, which had just stopped deserving it. The fix is one lookup over both registries; the guard is a census that names the four stores with no reader and asserts set equality in both directions, so a store that loses its reader is named rather than counted.
+
+Four stores are still refused, and the refusal is the right answer for each: `published` and `seen` append through `ledger.extend_ledger_file` from a caller that owns its own repeats, and `content-similarity-judge-metrics` and `content-similarity-judge-merge-line-holdout-scores` have shapes but no registry entry. Registering one of them is the row that makes it re-filable; until then the door says which registry to put it in.
 
 The dry run is the default, as it is for the prune verb - writing takes a word nobody types by accident. Both modes re-file a copy in a temporary directory and compare bytes, so a dry run's report is the live run's report rather than a second arithmetic that agrees until it does not. Run twice, the second pass reads line one, sees the contract's own header and returns, so the file is byte-identical and reported unchanged.
 
 It checks one thing and leaves the rest to the engine: the row count may not move, because that is the only failure `migrate_header` cannot see from inside a single file. Everything else is already there - it refuses a heading this build cannot place, keeps a row no reader could place and raises, and re-files through the contract's own reader rather than cell by cell.
 
-`StorySimilarityPair` is the first shape it was written for. It gained six columns on 2026-09-21 - `judge_id`, `judge_temperature`, `grammar_applied`, `first_token_probabilities`, `thinking_spans` and `judged_by_run_id` - and the six are declared in the row's own body rather than inherited from `judge_call.JudgeConfigStamp`. Pydantic collects a base class's fields first, so inheriting would have put them at the HEAD of the header and re-read every committed row one cell out of place. A mixin that cannot be inherited by the row it was written for is the price of a store with rows already in it, and it is the reason `JudgeConfigStamp` is a mixin rather than a base class. A seventh column, `decode_digest`, landed and left the same day, and re-filing it away is what made this door narrow as well as widen - the carried set now travels with the reader out of `keyed_paths`, and the reader is looked up for one day rather than for every committed file (Guardrail #12).
+`StorySimilarityPair` is the first shape it was written for. It gained six columns on 2026-09-21 - `judge_id`, `judge_temperature`, `grammar_applied`, `first_token_probabilities`, `thinking_spans` and `judged_by_run_id` - and the six are declared in the row's own body rather than inherited from `judge_call.JudgeConfigStamp`. Pydantic collects a base class's fields first, so inheriting would have put them at the HEAD of the header and re-read every committed row one cell out of place. A mixin that cannot be inherited by the row it was written for is the price of a store with rows already in it, and it is the reason `JudgeConfigStamp` is a mixin rather than a base class. A seventh column, `decode_digest`, landed and left the same day, and re-filing it away is what made this door narrow as well as widen - the carried set travels with the reader out of whichever registry answered, and a `keyed_paths` reader is looked up for one day rather than for every committed file (Guardrail #12).
 
 `judge_id` is the one appended cell the widening fills rather than leaves empty: its default is not `None`, and the rows it fills were written by the judge that owns the store. That makes it the one column the reader has to name. `StorySimilarityPair.from_csv_row` drops the key when the cell is empty so pydantic supplies the default, and it does that BY NAME - a predicate over "any field whose default is not `None`" would also drop `version`, because a required field has no default at all, and the before-validator would then refill it with this build's own stamp. That is silent coercion on the one cell that says which rows predate the widening.
 
@@ -349,13 +360,13 @@ record earlier changes; they are not instructions to an agent.
 
 **The line is the test.** An entry that will not fit one line is asking a question rather than failing a limit: is the reason worth a `## Design rationale` section on the page that owns the subsystem? If yes, write it there and leave one line here pointing at the page. If no, it was never worth keeping. Those are the only two answers - a wrapped entry is neither.
 
-**Old entries are deleted, not archived.** Every entry is copied verbatim into the generated schema and shipped, so an unbounded changelog is a file that grows forever in two places at once. Git already holds every word, so a fifth entry pointing a reader at the file's history costs one line and loses nothing. A commit hash is not the pointer: hashes do not survive the scheduled history prune (`CLAUDE.md` section 8), and a hash that no longer resolves is worse than no pointer at all.
+**Old entries are deleted, not archived.** Every entry is copied verbatim into the schema a contract computes, so an unbounded changelog is a list nobody reads carried by every reader that asks for the shape. Git already holds every word, so a fifth entry pointing a reader at the file's history costs one line and loses nothing. A commit hash is not the pointer: hashes do not survive the scheduled history prune (`CLAUDE.md` section 8), and a hash that no longer resolves is worse than no pointer at all.
 
-**Dropping an entry does not stamp a new `version`.** The stamp answers how old the *shape* is, and deleting history moves no field, no type, no default and no validator - a payload that validated before the trim validates after it. The generated bytes do move, so the drift gate has to be re-run, but a version bump here would announce a shape change that did not happen. Trimming is the one edit to a contract module that is exempt, and the rule that made it is dated once in `CLAUDE.md` rather than restamped across every contract.
+**Dropping an entry does not stamp a new `version`.** The stamp answers how old the *shape* is, and deleting history moves no field, no type, no default and no validator - a payload that validated before the trim validates after it. A version bump here would announce a shape change that did not happen. Trimming is the one edit to a contract module that is exempt, and the rule that made it is dated once in `CLAUDE.md` rather than restamped across every contract.
 
 Additive change: append the entry, stamp today, drop the oldest if that takes the list past five - older payloads still validate. Breaking change: append, stamp today, **and write the read-side migration in the same commit.** A payload written by yesterday's run that today's build cannot read is a release blocker.
 
-A document that arrives without a `version` is stamped with the current one on read, so the generated schema marks the field optional-with-a-default rather than required. Everything this project writes emits it explicitly; the tolerance exists for a hand-edited config file, not as a licence to omit it.
+A document that arrives without a `version` is stamped with the current one on read, so the schema marks the field optional-with-a-default rather than required. Everything this project writes emits it explicitly; the tolerance exists for a hand-edited config file, not as a licence to omit it.
 
 ### A published key can be frozen while its Python name moves
 
@@ -377,7 +388,7 @@ The section above rules on *when* a name may move. This one rules on *which word
 
 Two more clauses, and each one has already cost a day:
 
-- **A model's size, vendor or revision never appears in an identifier.** `models.summarize` names the role; which weights fill it is a value in `config/`, and a knob called `models.qwen9b` would have to be renamed the day the weights change. A **filename** under `config/models/` is not an identifier - it names one set of weights and is meant to, which is why `models_file` is the whole swap and no code may compare against what it says (`backend/tests/test_summarize.py::test_no_module_that_opens_a_model_branches_on_which_model_it_is`).
+- **A model's size, vendor or revision never appears in an identifier.** `models.summarizer` names the role; which weights fill it is a value in `config/`, and a knob called `models.qwen9b` would have to be renamed the day the weights change. A **filename** under `config/models/` is not an identifier - it names one set of weights and is meant to, which is why `models_file` is the whole swap and no code may compare against what it says (`backend/tests/test_summarize.py::test_no_module_that_opens_a_model_branches_on_which_model_it_is`).
 - **A word that is wrong is renamed early, not when it is convenient.** `route` named a dispatch decision and the stage makes a planning decision. It reached a module, a contract, a schema stem, two config keys, a workflow job, an enum member, two TypeScript fields and about two hundred sentences before anybody paid it off. Every plan written against the wrong word writes more of it, so the bill grows with the calendar and never with the difficulty.
 
 Two names in this repository do not take the word a glossary would give them, recorded here so they are not argued twice. **`visual_planner.py`** is the module filename, decided ahead of any glossary because a glossary names steps and not files; the stage it was named for retired on 2026-09-13 and the file kept the name, because what it still holds is the gate and the ladder that decide a picture. **`density_floor`** was chosen over the more formal term outright, by the owner.
@@ -390,7 +401,7 @@ Every persisted payload is written by one function: **sorted keys, two-space ind
 
 - A payload that is read and re-written is byte-identical, so a re-run that changed nothing produces an empty diff.
 - A diff shows a **changed value** rather than a reshuffled dict, which is what makes reviewing a committed payload possible at all.
-- The drift gate can compare bytes rather than parsed structures.
+- A fixture's round trip can compare bytes rather than parsed structures.
 
 **One payload takes the indent out, and only the indent.** `SearchIndex` serializes through `compact_json`, which is the same function with `separators` closed up: still sorted keys, still ASCII-escaped, still one trailing newline, so all three properties above still hold. It is the one payload a reader downloads whole with entries counted in thousands, and the indent roughly doubles it for whitespace nobody reads. Every other payload keeps the indent, because being able to review a committed diff by eye is worth more than its bytes.
 
@@ -435,23 +446,11 @@ The shapes carry rules a JSON Schema cannot express, and each one is a defect cl
 
 ## `$id` is relative, on purpose
 
-Each generated schema's `$id` is its own filename, not a URL. An editor's JSON Schema plugin then resolves it offline, with no network call and nothing to 404 - which matters because a schema that only validates when the internet is up is a schema nobody runs.
+Each schema's `$id` is the stem's filename form, not a URL. A reader handed one identifies it offline, with no network call and nothing to 404 - which matters because a schema that only validates when the internet is up is a schema nobody runs.
 
-## The drift gate
+## What holds a change in scope
 
-CI regenerates both outputs and fails on any diff. This is what makes "never hand-edit a generated artifact" enforceable rather than aspirational.
-
-Two conditions have to hold for the gate to be trustworthy:
-
-- **The generators are deterministic** - stable key ordering, stable formatting. A generator whose output shuffles produces a gate that fails at random and is switched off within a week.
-- **The stored bytes match the emitted bytes.** Generated files are pinned to LF in `.gitattributes`, so the gate does not fail purely because a contributor's checkout settings differ.
-
-A clean regeneration proves that schemas match models, not that an edit stayed
-in scope. Compare parsed schema trees before and after the change, including
-every value nested under `changelog`. Searching diff lines for the `version`
-and `changelog` keys misses a changed sentence whose key line did not move.
-
-The backend half is a contract-tier test: it regenerates every schema into a temporary directory and compares bytes against what is committed. It additionally asserts that `schemas/` holds **exactly** the generated set, so retiring a contract cannot leave a stale schema behind for something to keep validating against. `backend/tests/contracts/test_typescript_contracts.py` asks the same two questions of `frontend/src/contracts/`, and adds the one the byte comparison cannot answer: it widens a model in memory and asserts the emitted TypeScript changed, so a generator that stopped reading the model would be caught by a test rather than by a reader.
+A contract change that meant to add a field and also reworded a changelog entry is the failure this catches. Compare parsed schema trees before and after the change, including every value nested under `changelog`. Searching diff lines for the `version` and `changelog` keys misses a changed sentence whose key line did not move.
 
 ## The persisted surfaces
 
@@ -484,9 +483,11 @@ an earlier run's plan look larger than it was.
 
 ## Design rationale
 
-Generating the schemas and the frontend types from one hand-written model, and gating on regeneration, exists because the alternative - keeping a Python model, a JSON Schema and a TypeScript interface in step by hand - fails silently and always in the same way: two of the three agree, the third is edited in a hurry, and the mismatch surfaces as a runtime error in the surface furthest from the change. The cost is a generator and a CI step; the benefit is that the mismatch class stops existing. Authority: Fowler ([../../../.github/agents/fowler.agent.md](../../../.github/agents/fowler.agent.md)).
+**The generated layer went on 2026-09-23, and the hand copy plus two tests replaced it.** Until that date `python -m idhazh.contracts.export` wrote 66 JSON Schemas and 66 TypeScript modules, and CI regenerated both and failed on any diff. What it bought was real - a Python model, a JSON Schema and a TypeScript interface cannot be kept in step by hand, and the failure is always the same one: two of the three agree and the third was edited in a hurry. What it cost was the reviewer's attention: one commit in ten touched those two trees, so about one review in ten opened on 1,573,101 bytes of regenerated diff, and six names in two frontend modules were the whole of what any of it served. Sixty-one of the sixty-six schemas were read by nothing but the gate that checked they had been generated. The replacement is narrower and says the same thing: the copy is small, it is hand-written, and three named tests fail when it falls behind. Authority: Fowler.
 
 Making `version` a date-stamp rather than an integer is a small choice with a specific payoff: when an old payload turns up, the question is always "how old is this shape?", and an integer cannot answer it without consulting a table. Authority: Fowler.
+
+**What the replacement does not cover, stated rather than implied.** A generator held every shape in step whether or not anybody had thought about it; three tests hold the shapes somebody named. `frontend/src/lib/payload/types.ts` is the gap: it mirrors four contracts by hand and no test binds it. That was true before this change too - it was the one mirror the generator never replaced - but the generated tree beside it made it look like an exception rather than the rule. Binding it is a row nobody has written.
 
 ## Rejected alternatives
 
@@ -496,7 +497,8 @@ Making `version` a date-stamp rather than an integer is a small choice with a sp
 | Generate the Pydantic models from the schemas | Reverses the direction: the readable, invariant-carrying artifact becomes the generated one, and the invariants have nowhere to live. | Fowler |
 | Integer schema versions | Not self-documenting. The date-stamp is ASCII-sortable and answers the question a reader of an old payload actually has. | Fowler |
 | Absolute URL `$id` | Makes offline validation depend on a network fetch, and on a URL that has to keep resolving forever. | Carmack |
-| Skip the drift gate and rely on discipline | Discipline is not a control. The gate is what makes the no-hand-editing rule real. | Fowler |
+| Keep the generator for the six names the frontend uses | A generator that runs over one contract is a generator, with its command, its gate and its regenerated diff. Six names are a copy and three tests. | Fowler |
+| Delete only the 61 schemas nothing imports | The count is a fact about one day. The next contract adds a sixty-seventh and the generator still runs in full. | Fowler |
 
 ## See also
 

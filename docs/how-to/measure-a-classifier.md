@@ -167,8 +167,9 @@ unlocks it, and plan 23 row #11's kill criterion waits on that.
 
 ## What a model verdict here does and does not mean
 
-A model verdict in this set reaches no reader and selects nothing to publish,
-which is the `CLAUDE.md` section 0a property. What it does mean is narrower than
+A model verdict in this set reaches no reader and selects nothing to publish.
+`CLAUDE.md` section 1a would permit both; this set does neither. What it does
+mean is narrower than
 the set was designed for: with both sides model-written, row #18's figure says
 how well a small local model reproduces a large one's reading, and **it is a
 ranking instrument between classifiers rather than an accuracy claim against

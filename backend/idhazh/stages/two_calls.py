@@ -45,11 +45,11 @@ from idhazh.fingerprint import (
     text_digest,
 )
 from idhazh.llm.server import (
-    DEFAULT_ENDPOINT,
     Completion,
     completion_url,
     derive_turn_markers,
     request_timeout_seconds,
+    resolve_endpoint,
     window,
 )
 from idhazh.render import asset_relpath, render_planned_visual
@@ -428,7 +428,7 @@ def two_calls_one_item(
     settings: config.Settings,
     *,
     date: str,
-    endpoint: str = DEFAULT_ENDPOINT,
+    endpoint: str | None = None,
     run_id: str | None = None,
     tracer: telemetry.Tracer | None = None,
     recorder: ItemRecorder | None = None,
@@ -476,15 +476,16 @@ def two_calls_one_item(
     and still could not be read lands as `bad_shape`. Both lose the item, and
     both are a cell in the census rather than a silence.
     """
+    endpoint = endpoint or resolve_endpoint(settings.app.model_server.base_url)
     trace = tracer if tracer is not None else silent_tracer()
     kept = recorder if recorder is not None else _silent_recorder()
-    model = settings.models.summarize
+    model = settings.models.summarizer
     model_id = model.id
     # Both calls render their own prompt bytes, so they go to the completions
     # route and never to the chat one - which accepts `response_format` and
     # ignores it, losing the only control that survives an injection.
     rendered_endpoint = completion_url(endpoint)
-    timeout = request_timeout_seconds(model.request)
+    timeout = request_timeout_seconds(model)
     markers = derive_turn_markers(endpoint, entry=model, timeout=timeout)
     generated_at = assemble.utc_now()
     stamp = {
@@ -547,7 +548,7 @@ def two_calls_one_item(
                     table,
                     model_id=model_id,
                     server=model.server,
-                    request=model.request,
+                    sampling=model.sampling,
                     markers=markers,
                     prompt_config=settings.app.summarize,
                 )
@@ -811,7 +812,7 @@ def _decide_the_visual(
     if not wants_a_plan:
         return visual_planner.suppressed_by_the_gate(summary, **stamp)
     if two.hit_the_budget:
-        n_ctx = window(settings.models.summarize.server)
+        n_ctx = window(settings.models.summarizer.server)
         asked_for = calls.summarize_and_plan_budget_tokens(settings.app.summarize)
         if two.prompt_tokens + asked_for > n_ctx:
             LOG.warning(

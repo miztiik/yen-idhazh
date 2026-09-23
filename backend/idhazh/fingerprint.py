@@ -32,6 +32,7 @@ from typing import Any, Final
 
 from idhazh.contracts.base import derive_text_digest
 from idhazh.contracts.fingerprint import PipelineInputs
+from idhazh.contracts.knobs.model_server import is_loopback
 from idhazh.contracts.knobs.models import ModelRef
 from idhazh.llm.server import SETTING_KEYS, TurnMarkers, setting, turn_markers_digest, window
 
@@ -87,7 +88,7 @@ def file_digest(path: Path) -> str:
     return digest.hexdigest()
 
 
-def runtime_build(environ: Mapping[str, str] | None = None) -> str:
+def runtime_build(environ: Mapping[str, str] | None = None, *, base_url: str) -> str:
     """The llama.cpp release that decoded the weights, as the job pinned it.
 
     `config/llama-cpp-pin.json` decides the build, the job that installs
@@ -99,7 +100,18 @@ def runtime_build(environ: Mapping[str, str] | None = None) -> str:
     rather than inventing a tag: the whole reason this argument stopped being the
     literal `llama-server-local` is that a stamp naming a build nobody checked
     validates and lies (Guardrail #10).
+
+    **The address is here because the environment cannot answer for a server
+    this process is not running.** `LLAMA_CPP_BUILD` names the build installed
+    on this machine, and every other field of the manifest describes this
+    machine too - so pointed at a second one, the whole record is well formed,
+    validates, and is false about the only thing it exists to say. A server off
+    loopback degrades to `UNRECORDED_BUILD` rather than borrowing this machine's
+    answer. It is keyword-only with no default, because a default address bound
+    here would answer for a server no caller named.
     """
+    if not is_loopback(base_url):
+        return UNRECORDED_BUILD
     env = os.environ if environ is None else environ
     return env.get("LLAMA_CPP_BUILD", "").strip() or UNRECORDED_BUILD
 
@@ -136,11 +148,16 @@ def host_cpu(cpuinfo: Path = CPUINFO) -> str:
     return platform.processor() or platform.machine() or "unknown"
 
 
-def sampling_spelling(request: Mapping[str, Any]) -> dict[str, str]:
+def sampling_spelling(sampling: Mapping[str, Any]) -> dict[str, str]:
     """The decoding parameters, one key each, sorted.
 
-    `seed` is enumerated as an input, and above temperature 0 it is the control
-    that decides which sample the sampler draws rather than dead code. It was
+    **The whole block the entry declares, not a list of names this file knows.**
+    Three were read by name until 2026-09-23 while the request carried thirteen,
+    so ten keys could move the decode with this record unchanged. What is
+    recorded is now exactly what went on the wire.
+
+    `seed` is one of them, and above temperature 0 it is the control that
+    decides which sample the sampler draws rather than dead code. It was
     recorded from the start for exactly this move: a change of sampler cannot
     shift the words without shifting this record.
 
@@ -156,7 +173,9 @@ def sampling_spelling(request: Mapping[str, Any]) -> dict[str, str]:
     tolerance - no sampler this project runs is steered by the fifth decimal,
     and a full float repr would report a change every time a JSON round trip
     landed one bit out - but it is a choice rather than a fact, so it is stated
-    rather than left in the format string.
+    rather than left in the format string. A value that is a whole number in the
+    file is written as one: `top_k` is a count of tokens, not a quantity with
+    four decimals behind it.
 
     **No span budget is here, because no span carries one.** The two decode caps
     left the settings on 2026-09-21, and what bounds a span now is the window
@@ -164,21 +183,18 @@ def sampling_spelling(request: Mapping[str, Any]) -> dict[str, str]:
     reasoning flag here either: what turns reasoning on is the closing marker on
     the turn envelope, which arrives under `turn_markers_sha256`.
 
-    A value the file leaves out records as `RUNTIME_DEFAULT`, for the reason a
-    missing flag does: what the server picks is a real and different choice from
-    pinning a number, and writing our guess at its default here would record a
-    guess as a measurement (Guardrail #10).
+    A key the file leaves out is a key that is absent, which is what the field's
+    own read side says an absent key means. Writing this project's guess at the
+    server's default in its place would record a guess as a measurement
+    (Guardrail #10).
     """
-    spelled: dict[str, str] = {}
-    for name, digits in (("temperature", 4), ("top_p", 4), ("seed", 0)):
-        value = setting(request, name)
-        if value is None:
-            spelled[name] = RUNTIME_DEFAULT
-        elif digits:
-            spelled[name] = f"{float(value):.{digits}f}"
-        else:
-            spelled[name] = str(value)
+    spelled = {name: _spelled_value(value) for name, value in sampling.items()}
     return dict(sorted(spelled.items()))
+
+
+def _spelled_value(value: Any) -> str:
+    """One sampling value as the record writes it: four decimals, or as written."""
+    return f"{value:.4f}" if isinstance(value, float) else str(value)
 
 
 #: The server flags that can change arithmetic, prompt rendering or cache reuse,
@@ -253,7 +269,7 @@ def build_inputs(
     model: ModelRef,
     model_sha256: str | None,
     server: Mapping[str, Any],
-    request: Mapping[str, Any],
+    sampling: Mapping[str, Any],
     truncation_cap_tokens: int,
     runtime_build: str,
     chat_template: str,
@@ -294,7 +310,7 @@ def build_inputs(
         turn_markers_sha256=turn_markers_digest(markers) if markers is not None else None,
         output_schema_sha256=text_digest(output_schema),
         truncation_cap_tokens=truncation_cap_tokens,
-        sampling=sampling_spelling(request),
+        sampling=sampling_spelling(sampling),
         runtime_flags=runtime_flags_spelling(server),
         n_ctx=window(server),
         n_batch=_recorded(server, "n_batch"),

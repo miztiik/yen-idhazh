@@ -2,7 +2,7 @@
 
 **Last Updated**: 2026-09-22
 
-How a published summary is judged, and how the judgement is kept honest. This page fixes the vocabulary; the tunable bands live in [config.md](config.md).
+How a published summary is judged, and how the judgement is kept honest. This page fixes the vocabulary; the tunable bands live in [config/summary-length.md](config/summary-length.md).
 
 **It is one of three, and a person arrives holding one question of the three:**
 
@@ -283,10 +283,11 @@ a different thing, in a different file, from the gate target whose name it nearl
 is. `CLAUDE.md` called it a scorer until 2026-09-11, so a reader arriving from
 that sentence will look for a function that was never there.
 
-That is how it honours both rules at once. **Rule 2** - the model does not grade
-the model - takes a narrow, offline-only exception: the judge authors a
-maintenance artefact, never a verdict on a published summary or visual, and
-selects nothing that publishes ([../../CLAUDE.md](../../CLAUDE.md) section 0a).
+That is how it honours both rules at once. **Rule 2** no longer bans a model
+judge at all - [../../CLAUDE.md](../../CLAUDE.md) section 1a made LLM-as-judge
+primary evaluation - and the loop still keeps the judge off the gate: it authors
+a maintenance artefact, never a verdict on a published summary or visual, and
+selects nothing that publishes.
 **Rule 1** - the metric that selects can no longer alarm - is why the gate reads
 those four defect rates and not the new-fact rate. New-fact rate is recorded for
 every candidate, because a run's scores are its evidence, but acting on it is the
@@ -307,7 +308,7 @@ promotion - which is the whole reason a model is allowed to propose at all.
 
 ## Bands, not raw numbers
 
-Scores are bucketed into a small number of confidence bands, and the band - not the number - is what drives behaviour: what gets retried, what publishes with a visible low-confidence marker, and what a reader sees. Bands are tunable ([config.md](config.md)) and are re-calibrated against the human spot-checks rather than being fixed by taste.
+Scores are bucketed into a small number of confidence bands, and the band - not the number - is what drives behaviour: what gets retried, what publishes with a visible low-confidence marker, and what a reader sees. Bands are tunable ([config/summary-length.md](config/summary-length.md)) and are re-calibrated against the human spot-checks rather than being fixed by taste.
 
 The absolute summary gate starts at
 `summarize.length_policy.absolute_floor_words = 25`. That lets the brief band ask
@@ -529,9 +530,9 @@ kept?** Nothing has asked it yet, and this is the place to.
 
 It gates nothing, the same way the label queue gates nothing. No publish
 decision reads it, nothing downloads it back into a run, and no later row may
-make one. **The verdict here is a person's, which is what `CLAUDE.md` section 0a
-requires**: a model may not grade a published visual, and a human reading one is
-the instrument that clause leaves open.
+make one. **The verdict here is a person's by choice, not by rule.** `CLAUDE.md`
+section 1a would now let a model grade a published visual; nobody has asked a
+person the question yet, and a person is the instrument that answers it first.
 
 `backend/utilities/review_queue.py` builds one day's tree under
 `backend/var/review/<date>/`: a contact sheet a reviewer scrolls, a copy of every
@@ -1096,7 +1097,7 @@ that list. The first files it would take are the day files under
 - [../how-to/evaluate-new-summarizer-model.md](../how-to/evaluate-new-summarizer-model.md) - the controlled procedure for testing and adopting a challenger.
 - [pipeline-loop.md](pipeline-loop.md) - where the Evaluate stage sits.
 - [digest.md](digest.md) - how a confidence band reaches a reader.
-- [config.md](config.md) - the band thresholds and retry budget.
+- [config/summary-length.md](config/summary-length.md) - the band thresholds and retry budget.
 - [growing-reads.md](growing-reads.md) - what the observation index costs, and the cover every read over a growing collection declares.
 - [partitions.md](partitions.md) - what a partition file is called, and what a name the rule does not recognise does.
 - [principles.md](principles.md) - principle 6, the belief this page implements.

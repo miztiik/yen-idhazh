@@ -775,9 +775,8 @@ are different things (Guardrail #6).
 
 Do not change historical payloads or historical measurement rows. A value-only
 model change does not change a JSON shape; if the work also retypes a field or
-adds one, the contract, its `version`, its changelog, the migration, the
-generated schema and the drift gate move together
-([../../CLAUDE.md](../../CLAUDE.md) section 11).
+adds one, the contract, its `version`, its changelog and the migration move
+together ([../../CLAUDE.md](../../CLAUDE.md) section 11).
 
 ### 2.4 The fine-tuning check
 
@@ -892,7 +891,7 @@ and health before normal workers resume.
 - [run-the-gates.md](run-the-gates.md) - the complete local validation commands.
 - [../concepts/qualification.md](../concepts/qualification.md) - the ten gates, the model-choice arithmetic, and what a run that judged a candidate actually proves.
 - [../concepts/evaluation.md](../concepts/evaluation.md) - how a published summary is judged, which is the standard the gates grade against.
-- [../concepts/config.md](../concepts/config.md) - model and runtime knobs.
+- [../concepts/config/model-file.md](../concepts/config/model-file.md) - model and runtime knobs.
 - [../architecture/summarize/prompt.md](../architecture/summarize/prompt.md) - rendered bands, decoder rails and prompt controls.
 - [../architecture/summarize/throughput.md](../architecture/summarize/throughput.md) - read/write rates and prompt reuse.
 - [../architecture/contracts/determinism.md](../architecture/contracts/determinism.md) - what a run records about its own inputs.

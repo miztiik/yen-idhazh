@@ -540,7 +540,7 @@ for; with no group it would cost that worker's own run instead.
 record for it disagree.** [The qualification budget](../archive/measurements-2026-08.md#the-qualification-budget-derived-2026-08-26)
 puts a 40-item 9B worker at about 130 minutes, from a live production
 observation; the older length-interpolation and decode-ratio derivations quoted
-in [../concepts/config.md](../concepts/config.md) put it at 254 and 276. The
+in [../concepts/config/run-limits.md](../concepts/config/run-limits.md) put it at 254 and 276. The
 first fits this bound and the second two do not. Neither is a measurement of a
 9B worker, so neither may move a live bound (Guardrail #10). The 2026-08-26
 qualification run measured a 95.2-minute job, but that job replayed 30 frozen
@@ -729,7 +729,7 @@ server and in the page cache at once, and `MemAvailable` is mostly that same
 page cache. The console draws the two parts that do partition the machine and
 draws the process readings as overlapping brackets, so the addition is refused
 on the page rather than in a caption
-([../concepts/console-design.md](../concepts/console-design.md#what-is-holding-the-machines-memory-is-two-parts-a-reader-may-add-and-two-brackets-they-may-not)).
+([../concepts/console-design/how-the-machines-work-is-drawn-and-what-may-not-be-pooled.md](../concepts/console-design/how-the-machines-work-is-drawn-and-what-may-not-be-pooled.md#what-is-holding-the-machines-memory-is-two-parts-a-reader-may-add-and-two-brackets-they-may-not)).
 
 **The swap was the missing half of the survival argument, and it is small.**
 `SwapTotal` is 3.00 GiB on every one of the 378 rows. What had actually been

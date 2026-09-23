@@ -8,7 +8,7 @@
  *
  * **Since 2026-08-31 the shape this module writes is a contract**, generated
  * from `backend/idhazh/contracts/digest_view.py` into
- * `schemas/digest-view.schema.json`. The reason is a consumer we cannot
+ * `DigestView`. The reason is a consumer we cannot
  * upgrade: a reading route is about to fetch this file, so a reader's cached
  * shell can be older than the payload it reads. `VIEW_VERSION` below is that
  * contract's stamp, and a backend contract test fails if the two drift.

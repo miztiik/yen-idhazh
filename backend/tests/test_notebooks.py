@@ -79,7 +79,7 @@ def test_no_model_is_named_anywhere_in_it(every_cell: str) -> None:
 
     assert not named, (
         f"{named} appears in the notebook. It must resolve finetune.teacher against "
-        f"config/idhazh.json instead - models.summarize already moved once."
+        f"config/idhazh.json instead - models.summarizer already moved once."
     )
 
 

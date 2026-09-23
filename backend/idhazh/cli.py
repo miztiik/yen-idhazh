@@ -68,7 +68,6 @@ from idhazh.fingerprint import (
     file_digest,
     runtime_build,
 )
-from idhazh.llm.server import DEFAULT_ENDPOINT
 from idhazh.stages import (
     assemble as assemble_stage,
 )
@@ -207,7 +206,7 @@ def _candidate_identity(settings: config.Settings, args: argparse.Namespace) -> 
     the entry does not declare falls back to the observed size, which makes that
     one comparison inert rather than false - the digest is the check either way.
     """
-    model = settings.models.summarize
+    model = settings.models.summarizer
     weights = args.weights or (config.REPO_ROOT / "backend" / "models" / model.file)
     if not weights.exists():
         raise SystemExit(f"the candidate weights are not on disk: {model.file}")
@@ -223,7 +222,7 @@ def _candidate_identity(settings: config.Settings, args: argparse.Namespace) -> 
         sha256_observed=file_digest(weights),
         bytes_expected=model.byte_count or weights.stat().st_size,
         bytes_observed=weights.stat().st_size,
-        runtime_build=runtime_build(),
+        runtime_build=runtime_build(base_url=settings.app.model_server.base_url),
     )
 
 
@@ -528,15 +527,6 @@ def main(argv: Sequence[str] | None = None) -> int:
             "The operator's full pass over every committed shard, and the only one that "
             "costs more every month. `rebuild-score-index` rewrites every month's index "
             "rather than the months named."
-        ),
-    )
-    parser.add_argument(
-        "--base-url",
-        default=DEFAULT_ENDPOINT,
-        help=(
-            "The llama-server one judging shard talks to. Every route it needs is derived "
-            "from this one address, so a shard cannot ask one server for a tokenisation "
-            "and another for a verdict."
         ),
     )
     args = parser.parse_args(argv)

@@ -23,7 +23,7 @@ says about the article?**
 
 | | |
 | --- | --- |
-| Weights | `Qwen3.5-9B-Q4_K_M.gguf`, sha256 `03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8` - the file `models.summarize` declares |
+| Weights | `Qwen3.5-9B-Q4_K_M.gguf`, sha256 `03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8` - the file `models.summarizer` declares |
 | Runtime | `llama-server` from `backend/bin/`, started by `server_argv` from `config/` |
 | Token counts | The running server's own `/tokenize`. **Both cases were tokenised in one server session**, so the before and the after are read by one instrument |
 | The before case | Reconstructed from the prompt files at `242a701c`, the commit this row was cut from, rather than quoted from an earlier run |
@@ -99,7 +99,8 @@ call least able to absorb instructions it cannot act on - and it now carries the
 summariser's and the planner's.
 
 **Every number below is a deterministic count over the model's own output.** No
-model grades anything (`CLAUDE.md` section 0a). Anchoring is span equality
+model grades anything here, which is what makes the numbers reproducible rather
+than a matter of a judge's mood. Anchoring is span equality
 against the article's own bytes; the own-words rate is a set membership test.
 
 **Method.** Six real corpus articles were selected, 154 to 354 words, taken as

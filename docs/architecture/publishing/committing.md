@@ -110,7 +110,7 @@ this one has committed since the trigger, which is why the step below still
 runs.
 
 The answer is a current base rather than a merge rule. The job runs
-[`.github/scripts/take-state-from-the-tip.sh`](../../../.github/scripts/take-state-from-the-tip.sh)
+[`backend/utilities/take_state_from_the_tip.py`](../../../backend/utilities/take_state_from_the_tip.py)
 ahead of the fold: `state` is emptied and then taken from origin's tip, so a
 segment the run ahead drained is gone before the fold can read it. Restoring the
 tip's `state` on its own would not do it - git writes what the tip HAS and says
@@ -215,7 +215,7 @@ rebuilt day
 still names a file that is really in the tree. `DROP_RACED_ASSETS_COMMAND` without
 `REGENERATE_COMMAND` is rejected at startup, because only a job that rebuilds can
 commit the drops. Why it is a drop and not a merge side, a refresh or a rename is
-in [`../architecture/publishing/visuals.md`](visuals.md).
+in [`../architecture/publishing/one-visual-one-file-and-the-race-between-two-runs.md`](one-visual-one-file-and-the-race-between-two-runs.md).
 
 **Every git call in the loop is checked, never raised through.** A raised
 exception ends the run inside attempt 1 exactly as `bash -e` did before the loop
@@ -456,9 +456,10 @@ it is collected over time.
 
 ## See also
 
+- [a-losing-push-rebuilds-rather-than-rebases.md](a-losing-push-rebuilds-rather-than-rebases.md) - why the rebase this page describes does no work, what should replace it, and the one guardrail exception that needs.
 - [../../reference/github-actions.md](../../reference/github-actions.md) - which workflows exist, when each runs, and what each does.
 - [../../concepts/partitions.md](../../concepts/partitions.md) - the three classes every committed path is one of, and the layout each one obliges its writer to keep.
-- [visuals.md](visuals.md) - why a raced chart is dropped rather than merged, refreshed or renamed.
+- [one-visual-one-file-and-the-race-between-two-runs.md](one-visual-one-file-and-the-race-between-two-runs.md) - why a raced chart is dropped rather than merged, refreshed or renamed.
 - [../contracts/schemas.md](../contracts/schemas.md) - the row contracts under `state/`, and the rule that decides when a ledger shards.
 - [retention.md](retention.md) - what the committed record keeps once the artifacts are gone.
 - [../../../CLAUDE.md](../../../CLAUDE.md) - section 8 on git hygiene, section 11 on persisted contracts.
