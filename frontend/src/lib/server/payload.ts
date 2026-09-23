@@ -659,9 +659,56 @@ export function dayShardFiles(dir: string, days: number = LEDGER_WINDOW_DAYS): D
 	return kept.flat();
 }
 
-/** One row per planned item per run, read from the newest `days` recorded days. */
+/** Does `later` replace `kept` as this run's one census row for this item?
+ *
+ * `ledger.ITEM_HEALTH_RULE`, restated. A row that names the job which ran the
+ * item beats one that does not: the shard's rebuild carries `job` and `shard` -
+ * the one moment either is known - and assemble's rebuild leaves both empty,
+ * because it runs once for the whole day on a machine that read none of the
+ * items. Anything else leaves the row already held.
+ */
+function supersedesCensus(later: Record<string, string>, kept: Record<string, string>): boolean {
+	return Boolean(later.job) && !kept.job;
+}
+
+/** One census row per planned item per run, in the order the rows arrived.
+ *
+ * Two jobs write a row for one item - a work shard as the item settles, and
+ * assemble over the whole day afterwards - so both accounts of one item reach
+ * a reader of the raw files. A panel counting both counts every item twice,
+ * and a list keyed by item id draws the same story twice under one id.
+ *
+ * `ledger.ITEM_HEALTH_KEY` is what makes two rows the same record and
+ * `ledger.ITEM_HEALTH_RULE` is which one survives. Every backend reader of this
+ * ledger goes through that pair, so the console and the pipeline cannot
+ * disagree about how many items a run had.
+ */
+export function settledCensus<T extends Record<string, string>>(rows: readonly T[]): T[] {
+	const kept = new Map<string, T>();
+	for (const row of rows) {
+		const key = `${row.date ?? ''}\u0000${row.run_id ?? ''}\u0000${row.item_id ?? ''}`;
+		const held = kept.get(key);
+		if (held === undefined || supersedesCensus(row, held)) kept.set(key, row);
+	}
+	return [...kept.values()];
+}
+
+/** One row per planned item per run, read from the newest `days` recorded days.
+ *
+ * Settled here, at the one read every console panel shares, rather than in each
+ * panel - the placement `feedResults` takes below, for the same reason.
+ *
+ * **It is the newest day that carries the repeat, which is why this surfaced
+ * late.** A day older than `retention.settled_fold_after_days` has been folded
+ * into one settled file and holds no repeated key at all; the day a run is
+ * publishing still holds one file per writer, and that is the day every panel
+ * here opens on. Measured 2026-09-23 over the committed ledger: the thirteen
+ * folded days held 0 repeated keys between them, and the unfolded day held 240
+ * repeats over 240 items - every item of it, twice.
+ */
 export function itemHealthRows(days: number = LEDGER_WINDOW_DAYS): CsvTable {
-	return readDayShards(join(STATE_ROOT, 'item-health'), days);
+	const table = readDayShards(join(STATE_ROOT, 'item-health'), days);
+	return { rows: settledCensus(table.rows), columns: table.columns };
 }
 
 /** The published-set counts a run settled about one day.
