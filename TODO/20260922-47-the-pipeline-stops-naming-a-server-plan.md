@@ -102,9 +102,9 @@ Statuses: PENDING, IN PROGRESS, BLOCKED, DONE. A row's status is stamped by the 
 
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | Delete the rule that is not written | none | A | PENDING | - | - | - |
-| 2 | The address becomes one config field | 1 | A | PENDING | - | - | - |
-| 3 | Every caller names the address it means | 2 | A | PENDING | - | - | - |
+| 1 | Delete the rule that is not written | none | A | DONE | p47w1 | - | W1 |
+| 2 | The address becomes one config field | 1 | A | DONE | p47w1 | - | W1 |
+| 3 | Every caller names the address it means | 2 | A | DONE | p47w1 | - | W1 |
 | 4 | The port name disappears into the address | 3 | A | PENDING | - | - | - |
 | 5 | A job refuses to start a server nobody will talk to | 4 | A | PENDING | - | - | - |
 | 6 | The loopback literals outside the workflows become one function | 4 | A | PENDING | - | - | - |
