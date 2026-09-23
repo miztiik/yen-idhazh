@@ -1079,7 +1079,7 @@ names which of the two questions it serves, a title that asks a trend question
 draws a time axis, two series share one axis under twenty times with the ratio
 printed, and a value domain is fixed only where a ceiling is the comparison -
 are in
-[../../concepts/console-design.md](../../concepts/console-design.md#thirteen-rules-hold-for-every-chart-on-this-console).
+[../../concepts/console-design/the-rules-every-console-chart-obeys.md](../../concepts/console-design/the-rules-every-console-chart-obeys.md#thirteen-rules-hold-for-every-chart-on-this-console).
 
 ## The chart drawing is a flow, and every drop leaves it as a named branch
 
