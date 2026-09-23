@@ -61,7 +61,7 @@ python backend/utilities/prune_artifacts.py --collection workflow-runs --no-dry-
 ```
 
 `--record` writes the pass as a `collection-prune-row` payload
-(`schemas/collection-prune-row.schema.json`). Nothing reads it by default; it is
+(`CollectionPruneRow`). Nothing reads it by default; it is
 there for a workflow that wants to upload or commit what a pass did.
 
 ### Exit codes

@@ -107,7 +107,7 @@ seconds" figure averages two different machines together.
 
 **Hardware carried both timing panels until 2026-09-20, and carries neither
 now.** They merged into one panel on Pipelines - see [where a run's time
-went](console.md#where-a-runs-time-went-is-one-panel-on-pipelines-at-two-grains). The move
+went](what-the-pipelines-route-draws.md#where-a-runs-time-went-is-one-panel-on-pipelines-at-two-grains). The move
 is what makes room on a route that had fifteen flat siblings.
 
 **The board is six columns on a desktop and one card a shard at 1280px and
@@ -627,9 +627,17 @@ nothing: `anthropic-engineering`, `anthropic-research`, `axios-business`,
 the predicate that decides it is `preserves` - the same one the strike rule runs
 on, so an ask means one thing in both places. The section's own explanatory
 paragraph says "a feed nobody has asked is in neither count".
+
+## Rejected alternatives
+
+| Option | Why rejected |
+| --- | --- |
+| Dropping a column from the shard board on a phone | An instrument that answers five questions on a phone and six on a desktop is two instruments. A horizontal scroll was refused with it: it hides the job clock, the column an operator opens the page for. |
+| Summing peak memory across shards | Shards are separate jobs on separate hosts. The sum reads about 53 GB on a runner that has 16. |
+
 ## See also
 
-- [console.md](console.md) - the console index: the two questions every panel names, the five routes, the standing band and the shared window.
+- [console.md](console.md) - the console index: the two questions every panel names, and the five routes.
 - [console-charts.md](console-charts.md) - the frame, the readout and the marks every chart here is built from.
 - [../../concepts/console-design.md](../../concepts/console-design.md) - how a figure on these panels may be worded, ranked, tinted and drawn.
 - [../sources/item-health.md](../sources/item-health.md) - the ledger eleven of these panels read.

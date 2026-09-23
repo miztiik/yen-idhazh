@@ -52,6 +52,20 @@ def resolve_base_url(declared: str) -> str:
     return urlunsplit((parts.scheme, parts.netloc, "", "", ""))
 
 
+def port_of_base_url(declared: str) -> int:
+    """The port the server command binds, read back out of the address.
+
+    It is here rather than at each caller because it is a fact about this
+    field's grammar: `resolve_base_url` above is what guarantees the port is
+    there, and `urlsplit(...).port` is `int | None` whatever that guarantee
+    says. One narrowing, beside the rule it relies on.
+    """
+    port = urlsplit(resolve_base_url(declared)).port
+    if port is None:  # pragma: no cover - resolve_base_url has already refused this
+        raise ValueError(f"model_server.base_url must name a port, not {declared!r}")
+    return port
+
+
 def is_loopback(base_url: str) -> bool:
     """Is the model server on the machine this process is running on?
 

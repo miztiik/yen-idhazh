@@ -26,10 +26,11 @@ recorded (`docs/architecture/contracts/determinism.md`).
 from __future__ import annotations
 
 import json
-import os
+import logging
 from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from enum import StrEnum
+from functools import cache
 from pathlib import Path
 from string import Template
 from types import MappingProxyType
@@ -42,18 +43,12 @@ from idhazh.contracts.knobs.model_server import resolve_base_url
 from idhazh.contracts.knobs.models import CompanionFile, ModelEntry, ModelRef
 from idhazh.sanitize import why_a_forged_turn_would_survive
 
-# One port per job. A workflow declares it once as `LLAMA_PORT`, and both halves
-# read it here: the argv the server binds with, and the address the stage posts
-# to. Two answers would leave a server listening on one port and a summarizer
-# posting to another, and every item would fail as "model unreachable".
-# It is a process-boundary value, not a tunable, so it is not a config field and
-# `idhazh.fingerprint` has nothing to classify (Guardrail #6, `CLAUDE.md` section 11).
-DEFAULT_PORT: Final = int(os.environ.get("LLAMA_PORT") or 8080)
+LOG: Final = logging.getLogger("idhazh")
 
 # The route that takes a prompt string. It is a consequence of which builder
 # rendered the payload rather than a dial anybody turns - a chat body posted
-# here is broken, not differently tuned - so it sits beside the port for the
-# same reason the port does, and `idhazh.fingerprint` has nothing to classify
+# here is broken, not differently tuned - so it is a constant rather than a
+# config field, and `idhazh.fingerprint` has nothing to classify
 # (Guardrail #6, `CLAUDE.md` section 11).
 #
 # llama-server's own `/completions` rather than the OpenAI-compatible
@@ -451,7 +446,7 @@ def server_argv(
     weights: Path,
     model: ModelRef,
     server: Mapping[str, Any],
-    port: int = DEFAULT_PORT,
+    port: int,
 ) -> list[str]:
     """The exact process the run stands up.
 
@@ -471,6 +466,12 @@ def server_argv(
     it the server silently drops the middle of an oversized prompt and answers
     about a document it no longer holds, which scores as a hallucination and
     names the wrong cause.
+
+    **The port is required and has no default.** The one production caller reads
+    it out of `model_server.base_url`, so a default here would be a second
+    answer to which port the run uses, which is the fault the deleted port
+    variable had. A missing one is a type error rather than a server on the
+    wrong port.
 
     A companion file that declares a flag is emitted last, with the path it
     landed at - the one argument a config file cannot spell for itself.
@@ -955,6 +956,32 @@ def parse_completion(body: str, *, answer_at: int = 0) -> Completion:
     )
 
 
+def _origin_of(endpoint: str) -> str:
+    """Scheme, host and port of the server an endpoint names, and nothing else.
+
+    Read apart rather than taken whole. The authority of a URL carries userinfo,
+    so `http://user:token@box:8080` taken as one piece would write a credential
+    into a log line verbatim, and a log line is the artefact somebody pastes
+    into an issue (Guardrail #11). A host and a port cannot carry one.
+    """
+    parts = urlsplit(endpoint)
+    return urlunsplit((parts.scheme, f"{parts.hostname}:{parts.port}", "", "", ""))
+
+
+@cache
+def _note_origin(origin: str) -> None:
+    """Say once which server this run is talking to.
+
+    Keyed on the origin rather than the endpoint: the qualification process
+    posts to the chat route and to the rendered-completion route on one server,
+    and an endpoint key would write the identical line twice.
+
+    The cache is process-global, so a test that asserts "once" calls
+    `_note_origin.cache_clear()` first.
+    """
+    LOG.info("model server origin=%s", origin)
+
+
 def post(
     payload: dict[str, Any],
     *,
@@ -962,7 +989,19 @@ def post(
     timeout: float,
     answer_at: int = 0,
 ) -> Completion:
-    """The only place an item is sent for summarizing. Loopback only, by construction."""
+    """The only place an item is sent for summarizing.
+
+    One address for the whole run, and `_note_origin` says once which one. The
+    scheme, host and port are read apart rather than taken as the authority,
+    because the authority carries userinfo and would write a credential into a
+    log line verbatim (Guardrail #11).
+
+    Two other functions in this module send. `_ask` carries only this module's
+    own probe constants to routes derived from an address a caller already
+    named. `token_pieces` would send whatever it is handed and has no caller -
+    so whoever gives it one brings this constraint with them.
+    """
+    _note_origin(_origin_of(endpoint))
     outbound = request.Request(
         endpoint,
         data=json.dumps(payload).encode("utf-8"),
@@ -986,6 +1025,21 @@ def _sibling(endpoint: str, path: str) -> str:
 def resolve_endpoint(base_url: str) -> str:
     """Where an item is posted, on the server a base URL names."""
     return resolve_base_url(base_url) + _CHAT_PATH
+
+
+def loopback_url(port: int) -> str:
+    """The address of a server started on this machine.
+
+    Deliberately ignores `model_server.base_url`: the caller started this server
+    and must probe that one, not whichever one the config names. An instrument
+    measuring a server it is not running reports a number about the wrong
+    binary.
+
+    This is where the loopback host is written. One home for the literal, with
+    the reason beside it, is not a hardcoded value; thirty copies are
+    (Guardrail #6).
+    """
+    return f"http://127.0.0.1:{port}"
 
 
 def props_url(endpoint: str) -> str:

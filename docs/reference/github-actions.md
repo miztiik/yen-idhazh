@@ -509,7 +509,7 @@ two severities. An invalid payload means the day is broken, so `idhazh
 validate-days` and then `npm run build` run first and stop the commit; a page
 over its recorded weight still reads correctly, so `npm run bundle-gate` runs
 after the commit and fails the job without costing the repair
-([../architecture/publishing/layout.md](../architecture/publishing/layout.md#a-bad-day-is-stopped-before-the-commit-the-weight-ratchet-is-not)).
+([../architecture/publishing/what-the-site-weighs-and-when-it-stops-fitting.md](../architecture/publishing/what-the-site-weighs-and-when-it-stops-fitting.md#a-bad-day-is-stopped-before-the-commit-the-weight-ratchet-is-not)).
 `digest.yml` carries the same order for the same reason. **The validate step is
 there because the build stopped answering for it**: a reading document carries a
 seed rather than its whole day, so a build never opens the stories past it.
@@ -802,19 +802,20 @@ can share one cache entry: they open the same bytes. A caller serving a
 different model needs a different key, a different recorded digest and a
 different alias to assert, which is a design change rather than a parameter.
 
-**The port is an input rather than an inherited variable.** A composite action's
-`run` steps are handed the job's environment, so `$LLAMA_PORT` would probably
-have resolved on its own - but "probably" is a production run to find out, and
-the failure would be a five-hour job that never starts a server. Handing it over
-costs one line per caller, leaves the port's one home in the caller's workflow
-`env`, and turns an assumption about the runner into a declaration the file
-states.
+**The probe address is an input rather than an inherited variable.** A composite
+action's `run` steps are handed the job's environment, so
+`$MODEL_SERVER_PROBE` would probably have resolved on its own - but "probably"
+is a production run to find out, and the failure would be a five-hour job that
+never starts a server. Handing it over costs one line per caller, leaves the
+address's one home in the caller's workflow `env`, and turns an assumption about
+the runner into a declaration the file states. The action takes no port at all:
+the server command reads that out of the config root it is given.
 
 #### What stays duplicated, and why
 
-Checkout, Python setup, `LLAMA_PORT` and artifact upload stay copied. Each is
-one or two lines, each workflow's copy is already correct, and a block that
-saved two lines would cost a file to open.
+Checkout, Python setup, `MODEL_SERVER_PROBE` and artifact upload stay copied.
+Each is one or two lines, each workflow's copy is already correct, and a block
+that saved two lines would cost a file to open.
 
 **The corpus build looks the most shareable and is the one that must not be.**
 Five workflows build a corpus five ways, and each way is a different sampling

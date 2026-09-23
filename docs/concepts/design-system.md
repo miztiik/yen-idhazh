@@ -23,7 +23,7 @@ This is a reading surface before it is anything else. Measure, leading, hierarch
 
 The DOM state is the single source of truth for the view. Nothing is styled imperatively: **state is reflected by toggling a class or a `data-` attribute, and CSS reacts declaratively.**
 
-- **State classes** carry the look: `loading`, `empty`, `degraded`, `truncated`, `low-confidence`. `loading` is a global class in [../../frontend/src/styles/app.css](../../frontend/src/styles/app.css) rather than a component's scoped one, because the surface it belongs to switches every block on at once from one ancestor - see [the reserved box](console-design.md#a-console-panel-reserves-its-room-and-names-which-nothing-it-is-holding).
+- **State classes** carry the look: `loading`, `empty`, `degraded`, `truncated`, `low-confidence`. `loading` is a global class in [../../frontend/src/styles/app.css](../../frontend/src/styles/app.css) rather than a component's scoped one, because the surface it belongs to switches every block on at once from one ancestor - see [the reserved box](console-design/the-mark-shapes-a-panel-may-reach-for.md#a-console-panel-reserves-its-room-and-names-which-nothing-it-is-holding).
 - **Data-attribute styling** carries variants: an item keys its treatment off `data-visual` (the visual's state - `rendered`, `render_failed` or `absent`) and `data-band` (the confidence band from [evaluation.md](evaluation.md)).
 - **No inline styles** except genuinely dynamic values. Everything else is a token or a class.
 
@@ -499,7 +499,7 @@ that keeps moving on no measurement is a bar that is making it up.
 
 The console is the third and it is the one that gets the skeleton, because it is
 the only surface here whose panels have nothing at all to show until a fetch
-lands. What it draws is [a reserved box with the axis frame in it](console-design.md#a-console-panel-reserves-its-room-and-names-which-nothing-it-is-holding).
+lands. What it draws is [a reserved box with the axis frame in it](console-design/the-mark-shapes-a-panel-may-reach-for.md#a-console-panel-reserves-its-room-and-names-which-nothing-it-is-holding).
 
 **A day payload gets no byte readout, and that is the same rule read the other
 way.** A compressed response reports its compressed length, so a bar drawn on
@@ -562,7 +562,7 @@ Source is [Lucide](https://lucide.dev) under the ISC licence; only the icons in 
 
 ## Charts are static first, enhanced only when interaction earns it
 
-An item's chart is compiled at build time into data and its shape, and **the reader's browser draws it** - owner ruling 2026-09-13, [../architecture/publishing/visuals.md](../architecture/publishing/visuals.md). Nothing is rendered in the pipeline and no drawing is committed. Every chart on the dashboard is hand-written markup over a committed CSV or the published telemetry projection.
+An item's chart is compiled at build time into data and its shape, and **the reader's browser draws it** - owner ruling 2026-09-13, [../architecture/publishing/where-a-drawing-becomes-pixels.md](../architecture/publishing/where-a-drawing-becomes-pixels.md). Nothing is rendered in the pipeline and no drawing is committed. Every chart on the dashboard is hand-written markup over a committed CSV or the published telemetry projection.
 
 **No chart ENGINE on a reader's route, and that half is settled.** The arithmetic is a different question and is answered below: `d3-scale` and `d3-array` reach the reader and nothing else does.
 

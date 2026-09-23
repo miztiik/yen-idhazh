@@ -14,7 +14,7 @@ against a payload nobody has written is a consumer written against a guess.
 
 ## The eleven
 
-Every path below is under `frontend/public/`. Every schema is under `schemas/`.
+Every path below is under `frontend/public/`. Every shape is a contract under `backend/idhazh/contracts/`.
 
 | Dataset | Reader it replaces | Published to | Schema |
 | --- | --- | --- | --- |
@@ -440,11 +440,10 @@ the named absence while the suite reported a page that works.
 
 **The inventory is a page and a module, not a paragraph inside the producer.**
 Before this, the list of what the console needs existed nowhere: the producer,
-the consumer, the retention step and the drift gate would each have worked it
-out again, and four independent derivations of one list is four chances to miss
-the same entry. Naming it first is what makes a missing dataset fail at import
-instead of at review. Fowler, 2026-09-08, during the shell-and-fetch
-migration.
+the consumer and the retention step would each have worked it out again, and
+three independent derivations of one list is three chances to miss the same
+entry. Naming it first is what makes a missing dataset fail at import instead of
+at review. Fowler, 2026-09-08, during the shell-and-fetch migration.
 
 **Re-deriving it from the code found two datasets the plan's own table missed.**
 `dayMetrics` and `loadSpanRollup` are console reads out of `state/` and were not
@@ -469,6 +468,29 @@ route.** Row #13 moved four panels from `/console/` to `/console/voices/` on
 working rather than the table being lucky. A route column would have gone stale
 on a change that moved no data, and it would have had to be maintained by
 whoever moved a panel rather than by whoever moved a payload.
+
+**A reader function that opens a `state/` ledger settles it, and settles it
+once.** Two jobs write a census row for every item - a work shard as the item
+settles, and assemble over the whole day afterwards - so `itemHealthRows`
+applies `ledger.ITEM_HEALTH_KEY` and `ledger.ITEM_HEALTH_RULE` before any panel
+sees a row, exactly as `feedResults` below applies `settled` from
+`frontend/src/lib/feed-health.ts`. A panel reading the raw files counts every
+item of that day twice and a list keyed by item id draws one story twice, which
+is how this surfaced: `MemoryBoard.svelte` threw on a repeated key. **It is only
+ever the newest day.** A day older than `retention.settled_fold_after_days` has
+been folded into one settled file; the day a run is publishing still holds one
+file per writer, and that is the day every panel here opens on - so the defect
+is invisible in any fixture built from folded days. Measured 2026-09-23 over the
+committed ledger: thirteen folded days held 0 repeated keys between them, and
+the unfolded day held 240 repeats over 240 items.
+
+**`evalRows` is the same shape and is not settled yet.** It opens `state/scores`
+raw, and that ledger's own key is `ledger.OBSERVATION_KEY`, so the newest day
+reaches the model panels doubled exactly as the census did - measured the same
+day, 408 rows over 204 keys, against 0 repeats on every folded day before it.
+It is left standing because settling it moves figures a reader sees, and a
+number that moves deserves a change of its own rather than a line inside a bug
+fix (owner decision, 2026-09-23).
 
 **Row 10 measured before it moved anything, and the measurement changed the
 order of the work.** The plan read the 32 inline SVGs as "139 KB of 3,726 KB, so

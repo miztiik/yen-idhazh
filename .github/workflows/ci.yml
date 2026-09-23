@@ -199,17 +199,6 @@ jobs:
         if: needs.scope.outputs.code == 'true'
         run: pytest
 
-      # A generated artifact that was hand-edited regenerates to something else.
-      # The suite already asserts this against a temp directory; doing it again
-      # against the working tree catches an exporter that writes in place. Both
-      # generated trees, because one command writes both: the schemas the
-      # backend validates against, and the TypeScript the frontend trusts.
-      - name: Contract drift gate
-        if: needs.scope.outputs.code == 'true'
-        run: |
-          python -m idhazh.contracts.export
-          git diff --exit-code -- schemas/ frontend/src/contracts/
-
       # What prerendering used to give free. Until the reading routes were split
       # on 2026-09-01 every story was serialised into a document at build time,
       # so a story the contract refused failed the build. A reading document now

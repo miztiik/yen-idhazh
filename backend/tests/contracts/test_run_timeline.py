@@ -8,11 +8,10 @@ addresses it refuses to carry.
 
 from __future__ import annotations
 
-import json
 from typing import Any
 
 import pytest
-from conftest import CONTRACT_FIXTURES_DIR, SCHEMAS_DIR, read_text
+from conftest import CONTRACT_FIXTURES_DIR, read_text
 from pydantic import ValidationError
 
 from idhazh.contracts.eval_row import EvalRow
@@ -184,7 +183,7 @@ def test_a_csv_row_round_trips_and_an_absent_step_is_an_empty_cell() -> None:
 
 def test_the_generated_schema_says_what_the_shape_says() -> None:
     """The artefact a later reader parses against, checked rather than assumed."""
-    schema: dict[str, Any] = json.loads(read_text(SCHEMAS_DIR / "run-timeline-row.schema.json"))
+    schema: dict[str, Any] = RunTimelineRow.json_schema()
     properties = schema["properties"]
     assert set(properties) == set(RunTimelineRow.csv_columns())
 

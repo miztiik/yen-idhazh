@@ -42,7 +42,6 @@ from idhazh.stages import common, compact
 from utilities.capture_request_bodies import RENDERINGS, markers_for
 
 REPO_ROOT: Final = Path(__file__).resolve().parents[2]
-SCHEMAS_DIR: Final = REPO_ROOT / "schemas"
 CONFIG_DIR: Final = REPO_ROOT / "config"
 STATE_DIR: Final = REPO_ROOT / "state"
 FIXTURES_DIR: Final = REPO_ROOT / "tests" / "fixtures"
@@ -255,6 +254,7 @@ def llama_server_flags() -> frozenset[str]:
                 weights=Path("models/w.gguf"),
                 model=entry,
                 server=entry.server,
+                port=8080,
             )
         )
     # llama-bench and the image bench take these two under the same spelling,

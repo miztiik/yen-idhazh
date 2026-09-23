@@ -105,11 +105,11 @@ Statuses: PENDING, IN PROGRESS, BLOCKED, DONE. A row's status is stamped by the 
 | 1 | Delete the rule that is not written | none | A | DONE | p47w1 | - | W1 |
 | 2 | The address becomes one config field | 1 | A | DONE | p47w1 | - | W1 |
 | 3 | Every caller names the address it means | 2 | A | DONE | p47w1 | - | W1 |
-| 4 | The port name disappears into the address | 3 | A | PENDING | - | - | - |
-| 5 | A job refuses to start a server nobody will talk to | 4 | A | PENDING | - | - | - |
-| 6 | The loopback literals outside the workflows become one function | 4 | A | PENDING | - | - | - |
+| 4 | The port name disappears into the address | 3 | A | DONE | p47w3 | - | W3 |
+| 5 | A job refuses to start a server nobody will talk to | 4 | A | DONE | p47w3 | - | W3 |
+| 6 | The loopback literals outside the workflows become one function | 4 | A | DONE | p47w3 | - | W3 |
 | 7 | The model file, and the value nothing reads | 4 | A | DONE | p47w2 | - | W2 |
-| 8 | The run says which server answered | 3 | A | PENDING | - | - | - |
+| 8 | The run says which server answered | 3 | A | DONE | p47w3 | - | W3 |
 | 9 | Sampling settings pass through, unmapped | 8 | B | PENDING | - | - | - |
 | 10 | Model slots get nouns | 9 | B | PENDING | - | - | - |
 | 11 | The run record stops claiming a build it cannot see | 2 | C | DONE | p47w4 | - | W4 |
@@ -235,6 +235,8 @@ def loopback_url(port: int) -> str:
 ```
 
 All three instruments already import from `idhazh.llm.server`, so this adds no dependency.
+
+**The function lands in row 5's commit, not row 6's.** C5 calls it and C17 fixes the order at 4 then 5 then 6, so writing it in row 6 would put an import in row 5 pointing at a name that does not exist yet. Row 6 keeps the half that is its own: routing the six literals through it. Its one unit test - that `loopback_url` ignores `base_url` - travels with the function (`CLAUDE.md` Guardrail #9).
 
 ### C5 - the refusal, and where it must live
 
@@ -516,7 +518,15 @@ One commit per row, in Reckoner order. A worker who follows it never writes an i
 
 ## 6. Row 4 - The port name disappears into the address
 
-**Scope.** Delete `LLAMA_PORT` and `DEFAULT_PORT`. `server_argv` reads the port back out of the base URL.
+**Scope.** Delete `LLAMA_PORT` and `DEFAULT_PORT`. The server command reads the port back out of the base URL.
+
+**Corrected 2026-09-23, `Fowler (Architecture and Engineering)` ruling.** Three clauses of this row as drafted were wrong and the code follows the ruling rather than the prose.
+
+| id | Drafted | Shipped | Why |
+| --- | --- | --- | --- |
+| 4a | `server_argv` takes the base URL and reads the port out | `server_argv` keeps `port: int`, required and with no default, and `port_of_base_url` joins `resolve_base_url` in `backend/idhazh/contracts/knobs/model_server.py` | `server_argv` spells no `--host` and nothing in the tree does, so a base URL argument would carry a host the function silently drops: `http://192.168.1.20:9090` would build a working argv binding loopback on 9090. A wrong answer, where the missing port is an error. Five of the six callers know only a port; the one that knows an address is `start_server`, which resolves it anyway for row 5 |
+| 4b | The sweep's port becomes its own `--port` argument | `server_port(config_root)` reads the port out of that root's resolved `base_url` and takes no argument | `runtime_sweep.server_port`'s own docstring already refuses a `--port` argument as a second spelling of a llama-server flag. The sweep loads a per-candidate root anyway |
+| 4c | The 22 `.github/` probes keep a loopback literal (Table B row B1) | Each workflow declares `env: MODEL_SERVER_PROBE: 'http://127.0.0.1:8080'` once and every probe reads it back | B1 holds - the probes read no config, because a probe asks a server that job just started and three of five workflows run against a scratch root. What B1 did not price is that spelling the address 22 times deletes the guard that stops a 23rd probe naming a different one: the next person writes `:8081`, nothing goes red, and the job dies ten minutes later on a readiness timeout that says nothing about a port. One declaration per workflow is the same shape the file had, and the guard survives as a string equality against the committed address |
 
 **Files.** `backend/idhazh/llm/server.py`, `backend/utilities/{model_runtime,runtime_sweep,measure_probability_mode,slot_probe}.py`, `.github/actions/model-server/action.yml`, the five workflow files, `backend/tests/{test_summarize.py,workflows/_harness.py,workflows/test_model_server_jobs.py}`, `docs/how-to/{run-the-pipeline,test-models-locally}.md`, `docs/reference/{ci-model-runtime,github-actions}.md`.
 
@@ -525,7 +535,7 @@ One commit per row, in Reckoner order. A worker who follows it never writes an i
 - `pytest backend/tests/workflows/` green.
 - `test_model_server_jobs.py` carries 19 of the 62 `LLAMA_PORT` lines, including an assertion that the literal `PORT_ENV = "LLAMA_PORT"` exists inside `runtime_sweep.py`; that assertion **moves with the name**, it is not deleted.
 - `backend/utilities/model_runtime.py` line 78 declares `PORT_ENV` and line 544 reads it into `server_argv`. Both move to the port read back out of `base_url`.
-- `runtime_sweep.py` and `measure_probability_mode.py` each read the environment value once. Both are hard failures after the delete. **The sweep's port afterwards is its own `--port` argument, defaulted from the resolved base URL.**
+- `runtime_sweep.py` and `measure_probability_mode.py` each read the environment value once. Both are hard failures after the delete. **Each reads the port out of the config root it already loads** (decision 4b).
 - `slot_probe.py` line 16's shell example moves off `LLAMA_PORT`.
 
 **Oracle.** `git grep -n LLAMA_PORT` returns nothing. `git grep -n DEFAULT_PORT -- backend` returns nothing.
@@ -564,7 +574,20 @@ One commit per row, in Reckoner order. A worker who follows it never writes an i
 
 **Gates.** `ruff check .` clean. Each instrument still starts its own server and probes that one. A unit test that `loopback_url` ignores `base_url`.
 
-**Oracle.** `git grep -n '127\.0\.0\.1' -- backend/idhazh backend/utilities config` returns exactly two lines: the body of `loopback_url` and the committed default. Scoped deliberately - `backend/tests/` holds about 32 more that are about URL sanitisation and nothing to do with the model server.
+**Oracle.** `git grep -n '127\.0\.0\.1' -- backend/idhazh backend/utilities config` returns **six** lines, named below. Scoped deliberately - `backend/tests/` holds about 32 more that are about URL sanitisation and nothing to do with the model server.
+
+**Corrected 2026-09-23.** This row said two, and two was never the answer. Two of the six arrived with row 2, after this was written, and two were always there and were not counted. A grep is also not a guard - it goes quiet once and says nothing about the seventh literal somebody adds next week - so the survivors are now a named set in `backend/tests/test_summarize.py` and a module that starts writing the host turns it red.
+
+| The survivor | Why it survives |
+| --- | --- |
+| `backend/idhazh/llm/server.py` | The body of `loopback_url`. The one home for the literal |
+| `backend/idhazh/contracts/knobs/model_server.py` | `DEFAULT_BASE_URL`, the address this repository ships. Row 2 |
+| `backend/idhazh/contracts/app_config.py` | A `__changelog__` line quoting that default. Prose, not an address. Row 2 |
+| `config/idhazh.json` | The committed value itself |
+| `backend/utilities/measure_budgets.py` | A `--base` argparse default. **A finding, not a survivor on merit** - see below |
+| `backend/utilities/measure_judge_call.py` | The same `--base` default. The same finding |
+
+**The finding.** Those last two are hand-run instruments that talk to a server an operator already started. Neither spawns one, so decision 6.1 does not cover them: by this plan's own rule - a program that talks to a server it did not start reads the address from the settings it holds - both should read a config root. Row 3 gave `slot_probe.py` exactly that and its file list missed these two. **Price to fix: two lines each plus a `--config-root` argument each, following `slot_probe.py`'s shape.** Price to leave: an operator who moves `base_url` gets two instruments still asking loopback, and finds out when the request is refused. Left out here because reopening a closed row is a wider change than this row's intent needs; listed by name in the test so it cannot be forgotten.
 
 **What it cannot settle.** Nothing outstanding. It is stated as survivors rather than as zero, because zero is not the correct answer and an earlier draft claimed it was.
 

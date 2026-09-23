@@ -36,7 +36,6 @@ import {
 
 /** The tree the site under test was built from. Bounded, and a fixture. */
 const CANARY = resolve(process.cwd(), '..', 'backend', 'var', 'canary', 'digest');
-const SCHEMA = resolve(process.cwd(), '..', 'schemas', 'digest-day.schema.json');
 
 const CONFIG = JSON.parse(
 	readFileSync(resolve(process.cwd(), '..', 'config', 'appearance.json'), 'utf8')
@@ -244,21 +243,6 @@ test.describe('the arithmetic', () => {
 		expect(reasonHeadline(oneInFive, 30)).toBe(
 			'The reason given most often is "Does not match the article": 2 summaries in these 30 days, or about one in every five published.'
 		);
-	});
-
-	test('the panel draws every reason the contract can publish, and no other', () => {
-		// A sixth reason has to fail here rather than go unnoticed. The set is read
-		// off the generated schema, so this is the contract and not a second copy
-		// of it (`CLAUDE.md` Guardrail #3).
-		const schema = JSON.parse(readFileSync(SCHEMA, 'utf8')) as {
-			$defs?: { BandReason?: { enum?: string[] } };
-		};
-		const published = schema.$defs?.BandReason?.enum ?? [];
-		expect(published.length, 'the schema publishes no reason enum').toBeGreaterThan(0);
-		expect(
-			REASONS.map((reason) => reason.id).sort(),
-			'the panel and the contract disagree about which reasons exist'
-		).toEqual([...published].sort());
 	});
 
 	test('no reason label is the name of the column behind it', () => {
