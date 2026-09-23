@@ -596,6 +596,11 @@ COMMIT_SCRIPT: Final = SCRIPTS_DIR / "commit-and-push.sh"
 
 COMMIT_SCRIPT_CALL: Final = ("bash", ".github/scripts/commit-and-push.sh")
 
+#: The retry loop itself, which every test below executes. The shell script
+#: above is still what the workflows run, and goes when they are re-pointed at
+#: this. One loop either way: the two never both existed as live code.
+COMMIT_PROGRAM: Final = REPO_ROOT / "backend" / "utilities" / "commit_and_push.py"
+
 # Which workflow each label's step lives in. `bench` is dispatched by hand, many
 # times a day, and since 2026-09-17 it pushes the machine it drew.
 #
@@ -2289,10 +2294,15 @@ def _run_commit_script(
     staged_paths: Sequence[str],
     settings: dict[str, str],
 ) -> subprocess.CompletedProcess[str]:
-    bash = _bash()
-    assert bash is not None
+    """Run the retry loop over a real repository, as a workflow step would.
+
+    `sys.executable` rather than `python`, because the suite's own interpreter is
+    the one with a path a test can name. A runner has `python` on PATH, and the
+    program reads no configuration and imports nothing from `idhazh`, so either
+    one runs the same bytes.
+    """
     return subprocess.run(
-        [bash, COMMIT_SCRIPT.as_posix(), *staged_paths],
+        [sys.executable, COMMIT_PROGRAM.as_posix(), *staged_paths],
         cwd=runner,
         env={**env, **settings},
         capture_output=True,

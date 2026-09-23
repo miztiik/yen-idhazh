@@ -46,7 +46,6 @@ from ._harness import (
     _steps,
     _substitute,
     _write,
-    requires_bash,
 )
 
 pytestmark = [pytest.mark.workflow, pytest.mark.slow]
@@ -498,7 +497,6 @@ def test_a_commit_that_loses_its_push_cannot_throw_away_what_the_job_already_mad
     assert checked, "no step after a commit step carries anything, so this test proves nothing"
 
 
-@requires_bash
 def test_two_runs_that_conflict_each_keep_the_file_they_wrote(tmp_path: Path) -> None:
     """A conflicted path is settled by who wrote it, and the other writer is untouched.
 
@@ -533,7 +531,6 @@ def test_two_runs_that_conflict_each_keep_the_file_they_wrote(tmp_path: Path) ->
     assert not _mid_rebase(runner)
 
 
-@requires_bash
 def test_a_conflicted_path_this_job_did_not_write_stops_the_push(tmp_path: Path) -> None:
     """The other half of the rule, and the half that should never fire.
 
@@ -568,7 +565,6 @@ def test_a_conflicted_path_this_job_did_not_write_stops_the_push(tmp_path: Path)
     assert not _mid_rebase(runner)
 
 
-@requires_bash
 def test_a_file_this_job_wrote_that_the_tip_deleted_stops_the_push(tmp_path: Path) -> None:
     """The third case, and the one that exits 0 unless the index is read again.
 

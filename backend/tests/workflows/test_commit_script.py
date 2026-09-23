@@ -43,7 +43,6 @@ from ._harness import (
     _step_outputs,
     _tracked,
     _write,
-    requires_bash,
     requires_space_free_paths,
 )
 
@@ -105,7 +104,6 @@ def test_every_committing_job_configures_the_same_identity() -> None:
         assert f"{author.group(1)} <{address.group(1)}>" == COMMIT_IDENTITY
 
 
-@requires_bash
 @requires_space_free_paths
 @pytest.mark.parametrize("job_name", sorted(COMMIT_STEPS))
 def test_the_commit_step_pushes_what_it_staged(tmp_path: Path, job_name: str) -> None:
@@ -128,10 +126,13 @@ def test_the_commit_step_pushes_what_it_staged(tmp_path: Path, job_name: str) ->
     )
     # The script sets the committer itself, and the test supplies none.
     assert _git(origin, env, "log", "-1", "--format=%an <%ae>").strip() == COMMIT_IDENTITY
+    # And it adds no attribution tag (CLAUDE.md section 8). Nothing refused one
+    # until now, so the day a tool starts writing `Co-authored-by` into a commit
+    # body it would reach the permanent record with no test in the way.
+    assert "Co-authored-by" not in _git(origin, env, "log", "-1", "--format=%B")
     assert _git(runner, env, "status", "--porcelain").strip() == ""
 
 
-@requires_bash
 def test_the_commit_step_says_so_and_stops_when_nothing_changed(tmp_path: Path) -> None:
     staged_paths, settings = _commit_call("plan")
     env = _isolated_env(tmp_path)
@@ -146,7 +147,6 @@ def test_the_commit_step_says_so_and_stops_when_nothing_changed(tmp_path: Path) 
     assert _git(runner, env, "rev-parse", "HEAD").strip() == before
 
 
-@requires_bash
 def test_the_commit_step_rebases_past_a_racing_commit(tmp_path: Path) -> None:
     """The whole point of the loop: a push that loses a race still lands."""
     staged_paths, settings = _commit_call("plan")
@@ -173,7 +173,6 @@ def test_the_commit_step_rebases_past_a_racing_commit(tmp_path: Path) -> None:
     assert _git(runner, env, "status", "--porcelain", "--untracked-files=no").strip() == ""
 
 
-@requires_bash
 @requires_space_free_paths
 def test_a_rebase_is_not_blocked_by_an_untracked_file_the_tip_carries(tmp_path: Path) -> None:
     """Run `35152132574`: an untracked file stopped the rebase and cost a shard its rows.
@@ -222,7 +221,6 @@ def test_a_rebase_is_not_blocked_by_an_untracked_file_the_tip_carries(tmp_path: 
     assert (runner / "llama-server.log").is_file()
 
 
-@requires_bash
 def test_a_push_that_landed_first_try_reports_no_rebase(tmp_path: Path) -> None:
     """What the rebuild step reads. A clean push left the tree it was handed.
 
@@ -243,7 +241,6 @@ def test_a_push_that_landed_first_try_reports_no_rebase(tmp_path: Path) -> None:
     assert _step_outputs(written) == {"rebased": "false"}
 
 
-@requires_bash
 def test_a_commit_that_staged_nothing_reports_no_rebase(tmp_path: Path) -> None:
     """Nothing was pushed, so there is no new tree for a later step to read."""
     staged_paths, settings = _commit_call("plan")
@@ -258,7 +255,6 @@ def test_a_commit_that_staged_nothing_reports_no_rebase(tmp_path: Path) -> None:
     assert _step_outputs(written) == {"rebased": "false"}
 
 
-@requires_bash
 def test_a_push_that_lost_the_race_reports_the_rebase(tmp_path: Path) -> None:
     """The rebase replaced the checkout, so the build made before it is stale.
 
@@ -280,7 +276,6 @@ def test_a_push_that_lost_the_race_reports_the_rebase(tmp_path: Path) -> None:
     assert _step_outputs(written) == {"rebased": "true"}
 
 
-@requires_bash
 def test_the_commit_script_still_runs_where_no_step_output_exists(tmp_path: Path) -> None:
     """The guard on the write, and it is what lets one copy of the script serve both.
 
@@ -335,7 +330,6 @@ def test_every_way_out_of_the_commit_script_says_whether_it_rebased() -> None:
         )
 
 
-@requires_bash
 def test_two_runs_writing_their_own_files_both_land(tmp_path: Path) -> None:
     """Two writers, two files, one rebase, and nothing has to choose.
 
@@ -377,7 +371,6 @@ def test_two_runs_writing_their_own_files_both_land(tmp_path: Path) -> None:
     assert not _mid_rebase(runner)
 
 
-@requires_bash
 def test_a_rebase_it_cannot_finish_still_ends_the_script_cleanly(tmp_path: Path) -> None:
     """The guard, proved by running it: no command in the loop can exit early.
 
@@ -410,7 +403,6 @@ def test_a_rebase_it_cannot_finish_still_ends_the_script_cleanly(tmp_path: Path)
     assert not _mid_rebase(runner)
 
 
-@requires_bash
 def test_a_push_rejected_more_times_than_the_old_loop_allowed_still_lands(
     tmp_path: Path,
 ) -> None:
@@ -468,7 +460,6 @@ def test_a_push_rejected_more_times_than_the_old_loop_allowed_still_lands(
     assert not _mid_rebase(runner)
 
 
-@requires_bash
 def test_a_push_nothing_will_take_gives_up_on_the_clock_and_says_what_it_spent(
     tmp_path: Path,
 ) -> None:
@@ -498,7 +489,6 @@ def test_a_push_nothing_will_take_gives_up_on_the_clock_and_says_what_it_spent(
     assert not _mid_rebase(runner)
 
 
-@requires_bash
 def test_a_new_file_in_a_drained_directory_still_rebases(tmp_path: Path) -> None:
     """Row 2's Oracle, run rather than read: the B6 shape, at exit 0.
 
@@ -551,7 +541,6 @@ def test_a_new_file_in_a_drained_directory_still_rebases(tmp_path: Path) -> None
     assert not _mid_rebase(runner)
 
 
-@requires_bash
 @requires_space_free_paths
 def test_the_day_publishes_when_origin_moved_under_it(tmp_path: Path) -> None:
     """The Oracle: a stale base is answered by a current base, not by a text merge.
@@ -636,7 +625,6 @@ def test_the_day_publishes_when_origin_moved_under_it(tmp_path: Path) -> None:
     assert not _mid_rebase(runner)
 
 
-@requires_bash
 @requires_space_free_paths
 def test_two_runs_that_rendered_one_item_still_publish_the_day(tmp_path: Path) -> None:
     """The Oracle above, with the one thing it never had: both sides create the path.
@@ -711,7 +699,6 @@ def test_two_runs_that_rendered_one_item_still_publish_the_day(tmp_path: Path) -
     assert _git(origin, env, "show", "main:docs/unrelated.md") == "merged by a pull request\n"
 
 
-@requires_bash
 @requires_space_free_paths
 def test_a_rebuild_that_fails_spends_the_attempts_and_says_which(tmp_path: Path) -> None:
     """A producer that cannot run is a lost day, said out loud, not a half-rebased tree."""
