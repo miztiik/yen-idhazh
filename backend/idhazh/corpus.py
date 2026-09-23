@@ -471,8 +471,17 @@ def roll(
     """
     if window < 1:
         raise ValueError("the corpus window must be at least one row")
+    # The set grows as rows are accepted, so a url_key twice in `incoming` keeps
+    # its first row. Built once from `existing` alone, it only ever deduplicated
+    # against the window, and one harvest that saw an article twice trained on it
+    # twice.
     seen = {row.url_key for row in existing}
-    merged = [*existing, *(row for row in incoming if row.url_key not in seen)]
+    merged = list(existing)
+    for row in incoming:
+        if row.url_key in seen:
+            continue
+        seen.add(row.url_key)
+        merged.append(row)
     merged.sort(key=lambda row: (row.date, row.url_key))
     return merged[-window:] if len(merged) > window else merged
 
