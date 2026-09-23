@@ -137,7 +137,7 @@ def test_a_feed_health_name_the_walk_cannot_place_stops_the_prune(tmp_path: Path
     feed_health_history(state, ["2024-01"])
     (state / ledger.HEALTH_DIRNAME / "2024-01.csv").write_text("header\n", encoding="utf-8")
 
-    with pytest.raises(ValueError, match="neither a YYYY/MM/DD day file"):
+    with pytest.raises(ValueError, match="not a file inside a YYYY/MM/DD day directory"):
         prune_feed_health(state, ObservabilityConfig(), TODAY)
 
     assert ledger.health_path(state, "2024-01-11").exists(), "a refused read deleted a day"

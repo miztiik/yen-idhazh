@@ -932,9 +932,10 @@ def _csv_line(columns: tuple[str, ...], payload: dict[str, str]) -> str:
 def render_file(columns: tuple[str, ...], rows: Iterable[Mapping[str, str]]) -> str:
     """A whole ledger file as one document: the header, then every row.
 
-    Beside `_csv_line` because a head the compaction rewrites and a row an append
-    adds have to be the same bytes. Written two ways, a file the compaction
-    touched would read as changed line by line the next time anything diffed it.
+    Beside `_csv_line` because a file the compaction rewrites whole and a row an
+    append adds have to be the same bytes. Written two ways, a file the
+    compaction touched would read as changed line by line the next time anything
+    diffed it.
 
     Returned rather than written, so the caller owns the temp-file-plus-rename
     and this module keeps its rule that a row is rendered in exactly one place.
@@ -1050,9 +1051,9 @@ def migrate_header(
     append, and it is complete rather than optimistic: `extend_ledger_file` writes rows into
     a file that exists and a header only into one that does not, so an append
     cannot put a second header in a file. A union merge resolve could, and every
-    head under `state/` carried that driver until 2026-09-19; the files it already
-    made are committed, and `stages.compact` calls this on a head before it folds
-    a segment into one.
+    day file under `state/` carried that driver until 2026-09-19; the files it
+    already made are committed, and the migration to day directories carried
+    their bytes over as they stood.
 
     This is the half of a widening `require_matching_header` cannot give. A
     schema change ships a read-side migration, so a file an earlier run wrote
@@ -1115,7 +1116,7 @@ def settle_header(
     """Fold a file carrying more than one header back onto one. Never raises.
 
     The scan `migrate_header` stopped doing, moved to the one place that can see
-    what it is looking for. Every head under `state/` carried a union merge
+    what it is looking for. Every day file under `state/` carried a union merge
     driver until 2026-09-19 (`.gitattributes`), and that driver resolved one
     physical line at a time: two runs appending
     different rows merge correctly, and two runs appending under different
@@ -1124,9 +1125,10 @@ def settle_header(
     2026-09-15, `state/item-health/2026/09/14.csv` held 394 rows under the
     current header and 71 under the one before it.
 
-    Nothing can make that shape now, and the files that already hold it are
-    committed - so this runs on a head before the compaction folds a segment
-    into it. A row whose width does not match its
+    Nothing can make that shape now: no two writers share a file, so no file
+    here is ever merged. The bytes that already hold it are committed, and this
+    is what repairs one when a reader meets it. A row whose width does not match
+    its
     own header block is repaired here too: the contract's reader fills what a
     short row left out, and an empty cell is what an absent optional already
     means.
@@ -1495,12 +1497,12 @@ def load_retirements(state_dir: Path) -> list[FeedRetirementRow]:
 
 
 def recorded_span_rollup(path: Path) -> set[tuple[str, ...]]:
-    """Every (date, run, shard, span) the month's shard already carries a fold for.
+    """Every (date, run, shard, span) one span-rollup file already carries a fold for.
 
     A reader and no longer half of a writer. A work shard folds its spans into
-    its own segment and `stage_compact` merges that into the month head, so the
-    question this answers is what the head already holds rather than what an
-    append is about to skip.
+    its own file in the day directory and nothing else opens that path, so the
+    question this answers is what a settled file already holds rather than what
+    an append is about to skip.
     """
     return {tuple(row[name] for name in SPAN_ROLLUP_KEY) for row in _read_rows(path)}
 

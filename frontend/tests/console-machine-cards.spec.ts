@@ -607,18 +607,19 @@ test.describe('a day that published and kept no machine row', () => {
 		expect(view.lostNote).toBeNull();
 	});
 
-	test('a day file with a header and no rows is a day the record RAN', () => {
+	test("a writer's file with a header and no rows is a day the record RAN", () => {
 		// The fact the rows cannot carry, and the one the whole join turns on. A
 		// fixture tree, because the archive's own example of this ages out of every
 		// window and a test timed to go red on a date nobody set is a fuse
 		// (`CLAUDE.md` section 13).
 		const root = mkdtempSync(join(tmpdir(), 'idhazh-record-'));
 		const at = join(root, 'host-fingerprint', '2026', '09');
-		mkdirSync(at, { recursive: true });
+		mkdirSync(join(at, '16'), { recursive: true });
+		mkdirSync(join(at, '17'), { recursive: true });
 		const header = 'version,date,run_id,job,shard,fingerprint,cpu_model';
-		writeFileSync(join(at, '16.csv'), `${header}\n`);
+		writeFileSync(join(at, '16', '2026-09-16-1-1-work-00.csv'), `${header}\n`);
 		writeFileSync(
-			join(at, '17.csv'),
+			join(at, '17', '2026-09-17-1-1-work-00.csv'),
 			`${header}\n2026-09-17,2026-09-17,2026-09-17-1,work,0,3a7f0b1c2d4e5f60,AMD EPYC 7763\n`
 		);
 

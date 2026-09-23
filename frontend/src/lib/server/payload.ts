@@ -554,7 +554,7 @@ export function readShards(dir: string, months: number = LEDGER_WINDOW_MONTHS): 
 	return { rows, columns };
 }
 
-/** The newest `days` `<YYYY>/<MM>/<DD>.csv` files of a ledger, oldest first, as one table.
+/** The newest `days` `<YYYY>/<MM>/<DD>/` day directories of a ledger, oldest first, as one table.
  *
  * The day-grain twin of `readShards`, and the bound sits here for the same
  * reason: it is exported, so bounding only `itemHealthRows` would leave the next
@@ -562,9 +562,9 @@ export function readShards(dir: string, months: number = LEDGER_WINDOW_MONTHS): 
  * say beside the call why (`docs/concepts/growing-reads.md`).
  *
  * The newest `days` RECORDED days, not the newest `days` calendar days. A day
- * nothing ran on has no file, so counting files never starves a panel of a day
- * it should have drawn - which is the property `shardMonths` bought by rounding
- * up, obtained here for nothing.
+ * nothing ran on has no directory, so counting directories never starves a panel
+ * of a day it should have drawn - which is the property `shardMonths` bought by
+ * rounding up, obtained here for nothing.
  *
  * The listing is the honest residue, and it is bigger than it was: the walk names
  * one entry a recorded day where the month tree named one a month. It opens no
@@ -589,9 +589,9 @@ export function readDayShards(dir: string, days: number = LEDGER_WINDOW_DAYS): C
 
 /** One shard of a day-grain ledger: the date it is filed under, and its path.
  *
- * Several entries can carry one date. A day is one `<DD>.csv` file today and a
- * `<DD>/` directory of writer-owned files once more than one job writes the
- * ledger, and both are the same day to every reader here. */
+ * Several entries carry one date. A day is a `<DD>/` directory of writer-owned
+ * files, one per job that wrote the ledger that day, and every one of them is
+ * the same day to every reader here. */
 export interface DayShard {
 	date: string;
 	path: string;
@@ -604,14 +604,13 @@ export interface DayShard {
  * measurement that did not survive, and a day with no file at all is a day the
  * instrument did not run. Rows alone cannot tell those two apart.
  *
- * **It reads both shapes.** A `<DD>.csv` day file is one shard; a `<DD>/` day
- * directory is every `.csv` inside it, in name order. Nothing writes a
- * directory yet, so until something does this returns exactly what it always
- * did.
+ * **A day is a directory.** `<DD>/` holds every `.csv` a writer left that day,
+ * read in name order. A `<DD>.csv` beside it is a name no writer spells, so it
+ * is skipped with every other stray.
  *
  * **The cover counts days, not files.** A day directory holding five writer
  * files is one day, so `days` keeps meaning the newest `days` recorded days
- * whatever the store's shape is.
+ * whatever the store holds.
  *
  * Bounded exactly as `readDayShards` is, and by the same call, so a caller
  * asking which days exist and a caller asking what they hold cannot answer over
@@ -636,26 +635,23 @@ export function dayShardFiles(dir: string, days: number = LEDGER_WINDOW_DAYS): D
 	for (const year of named(dir, /^\d{4}$/)) {
 		for (const month of named(join(dir, year.name), /^\d{2}$/)) {
 			const under = join(dir, year.name, month.name);
-			for (const entry of named(under, /^\d{2}(\.csv)?$/)) {
-				const date = `${year.name}-${month.name}-${entry.name.slice(0, 2)}`;
-				if (entry.isDirectory()) {
-					const day = join(under, entry.name);
-					const shards = readdirSync(day)
-						.filter((name) => name.endsWith('.csv'))
-						.sort()
-						.map((name) => ({ date, path: join(day, name) }));
-					if (shards.length === 0) {
-						throw new Error(
-							`${join(dir, year.name, month.name, entry.name)} is a day directory with no ` +
-								'readable .csv file in it. A day nothing wrote has no directory, so this is a ' +
-								'writer that made the directory and lost its rows - reading it as a day that ' +
-								'recorded nothing would draw an empty panel on a passing build.'
-						);
-					}
-					recorded.push(shards);
-				} else if (entry.isFile() && entry.name.endsWith('.csv')) {
-					recorded.push([{ date, path: join(under, entry.name) }]);
+			for (const entry of named(under, /^\d{2}$/)) {
+				if (!entry.isDirectory()) continue;
+				const date = `${year.name}-${month.name}-${entry.name}`;
+				const day = join(under, entry.name);
+				const shards = readdirSync(day)
+					.filter((name) => name.endsWith('.csv'))
+					.sort()
+					.map((name) => ({ date, path: join(day, name) }));
+				if (shards.length === 0) {
+					throw new Error(
+						`${day} is a day directory with no ` +
+							'readable .csv file in it. A day nothing wrote has no directory, so this is a ' +
+							'writer that made the directory and lost its rows - reading it as a day that ' +
+							'recorded nothing would draw an empty panel on a passing build.'
+					);
 				}
+				recorded.push(shards);
 			}
 		}
 	}
@@ -663,32 +659,9 @@ export function dayShardFiles(dir: string, days: number = LEDGER_WINDOW_DAYS): D
 	return kept.flat();
 }
 
-/** One row per planned item per run, read from the newest `days` day files. */
+/** One row per planned item per run, read from the newest `days` recorded days. */
 export function itemHealthRows(days: number = LEDGER_WINDOW_DAYS): CsvTable {
 	return readDayShards(join(STATE_ROOT, 'item-health'), days);
-}
-
-/** One published day's item-health rows, from that day's own file alone.
- *
- * Opens only `state/item-health/<YYYY>/<MM>/<DD>.csv` for the one date handed in
- * - never a listing of the tree, never a neighbouring day - so the cost is one
- * file whatever the archive holds behind it (`CLAUDE.md` Guardrail #12). The console
- * band reads the newest published day this way instead of walking the ledger
- * through `readDayShards` to keep only that one day. A date with no file returns
- * no rows, and the caller shows the day no health fact rather than reaching for
- * the whole tree (section 1a).
- *
- * `root` is overridable for the same reason `dayMetrics`' is: the canary suite
- * points it at a fixture state that must never reach the real ledger.
- */
-export function itemHealthForDay(
-	date: string,
-	root: string = STATE_ROOT
-): Record<string, string>[] {
-	if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return [];
-	const path = join(root, 'item-health', date.slice(0, 4), date.slice(5, 7), `${date.slice(8, 10)}.csv`);
-	if (!existsSync(path)) return [];
-	return readCsv(path).rows.filter((row) => (row.date ?? '') === date);
 }
 
 /** The published-set counts a run settled about one day.

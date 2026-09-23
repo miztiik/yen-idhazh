@@ -11,6 +11,7 @@ import pytest
 from conftest import REPO_ROOT
 from pydantic import ValidationError
 
+from idhazh import day_shards
 from idhazh.contracts.item_health import (
     FailureCode,
     ItemHealthRow,
@@ -59,7 +60,7 @@ def _row(**overrides: object) -> ItemHealthRow:
 
 
 def _write_item_health(state: Path, rows: list[ItemHealthRow]) -> None:
-    """File each row in its own day's file, the way `append_item_health` does.
+    """File each row in its own day, as that day's settled fold.
 
     A day already written is replaced whole, so a fixture that re-states a day is
     a correction rather than a second copy of it.
@@ -68,7 +69,9 @@ def _write_item_health(state: Path, rows: list[ItemHealthRow]) -> None:
     for row in rows:
         by_day.setdefault(row.date, []).append(row)
     for date, day_rows in by_day.items():
-        path = state / "item-health" / date[:4] / date[5:7] / f"{date[8:10]}.csv"
+        path = (
+            state / "item-health" / date[:4] / date[5:7] / date[8:10] / day_shards.SETTLED_NAME
+        )
         path.parent.mkdir(parents=True, exist_ok=True)
         with path.open("w", encoding="utf-8", newline="") as handle:
             writer = csv.DictWriter(
@@ -654,8 +657,10 @@ def test_the_cover_is_the_months_the_caller_names(tmp_path: Path) -> None:
     with _partitions_opened(source_dir) as daily:
         publish(state_root=state, public_root=public, months={"2026-09"})
 
-    assert backfill == [f"2026/{month:02d}/05.csv" for month in range(1, 13)]
-    assert daily == ["2026/09/05.csv"]
+    assert backfill == [
+        f"2026/{month:02d}/05/{day_shards.SETTLED_NAME}" for month in range(1, 13)
+    ]
+    assert daily == [f"2026/09/05/{day_shards.SETTLED_NAME}"]
 
 
 def test_a_frozen_month_is_not_rebuilt_once_it_has_been_published(tmp_path: Path) -> None:

@@ -52,7 +52,7 @@ a pass, the report says which day the next pass resumes at.
 from __future__ import annotations
 
 import argparse
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
 from datetime import date as date_type
 from pathlib import Path
@@ -328,32 +328,48 @@ def _relpath(state_root: Path, day: Path) -> str:
     return f"{ledger.STATE_DIRNAME}/{day.relative_to(state_root).as_posix()}"
 
 
+#: The stores here whose day is a directory of writer-owned files. Read off
+#: `ledger.SegmentLedger` rather than listed again, so a tree that moves its
+#: writer joins this set in the row that moves it and nothing here is a second
+#: list to keep in step.
+WRITER_OWNED_STORES: Final = frozenset(tree.value for tree in ledger.SegmentLedger)
+
+
 def day_collection(state_root: Path, store: str) -> one_at_a_time.Collection[Path]:
     """One store's day tree, as the three callables the core deletes through.
 
-    The listing is `day_shards.shard_files`, which is a generator, so a store
-    of any size is walked one path at a time and never held. It also refuses a
-    name it cannot place, which means a store holding something this walk cannot
-    read stops the pass at that file rather than deleting round it. It reads a
-    `<DD>.csv` day file and a `<DD>/` day directory of writer-owned files alike,
-    so a store that changes shape needs nothing here.
+    **The walk follows the store's own shape, and the store says which.**
+    `ledger.SegmentLedger` is the closed set of trees a writer files its own file
+    in, so a day there is a `<DD>/` directory read by `day_shards.shard_files`.
+    Every other store here still files one `<DD>.csv` a day and is read by
+    `day_partition.day_files`. Both are generators, so a store of any size is
+    walked one path at a time and never held, and both refuse a name they cannot
+    place - which means a store holding something the walk cannot read stops the
+    pass at that file rather than deleting round it.
 
     Unbounded because the range an operator typed is the cover: the walk finds
     what the range names, and a window over it would hide the older half of the
     range the operator asked for (Guardrail #12).
     """
+    writer_owned = store in WRITER_OWNED_STORES
 
     def describe(day: Path) -> one_at_a_time.Member:
         return one_at_a_time.Member(
             id=_relpath(state_root, day),
-            day=day_shards.date_of(day),
+            day=day_shards.date_of(day) if writer_owned else day_partition.date_of(day),
             size_bytes=day.stat().st_size,
             label=day.name,
         )
 
+    def listing() -> Iterator[Path]:
+        root = state_root / store
+        if writer_owned:
+            return day_shards.shard_files(root, days=UNBOUNDED_WINDOW)
+        return day_partition.day_files(root)
+
     return one_at_a_time.Collection(
         name=store,
-        listing=lambda: day_shards.shard_files(state_root / store, days=UNBOUNDED_WINDOW),
+        listing=listing,
         describe=describe,
         delete=_delete,
     )

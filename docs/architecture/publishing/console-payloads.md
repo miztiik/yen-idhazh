@@ -20,7 +20,7 @@ Every path below is under `frontend/public/`. Every schema is under `schemas/`.
 | --- | --- | --- | --- |
 | Verdict band | `console-shell.ts` `consoleShell` | `console/band.json` | `console-band` |
 | Telemetry rows | `payload.ts` `telemetryRows` | `telemetry/<YYYY-MM>.csv` | `public-telemetry` |
-| Item health | `payload.ts` `itemHealthRows`, `itemHealthForDay` | `telemetry/<YYYY-MM>.csv` | `public-telemetry` |
+| Item health | `payload.ts` `itemHealthRows` | `telemetry/<YYYY-MM>.csv` | `public-telemetry` |
 | Run manifests | `payload.ts` `loadManifests` | `run-days/<YYYY-MM>.json` | `public-run-day` |
 | Published items | `payload.ts` `publishedItems` | `run-days/<YYYY-MM>.json` | `public-run-day` |
 | Published charts | `payload.ts` `publishedCharts` | `run-days/<YYYY-MM>.json` | `public-run-day` |
