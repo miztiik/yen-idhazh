@@ -103,7 +103,7 @@ the top of the page.
 **Stage 2 is the only part of the order that reads a clock**, and
 `backend/idhazh/placement.py` carries the reason beside the code. The terms and
 what each is worth are in
-[layout.md](../architecture/publishing/layout.md#the-weighted-score-that-chooses-the-leading-block).
+[layout.md](../architecture/publishing/how-a-day-is-ordered-and-what-each-desk-published.md#the-weighted-score-that-chooses-the-leading-block).
 **The exact formula is
 [discovery.md](../architecture/sources/discovery.md#ranking-is-arithmetic-not-judgement),
 in the code block it already carries, and it is not repeated here.** That page
@@ -256,14 +256,14 @@ runs over one day cannot disagree, and sorts are stable so the three compose.
 every day published before the field landed, and reading null as zero would put
 those stories at the bottom of a day where every score is positive and at the top
 of one where they are not - a claim the payload never made
-([layout.md](../architecture/publishing/layout.md#an-item-says-why-it-is-here-and-whose-clock-its-time-is)).
+([layout.md](../architecture/publishing/what-a-published-item-says-about-itself.md#an-item-says-why-it-is-here-and-whose-clock-its-time-is)).
 
 **The list is the run's block, not the day, and the blocks stay in the order the
 runs published them.** A day is published five times. Run 4 can score higher than
 anything run 1 found, so one sort over the combined day moves a story a reader
 read at breakfast down the page at lunchtime - the one thing the reading page was
 built never to do
-([layout.md](../architecture/publishing/layout.md#rejected-alternatives)). `DigestDay`
+([layout.md](../architecture/publishing/how-a-day-is-ordered-and-what-each-desk-published.md#rejected-alternatives)). `DigestDay`
 refuses such a payload outright: `introduced_by_run` may never decrease down
 `items`. So the sort, the desk caps and the head frame all run over one block at
 a time.
@@ -546,7 +546,7 @@ Three things were wrong with the multiplier and only the third is obvious.
 - **It was unbounded.** A story on six feeds took the day, and no rule said
   otherwise.
 - **It priced syndication as agreement.** `carried_by` counts feeds carrying
-  **one address** ([layout.md](../architecture/publishing/layout.md#an-item-says-why-it-is-here-and-whose-clock-its-time-is)),
+  **one address** ([layout.md](../architecture/publishing/what-a-published-item-says-about-itself.md#an-item-says-why-it-is-here-and-whose-clock-its-time-is)),
   so it counts the same article arriving twice.
   [digest.md](digest.md) already refuses to print "three sources covered this"
   because the number does not support the claim, while the ranker was making

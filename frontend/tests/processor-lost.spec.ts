@@ -5,7 +5,6 @@ import { resolve } from 'node:path';
 import {
 	processorLostOverDays,
 	processorLostOverShards,
-	BUSY_HELD_BOTH_BEFORE,
 	type LostThresholds
 } from '../src/lib/console/machine/processor-lost';
 
@@ -21,11 +20,10 @@ import {
  * each, fixed in number, and they carry the two states the archive has never
  * produced.
  *
- * The last case is the drift gate. The correction the panel prints names the
- * date the busy figure stopped holding both halves, and the same date is
- * written into `cpu_busy_pct`'s own description in the generated contract. Two
- * copies of one fact drift, so this reads the contract and fails here rather
- * than letting the page print a correction for a day that moved.
+ * The correction the panel prints names the date the busy figure stopped holding
+ * both halves, and the same date is written into `cpu_busy_pct`'s own
+ * description. Holding those two together needs the Python contract, so it lives
+ * in `backend/tests/contracts/test_frontend_console_lists.py` rather than here.
  */
 
 /** The committed shares, so a case says loud or quiet on the same line the page
@@ -153,24 +151,4 @@ test('no run to read draws no shards rather than an empty run', () => {
 	expect(run.runId).toBeNull();
 	expect(run.shards).toEqual([]);
 	expect(run.outOf).toBe(0);
-});
-
-test('THE ORACLE: the correction names the date the contract records', () => {
-	// The generated TypeScript rather than the schema, because that is the file
-	// the frontend compiles against - if the two ever disagree the drift gate
-	// fails first, and this reads the one a reader of this code would read.
-	const contract = readFileSync(
-		resolve(ROOT, 'frontend/src/contracts/item-health-row.ts'),
-		'utf8'
-	);
-	const said = contract.match(/A row written before (\d{4}-\d{2}-\d{2}) counted that time as ours/);
-
-	expect(
-		said,
-		'`cpu_busy_pct` no longer records the date it stopped holding the stolen share, so the correction the panel prints cannot be checked against anything'
-	).not.toBeNull();
-	expect(
-		said?.[1],
-		'the panel prints a correction for a different day from the one the contract records'
-	).toBe(BUSY_HELD_BOTH_BEFORE);
 });

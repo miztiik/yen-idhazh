@@ -55,7 +55,7 @@ A message with no options is a status update, not a decision request, and does n
 
 **Intent is the top of the chain. The contract follows intent. Code follows the contract.**
 
-**Intent** is what the user wants to be true when the work is done. **The contract** is this file, `docs/`, the models in `backend/idhazh/contracts/` and the generated `schemas/`; when intent and the contract disagree, the contract is what changes, in the same commit (section 0). **Code** follows the contract; when they disagree, the code is what changes.
+**Intent** is what the user wants to be true when the work is done. **The contract** is this file, `docs/` and the models in `backend/idhazh/contracts/`; when intent and the contract disagree, the contract is what changes, in the same commit (section 0). **Code** follows the contract; when they disagree, the code is what changes.
 
 **Compliance is to the intent, not to the current shape of the system.** An existing limitation - a guardrail, a budget, a schema, a dependency, a design already shipped - is a cost to price, never an answer on its own. "We cannot, because X" is not a finished sentence. The finished sentence names what X costs to move, what moving it buys, and what you recommend.
 
@@ -83,7 +83,7 @@ A message with no options is a status update, not a decision request, and does n
    - **20 concurrent jobs.** Past it a job waits its turn. A queue is not a failure.
    - **10 GB cache.** GitHub manages this one, not us. 
    Boundary: the 6 h job and the 1 GB site are GitHub's and they fail a run, so an agent surfaces those two and never overrules them. That clause covers those two and nothing else on this list.
-3. **Contracts before logic**. Every **persisted payload a later run reads** is declared once in `backend\idhazh\contracts\` - as a `schemas\`, before any logic reads or writes it - using whatever validation library is native to its own language. Every downstream artifact (DB migration, API spec, frontend type, cross-service binding) is generated from that schema, never hand-written. A shape nobody declared is a shape nobody can validate, migrate, or generate a binding for, so it survives instead as a hand-written copy that drifts quietly out of sync. **A configuration file this project authors needs no declared shape.** Nothing but this repository writes one and nothing but this repository reads one, so a schema of it restates a model that is already its only reader, and a typed field for a value this project hands straight to another program is a second spelling somebody has to keep in step. Declare what the file's own readers compute on, and refuse a missing one by name at load. (Owner ruling 2026-09-21.)
+3. **Contracts before logic**. Every **persisted payload a later run reads** is declared once in `backend\idhazh\contracts\` - before any logic reads or writes it - using whatever validation library is native to its own language. A downstream artifact is derived from that model at the moment it is needed. Where a copy must cross into another language, it is small, hand-written, and held in step by a named test. A shape nobody declared is a shape nobody can validate or migrate, so it survives instead as a hand-written copy that drifts quietly out of sync. **A configuration file this project authors needs no declared shape.** Nothing but this repository writes one and nothing but this repository reads one, so a schema of it restates a model that is already its only reader, and a typed field for a value this project hands straight to another program is a second spelling somebody has to keep in step. Declare what the file's own readers compute on, and refuse a missing one by name at load. (Owner ruling 2026-09-21.)
 4. **docs/ is the memory, and a decision lives on the page it impacts**. Pipeline rules, published shapes, tuning knobs and current subsystem contracts live under `docs\`; a choice that clears the bar is recorded IN the living doc it impacts as a `## Design rationale` section, never as a standalone record. There is no ADR file and no `decisions/` directory - a decision written beside the thing it governs is read by the person about to change it, and one filed in a register is read by nobody. **A private note store is a cache of** `docs\`, **never the only copy**: a fact learned with no page to hold it gets a page, or goes to `docs\reference\agent-notes.md`, in the same session.
 5. **Structural fixes only.** No band-aids, no monkey patches, no "temporary" hacks. This one does not bend: a temporary fix is a permanent fix with a note attached, and the note is what gets lost. When the structural fix is out of scope, escalate the correction level and say so - that is the adapt path, and it is the only one. Escalation is a person's decision under section 6, not a label an agent applies to itself to keep going.
 6. **No hard coding, anywhere in the codebase**. Every layer - frontend included - reads tunable behavior from schema-validated `config\` with sane defaults; a theme token is a knob, not a literal. The substitution test: change the config and behavior changes, no source edit required - anything else is hard coded. A feature in development ships behind a config flag: default agreed and documented at build time; removal condition on the declaring line, or the flag is a permanent second implementation. A value that truly belongs in source - a protocol constant, a format literal - is named as one by someone who states why it can never vary.
@@ -98,12 +98,12 @@ A message with no options is a status update, not a decision request, and does n
 
 These operationalize the guardrails and shape every subsystem.
 - **Event-driven.** Stages communicate through structured-payload events, never direct calls into each other's internals. A stage consumes one validated payload and emits another; the contract between stages, and between `backend/` and `frontend/`, is a typed payload - not a function signature.
-- **Pydantic models are the source of truth.** Every event, every persisted payload, and every config file is a Pydantic model under `backend/idhazh/contracts/`. `schemas/*.schema.json` is generated from those models, and the frontend's TypeScript types and validators are generated from those schemas. A CI drift gate regenerates both and fails on any diff. Nobody hand-edits a generated artifact.
+- **Pydantic models are the source of truth.** Every event, every persisted payload, and every config file is a Pydantic model under `backend/idhazh/contracts/`. A contract can produce its own JSON Schema on demand through `json_schema()`. The frontend carries a small hand-written copy of the few shapes it needs. Two tests hold the hand copy in step: one over the field set, one over the vocabularies.
 - **Payloads, not calls.** Data crossing any boundary is a serializable structured payload (JSON-shaped), so it can be logged, validated, replayed, and tested with real fixtures.
 - **Atomic, resumable units.** One work item is one content-addressed file written with a temp-file-plus-rename. A failed item never damages a sibling, and a re-run costs only the unfinished items.
 - **A source file answers one narrow question, and its first sentence states which one.** Read that sentence before you add to the file. If what you add requires widening it, the file now holds two answers - put yours in a new file beside it. A sentence that names a tier, layer, or subsystem names no question, turning the file into a dumping ground. Keep files short and focused: an answer should not sprawl. If answering the question requires a long file, the question is too broad - decompose it into smaller, composable units. A file must never hold two answers, nor should it grow long when it can be split. A router is the sharpest case: a file that dispatches work contains only the routing logic, while the execution lives strictly in the unit's own module. A file every change touches is a file no change owns; its bloat remains hidden from the author and penalizes the next reader.
 - **Config-driven, sane defaults.** Both `frontend/` and `backend/` read tunable behaviour from `config/`; every knob has a sane default; a fresh clone runs on the defaults (Guardrail #6).
-- **Schema-first.** Every config file and every persisted payload conforms to a generated schema in `schemas/`; a config or payload that fails its schema fails the build (Guardrail #3).
+- **Schema-first.** Every config file and every persisted payload conforms to the contract that declares it; a config or payload that fails validation fails the build (Guardrail #3).
 - **Degrade, do not fail.** A missing visual, a failed extraction, or an unreachable source degrades that item and records why. It never takes down the run.
 - **LLM-as-judge evaluation** LLM-as-judge is primary evaluation where applicable. Model verdicts are no longer restricted to offline write-critique loops, non-reader-facing environments, or human triage queues; they may operate directly in production workflows, score live content, and determine publication without constituting a section 0a deviation (`docs/concepts/evaluation.md`).
 - **Naming Conventions:** All files, modules, configs, and variables must be self-descriptive nouns; all functions and actions must be self-descriptive verbs.
@@ -132,7 +132,7 @@ These are conventions rather than guardrails because a serialization invariant h
 
 ## 3. Repository Topology
 
-`backend/` is a build-time producer that runs in CI and on a developer machine and is never a service. `frontend/` is the published static site. The two meet only through committed data and the contracts generated from `backend/idhazh/contracts/` (section 4).
+`backend/` is a build-time producer that runs in CI and on a developer machine and is never a service. `frontend/` is the published static site. The two meet only through committed data and the contracts declared in `backend/idhazh/contracts/` (section 4).
 
 Which directory holds what, who writes it, whether it is committed and whether a reader ever sees it is [`docs/reference/repository-layout.md`](docs/reference/repository-layout.md). A directory is created when real code is about to land in it, never ahead of one (section 10).
 
@@ -140,7 +140,7 @@ Which directory holds what, who writes it, whether it is committed and whether a
 
 - `frontend/src/` MUST NOT depend on a runtime backend service - there is none in production. It reads committed files under `frontend/public/` and nothing else.
 - `backend/` is the only writer of pipeline output under `frontend/public/`. The site reads only that output.
-- `backend/` MUST NOT import frontend code, and frontend code MUST NOT import backend code. They meet only through committed data and generated contracts (Guardrail #1, section 1a).
+- `backend/` MUST NOT import frontend code, and frontend code MUST NOT import backend code. They meet only through committed data and the contracts declared in `backend/idhazh/contracts/` (Guardrail #1, section 1a).
 - `backend/idhazh/contracts/` MUST NOT import any other subpackage of `backend/idhazh/`. Contracts are the bottom of the dependency graph; everything else depends on them.
 - Every stage lives in its own module and is invocable on its own with a file in and a file out. A stage that can only run as part of the whole pipeline, or whose body sits in the file that dispatches it, is a design error.
 - Anything fetched from the open web crosses the trust boundary exactly once, at the extraction stage, and is sanitized there (Guardrail #11).
@@ -216,7 +216,7 @@ The commands behind these gates are in [`docs/how-to/run-the-gates.md`](docs/how
 - [ ] Tests added/updated at the tier appropriate to the surface (section 13). No mocks per Guardrail #7.
 - [ ] Full suite green **on the merge candidate, once**. CI is authoritative; a local full-suite run before every push is optional, not required. A candidate that is already green does not re-run the suite because the trunk moved under it.
 - [ ] Applicable local lint, type checks and selected tests pass before the push, per [docs/how-to/run-the-gates.md](docs/how-to/run-the-gates.md). Use the shared test selector. Keep full-suite checks in CI unless local full coverage is explicitly needed. Verify a worker's unchanged test record instead of repeating its check; documentation-only closure needs no local application suite.
-- [ ] Contract drift gate green: schemas and frontend types regenerate byte-identical to what is committed.
+- [ ] The frontend field-set and vocabulary tests are green for any contract the frontend copies.
 - [ ] For published-site changes: smoke-tested via integrated browser tools per section 12.
 - [ ] For reader-facing and operator-facing surfaces: the sufficiency checks in [`docs/concepts/design-system.md`](docs/concepts/design-system.md) pass, or a `## Design rationale` entry says why not. A surface can fail by being too little.
 - [ ] Canonical docs updated in `docs/` (right tier). A page you added a section to paid the split test first, or the PR says in one line why it stays whole ([`docs/reference/documentation-structure.md`](docs/reference/documentation-structure.md)).
@@ -235,7 +235,7 @@ The commands behind these gates are in [`docs/how-to/run-the-gates.md`](docs/how
 - Hardcode tunables, source lists, model refs, thresholds, or magic strings. They live in `config/`.
 - Put a unit of work in the file that routes to it.
 - Ship a surface that is still under development without a config flag, default off, carrying its removal condition on the line that declares it (Guardrail #6).
-- Hand-edit a generated artifact (`schemas/*.schema.json`, `frontend/src/contracts/*`). Edit the Pydantic model and regenerate.
+- Change a frontend contract copy without changing the Pydantic model, or the reverse. The two tests that bind them are not optional.
 - Store absolute / backslash paths in any persisted artifact.
 - Let fetched text reach a system prompt, a shell argument, a file path, or an outbound URL (Guardrail #11).
 - Build custom HTTP / retry / parsing / validation / extraction systems when a mature OSS library exists.
@@ -257,7 +257,7 @@ The commands behind these gates are in [`docs/how-to/run-the-gates.md`](docs/how
 
 **This section is scoped to a persisted payload a later run reads.** A configuration file this project authors is out: nothing but this repository writes one, and a file a person edits in place has no older copy for a later build to read. (Owner ruling 2026-09-21.)
 
-Every such payload is a Pydantic model in `backend/idhazh/contracts/` before logic is written (Guardrail #3, section 1a), and `schemas/<name>.schema.json` is generated from it. Four rules bind every one of them.
+Every such payload is a Pydantic model in `backend/idhazh/contracts/` before logic is written (Guardrail #3, section 1a), and its JSON Schema is computed from it on demand. Four rules bind every one of them.
 
 - `version` is a `YYYY-MM-DD` date-stamp - never an integer, never an epoch. It answers the question a reader of an old payload actually has: how old is this shape?
 - Every change appends a `changelog` entry, newest first, `{ version, change }`, and sets `version` if necessary.
@@ -294,7 +294,7 @@ Four tiers - **Unit / Contract / Integration / End-to-end**. Change without an a
 Per tier:
 
 - **Unit** - pure functions (sanitization, sharding, scoring maths, serialization round-trip).
-- **Contract** - the generated schemas vs the readers and the writers, plus the drift gate.
+- **Contract** - the model against its readers and its writers, plus the two tests binding the frontend copy.
 - **Integration** - two or more stages composed against real fixtures, with the model boundary driven by a recorded response where the model itself is not under test.
 - **End-to-end** - the pipeline run start-to-finish on a fixture corpus, producing a digest; and the published site rendered in a real browser against that output.
 

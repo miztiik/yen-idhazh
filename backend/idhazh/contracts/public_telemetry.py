@@ -17,9 +17,9 @@ import rather than in the published tree.
 contract read as a prefix - `parseTelemetryCsv` in
 `frontend/src/lib/charts/series.ts` compares position by position - so one more
 name at position zero would shift every position the console reads and blank its
-charts on every cached bundle. The shape's own stamp lives in
-`schemas/public-telemetry.schema.json`, which is where a reader of an old shard
-looks it up. A new cell is appended at the end, never inserted
+charts on every cached bundle. The shape's own stamp lives on this model, which
+is where a reader of an old shard looks it up. A new cell is appended at the
+end, never inserted
 (`docs/architecture/publishing/telemetry-series.md`).
 """
 

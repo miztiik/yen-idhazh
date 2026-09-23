@@ -35,7 +35,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | 4 | The retrieval loaders take their bounds | - | A | DONE | p43r4 | - | worker |
 | 5 | The label queue becomes runnable | - | A | DONE | p43r5 | - | worker |
 | 6 | The pipeline test commits what it already wrote | 2, 3 | B | DONE | p43r6 | - | worker |
-| 7 | The generated contract layer goes, and the contract catches up | plan 46, landed 2026-09-23 | C | PENDING | - | - | - |
+| 7 | The generated contract layer goes, and the contract catches up | plan 46, landed 2026-09-23 | C | DONE | p43r7 | - | worker |
 
 ### Section 1a - Six pull requests, three waves
 
@@ -61,6 +61,8 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 **Row 7 deletes a persisted contract layer and amends the engineering contract, so it stops before its pull request opens** (CLAUDE.md section 6, Level 5). It is cheap to write and expensive to reverse, which is what Level 5 names.
 
 **A worker reaching it stops and reports**: what the deletion removes, what a future change loses by not having it, and the smallest thing that would put it back. It does not open the pull request. The owner rules, and the ruling lands as a dated `## Design rationale` line in the living doc the row edits.
+
+**The pause is spent. The owner ruled on 2026-09-23: ship it.** The rationale is in [`../docs/architecture/contracts/schemas.md`](../docs/architecture/contracts/schemas.md).
 
 **No other row pauses.** Rows 1 to 6 are Level 2 or 3 and run AUTO.
 
@@ -395,7 +397,7 @@ Restore the `if run is None or not run.trial_state_dirname: return []` early ret
 
 ## Section 8 - Row 7: the generated contract layer goes, and the contract catches up
 
-**PAUSE before the pull request opens** (section 1b). **Level 5.** Waited on all of plan 46, which landed on 2026-09-23.
+**PAUSE before the pull request opens** (section 1b). **Level 5.** Waited on all of plan 46, which landed on 2026-09-23. **The owner ruled on 2026-09-23: ship it**, and the row landed that day.
 
 **What it waited for, and what arrived.** Plan 46 minted contracts under the rule this row deletes and had rows still writing into both directories this row removes whole. All of that is settled on `main`: `schemas/digest-run-fragment.schema.json` and its generated frontend twin are committed and nothing further is being minted, and `frontend/src/lib/server/host-fingerprint.ts` is on its final shape. Plan 46's plan-doc is deleted and git holds it. **The checkable gate is spent** - it named a file that no longer exists, and nothing replaces it. Its one surviving row is the corpus ref move, now [`20260923-48-the-corpus-ref-move-plan.md`](20260923-48-the-corpus-ref-move-plan.md), which mints no contract, touches no schema, and is not scheduled. **Re-read the generated layer against the tree before starting**: the schema count below was taken before plan 46 added to it.
 

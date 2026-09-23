@@ -666,7 +666,7 @@ a second copy of a fact, which is a thing that can disagree with itself.
 a user (`CLAUDE.md` section 0b). `SETTING_WORDS` in
 `$lib/console/settings-moved` holds one phrase per recorded input, in the order
 the contract declares them, and `frontend/tests/settings-moved.spec.ts` reads
-`schemas/run-manifest.schema.json` and fails on a field with no words or words
+`RunManifest` and fails on a field with no words or words
 with no field - so a field added to `PipelineInputs` next month fails a test
 rather than going unnamed on the page for a year.
 

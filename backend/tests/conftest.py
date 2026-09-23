@@ -42,7 +42,6 @@ from idhazh.stages import common, compact
 from utilities.capture_request_bodies import RENDERINGS, markers_for
 
 REPO_ROOT: Final = Path(__file__).resolve().parents[2]
-SCHEMAS_DIR: Final = REPO_ROOT / "schemas"
 CONFIG_DIR: Final = REPO_ROOT / "config"
 STATE_DIR: Final = REPO_ROOT / "state"
 FIXTURES_DIR: Final = REPO_ROOT / "tests" / "fixtures"

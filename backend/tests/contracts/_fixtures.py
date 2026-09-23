@@ -10,11 +10,10 @@ from typing import Any, Final
 
 from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR, REPO_ROOT, read_text
 
-from idhazh.contracts import canonical_json
+from idhazh.contracts import CONTRACTS, canonical_json
 from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.appearance_config import AppearanceConfig
 from idhazh.contracts.base import Contract
-from idhazh.contracts.export import CONTRACTS
 from idhazh.contracts.knobs.models import ModelsConfig
 from idhazh.contracts.pipeline_tests import PipelineTestsConfig
 from idhazh.contracts.sources import Sources

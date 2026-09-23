@@ -8,13 +8,13 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from conftest import CONTRACT_FIXTURES_DIR, SCHEMAS_DIR, read_text
+from conftest import CONTRACT_FIXTURES_DIR, read_text
 from pydantic import ValidationError
 
+from idhazh.contracts import CONTRACTS
 from idhazh.contracts.base import Contract, StalePayloadError
 from idhazh.contracts.console_band import ConsoleBand, ConsoleRoute, RouteId
 from idhazh.contracts.console_payloads import CONSOLE_PAYLOADS, payloads_by_stem
-from idhazh.contracts.export import CONTRACTS
 from idhazh.contracts.item_health import DROPPED_CELLS, RETIRED_CELLS, ItemHealthRow
 from idhazh.contracts.knobs.console import ConsoleConfig
 from idhazh.contracts.knobs.observability import ObservabilityConfig
@@ -173,18 +173,17 @@ def test_every_contract_can_be_read_through_the_stamped_boundary() -> None:
         assert inspect.getattr_static(model, "read") is boundary, model.__name__
 
 
-def test_every_console_read_resolves_to_exactly_one_committed_schema() -> None:
+def test_every_console_read_resolves_to_exactly_one_declared_shape() -> None:
     """The inventory's whole job: no dataset without a shape, no shape twice.
 
-    A dataset the console fetches with no schema file is the gap this closes -
-    the producer, the consumer and the drift gate would each work out
-    their own answer. Two files for one shape is the other failure, and it is
-    the one that lets a committed shard stop validating.
+    A dataset the console fetches with no contract is the gap this closes - the
+    producer and the consumer would each work out their own answer. Two
+    contracts for one stem is the other failure, and it is the one that lets a
+    committed shard stop validating.
     """
     for entry in CONSOLE_PAYLOADS:
         stem = entry.contract.__schema_stem__
-        assert (SCHEMAS_DIR / f"{stem}.schema.json").is_file(), entry.reader
-        assert entry.contract in CONTRACTS, f"{stem} is not exported"
+        assert entry.contract in CONTRACTS, f"{stem} is not a registered contract ({entry.reader})"
 
     stems = payloads_by_stem()
     assert len(stems) == 7, "ten console reads answer off seven shapes"
