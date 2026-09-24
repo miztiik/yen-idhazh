@@ -667,7 +667,6 @@ interface RawConfig {
 		same_story?: {
 			floor_min?: number;
 			cosine_weight?: number;
-			key_point_weight?: number;
 			adaptive_dedup_threshold?: Partial<SimilarityConfig>;
 		};
 	};
