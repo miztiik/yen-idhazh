@@ -69,8 +69,8 @@ configuration and it is already on.
 
 ### The truncation cap never bound
 
-`truncation_cap_tokens` is **20,000** in `config/idhazh.json`. The dearest of the
-five articles presented **12,585** tokens, which is 63 percent of the cap.
+`truncation_cap_tokens` is **30,000** in `config/idhazh.json`. The dearest of the
+five articles presented **12,585** tokens, which is 42 percent of the cap.
 
 So the cap did not cut anything in this dispatch, and lowering it to 12,000 would
 be the first change that did. It is not a throughput lever at its current value

@@ -115,9 +115,9 @@ class PipelineTestCase(Model):
             "The window for this case. None leaves the committed value. A case that "
             "raises the slot count raises this with it: llama-server divides the "
             "window it is given between its slots, so two slots on the committed "
-            "window is a 32,768-token slot rather than the 65,536 the production "
+            "window is a 40,960-token slot rather than the 81,920 the production "
             "gate admits articles against - and the worst article the truncation cap "
-            "admits needs 54,887. Leaving it alone would make the case a test of a "
+            "admits needs 71,239. Leaving it alone would make the case a test of a "
             "smaller window wearing a concurrency case's name."
         ),
     )

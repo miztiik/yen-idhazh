@@ -194,7 +194,7 @@
     "reject_not_prose": false,
     "reject_too_short": false,
     "request_timeout_seconds": 20.0,
-    "truncation_cap_tokens": 20000,
+    "truncation_cap_tokens": 30000,
     "user_agent": "yen-idhazh/1.0 (+https://github.com/miztiik/yen-idhazh)"
   },
   "finetune": {
@@ -208,7 +208,7 @@
     "prune_keep_days": 60,
     "reference_rows": 500,
     "reference_test_rows": 100,
-    "sequence_length": 32768,
+    "sequence_length": 49152,
     "teacher": "summarizer",
     "train_rows": 1000
   },

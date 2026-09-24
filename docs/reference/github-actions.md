@@ -590,8 +590,8 @@ in what that case changes, and the committed config is never edited - a case tha
 edited it would leave the next case reading whatever the last one wrote.
 
 **The parallel case doubles `n_ctx` because llama-server divides the window it is
-given between its slots.** Two slots on the committed 65,536 is a 32,768-token
-slot, and the worst article the truncation cap admits needs 54,887 - so leaving
+given between its slots.** Two slots on the committed 81,920 is a 40,960-token
+slot, and the worst article the truncation cap admits needs 71,239 - so leaving
 the window alone would make that case a test of a smaller window wearing a
 concurrency case's name. The slot count is fixed when the process starts, which
 is why that case costs a restart and a second model load.

@@ -37,7 +37,7 @@
     },
     "server": {
       "--batch-size": 512,
-      "--ctx-size": 65536,
+      "--ctx-size": 81920,
       "--metrics": null,
       "--spec-draft-n-max": 2,
       "--spec-draft-n-min": 0,

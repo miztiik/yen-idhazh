@@ -613,7 +613,7 @@ ledger had been committed for four days with no page reading a cell of it.
 Both ceilings come from `config/idhazh.json` through
 [frontend/src/lib/server/config.ts](../../../frontend/src/lib/server/config.ts)
 (Guardrail #6). A counter without its ceiling is not a measurement: 4,925 says
-nothing until the configured 65,536 sits beside it.
+nothing until the configured 81,920 sits beside it.
 
 **What counts as a read prompt token is defined once**, in `itemRead` in
 [frontend/src/lib/charts/machine.ts](../../../frontend/src/lib/charts/machine.ts):

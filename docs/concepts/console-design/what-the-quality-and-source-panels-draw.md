@@ -66,10 +66,10 @@ the committed truncation cap no prompt can reach the window the machine reads
 with, so the count is zero by arithmetic rather than by luck. It is on the page
 so that the day the cap moves, the number that says the move went too far is
 already being printed. The longest single-call prompt the committed cap can
-produce sizes at 25,156 tokens, 38 percent of the 65,536 window
+produce sizes at 40,622 tokens, 50 percent of the 81,920 window
 ([../../reference/pipeline-cost.md](../../reference/pipeline-cost.md)). **What
 that window is held open for is the two-call pair, which this counter does not
-read** - it sizes at 54,887 tokens
+read** - it sizes at 71,239 tokens
 ([../../architecture/summarize/prompt.md](../../architecture/summarize/prompt.md)),
 and the pair has an assertion of its own.
 

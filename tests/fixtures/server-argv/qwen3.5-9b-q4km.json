@@ -4,7 +4,7 @@
   "--cache-prompt": null,
   "--cpu-range": "0-3",
   "--cpu-strict": "1",
-  "--ctx-size": "65536",
+  "--ctx-size": "81920",
   "--jinja": null,
   "--metrics": null,
   "--model": "var/models/weights.gguf",

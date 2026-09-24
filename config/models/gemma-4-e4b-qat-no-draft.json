@@ -27,7 +27,7 @@
     },
     "server": {
       "--batch-size": 512,
-      "--ctx-size": 65536,
+      "--ctx-size": 81920,
       "--metrics": null,
       "--threads": 4,
       "--ubatch-size": 512,

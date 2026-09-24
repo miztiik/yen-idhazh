@@ -107,7 +107,8 @@ footprint.
 
 So **65,536 costs 1,584 MiB more than 16,384**, against the runner's measured
 low-water free of 6.84 GiB and a 1.0 GiB bar. `n_ctx_train` is 262,144, so none
-of these cases scaled RoPE. **65,536 is the window `config/` carries**, so the
+of these cases scaled RoPE. **65,536 was the window `config/` carried when this
+was taken**, so the
 reading for it is measured here rather than interpolated.
 
 **Peak working set is the weaker of the two numbers.** It counts the

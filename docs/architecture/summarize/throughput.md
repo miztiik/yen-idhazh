@@ -427,8 +427,8 @@ the first price answered.
 ending 2026-09-13, 8,938 items carry a recorded prompt: the median is 1,672
 tokens, the 95th percentile 3,378 and the worst 8,741. Behind the prompt the
 sequence spends a fixed 11,284 tokens - 6,491 for the label call's reply, 58 for the seam
-and 4,735 for the summarize-and-plan call's. At the committed `n_ctx` of 65,536 **no item of the 8,938
-would have been refused**. That is the number that decides
+and 4,735 for the summarize-and-plan call's. At the 65,536 `n_ctx` in force when this was read **no item of the 8,938
+would have been refused**, and the window has since gone to 81,920. That is the number that decides
 whether a later row proposes a raise, and it says the raise has already been
 made and bought the whole tail. Read once from `ledger.load_item_health` with a
 30-day cover, 2026-09-13.

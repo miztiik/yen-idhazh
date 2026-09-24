@@ -59,13 +59,13 @@ word**. `extract.truncate_to_tokens` spends the cap as
 `int(cap / TOKENS_PER_WORD)` words, at a rate taken from the configured weights
 and currently 1.3628, so an article that tokenizes harder than that rate
 overruns the budget its own cap gave it. **The worst one overruns by 16.3
-percent**: the committed cap of 20,000 cuts at 14,675 words, which at 1.585
+percent**: the 20,000 cap in force when this was taken cuts at 14,675 words, which at 1.585
 tokens a word is 23,259 tokens. The ratio is a property of the prose and not of
 the cap, which is why what is recorded is the ratio and what follows it is the
 overrun at whatever cap is committed.
 
-**Worst case at the committed cap of 20,000, against the committed window of
-65,536:**
+**Worst case at the 20,000 cap in force when this was taken, against the 65,536
+window beside it:**
 
 | | tokens | share of 65,536 |
 | --- | --- | --- |
@@ -79,7 +79,7 @@ that could not have shipped apart: at the 8,192 window in force on 2026-09-08 a
 [../../../backend/tests/contracts/](../../../backend/tests/contracts/)
 reads both sides from `config/` and fails on any later pair that does not fit.
 **It sizes the single call, which is the path being retired** - the two-call
-pair sizes at 54,887 of the same window
+pair sizes at 71,239 of the 81,920 window the cap's rise to 30,000 called for
 ([../../architecture/summarize/prompt.md](../../architecture/summarize/prompt.md)).
 
 ### What the wall clock pays

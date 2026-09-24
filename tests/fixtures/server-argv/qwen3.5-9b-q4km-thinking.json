@@ -1,7 +1,7 @@
 {
   "--alias": "qwen3-5-9b-q4-k-m-thinking",
   "--batch-size": "512",
-  "--ctx-size": "65536",
+  "--ctx-size": "81920",
   "--metrics": null,
   "--model": "var/models/weights.gguf",
   "--no-context-shift": null,

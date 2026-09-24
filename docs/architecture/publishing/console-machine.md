@@ -196,7 +196,8 @@ together are a length the server never held. The panel takes the largest filled
 call slot per article instead. Measured 2026-09-21 over the 1,312 committed item
 rows that record both a limit and a call's own tokens, so both figures come off
 one row set: the old arithmetic read 26,706 tokens at its worst and the honest
-peak is 13,569, which is 41 percent of a 65,536-token limit against 21 percent.
+peak is 13,569, which is 41 percent of the 65,536-token limit those rows were
+written under against 21 percent.
 The overstatement is 1.97x at the worst row and 1.92x at the middle one.
 **Nothing here counts calls** - a slot is measured when the ledger filled it -
 because how many a model makes is a config value
