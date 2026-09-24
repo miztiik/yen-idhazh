@@ -82,7 +82,7 @@ COUNCIL_VERBS: Final = ("council-prepare", "council-settle", "council-shard")
 #: The one commit call the night makes, and the guard that keeps it off a night
 #: with nothing to stage.
 COMMIT_STEP: Final = "Commit what the night's tenants wrote"
-COMMIT_SCRIPT: Final = ".github/scripts/commit-and-push.sh"
+COMMIT_PROGRAM: Final = "backend/utilities/commit_and_push.py"
 
 #: What a unit's output travels in, and what a date's selection travels in.
 METRICS_ARTIFACT: Final = "council-metrics-"
@@ -505,15 +505,14 @@ def test_no_shard_commits() -> None:
     - a row pushed at 22:40 is not in it. The artifact is the only way across,
     and no config edit can retire that.
 
-    Read through the shell CLOSURE rather than off the `run:` body. `_steps`
-    resolves the composite action the model block moved into, and
-    `_effective_shell` follows the shipped scripts that action calls, so a commit
-    issued one delegation away is still seen.
+    Read through every step the job really runs rather than off the workflow
+    file. `_steps` resolves the composite action the model block moved into, so
+    a commit issued one delegation away is still seen.
     """
     shells = [_effective_shell(step) for step in _steps(_judges(), "judge")]
 
     assert [shell for shell in shells if shell], "the judging job runs no shell to search"
-    assert not [shell for shell in shells if Path(COMMIT_SCRIPT).name in shell]
+    assert not [shell for shell in shells if Path(COMMIT_PROGRAM).name in shell]
 
 
 def test_the_night_makes_one_commit_call_over_the_paths_its_tenants_named() -> None:
@@ -526,7 +525,7 @@ def test_the_night_makes_one_commit_call_over_the_paths_its_tenants_named() -> N
     calls = [
         _script(step, "a collect step")
         for step in _steps(_judges(), "collect")
-        if "run" in step and COMMIT_SCRIPT in _script(step, "a collect step")
+        if "run" in step and COMMIT_PROGRAM in _script(step, "a collect step")
     ]
     step = _step(_judges(), "collect", "name", COMMIT_STEP)
     environment = step.get("env")

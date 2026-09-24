@@ -117,3 +117,34 @@ export function monthsInWindow(months: string[], anchor: string, days: number): 
 	const anchorMonth = anchor.slice(0, 7);
 	return months.filter((month) => month >= startMonth && month <= anchorMonth);
 }
+
+/** The month a day sits in and the `back` months before it, newest first.
+ *
+ * **The archive is handed the months that exist; a reading page has to derive
+ * them.** A dated route is one shell with a universal load, so it may not reach
+ * `$lib/server/` and there is no build-time list of published months on it. The
+ * alternative was baking that list into the reading bundle, which grows as the
+ * archive grows (Guardrail #12) and rewrites the bundle the day a month starts.
+ * A date does neither: it is in the address the reader typed.
+ *
+ * A name with no file is the designed gap `loadIndex` already returns null for,
+ * so a reader on the oldest published month spends one refused request and gets
+ * a narrower scope, which the sentence under the field then states in days. It
+ * never takes the page down (`CLAUDE.md` section 1a).
+ *
+ * `back` is `assist.search_months`, so the list is exactly as long as
+ * `readScope` can read plus the one extra it takes when the newest shard is
+ * thin. Pure, and driven in Node.
+ */
+export function monthsBackFrom(date: string, back: number): string[] {
+	const parts = /^(\d{4})-(\d{2})/.exec(date);
+	if (parts === null) return [];
+	const year = Number(parts[1]);
+	const month = Number(parts[2]);
+	const names: string[] = [];
+	for (let step = 0; step <= Math.max(back, 0); step += 1) {
+		const at = new Date(Date.UTC(year, month - 1 - step, 1));
+		names.push(at.toISOString().slice(0, 7));
+	}
+	return names;
+}

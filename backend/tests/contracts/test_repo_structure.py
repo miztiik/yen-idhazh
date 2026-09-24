@@ -474,26 +474,6 @@ def test_the_retired_word_has_not_come_back() -> None:
     assert not offenders, "the retired word is back:\n" + "\n".join(offenders)
 
 
-def test_every_script_a_workflow_runs_is_on_disk() -> None:
-    """A renamed script with a caller left behind fails in CI and nowhere earlier.
-
-    Two files were renamed when the word went. The workflow names the path as a
-    string, so nothing but a run would have caught a stale one.
-    """
-    named = re.compile(r"(?:bash|sh|\./)\s*(\.github/scripts/[\w./-]+\.sh)")
-    workflows = sorted((REPO_ROOT / ".github" / "workflows").glob("*.y*ml"))
-    assert workflows, "no workflows found, so this test would pass on nothing"
-    missing: list[str] = []
-    seen = 0
-    for workflow in workflows:
-        for script in named.findall(read_text(workflow)):
-            seen += 1
-            if not (REPO_ROOT / script).is_file():
-                missing.append(f"{workflow.name} runs {script}, which is not on disk")
-    assert seen, "no workflow names a script, so this test would pass on nothing"
-    assert not missing, "\n".join(missing)
-
-
 #: The store path the same-story judge's output sat under until it moved beneath
 #: that judge's own slug, and the constant that used to spell it. Written as a
 #: pattern with the first letter in a character class so this file does not

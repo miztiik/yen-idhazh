@@ -33,7 +33,6 @@ question, and the four answers do not mix.
 | `corpus/` | The rolling training window: source text as training samples, its census and its holdout. **`corpus/reference-dataset-1/` is a second collection in the same directory and a different thing entirely**: a frozen, hand-labelled set for measuring the article classifier, written once by hand and never by a run. The two must not share an article, and `build_reference_dataset.py verify` is what says so. **`corpus/reference-dataset-2/` is a third**: a collection built from a URL list supplied by hand, for a later balanced classification sample, with its own settings in `config.json` and its own `scratch/` subtree ignored by git | a run, in CI; `reference-dataset-1/` and `reference-dataset-2/` by a person | **never** |
 | `backend/` | The build-time producer. Not a service, ever. `backend/idhazh/` is the package, `backend/idhazh/contracts/` the Pydantic models, `backend/idhazh/contracts/knobs/` one module per block of `config/idhazh.json`, `backend/idhazh/stages/` one module per pipeline stage, `backend/utilities/` the operator tooling, `backend/tests/` its tests | a person | no |
 | `.github/workflows/` | CI, the measurement harness, the daily pipeline, and the Pages deploy | a person | no |
-| `.github/scripts/` | A shell step two or more workflow jobs run | a person | no |
 | `.github/agents/` | The seven persona advisors (`CLAUDE.md` section 14) | a person | no |
 | `.claude/skills/` | Claude Code skill wrappers that point at `docs/`, so one procedure is not written twice | a person | no |
 | `state/` | The append-only ledgers one run leaves for the next. Eight of them partition - `state/seen/`, `state/feed-health/`, `state/item-health/`, `state/published/`, `state/counterfactual-scores/`, `state/content-similarity-judge/scored-pairs/` and `state/content-similarity-judge/fitted-thresholds/` by day, `state/scores/` by month. A ledger more than one job writes is a day directory holding one file per writer, so two writers never share a path. `state/content-similarity-judge/` is a child that is a folder of ledgers rather than a ledger, so everything one judge produces is one prefix for a commit step to stage; `state/llm-council/` is the other | a run, in CI | **never** |
@@ -135,18 +134,14 @@ and that page says what binds it.
 its only writer; the site only renders what is already there. That is the whole
 interface between the two halves.
 
-**`.github/scripts/` holds a step, not a tool.** A shell block that two workflow
-jobs both run is a duplicate nobody can execute in a test, and the daily run has
-already lost a day to one. Pulling it into a file next to the workflow that
-calls it makes the behaviour testable: the test runs the script against a
-scripted local git origin and reads the outcome. It is not part of the producer
-package, so `backend/` stays runnable with no knowledge of CI, and `pip install`
-never ships a runner detail.
-
 ## What is deliberately not a directory
 
 - **`evals/`** - folded into `state/`. The published dashboard keeps its
  `/evals/` route, because a reader's URL is a promise and a folder name is not.
+- **`.github/scripts/`** - removed 2026-09-23. A program is written in Python
+ under `backend/utilities/` and a workflow step calls one. Shell there needed
+ its own linter in CI, a bash-on-the-host skip in every test that drove it, and
+ a word-splitting rule that forbade a space in any path it was handed.
 - **`docs/architecture/decisions/`** - there is no ADR directory. A decision is
  recorded in the living doc it impacts, as a `## Design rationale` or
  `## Rejected alternatives` section on that page (section 5).

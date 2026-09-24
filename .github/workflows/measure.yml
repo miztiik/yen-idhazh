@@ -834,7 +834,7 @@ jobs:
           NOTHING_STAGED_MESSAGE: "no machine recorded"
           PUSH_FAILED_MESSAGE: "could not push the bench host record"
         run: >-
-          bash .github/scripts/commit-and-push.sh
+          python backend/utilities/commit_and_push.py
           state/pipeline-tests/host-fingerprint
 
       - name: Upload runtime sweep

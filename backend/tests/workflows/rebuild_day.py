@@ -1,7 +1,7 @@
 """Rebuild a day the way `stage_assemble` does, with no pipeline behind it.
 
 The workflow harness in `_harness.py` needs a producer it can drive
-through `.github/scripts/commit-and-push.sh`: something that really reads the
+through `backend/utilities/commit_and_push.py`: something that really reads the
 day a repository already published, really appends what this run produced, and
 really rewrites the derived payload. The pipeline's own `assemble` cannot be
 that producer here. It anchors every path on the installed repository root, so a

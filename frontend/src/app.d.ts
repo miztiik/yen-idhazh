@@ -10,6 +10,12 @@ declare global {
 	 * see the note beside the definition. */
 	const __UI_CONFIG__: import('$lib/server/config').UiConfig;
 
+	/** What `assistConfig()` resolved at build time, injected by `vite.config.ts`.
+	 *
+	 * The reading routes search on the reader's own device and have no server
+	 * load to read it - see the note beside the definition. */
+	const __ASSIST_CONFIG__: import('$lib/server/config').AssistConfig;
+
 	/** The encoder's failover leg, injected by `vite.config.ts` from `config/`.
 	 *
 	 * Our own origin is primary. Every field is empty or zero when the block is

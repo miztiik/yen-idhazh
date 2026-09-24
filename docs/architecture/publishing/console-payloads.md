@@ -1,6 +1,6 @@
 # Console Payloads
 
-**Last Updated**: 2026-09-20
+**Last Updated**: 2026-09-23
 The operator console reads ten datasets. Nine of them come from `state/`,
 which is never served, so each one crosses a trust boundary and each crossing
 needs a contract (Guardrail #11). This page is the list. The machine-readable copy is
@@ -220,9 +220,9 @@ from either builds locally and never reaches the site. The staged path list on
 the same step still moves with a new payload root.
 
 **Every new payload root ships with a committed file.**
-`.github/scripts/commit-and-push.sh` runs `git add "$@"` under
-`set -euo pipefail`, so a path that does not exist aborts the whole commit step
-and takes every sibling ledger staged in the same call with it.
+`backend/utilities/commit_and_push.py` stages every path a job owns in one
+`git add`, so a path that does not exist fails that call, stops the whole commit
+step, and takes every sibling ledger staged beside it.
 `test_every_path_the_day_stages_exists_in_a_fresh_checkout` asks the working
 tree for each one.
 
@@ -484,13 +484,30 @@ is invisible in any fixture built from folded days. Measured 2026-09-23 over the
 committed ledger: thirteen folded days held 0 repeated keys between them, and
 the unfolded day held 240 repeats over 240 items.
 
-**`evalRows` is the same shape and is not settled yet.** It opens `state/scores`
-raw, and that ledger's own key is `ledger.OBSERVATION_KEY`, so the newest day
-reaches the model panels doubled exactly as the census did - measured the same
-day, 408 rows over 204 keys, against 0 repeats on every folded day before it.
-It is left standing because settling it moves figures a reader sees, and a
-number that moves deserves a change of its own rather than a line inside a bug
-fix (owner decision, 2026-09-23).
+**`evalRows` is the same shape, and it settles too.** It opens `state/scores`,
+whose key is `ledger.OBSERVATION_KEY`, and until 2026-09-23 it handed the raw
+rows to the model panels - so the newest day reached them doubled exactly as the
+census did: measured that day, 441 rows over 237 keys, against 0 repeats on
+every folded day before it. Both reads now go through one settler, because two
+copies of a settlement loop is how the next ledger gets the third copy.
+
+**The settlement is per day, never over the whole cover, and that is the part
+that carries the weight.** `OBSERVATION_KEY` carries no date. It is the article,
+the words that came out, and the version of the instrument that read them - so
+two days holding one key can be two real measurements, and collapsing the cover
+would delete the second. Measured 2026-09-23 over the committed ledger: of
+12,463 keys, exactly one spans two days, and a cover-wide settlement would have
+dropped it. A day is the unit a writer owns - one directory, one file per job -
+so a repeat inside it is one record written twice and a repeat across it is not.
+The scope costs nothing for a key that already carries `date`, which is why
+`itemHealthRows` takes the same path and returns the same rows in the same
+order.
+
+**A key with no preference keeps the first row it saw.** That is what the
+backend does with a key `ledger.preference_for` has no rule for, and the ledger
+bears out the reason: all 204 repeated keys of the publishing day agreed cell
+for cell. Only `ITEM_HEALTH_KEY` needs a rule here, because its two writers
+genuinely differ - assemble cannot name the job that ran the item.
 
 **Row 10 measured before it moved anything, and the measurement changed the
 order of the work.** The plan read the 32 inline SVGs as "139 KB of 3,726 KB, so
