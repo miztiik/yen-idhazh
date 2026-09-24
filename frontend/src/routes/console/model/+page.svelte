@@ -34,7 +34,10 @@
 		flagReadings,
 		matchColumns,
 		matchDays,
+		matchFloor,
 		matchHeadline,
+		matchNotes,
+		matchRules,
 		matchSeries,
 		recordedReadings,
 		recordedText,
@@ -42,6 +45,7 @@
 	} from '$lib/console/eval-instruments';
 	import { buildCardTrends, type CardTrend } from '$lib/console/model-cards';
 	import Chart from '$lib/charts/Chart.svelte';
+	import Icon from '$lib/icons/Icon.svelte';
 	import KpiCard from '$lib/components/KpiCard.svelte';
 	import RankedList from '$lib/components/RankedList.svelte';
 	import RunLengths from '$lib/components/RunLengths.svelte';
@@ -424,8 +428,38 @@
 	 */
 	const evalWindow = $derived(evalWithin(data.evaluated, modelSpan));
 	const matchWindow = $derived(matchDays(evalWindow));
+	/** The value axis floor, named once and used twice: the plot is drawn against
+	 * it and the panel publishes it, so the browser suite can re-derive it from
+	 * the figures on the page rather than from the module that computed it. */
+	const matchFloorDrawn = $derived(
+		matchFloor(matchWindow, data.matchThresholds, {
+			step: data.console.faithfulness_axis_step,
+			floorMax: data.console.faithfulness_axis_floor_max
+		})
+	);
+	/** The same options the server built the prerendered SVG with. The axis
+	 * floor is re-derived rather than passed down, because it is a function of
+	 * the days the CONTROL has selected and the server only knows the opening
+	 * one - a floor carried over from the opening window would leave a narrowed
+	 * span drawn against a scale nothing on it reaches. */
+	const matchRulesDrawn = $derived(matchRules(data.matchThresholds, matchFloorDrawn));
 	const matchPlot = $derived(
-		stacked(evalColumnLabels(matchWindow), matchSeries(matchWindow), 'lines')
+		stacked(evalColumnLabels(matchWindow), matchSeries(matchWindow), 'lines', {
+			min: matchFloorDrawn,
+			max: 100,
+			rules: matchRulesDrawn,
+			columnNotes: matchNotes(matchWindow),
+			unit: '%'
+		})
+	);
+	/** The chart's spoken description. Built here rather than in the markup
+	 * because it has to name the rules the plot actually drew, and a rule under
+	 * the axis floor is not one of them. */
+	const matchChartLabel = $derived(
+		`Summary faithfulness per day over ${windowDays} days, as a percentage. One line is each day's middle summary and the other is the summary a quarter of the way up from the bottom.` +
+			(matchRulesDrawn.length === 0
+				? ''
+				: ` A line crosses the plot at ${matchRulesDrawn.map((rule) => `${rule.at}`).join(' and ')} percent, the scores a published story is banded on.`)
 	);
 	const matchStrip = $derived(matchColumns(matchWindow));
 	const matchHead = $derived(matchHeadline(evalWindow, windowDays));
@@ -736,17 +770,36 @@
 			data-model-match-days={windowDays}
 			data-model-match-from={modelSpan.start}
 			data-model-match-to={modelSpan.end}
+			data-match-floor={matchFloorDrawn}
 		>
-			<h2 class="console-h2">How closely a summary matched its article</h2>
+			<div class="flex items-baseline gap-2">
+				<h2 class="console-h2">Summary faithfulness, day by day</h2>
+				<!-- What the four eval names mean, defined once, where they are
+				     defined for everybody else. A paraphrase beside the chart would
+				     be a second definition, and two of them drift. -->
+				<a
+					href={data.faithfulnessReference}
+					class="text-text-tertiary hover:text-accent"
+					rel="noreferrer"
+					title="How each of these measures is scored"
+					aria-label="How each of these measures is scored"
+					data-model-match-reference
+				>
+					<Icon id="external" size={13} />
+				</a>
+			</div>
 			<p class="mt-1 text-[0.8125rem] text-text-tertiary" data-model-match-intro>
-				The checker reads each summary back against its own article and scores how much of it the
-				article supports. One point is one day over these {windowDays} days, and the two lines are
-				the middle summary of that day and the summary a quarter of the way up from the bottom.
+				Faithfulness is how much of a summary its own article supports. The checker reads each
+				summary back against the article it came from and scores it out of a hundred, and
+				<strong class="font-semibold text-text-secondary">higher is better</strong>. One point is
+				one day over these {windowDays} days, and the two lines are that day's middle summary and
+				the summary a quarter of the way up from the bottom.
 				<strong class="font-semibold text-text-secondary" data-model-match-rule
-					>Nothing here sets a bar</strong
-				>: no line is drawn for a score to fail against, and no day is coloured. The committed
-				record is fifteen days long and the summarizer is about to change, so a bar taken off it
-				would be a guess wearing a measurement's clothes.
+					>A published story is banded on two of these scores</strong
+				>: {data.matchThresholds.high}% and up is published as matching its source, and under {data
+					.matchThresholds.low}% is published as possibly not. Both are the pipeline's own numbers,
+				not a bar this panel invented, and a line crosses the plot at each one the days on it
+				reach.
 			</p>
 
 			{#if matchHead}
@@ -770,12 +823,12 @@
 					option={matchPlot.option}
 					width={data.console.chart_width}
 					height={data.console.chart_height}
-					label="How closely summaries matched their articles, per day, over {windowDays} days. One line is the middle summary of each day and the other is the summary a quarter of the way up from the bottom, both as a percentage."
+					label={matchChartLabel}
 					columns={matchStrip}
 					readoutName="faithfulness"
 					readoutMaxShare={data.chart.readout_max_share}
 					restingNote=", the newest day"
-					hint="Point at a day to read both figures at once. Left and Right step through the days, Escape returns to the newest."
+					hint="Point at a day to read both figures and how many summaries they are over. Left and Right step through the days, Escape returns to the newest."
 				/>
 				<!-- The numbers as text, for anybody who cannot see the plot and for
 				     the browser suite, which re-derives every one of them from the
@@ -812,7 +865,8 @@
 			<p class="mt-1 text-[0.8125rem] text-text-tertiary" data-model-recorded-intro>
 				Eight more instruments run on every summary. None of them changes a band, a card or a rule.
 				<strong class="font-semibold text-text-secondary" data-model-recorded-rule
-					>A day here is that day's middle summary</strong
+					>Every figure here is one day's middle summary: half of that day's summaries scored
+					higher, half lower</strong
 				>, and the two columns beside it are the quietest and loudest day in these {windowDays} days
 				- not the quietest and loudest summary, which would need every reading on the page.
 			</p>

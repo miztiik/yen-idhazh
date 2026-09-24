@@ -1,6 +1,7 @@
 import {
 	chartConfig,
 	consoleConfig,
+	evaluationConfig,
 	observabilityConfig,
 	summarizeConfig,
 	uiConfig
@@ -11,6 +12,9 @@ import {
 	evalDays,
 	evalWithin,
 	matchDays,
+	matchFloor,
+	matchNotes,
+	matchRules,
 	matchSeries,
 	type DayScoredCounts
 } from '$lib/console/eval-instruments';
@@ -204,7 +208,27 @@ export async function load() {
 	// another is not a quantity, and neither is one day's share added to the
 	// next day's - so the second shape `stacked()` offers would be a lie here.
 	const openMatch = matchDays(openEval);
-	const matchPlot = stacked(evalColumnLabels(openMatch), matchSeries(openMatch), 'lines');
+	// Whole percents, converted once, here. The plot is drawn in percent and the
+	// pipeline bands in scores between zero and one, so converting anywhere else
+	// would mean a second place that has to agree about which unit it holds.
+	const evaluation = evaluationConfig();
+	const matchThresholds = {
+		high: Math.round(evaluation.band_high_min * 100),
+		low: Math.round(evaluation.band_medium_min * 100)
+	};
+	const matchAxisFloor = matchFloor(openMatch, matchThresholds, {
+		step: console.faithfulness_axis_step,
+		floorMax: console.faithfulness_axis_floor_max
+	});
+	const matchPlot = stacked(evalColumnLabels(openMatch), matchSeries(openMatch), 'lines', {
+		min: matchAxisFloor,
+		// A percentage has a ceiling and it is not one the data gets to move. A
+		// fitted top would redraw the scale every time the best day changed.
+		max: 100,
+		rules: matchRules(matchThresholds, matchAxisFloor),
+		columnNotes: matchNotes(openMatch),
+		unit: '%'
+	});
 	const matchSvg = matchPlot.empty
 		? null
 		: await renderToSvg(matchPlot.option, {
@@ -298,6 +322,14 @@ export async function load() {
 		// copied onto this page: two machines and two workloads, so a gap between a
 		// bench number and a run reads as a regression nobody measured.
 		measurementsReference: `${uiConfig().repo_url.replace(/\/+$/, '')}/blob/main/docs/reference/pipeline-cost.md`,
+		// What each eval name means and how its checker arrives at a score. The
+		// panel names four measures and defines none of them on the page: an
+		// operator who needs the definition needs the whole one, and a paraphrase
+		// beside a chart is a second definition that drifts from the first.
+		faithfulnessReference: `${uiConfig().repo_url.replace(/\/+$/, '')}/blob/main/docs/architecture/publishing/autotune-summary-quality.md`,
+		// The two scores a published item is banded on, in whole percents, so the
+		// page can say what the drawn rules mean without holding the number twice.
+		matchThresholds,
 		// The bands the strip buckets and labels on, so the page reads one ladder.
 		summarizeBands: bands,
 		console,

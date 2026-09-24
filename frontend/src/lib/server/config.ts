@@ -142,6 +142,22 @@ export interface CollectConfig {
 	availability_strikes_before_rest: number;
 }
 
+/** The two scores a published summary is banded on.
+ *
+ * Only the two the console draws a rule at. The block carries the scorer's own
+ * settings beside them and none of those is a number a chart puts on screen.
+ *
+ * They are here rather than written into the chart because they decide what a
+ * published item says about itself: a reader is told a story matches its source
+ * at or above `band_high_min` and may not match below `band_medium_min`, so an
+ * operator panel that drew its own line would be drawing a threshold no run
+ * applied.
+ */
+export interface EvaluationConfig {
+	band_high_min: number;
+	band_medium_min: number;
+}
+
 export interface SummaryBand {
 	min_source_words: number;
 	target_words_min: number;
@@ -225,6 +241,17 @@ export interface ConsoleConfig {
 	 * down: the fit aims for the discard share, and ten times it shows the target
 	 * and a tenfold overshoot on one fixed scale. */
 	precision_axis_multiple: number;
+	/** The grain the faithfulness plot's value axis floor rounds down to, and the
+	 * headroom it leaves under the lowest point drawn. A floor sitting exactly on
+	 * the lowest point puts that day's mark on the axis line, where it reads as a
+	 * missing day rather than as the worst one. */
+	faithfulness_axis_step: number;
+	/** The highest that floor may rise to. Without it a fortnight that never left
+	 * the nineties fills the panel with a three-point wobble and teaches an
+	 * operator that a normal day is an incident. The floor's LOWER bound is not a
+	 * knob: it is the doubt threshold, because below that every summary carries
+	 * the same band and there is nothing left to zoom into. */
+	faithfulness_axis_floor_max: number;
 	/** The size a console chart is drawn at on the server, before a script
 	 * re-measures the container. Declared once, in `config/appearance.json`. */
 	chart_height: number;
@@ -474,6 +501,7 @@ const OBSERVABILITY_DEFAULTS: ObservabilityConfig = {
 	sample_rate: 1
 };
 const COLLECT_DEFAULTS: CollectConfig = { availability_strikes_before_rest: 5 };
+const EVALUATION_DEFAULTS: EvaluationConfig = { band_high_min: 0.8, band_medium_min: 0.5 };
 const SUMMARIZE_DEFAULTS: SummarizeConfig = {
 	bands: [
 		{ min_source_words: 0, target_words_min: 30, target_words_max: 45, key_points_min: 1, key_points_max: 1 },
@@ -493,6 +521,8 @@ const CONSOLE_DEFAULTS: ConsoleConfig = {
 	max_window_days: 366,
 	min_attempts_for_rate: 5,
 	precision_axis_multiple: 10,
+	faithfulness_axis_step: 5,
+	faithfulness_axis_floor_max: 75,
 	chart_height: 220,
 	chart_width: 760,
 	shimmer_after_ms: 400,
@@ -628,6 +658,7 @@ interface RawConfig {
 	summarize?: Partial<SummarizeConfig>;
 	console?: ConsoleBlock;
 	assist?: Partial<AssistConfig>;
+	evaluation?: Partial<EvaluationConfig>;
 	observability?: Partial<ObservabilityConfig>;
 	visuals?: Partial<VisualsConfig>;
 	/** Where the merge line's own block sits. Nested under `same_story` rather
@@ -944,6 +975,17 @@ export function observabilityConfig(): ObservabilityConfig {
 
 export function collectConfig(): CollectConfig {
 	return { ...COLLECT_DEFAULTS, ...(raw().collect ?? {}) };
+}
+
+/** The two band thresholds, and only those.
+ *
+ * One knob pair rather than the whole `evaluation` block, for the reason
+ * `visualsConfig()` takes one knob: whatever this returns is inlined into the
+ * prerendered console, and these two are the only values in the block a panel
+ * draws.
+ */
+export function evaluationConfig(): EvaluationConfig {
+	return { ...EVALUATION_DEFAULTS, ...(raw().evaluation ?? {}) };
 }
 
 export function summarizeConfig(): SummarizeConfig {

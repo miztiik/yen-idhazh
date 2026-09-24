@@ -259,6 +259,18 @@ No chart on the console draws a key: the engine's `legend` component is not even
 registered in
 [../../../frontend/src/lib/charts/core.ts](../../../frontend/src/lib/charts/core.ts).
 
+**A key that does not stack is the strip with short labels in it.** A series
+label long enough to wrap turns one strip row into two, and three of those is a
+block of prose where a key should be. So a series name is written to fit on one
+line at the narrowest width the strip is drawn at - "Half scored above", not
+"Half of them scored above this article's own faithfulness score". Asked on
+2026-09-25 for a horizontal legend on the faithfulness plot, this is what
+shipped: the component that would draw one is not registered, registering it
+costs a lazy-chunk re-measurement against a ceiling the console is already close
+to, and the strip already prints every series in its own colour. What a reader
+gives up is a key visible without hovering. What they get back is the plot area
+the key would have taken, and one place the series names live.
+
 A chart with no shared column gets no strip - a ranked list, one target bar, a
 flow, two shares of one total. A strip there would print the row the cursor is
 already on. **That is a decision, so it is written down where the chart is**:
