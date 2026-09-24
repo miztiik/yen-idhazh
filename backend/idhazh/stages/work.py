@@ -29,6 +29,7 @@ from idhazh.contracts.item_health import FailureCode, ItemHealthRow, ItemOutcome
 from idhazh.contracts.run_plan import PlannedItem, RunPlan
 from idhazh.contracts.summary import Summary, SummaryStatus
 from idhazh.contracts.visual_decision import PAYLOAD_SUFFIX
+from idhazh.embed import encoder_if_committed
 from idhazh.evals import evidence, metrics, score
 from idhazh.evals.hhem import (
     HHEM_REVISION,
@@ -338,6 +339,12 @@ def stage_work(
         weights_sha256=weights_digest(scorer) if isinstance(scorer, HhemScorer) else "0" * 64,
         evaluation=settings.app.evaluation,
     )
+    # The sentence encoder `coherence` reads, built here and loaded by the first
+    # item that reaches the scorer below. This is the job that COMPOSES an eval
+    # row; the jobs that hold this encoder for the search index only ever read
+    # one back, so composing the column anywhere else would leave the durable
+    # per-item payload carrying a null forever (`docs/concepts/evaluation.md`).
+    encoder = encoder_if_committed(config.REPO_ROOT, settings.app.assist)
 
     items_dir = _run_dir(plan.date) / "items"
     _write_inputs(items_dir, inputs=inputs)
@@ -593,7 +600,7 @@ def stage_work(
                     hhem=hhem,
                     hhem_full=hhem_full,
                     config=settings.app.evaluation,
-                    restatement_ceiling=settings.app.summarize.key_point_restatement_ceiling,
+                    encoder=encoder,
                     date=plan.date,
                     run_id=plan.run_id,
                     scorer_version=scorer_version,

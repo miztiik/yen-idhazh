@@ -32,6 +32,7 @@ from idhazh.contracts.fitted_similarity_threshold import (
 from idhazh.contracts.similarity_holdout_pair import SimilarityHoldoutPair
 from idhazh.contracts.story_similarity_distribution import StorySimilarityDistribution
 from idhazh.contracts.story_similarity_pair import (
+    DROPPED_CELLS,
     JudgeModelId,
     SameStoryVerdict,
     ScorerModelId,
@@ -65,8 +66,13 @@ def _narrow_file() -> list[list[str]]:
 
 
 def narrow_header() -> tuple[str, ...]:
-    """The columns this store carried before the judge-call stamp was appended."""
-    return tuple(_narrow_file()[0])
+    """The columns this store carried before the judge-call stamp was appended.
+
+    Minus the two the row has since stopped naming. `ledger.migrate_header`
+    re-files a committed day under the contract's own columns and drops what it
+    carries, so the head of today's header is the narrow header WITHOUT them.
+    """
+    return tuple(name for name in _narrow_file()[0] if name not in DROPPED_CELLS)
 
 
 def a_narrow_row() -> dict[str, str]:
@@ -87,11 +93,9 @@ def a_pair(**overrides: Any) -> dict[str, Any]:
         "right_url_key": high,
         "composite_score": 0.9,
         "cosine": 0.9,
-        "key_point": 0.4,
         "headline": False,
         "scorer_model": "all-minilm-l6-v2-quantized",
         "cosine_weight": 1.0,
-        "key_point_weight": 0.0,
     }
     return payload | overrides
 
@@ -134,7 +138,6 @@ def a_fit(**overrides: Any) -> dict[str, Any]:
         "merge_count": 22,
         "scorer_model": "all-minilm-l6-v2-quantized",
         "cosine_weight": 1.0,
-        "key_point_weight": 0.0,
     }
     return payload | overrides
 
@@ -199,19 +202,19 @@ def test_a_pair_named_by_the_wrong_digest_is_refused() -> None:
 
 
 def test_a_pair_whose_score_is_not_its_weighted_terms_is_refused() -> None:
-    """The row carries the terms and the answer, so a row that disagrees is unreadable.
+    """The row carries the term and the answer, so a row that disagrees is unreadable.
 
-    A later reweighting is computed from the two raw terms on the row. A
-    composite that no rule on the row produces would make that computation
-    silently wrong rather than loudly impossible.
+    A later reweighting is computed from the raw cosine on the row. A composite
+    that no rule on the row produces would make that computation silently wrong
+    rather than loudly impossible.
     """
     with pytest.raises(ValidationError, match="composite_score"):
         StorySimilarityPair.model_validate(a_pair(composite_score=0.99))
 
     split = StorySimilarityPair.model_validate(
-        a_pair(cosine=0.9, key_point=0.5, cosine_weight=0.8, key_point_weight=0.2, composite_score=0.82)
+        a_pair(cosine=0.9, cosine_weight=0.8, composite_score=0.72)
     )
-    assert split.composite_score == 0.82
+    assert split.composite_score == 0.72
 
 
 def test_a_headline_matched_pair_scores_one_and_is_accepted() -> None:

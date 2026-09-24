@@ -53,7 +53,8 @@ config where the three values disagree.
 starts at 60 words. `summarize.length_policy.absolute_floor_words` is 25, so the
 decoder's summary floor is 125 characters. `evaluation.brief_compression_ceiling`
 is 0.5; it caps `verbatim_run` for brief items and derives the floor above.
-`evaluation.lead_coverage_min` is 0.30; a miss below it caps `high` at `medium`.
+The band a summary is asked for is chosen by the article's length, not by its
+quality, so no counterweight threshold reads it.
 That lets a brief stop naturally instead of padding toward the old 40-word gate.
 
 `evaluation.verbatim_reject_ceiling` is 0.75, and it is deliberately a different

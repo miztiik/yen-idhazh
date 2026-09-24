@@ -62,9 +62,7 @@ KNOBS: Final = SimilarityThresholdConfig()
 
 
 def a_scorer() -> ScorerStamp:
-    return ScorerStamp(
-        scorer_model="all-minilm-l6-v2-quantized", cosine_weight=1.0, key_point_weight=0.0
-    )
+    return ScorerStamp(scorer_model="all-minilm-l6-v2-quantized", cosine_weight=1.0)
 
 
 def a_judge() -> JudgeStamp:
@@ -147,7 +145,6 @@ def a_written_row(
         merge_count=0,
         scorer_model="all-minilm-l6-v2-quantized",
         cosine_weight=1.0,
-        key_point_weight=0.0,
     )
 
 

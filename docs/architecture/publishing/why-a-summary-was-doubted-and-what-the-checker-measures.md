@@ -96,12 +96,12 @@ fact at the size it is worth.
 and the spec fails the build if a tinted element appears inside either score
 panel. The committed window is fifteen days and the summarizer is about to change
 twice, so a threshold taken off it would be a guess wearing a measurement's
-clothes. The one number that *is* a bar - the configured lead-coverage share - is
-printed as a count of summaries under it and never drawn as a line to fail
-against, because it caps a summary at "fairly sure" and has never on its own
-marked one "not sure".
+clothes. No number on this page is a bar at all, which is a change from how it
+read until 2026-09-24: the one threshold it drew - the share of an article's
+opening a summary had to keep - is retired, because plenty of good articles
+open slowly.
 
-**Two lines on faithfulness, one on lead coverage.** Measured 2026-09-06 over the
+**Two lines on faithfulness.** Measured 2026-09-06 over the
 fifteen committed days, the middle summary's faithfulness sat between 88 and 95
 percent while the lower quarter swung from 73 to 94 - so the level and the tail
 are two different facts and both are drawn. Lead coverage does the opposite: the

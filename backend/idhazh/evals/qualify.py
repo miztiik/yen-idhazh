@@ -658,7 +658,6 @@ def diagnostics(corpus: Corpus, *, evaluation: EvaluationConfig) -> list[Diagnos
     ok = [o for o in calls if o.ok]
     unsupported = sum(s.unsupported_numbers for s in scores)
     hedges = sum(1 for s in scores if s.hedge_dropped)
-    thin_lead = sum(1 for s in scores if s.lead_coverage < evaluation.lead_coverage_min)
     titles = sum(1 for s in scores if s.title_fell_back)
     hhem = [s.hhem for s in scores]
     decode = [
@@ -685,12 +684,6 @@ def diagnostics(corpus: Corpus, *, evaluation: EvaluationConfig) -> list[Diagnos
         Diagnostic(
             name="hedge_dropped_rate",
             value=f"{(hedges / n if n else 0.0):.4f}",
-            unit="share of articles",
-            denominator=n,
-        ),
-        Diagnostic(
-            name="below_lead_coverage_min_share",
-            value=f"{(thin_lead / n if n else 0.0):.4f}",
             unit="share of articles",
             denominator=n,
         ),

@@ -260,7 +260,6 @@ class ItemScore(Model):
     verbatim_run: float = Field(ge=0.0, le=1.0)
     extractiveness: float = Field(ge=0.0, le=1.0)
     compression: float = Field(ge=0.0)
-    lead_coverage: float = Field(ge=0.0, le=1.0)
     unsupported_numbers: int = Field(ge=0)
     hedge_dropped: bool
     evidential_density: float = Field(ge=0.0)
@@ -313,6 +312,11 @@ class QualificationShard(Contract):
     __schema_stem__: ClassVar[str] = "qualification-shard"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-24",
+            change="An item score no longer carries lead_coverage.",
+            why="The counterweight it came from is retired, so nothing measures it.",
+        ),
+        ChangelogEntry(
             version="2026-09-22",
             change="Embedded sampling and runtime flags become mappings; an old shard reads.",
             why="Joined, a rename moved the whole record and the console called it a change.",
@@ -326,11 +330,6 @@ class QualificationShard(Contract):
             version="2026-09-16",
             change="An observation's finish_reason is nullable.",
             why="A reply that named no reason no longer reaches this row as a clean stop.",
-        ),
-        ChangelogEntry(
-            version="2026-09-15T23:30",
-            change="Added calls_per_item, defaulting to 1.",
-            why="Qualification can now run the call path the digest runs, which calls twice.",
         ),
         ChangelogEntry(
             version="2026-08-26",

@@ -262,26 +262,22 @@ judge and the Editor rubric
 ([../../backend/utilities/prompt_loop_rubric.md](../../backend/utilities/prompt_loop_rubric.md))
 **propose** a revised prompt. The deterministic, model-free scorers above
 **dispose**: a candidate replaces the incumbent only when it beats it, over a
-frozen committed article set, on all four gate targets. The gate is a Pareto
+frozen committed article set, on all three gate targets. The gate is a Pareto
 beat - no worse on every target, strictly better on at least one - not a
 weighted sum and not an optimiser. The judge's preference is recorded and
 promotes nothing.
 
-The four are `unsupported_numbers`, `lead_missing_rate`, `hedge_dropped_rate`
-and `verbatim_run` - `prompt_loop.GATE_TARGETS`, at line 96 of
-[../../backend/utilities/prompt_loop.py](../../backend/utilities/prompt_loop.py).
-They are computed by `metrics.unsupported_numbers`, by `metrics.lead_coverage`
-compared against `evaluation.lead_coverage_min`, by `metrics.hedge_dropped` and
-by `metrics.verbatim_run`.
+The three are `unsupported_numbers`, `hedge_dropped_rate` and `verbatim_run` -
+`prompt_loop.GATE_TARGETS`. They are computed by `metrics.unsupported_numbers`,
+by `metrics.hedge_dropped` and by `metrics.verbatim_run`. All three are
+copy-or-invention defects, which is the set a string measure can judge without a
+human label.
 
-**There is no `metrics.lead_missing`.** `lead_missing` is a `BandReason` member,
-declared at line 58 of
-[../../backend/idhazh/contracts/eval_row.py](../../backend/idhazh/contracts/eval_row.py)
-and returned by the band rule at line 77 of
-[../../backend/idhazh/evals/score.py](../../backend/idhazh/evals/score.py). It is
-a different thing, in a different file, from the gate target whose name it nearly
-is. `CLAUDE.md` called it a scorer until 2026-09-11, so a reader arriving from
-that sentence will look for a function that was never there.
+The card carried two more until 2026-09-24. A lead-survival rate was a gate
+target and a new-fact rate deliberately was not, and both went with the eval
+columns behind them. What the loop gave up is a target that steered toward
+summaries which front-load the article's opening, and nothing ever showed those
+read better.
 
 That is how it honours both rules at once. **Rule 2** no longer bans a model
 judge at all - [../../CLAUDE.md](../../CLAUDE.md) section 1a made LLM-as-judge
@@ -289,9 +285,7 @@ primary evaluation - and the loop still keeps the judge off the gate: it authors
 a maintenance artefact, never a verdict on a published summary or visual, and
 selects nothing that publishes.
 **Rule 1** - the metric that selects can no longer alarm - is why the gate reads
-those four defect rates and not the new-fact rate. New-fact rate is recorded for
-every candidate, because a run's scores are its evidence, but acting on it is the
-Goodhart form its own section forbids, so it steers nothing here either.
+three defect rates and nothing else.
 
 Nothing the loop produces reaches a reader. It runs on a developer machine or a
 manual dispatch, never in the daily pipeline, and it never edits the live prompt
@@ -323,13 +317,20 @@ The counterweights have different force:
 | Counterweight | Band effect |
 | --- | --- |
 | Unsupported numbers | Force `low`. A wrong figure is a direct false claim. |
-| Lead coverage below `evaluation.lead_coverage_min` | Cap `high` at `medium`. The summary missed the lead, but it may still match what it did say. |
 | Dropped hedge | Cap `high` at `medium`. The summary flattened uncertainty, but that defect does not erase every faithful sentence. |
 
-The cap is deliberate. A faithful summary that missed the lead deserves less
+The cap is deliberate. A faithful summary that flattened a hedge deserves less
 confidence, not no confidence. Re-cutting the `high` and `medium` thresholds is
 a separate Level 5 decision. The current rows have no human labels, so they do
 not supply an error rate for any cut.
+
+**A third counterweight capped the band until 2026-09-24**: whether the names and
+figures in the article's opening survived into the summary. It is retired,
+because plenty of good articles and blogs open slowly and a summary that left
+the opening behind was not a worse summary for it. `BandReason.lead_missing`
+stays in the vocabulary - committed published days carry it, and a reader of one
+of those days still has to be told why the item was doubted - but nothing
+produces it any more.
 
 Historical `band` cells are a time-of-write record, not a live distribution.
 Rows written before the counterweight caps may record `high` even though today's
@@ -792,9 +793,21 @@ benchmark or prove that every live source still has the captured layout.
 
 ## Design rationale
 
-**The band is one function (2026-08-23).** The old code had one function for rows with a faithfulness score and another function for rows without one. Only the first path wrote the eval row, so `lead_coverage` and `hedge_dropped` were measured and then ignored by the reader-facing band. One function removes that split. Authority: Fowler.
+**The band is one function (2026-08-23).** The old code had one function for rows with a faithfulness score and another function for rows without one. Only the first path wrote the eval row, so the counterweights were measured and then ignored by the reader-facing band. One function removes that split. Authority: Fowler.
 
-**Failed counterweights cap at `medium` (2026-08-23).** A low lead-coverage score or a dropped hedge reduces confidence, but it does not prove the whole summary false. Unsupported numbers still force `low`, because a wrong figure is a direct false claim. Authority: owner, resolving the known-defects open question.
+**Failed counterweights cap at `medium` (2026-08-23).** A dropped hedge reduces confidence, but it does not prove the whole summary false. Unsupported numbers still force `low`, because a wrong figure is a direct false claim. Authority: owner, resolving the known-defects open question.
+
+**Two measures left and two arrived (2026-09-24).** `lead_coverage` and `new_fact_rate` are gone from the eval row; `coherence` and `semantic_coverage` replace them, both recorded only.
+
+Lead coverage went because a slow opening is not a worse story. New-fact rate went with the key points it counted. Coherence is the mean cosine between neighbouring sentences of the summary, taken with the same sentence encoder the reader's search uses - the one measure here that reads the summary against itself at the level of meaning, and a poor thing to gate on because a summary that repeats a sentence scores near the top of it. Semantic coverage is the share of the article's 20 most-repeated content words the summary kept; it is lexical despite the name, and its denominator is fixed at 20 so it does not fall as the article lengthens.
+
+What that last point cost to establish, measured over 1,490 committed article-and-summary pairs on 2026-09-24: recall against the WHOLE article sits at a median of 0.017 at four-gram size, with half of all summaries between 0.008 and 0.036 - a near-constant. At unigram size the whole-article version has range but correlates 0.93 with `compression`, which is a length column. Against a fixed 20-term reference the reading is 0.60 at the median with 0.35 to 0.85 covering the middle 90 percent, and its rank correlation with article length is -0.09. What it gives up is the fact an article mentioned once and the summary dropped; it only asks whether the summary carried what the article kept returning to. Authority: Andre.
+
+Coherence runs in the `work` shard, inside `to_eval_row`, because that is where an eval row is composed. The jobs that already hold the sentence encoder for the search index - `plan` and `assemble` - only ever read a row back, so computing the column there would leave the durable per-item payload carrying a null and put two committed rows with one settlement key in disagreement. The encoder loads on the first item that reaches the scorer and answers null where the weights are not in the checkout. Authority: Carmack.
+
+**Four things exist because of the band that went, and none is deleted here.** The `lead_missing` reason on published days, its slice on the console's doubt-reason panel, the `lead_missing` bucket on the day-metrics record, and the `LEAD_MISSING` enum member all stay, because committed days carry the reason and a reader of one of those days still has to be told why. Each now counts zero from 2026-09-24 onward.
+
+**Dropping the band input moves `scorer_version` once.** The derived string loses its `lead=` component, so every row written after this change carries a different instrument identity and the run-day count in `evaluation.label_min_run_days` restarts. `METRICS_VERSION` moves to `4` in the same change, which is what names why: two columns left the counterweight set and two arrived, so a row cannot be read as if it came from the same instruments.
 
 **Lead entities do not cross line breaks (2026-08-23).** The source's title and body can be adjacent without sentence punctuation. Treating the newline as ordinary whitespace created impossible entities such as `biodiversity loss\nwe`, which counted against the summary and could never match it. A line break now ends the entity run while spaces and tabs still join names inside one line, such as `US President Donald Trump`. Authority: Andre's metric boundary, implemented as a structural bug fix.
 

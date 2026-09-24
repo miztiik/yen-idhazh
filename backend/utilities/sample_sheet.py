@@ -96,7 +96,6 @@ class Pair:
     pair_key: str
     score: float
     cosine: float
-    key_point: float
     headline: bool
     band: Band
     left: Article
@@ -300,7 +299,6 @@ def resolve(
                 pair_key=key,
                 score=score,
                 cosine=float(row.get("cosine") or 0.0),
-                key_point=float(row.get("key_point") or 0.0),
                 headline=(row.get("headline") or "").lower() == "true",
                 band=band_of(score, line, corridor=corridor),
                 left=left,
@@ -372,8 +370,7 @@ def as_markdown(pairs: Sequence[Pair], *, line: float, refused: dict[str, int]) 
             f"- **B** [{pair.right.title}]({pair.right.url}) ({pair.right.source})",
             f"  - {pair.right.summary}",
             "",
-            f"`{pair.pair_key}` cosine {pair.cosine:.4f}, key points "
-            f"{pair.key_point:.4f}, headline match {pair.headline}",
+            f"`{pair.pair_key}` cosine {pair.cosine:.4f}, headline match {pair.headline}",
             "",
         ]
     return "\n".join(lines) + "\n"

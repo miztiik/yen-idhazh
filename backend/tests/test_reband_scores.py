@@ -43,12 +43,12 @@ def test_reband_reports_current_distribution_and_move_reasons() -> None:
 
     assert report.rows == 7
     assert report.recorded == {"high": 5, "medium": 1, "low": 1}
-    assert report.current == {"high": 1, "medium": 4, "low": 2}
-    assert report.moves == {("high", "medium"): 3, ("high", "low"): 1}
+    # Two of the four rows that used to move were moved by lead coverage alone.
+    # That counterweight is retired, so they stay where they were recorded.
+    assert report.current == {"high": 2, "medium": 3, "low": 2}
+    assert report.moves == {("high", "medium"): 2, ("high", "low"): 1}
     assert report.reasons == {
-        "lead coverage": 1,
-        "dropped hedge": 1,
-        "lead coverage and dropped hedge": 1,
+        "dropped hedge": 2,
         "unsupported numbers": 1,
     }
 
@@ -64,17 +64,15 @@ def test_reband_output_is_stable_for_operators() -> None:
         "  medium: 1 (14.3%)",
         "  low: 1 (14.3%)",
         "current bands:",
-        "  high: 1 (14.3%)",
-        "  medium: 4 (57.1%)",
+        "  high: 2 (28.6%)",
+        "  medium: 3 (42.9%)",
         "  low: 2 (28.6%)",
-        "rows moved: 4 (57.1%)",
+        "rows moved: 3 (42.9%)",
         "moves:",
         "  high -> low: 1",
-        "  high -> medium: 3",
+        "  high -> medium: 2",
         "move reasons:",
-        "  lead coverage: 1",
-        "  dropped hedge: 1",
-        "  lead coverage and dropped hedge: 1",
+        "  dropped hedge: 2",
         "  unsupported numbers: 1",
     ]
 

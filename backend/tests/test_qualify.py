@@ -114,7 +114,6 @@ def scored(index: int, **overrides: Any) -> ItemScore:
         "verbatim_run": 0.10,
         "extractiveness": 0.30,
         "compression": 0.08,
-        "lead_coverage": 0.60,
         "unsupported_numbers": 0,
         "hedge_dropped": False,
         "evidential_density": 0.02,
@@ -756,7 +755,6 @@ def test_every_diagnostic_carries_its_denominator() -> None:
     assert {row.name for row in rows} >= {
         "unsupported_numbers_total",
         "hedge_dropped_rate",
-        "below_lead_coverage_min_share",
         "hhem_mean",
         "hhem_spread",
         "compression_mean",
@@ -774,7 +772,7 @@ def test_a_demoted_metric_does_not_block() -> None:
         update={
             "scores": [
                 s.model_copy(
-                    update={"unsupported_numbers": 4, "hedge_dropped": True, "lead_coverage": 0.0}
+                    update={"unsupported_numbers": 4, "hedge_dropped": True}
                 )
                 for s in shard.scores
             ]

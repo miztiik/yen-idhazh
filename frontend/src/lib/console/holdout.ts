@@ -20,12 +20,11 @@
  * is checked without a day off the archive (Guardrail #12).
  */
 
-/** What the score was computed under. Both terms come from the newest fitted
+/** What the score was computed under. The weight comes from the newest fitted
  * row where one exists, and from `config/idhazh.json` where none does. */
 export interface ScoreWeights {
 	cosineWeight: number;
-	keyPointWeight: number;
-	/** The date of the fitted row these weights came off, or null for the
+	/** The date of the fitted row this weight came off, or null for the
 	 * committed config. A weight with no date beside it is a number that rots. */
 	fittedOn: string | null;
 }
@@ -87,51 +86,16 @@ export function cosineInt8(left: Int8Array, right: Int8Array): number {
 	return dot / norms;
 }
 
-/** A block of text as the set of words the score counts, lower-cased.
+/** The score the merge line is applied to.
  *
- * Mirrors `assemble._reduce`: compatibility-normalise, fold case, turn anything
- * that is not a letter, a digit or an underscore into a space. Two spellings of
- * one rule, in two languages, because no contract can be generated for a string
- * function - so the copy was measured against its source rather than asserted
- * (`docs/architecture/publishing/autotune-content-similarity.md`).
- *
- * **A combining mark is a separator here, as it is there.** Python's `\w` is
- * alphanumeric plus the underscore and a matra is neither, so a Devanagari word
- * splits at every matra. Keeping marks instead read like the kinder choice and
- * disagreed with the run on 3 of the 10,328 committed key-point blocks.
- */
-export function reduceWords(text: string): string[] {
-	const folded = text.normalize('NFKC').toLowerCase();
-	const words = folded.replace(/[^\p{L}\p{N}_]+/gu, ' ').trim();
-	return words === '' ? [] : words.split(' ');
-}
-
-/** What share of their key-point words two items have between them, 0 to 1.
- *
- * Shared words over the words they have between them - the same Jaccard share
- * `assemble.key_point_overlap` takes. Zero where either side reduces to
- * nothing, which is the honest answer for a term: no evidence rather than a
- * match, because the line is what decides and a term may not decide alone.
- */
-export function keyPointOverlap(left: readonly string[], right: readonly string[]): number {
-	const one = new Set(left);
-	const other = new Set(right);
-	if (one.size === 0 || other.size === 0) return 0;
-	let shared = 0;
-	for (const word of one) if (other.has(word)) shared += 1;
-	return shared / (one.size + other.size - shared);
-}
-
-/** The weighted sum the merge line is applied to.
- *
- * The two terms and their two weights, and nothing else. The two overrides in
+ * The one term and its weight, and nothing else. The two overrides in
  * `assemble._pair_terms` - a matching reduced headline joining at 1.0, and a
  * clash of figures refusing outright - are not reproduced here, because neither
  * is a function of the line: they fire or they do not whatever the line is set
  * to, so neither can move the margin this panel measures.
  */
-export function pairScore(cosine: number, keyPoints: number, weights: ScoreWeights): number {
-	return weights.cosineWeight * cosine + weights.keyPointWeight * keyPoints;
+export function pairScore(cosine: number, weights: ScoreWeights): number {
+	return weights.cosineWeight * cosine;
 }
 
 /** The margin, the pair that sets it, and how many marks sit the wrong side.
@@ -314,17 +278,15 @@ export function holdoutNote(
 
 /** What the score was computed under, in one sentence.
  *
- * Printed beside the margin because a reader who changes a weight has to see
- * that the margin moved because the ruler moved. A score with no weights beside
+ * Printed beside the margin because a reader who changes the weight has to see
+ * that the margin moved because the ruler moved. A score with no weight beside
  * it is a number that rots quietly.
  */
 export function weightsNote(weights: ScoreWeights): string {
-	const under =
-		`Scored at ${weights.cosineWeight} on the cosine and ${weights.keyPointWeight} on the ` +
-		'key points';
+	const under = `Scored at ${weights.cosineWeight} on the cosine`;
 	return weights.fittedOn === null
-		? `${under}, the weights in the committed config. No day has fitted a line yet.`
-		: `${under}, the weights on the newest fitted day, ${weights.fittedOn}.`;
+		? `${under}, the weight in the committed config. No day has fitted a line yet.`
+		: `${under}, the weight on the newest fitted day, ${weights.fittedOn}.`;
 }
 
 /** The four cells of a committed reading, and the line they were counted at. */

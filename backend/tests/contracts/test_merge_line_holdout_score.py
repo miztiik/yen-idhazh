@@ -118,7 +118,7 @@ def test_the_row_carries_no_call_stamp_because_no_model_runs_in_it() -> None:
         "this row inherited a judge's call stamp, which asserts an instrument that "
         "never ran in it"
     )
-    assert {"applied_line", "scorer_model", "cosine_weight", "key_point_weight"} <= columns, (
+    assert {"applied_line", "scorer_model", "cosine_weight"} <= columns, (
         "the row stopped saying what the line was made of, so two runs cannot be compared"
     )
 

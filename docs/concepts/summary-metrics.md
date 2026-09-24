@@ -133,9 +133,11 @@ because one article's text moved. That is the ruling on
 our own code can get wrong, degrade the item on what one article's data can.
 
 **`METRICS_VERSION` did not move for either.** No band and no derived column
-reads them, so every row written under `metrics-3` still says exactly what it
-said - the same reason it did not move for `self_repetition`, `compression` or
-`new_fact_rate`.
+reads them, so a row written under an earlier stamp still says exactly what it
+said - the same reason it did not move for `self_repetition` or `compression`.
+It moved to `4` on 2026-09-24 for a different reason: two columns left the
+counterweight set and two arrived, so a row cannot be read as if it came from
+the same instruments.
 
 ### Three definitions that look reasonable and are not
 

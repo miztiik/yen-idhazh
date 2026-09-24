@@ -14,7 +14,6 @@
   "grammar_digest": null,
   "held_reason": "sheet_too_small",
   "judge_model": null,
-  "key_point_weight": 0.0,
   "max_down_step": 0.01,
   "max_up_step": 0.003,
   "merge_count": 19,

@@ -13,10 +13,8 @@ import {
 	holdoutMargin,
 	holdoutNote,
 	holdoutState,
-	keyPointOverlap,
 	marginDistance,
 	pairScore,
-	reduceWords,
 	scoredNote,
 	skipNote,
 	weightsNote,
@@ -24,7 +22,7 @@ import {
 	type ScoreWeights
 } from '../src/lib/console/holdout';
 
-const WEIGHTS: ScoreWeights = { cosineWeight: 1, keyPointWeight: 0, fittedOn: '2026-09-18' };
+const WEIGHTS: ScoreWeights = { cosineWeight: 1, fittedOn: '2026-09-18' };
 
 function mark(score: number, sameStory = false, leftTitle = 'one'): HoldoutMark {
 	return {
@@ -138,37 +136,14 @@ test('two vectors of different widths score nothing rather than a prefix', () =>
 	expect(cosineInt8(Int8Array.from([]), Int8Array.from([]))).toBe(0);
 });
 
-test('the key-point term is the share of words the two have between them', () => {
-	// Two words shared, five between them.
-	expect(keyPointOverlap(['a', 'b', 'c'], ['b', 'c', 'd', 'e'])).toBeCloseTo(2 / 5, 9);
-	// No evidence rather than a match. A term may not decide on its own.
-	expect(keyPointOverlap([], ['b'])).toBe(0);
+test('the score is the cosine under its weight, and nothing else', () => {
+	expect(pairScore(0.9, WEIGHTS)).toBeCloseTo(0.9, 9);
+	expect(pairScore(0.9, { cosineWeight: 0.8, fittedOn: null })).toBeCloseTo(0.72, 9);
 });
 
-test('the reduction keeps letters and digits and drops everything else', () => {
-	expect(reduceWords('Budget 2026: the "big" deal -- signed')).toEqual([
-		'budget',
-		'2026',
-		'the',
-		'big',
-		'deal',
-		'signed'
-	]);
-	expect(reduceWords('!!! ...')).toEqual([]);
-});
-
-test('the score is the two terms under the two weights, and nothing else', () => {
-	expect(pairScore(0.9, 0.5, WEIGHTS)).toBeCloseTo(0.9, 9);
-	expect(
-		pairScore(0.9, 0.5, { cosineWeight: 0.8, keyPointWeight: 0.2, fittedOn: null })
-	).toBeCloseTo(0.82, 9);
-});
-
-test('the printed weights name where they came from', () => {
+test('the printed weight names where it came from', () => {
 	expect(weightsNote(WEIGHTS)).toContain('2026-09-18');
-	expect(weightsNote({ cosineWeight: 1, keyPointWeight: 0, fittedOn: null })).toContain(
-		'committed config'
-	);
+	expect(weightsNote({ cosineWeight: 1, fittedOn: null })).toContain('committed config');
 });
 
 test('a mark the day tree cannot answer for is counted with its reason', () => {

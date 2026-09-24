@@ -297,9 +297,9 @@ def digest_day_ok() -> DigestDay:
 REFILL_URL: Final = "https://grid.example.com/2026/08/winter-outlook"
 
 #: A body that shares the summary's entities and numbers but no three-word run
-#: with it. Both halves matter: too little overlap fails `lead_coverage_min`,
-#: too much fails `verbatim_reject_ceiling`, and a number the body does not
-#: carry fails `unsupported_numbers`.
+#: with it. Both halves matter: too little overlap and the body no longer looks
+#: like the summary's own article, too much fails `verbatim_reject_ceiling`, and
+#: a number the body does not carry fails `unsupported_numbers`.
 REFILL_BODY: Final = (
     "The Nordic Grid Authority said its winter reserve margin will stay near 12 "
     "percent into February. Officials called the figure comfortable rather than "

@@ -373,7 +373,6 @@ def test_a_pair_whose_day_is_gone_is_counted_unresolved_rather_than_dropped(
         holdout.marked_pairs(state),
         digest_root=digest,
         cosine_weight=1.0,
-        key_point_weight=0.0,
     )
 
     assert reading.marked == 6
@@ -443,5 +442,4 @@ def test_the_row_records_the_ruler_the_cells_were_counted_under(tmp_path: Path) 
     same_story = settings.app.assemble.same_story
     assert row.applied_line == same_story.floor_min
     assert row.cosine_weight == same_story.cosine_weight
-    assert row.key_point_weight == same_story.key_point_weight
     assert row.labeller == A_LABELLER

@@ -13,8 +13,6 @@
   "judge_model": null,
   "judge_temperature": null,
   "judged_by_run_id": null,
-  "key_point": 0.4444,
-  "key_point_weight": 0.0,
   "left_url_key": "7410cf9f53f72d92d53cfd8880aedd0797a43fb0db63187748bb9e6c43681cdc",
   "pair_key": "15d4fa8ae639e5b854873ed0017b5c5654b03ae38ebb50b52c165ae47c1e3efe",
   "prompt_digest": null,

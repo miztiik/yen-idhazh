@@ -86,7 +86,6 @@ MEASUREMENT_COLUMNS: Final = (
     "hhem",
     "hhem_full",
     "hhem_delta",
-    "coverage",
     "compression",
     "extractiveness",
     "verbatim_run",
@@ -98,7 +97,8 @@ MEASUREMENT_COLUMNS: Final = (
     "evidential_density",
     "speculative_density",
     "self_repetition",
-    "new_fact_rate",
+    "coherence",
+    "semantic_coverage",
 )
 
 #: What a person reading a utility's refusal needs to know in one line.

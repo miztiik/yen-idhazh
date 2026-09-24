@@ -51,8 +51,8 @@ def merge_count(day: DigestDay) -> int:
 
 def _ruler(
     record: StorySimilarityDistribution, scorer: ScorerStamp
-) -> tuple[ScorerModelId, float, float]:
-    """Which encoder and weights the counts being fitted were taken under.
+) -> tuple[ScorerModelId, float]:
+    """Which encoder and weight the counts being fitted were taken under.
 
     Off the record rather than off the config, because the row is a statement
     about evidence already counted. The config is only reached for a record that
@@ -62,11 +62,6 @@ def _ruler(
     return (
         scorer.scorer_model if record.scorer_model is None else record.scorer_model,
         scorer.cosine_weight if record.cosine_weight is None else record.cosine_weight,
-        (
-            scorer.key_point_weight
-            if record.key_point_weight is None
-            else record.key_point_weight
-        ),
     )
 
 
@@ -205,7 +200,7 @@ def stage_set_merge_line(
             delta=knobs.settled_delta,
         )
 
-    scorer_model, cosine_weight, key_point_weight = _ruler(record, scorer)
+    scorer_model, cosine_weight = _ruler(record, scorer)
     row = FittedSimilarityThreshold(
         version=FittedSimilarityThreshold.schema_version(),
         date=date,
@@ -238,7 +233,6 @@ def stage_set_merge_line(
         merge_count=merge_count(day),
         scorer_model=scorer_model,
         cosine_weight=cosine_weight,
-        key_point_weight=key_point_weight,
         judge_model=record.judge_model,
         prompt_digest=record.prompt_digest,
         grammar_digest=record.grammar_digest,

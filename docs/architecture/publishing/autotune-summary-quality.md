@@ -23,7 +23,7 @@ question-answering metric with no question. The chart labels are `Faithfulness`,
 | Chart label | Instrument | Reads | Output | Stage | Role |
 | --- | --- | --- | --- | --- | --- |
 | Faithfulness | HHEM-2.1-Open cross-encoder | article + summary | 0..1 | same-day digest job | gate: block (absolute) + downgrade (adaptive) |
-| Coverage | ROUGE-recall | article + summary | 0..1 | same-day digest job | monitor (watch) |
+| Coverage | word recall against the article's most-used terms | article + summary | 0..1 | same-day digest job | monitor (watch) |
 | Coherence | MiniLM adjacent-sentence cosine | summary only | -1..1 | same-day digest job | monitor (watch) |
 | Fluency | G-Eval (summariser as judge) | summary only | 0..1 | next-day council, sampled | monitor (watch), next-day |
 
@@ -48,8 +48,34 @@ thinks exists is worse than leaving the axis unnamed.
   the windowing, the two scorings and what the gap between them means. What matters here is only its
   role in the loop: it is the one metric reliable enough to WITHHOLD a story, and it withholds at the
   absolute 0.50 line, never at the drifting adaptive floor (see the publish gate).
-- **Coverage** = ROUGE-recall: `|content_ngrams(summary) & content_ngrams(source)| /
-  |content_ngrams(source)|`. Recognised, reference-free, needs the source, so it runs same-day.
+- **Coverage** = the share of the article's `SALIENT_TERMS` most-used content words that appear in
+  the summary. The reference is built by counting the article's tokens, dropping the function words
+  `metrics._NOT_AN_ENTITY` already names, ranking on `(-count, word)` and taking the top 20; the
+  summary side is its raw token set, so presence counts and repetition does not. Null when the
+  article yielded no content word. Needs the source, so it runs same-day.
+
+  **This amends the line that stood here until 2026-09-24**, which said
+  `|content_ngrams(summary) & content_ngrams(source)| / |content_ngrams(source)|` - recall against
+  the whole article. Measured over 1,490 committed article-and-summary pairs, that shape does not
+  work: at four-gram size the median is 0.017 with half of all summaries between 0.008 and 0.036,
+  which is a near-constant; at unigram size it has range but correlates 0.93 with `compression`,
+  which is a length column and already on the row. Against a fixed 20-term reference the reading is
+  0.60 at the median with 0.35 to 0.85 covering the middle 90 percent, and its rank correlation with
+  article length is -0.09. Stopword removal was measured too and rescued nothing: it moved the median
+  by 0.02 and left the length correlation at -0.85. The amendment buys a column that varies with
+  something other than article length; what it gives up is a fact the article mentioned once and the
+  summary dropped, because it only asks whether the summary carried what the article kept returning
+  to. Authority: Andre, 2026-09-24.
+
+  Two properties a reader of the number needs. The reference is a count, so the column takes at most
+  `SALIENT_TERMS + 1` distinct values - 21 buckets, not a continuous scale. And it is lexical despite
+  the column being named `semantic_coverage`: a summary that writes "the chipmaker" where the article
+  wrote "Nvidia" is scored as a miss.
+
+  `SALIENT_TERMS` is a module constant in `metrics.py` rather than a `config/` knob. Moving it does
+  not tune a threshold, it changes what a committed cell MEANS, and the machinery for that is
+  `METRICS_VERSION` - a knob would assert that rows written either side of a config edit are
+  comparable, and they are not.
 - **Coherence** = mean cosine of adjacent summary sentences. With unit vectors `v_1..v_n` for the
   summary's sentences, `coherence = (1 / (n-1)) * sum_{i=1..n-1} dot(v_i, v_{i+1})`. Summary-only.
   Null for a one-sentence summary. A monitor, never a gate: a repeated sentence reads as maximally
@@ -77,7 +103,7 @@ flowchart TD
     art["source article"]
     sum --> hhem["HHEM<br/>Faithfulness 0..1"]
     art --> hhem
-    sum --> rouge["ROUGE-recall<br/>Coverage 0..1"]
+    sum --> rouge["Term recall<br/>Coverage 0..1"]
     art --> rouge
     sum --> mini["MiniLM adjacent cosine<br/>Coherence -1..1"]
     hhem --> row[("EvalRow<br/>state/scores")]
@@ -112,7 +138,7 @@ grows with the archive), then walk the slots from the low tail. Each metric's ba
 - **Downgrade/watch floor - adaptive p05** of the rolling distribution. Below it, faithfulness
   DOWNGRADES (the low-confidence marker) and the other three only WATCH (an operator alarm), because
   their low tail is confounded: adjacent-cosine reads a repeated sentence as maximally coherent, and
-  ROUGE-recall reads a faithful abstraction as low coverage, so their low tail can be a good summary.
+  ROUGE-style recall reads a faithful abstraction as low coverage, so their low tail can be a good summary.
 - **Damping 0.15 new / 0.85 old, one-directional - damp the raise.** Raising a floor withholds or
   marks MORE, which is the invisible-deletion direction (a withheld good summary is a story the reader
   never sees), so a rise is damped and needs sustained evidence; a fall (act less) lands at once. This
@@ -143,7 +169,7 @@ instrumented and the action is a knob, not a hardcode. The shipped defaults:
 | Metric | Default action | Why |
 | --- | --- | --- |
 | Faithfulness | **block** below 0.50 (absolute), **downgrade** below the adaptive floor | A false claim is the one failure where silence beats the story |
-| Coverage | **watch** | Low ROUGE-recall can be a faithful abstraction, not an omission - marking it low would lie to the reader |
+| Coverage | **watch** | Low term recall can be a faithful abstraction, not an omission - marking it low would lie to the reader |
 | Coherence | **watch** | Adjacent-cosine reads a repeated sentence as coherent - its low tail is not reliably "bad" |
 | Fluency | **watch** | Scored next-day, after the item shipped - it can only alarm on a fleet-wide slide |
 

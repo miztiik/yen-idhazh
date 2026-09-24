@@ -242,7 +242,6 @@ def stage_assemble(
             decided = score.verdict(
                 row.hhem,
                 unsupported_numbers=row.unsupported_numbers,
-                lead_coverage=row.coverage,
                 hedge_dropped=row.hedge_dropped,
                 config=settings.app.evaluation,
             )
@@ -252,7 +251,6 @@ def stage_assemble(
             decided = score.verdict(
                 None,
                 unsupported_numbers=metrics.unsupported_numbers(text, full_text),
-                lead_coverage=metrics.lead_coverage(text, full_text),
                 hedge_dropped=metrics.hedge_dropped(text, full_text),
                 config=settings.app.evaluation,
             )

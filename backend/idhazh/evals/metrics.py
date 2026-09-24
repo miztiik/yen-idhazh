@@ -30,34 +30,40 @@ article is exactly what it measures.
 from __future__ import annotations
 
 import re
+from collections import Counter
 from collections.abc import Iterable, Sequence
 from typing import Final
 
 from idhazh.contracts.knobs.evaluation import EvaluationConfig
 from idhazh.evals.hhem import CHUNK_ANCHOR
 
-#: Bumped whenever a definition below changes what an existing column means.
-#: Part of the derived `scorer_version`, so a ledger row keeps meaning what it
-#: meant when written. `self_repetition` was added on 2026-08-26 without moving
-#: it: no band and no derived column reads that column, so every row written
-#: under `metrics-3` still says exactly what it said. Moving it would have
-#: restarted the ten-run-day count `docs/concepts/evaluation.md` requires before
-#: any threshold can move, to record a fact no threshold reads.
+#: Bumped whenever the set of definitions below changes what a ledger row means.
+#: Part of the derived `scorer_version`, so a row keeps meaning what it meant
+#: when written.
 #:
-#: It did not move on 2026-08-28 either, when the faithfulness chunker gained a
-#: configured window and an anchored last window. Nothing in this file changed,
-#: so bumping it would assert a change to the counterweights that did not happen.
-#: The new `window=` field in `scorer_version` records that change where it
-#: belongs.
+#: It did not move for `self_repetition` on 2026-08-26, for the anchored
+#: faithfulness window on 2026-08-28, or for `new_fact_rate`. Each of those
+#: added a column nothing bands or derives from, so every row already written
+#: still said exactly what it said, and moving the stamp would have restarted
+#: the ten-run-day count `docs/concepts/evaluation.md` requires before any
+#: threshold moves - to record a fact no threshold reads.
 #:
-#: And it did not move for `new_fact_rate`. That column is recorded only - no
-#: band and no derived column reads it, and the standing trap forbids anything
-#: acting on it (`docs/concepts/evaluation.md`) - so every row written under
-#: `metrics-3` still says exactly what it said. `METRICS_VERSION` folds into
-#: `scorer_version`, so bumping it would restart the ten-run-day count that page
-#: requires before any threshold moves, to record a fact no threshold reads.
-#: `self_repetition` and `compression` are the precedent. Authority: Andre, Fowler.
-METRICS_VERSION: Final = "3"
+#: It moves to `4` on 2026-09-24, because this time columns LEFT. `coverage` and
+#: `new_fact_rate` are gone and `coherence` and `semantic_coverage` are new, so
+#: a row cannot be read as if it came from the same set of instruments. The
+#: count restarts anyway in the same change - `scorer_version` loses its `lead=`
+#: component with the band input behind it - so the stamp is what names why.
+#: Authority: Andre, Fowler.
+METRICS_VERSION: Final = "4"
+
+#: How many of the article's most-repeated content words `semantic_coverage`
+#: asks the summary about. A constant rather than a `config/` knob, like
+#: `_NGRAM` and `LEAD_SENTENCES` above and below it: moving it does not tune a
+#: threshold, it changes what a committed cell MEANS, and the machinery for
+#: that is `METRICS_VERSION` rather than a config edit two rows can straddle.
+#: 20 was measured against 1,490 committed article-and-summary pairs on
+#: 2026-09-24 - see `docs/architecture/publishing/autotune-summary-quality.md`.
+SALIENT_TERMS: Final = 20
 
 LEAD_SENTENCES: Final = 3
 _NGRAM: Final = 4
@@ -67,10 +73,11 @@ _SENTENCE_SPLIT = re.compile(r"(?<=[.!?])[\s\n]+")
 # Only numbers a summary could plausibly get wrong. Single digits are usually
 # spelled out or trivially present, and checking them manufactures false alarms.
 _NUMBER = re.compile(r"\d[\d,]*(?:\.\d+)?")
-_CAPITALISED_RUN = re.compile(r"\b[A-Z][\w.&'-]*(?:[ \t]+[A-Z][\w.&'-]*)*")
 
-# Words that start an English sentence far more often than they name anything,
-# plus the calendar - a summary that dropped the day of the week dropped nothing.
+# Words English uses for grammar rather than for naming anything, plus the
+# calendar - a summary that dropped the day of the week dropped nothing.
+# `semantic_coverage` subtracts these before it asks what the article kept
+# returning to, because an article returns to "the" more than to any name in it.
 _NOT_AN_ENTITY: Final[frozenset[str]] = frozenset(
     {
         "a",
@@ -334,36 +341,6 @@ def restates_summary(key_point: str, summary: str) -> float:
     return len(point_grams & summary_grams) / len(point_grams)
 
 
-def new_fact_rate(key_points: Sequence[str], summary: str, *, ceiling: float) -> float:
-    """Share of the key points that add a fact the summary does not already carry.
-
-    The aggregate inverse of `restates_summary`, and the instrument for whether a
-    prompt that decodes key points before the prose is finding facts or only
-    paraphrasing what it just wrote. A key point adds a fact when its restatement
-    measure is at or below `ceiling` - the same distinctness floor `to_summary`
-    drops a key point on, so a key point that counts here is exactly one the drop
-    keeps, and the two can never disagree about a single line.
-
-    A rate over no key points is not a rate, so it reads 0.0: a reply that carried
-    no key point added no fact, and 0.0 is the safe direction for a number nothing
-    acts on.
-
-    This is the LEXICAL new-fact rate, and it can be fooled the way every n-gram
-    measure in this file can: a key point that states the summary's own fact in
-    fresh words scores as new. The two-call planner unlocks the honest version - a
-    key point whose span-anchored element ids are all already cited by the summary
-    is a restatement by construction, with no lexical false positive (the element
-    table). Until that ships this is the baseline, and it is read and never
-    acted on: best-of-N against it optimises key points for lexical difference from
-    the summary, which is the Goodhart form of this exact number and stops the
-    instrument detecting the thing it was built for.
-    """
-    if not key_points:
-        return 0.0
-    adds_a_fact = sum(1 for point in key_points if restates_summary(point, summary) <= ceiling)
-    return adds_a_fact / len(key_points)
-
-
 def _checkable_numbers(text: str) -> set[str]:
     """Normalised so 1,320 and 1320 and 1320.0 are the same number."""
     found: set[str] = set()
@@ -385,52 +362,47 @@ def unsupported_numbers(summary: str, source: str) -> int:
     return len(_checkable_numbers(summary) - _checkable_numbers(source))
 
 
-def _entities(text: str) -> set[str]:
-    """Capitalised runs, minus the ones English capitalises for grammar.
+def semantic_coverage(summary: str, source: str, terms: int = SALIENT_TERMS) -> float | None:
+    """Share of the article's most-repeated content words the summary carried.
 
-    A single capitalised word opening a sentence is not evidence of a name -
-    every sentence has one. Requiring it to appear mid-sentence somewhere lets
-    the document itself say whether the capital is structural or nominal.
+    **Lexical, despite the column's name.** It compares word forms, so a summary
+    saying "the chipmaker" where the article said "Nvidia" is counted as a miss,
+    and so is "cut rates" against "rate reduction".
+
+    The reference is the `terms` content words the article used most, which is
+    what gives the number any range. Recall against the whole article is the
+    shape that does not work, and it was measured rather than argued: over 1,490
+    committed pairs on 2026-09-24, whole-article 4-gram recall sat at a median of
+    0.017 with half of all summaries between 0.008 and 0.036, and whole-article
+    unigram recall correlated 0.93 with `compression`, which is a length column.
+    A fixed reference of 20 reads 0.60 at the median with 0.35 to 0.85 covering
+    the middle 90 percent, and its rank correlation with article length is -0.09.
+    See `docs/architecture/publishing/autotune-summary-quality.md`.
+
+    What it gives up for that: it cannot see a fact the article mentioned once
+    and the summary dropped. It only asks whether the summary carried what the
+    article kept returning to.
+
+    Ties are broken alphabetically and not by whichever word the counter happened
+    to meet first, or the word on the boundary would be chosen by dict insertion
+    order and two runs over one article could disagree.
+
+    The summary side is the raw token set: presence is the question, the same way
+    `hedge_dropped` asks it, so a summary is not required to repeat a term to be
+    counted as carrying it.
+
+    None when the article yielded no content word at all. That is an article
+    nobody could measure, which is a different fact from a summary that carried
+    nothing.
     """
-    named: set[str] = set()
-    for sentence in _SENTENCE_SPLIT.split(text.strip()):
-        for line in sentence.splitlines():
-            stripped = line.strip()
-            if not stripped:
-                continue
-            for match in _CAPITALISED_RUN.finditer(stripped):
-                run = match.group().strip(" .,").lower()
-                if not run or run in _NOT_AN_ENTITY:
-                    continue
-                if match.start() == 0 and " " not in run:
-                    continue
-                named.add(run)
-    return named
-
-
-def lead_coverage(summary: str, source: str, sentences: int = LEAD_SENTENCES) -> float:
-    """Survival of the lead's names and figures into the summary.
-
-    Recall over the WHOLE source would be a constant near 0.12 - a 3,500-word
-    article carries far more entities than 150 words can hold, for a good
-    summary and a bad one alike. Anchoring on the lead gives the metric dynamic
-    range and points it at the defect that matters: a summary that dropped the
-    story.
-
-    Carriage is checked by presence in the summary, not by re-extracting from
-    it: the question is whether the summary mentioned the thing, and an entity
-    that happens to open the summary's second sentence still counts.
-    """
-    opening = lead(source, sentences)
-    salient_names = _entities(opening)
-    salient_numbers = _checkable_numbers(opening)
-    total = len(salient_names) + len(salient_numbers)
-    if not total:
-        return 1.0
-    haystack = summary.lower()
-    kept = sum(1 for name in salient_names if name in haystack)
-    kept += len(salient_numbers & _checkable_numbers(summary))
-    return kept / total
+    counts = Counter(
+        token for token in _normalise(words(source)) if token and token not in _NOT_AN_ENTITY
+    )
+    ranked = sorted(counts.items(), key=lambda entry: (-entry[1], entry[0]))[:terms]
+    if not ranked:
+        return None
+    reference = {term for term, _ in ranked}
+    return len(reference & set(_normalise(words(summary)))) / len(reference)
 
 
 def hedge_dropped(summary: str, source: str, sentences: int = LEAD_SENTENCES) -> bool:
@@ -454,11 +426,10 @@ def _density(pattern: re.Pattern[str], text: str) -> float:
 def evidential_density(source: str) -> float:
     """How often the article says where a claim came from.
 
-    Over the whole article and not the lead, unlike `lead_coverage`. That one is
-    a recall and needs a small denominator to keep any dynamic range. This is a
-    rate, so the denominator can be the honest one - and the lead is exactly
-    where the style guide puts an attribution, so anchoring there would measure
-    the convention instead of the reporting.
+    Over the whole article, and a rate rather than a recall - so the denominator
+    can be the honest one. The lead is exactly where the style guide puts an
+    attribution, so anchoring there would measure the convention instead of the
+    reporting.
 
     Read it against `speculative_density`, never alone. High on both is normal
     for a court report. High on speculation and near zero on attribution is an
@@ -483,8 +454,8 @@ def speculative_density(source: str) -> float:
 # counts, and they belong here for the reason the two densities do: model-free
 # arithmetic that says whether the pipeline is still doing its job. They are not
 # scorers, no eval-ledger column carries them, and `METRICS_VERSION` does not
-# move for them - the same reason it did not move for `self_repetition`,
-# `compression` or `new_fact_rate`.
+# move for them - the same reason it did not move for `self_repetition` or
+# `compression`.
 #
 # Both return `None` on an empty denominator. A rate over nothing is not zero:
 # zero is a day where every chartable article went undrawn, and a day with no
@@ -536,6 +507,11 @@ def scorer_version(
     Order is identity, then geometry, then the cuts. `window=` names the premise
     the number was measured over, which is part of the instrument and not part
     of the decision made from it.
+
+    `bands=` used to carry a `lead=` component too, naming the lead-coverage
+    floor a high band had to clear. That input is retired, so the string no
+    longer names it - which moves every row's `scorer_version` once and restarts
+    the run-day count in `evaluation.label_min_run_days`.
     """
     return ";".join(
         (
@@ -543,9 +519,6 @@ def scorer_version(
             f"weights-{weights_sha256[:8]}",
             f"metrics-{METRICS_VERSION}",
             f"window={evaluation.chunk_words}/{evaluation.chunk_overlap_words}/{CHUNK_ANCHOR}",
-            (
-                f"bands={evaluation.band_high_min:.2f}/{evaluation.band_medium_min:.2f};"
-                f"lead={evaluation.lead_coverage_min:.2f}"
-            ),
+            f"bands={evaluation.band_high_min:.2f}/{evaluation.band_medium_min:.2f}",
         )
     )

@@ -69,7 +69,6 @@ def empty_record(
             "bin_width": knobs.bin_width,
             "scorer_model": scorer.scorer_model,
             "cosine_weight": scorer.cosine_weight,
-            "key_point_weight": scorer.key_point_weight,
             "judge_model": judge.judge_model,
             "prompt_digest": judge.prompt_digest,
             "grammar_digest": judge.grammar_digest,
@@ -160,7 +159,6 @@ def rows_the_record_admits(
     stamp = (
         record.scorer_model,
         record.cosine_weight,
-        record.key_point_weight,
         record.judge_model,
         record.prompt_digest,
         record.grammar_digest,
@@ -175,7 +173,6 @@ def _stamp_of(row: StorySimilarityPair) -> tuple[object, ...]:
     return (
         row.scorer_model,
         row.cosine_weight,
-        row.key_point_weight,
         row.judge_model,
         row.prompt_digest,
         row.grammar_digest,
@@ -277,7 +274,6 @@ def inputs_changed(
     for was, now in (
         (record.scorer_model, scorer.scorer_model),
         (record.cosine_weight, scorer.cosine_weight),
-        (record.key_point_weight, scorer.key_point_weight),
         (record.judge_model, judge.judge_model),
         (record.prompt_digest, judge.prompt_digest),
         (record.grammar_digest, judge.grammar_digest),

@@ -32,7 +32,7 @@ and which this module may not import (CLAUDE.md section 4).
 
 from __future__ import annotations
 
-from typing import Annotated, Any, ClassVar, Self
+from typing import Annotated, Any, ClassVar, Final, Self
 
 from pydantic import Field, StringConstraints, model_validator
 
@@ -42,6 +42,7 @@ from idhazh.contracts.base import (
     Contract,
     DateStamp,
     RunId,
+    without_retired_keys,
 )
 from idhazh.contracts.story_similarity_pair import ScorerModelId
 
@@ -52,12 +53,24 @@ from idhazh.contracts.story_similarity_pair import ScorerModelId
 #: reader that takes a day file a line at a time.
 Labeller = Annotated[str, StringConstraints(pattern=PRINTABLE_LINE_PATTERN, max_length=64)]
 
+#: Headings a committed day file still carries that this row no longer names and
+#: that nothing replaced. `key_point_weight` went with the key points
+#: themselves: the term shipped at a weight of 0.0, so it never moved a line.
+#: `from_csv_row` hands this model every cell the file carries, so without this
+#: set `extra="forbid"` would refuse the whole committed day.
+DROPPED_CELLS: Final[frozenset[str]] = frozenset({"key_point_weight"})
+
 
 class MergeLineHoldoutScore(Contract):
     """One run's reading of the applied merge line against the hand-marked holdout."""
 
     __schema_stem__: ClassVar[str] = "content-similarity-judge-merge-line-holdout-score"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-24",
+            change="key_point_weight is gone. Its heading is carried and dropped on read.",
+            why="The term shipped at a weight of zero and never moved a score.",
+        ),
         ChangelogEntry(
             version="2026-09-21",
             change="Initial shape: the line in force, its four cells, and what it was made of.",
@@ -130,11 +143,17 @@ class MergeLineHoldoutScore(Contract):
             "same question."
         ),
     )
-    key_point_weight: float = Field(
-        ge=0,
-        le=1,
-        description="What the key-point term was worth. Same reason as the cosine weight.",
-    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _without_the_columns_this_row_stopped_naming(cls, data: Any) -> Any:
+        """The read-side migration `CLAUDE.md` section 11 owes a removed column.
+
+        `from_csv_row` hands this model every cell the file carries, so a heading
+        the row stopped naming would be refused by `extra="forbid"` and take the
+        whole committed day with it.
+        """
+        return without_retired_keys(data, *DROPPED_CELLS)
 
     @model_validator(mode="after")
     def _the_negative_cells_fit_their_population(self) -> Self:

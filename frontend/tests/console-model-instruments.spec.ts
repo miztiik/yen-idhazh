@@ -10,11 +10,7 @@ import {
 	RECORDED,
 	evalDays,
 	flagReadings,
-	leadFloorNote,
-	leadHeadline,
 	matchHeadline,
-	newFactBands,
-	newFactDays,
 	recordedReadings,
 	recordedText,
 	widerNote,
@@ -29,8 +25,8 @@ import {
  * `NOT_A_MEASUREMENT` between them must name every column of `EvalRow`, exactly
  * once, and name nothing else, so a column added next month fails there instead
  * of being scored on every summary for a year with nowhere to look at it - which
- * is exactly what happened to `hhem` and `coverage`, the two the pipeline has
- * written since its first published day. It asks that of the contract itself
+ * is exactly what happened to `hhem`, the column the pipeline has written since
+ * its first published day. It asks that of the contract itself
  * rather than of a generated copy of it, which is why it is not here.
  *
  * What this file holds is what the browser tier alone can say: every drawn
@@ -43,10 +39,8 @@ const REPO = resolve(process.cwd(), '..');
 const CANARY_SCORES = resolve(REPO, 'backend', 'var', 'canary', 'state', 'scores');
 
 const CONFIG = JSON.parse(readFileSync(resolve(REPO, 'config', 'idhazh.json'), 'utf8')) as {
-	evaluation?: { lead_coverage_min?: number };
 	console?: { default_window_days?: number };
 };
-const LEAD_FLOOR = CONFIG.evaluation?.lead_coverage_min ?? 0.3;
 
 /** The canary ledger, as rows of strings, exactly as the page's reader sees it.
  *
@@ -74,18 +68,11 @@ function asPct(value: number | null): number | null {
 /** One day of a shard, counted by hand, sharing nothing with `evalDays`. */
 function byHand(rows: readonly EvalInput[], date: string) {
 	const match: number[] = [];
-	const lead: number[] = [];
-	let under = 0;
 	let differs = 0;
 	for (const row of rows) {
 		if (row.date !== date) continue;
 		const hhem = Number(row.hhem);
 		if ((row.hhem ?? '') !== '' && Number.isFinite(hhem)) match.push(hhem);
-		const coverage = Number(row.coverage);
-		if ((row.coverage ?? '') !== '' && Number.isFinite(coverage)) {
-			lead.push(coverage);
-			if (coverage < LEAD_FLOOR) under += 1;
-		}
 		const delta = Number(row.hhem_delta);
 		if ((row.hhem_delta ?? '') !== '' && Number.isFinite(delta) && delta !== 0) differs += 1;
 	}
@@ -94,10 +81,6 @@ function byHand(rows: readonly EvalInput[], date: string) {
 		mid: asPct(nth(match, 0.5)),
 		low: asPct(nth(match, 0.25)),
 		high: asPct(nth(match, 0.75)),
-		led: lead.length,
-		leadMid: asPct(nth(lead, 0.5)),
-		under,
-		underPct: lead.length === 0 ? null : Math.round((under / lead.length) * 100),
 		differs
 	};
 }
@@ -124,24 +107,24 @@ function jargonColumns(): string[] {
  * Written out rather than taken from the committed ledger, because three of
  * these have never occurred there and one of them cannot: a scored day where
  * the checker wrote no reading at all, a day where the whole-article score
- * parts from the read-text score on every row, and a day whose lead coverage is
- * entirely under the floor.
+ * parts from the read-text score on every row, and a day carrying a coherence
+ * reading below zero.
  */
 const FIXTURE: EvalInput[] = [
 	// Out of order, so the sort is asserted rather than assumed.
-	{ date: '2026-04-02', hhem: '0.90', hhem_delta: '0', coverage: '0.10', compression: '0.20' },
-	{ date: '2026-04-02', hhem: '0.80', hhem_delta: '0', coverage: '0.20', compression: '0.40' },
-	{ date: '2026-04-01', hhem: '0.50', hhem_delta: '0.10', coverage: '0.60', compression: '0.10' },
-	{ date: '2026-04-01', hhem: '0.60', hhem_delta: '-0.20', coverage: '0.70', compression: '0.30' },
-	{ date: '2026-04-01', hhem: '0.70', hhem_delta: '0', coverage: '0.80', compression: '0.50' },
-	{ date: '2026-04-01', hhem: '0.90', hhem_delta: '0', coverage: '0.90', compression: '0.70' },
+	{ date: '2026-04-02', hhem: '0.90', hhem_delta: '0', compression: '0.20', coherence: '0.10' },
+	{ date: '2026-04-02', hhem: '0.80', hhem_delta: '0', compression: '0.40', coherence: '-0.30' },
+	{ date: '2026-04-01', hhem: '0.50', hhem_delta: '0.10', compression: '0.10' },
+	{ date: '2026-04-01', hhem: '0.60', hhem_delta: '-0.20', compression: '0.30' },
+	{ date: '2026-04-01', hhem: '0.70', hhem_delta: '0', compression: '0.50' },
+	{ date: '2026-04-01', hhem: '0.90', hhem_delta: '0', compression: '0.70' },
 	// A scored day the checker wrote no reading on. Not a day nothing ran.
-	{ date: '2026-04-03', hhem: '', coverage: '', compression: '' },
+	{ date: '2026-04-03', hhem: '', compression: '' },
 	// A row with no day at all. Broken, and drawing it would draw the break.
-	{ date: '', hhem: '0.99', coverage: '0.99' },
+	{ date: '', hhem: '0.99' },
 	// A cell that is present and is not a number.
-	{ date: '2026-04-04', hhem: 'n/a', coverage: '0.55', extraction_suspect: 'true' },
-	{ date: '2026-04-04', hhem: '0.85', coverage: '0.45', determinism_violation: 'True' }
+	{ date: '2026-04-04', hhem: 'n/a', extraction_suspect: 'true' },
+	{ date: '2026-04-04', hhem: '0.85', determinism_violation: 'True' }
 ];
 
 test.describe('the map', () => {
@@ -184,7 +167,7 @@ test.describe('the map', () => {
 
 test.describe('the arithmetic', () => {
 	test('a day is reduced by position, and a missing reading never enters as a zero', () => {
-		const days = evalDays(FIXTURE, LEAD_FLOOR);
+		const days = evalDays(FIXTURE);
 		expect(days.map((day) => day.date)).toEqual([
 			'2026-04-01',
 			'2026-04-02',
@@ -207,7 +190,6 @@ test.describe('the arithmetic', () => {
 		expect(blank.scored).toBe(1);
 		expect(blank.matched).toBe(0);
 		expect(blank.matchMid).toBeNull();
-		expect(blank.leadMid).toBeNull();
 		expect(blank.recorded.compression).toBeNull();
 
 		// A cell that is present and is not a number is a missing reading, not a
@@ -221,51 +203,43 @@ test.describe('the arithmetic', () => {
 		expect(bad.fired.determinism_violation).toBe(1);
 	});
 
-	test('the floor is counted against the configured share, never against a literal', () => {
-		const days = evalDays(FIXTURE, LEAD_FLOOR);
-		// 0.10 and 0.20 are both under 0.3; 0.60 to 0.90 are all over it.
-		expect(days[1].leadUnder).toBe(2);
-		expect(days[1].leadUnderPct).toBe(100);
-		expect(days[0].leadUnder).toBe(0);
-		expect(days[0].leadUnderPct).toBe(0);
-		// Handed a different floor, the same rows count differently. A literal in
-		// the reduction would make this pass on the wrong number.
-		const strict = evalDays(FIXTURE, 0.75);
-		expect(strict[0].leadUnder).toBe(2);
+	test('a cosine keeps its own scale and its sign, and is never read as a percent', () => {
+		// -0.30 and 0.10 on one day. Nearest rank at a half is the second of them,
+		// kept to two places rather than multiplied by a hundred.
+		const days = evalDays(FIXTURE);
+		expect(days[1].recorded.coherence).toBe(0.1);
+		const reading = recordedReadings(days).find((entry) => entry.id === 'coherence');
+		expect(reading?.days).toBe(1);
+		expect(reading?.low).toBe(0.1);
+		expect(recordedText(reading!, -0.3)).toBe('-0.30');
+		expect(recordedText(reading!, null)).toBe('-');
 	});
 
 	test('a row with no day is dropped rather than pooled into an empty one', () => {
-		const days = evalDays(FIXTURE, LEAD_FLOOR);
+		const days = evalDays(FIXTURE);
 		expect(days.some((day) => day.date === '')).toBe(false);
 		expect(days.reduce((sum, day) => sum + day.scored, 0)).toBe(FIXTURE.length - 1);
 	});
 
 	test('the sentences say what the numbers mean, and say nothing when there is nothing', () => {
-		const days = evalDays(FIXTURE, LEAD_FLOOR);
+		const days = evalDays(FIXTURE);
 		const head = matchHeadline(days, 30) ?? '';
 		expect(head).toContain('percent');
 		expect(head).not.toMatch(/\b[01]\.\d/);
 		expect(widerNote(days, 30) ?? '').toContain('whole article');
-		expect(leadHeadline(days, 30) ?? '').toContain('opening lines');
-		expect(leadFloorNote(days, 30, LEAD_FLOOR)).toContain(`${Math.round(LEAD_FLOOR * 100)} percent`);
 
 		// Nothing to report is silence, not a zero dressed as a reading.
 		expect(matchHeadline([], 30)).toBeNull();
 		expect(widerNote([], 30)).toBeNull();
-		expect(leadHeadline([], 30)).toBeNull();
-		expect(leadFloorNote([], 30, LEAD_FLOOR)).toBeNull();
 	});
 
 	test('a day with no faithfulness gap is said in words, not left blank', () => {
-		const clean = evalDays(
-			[{ date: '2026-04-01', hhem: '0.9', hhem_delta: '0', coverage: '0.6' }],
-			LEAD_FLOOR
-		);
+		const clean = evalDays([{ date: '2026-04-01', hhem: '0.9', hhem_delta: '0' }]);
 		expect(widerNote(clean, 7) ?? '').toContain('scores the same');
 	});
 
 	test('a recorded reading carries its unit, and an absent one is a dash', () => {
-		const days = evalDays(FIXTURE, LEAD_FLOOR);
+		const days = evalDays(FIXTURE);
 		const readings = recordedReadings(days);
 		const compression = readings.find((reading) => reading.id === 'compression');
 		expect(compression, 'the compression instrument left the list').toBeTruthy();
@@ -281,7 +255,7 @@ test.describe('the arithmetic', () => {
 	});
 
 	test('a flag that never fired is counted, not omitted', () => {
-		const readings = flagReadings(evalDays(FIXTURE, LEAD_FLOOR));
+		const readings = flagReadings(evalDays(FIXTURE));
 		expect(readings.map((reading) => reading.id)).toEqual(FLAGS.map((flag) => flag.id));
 		for (const reading of readings) {
 			expect(reading.fired).toBe(1);
@@ -302,37 +276,6 @@ test.describe('the arithmetic', () => {
 				column
 			);
 		}
-	});
-
-	test('the new-fact rate is bucketed by length band and pooled over the window', () => {
-		// Two bands, a floor at zero and a floor at 700 words - the same ladder
-		// `bandFor` reads on the page and `band_for` reads in the pipeline.
-		const bands = [
-			{ min_source_words: 0, target_words_min: 30, target_words_max: 45 },
-			{ min_source_words: 700, target_words_min: 70, target_words_max: 150 }
-		];
-		const rows: EvalInput[] = [
-			{ date: '2026-04-01', source_word_count: '100', new_fact_rate: '0.20' },
-			{ date: '2026-04-01', source_word_count: '120', new_fact_rate: '0.40' },
-			{ date: '2026-04-02', source_word_count: '1500', new_fact_rate: '1.00' },
-			// Measured no rate: stays out of the mean rather than entering as a zero.
-			{ date: '2026-04-02', source_word_count: '900', new_fact_rate: '' },
-			// No length to place it on: stays out rather than landing in the first band.
-			{ date: '2026-04-02', source_word_count: '', new_fact_rate: '0.50' }
-		];
-
-		const reading = newFactBands(newFactDays(rows, bands), bands);
-
-		expect(reading.map((band) => band.key)).toEqual(['0', '700']);
-		// Short band: 0.20 and 0.40 over two items, a mean of 0.30 -> 30 percent.
-		expect(reading[0].items).toBe(2);
-		expect(reading[0].rate).toBe(30);
-		expect(reading[0].label).toBe('0-699 words');
-		// Long band: one placed item at 1.00. The blank rate and the blank length
-		// are both out, so it is one item and not three.
-		expect(reading[1].items).toBe(1);
-		expect(reading[1].rate).toBe(100);
-		expect(reading[1].label).toBe('700+ words');
 	});
 });
 
@@ -374,13 +317,6 @@ test.describe('the panels, in a browser', () => {
 			await expect(match).toHaveAttribute('data-match-low', String(want.low));
 			await expect(match).toHaveAttribute('data-match-high', String(want.high));
 			await expect(match).toHaveAttribute('data-match-checked', String(want.checked));
-
-			const lead = page.locator(`[data-lead-day="${date}"]`);
-			await expect(lead, `${date} is in the ledger and not on the coverage panel`).toHaveCount(1);
-			await expect(lead).toHaveAttribute('data-lead-under', String(want.under));
-			await expect(lead).toHaveAttribute('data-lead-under-pct', String(want.underPct));
-			await expect(lead).toHaveAttribute('data-lead-mid', String(want.leadMid));
-			await expect(lead).toHaveAttribute('data-lead-checked', String(want.led));
 		}
 	});
 
@@ -405,15 +341,10 @@ test.describe('the panels, in a browser', () => {
 	test('the two panels state what they count, and set no bar', async ({ page }) => {
 		await page.goto('/console/model/');
 		await expect(page.locator('[data-model-match-rule]')).toContainText('Nothing here sets a bar');
-		await expect(page.locator('[data-model-lead-rule]')).toHaveCount(1);
 		await expect(page.locator('[data-model-recorded-rule]')).toHaveCount(1);
 		// Decision 2 of the row: every alarm ships in record-only mode until a
 		// corpus month exists to set it from. A tint here would be that alarm.
-		const tinted = await page
-			.locator(
-				'[data-eval-panel="faithfulness"] [data-band], [data-eval-panel="lead-coverage"] [data-band]'
-			)
-			.count();
+		const tinted = await page.locator('[data-eval-panel="faithfulness"] [data-band]').count();
 		expect(tinted, 'a new panel colours a reading against a threshold nobody set').toBe(0);
 	});
 
@@ -421,27 +352,28 @@ test.describe('the panels, in a browser', () => {
 		page
 	}) => {
 		await page.goto('/console/model/');
-		for (const id of ['faithfulness', 'lead-coverage', 'recorded-only']) {
+		for (const id of ['faithfulness', 'recorded-only']) {
 			const text = (await page.locator(`[data-eval-panel="${id}"]`).innerText()).toLowerCase();
 			for (const column of jargonColumns()) {
 				expect(text, `the ${id} panel prints ${column} at a reader`).not.toContain(column);
 			}
 		}
-		// Every figure on the two score panels is a whole percent, so a decimal
-		// point on either of them is the checker's own unit having leaked out.
-		for (const id of ['faithfulness', 'lead-coverage']) {
-			const text = await page.locator(`[data-eval-panel="${id}"]`).innerText();
-			expect(text, `the ${id} panel prints a raw score between zero and one`).not.toMatch(/\d\.\d/);
-		}
-		// The recorded table carries two units and says which is which on every
-		// cell. A bare number in a table of mixed units is a number nobody can read.
+		// Every figure on the score panel is a whole percent, so a decimal point on
+		// it is the checker's own unit having leaked out.
+		const text = await page.locator('[data-eval-panel="faithfulness"]').innerText();
+		expect(text, 'the faithfulness panel prints a raw score between zero and one').not.toMatch(
+			/\d\.\d/
+		);
+		// The recorded table carries three units and says which is which on every
+		// cell. A bare number in a table of mixed units is a number nobody can read -
+		// except a cosine, which IS its own number and carries a sign instead.
 		const cells = await page
 			.locator('[data-model-recorded-table] [data-recorded-mid]')
 			.allInnerTexts();
 		expect(cells.length, 'the recorded table drew no reading').toBe(RECORDED.length);
 		for (const cell of cells) {
 			expect(cell.trim(), 'a recorded reading carries no unit').toMatch(
-				/^(-|\d+%|\d+\.\d per 1,000 words)$/
+				/^(-|\d+%|-?\d\.\d{2}|\d+\.\d per 1,000 words)$/
 			);
 		}
 	});
@@ -452,9 +384,9 @@ test.describe('the panels, in a browser', () => {
 		await page.goto('/console/model/');
 		const before = await page.locator('[data-match-day]').count();
 		expect(before, 'the faithfulness panel drew no day').toBeGreaterThan(0);
-		for (const id of ['faithfulness', 'lead-coverage', 'recorded-only']) {
+		for (const id of ['faithfulness', 'recorded-only']) {
 			// `console-window.spec.ts` pins the exact list of windowed surfaces. These
-			// three honour the control and never claim to be one, for the same reason
+			// two honour the control and never claim to be one, for the same reason
 			// the doubt-reason panel does not: the list is the contract with the
 			// control, not a list of everything the control moves.
 			await expect(page.locator(`[data-eval-panel="${id}"][data-windowed]`)).toHaveCount(0);

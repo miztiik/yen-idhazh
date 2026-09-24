@@ -754,35 +754,6 @@ def outlet_of(item: DigestItem) -> str:
     return item.source_name
 
 
-def key_point_overlap(left: frozenset[str], right: frozenset[str]) -> float:
-    """What share of their key-point words two items have between them, 0 to 1.
-
-    Shared words over the words they have between them, reduced exactly the way
-    a headline is reduced so one rule owns what counts as a word. It is a term
-    in the score rather than a rule of its own: two tellings of one story name
-    the same people, places and figures in their key points, and two different
-    stories on one subject share the subject and little else.
-
-    Zero when either item has no words left after the reduction, which is what
-    a key-point list of punctuation reduces to. That is the honest answer for a
-    term - no evidence rather than a match - because the floor is what decides
-    and a term may not decide on its own.
-
-    The size of the union is counted rather than built. A day of 731 items asks
-    this a few million times, and building the second set doubles the work for a
-    number two additions already give.
-    """
-    if not left or not right:
-        return 0.0
-    shared = len(left & right)
-    return shared / (len(left) + len(right) - shared)
-
-
-def key_point_words(item: DigestItem) -> frozenset[str]:
-    """One item's key points as a set of reduced words, computed once per day."""
-    return frozenset(_reduce(" ".join(item.key_points)).split())
-
-
 def _numbers_clash(left: StoryKey | None, right: StoryKey | None) -> bool:
     """Do two headlines say the same words about two different figures?
 
@@ -847,8 +818,6 @@ class _Terms:
 
     #: The cosine between the two vectors the day already carries.
     cosine: float
-    #: The share of key-point words the two items have between them.
-    key_points: float
     #: Whether their reduced headlines are the same, which joins them outright.
     headline: bool
     #: The weighted score the floor is applied to.
@@ -860,8 +829,8 @@ class _DayScoring:
     """Everything the score reads, built once for the day rather than per pair.
 
     A day of 431 items is about 93,000 pairs, so anything derived from an item
-    rather than from a pair is derived here: reducing a key-point list at every
-    pair would do the same work two hundred times over.
+    rather than from a pair is derived here: reading an item's own title at
+    every pair would do the same work two hundred times over.
 
     `earlier` and `window_hours` are what let a story that broke last night join
     a group formed this morning. They bind only a pair that crosses a day
@@ -873,7 +842,6 @@ class _DayScoring:
     vectors: Mapping[str, array[int]]
     norms: Mapping[str, float]
     keys: Mapping[str, StoryKey]
-    points: Mapping[str, frozenset[str]]
     knobs: SameStoryConfig
     #: Every story the block covers, today's and the window's, by id. Here
     #: rather than rebuilt by each caller because the masthead a pair crosses is
@@ -936,13 +904,9 @@ def _pair_terms(left: str, right: str, day: _DayScoring) -> _Terms | None:
         left_norm=day.norms[left],
         right_norm=day.norms[right],
     )
-    points = key_point_overlap(day.points[left], day.points[right])
     headline = headlines_match(key, other)
-    score = (
-        1.0 if headline else day.knobs.cosine_weight * cosine + day.knobs.key_point_weight * points
-    )
-    return _Terms(cosine=cosine, key_points=points, headline=headline, score=score)
-
+    score = 1.0 if headline else day.knobs.cosine_weight * cosine
+    return _Terms(cosine=cosine, headline=headline, score=score)
 
 def _group_fit(cluster: Sequence[str], item_id: str, day: _DayScoring) -> float | None:
     """How well this item fits the whole group, or nothing if it does not.
@@ -989,13 +953,12 @@ def _log_groups(clusters: Sequence[Sequence[str]], day: _DayScoring) -> None:
         _, terms, left, right = min(scored, key=lambda entry: entry[0])
         LOG.info(
             "same story group=%s members=%s carried_by=%s score=%.4f cosine=%.4f "
-            "key_points=%.4f weakest_pair=%s,%s",
+            "weakest_pair=%s,%s",
             cluster[0],
             len(cluster),
             "headline" if terms.headline else "score",
             terms.score,
             terms.cosine,
-            terms.key_points,
             left,
             right,
         )
@@ -1030,7 +993,6 @@ class ScoredPair:
     #: The higher of the two item ids.
     right: str
     cosine: float
-    key_points: float
     #: Whether the two reduced headlines matched, which scores 1.0 outright
     #: instead of the weighted sum. Carried because the two rules give one
     #: number and a reader of the score alone cannot tell which one ran.
@@ -1112,7 +1074,6 @@ def _day_scoring(
         vectors=vectors,
         norms=norms,
         keys=keys,
-        points={item_id: key_point_words(by_id[item_id]) for item_id in vectors},
         knobs=same_story or SameStoryConfig(),
         by_id=by_id,
         day_of=day_of,
@@ -1166,7 +1127,6 @@ def cross_source_pairs(
             left=left,
             right=right,
             cosine=terms.cosine,
-            key_points=terms.key_points,
             headline=terms.headline,
             score=terms.score,
         )

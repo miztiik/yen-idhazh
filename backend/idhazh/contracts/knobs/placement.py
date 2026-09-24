@@ -503,23 +503,22 @@ class SimilarityThresholdConfig(Model):
 class SameStoryConfig(Model):
     """How alike two of a day's items have to be before they are one story.
 
-    One score, and the score is a weighted sum of terms that each run 0 to 1.
-    Nested rather than three flat knobs under `assemble` because the weights
-    carry an invariant ACROSS them - they sum to 1.0 - and a knob whose legal
-    value depends on another knob's value belongs in the model where a validator
-    can see both.
+    One score, and the score is the cosine between the two vectors the day
+    already carries. Nested rather than flat under `assemble` because the weight
+    carries an invariant - it is the whole score, so it is 1.0 - and a knob a
+    validator has to see belongs in a model that can see it.
 
-    **The sum-to-one rule is what keeps the floor meaning something.** The floor
-    is a number on the same 0-to-1 scale as every term, so a person reading
-    `config/idhazh.json` can compare the floor against a term without first
-    working out what the weights add up to. Let them sum to 1.3 and the floor
-    silently becomes easier to clear every time a weight moves, which is the
-    failure this model exists to make impossible.
+    **The weight is what keeps the floor meaning something.** The floor is a
+    number on the same 0-to-1 scale as the term, so a person reading
+    `config/idhazh.json` can compare the floor against the cosine without first
+    working out what the weight does to it. Let the weight be 1.3 and the floor
+    silently becomes easier to clear, which is the failure this model exists to
+    make impossible.
 
-    It ships with all the weight on the cosine, which is exactly what the pass
-    scored before this model existed. The weights are fitted against hand labels
-    in a later change; until then this is a rewrite that changes no published
-    group rather than a retune.
+    There was a second term once - the share of words two items' key points had
+    in common - and it shipped at a weight of 0.0 and was never raised. Key
+    points are retired, so the cosine is the whole score and the weight cannot
+    be anything but 1.0.
     """
 
     cosine_weight: float = Field(
@@ -528,29 +527,13 @@ class SameStoryConfig(Model):
         le=1.0,
         description=(
             "How much of the score is the cosine between the two vectors the day "
-            "already carries. 1.0 ships, which is the whole score and is what the pass "
-            "used before the composite existed - so the composite lands changing no "
-            "published group, and the weights move against labels rather than against "
-            "taste. It is the strongest single term measured so far: it separates 97.4 "
-            "percent of the labelled pairs. NOT comparable to assist.similarity_floor, "
-            "which scores a reader's query against an item rather than two items "
-            "against each other, so the two distributions are different shapes."
-        ),
-    )
-    key_point_weight: float = Field(
-        default=0.0,
-        ge=0.0,
-        le=1.0,
-        description=(
-            "How much of the score is the share of words the two items' key points "
-            "have in common - the words of both lists reduced the way a headline is "
-            "reduced, then what they share over what they have between them. 0.0 "
-            "ships, so the term is computed and logged and carries no weight yet: the "
-            "composite is a rewrite first and a retune second. It is the only term "
-            "beside the cosine whose different-story pairs stay below its same-story "
-            "pairs with room to spare - a 99th percentile of 0.0962 against a "
-            "same-story median of 0.2419, so the two populations barely touch - which "
-            "is why it is the second term rather than one of several."
+            "already carries. 1.0, which is the whole score and the only legal value: "
+            "the cosine is the only term, so anything else moves the score off the "
+            "scale `floor_min` is read on. It is the strongest single term measured so "
+            "far: it separates 97.4 percent of the labelled pairs. NOT comparable to "
+            "assist.similarity_floor, which scores a reader's query against an item "
+            "rather than two items against each other, so the two distributions are "
+            "different shapes."
         ),
     )
     floor_min: float = Field(
@@ -603,25 +586,23 @@ class SameStoryConfig(Model):
         return self.adaptive_dedup_threshold
 
     @model_validator(mode="after")
-    def _the_weights_sum_to_one(self) -> Self:
+    def _the_cosine_carries_the_whole_score(self) -> Self:
         """A score that is not on 0 to 1 cannot be compared against a floor on 0 to 1.
 
         Checked here rather than left to whoever edits the file, because the
-        failure is silent: weights that sum to 1.3 push every pair up, the floor
-        stops meaning what the labels measured, and the day publishes a merge
-        nobody chose. Nothing downstream re-checks it.
+        failure is silent: a weight of 1.3 pushes every pair up, the floor stops
+        meaning what the labels measured, and the day publishes a merge nobody
+        chose. Nothing downstream re-checks it.
+
+        The rule used to be that the weights summed to 1.0, across two of them.
+        With the key-point term retired the cosine is the only term left, so the
+        same rule now says the same thing about one number.
         """
-        weights = {
-            "cosine_weight": self.cosine_weight,
-            "key_point_weight": self.key_point_weight,
-        }
-        total = math.fsum(weights.values())
-        if not math.isclose(total, 1.0, abs_tol=_WEIGHTS_TOLERANCE):
-            spelled = ", ".join(f"{name}={value}" for name, value in weights.items())
+        if not math.isclose(self.cosine_weight, 1.0, abs_tol=_WEIGHTS_TOLERANCE):
             raise ValueError(
-                f"the same_story weights must sum to 1.0, and these sum to {total} "
-                f"({spelled}). Every term runs 0 to 1, so the weights are what keep "
-                "the score on the same scale as floor_min"
+                f"cosine_weight is {self.cosine_weight}, and the cosine is the whole "
+                "same_story score, so it is 1.0. The term runs 0 to 1, and the weight "
+                "is what keeps the score on the same scale as floor_min"
             )
         return self
 

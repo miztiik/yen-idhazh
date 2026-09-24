@@ -12,7 +12,7 @@ ever enabled, not after.
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import ClassVar, Self
+from typing import Any, ClassVar, Final, Self
 
 from pydantic import Field, model_validator
 
@@ -28,10 +28,31 @@ from idhazh.contracts.base import (
     Timestamp,
     Url,
     UrlKey,
+    without_retired_keys,
 )
 
 Score = float
 _DELTA_PLACES = 6
+
+#: Headings a committed day shard still carries that this row no longer names
+#: and that nothing replaced. `coverage` held the survival of the article's
+#: opening names and figures; many good articles and blogs open slowly, so a
+#: summary that left the opening behind was never a worse summary for it.
+#: `new_fact_rate` counted key points that added a fact, and key points are
+#: themselves being retired.
+#:
+#: **This is a contract, not a courtesy.** A work shard seals one `.eval.json`
+#: per item and two later jobs read it back hours afterwards, so a key this row
+#: stopped naming is one `extra="forbid"` would refuse on a payload that is
+#: exactly what its author meant to write - and the run would lose its day.
+#: `ledger.migrate_header` refuses any heading it cannot place for the same
+#: reason, so a column deleted above without an entry here leaves every
+#: committed day file unappendable.
+#:
+#: **Both sides of the row read this one set.** A committed day file reaches it
+#: through `ledger.SCORES_CARRIED`; the per-item payload reaches it through the
+#: before-validator below.
+DROPPED_CELLS: Final[frozenset[str]] = frozenset({"coverage", "new_fact_rate"})
 
 
 class ConfidenceBand(StrEnum):
@@ -54,7 +75,10 @@ class BandReason(StrEnum):
     UNSUPPORTED_NUMBER = "unsupported_number"
     #: No faithfulness score exists, so the item cannot claim the top band.
     NOT_SCORED = "not_scored"
-    #: The names and figures in the article's opening did not survive.
+    #: The names and figures in the article's opening did not survive. Nothing
+    #: produces this any more: a slow opening is not a worse story, so the band
+    #: stopped reading it. The member stays because committed published days
+    #: carry it, and a reader of one of those days still has to name the reason.
     LEAD_MISSING = "lead_missing"
     #: The article hedged and the summary asserted.
     HEDGE_DROPPED = "hedge_dropped"
@@ -67,6 +91,11 @@ class EvalRow(Contract):
 
     __schema_stem__: ClassVar[str] = "eval-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-24",
+            change="coverage and new_fact_rate go; coherence and semantic_coverage arrive.",
+            why="Two columns did not signal what they named, and two that do replace them.",
+        ),
         ChangelogEntry(
             version="2026-09-13T22:00",
             change="pipeline_fingerprint stays on this one shape after leaving the other nine.",
@@ -81,11 +110,6 @@ class EvalRow(Contract):
             version="2026-09-12T18:40",
             change="item_id accepts a second shape: sixteen Crockford base32 symbols.",
             why="Ten decimal digits is 33 bits of an address, which collides on a busy day.",
-        ),
-        ChangelogEntry(
-            version="2026-09-07T01:00",
-            change="Added new_fact_rate, nullable, at the end of the row.",
-            why="A summary can add a fact the article never carried and nothing counted it.",
         ),
         ChangelogEntry(
             version="2026-08-21",
@@ -156,11 +180,6 @@ class EvalRow(Contract):
             "is frontend/src/lib/server/model-work.ts, which counts it only over rows "
             "stamped from CUT_FLAG_MEANS_A_CUT_FROM."
         )
-    )
-    coverage: Score = Field(
-        ge=0.0,
-        le=1.0,
-        description="Survival of the lead's entities and numbers. The instrument for omission.",
     )
     compression: Score = Field(
         ge=0.0,
@@ -319,25 +338,58 @@ class EvalRow(Contract):
         ),
     )
     # Appended for the same layout reason as the block above, and null for the
-    # same meaning reason: 0.0 is a reply whose every key point restated the
-    # summary, which a row written before the column existed never measured.
-    new_fact_rate: Score | None = Field(
+    # same meaning reason: a row written before these existed measured neither,
+    # and 0.0 would claim a measurement that never ran.
+    coherence: Score | None = Field(
+        default=None,
+        ge=-1.0,
+        le=1.0,
+        description=(
+            "How connected the summary reads: the mean cosine similarity between each "
+            "pair of neighbouring sentences in the summary, encoded by the same sentence "
+            "encoder the reader's search uses. Reads the summary alone - the article is "
+            "not involved - so it sees the one defect every other column here is blind "
+            "to: sentences that are each faithful and do not follow one another. Raw on "
+            "the encoder's own -1 to 1 scale rather than rescaled, so the number stays "
+            "the cosine a reader can recompute. Recorded only, and a poor instrument to "
+            "gate on even later: a summary that says the same sentence twice reads as "
+            "perfectly coherent. Null when the summary holds fewer than two sentences, "
+            "because there is no neighbouring pair to compare, and null on a row scored "
+            "before metrics-4."
+        ),
+    )
+    semantic_coverage: Score | None = Field(
         default=None,
         ge=0.0,
         le=1.0,
         description=(
-            "Share of the item's key points that state a fact the summary prose does "
-            "not already carry - the aggregate inverse of the restatement drop "
-            "to_summary makes, read at the same distinctness ceiling, so a key point "
-            "that counts here is exactly one the drop keeps. The instrument for whether "
-            "the key-point prompt finds facts or paraphrases the summary. Lexical, and "
-            "the element table supersedes it with span-anchored ids that "
-            "carry no false positive. Recorded only - no band reads it, and best-of-N "
-            "against it is the Goodhart form of the number. Null on a row scored before "
-            "the column existed; 0.0 only on a scored reply whose every key point "
-            "restated."
+            "Share of the article's most-repeated content words that appear in the "
+            "summary. Lexical, not semantic, despite the name: it matches word forms, so "
+            "a summary saying 'the chipmaker' where the article said 'Nvidia' is scored "
+            "as a miss. The reference is a fixed count of the article's most frequent "
+            "non-function words, so the denominator does not grow with the article - "
+            "recall over the WHOLE article was measured at the same time and rejected, "
+            "because it tracks article length and restates `compression`. Recorded only, "
+            "and a low score is as often a faithful abstraction as an omission, which is "
+            "why no band reads it. Null when the article yielded no content word, and "
+            "null on a row scored before metrics-4."
         ),
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _without_the_columns_this_row_stopped_naming(cls, data: Any) -> Any:
+        """The read-side migration `CLAUDE.md` section 11 owes a removed column.
+
+        A work shard seals one `.eval.json` the moment it finishes an item, and
+        `stages.record` and `stages.assemble` both read it back later in the same
+        run. A column that leaves the row in between is a key `extra="forbid"`
+        refuses, so the run that wrote the payload loses its whole day.
+
+        The keys come from `DROPPED_CELLS` rather than from a list of their own,
+        so the CSV side and the JSON side cannot name different sets.
+        """
+        return without_retired_keys(data, *DROPPED_CELLS)
 
     @model_validator(mode="after")
     def _delta_is_rebuilt_not_trusted(self) -> Self:

@@ -289,15 +289,20 @@ test.describe('the pairs a person marked apart', () => {
 		expect(await skips.textContent()).toContain('could not be checked');
 	});
 
-	test('the weights the score was taken under are printed beside it', async ({ page }) => {
-		// A score with no weights beside it is a number that rots quietly: a
-		// reader who changes a weight has to see that the margin moved because
-		// the ruler moved.
+	test('the weight the score was taken under is printed beside it', async ({ page }) => {
+		// A score with no weight beside it is a number that rots quietly: a
+		// reader who changes the weight has to see that the margin moved because
+		// the ruler moved. The note carried a second term until 2026-09-24; the
+		// cosine is the whole score now, so it names one weight and says where
+		// that weight came from.
 		await open(page);
 
 		const weights = (await page.locator(`${PANEL} [data-holdout-weights]`).textContent()) ?? '';
 		expect(weights).toContain('on the cosine');
-		expect(weights).toContain('on the key points');
+		expect(weights).toMatch(/committed config|newest fitted day/);
+		expect(weights, 'the key-point term is retired and must not be printed').not.toContain(
+			'key point'
+		);
 	});
 
 	test('a tree nobody has scored says so rather than printing four zeros', async ({ page }) => {

@@ -1,10 +1,10 @@
 /** Every instrument the eval ledger writes, and the console panel that answers for it.
  *
- * The pipeline has scored a faithfulness number and a lead-coverage number on
- * every summary since the first day it published, and neither had ever been
- * drawn. The band was drawn, and a band is a verdict: it says a summary was
- * doubted and never says by how much, so a prompt change that moved every score
- * four points without moving a single band looked like it did nothing.
+ * The pipeline has scored a faithfulness number on every summary since the first
+ * day it published, and it had never been drawn. The band was drawn, and a band
+ * is a verdict: it says a summary was doubted and never says by how much, so a
+ * prompt change that moved every score four points without moving a single band
+ * looked like it did nothing.
  *
  * **The map below is the point of this module, not the charts.** `DRAWN_BY`
  * assigns every measured column of the ledger to exactly one panel, and
@@ -13,7 +13,7 @@
  * reads `EvalRow` and fails on a column that is in neither,
  * in both, or in a map and not in the contract. So a column added to `EvalRow`
  * next month fails a test instead of quietly going undrawn for a year, which is
- * how `hhem` and `coverage` got here.
+ * how `hhem` got here.
  *
  * **Nothing here sets an alarm.** No threshold, no red, no band tint, no
  * polarity. The committed window is fifteen days and the summarizer is about to
@@ -50,15 +50,9 @@ export const EVAL_PANELS: readonly EvalPanel[] = [
 		title: 'How closely a summary matched its article',
 		route: '/console/model/'
 	},
-	{ id: 'lead-coverage', title: 'How much of the opening survived', route: '/console/model/' },
 	{ id: 'recorded-only', title: 'Measured, and nothing acts on it', route: '/console/model/' },
 	{ id: 'summary-length', title: 'How long the summaries came out', route: '/console/model/' },
-	{ id: 'score-cost', title: 'What checking one summary cost', route: '/console/model/' },
-	{
-		id: 'new-fact-rate',
-		title: 'How often a key point adds to the summary',
-		route: '/console/model/'
-	}
+	{ id: 'score-cost', title: 'What checking one summary cost', route: '/console/model/' }
 ];
 
 /** Which panel answers for which ledger column.
@@ -80,19 +74,19 @@ export const DRAWN_BY: Readonly<Record<string, string>> = {
 	hhem: 'faithfulness',
 	hhem_full: 'faithfulness',
 	hhem_delta: 'faithfulness',
-	coverage: 'lead-coverage',
 	compression: 'recorded-only',
 	self_repetition: 'recorded-only',
 	evidential_density: 'recorded-only',
 	speculative_density: 'recorded-only',
+	coherence: 'recorded-only',
+	semantic_coverage: 'recorded-only',
 	extraction_suspect: 'recorded-only',
 	determinism_violation: 'recorded-only',
 	// Already drawn, now declared.
 	summary_word_count: 'summary-length',
 	source_word_count: 'summary-length',
 	source_seen_word_count: 'summary-length',
-	score_ms: 'score-cost',
-	new_fact_rate: 'new-fact-rate'
+	score_ms: 'score-cost'
 };
 
 /** Every remaining column, and why no panel owes it a number.
@@ -128,16 +122,17 @@ export interface RecordedInstrument {
 	/** The ledger column. */
 	id: string;
 	label: string;
-	unit: 'percent' | 'per-thousand-words';
+	unit: 'percent' | 'per-thousand-words' | 'cosine';
 	/** What the number is, and which way is bad, in the reader's words. */
 	note: string;
 }
 
-/** Four numbers the checker writes down and no band, no card and no rule reads.
+/** Six numbers the checker writes down and no band, no card and no rule reads.
  *
- * Order is the order they are drawn in, and it is deliberate: the two lengths
- * first, because they are about the summary, then the two marker counts, which
- * are about the article and are read against each other rather than alone.
+ * Order is the order they are drawn in, and it is deliberate: the three about
+ * the summary first, then the one about the summary against its article, then
+ * the two marker counts, which are about the article and are read against each
+ * other rather than alone.
  */
 export const RECORDED: readonly RecordedInstrument[] = [
 	{
@@ -151,6 +146,18 @@ export const RECORDED: readonly RecordedInstrument[] = [
 		label: 'Summary text that repeats itself',
 		unit: 'percent',
 		note: 'The share of four-word runs the summary had already used. Up is the bad direction, and nothing bands it.'
+	},
+	{
+		id: 'coherence',
+		label: 'Summary sentences that follow one another',
+		unit: 'cosine',
+		note: 'How close each sentence sits to the one before it, from -1 to 1. A summary that says the same thing twice scores near the top, so it is a poor thing to judge one by.'
+	},
+	{
+		id: 'semantic_coverage',
+		label: "Article's most-used words the summary kept",
+		unit: 'percent',
+		note: 'Word for word, not by meaning: a summary saying "the chipmaker" where the article said "Nvidia" counts as a miss. A low reading is as often a good short summary as a poor one.'
 	},
 	{
 		id: 'evidential_density',
@@ -206,14 +213,6 @@ export interface EvalDay {
 	widerDiffers: number;
 	/** The widest such gap that day, in whole percentage points. */
 	widestGap: number;
-	/** Summaries that day carrying a lead-coverage score. */
-	led: number;
-	/** Lead coverage of the middle summary, whole percent. */
-	leadMid: number | null;
-	/** Summaries whose lead coverage fell under the floor. */
-	leadUnder: number;
-	/** That share as a whole percent of the day's led summaries. */
-	leadUnderPct: number | null;
 	/** The middle summary's reading on each recorded instrument, in its own unit. */
 	recorded: Readonly<Record<string, number | null>>;
 	/** How many summaries each flag fired on. */
@@ -280,13 +279,16 @@ function perThousand(value: number): number {
 	return Math.round(value * 10000) / 10;
 }
 
-/** Every day the ledger holds, oldest first, reduced.
+/** A cosine kept on its own scale, to two places.
  *
- * `leadFloor` is `evaluation.lead_coverage_min` from `config/idhazh.json`, handed
- * in rather than read here: this module is imported by the page, by the server
- * load and by the browser oracle in plain Node, and a default sitting in a
- * module variable is how two of those three end up counting against a different
- * number without anything failing.
+ * Not a percent. It runs from -1 to 1 and has no denominator, so the reader is
+ * shown the number the encoder produced rather than a share of nothing.
+ */
+function toTwoPlaces(value: number): number {
+	return Math.round(value * 100) / 100;
+}
+
+/** Every day the ledger holds, oldest first, reduced.
  *
  * `counts` carries the distinct-published counts a run settled for a day, keyed
  * by date. Where a day is present, the three published-set figures - the scored
@@ -303,7 +305,6 @@ function perThousand(value: number): number {
  */
 export function evalDays(
 	rows: readonly EvalInput[],
-	leadFloor: number,
 	counts?: ReadonlyMap<string, DayScoredCounts>
 ): EvalDay[] {
 	const byDate = new Map<string, EvalInput[]>();
@@ -319,10 +320,8 @@ export function evalDays(
 	for (const date of [...byDate.keys()].sort()) {
 		const group = byDate.get(date) ?? [];
 		const match: number[] = [];
-		const lead: number[] = [];
 		let widerDiffers = 0;
 		let widestGap = 0;
-		let leadUnder = 0;
 		const recordedValues = new Map<string, number[]>();
 		for (const instrument of RECORDED) recordedValues.set(instrument.id, []);
 		const fired: Record<string, number> = {};
@@ -336,11 +335,6 @@ export function evalDays(
 				widerDiffers += 1;
 				widestGap = Math.max(widestGap, Math.abs(delta));
 			}
-			const coverage = measured(row.coverage);
-			if (coverage !== null) {
-				lead.push(coverage);
-				if (coverage < leadFloor) leadUnder += 1;
-			}
 			for (const instrument of RECORDED) {
 				const value = measured(row[instrument.id]);
 				if (value !== null) recordedValues.get(instrument.id)?.push(value);
@@ -351,7 +345,6 @@ export function evalDays(
 		}
 
 		match.sort((a, b) => a - b);
-		lead.sort((a, b) => a - b);
 		// The published-set counts, where a run settled them. A flag fires on a
 		// distinct published item, not on a ledger row, so a re-scored day counts
 		// it once here even though its two rows still both enter the distributions
@@ -364,12 +357,17 @@ export function evalDays(
 		const recorded: Record<string, number | null> = {};
 		for (const instrument of RECORDED) {
 			const values = (recordedValues.get(instrument.id) ?? []).sort((a, b) => a - b);
+			if (values.length === 0) {
+				recorded[instrument.id] = null;
+				continue;
+			}
+			const middle = at(values, 0.5);
 			recorded[instrument.id] =
-				values.length === 0
-					? null
-					: instrument.unit === 'percent'
-						? pct(at(values, 0.5))
-						: perThousand(at(values, 0.5));
+				instrument.unit === 'percent'
+					? pct(middle)
+					: instrument.unit === 'cosine'
+						? toTwoPlaces(middle)
+						: perThousand(middle);
 		}
 
 		days.push({
@@ -385,10 +383,6 @@ export function evalDays(
 			matchHigh: match.length === 0 ? null : pct(at(match, 0.75)),
 			widerDiffers,
 			widestGap: pct(widestGap),
-			led: lead.length,
-			leadMid: lead.length === 0 ? null : pct(at(lead, 0.5)),
-			leadUnder,
-			leadUnderPct: lead.length === 0 ? null : Math.round((leadUnder / lead.length) * 100),
 			recorded,
 			fired
 		});
@@ -403,123 +397,9 @@ export function evalWithin(
 	return days.filter((day) => day.date >= span.start && day.date <= span.end);
 }
 
-// --- How often a key point adds a fact, by length band ----------------------
-//
-// `new_fact_rate` is a per-item share on the eval row, recorded and acted on by
-// nothing (the standing trap: best-of-N against it is the Goodhart form of the
-// number). It is bucketed by the SummaryBand the article fell in, because the
-// shortest band asks for one key point and the longest for five, so redundancy
-// is structural at the short end and one pooled figure would hide it. `bandFor`
-// reads the same length ladder the summarizer wrote the item under.
-//
-// The item count and the summed rate ride per day, never the rate itself: a rate
-// averaged across days is meaningless, so the window sums the parts and divides
-// once. One small object a day over the ladder's rungs, so a wider window filters
-// this array and re-aggregates nothing - the same shape `evalDays` keeps.
-
-export interface NewFactDay {
-	date: string;
-	byBand: Readonly<Record<string, { items: number; sum: number }>>;
-}
-
-export function newFactDays(
-	rows: readonly EvalInput[],
-	bands: readonly SummaryBand[]
-): NewFactDay[] {
-	const byDate = new Map<string, EvalInput[]>();
-	for (const row of rows) {
-		const date = (row.date ?? '').trim();
-		if (date === '') continue;
-		const found = byDate.get(date);
-		if (found) found.push(row);
-		else byDate.set(date, [row]);
-	}
-
-	const days: NewFactDay[] = [];
-	for (const date of [...byDate.keys()].sort()) {
-		const byBand: Record<string, { items: number; sum: number }> = {};
-		for (const row of byDate.get(date) ?? []) {
-			const rate = measured(row.new_fact_rate);
-			if (rate === null) continue;
-			// The length the band was chosen on, pre-cap where the row still knows it,
-			// falling back to what the model saw - the same order `band_source_words`
-			// reads on the producing side.
-			const words = measured(row.source_word_count) ?? measured(row.source_seen_word_count);
-			if (words === null) continue;
-			const band = bandFor(bands, words);
-			if (band === null) continue;
-			const key = String(band.min_source_words);
-			const bucket = byBand[key] ?? { items: 0, sum: 0 };
-			bucket.items += 1;
-			bucket.sum += rate;
-			byBand[key] = bucket;
-		}
-		days.push({ date, byBand });
-	}
-	return days;
-}
-
-export function newFactWithin(
-	days: readonly NewFactDay[],
-	span: { start: string; end: string }
-): NewFactDay[] {
-	return days.filter((day) => day.date >= span.start && day.date <= span.end);
-}
-
-/** One band's reading over a window: the typical item's share of key points that
- * add a fact, and how many items that is out of. */
-export interface NewFactReading {
-	/** The band's floor word count as a string - the stable key across days. */
-	key: string;
-	/** The length range a reader sees, e.g. "700-1,999 words". */
-	label: string;
-	/** Items in the window that fell in this band and carried a rate. */
-	items: number;
-	/** The average of those items' shares, whole percent, or null where the band
-	 * held no item in the window. */
-	rate: number | null;
-}
-
-export function newFactBands(
-	days: readonly NewFactDay[],
-	bands: readonly SummaryBand[]
-): NewFactReading[] {
-	const totals = new Map<string, { items: number; sum: number }>();
-	for (const day of days) {
-		for (const [key, bucket] of Object.entries(day.byBand)) {
-			const running = totals.get(key) ?? { items: 0, sum: 0 };
-			running.items += bucket.items;
-			running.sum += bucket.sum;
-			totals.set(key, running);
-		}
-	}
-
-	const sorted = [...bands].sort((a, b) => a.min_source_words - b.min_source_words);
-	return sorted.map((band, index) => {
-		const key = String(band.min_source_words);
-		const next = sorted[index + 1];
-		const label =
-			next === undefined
-				? `${grouped(band.min_source_words)}+ words`
-				: `${grouped(band.min_source_words)}-${grouped(next.min_source_words - 1)} words`;
-		const running = totals.get(key);
-		return {
-			key,
-			label,
-			items: running?.items ?? 0,
-			rate: running && running.items > 0 ? pct(running.sum / running.items) : null
-		};
-	});
-}
-
 /** The days that carry a faithfulness reading, which is what the plot draws. */
 export function matchDays(days: readonly EvalDay[]): EvalDay[] {
 	return days.filter((day) => day.matchMid !== null);
-}
-
-/** The days that carry a lead-coverage reading. */
-export function leadDays(days: readonly EvalDay[]): EvalDay[] {
-	return days.filter((day) => day.leadUnderPct !== null);
 }
 
 export function evalColumnLabels(days: readonly EvalDay[]): string[] {
@@ -577,49 +457,11 @@ export function matchColumns(days: readonly EvalDay[]): DayReadout[] {
 	}));
 }
 
-/** One line: the share of a day's summaries that kept too little of the opening.
- *
- * The middle summary's kept share is in the strip and the headline instead. It
- * barely moves - measured 2026-09-06, every one of the fifteen committed days
- * sat between 57 and 64 percent - and a flat line drawn beside a moving one
- * reads as the important one.
- */
-export function leadSeries(days: readonly EvalDay[]): StackSeries[] {
-	return [
-		{
-			label: 'Kept too little of the opening',
-			token: '--chart-8',
-			values: days.map((day) => day.leadUnderPct ?? 0)
-		}
-	];
-}
-
-export function leadColumns(days: readonly EvalDay[]): DayReadout[] {
-	return days.map((day) => ({
-		x: 0,
-		date: day.date,
-		rows: [
-			{
-				label: 'Kept too little of the opening',
-				value: `${grouped(day.leadUnder)} of ${grouped(day.led)}`,
-				colour: 'var(--chart-8)'
-			},
-			{
-				label: 'The middle summary kept',
-				value: `${day.leadMid}%`,
-				colour: 'var(--chart-marker)'
-			}
-		]
-	}));
-}
-
 /** What the whole window holds, so a sentence never re-walks the days itself. */
 export interface EvalTotals {
 	days: number;
 	scored: number;
 	matched: number;
-	led: number;
-	leadUnder: number;
 	widerDiffers: number;
 	widestGap: number;
 }
@@ -627,19 +469,15 @@ export interface EvalTotals {
 export function evalTotals(days: readonly EvalDay[]): EvalTotals {
 	let scored = 0;
 	let matched = 0;
-	let led = 0;
-	let leadUnder = 0;
 	let widerDiffers = 0;
 	let widestGap = 0;
 	for (const day of days) {
 		scored += day.scored;
 		matched += day.matched;
-		led += day.led;
-		leadUnder += day.leadUnder;
 		widerDiffers += day.widerDiffers;
 		widestGap = Math.max(widestGap, day.widestGap);
 	}
-	return { days: days.length, scored, matched, led, leadUnder, widerDiffers, widestGap };
+	return { days: days.length, scored, matched, widerDiffers, widestGap };
 }
 
 /** The middle day of the window, by its own middle summary. */
@@ -672,35 +510,6 @@ export function widerNote(days: readonly EvalDay[], windowDays: number): string 
 		return `Scored against the whole article instead of the part the machine read, every one of these ${grouped(totals.matched)} summaries scores the same. The two readings only part when the article was cut.`;
 	}
 	return `Scored against the whole article instead of the part the machine read, ${grouped(totals.widerDiffers)} of these ${grouped(totals.matched)} summaries score differently, by up to ${totals.widestGap} points.`;
-}
-
-export function leadHeadline(days: readonly EvalDay[], windowDays: number): string | null {
-	const drawn = leadDays(days);
-	if (drawn.length === 0) return null;
-	const mid = middleDay(drawn.map((day) => day.leadMid));
-	if (mid === null) return null;
-	return `Over these ${windowDays} days the middle summary carried ${mid} percent of the names and figures in its article's opening lines.`;
-}
-
-/** What falling under the floor costs a summary, said once, in the panel it governs.
- *
- * The floor is a cap and not a bar: falling under it holds a summary at "fairly
- * sure" and cannot on its own mark one "not sure". A panel that drew it as a
- * failure line would be reporting a verdict the checker does not reach.
- *
- * Stated as the rule rather than as a record. "has never marked one" says the
- * same thing over every day there has ever been, which is a span this panel
- * reads none of - and it is the weaker sentence anyway, because it reports a
- * run of luck where the arithmetic gives a guarantee.
- */
-export function leadFloorNote(
-	days: readonly EvalDay[],
-	windowDays: number,
-	leadFloor: number
-): string | null {
-	const totals = evalTotals(days);
-	if (totals.led === 0) return null;
-	return `${grouped(totals.leadUnder)} of ${grouped(totals.led)} summaries in these ${windowDays} days kept under ${pct(leadFloor)} percent. That holds a summary at "fairly sure" and cannot on its own mark one "not sure".`;
 }
 
 /** One recorded instrument over the window. */
@@ -751,8 +560,15 @@ export function flagReadings(days: readonly EvalDay[]): FlagReading[] {
 	}));
 }
 
-/** How a recorded reading is written, unit included, or a dash where there is none. */
+/** How a recorded reading is written, unit included, or a dash where there is none.
+ *
+ * A cosine is printed as the number it is, to two places. Multiplying it by a
+ * hundred and calling it a percent would read as a share of something, and it
+ * is not one - it runs from -1 to 1 and has no denominator.
+ */
 export function recordedText(reading: RecordedReading, value: number | null): string {
 	if (value === null) return '-';
-	return reading.unit === 'percent' ? `${value}%` : `${value.toFixed(1)} per 1,000 words`;
+	if (reading.unit === 'percent') return `${value}%`;
+	if (reading.unit === 'cosine') return value.toFixed(2);
+	return `${value.toFixed(1)} per 1,000 words`;
 }

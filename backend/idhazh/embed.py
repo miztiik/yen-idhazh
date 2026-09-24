@@ -211,6 +211,44 @@ class Embedder:
         return vectors
 
 
+class EncoderOnFirstUse:
+    """An encoder that loads its weights the first time something asks for a vector.
+
+    For a caller that embeds SOME of its items and cannot tell in advance which.
+    `Embedder` is lazy about the file and strict about the call - it refuses to
+    encode before `load()` - so a caller like that has to either load at start-up
+    and pay for a shard whose items all failed, or write the same
+    is-it-loaded-yet branch itself.
+
+    It answers `None` rather than raising when the ONNX file is not in the
+    checkout, so a measurement that needs a vector records nothing and the item
+    still publishes (`docs/concepts/evaluation.md`).
+    """
+
+    def __init__(self, embedder: Embedder) -> None:
+        self._embedder = embedder
+        self._loaded = False
+
+    def encode(self, texts: list[str]) -> list[list[float]]:
+        if not self._loaded:
+            self._embedder.load()
+            self._loaded = True
+        return self._embedder.encode(texts)
+
+
+def encoder_if_committed(
+    root: Path, assist: AssistConfig | None = None
+) -> EncoderOnFirstUse | None:
+    """An encoder for this checkout, or nothing when the weights are not in it.
+
+    The weights are committed, so `None` means a partial checkout rather than a
+    missing download - and the right answer to that is to measure less, not to
+    fetch something at run time (Guardrail #1).
+    """
+    embedder = Embedder(root, assist)
+    return EncoderOnFirstUse(embedder) if embedder.available else None
+
+
 def text_for(item: DigestItem) -> str:
     """What a reader is actually searching: the headline and what we said about it."""
     return f"{item.title}. {item.summary}"

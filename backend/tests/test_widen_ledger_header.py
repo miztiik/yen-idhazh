@@ -144,6 +144,10 @@ def test_widening_keeps_every_cell_the_narrow_header_named(tmp_path: Path) -> No
     Read by name rather than by position, because that is the promise the tail
     rule makes: a cell inserted in the middle would pass a position check on the
     columns before it and put the wrong name over every value after it.
+
+    A cell the row has stopped naming is the one exception, and it is named as
+    the survivors rather than counted: a check that only asserted the count fell
+    would pass whichever cells went.
     """
     path = a_narrow_day(tmp_path)
     with path.open("r", encoding="utf-8", newline="") as handle:
@@ -155,9 +159,11 @@ def test_widening_keeps_every_cell_the_narrow_header_named(tmp_path: Path) -> No
         after = list(csv.DictReader(handle))
     assert len(after) == len(before)
     for old, new in zip(before, after, strict=True):
+        carried = {name: value for name, value in old.items() if name not in DROPPED_CELLS}
+        assert set(old) - set(new) == DROPPED_CELLS & set(old)
         # `judge_id` is the one appended cell the widening fills rather than
         # leaves empty: these rows were judged by the judge that owns the store.
-        assert {name: new[name] for name in old} == old
+        assert {name: new[name] for name in carried} == carried
         assert new["judge_id"] == "content-similarity-judge"
         assert new["judged_by_run_id"] == ""
 

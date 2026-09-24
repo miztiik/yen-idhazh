@@ -24,11 +24,10 @@ from idhazh.similarity import judge, prompt
 
 @dataclass(frozen=True, slots=True)
 class ScorerStamp:
-    """The three values that decide what a similarity score means."""
+    """The two values that decide what a similarity score means."""
 
     scorer_model: ScorerModelId
     cosine_weight: float
-    key_point_weight: float
 
 
 @dataclass(frozen=True, slots=True)
@@ -65,7 +64,6 @@ def scorer_inputs(settings: config.Settings) -> ScorerStamp:
     return ScorerStamp(
         scorer_model=EMBEDDER_ID,
         cosine_weight=same_story.cosine_weight,
-        key_point_weight=same_story.key_point_weight,
     )
 
 

@@ -30,39 +30,21 @@ pytestmark = pytest.mark.slow
 def test_the_counterweights_alone_never_claim_the_top_band() -> None:
     """Without a faithfulness score there is no basis for claiming high confidence."""
     assert (
-        band(
-            None,
-            unsupported_numbers=0,
-            lead_coverage=1.0,
-            hedge_dropped=False,
-            config=EvaluationConfig(),
-        )
+        band(None, unsupported_numbers=0, hedge_dropped=False, config=EvaluationConfig())
         is ConfidenceBand.MEDIUM
     )
 
 
 def test_an_invented_number_still_reaches_the_reader_as_low() -> None:
     assert (
-        band(
-            None,
-            unsupported_numbers=1,
-            lead_coverage=1.0,
-            hedge_dropped=False,
-            config=EvaluationConfig(),
-        )
+        band(None, unsupported_numbers=1, hedge_dropped=False, config=EvaluationConfig())
         is ConfidenceBand.LOW
     )
 
 
-def test_a_summary_that_dropped_the_lead_reaches_the_reader_as_medium() -> None:
+def test_a_summary_that_flattened_a_hedge_reaches_the_reader_as_medium() -> None:
     assert (
-        band(
-            None,
-            unsupported_numbers=0,
-            lead_coverage=0.0,
-            hedge_dropped=False,
-            config=EvaluationConfig(),
-        )
+        band(None, unsupported_numbers=0, hedge_dropped=True, config=EvaluationConfig())
         is ConfidenceBand.MEDIUM
     )
 

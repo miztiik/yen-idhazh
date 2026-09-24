@@ -67,7 +67,6 @@ from idhazh.contracts.item_health import FailureCode as ItemFailureCode
 from idhazh.contracts.item_health import ItemHealthRow, ItemOutcome, ItemStage, TimeSource
 from idhazh.contracts.knobs.evaluation import EvaluationConfig
 from idhazh.contracts.knobs.models import ModelRef
-from idhazh.contracts.knobs.summarize import SummarizeConfig
 from idhazh.contracts.knobs.visuals import VisualsConfig
 from idhazh.contracts.run_manifest import ModelRole, ModelUse, RunManifest, RunRecord, RunStatus
 from idhazh.contracts.similarity_holdout_pair import SimilarityHoldoutPair
@@ -191,6 +190,14 @@ _DELTA_PLACES: Final = 6
 #: draws them.
 _EXTRACTIVENESS: Final = 0.22
 _VERBATIM_RUN: Final = 0.07
+#: The two recorded-only columns added on 2026-09-24, held flat for the same
+#: reason as the four above. Typed rather than computed because both need a text
+#: this builder does not have: coherence needs the summary through the sentence
+#: encoder, and semantic coverage needs the article, and a fixture day carries
+#: counts with no article behind them. Both sit mid-scale so each panel draws a
+#: value rather than an empty state.
+_COHERENCE: Final = 0.41
+_SEMANTIC_COVERAGE: Final = 0.60
 _EVIDENTIAL_DENSITY: Final = 0.011
 _SPECULATIVE_DENSITY: Final = 0.004
 
@@ -208,7 +215,6 @@ class _Measured(NamedTuple):
     summary_words: int
     hhem: float
     hhem_full: float
-    coverage: float
     score_ms: int
     unsupported_numbers: int = 0
     hedge_dropped: bool = False
@@ -245,32 +251,34 @@ SCORED: Final[tuple[_Measured, ...]] = (
     # axis widened to hold it or clamped it onto the edge.
     _Measured(
         source_words=38, summary_words=31,
-        hhem=0.93, hhem_full=0.92, coverage=0.78, score_ms=180,
+        hhem=0.93, hhem_full=0.92, score_ms=180,
     ),
     # High confidence, second target zone.
     _Measured(
         source_words=140, summary_words=62,
-        hhem=0.86, hhem_full=0.84, coverage=0.61, score_ms=240,
+        hhem=0.86, hhem_full=0.84, score_ms=240,
     ),
     # Medium on faithfulness alone, and the only mark under the zone the sixth
     # rung opened on 2026-09-09 - long enough that the model read part of it and
     # short enough to stay under the top rung's floor.
     _Measured(
         source_words=4200, summary_words=78,
-        hhem=0.71, hhem_full=0.70, coverage=0.52, score_ms=290,
+        hhem=0.71, hhem_full=0.70, score_ms=290,
     ),
-    # Faithful, but the lead's names and figures did not survive, so the band is
-    # capped at medium and the reason is the missing lead.
+    # High confidence. It carried a missing-lead reason until 2026-09-24, when
+    # the band stopped reading whether the article's opening survived - so the
+    # reason it exercised cannot be produced any more, and a fixture that still
+    # claimed it would be a fixture of a rule nothing applies.
     _Measured(
         source_words=880, summary_words=96,
-        hhem=0.88, hhem_full=0.87, coverage=0.22, score_ms=330,
+        hhem=0.88, hhem_full=0.87, score_ms=330,
     ),
     # Faithful, but the article hedged and the summary asserted. Its length
     # before the cut was never recorded, so it scores and counts but is not on
     # the plot - the state the sentence under the chart exists to declare.
     _Measured(
         source_words=1320, summary_words=118,
-        hhem=0.90, hhem_full=0.89, coverage=0.64, score_ms=410,
+        hhem=0.90, hhem_full=0.89, score_ms=410,
         hedge_dropped=True, full_length_known=False,
     ),
     # Low on faithfulness, in the widest target zone. Longer than SEEN_WORD_CAP,
@@ -282,7 +290,7 @@ SCORED: Final[tuple[_Measured, ...]] = (
     # has no full length anywhere.
     _Measured(
         source_words=2450, summary_words=164,
-        hhem=0.44, hhem_full=0.43, coverage=0.48, score_ms=520,
+        hhem=0.44, hhem_full=0.43, score_ms=520,
         full_length_known=False,
     ),
     # Cut: the article is longer than what the model was given, so the plot draws
@@ -293,14 +301,14 @@ SCORED: Final[tuple[_Measured, ...]] = (
     # one item whose note has to carry two source limits at once.
     _Measured(
         source_words=2800, summary_words=205,
-        hhem=0.91, hhem_full=0.78, coverage=0.57, score_ms=610,
+        hhem=0.91, hhem_full=0.78, score_ms=610,
     ),
     # Cut, and low whatever the scorer thought: the summary asserts two
     # figures the article never gave, and nothing else in the row may outvote
     # that.
     _Measured(
         source_words=6100, summary_words=190,
-        hhem=0.83, hhem_full=0.69, coverage=0.55, score_ms=640,
+        hhem=0.83, hhem_full=0.69, score_ms=640,
         unsupported_numbers=2,
     ),
 )
@@ -370,7 +378,6 @@ def verdict_for(measured: _Measured, evaluation: EvaluationConfig) -> score.Verd
     return score.verdict(
         measured.hhem,
         unsupported_numbers=measured.unsupported_numbers,
-        lead_coverage=measured.coverage,
         hedge_dropped=measured.hedge_dropped,
         config=evaluation,
     )
@@ -1444,7 +1451,6 @@ def _eval_row(item: DigestItem, measured: _Measured, evaluation: EvaluationConfi
         hhem_full=measured.hhem_full,
         hhem_delta=delta,
         truncation_flagged=was_cut(measured),
-        coverage=measured.coverage,
         # Summary words over source words, which is the whole of what
         # `metrics.compression` computes - done on the counts because a fixture
         # day has counts and no article behind them.
@@ -1455,15 +1461,9 @@ def _eval_row(item: DigestItem, measured: _Measured, evaluation: EvaluationConfi
         hedge_dropped=measured.hedge_dropped,
         evidential_density=_EVIDENTIAL_DENSITY,
         speculative_density=_SPECULATIVE_DENSITY,
-        # Computed from the fixture's own key points and summary, so the console's
-        # new-fact panel draws a real per-band figure rather than an empty state.
-        new_fact_rate=metrics.new_fact_rate(
-            item.key_points,
-            item.summary,
-            ceiling=SummarizeConfig().key_point_restatement_ceiling,
-        ),
-        extraction_suspect=False,
-        band=item.band,
+        coherence=_COHERENCE,
+        semantic_coverage=_SEMANTIC_COVERAGE,
+        extraction_suspect=False,        band=item.band,
         source_word_count=measured.source_words if measured.full_length_known else None,
         source_seen_word_count=seen_words(measured),
         summary_word_count=measured.summary_words,

@@ -342,7 +342,7 @@ from run 34943695821 shard 3, 20 articles, 2026-09-15.
 | `quotes[]` | two sentence addresses, no text | indices only: an exact search rejects a real quote over one changed word, silently | **nobody** - no renderer compiles a quote | 24 |
 | `claims[]` | the same, for the article's own assertions | same | **nobody** | 73 |
 | `keyphrases[]` | up to 8 phrases copied from the article | "the only search surface that needs no embedding model" | **nobody** - search uses the embedding vector | 138 |
-| `lede_sentence_ids[]` | the 1-2 sentences carrying the main point | carried for `lead_coverage` | **nobody** - `lead_coverage` is a deterministic function | 20 |
+| `lede_sentence_ids[]` | the 1-2 sentences carrying the main point | nothing reads it since the lead-coverage metric was retired on 2026-09-24 | **nobody** | 20 |
 
 `labels` was empty on 8 of 20 articles and `proposed` on all 20.
 

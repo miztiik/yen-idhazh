@@ -82,6 +82,7 @@ UNMARKED_MODULES: Final = frozenset(
         "test_doc_load",
         "test_elements",
         "test_embed",
+        "test_embedding_metrics",
         "test_eval_ledger",
         "test_eval_row",
         "test_evals",

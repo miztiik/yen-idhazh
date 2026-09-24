@@ -152,7 +152,6 @@ def test_the_fitted_line_reaches_the_block_the_grouping_pass_reads(tmp_path: Pat
 
     assert effective.floor_min == pytest.approx(0.912)
     assert effective.cosine_weight == committed.cosine_weight
-    assert effective.key_point_weight == committed.key_point_weight
     assert effective.adaptive_dedup_threshold == committed.adaptive_dedup_threshold
 
 

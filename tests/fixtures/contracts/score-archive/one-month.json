@@ -36,13 +36,6 @@
           "sum": 0.8206322095272344,
           "sum_squares": 0.2337035288985579
         },
-        "coverage": {
-          "max": 1.0,
-          "min": 0.0,
-          "n": 5,
-          "sum": 2.3666666666666667,
-          "sum_squares": 1.7344444444444445
-        },
         "evidential_density": {
           "max": null,
           "min": null,
