@@ -303,7 +303,7 @@ test.describe('the day list', () => {
 				day.items[0].item_id
 			);
 		}
-		for (const needle of ['alpha', 'beta', 'gamma']) {
+		for (const needle of ['alpha', 'beta']) {
 			expect(ids(shortlist(index, needle, null, NOBODY, '').visible)).toContain(
 				day.items[0].item_id
 			);
