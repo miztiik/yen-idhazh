@@ -66,8 +66,9 @@ One row is one pull request. Fourteen rows were merged into seven because the me
 | 6 | `prune.yml` becomes `idhazh-gardener.yml`; the GitHub tasks get a schedule | 4, 5 | D | PENDING | - | - | - |
 | 7 | The month compaction, and the diagram moves into the page | 6 | E | PENDING | - | - | - |
 | 8 | One panel end to end: parquet at rest, parsed in the browser, drawn in d3 | 2 | B | PENDING | - | - | - |
+| 9 | The console shell: a stuck tab strip, the span control on it, four named anchors | - | B | PENDING | - | - | - |
 
-Rows 1 and 2 are the only genuinely concurrent pair, and they still collide on `backend/tests/test_marks.py`. Everything from row 3 down is serial on `backend/idhazh/gardener/tasks.py` and `config/idhazh_gardener.json` - except row 8, which touches `frontend/` and one backend writer and shares no file with any of them. It is the one row that could run beside the others; whether to widen N past 1 for it is the owner's call at dispatch.
+Rows 1 and 2 are the only genuinely concurrent pair, and they still collide on `backend/tests/test_marks.py`. Everything from row 3 down is serial on `backend/idhazh/gardener/tasks.py` and `config/idhazh_gardener.json` - except rows 8 and 9, which touch `frontend/` and one backend writer and share no file with any of them. They are the two rows that could run beside the others; whether to widen N past 1 for them is the owner's call at dispatch.
 
 ## 2. The layout this plan establishes
 
@@ -832,6 +833,46 @@ It mints the name from `naming.unit_id` (section 5.7), builds the path through `
 
 **The house style is the deliverable, and it is designed for every panel on the console.** `frontend/src/lib/charts/d3/` holds the scale, axis, colour, empty-state and reduced-motion rules, read from `config/appearance.json` like everything else (Guardrail #6), and `frontend/src/lib/data/` holds the one reader every panel goes through. **The Platform Mix panel is the proof, not the product** - a row that ships one good panel and no shared parts has bought one panel and left the next fourteen where they were. The seven rules this row is built to are `docs/concepts/console-design/how-a-console-chart-gets-its-data.md`; rule 1 is the one that decides any scope argument inside this row.
 
+#### The panel this row delivers
+
+Ruled by Susan on 2026-09-24 against the panel as it stands. Her verdict on the current one was SEND BACK: three of four sufficiency checks fail, two of the five spans draw no mark at all, and the fold line ships a visible defect.
+
+**The title and the standfirst are settled and go in verbatim.**
+
+```
+Which machines ran our jobs, day by day
+```
+
+```
+We do not pick the machine. The platform hands us one at the start of every job,
+so a slow week can be the machine rather than the code. One bar is one kind of
+machine on one day, over the last {windowDays} days. It counts what we were
+given and predicts nothing about the next job.
+```
+
+If the speed ramp lands, one sentence is added and nothing else: `Darker bars are faster machines.` The old title stated a grievance and never said what was counted; the old standfirst opened on a conclusion about re-running before the reader knew what the panel measured.
+
+**Colour carries speed, ordered, and it is bound to the whole record.** One hue, five steps, ranked by the machine kind's median prompt throughput from `server_prompt_tokens / server_prompt_seconds`. Five steps because a reader cannot rank more than about five steps of one hue on a bar that thin. Not the confidence hues - a machine that draws slow is a draw, not a failure. **Bound to the whole record and never to the open window**: a machine keeps its colour when the operator changes the span, and surviving the span control is the one thing this colour has to do. A five-step key chip reads `slower` to `faster`, and every readout row prints an absolute rate, so no share, probability or pie returns.
+
+| Case | Colour |
+| --- | --- |
+| Machine not recorded | the reserved grey, flat, sorted last, outside the ramp |
+| Known machine, no throughput reading | the same grey with a 45-degree hatch, the row reads `no speed reading` |
+| `Other machines` | allowed **only** over ramp-adjacent kinds, taking their shared step, and named by the band: `3 machines near 30 tokens a second` |
+| Kinds that are not ramp-adjacent | do not fold. Folding the slowest into the middle is the one thing an ordered ramp cannot do |
+
+**Cost, stated rather than implied: three panels share machine colour, so all three move together and all three must print the rate.**
+
+**Under the row threshold the panel changes shape rather than switching off.** One mark per job - one column a day, one dot a job, coloured by machine - so all five spans draw something. The threshold's reason survives intact and is why this works: a bar over small counts reads as `this much` and invites a rate, where a dot per job reads as `these ones` and cannot, because every mark is an individual a reader can point at. **The sentence quoting `160` goes**: an internal knob is not a fact a reader can act on (CLAUDE.md section 0b).
+
+**The readout stays a vertical column and moves beside the plot.** It carries names and counts, and counts compare down a right-aligned column in one eye movement; laid out horizontally a reader scans past `Intel Xeon Platinum 8573C` to reach the next number, and those names wrap to two and three rows below 1400 px. What was wrong was its position, not its orientation: the plot is 760 px inside a 1216 px content box at a 1536 px viewport, with 456 px standing empty beside it.
+
+**What this row does, in Susan's rank order:** say the machine is not recorded and sort that last, outside `Other machines`; drill through from a day or a mark to the jobs behind it, naming run, job, shard, machine, seconds and rate; one shape switch splitting by `job`; the speed ramp; the unit marks under the threshold; and last, a full-record context band showing where the open window sits.
+
+**What this row refuses, each with its reason.** The throughput spread per machine kind - this panel answers what we were given, the machine cards and shard board own variance, so the readout row links to them instead. Splits by `vm_location`, `vm_size` or `runner_name` - location is not actionable, size is nearly the same fact as the machine kind, and the runner name is a high-cardinality identifier with no reader meaning, while colour is already carrying an ordered variable. Any figure about the next job. Animating between windows.
+
+**Two defects are in this row's way and neither is this row's to fix.** Defect 33 in `TODO/20260823-known-defects-plan.md` doubles every count this panel draws and is what makes `Other machines` read as the second commonest machine; until it lands, every number here is wrong by about a fifth. The fold line renders `drawn as one bar: .` because `PlatformMixPanel.svelte` reads `series.at(-1)` while `fleet.ts` merges into an existing series and pushes nothing, so the last series is a real machine with an empty `folded` list - an optional chain swallows it. **Both are fixed before this row starts, not inside it**, because a redraw that inherits a wrong number ships a prettier wrong number.
+
 - **Files touched:**
   - `backend/idhazh/telemetry/silicon.py` (writes through the row 2 door), `backend/idhazh/contracts/host_fingerprint.py` (`version` stamp, one `changelog` line)
   - `backend/idhazh/ledger.py` (`SegmentLedger.HOST_FINGERPRINT` leaves `write_segment`), `backend/idhazh/paths.py`
@@ -866,6 +907,40 @@ It mints the name from `naming.unit_id` (section 5.7), builds the path through `
   | 4 | Delete `waterfall.ts` and `donut.ts` here | They are ECharts modules with no importer anywhere in `frontend/src`, found 2026-09-24 - real dead code and a free deletion, but not this row's question | A one-line change of its own | Fowler |
 
 - **ESCALATE - how the browser reaches the bytes.** `state/` is not published today. N7 says the console reads `state/` rather than a projection of it; N8 says telemetry does not live under `frontend/` in git. A build step that copies one store into the published output satisfies both; committing a second copy under `frontend/public/` satisfies neither and is what N8 exists to end. **This is a Level 5 contract decision, it is not settled here, and the row stops until the owner rules.**
+
+---
+
+### Row #9 - The console shell: a stuck tab strip, the span control on it, four named anchors
+
+- **Scope:** the chrome every console route sits in. No panel changes and no store is read differently.
+- **Depends on:** nothing. It shares no file with any other row.
+
+**Why it is not part of row 8.** It is route chrome across all five console routes, where row 8 is one panel on one of them. One row is one pull request, and a shell change that fails a nav spec would hold up the panel it has nothing to do with.
+
+Ruled by Susan on 2026-09-24. The complaint it answers: the Hardware route is fifteen panels long with no quick way back, and the span control sits at the top where a reader nine panels down cannot reach it.
+
+| # | Element | Ruling | What the reader loses |
+| --- | --- | --- | --- |
+| 1 | The five-tab strip | **Stuck from 1024 px up**, about 47 px. Below that it stays where it is | about 47 px of every screen above 1024 px, against fifteen panels of scrolling |
+| 2 | `Days shown` | Moves to the trailing edge of the stuck strip at 1024 px and up, as a **compact five-segment control**. Below 1024 px it stays where it is, full width | the word `days` repeated five times |
+| 3 | The tab description line, while stuck | Hidden. It is already hidden below 1400 px and is the anchor's `title` | the one-line summary of the other four routes while scrolled; it returns at the top |
+| 4 | Back to the top | An **`On this page` row of the four group names** under the span control, and a `Top` link on each group heading | nothing |
+| 5 | The site header | Not stuck, unchanged. Its tagline drops on console routes only | the site's one-line self-description on operator routes; it stays on every reading route |
+| 6 | The `Console` heading | Not stuck, scrolls away | nothing. It names the surface once, and repeating it every screen is furniture |
+| 7 | The days status sentence | Stays under the strip, never inside it | nothing. It is a sentence, not a control |
+
+- **Decisions:**
+
+  | # | Decision | Authority |
+  | --- | --- | --- |
+  | 1 | **A dropdown is refused for the span control.** A menu hides four of five options, and it hides the price at the moment the browser starts fetching its own data | Susan, 2026-09-24 |
+  | 2 | **Folding the logo on scroll is refused.** It buys zero pixels because the header already leaves the screen, and scroll-linked motion has to be designed twice for reduced motion | Susan, 2026-09-24 |
+  | 3 | **Folding the band is refused.** The band is what an operator reads on landing; folded, he opens a disclosure to learn that yesterday failed. Its worst-thing fragment rides in the stuck strip as one short line instead | Susan, 2026-09-24 |
+  | 4 | **1024 px is where it sticks, and the number is a knob.** A stuck control must be one band at the width it sticks at: at 1024 px the five tabs are one row, at 640 px two, at 360 px three | Susan. The breakpoint lives in `config/appearance.json` (Guardrail #6) |
+  | 5 | Four named anchors beat one floating arrow. Fifteen panels sit in four declared groups, and named anchors work with no script at every width | Susan, 2026-09-24 |
+
+- **Acceptance gates:** the browser smoke on all five console routes at 360 px, 640 px, 1024 px and 1536 px (CLAUDE.md section 12); the stuck strip is one row at every width it sticks at; zero new `[error]` and zero new `404`. Local `npm --prefix frontend run test:changed -- --list` then the selected checks.
+- **Oracle:** at each of the four widths, the strip's measured height equals one row and the four anchors reach their headings. It cannot settle whether 1024 px is the right breakpoint; that is a judgement, and decision 4 makes it a knob so it can move without a code change.
 
 ---
 
