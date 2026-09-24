@@ -143,7 +143,7 @@ function brokenShapes(day: Day): Record<string, string> {
 		}),
 		oneStoryTheViewRefuses: broken(day, (payload) => {
 			const items = payload.items as Record<string, unknown>[];
-			items[items.length - 1]!.key_points = [];
+			items[items.length - 1]!.summary = '';
 		})
 	};
 }
@@ -222,13 +222,12 @@ function validateDays(root: string): { code: number; said: string } {
 	}
 }
 
-/** A story the loader can render: the four names it reads, and no more. */
+/** A story the loader can render: the three names it reads, and no more. */
 function story(n: number): Record<string, unknown> {
 	return {
 		item_id: `ai-${n}`,
 		title: `A story that is fine, number ${n}`,
-		summary: 'A summary long enough to be a summary.',
-		key_points: ['One point.']
+		summary: 'A summary long enough to be a summary.'
 	};
 }
 
@@ -242,7 +241,7 @@ const SERVED: Record<string, string> = {
 	noItemList: JSON.stringify({ version: '2026-09-01T09:00', items: null }),
 	oneStoryTheViewRefuses: JSON.stringify({
 		version: '2026-09-01T09:00',
-		items: [story(1), { ...story(2), key_points: undefined }, story(3)]
+		items: [story(1), { ...story(2), summary: undefined }, story(3)]
 	})
 };
 

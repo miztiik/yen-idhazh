@@ -81,12 +81,10 @@ _INCUMBENT_SUMMARIES = [
     ItemSummary(
         key="a",
         summary="The agency fined the bank 250 million dollars after an inquiry into fees.",
-        key_points=("A regulator penalised the bank over overdraft fees.",),
     ),
     ItemSummary(
         key="b",
         summary="The council approved 1,320 homes, with building due to start next spring.",
-        key_points=("A council cleared a large housing scheme.",),
     ),
 ]
 
@@ -100,12 +98,10 @@ _CANDIDATE_SUMMARIES = [
             "The agency fined the bank 250 million dollars after an inquiry into fees. "
             "It affected 9999 accounts."
         ),
-        key_points=("A regulator penalised the bank over overdraft fees.",),
     ),
     ItemSummary(
         key="b",
         summary="The council approved 1,320 homes, with building due to start next spring.",
-        key_points=("A council cleared a large housing scheme.",),
     ),
 ]
 
@@ -168,12 +164,12 @@ def test_the_gate_promotes_a_real_winner_even_when_the_judge_is_against_it() -> 
     the whole decision.
     """
     worse = [
-        ItemSummary("a", "A separate note put the penalty at 999 pounds overall.", ("A fine was set.",)),
-        ItemSummary("b", "The council cleared 1320 homes for next spring.", ("Homes were cleared.",)),
+        ItemSummary("a", "A separate note put the penalty at 999 pounds overall."),
+        ItemSummary("b", "The council cleared 1320 homes for next spring."),
     ]
     better = [
-        ItemSummary("a", "A separate note put the penalty at 250 pounds overall.", ("A fine was set.",)),
-        ItemSummary("b", "The council cleared 1320 homes for next spring.", ("Homes were cleared.",)),
+        ItemSummary("a", "A separate note put the penalty at 250 pounds overall."),
+        ItemSummary("b", "The council cleared 1320 homes for next spring."),
     ]
     # Precondition: prove the crafted sets are a clean Pareto beat before the loop.
     worse_card = score_prompt(worse, _ITEMS)

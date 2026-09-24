@@ -21,11 +21,6 @@
       ],
       "introduced_by_run": 1,
       "item_id": "ai-01",
-      "key_points": [
-        "Cost per million tokens falls 34 percent against the model it replaces.",
-        "Throughput on commodity CPUs is 2.1x the previous release.",
-        "Weights are published under a permissive licence."
-      ],
       "lenses": [
         "ai-roi"
       ],
@@ -69,11 +64,6 @@
       ],
       "introduced_by_run": 1,
       "item_id": "energy-01",
-      "key_points": [
-        "Four small modular reactors, 1.2 gigawatts in total.",
-        "The order is worth 3.2 billion dollars.",
-        "First unit is due in 2031."
-      ],
       "lenses": [
         "markets"
       ],

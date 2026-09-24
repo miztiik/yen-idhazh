@@ -64,7 +64,7 @@ const MODEL_DIR = /\/assist\/models\//;
 const WEIGHTS = /\/assist\/models\/.*\.onnx$/;
 const MONTH = /\/index\/\d{4}-\d{2}\.json$/;
 
-function item(id: string, title: string, summary = '', points: string[] = []): DigestItem {
+function item(id: string, title: string, summary = ''): DigestItem {
 	return {
 		item_id: id,
 		vertical: 'ai',
@@ -75,7 +75,6 @@ function item(id: string, title: string, summary = '', points: string[] = []): D
 		source_kind: 'reporting',
 		published_at: null,
 		summary,
-		key_points: points,
 		lenses: [],
 		events: [],
 		entities: [],
@@ -109,11 +108,11 @@ test.describe('the filter rule', () => {
 		expect(filterNeedle('a', 1)).toBe('a');
 	});
 
-	test('the needle reads the title, the summary and the key points', () => {
+	test('the needle reads the title and the summary', () => {
 		const items = [
 			item('one', 'A reactor in Kerala'),
 			item('two', 'Something else', 'the reactor is cooled by seawater'),
-			item('three', 'Another thing', 'no match here', ['a second reactor is planned']),
+			item('three', 'Another thing', 'a second reactor is planned'),
 			item('four', 'Nothing to do with it')
 		];
 

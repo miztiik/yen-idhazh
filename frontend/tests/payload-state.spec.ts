@@ -72,8 +72,7 @@ function dayBody(revision: string, ids: string[]): string {
 		items: ids.map((id) => ({
 			item_id: id,
 			title: 'A story',
-			summary: 'A summary long enough to be a summary.',
-			key_points: ['One point.']
+			summary: 'A summary long enough to be a summary.'
 		}))
 	});
 }
@@ -424,8 +423,7 @@ test.describe('what one session keeps in hand', () => {
 			const story = (id: string) => ({
 				item_id: id,
 				title: id,
-				summary: id,
-				key_points: [] as string[]
+				summary: id
 			});
 			/** A day that counts how many times anything reads its story list. */
 			const watched = (items: ReturnType<typeof story>[]) => {

@@ -346,7 +346,6 @@ class DigestItem(Model):
     )
 
     summary: Prose = Field(min_length=1)
-    key_points: list[str] = Field(min_length=1)
     lenses: list[Slug] = Field(default_factory=list)
     events: list[Slug] = Field(default_factory=list)
     entities: list[Slug] = Field(default_factory=list)
@@ -461,6 +460,12 @@ class DigestItem(Model):
         ),
     )
 
+    @model_validator(mode="before")
+    @classmethod
+    def _without_the_retired_key_points(cls, data: Any) -> Any:
+        """Every day published before 2026-09-24 carries them, and they are frozen."""
+        return without_retired_keys(data, "key_points")
+
     @model_validator(mode="after")
     def _item_id_is_addressed_by_vertical(self) -> Self:
         if not self.item_id.startswith(f"{self.vertical}-"):
@@ -538,6 +543,11 @@ class DigestDay(Contract):
     __schema_stem__: ClassVar[str] = "digest-day"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-24",
+            change="Removed DigestItem.key_points. A frozen day that carries it still loads.",
+            why="Nothing drew them, and the search filter reads title and summary instead.",
+        ),
+        ChangelogEntry(
             version="2026-09-22T12:00",
             change="Added DigestRunRef.run_id and .completed_at; items_failed may be null.",
             why="The day is folded from per-run fragments, and a fold can be missing one.",
@@ -551,11 +561,6 @@ class DigestDay(Contract):
             version="2026-09-17",
             change="DigestItem.summary is Prose - paragraphs split by one blank line.",
             why="A long summary is two paragraphs, and read-side folding keeps old days readable.",
-        ),
-        ChangelogEntry(
-            version="2026-09-16T17:00",
-            change="Added DigestItem.same_story_on - which day holds the item it collapses onto.",
-            why="A story can now be the same story as one from yesterday; absent means today.",
         ),
         ChangelogEntry(
             version="2026-08-21",

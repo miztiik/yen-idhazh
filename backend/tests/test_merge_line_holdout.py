@@ -87,7 +87,6 @@ def item(item_id: str, *, outlet: str) -> DigestItem:
         source_id=outlet,
         source_name=outlet.title(),
         summary="A summary long enough to be a summary.",
-        key_points=["One point."],
         band=ConfidenceBand.HIGH,
         rank_score=1.0,
         introduced_by_run=1,

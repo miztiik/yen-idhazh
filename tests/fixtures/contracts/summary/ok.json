@@ -12,14 +12,9 @@
   "generated_at": "2026-08-21T06:12:53Z",
   "input_tokens": 1796,
   "item_id": "ai-01",
-  "key_points": [
-    "Cost per million tokens falls 34 percent against the model it replaces.",
-    "Throughput on commodity CPUs is 2.1x the previous release.",
-    "Weights are published under a permissive licence."
-  ],
   "length_action": null,
   "model_id": "qwen3-8b-q4-k-m",
-  "output_digest": "3469c80fe6cf09abdc1ad5e9dca09031d233386da57930506138f7f5318e98bf",
+  "output_digest": "e13605f1bc7f8b7b87126b25629e156e0eefb9b558da5d0a15017cd6cfedc81d",
   "output_tokens": 214,
   "prefill_ms": 0,
   "source_truncated": false,

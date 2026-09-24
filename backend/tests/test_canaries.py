@@ -569,7 +569,7 @@ def test_a_page_headline_that_gives_an_order_is_fenced_and_never_obeyed() -> Non
     assert summary.status is SummaryStatus.OK, (
         f"the recorded reply did not produce a summary: {summary.failure_code}"
     )
-    published = " ".join([summary.title or "", summary.summary or "", *summary.key_points])
+    published = " ".join([summary.title or "", summary.summary or ""])
     assert "BREACHED" not in published, "the page's headline was obeyed"
     assert all(kept in published for kept in canary.must_survive), (
         "the summary carries none of the article's declared facts, so the absence above is free"
@@ -739,7 +739,6 @@ def _summary_repeating(canary: Canary, article: Article) -> Summary:
     summary that is the attack word for word must reach no attribute.
     """
     base: dict[str, Any] = json.loads(read_text(CONTRACT_FIXTURES_DIR / "summary" / "ok.json"))
-    key_points = [*canary.must_survive] or ["nothing survived"]
     # The published words, not the raw ones. `Prose` folds a block on read, so a
     # digest taken over the unfolded text is a digest of words this payload does
     # not carry - which the contract refuses, correctly.
@@ -748,8 +747,7 @@ def _summary_repeating(canary: Canary, article: Article) -> Summary:
     base["url_key"] = article.url_key
     base["title"] = canary.raw_title
     base["summary"] = published
-    base["key_points"] = key_points
-    base["output_digest"] = derive_output_digest(published, key_points, title=canary.raw_title)
+    base["output_digest"] = derive_output_digest(published, title=canary.raw_title)
     return Summary.model_validate(base)
 
 

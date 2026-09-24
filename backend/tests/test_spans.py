@@ -110,7 +110,6 @@ def completion_carrying(sentinel: str) -> tuple[bytes, ...]:
     summary: dict[str, Any] = content["summary"]
     summary["title"] = "Kumquat lanternfish barometer figures restated by the regulator"
     summary["summary"] = f"{sentinel} {summary['summary']}"
-    summary["key_points"] = [f"{sentinel}", *summary["key_points"]]
     payload["choices"][0]["message"]["content"] = json.dumps(content)
     return (one, json.dumps(payload).encode("utf-8"))
 

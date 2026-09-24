@@ -420,7 +420,6 @@ class TestAReplyTheBudgetCutKeepsItsSummary:
         for summary in written:
             assert summary.status is SummaryStatus.OK
             assert summary.summary and "34 percent" in summary.summary
-            assert summary.key_points
         for item in run_plan.items:
             decision = VisualDecision.from_json(read_text(items / f"{item.item_id}{PAYLOAD_SUFFIX}"))
             assert decision.kind is VisualKind.NONE
@@ -440,7 +439,7 @@ class TestAReplyTheBudgetCutKeepsItsSummary:
         """
         body = json.loads(read_text(CUT_IN_THE_PLAN_REPLY))
         content = body["choices"][0]["message"]["content"]
-        body["choices"][0]["message"]["content"] = content[: content.index('"key_points"')]
+        body["choices"][0]["message"]["content"] = content[: content.index(', "summary": ')]
 
         run_plan, items, _served = worked(
             tmp_path,

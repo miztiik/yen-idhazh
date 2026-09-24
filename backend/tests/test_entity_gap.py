@@ -123,8 +123,7 @@ def tree(tmp_path: Path) -> Path:
                     "entities": list(entities),
                     "title": words,
                     "summary": words,
-                    "key_points": ["The point carries no name of its own."],
-                    "visual": None,
+                                "visual": None,
                 }
             )
             for index, (entities, words) in enumerate(specs, start=1)

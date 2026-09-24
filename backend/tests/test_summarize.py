@@ -171,7 +171,6 @@ def body(**overrides: object) -> str:
     payload: dict[str, object] = {
         "title": TITLE,
         "summary": "word " * 100,
-        "key_points": ["one point here", "two points here"],
     }
     payload.update(overrides)
     return json.dumps(payload)
@@ -1318,56 +1317,35 @@ def test_a_config_naming_the_old_global_word_bounds_still_loads() -> None:
     assert not hasattr(older, "summary_words_max")
 
 
-def test_the_prompt_and_the_decoder_count_key_points_the_same_way() -> None:
-    """Disagree, and the decoder rejects a reply that did exactly what was asked."""
-    asked = SummarizeConfig(
-        bands=[
-            SummaryBand(
-                min_source_words=0,
-                target_words_min=50,
-                target_words_max=90,
-                key_points_min=3,
-                key_points_max=4,
-            )
-        ]
-    )
-    schema = output_schema(asked, source_words=0)["properties"]["key_points"]
-    assert (schema["minItems"], schema["maxItems"]) == (3, 4)
-    assert "3 to 4 key points" in system_prompt(asked, source_words=0)
-
-
-def test_the_decoder_holds_each_band_to_its_own_key_point_count() -> None:
-    """The band's ceiling is a control the decoder enforces, not a prompt request.
-
-    A note is held to one key point and a long read to five, so the shortest
-    band cannot emit the five key points that only restate a 40-word summary.
-    With no article named the rail is the union across the ladder, the permissive
-    envelope the recorded input manifest and the offline harnesses hold a reply to.
-    """
-    ask = SummarizeConfig()
-    brief = ask.bands[0]
-    top = ask.bands[-1]
-    at_brief = output_schema(ask, source_words=0)["properties"]["key_points"]
-    at_top = output_schema(ask, source_words=top.min_source_words)["properties"]["key_points"]
-    union = output_schema(ask)["properties"]["key_points"]
-    assert (at_brief["minItems"], at_brief["maxItems"]) == (brief.key_points_min, brief.key_points_max)
-    assert (at_top["minItems"], at_top["maxItems"]) == (top.key_points_min, top.key_points_max)
-    assert at_brief["maxItems"] < at_top["maxItems"], "the shortest band asks for fewer"
-    assert union["maxItems"] == max(band.key_points_max for band in ask.bands)
-
-
-def test_the_key_points_decode_before_the_summary() -> None:
-    """The model finds the facts before it writes the prose that connects them.
+def test_the_title_decodes_before_the_summary() -> None:
+    """The model names the story before it writes the prose that explains it.
 
     Grammar-constrained decoding emits the properties in schema order, so this
-    order is what the model produces: the key points first, then a summary
-    written after them. Nothing else pins it - llama.cpp's order-preserving
-    grammar is not a guarantee this project may assume - so the order is
-    asserted rather than trusted.
+    order is what the model produces. Nothing else pins it - llama.cpp's
+    order-preserving grammar is not a guarantee this project may assume - so the
+    order is asserted rather than trusted.
+
+    A list of key points sat between the two until 2026-09-24 and was the
+    facts-first step. With it gone the title is, and the summary still comes
+    last.
     """
-    order = list(output_schema()["properties"])
-    assert order.index("key_points") < order.index("summary"), order
-    assert order == ["title", "key_points", "summary"]
+    assert list(output_schema()["properties"]) == ["title", "summary"]
+
+
+def test_the_reply_shape_does_not_vary_by_band() -> None:
+    """Every rail left is the widest any band can publish, so no band narrows one.
+
+    The key-point count was the one band-keyed bound - a note held to one, a long
+    read to five - and it made the grammar differ per article, which the prompt
+    then had to state in the same two numbers or lose the item. Gone, the shape
+    is one shape and that whole class of disagreement cannot happen.
+    """
+    ask = SummarizeConfig()
+    shapes = [output_schema(ask, source_words=band.min_source_words) for band in ask.bands]
+
+    assert all(shape == shapes[0] for shape in shapes)
+    assert output_schema(ask) == shapes[0]
+    assert output_schema(ask, brief=True) == shapes[0]
 
 
 def test_the_decoder_rail_never_catches_a_summary_the_verdict_would_publish() -> None:
@@ -1405,66 +1383,13 @@ def test_the_decoder_rail_moves_with_the_ladder_it_is_derived_from() -> None:
     assert rail["maxLength"] > base["maxLength"]
 
 
-def test_a_key_point_carries_a_rail_of_its_own() -> None:
-    """It was the one decoded string in the reply with no upper end.
-
-    That is a budget question rather than a length one. The planner's second
-    call decodes the summary and the visual plan through one output budget, and
-    that budget is derived from the reply shape's own bounds - an unbounded
-    string in it makes the arithmetic a hope.
-    """
-    ask = SummarizeConfig()
-    rail = output_schema(ask)["properties"]["key_points"]["items"]
-
-    assert rail["maxLength"] == ask.key_point_words_max * 12
-
-
-def test_the_key_point_rail_never_catches_a_key_point_the_pipeline_has_published() -> None:
-    """Deliberately loose, because a maxLength is a hard grammar stop.
-
-    Measured 2026-09-10 over the 32,353 key points in the committed digest days:
-    the longest is 66 words and 418 characters. A rail set at what has been seen
-    turns the next slightly longer key point into a parse failure for the whole
-    item, which is the trade `decoder_words_max` refuses for the summary and
-    refuses here for the same reason.
-    """
-    longest_published_words = 66
-    longest_published_chars = 418
-    ask = SummarizeConfig()
-    rail = output_schema(ask)["properties"]["key_points"]["items"]
-
-    assert ask.key_point_words_max > longest_published_words
-    assert rail["maxLength"] > longest_published_chars
-
-
-def test_the_key_point_rail_moves_with_the_knob_it_is_derived_from() -> None:
-    wide = output_schema(SummarizeConfig(key_point_words_max=200))
-    narrow = output_schema(SummarizeConfig(key_point_words_max=20))
-
-    assert (
-        wide["properties"]["key_points"]["items"]["maxLength"]
-        > narrow["properties"]["key_points"]["items"]["maxLength"]
-    )
-
-
 def test_changing_what_we_ask_for_changes_the_fingerprints_inputs() -> None:
     """The old bounds lived only in the prompt text and in a gate nothing hashed."""
     tighter = SummarizeConfig(
         bands=[SummaryBand(min_source_words=0, target_words_min=50, target_words_max=120)]
     )
     assert prompt_inputs() != prompt_inputs(tighter)
-    fewer_points = SummarizeConfig(
-        bands=[
-            SummaryBand(
-                min_source_words=0,
-                target_words_min=50,
-                target_words_max=120,
-                key_points_min=1,
-                key_points_max=2,
-            )
-        ]
-    )
-    assert output_schema_text() != output_schema_text(fewer_points)
+    assert output_schema_text() != output_schema_text(tighter)
 
 
 def test_the_stamp_holds_still_while_the_rendered_prompt_moves() -> None:
@@ -1529,40 +1454,6 @@ def test_no_rung_floor_ever_sits_above_the_cut_point() -> None:
     assert highest_floor < cut_point_words, (
         f"the top rung starts at {highest_floor} words and the model is handed "
         f"{cut_point_words}, so that rung asks for a summary of text it never saw"
-    )
-
-
-#: Words one distinct fact needs, written as a single key-point sentence. A key
-#: point is one sentence (the summarize prompt asks for exactly that), and 20 is
-#: the sentence length this repo already commits to in
-#: `summarize.max_verbatim_words`, whose description calls 20 words "long enough
-#: to carry a real sentence somebody said". Held as a constant rather than read
-#: from that knob, because that knob caps a quotation's length and must not gate
-#: how many key points a band may ask for.
-_WORDS_PER_KEY_POINT = 20
-
-
-def test_no_band_asks_for_more_key_points_than_its_summary_can_carry() -> None:
-    """The redundancy fix, held per band so a sixth band cannot be added at five.
-
-    A key point states a fact the summary does not already hold. The summary's
-    own word budget bounds how many distinct facts the article carries at that
-    band, so asking for more key points than the budget can hold is asking for
-    facts that are not there - which is what made a 40-word note restate itself
-    five times. The bound is `target_words_max / _WORDS_PER_KEY_POINT`, read from
-    `config/` so it follows the ladder when the ladder moves (Guardrail #6). It is a
-    ceiling, not a target: a band may ask for fewer, and the shortest one does.
-    """
-    bands = config.load().app.summarize.bands
-    for band in bands:
-        capacity = band.target_words_max // _WORDS_PER_KEY_POINT
-        assert band.key_points_max <= capacity, (
-            f"the band at {band.min_source_words} words asks for {band.key_points_max} "
-            f"key points but its {band.target_words_max}-word summary can carry about "
-            f"{capacity} distinct facts"
-        )
-    assert bands[0].key_points_max < bands[-1].key_points_max, (
-        "the shortest band must ask for fewer key points than the longest"
     )
 
 
@@ -1689,11 +1580,6 @@ def test_the_prompt_bans_the_verbs_that_smuggle_a_judgement() -> None:
     assert "neutral verbs" in prompt
     for loaded in ("slammed", "blasted", "admitted", "revealed", "confirmed"):
         assert loaded in prompt, "named, so the model can recognise the class"
-
-
-def test_a_key_point_is_asked_to_add_something() -> None:
-    """Three restatements of the summary are three lines a reader skips."""
-    assert "a key point that restates the summary is a wasted line" in flattened()
 
 
 # --- Quoting is allowed, and always attributed -------------------------------
@@ -2404,8 +2290,6 @@ FLOORED: Final = SummarizeConfig(
             min_source_words=0,
             target_words_min=80,
             target_words_max=130,
-            key_points_min=2,
-            key_points_max=3,
         )
     ],
     length_policy=LengthPolicy(absolute_floor_words=75, floor_applies_above_source_words=0),
@@ -2532,8 +2416,7 @@ def test_a_reply_claiming_more_cache_than_prompt_is_refused() -> None:
             item_id="ai-01",
             url_key="9" * 64,
             summary="word " * 60,
-            key_points=["one point here", "two points here"],
-            output_digest=derive_output_digest("word " * 60, ["one point here", "two points here"]),
+            output_digest=derive_output_digest("word " * 60),
             model_id="m",
             input_tokens=100,
             cached_tokens=101,
@@ -2549,103 +2432,10 @@ def test_a_well_formed_reply_becomes_a_summary() -> None:
     result = summarised("ok")
     assert result.status is SummaryStatus.OK
     assert result.summary
-    assert len(result.key_points) == 3
-    assert "pipeline_fingerprint" not in type(result).model_fields, (
-        "the stamp was retired, and the shape stopped carrying it on 2026-09-13"
+    assert "key_points" not in type(result).model_fields, (
+        "the field was retired, and the shape stopped carrying it on 2026-09-24"
     )
-    assert result.output_digest == derive_output_digest(
-        result.summary, result.key_points, title=result.title
-    )
-
-
-# --- A key point that only restates the summary is dropped, not failed --------
-
-# A 29-word summary and slices lifted from it. Each slice shares a four-word run
-# with the summary, so it restates; the distinct line reuses words the summary
-# used and shares no run, so it adds a fact.
-RESTATE_SUMMARY = (
-    "The city council approved a five percent budget increase for the district "
-    "schools on Tuesday evening after a long and at times heated public debate "
-    "over the coming year."
-)
-_DISTINCT_POINT = "The increase is the first the schools have seen since 2019."
-_RESTATING_POINT = "The city council approved a five percent budget increase"
-
-
-def _one_band(ceiling: float = 0.5, floor: int = 1) -> SummarizeConfig:
-    return SummarizeConfig(
-        bands=[
-            SummaryBand(
-                min_source_words=0,
-                target_words_min=30,
-                target_words_max=240,
-                key_points_min=floor,
-                key_points_max=5,
-            )
-        ],
-        key_point_restatement_ceiling=ceiling,
-    )
-
-
-def test_a_key_point_that_restates_the_summary_is_dropped_and_the_item_kept() -> None:
-    result = replied(
-        body(summary=RESTATE_SUMMARY, key_points=[_DISTINCT_POINT, _RESTATING_POINT]),
-        prompt_config=_one_band(),
-    )
-    assert result.status is SummaryStatus.OK
-    assert result.failure_code is None
-    assert result.key_points == [_DISTINCT_POINT]
-    assert result.output_digest == derive_output_digest(
-        result.summary, [_DISTINCT_POINT], title=result.title
-    )
-
-
-def test_a_reply_whose_every_key_point_restates_publishes_the_floor() -> None:
-    """The oracle. Every key point restates, so the item publishes with fewer key
-    points and never a failure code - the drop stops at the band's floor, and the
-    payload's one-key-point minimum is never breached."""
-    all_restate = [
-        _RESTATING_POINT,
-        "budget increase for the district schools on Tuesday evening",
-        "after a long and at times heated public debate",
-    ]
-    result = replied(
-        body(summary=RESTATE_SUMMARY, key_points=all_restate),
-        prompt_config=_one_band(),
-    )
-    assert result.status is SummaryStatus.OK
-    assert result.failure_code is None
-    assert len(result.key_points) == 1
-    assert result.key_points[0] in all_restate
-
-
-def test_the_restatement_drop_keeps_the_bands_key_points_min_not_just_one() -> None:
-    """The floor is the band's key_points_min, so a band that asks for two keeps
-    two even when every key point restates."""
-    all_restate = [
-        _RESTATING_POINT,
-        "budget increase for the district schools on Tuesday evening",
-        "after a long and at times heated public debate",
-    ]
-    result = replied(
-        body(summary=RESTATE_SUMMARY, key_points=all_restate),
-        prompt_config=_one_band(floor=2),
-    )
-    assert result.status is SummaryStatus.OK
-    assert len(result.key_points) == 2
-
-
-def test_the_restatement_ceiling_is_read_from_config_and_not_written_in_the_code() -> None:
-    """Guardrail #6. Move the knob and the same restating key point changes side."""
-    points = [_DISTINCT_POINT, _RESTATING_POINT]
-    lenient = replied(
-        body(summary=RESTATE_SUMMARY, key_points=points), prompt_config=_one_band(ceiling=1.0)
-    )
-    strict = replied(
-        body(summary=RESTATE_SUMMARY, key_points=points), prompt_config=_one_band(ceiling=0.5)
-    )
-    assert lenient.key_points == [_DISTINCT_POINT, _RESTATING_POINT]
-    assert strict.key_points == [_DISTINCT_POINT]
+    assert result.output_digest == derive_output_digest(result.summary, title=result.title)
 
 
 def test_an_injected_tool_call_cannot_reach_a_payload() -> None:
@@ -2683,8 +2473,6 @@ SHORT_BAND = SummaryBand(
     min_source_words=0,
     target_words_min=30,
     target_words_max=45,
-    key_points_min=1,
-    key_points_max=1,
 )
 LONG_BAND = SummaryBand(
     min_source_words=2000,
@@ -2892,7 +2680,6 @@ def test_a_summary_that_is_one_copied_run_of_its_source_is_refused() -> None:
     assert result.failure_code is FailureCode.COPIED_SOURCE
     assert "1.000 of the summary" in (result.failure_detail or "")
     assert result.summary is None
-    assert result.key_points == []
 
 
 def test_the_copied_reply_failed_on_the_copying_and_on_nothing_else() -> None:
@@ -2925,12 +2712,11 @@ def test_the_reject_fires_above_the_ceiling_and_not_at_it() -> None:
     assert verbatim_run(copied_run(33), text) == pytest.approx(0.75)
     assert verbatim_run(copied_run(34), text) == pytest.approx(34 / 44)
 
-    one_point = ["the policy rate is unchanged"]
     assert (
-        replied(body(summary=copied_run(33), key_points=one_point), source="brief").status
+        replied(body(summary=copied_run(33)), source="brief").status
         is SummaryStatus.OK
     )
-    over = replied(body(summary=copied_run(34), key_points=one_point), source="brief")
+    over = replied(body(summary=copied_run(34)), source="brief")
     assert over.failure_code is FailureCode.COPIED_SOURCE
 
 
@@ -2945,7 +2731,7 @@ def test_the_copy_ceiling_is_read_from_config_and_not_written_in_the_code() -> N
         FailureCode.COPIED_SOURCE
     )
     assert replied(
-        body(summary=copied_run(33), key_points=["the policy rate is unchanged"]),
+        body(summary=copied_run(33)),
         source="brief",
         evaluation=strict,
     ).failure_code is (
@@ -3041,15 +2827,6 @@ def test_every_address_shape_the_sanitizer_knows_is_refused_on_the_way_out(addre
         )
     )
     assert replied(leaked).failure_code is FailureCode.LEAKED_ADDRESS
-
-
-def test_a_key_point_carrying_an_address_costs_the_item_too() -> None:
-    """Key points are published words. An address in one is on the page either way."""
-    result = replied(
-        body(key_points=["Read the notice at https://collect.canary.example/beacon.", "Two."])
-    )
-    assert result.failure_code is FailureCode.LEAKED_ADDRESS
-    assert "key point" in (result.failure_detail or "")
 
 
 def test_the_marker_the_sanitizer_leaves_behind_is_refused_as_well() -> None:

@@ -19,10 +19,6 @@
       ],
       "introduced_by_run": 1,
       "item_id": "ai-02",
-      "key_points": [
-        "The paper reports a 12 point gain on a summarization benchmark.",
-        "Training used 4,000 GPU hours."
-      ],
       "lenses": [],
       "on_front_page": null,
       "published_at": "2026-08-21T16:40:00Z",

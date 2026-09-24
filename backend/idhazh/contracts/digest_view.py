@@ -70,6 +70,7 @@ from idhazh.contracts.base import (
     Timestamp,
     Url,
     compact_json,
+    without_retired_keys,
 )
 from idhazh.contracts.digest_day import (
     EARLIER_OUTLETS_MAX,
@@ -292,7 +293,6 @@ class DigestViewItem(Model):
         ge=1, description="A global fact, true for every reader, asserted without any storage."
     )
     lenses: list[Slug] = Field(default_factory=list)
-    key_points: list[str] = Field(min_length=1)
     same_story_as: ItemId | None = Field(
         default=None,
         description=(
@@ -328,6 +328,12 @@ class DigestViewItem(Model):
         ),
     )
 
+    @model_validator(mode="before")
+    @classmethod
+    def _without_the_retired_key_points(cls, data: Any) -> Any:
+        """Every view staged before 2026-09-24 carries them, and they are frozen."""
+        return without_retired_keys(data, "key_points")
+
     @model_validator(mode="after")
     def _item_id_is_addressed_by_vertical(self) -> Self:
         if not self.item_id.startswith(f"{self.vertical}-"):
@@ -349,6 +355,11 @@ class DigestView(Contract):
     __schema_stem__: ClassVar[str] = "digest-view"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-24",
+            change="Removed DigestViewItem.key_points. A staged view that carries it still loads.",
+            why="Nothing drew them, and the in-page filter reads title and summary instead.",
+        ),
+        ChangelogEntry(
             version="2026-09-22",
             change="generated_at is the newest run's completion, not the assembling clock.",
             why="A wall clock makes two assemblies of one set of runs disagree byte for byte.",
@@ -362,11 +373,6 @@ class DigestView(Contract):
             version="2026-09-16T00:40",
             change="Added DigestViewItem.same_story_as and .covered_by.",
             why="The page folds a group into one card, which has to name the other outlets.",
-        ),
-        ChangelogEntry(
-            version="2026-09-13T22:30",
-            change="DigestViewVisual.path became data_path.",
-            why="The reader's browser draws the chart from the marks, so no SVG is published.",
         ),
         ChangelogEntry(
             version="2026-08-31T12:00",

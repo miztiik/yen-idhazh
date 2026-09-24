@@ -168,8 +168,7 @@ def _day() -> DigestDay:
             source_id="probe",
             source_name="Probe",
             summary="A short summary of one grid story.",
-            key_points=["The reserve margin held."],
-            band=ConfidenceBand.HIGH,
+                band=ConfidenceBand.HIGH,
             visual=(
                 DigestVisual(
                     kind=VisualKind.CHART,

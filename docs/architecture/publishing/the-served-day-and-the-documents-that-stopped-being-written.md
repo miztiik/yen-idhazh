@@ -55,11 +55,10 @@ The staged file is now `DigestView`, in [../../../backend/idhazh/contracts/diges
 | `published_at`, `time_source` | the time beside every story's heading | +8.29, +0.99 B an item |
 | `introduced_by_run` | nothing, since the run divider was deleted on 2026-09-01. It stays because taking a field off this list is a contract change | +1.16 B an item |
 | `lenses` | the topic chips | +1.11 B an item |
-| `key_points` | the in-page filter, which reads them today | +93.54 B an item |
 
-All nine together are +107.42 bytes an item rather than the +109.42 those nine sum to, because gzip shares what they have in common.
+All nine together were +107.42 bytes an item rather than the +109.42 those nine sum to, because gzip shares what they have in common.
 
-**`key_points` is nine tenths of that and it is the one worth defending.** `DigestList` filters on it now, so once a reading route fetches this file an absent `key_points` is a thrown `TypeError` rather than a narrower filter. The twelve prerendered documents it replaces carry the same words twelve times over, so on the wire it is cheaper here than it was there. Three names were refused: `events` and `entities` have no renderer and are out of scope as reader-facing chips (+1.63 and +1.80 B an item), and `source_form` has no reader at all (+1.21).
+**A ninth name joined them and left on 2026-09-24.** `key_points` cost +93.54 B an item on its own, nine tenths of what the nine cost together, and it was here for one reader: `DigestList` filtered on it, so once a reading route fetched this file rather than inlining the day, an absent `key_points` was a thrown `TypeError` and not a narrower filter. The field then left the pipeline entirely and the filter reads the title and the summary, so the bytes bought nothing and the name went with the field. Three names were refused at the time: `events` and `entities` have no renderer and are out of scope as reader-facing chips (+1.63 and +1.80 B an item), and `source_form` has no reader at all (+1.21).
 
 **On 2026-09-09 the file gained the day's own facts as well as its stories**, because the document that used to carry them stopped being written. That is recorded with its price under [the served day carries the day's own facts](#the-served-day-carries-the-days-own-facts).
 

@@ -49,10 +49,11 @@ import { join, relative, resolve, sep } from 'node:path';
 const BUILD = resolve(process.cwd(), 'build');
 
 /** On every published item, and on nothing else this site serializes. The
- * trailing colon matters: it matches a day item's `key_points:` field but not
- * the config's `key_points_min` / `key_points_max`, which the console inlines
- * alongside the summary bands and which are not a day payload. */
-const MARKER = 'key_points:';
+ * trailing colon matters: it matches a day item's field and not a prose
+ * mention. It was `key_points:` until 2026-09-24, when that field left the
+ * payload; this one is required on every served item, so it cannot go absent
+ * on a story the way an optional name can. */
+const MARKER = 'introduced_by_run:';
 
 const DATED = /^\/\d{4}-\d{2}-\d{2}(\/|$)/;
 

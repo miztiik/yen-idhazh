@@ -416,13 +416,12 @@ def label_system_prompt(prompt_config: SummarizeConfig | None = None) -> str:
     """Both jobs, in one turn, in front of the article.
 
     Three files joined here rather than one file holding all of it, and the
-    reason is the four placeholders that may NOT move: `target_words_min/max`
-    and `key_points_min/max` are the article's own band and belong in the turn
-    behind it. Appended into one 8.5 KB file a stray one of those is invisible
-    and renders to a model as the literal `$target_words_min`. Kept apart, one
-    test states the whole invariant - the rendered system prompt carries no `$`,
-    and the moved template's placeholder set is exactly the four config-level
-    names.
+    reason is the two placeholders that may NOT move: `target_words_min/max`
+    are the article's own band and belong in the turn behind it. Appended into
+    one 8.5 KB file a stray one of those is invisible and renders to a model as
+    the literal `$target_words_min`. Kept apart, one test states the whole
+    invariant - the rendered system prompt carries no `$`, and the moved
+    template's placeholder set is exactly the config-level names.
 
     Elements, then the summary, then the plan, because everything the plan half
     points at - an address, the table - is defined in the elements half, so the
@@ -440,7 +439,6 @@ def label_system_prompt(prompt_config: SummarizeConfig | None = None) -> str:
             _summary_half().substitute(
                 title_words_min=ask.title_words_min,
                 title_words_max=ask.title_words_max,
-                key_point_words_max=ask.key_point_words_max,
                 max_verbatim_words=ask.max_verbatim_words,
                 paragraph_rule=summarize.paragraph_rule(ask),
             ),
@@ -1222,11 +1220,8 @@ def summarize_and_plan_user_turn(
     past it.
 
     Every number in it is substituted from `config/` at render time (Guardrail #6),
-    and the key-point pair comes off `summarize.key_point_rail`, which is the
-    same function the decoder's rail comes off. Asking for more key points than
-    the grammar admits would lose the item for doing what it was told, and with
-    no article named the two would disagree: the prompt would state the shortest
-    band's numbers while the decoder held the union of every band's.
+    and the band comes off the article's own length, which is what the decoder's
+    word rails are derived from too.
 
     **The last line is read off the grammar rather than written out**, so the
     field names in the recency position cannot disagree with the shape the
@@ -1240,13 +1235,10 @@ def summarize_and_plan_user_turn(
     """
     ask = prompt_config or SummarizeConfig()
     band = ask.band_for(0) if brief else ask.band_for(source_words or 0)
-    key_points_min, key_points_max = summarize.key_point_rail(ask, source_words, brief)
     shape = summarize_and_plan_model(ask, source_words=source_words, brief=brief, plan=plan)
     return _pointer_template().substitute(
         target_words_min=band.target_words_min,
         target_words_max=band.target_words_max,
-        key_points_min=key_points_min,
-        key_points_max=key_points_max,
         write="Write " + ", then ".join(f'"{name}"' for name in shape.model_fields) + ".",
     )
 
@@ -1255,16 +1247,10 @@ def summarize_and_plan_prose_words(prompt_config: SummarizeConfig | None = None)
     """Every word the reply's prose fields can hold, at their widest.
 
     The union rail rather than one band's, because the budget is a property of
-    the reply shape and not of the article in front of it. `key_points_max` is
-    the widest band's, for the same reason.
+    the reply shape and not of the article in front of it.
     """
     ask = prompt_config or SummarizeConfig()
-    key_points = max(band.key_points_max for band in ask.bands)
-    return (
-        ask.title_words_max
-        + key_points * ask.key_point_words_max
-        + ask.decoder_words_max()
-    )
+    return ask.title_words_max + ask.decoder_words_max()
 
 
 def summarize_and_plan_budget_tokens(
@@ -1280,7 +1266,7 @@ def summarize_and_plan_budget_tokens(
     Two halves, converted differently, because they are two different kinds of
     text and one rule would be wrong about one of them.
 
-    - **The prose** is `title`, the key points and the summary. Their rails are
+    - **The prose** is `title` and the summary. Their rails are
       word counts from `config/`, spent as characters at `CHARS_PER_WORD`, so
       the honest unit for them is words: `extract.approx_tokens` at 1.3 tokens a
       word is what the truncation cap already spends, and using a second ratio
@@ -1325,14 +1311,18 @@ def summarize_and_plan_budget_tokens(
 #: `visual.WORST_CASE_REPLY_CHARACTERS` is the precedent and the reason is the
 #: same: a number that only exists inside a function is a number nobody
 #: re-derives, and a bound can then move without anybody seeing what it cost.
-SUMMARIZE_AND_PLAN_BUDGET_TOKENS: Final = 4735
+SUMMARIZE_AND_PLAN_BUDGET_TOKENS: Final = 4160
 #: The same arithmetic with the plan off the grammar. The gap between the two is
 #: what the reachability gate saves per item, and it is a decode rather than a
-#: call (O43): 3,789 tokens off a 4,735-token ceiling, which is 80 percent of it.
+#: call (O43): 3,789 tokens off a 4,160-token ceiling, which is 91 percent of it.
 #: A ceiling is not a measurement of seconds - an ordinary reply's plan half was
 #: measured at 176 tokens of 327, which is 29.3 s at the summarizer's decode
 #: rate. The working is in `docs/architecture/publishing/visuals.md`.
-SUPPRESSED_BUDGET_TOKENS: Final = 946
+#:
+#: Both fell on 2026-09-24, when the reply shape stopped carrying key points:
+#: the ceiling by 575 tokens and the summary-alone figure by the same 575, which
+#: is what five key points of 80 words each were reserving.
+SUPPRESSED_BUDGET_TOKENS: Final = 371
 
 if summarize_and_plan_budget_tokens() != SUMMARIZE_AND_PLAN_BUDGET_TOKENS:
     raise TypeError(

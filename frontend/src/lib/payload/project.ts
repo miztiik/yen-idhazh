@@ -54,7 +54,7 @@ export interface CoverageSource {
  * file and fails if it and the contract disagree, which is what stops the two
  * halves of one payload drifting across two languages.
  */
-export const VIEW_VERSION = '2026-09-22';
+export const VIEW_VERSION = '2026-09-24';
 
 /** How many publisher names a served item may carry.
  *
@@ -73,7 +73,7 @@ export const COVERAGE_NAMES_MAX = 3;
 // way out to the source, which is the most important thing on an item after the
 // summary itself.
 //
-// Nine names joined the original thirteen on 2026-08-31, each with a named
+// Eight names joined the original thirteen on 2026-08-31, each with a named
 // renderer and each priced. Measured over 11 committed days and 3,733 items,
 // `gzip -9` on the compact projection, each name added to the thirteen-field
 // case on its own:
@@ -82,17 +82,13 @@ export const COVERAGE_NAMES_MAX = 3;
 //   watchlist_hit   +1.12    time_source         +0.99
 //   on_front_page   +1.11    introduced_by_run   +1.16
 //   rank_score      +1.16    lenses              +1.11
-//   key_points     +93.54
 //
-// All nine together are +107.42 bytes an item rather than the +109.42 those
-// nine sum to, because gzip shares what they have in common.
-//
-// `key_points` is nine tenths of that and it is the one worth defending.
-// `DigestList` filters on it today, so once a reading route fetches this file
-// instead of inlining the day, an absent `key_points` is a thrown TypeError
-// rather than a narrower filter. The twelve prerendered documents it replaces
-// carry the same words twelve times over, so on the wire it is cheaper here
-// than it was there.
+// A ninth joined with them and left on 2026-09-24. `key_points` was +93.54 on
+// its own, nine tenths of what the nine cost together, and it was here because
+// `DigestList` filtered on it - so once a reading route fetched this file rather
+// than inlining the day, an absent `key_points` was a thrown TypeError and not
+// a narrower filter. The filter reads the title and the summary now, so the
+// bytes bought nothing and the name went with the field.
 //
 // Three names were refused. `events` and `entities` have no renderer and the
 // reading-page plan forbids publishing them as reader-facing chips (+1.63 and
@@ -150,7 +146,6 @@ export const ITEM_FIELDS: readonly string[] = [
 	'also_covered_by',
 	'introduced_by_run',
 	'lenses',
-	'key_points',
 	'same_story_as',
 	'covered_by',
 	'also_ran_earlier'

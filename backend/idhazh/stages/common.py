@@ -574,7 +574,7 @@ def _run_canaries(
             payload, extract_config=settings.app.extract, fetched_at=assemble.utc_now()
         )
         summary, completion, _ = _one_call(article, settings, endpoint=endpoint)
-        reply = " ".join([summary.title or "", summary.summary or "", *(summary.key_points or [])])
+        reply = " ".join([summary.title or "", summary.summary or ""])
         cleaned = sanitize(str(payload["raw_text"]))
         raw = completion.content if completion else ""
         observations.append(

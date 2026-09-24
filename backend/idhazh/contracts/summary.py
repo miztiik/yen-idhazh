@@ -55,6 +55,11 @@ class Summary(Contract):
     __schema_stem__: ClassVar[str] = "summary"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-24",
+            change="Removed key_points, and output_digest no longer digests them.",
+            why="Nothing read them, and the decode that wrote them cost about 21 s an item.",
+        ),
+        ChangelogEntry(
             version="2026-09-15T22:10",
             change="FailureCode gained model_timed_out and shard_out_of_time.",
             why="Both were being reported under a name that sends an operator to the wrong place.",
@@ -68,11 +73,6 @@ class Summary(Contract):
             version="2026-09-15",
             change="failure_code may now carry no_title.",
             why="Extract gained a refusal for an item whose feed carried no headline.",
-        ),
-        ChangelogEntry(
-            version="2026-09-13T22:00",
-            change="Removed pipeline_fingerprint.",
-            why="It gated a skip nothing was ever wired to, and no writer has filled it since.",
         ),
         ChangelogEntry(
             version="2026-08-21",
@@ -92,7 +92,6 @@ class Summary(Contract):
         ),
     )
     summary: Prose | None = None
-    key_points: list[str] = Field(default_factory=list)
 
     output_digest: Sha256 = Field(
         description="Digest of the words only. Recomputed on read, never trusted."
@@ -201,7 +200,7 @@ class Summary(Contract):
 
     @model_validator(mode="after")
     def _output_digest_is_rebuilt_not_trusted(self) -> Self:
-        expected = derive_output_digest(self.summary, self.key_points, title=self.title)
+        expected = derive_output_digest(self.summary, title=self.title)
         if self.output_digest != expected:
             raise ValueError("output_digest must be the digest of the published words")
         return self
@@ -233,8 +232,8 @@ class Summary(Contract):
     @model_validator(mode="after")
     def _state_is_complete(self) -> Self:
         if self.status is SummaryStatus.OK:
-            if not self.summary or not self.key_points:
-                raise ValueError("an ok summary carries summary text and at least one key point")
+            if not self.summary:
+                raise ValueError("an ok summary carries summary text")
             if self.failure_detail is not None:
                 raise ValueError("an ok summary carries no failure_detail")
             if self.failure_code is not None:

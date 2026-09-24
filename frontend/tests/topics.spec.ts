@@ -56,7 +56,6 @@ function item(id: string, vertical: string): DigestItem {
 		source_kind: 'reporting',
 		published_at: null,
 		summary: id,
-		key_points: [],
 		lenses: [],
 		events: [],
 		entities: [],

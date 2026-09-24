@@ -321,11 +321,6 @@ REFILL_PUBLISHED: Final = Published(
         "has reached 4 gigawatts. Southern data centre demand overtook the "
         "spring forecast, and a fresh outlook is due in March."
     ),
-    key_points=(
-        "Reserve margin stays near 12 percent into February",
-        "Battery capacity reaches 4 gigawatts",
-        "A revised outlook is due in March",
-    ),
 )
 
 
@@ -369,7 +364,7 @@ def refill_recorded(
             "title": article.title,
             "vertical": article.vertical,
             "output_digest": derive_output_digest(
-                published.summary, list(published.key_points), title=published.title
+                published.summary, title=published.title
             ),
             **overrides,
         }

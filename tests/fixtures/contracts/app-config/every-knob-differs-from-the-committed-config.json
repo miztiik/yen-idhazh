@@ -380,40 +380,30 @@
     "asks_for_a_visual_plan": false,
     "bands": [
       {
-        "key_points_max": 4,
-        "key_points_min": 3,
         "min_source_words": 0,
         "over_length_action": "trim",
         "target_words_max": 45,
         "target_words_min": 30
       },
       {
-        "key_points_max": 4,
-        "key_points_min": 3,
         "min_source_words": 60,
         "over_length_action": "trim",
         "target_words_max": 90,
         "target_words_min": 50
       },
       {
-        "key_points_max": 4,
-        "key_points_min": 3,
         "min_source_words": 700,
         "over_length_action": "trim",
         "target_words_max": 150,
         "target_words_min": 70
       },
       {
-        "key_points_max": 4,
-        "key_points_min": 3,
         "min_source_words": 2000,
         "over_length_action": "publish",
         "target_words_max": 200,
         "target_words_min": 110
       }
     ],
-    "key_point_restatement_ceiling": 0.6,
-    "key_point_words_max": 70,
     "length_policy": {
       "absolute_floor_words": 20,
       "floor_applies_above_source_words": 500,

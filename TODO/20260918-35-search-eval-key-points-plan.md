@@ -221,12 +221,12 @@ row) in the opening window, sustained **2**, collapsing to **1** on the serial s
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | Raise `truncation_cap_tokens` to 26000, pin to `n_ctx` (+ fingerprint move, C5) | - | A / cap | DONE | - | 1092 | Carmack |
 | 5 | Live-day search - instant + semantic (+ frontend `key_points` owner, C2) | - | A / search | DONE | - | 1094 | Susan |
-| 6 | Remove `new_fact_rate` + `key_point_weight` (+#34 field, judge stages, C3) | #34 | A / eval-core | IN REVIEW | p35eval | - | Carmack, Andre |
-| 7 | Remove `lead_coverage` (+ day-metrics bucket + qualification, C4) | - | A / eval-core | IN REVIEW | p35eval | - | Andre |
-| 8 | Add coherence + coverage scorers (recorded-only) | - | A / eval-core | IN REVIEW | p35eval | - | Carmack, Andre |
+| 6 | Remove `new_fact_rate` + `key_point_weight` (+#34 field, judge stages, C3) | #34 | A / eval-core | DONE | - | 1093 | Carmack, Andre |
+| 7 | Remove `lead_coverage` (+ day-metrics bucket + qualification, C4) | - | A / eval-core | DONE | - | 1093 | Andre |
+| 8 | Add coherence + coverage scorers (recorded-only) | - | A / eval-core | DONE | - | 1093 | Carmack, Andre |
 | 2 | Redesign + re-label the faithfulness chart; docs glyph-link | 8 | B / chart | PENDING | - | - | - |
 | 3 | Reword recorded-only copy; relabel `compression` | 8 | B / chart | PENDING | - | - | - |
-| 4 | Retire `key_points` completely (published + internal + corpus + `output_digest`) | 5, 6, 7 | B / retire | PENDING | - | - | - |
+| 4 | Retire `key_points` completely (published + internal + corpus + `output_digest`) | 5, 6, 7 | B / retire | IN REVIEW | p35retire | - | worker |
 
 ## Section 2 - Row detail
 

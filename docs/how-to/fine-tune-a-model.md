@@ -60,9 +60,11 @@ first.
 
 Not the model's raw reply. It is rebuilt through `summarize.draft_model`, the
 same shape the constrained decoder is held to, and dumped in that model's field
-order - `title`, `summary`, `key_points`. Field order is decode order under a
-grammar, so a target written in sorted order would teach a sequence the decoder
-is not allowed to emit.
+order - `title`, `summary`. Field order is decode order under a grammar, so a
+target written in sorted order would teach a sequence the decoder is not
+allowed to emit. A `key_points` list sat between the two until 2026-09-24, when
+the field left the pipeline; a row harvested before then teaches a shape the
+decoder now refuses, so the window refills rather than migrating.
 
 A row is dropped, never degraded, when the summary has no title, when the item
 was not scored, or when it fails one of the deterministic counterweights below.
@@ -289,7 +291,7 @@ only way they differ:
  and the committed digest hold between them every half of a training row except
  the article body - and the body has an address. `state/scores.csv` names the
  canonical URL, the model and the fingerprint; the day payload under
- `frontend/public/digest/` holds the title, the summary and the key points.
+`frontend/public/digest/` holds the title and the summary.
 
  ```bash
  python backend/utilities/data_wrangler.py refill --limit 0 # the plan, no network
@@ -304,11 +306,15 @@ only way they differ:
  guess:
 
  1. **The join is proved, not assumed.** `output_digest` is taken over exactly
- the title, the summary and the key points, so a published item is paired
- with a ledger row only when it recomputes to the value that row recorded. A
- later run that re-summarized the same article is dropped rather than
- mismatched. Measured 2026-08-29 over the 2,791 committed ledger rows: 89 of
- them are exactly this case.
+ the title and the summary, so a published item is paired with a ledger row
+ only when it recomputes to the value that row recorded. A later run that
+ re-summarized the same article is dropped rather than mismatched. Measured
+ 2026-08-29 over the 2,791 committed ledger rows: 89 of them are exactly this
+ case. **Key points were in the digested payload until 2026-09-24**, so no row
+ scored before then can recompute and the refill finds nothing to join for
+ those days. That break was accepted rather than migrated (owner, 2026-09-19):
+ rewriting every committed digest is a join of its own, and the window refills
+ from days written since.
  2. **Nothing about the page is reconstructed.** The body goes through the same
  extractor a run uses, so `brief`, the source form and the length band are
  computed from the bytes that came back. This is what a rebuild from an

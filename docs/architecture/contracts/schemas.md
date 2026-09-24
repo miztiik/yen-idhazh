@@ -417,7 +417,7 @@ Where a field is a function of other fields on the same payload, the model recom
 
 - `url_key` is the sha256 of `canonical_url`. It is item identity for dedupe and skip, it is a **field and never a path segment**, and a payload that carries someone else's key does not load.
 - `hhem_delta` is `hhem - hhem_full`. The truncation signal cannot be silently wrong.
-- `output_digest` is the sha256 of the summary and its key points - the published words only, so a re-run that produced the same text in a different wall-clock does not read as drift.
+- `output_digest` is the sha256 of the summary and the title - the published words only, so a re-run that produced the same text in a different wall-clock does not read as drift. Key points were in that payload until 2026-09-24, so a digest taken before then cannot recompute; the one place that recomputes against committed data is the corpus join, which stops matching rather than failing.
 - `pipeline_fingerprint` was the sha256 of the `PipelineInputs` model's own serialization. Nothing has written it since 2026-09-12, and on 2026-09-13 it was removed from every shape except `EvalRow`, which keeps it because the console still reads that column for days committed before the cutover. The same inputs are recorded by name on the run record. See [determinism.md](determinism.md).
 
 The alternative - trusting the stored value - makes a stale derived field indistinguishable from a correct one, and the mismatch surfaces months later as a dedupe that quietly stopped working.

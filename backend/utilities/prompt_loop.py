@@ -91,7 +91,6 @@ class ItemSummary:
 
     key: str
     summary: str
-    key_points: tuple[str, ...]
 
 
 # --- The deterministic scorecard (the DISPOSE) ------------------------------
@@ -356,7 +355,7 @@ class LiveSummarizer:
             )
             produced.append(
                 ItemSummary(
-                    key=item.key, summary=draft.summary, key_points=tuple(draft.key_points)
+                    key=item.key, summary=draft.summary
                 )
             )
         return produced

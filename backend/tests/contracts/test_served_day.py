@@ -83,8 +83,7 @@ def a_group(
             "rank_score": rank,
             "introduced_by_run": 1,
             "lenses": [],
-            "key_points": [f"{item_id} happened."],
-            "same_story_as": None if item_id == keeper else keeper,
+                "same_story_as": None if item_id == keeper else keeper,
             "also_covered_by": None,
         }
         for item_id, source_name, rank in members

@@ -565,7 +565,6 @@ def _one_repeat(items: Path, *, count: int) -> list[dict[str, object]]:
             "status": "ok",
             "title": f"Headline {index}",
             "summary": summary,
-            "key_points": [f"point {index}a", f"point {index}b"],
             "duration_ms": 100 + index,
             "fetch_ms": 1,
             "extract_ms": 2,
@@ -607,7 +606,6 @@ def test_the_bench_artifact_carries_the_words_the_candidate_wrote(
         entry = by_id[payload["item_id"]]
         assert entry["title"] == payload["title"]
         assert entry["summary"] == payload["summary"]
-        assert entry["key_points"] == payload["key_points"]
         assert entry["output_digest"] == payload["output_digest"], (
             "the digest stays beside the words, so a reader can still prove they moved"
         )

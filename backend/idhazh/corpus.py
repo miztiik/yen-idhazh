@@ -276,22 +276,27 @@ class Published(NamedTuple):
 
     title: str
     summary: str
-    key_points: tuple[str, ...]
 
 
 def published_is_the_scored_one(published: Published, *, recorded: EvalRow) -> bool:
     """Does this published item prove it is the output the ledger row scored?
 
-    `output_digest` is taken over exactly the title, the summary and the key
-    points, so recomputing it here is a real join check rather than a plausible
-    one. A digest payload and an eval row can share a `url_key` and still be two
+    `output_digest` is taken over exactly the title and the summary, so
+    recomputing it here is a real join check rather than a plausible one. A
+    digest payload and an eval row can share a `url_key` and still be two
     different summaries of one article - a re-run makes that ordinary - and
     pairing the wrong one with a re-fetched body would teach a summary nobody
     ever published.
+
+    **This is the one place a committed digest is recomputed, and on 2026-09-24
+    the formula it recomputes changed.** Key points were in the digested payload
+    until then, so a row scored before the change recomputes to a value that is
+    not the one stored beside it and this returns False. That was accepted rather
+    than migrated: the harvest simply finds nothing to join for those days and
+    refills from days written after the change, which the history prune bounds
+    anyway. Nothing crashes, and no other reader recomputes a stored digest.
     """
-    recomputed = derive_output_digest(
-        published.summary, list(published.key_points), title=published.title
-    )
+    recomputed = derive_output_digest(published.summary, title=published.title)
     return recomputed == recorded.output_digest
 
 
@@ -347,7 +352,6 @@ def rescored(
         url_key=recorded.url_key,
         title=published.title,
         summary=text,
-        key_points=list(published.key_points),
         output_digest=recorded.output_digest,
         model_id=recorded.model_id,
         attempt=recorded.attempt,
@@ -378,7 +382,6 @@ def _target(
         draft = shape(
             title=summary.title,
             summary=summary.summary,
-            key_points=list(summary.key_points),
         )
     except ValidationError:
         return None

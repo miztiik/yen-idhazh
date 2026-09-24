@@ -98,7 +98,7 @@ function buildDay(stories: number, seed: number): BuiltDay {
 							minute % 60
 						).padStart(2, '0')}:00Z`,
 			summary: phrase(8),
-			key_points: Array.from({ length: 2 + Math.floor(roll() * 3) }, () => phrase(4)),
+
 			lenses: [],
 			events: [],
 			entities: [],
@@ -151,8 +151,7 @@ function reference(
 			: day.items.filter(
 					(item) =>
 						item.title.toLowerCase().includes(needle) ||
-						item.summary.toLowerCase().includes(needle) ||
-						item.key_points.some((point) => point.toLowerCase().includes(needle))
+						item.summary.toLowerCase().includes(needle)
 				);
 	const visible = hideRead ? matched.filter((item) => !read.has(item.item_id)) : matched;
 	const drawn = needle !== null ? [] : leadingStories(day.leads, visible);
@@ -217,7 +216,7 @@ function shipped(
  */
 function needlesOf(day: BuiltDay): string[] {
 	const text = day.items
-		.flatMap((item) => [item.title, item.summary, ...item.key_points])
+		.flatMap((item) => [item.title, item.summary])
 		.join(' ')
 		.toLowerCase();
 	const one = new Set<string>();
@@ -296,15 +295,15 @@ test.describe('the day list', () => {
 		// one string: the last word of the title and the first of the summary
 		// become a match for text no story holds.
 		const day = buildDay(4, 7);
-		day.items[0] = { ...day.items[0], title: 'alpha', summary: 'beta', key_points: ['gamma'] };
+		day.items[0] = { ...day.items[0], title: 'alpha', summary: 'beta' };
 		const index = indexDay(day.items);
-		for (const needle of ['alphabeta', 'alpha beta', 'betagamma', 'beta gamma']) {
+		for (const needle of ['alphabeta', 'alpha beta']) {
 			const list = shortlist(index, needle, null, NOBODY, '');
 			expect(ids(list.visible), `"${needle}" matched across a field boundary`).not.toContain(
 				day.items[0].item_id
 			);
 		}
-		for (const needle of ['alpha', 'beta', 'gamma']) {
+		for (const needle of ['alpha', 'beta']) {
 			expect(ids(shortlist(index, needle, null, NOBODY, '').visible)).toContain(
 				day.items[0].item_id
 			);
@@ -325,12 +324,12 @@ test.describe('the day list', () => {
 });
 
 /** Counting a read of a story's searchable text. `orderByTime` and `shortlist`
- * read `item_id` and `published_at`, which are not counted - only the three
+ * read `item_id` and `published_at`, which are not counted - only the two
  * fields a filter has to lowercase. */
 function watchFields(items: DigestItem[]): { items: DigestItem[]; reads: () => number } {
 	let reads = 0;
 	const watched = items.map((item) => {
-		const { title, summary, key_points, ...rest } = item;
+		const { title, summary, ...rest } = item;
 		return {
 			...rest,
 			get title() {
@@ -340,10 +339,6 @@ function watchFields(items: DigestItem[]): { items: DigestItem[]; reads: () => n
 			get summary() {
 				reads += 1;
 				return summary;
-			},
-			get key_points() {
-				reads += 1;
-				return key_points;
 			}
 		} as DigestItem;
 	});
@@ -370,14 +365,14 @@ test.describe('what the day list costs', () => {
 		const once = watchFields(DAY.items);
 		const index = indexDay(once.items);
 		for (const needle of typed) shortlist(index, needle, null, PINNED, '');
-		expect(once.reads(), 'the index read a field more than once per story').toBe(stories * 3);
+		expect(once.reads(), 'the index read a field more than once per story').toBe(stories * 2);
 
 		// The same day, typed at twice as long. The number may not move.
 		const again = watchFields(DAY.items);
 		const second = indexDay(again.items);
 		for (const needle of [...typed, ...typed]) shortlist(second, needle, null, PINNED, '');
 		expect(again.reads(), 'a second pass over the same letters read the day again').toBe(
-			stories * 3
+			stories * 2
 		);
 
 		// What it replaces: at least one title read per story per keystroke.
@@ -386,8 +381,7 @@ test.describe('what the day list costs', () => {
 			before.items.filter(
 				(item) =>
 					item.title.toLowerCase().includes(needle) ||
-					item.summary.toLowerCase().includes(needle) ||
-					item.key_points.some((point) => point.toLowerCase().includes(needle))
+					item.summary.toLowerCase().includes(needle)
 			);
 		}
 		expect(before.reads()).toBeGreaterThanOrEqual(typed.length * stories);

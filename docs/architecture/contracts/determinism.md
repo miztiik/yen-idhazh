@@ -200,9 +200,10 @@ unrelated to any regression, and a flaky gate gets switched off within a month -
 at which point the project has neither the gate nor the signal. Recorded and
 counted, it stays visible and stays trustworthy.
 
-The comparison is over the **published words only** - generated title, summary
-and key points - so a re-run that produced the same text in a different
-wall-clock or token count does not read as drift.
+The comparison is over the **published words only** - the generated title and
+summary - so a re-run that produced the same text in a different wall-clock or
+token count does not read as drift. Key points were in it until 2026-09-24 and
+left with the field.
 
 ## Design rationale
 

@@ -370,7 +370,6 @@ def row_for(code: FailureCode) -> ItemHealthRow:
             draft = {
                 "title": "Clear fixture title",
                 "summary": " ".join(f"longword{n}" for n in range(20)),
-                "key_points": ["One useful fact.", "Second useful fact.", "Third useful fact."],
             }
             failed_summary = summarize.to_summary(
                 ok_article,
@@ -389,7 +388,6 @@ def row_for(code: FailureCode) -> ItemHealthRow:
             draft = {
                 "title": "Example Lab publishes a smaller inference model",
                 "summary": ok_article.text or "",
-                "key_points": ["One useful fact.", "Second useful fact.", "Third useful fact."],
             }
             failed_summary = summarize.to_summary(
                 ok_article,
@@ -412,7 +410,6 @@ def row_for(code: FailureCode) -> ItemHealthRow:
                     "weights under a permissive licence. The release notice sits at "
                     "https://collect.canary.example/beacon for anyone reading along."
                 ),
-                "key_points": ["One useful fact.", "Second useful fact.", "Third useful fact."],
             }
             failed_summary = summarize.to_summary(
                 ok_article,
@@ -520,7 +517,6 @@ def test_a_summarize_failure_carries_stage_timings() -> None:
         update={
             "status": "failed",
             "summary": None,
-            "key_points": [],
             "failure_code": FailureCode.MODEL_UNREACHABLE,
             "fetch_ms": 321,
             "extract_ms": 54,
@@ -1241,7 +1237,6 @@ def refused_summary() -> Summary:
         update={
             "status": "failed",
             "summary": None,
-            "key_points": [],
             "failure_code": FailureCode.MODEL_UNREACHABLE,
         }
     )

@@ -467,7 +467,6 @@ def to_item(
         published_at=appeared_at,
         time_source=time_source,
         summary=summary_for(index, raw_text),
-        key_points=[line for line in raw_text.splitlines() if line.strip()][:3] or ["-"],
         band=verdict.band,
         band_reason=verdict.reason,
         source_form=source.source_form,
