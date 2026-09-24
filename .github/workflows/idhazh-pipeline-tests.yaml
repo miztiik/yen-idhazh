@@ -397,10 +397,10 @@ jobs:
       # Ninety days, because a change is often argued about weeks after the
       # dispatch that measured it, and re-running is 45 minutes.
       #
-      # The article text this produced goes with it. Nothing under
-      # `backend/var/` is committed and nothing here reaches a reader, so this
-      # is an artifact an operator downloads rather than anything republished
-      # (CLAUDE.md section 0a).
+      # The article text this produced goes with it. An article body is never
+      # republished to a reader, and this is not that: nothing under
+      # `backend/var/` is committed, nothing here reaches a reader, and an
+      # operator is who downloads it.
       - name: Upload what the cases produced
         if: always()
         uses: actions/upload-artifact@v7
@@ -411,7 +411,8 @@ jobs:
 
       # The ledgers, separately from the tree above, because the `commit` job
       # downloads this one into its own checkout and must never be handed the
-      # article text that tree carries (CLAUDE.md section 0a).
+      # article text that tree carries. `corpus/` is the one place this project
+      # commits article text.
       #
       # Gathered into one fixed directory rather than uploaded by a glob over
       # `state/`. An artifact's internal root is the common ancestor of what

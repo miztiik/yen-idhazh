@@ -1,7 +1,8 @@
 """Write a person's labels onto `corpus/reference-dataset-1/dataset.jsonl`.
 
 Plan 23 row #P3. An agent may prepare this tooling; the labels themselves are a
-person's (`CLAUDE.md` section 0a, and the set's own datasheet).
+person's (the set's own datasheet). `CLAUDE.md` section 1a lifted the ban on a
+model judge, so that is the set's own rule now rather than a project one.
 
 Three verbs.
 

@@ -932,7 +932,7 @@ jobs:
       # docs/how-to/label-the-faithfulness-queue.md.
       #
       # Never committed, and deliberately not named in any commit call: an
-      # article body is not ours to republish (CLAUDE.md section 0a).
+      # article body is never republished to a reader.
       - uses: actions/upload-artifact@v7
         with:
           name: evidence-${{ matrix.shard }}
@@ -956,7 +956,7 @@ jobs:
       #
       # Never committed, and deliberately not named in any commit call: a
       # rendered prompt carries the article body inside it, and an article body
-      # is not ours to republish (CLAUDE.md section 0a).
+      # is never republished to a reader.
       - uses: actions/upload-artifact@v7
         if: always()
         with:
@@ -1365,8 +1365,9 @@ jobs:
 
       # Every visual decision this day made, laid out so a person can look at
       # them and say whether the machine kept the visual they would have kept.
-      # It gates nothing: nothing downloads this, nothing reads it back, and no
-      # publish decision can (../../CLAUDE.md section 0a).
+      # It gates nothing: nothing downloads this and nothing reads it back. A
+      # model verdict is allowed to reach a publish decision since CLAUDE.md
+      # section 1a lifted the ban; none does here, by choice and not by rule.
       #
       # This job because it is the only one holding every population at once -
       # `items-*` carries the decisions and `shard-visuals-*` carries the

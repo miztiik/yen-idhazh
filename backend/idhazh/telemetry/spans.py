@@ -28,8 +28,7 @@ from idhazh.contracts.summary import Summary
 
 #: The longest a span attribute value may be. One SHA-256 digest is 64
 #: characters, and nothing an attribute carries is wider - a value that needs
-#: more room is prose, and prose does not leave the process (Guardrail #11,
-#: CLAUDE.md section 0a).
+#: more room is prose, and prose does not leave the process (Guardrail #11).
 MAX_ATTRIBUTE_CHARS: Final = 64
 
 #: What a string attribute may be made of: lowercase, no whitespace, no sentence

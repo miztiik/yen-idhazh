@@ -17,10 +17,10 @@ from the ledger.
 
 **There is nowhere to put a machine verdict.** `labeller` is a required non-empty
 name checked against `evaluation.labellers` in config. No `model_id`, no nullable
-author. LLM-as-judge is a project non-goal (`CLAUDE.md` section 0a), and a
-non-goal that is only discouraged is not a control - putting a model in this
-ledger needs a schema change, a changelog entry with a written reason, and a
-Level 5 consultation.
+author. `CLAUDE.md` section 1a lifted the ban on a model judge, so this shape is
+a deliberate choice rather than a rule - and it is still a control, because
+putting a model in this ledger needs a schema change, a changelog entry with a
+written reason, and a Level 5 consultation.
 
 **`seconds_spent` is the cheapest fatigue detector there is**, and together with
 `labelled_at` it is what a contract test reads to refuse a machine-paced dump.

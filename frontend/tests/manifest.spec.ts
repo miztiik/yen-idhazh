@@ -93,7 +93,7 @@ test.describe('what installability may not become', () => {
 		const banned =
 			/\bNotification\b|\bshowNotification\b|\bPushManager\b|\bpushManager\b|\bPushSubscription\b|\bperiodicSync\b|\bPeriodicSyncManager\b|\bSyncManager\b|registration\.sync\b/;
 		const offenders = sourceFiles().filter((path) => banned.test(readFileSync(path, 'utf8')));
-		expect(offenders, 'the reader decides when to read - CLAUDE.md section 0a').toEqual([]);
+		expect(offenders, 'the reader decides when to read - CLAUDE.md Guardrail #1').toEqual([]);
 	});
 
 	test('exactly one file registers the worker, and it is not the worker', () => {

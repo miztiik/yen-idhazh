@@ -12,9 +12,9 @@ the address at label time would hand the person a different document from the on
 the number came from, so their disagreement with the scorer would measure a
 premise mismatch and not a scorer error.
 
-**Never committed.** An article body is not ours to republish (`CLAUDE.md`
-section 0a), so this payload is written under `backend/var/evidence/`, which is
-gitignored, and travels to a labeller as a workflow artifact with a finite life.
+**Never committed.** An article body is never republished to a reader, so this
+payload is written under `backend/var/evidence/`, which is gitignored, and
+travels to a labeller as a workflow artifact with a finite life.
 
 **Why a contract at all**, when the file is gitignored and a re-run rebuilds it:
 it crosses a process boundary and usually a machine boundary, which is what makes

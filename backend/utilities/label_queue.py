@@ -13,7 +13,8 @@ anyone can run it and nobody can pollute the ledger with it.
 construction: there is no `--from-file`, no `--model`, no stdin path, and no way
 to write more than one row per prompt. Producing labels from a model would mean
 writing a second writer, which is a new module in a diff in a pull request -
-which is the point (`CLAUDE.md` section 0a).
+which is the point. `CLAUDE.md` section 1a lifted the ban on a model judge, so
+that second writer is a product decision now rather than a refusal.
 
 **One scorer, and that is the whole of the pool rule.** A draw comes from exactly
 one `scorer_version`, because the cuts being calibrated live inside that string

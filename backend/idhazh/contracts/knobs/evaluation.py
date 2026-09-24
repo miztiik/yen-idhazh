@@ -62,8 +62,9 @@ class EvaluationConfig(Model):
             "Who may write a faithfulness label. Empty by default, so a fresh clone can "
             "draw the queue and read it but cannot record a verdict. The list is what "
             "keeps a machine out of the label ledger: there is no author field a model "
-            "could fill, and adding one would be a schema change with a written reason "
-            "(CLAUDE.md section 0a)."
+            "could fill, and adding one would be a schema change with a written reason. "
+            "CLAUDE.md section 1a now permits a model judge, so this roster is a choice "
+            "and no longer a ban."
         ),
     )
     label_draw_per_decile: int = Field(

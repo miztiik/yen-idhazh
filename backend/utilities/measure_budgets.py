@@ -230,12 +230,11 @@ def plan_roles() -> tuple[str, ...]:
 def corpus_bodies(corpus: Path, *, samples: int) -> list[str]:
     """The article body of the first `samples` corpus rows.
 
-    The corpus is the only committed article prose in this repository
-    (`CLAUDE.md` section 0a), and article prose is what `truncate_to_tokens`
-    cuts - a ratio taken over prompt scaffolding or over definition sentences
-    would be a ratio of the wrong text. Bounded by `samples` rather than read
-    whole, so the probe costs the same after a year of harvesting as it does
-    today (Guardrail #12).
+    The corpus is the only committed article prose in this repository, and
+    article prose is what `truncate_to_tokens` cuts - a ratio taken over prompt
+    scaffolding or over definition sentences would be a ratio of the wrong text.
+    Bounded by `samples` rather than read whole, so the probe costs the same
+    after a year of harvesting as it does today (Guardrail #12).
     """
     bodies: list[str] = []
     with corpus.open(encoding="utf-8") as rows:

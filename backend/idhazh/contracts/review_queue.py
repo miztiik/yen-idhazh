@@ -2,8 +2,9 @@
 
 The question this surface exists to answer is the one nothing has asked yet:
 **is the visual the machine kept the visual a human would have kept?** It gates
-nothing. No publish decision reads it, and no later row may make one read it
-(`CLAUDE.md` section 0a).
+nothing. No publish decision reads it. `CLAUDE.md` section 1a lifted the ban that
+kept a model verdict out of a publish decision, so wiring this in is a product
+decision now rather than a refusal.
 
 **Never committed, and never under `frontend/public/`.** The tree is written to
 `backend/var/review/<date>/`, which `.gitignore` already covers, and reaches a

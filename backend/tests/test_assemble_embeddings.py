@@ -521,9 +521,11 @@ class TestTheAlarmCostsTheRunNothing:
     def test_the_reading_lands_on_the_day_record_and_on_no_item(self, tmp_path: Path) -> None:
         """No field on an item, no vector added, and no per-item cosine anywhere.
 
-        The last one is the line that keeps this out of `CLAUDE.md` section 0a:
-        a record naming what one summary scored is a per-item verdict whatever
-        it is called. Asserted by looking for the item ids in the block's text.
+        The last one used to be the line that kept this clear of the
+        LLM-as-judge ban, which `CLAUDE.md` section 1a has lifted. It still
+        holds: a record naming what one summary scored is a per-item verdict
+        whatever it is called. Asserted by looking for the item ids in the
+        block's text.
         """
         if not Embedder(REPO_ROOT).available:
             pytest.skip("the encoder is not committed in this checkout")

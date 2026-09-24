@@ -226,7 +226,7 @@ class TestPathsThatLeaveTheProcess:
 
 
 class TestTheArticleBodyIsNeverCommitted:
-    """Republishing an article body is a project non-goal (`CLAUDE.md` section 0a)."""
+    """An article body is never republished to a reader."""
 
     def test_the_evidence_root_is_gitignored(self) -> None:
         ignored = read_text(REPO_ROOT / ".gitignore").splitlines()

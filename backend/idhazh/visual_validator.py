@@ -17,9 +17,11 @@ checks before it have already resolved, and `backend/tests/test_visual_validator
 holds one fixture per check that trips only that one.
 
 **No check calls a model, and none can.** A judge that shares the failure modes
-of the thing judged is not a measurement (`CLAUDE.md` section 0a), so every
-answer here is deterministic code over committed data. The test reads this
-module's own imports to keep it that way.
+of the thing judged is not a measurement, so every answer here is deterministic
+code over committed data. The test reads this module's own imports to keep it
+that way. `CLAUDE.md` section 1a lifted the ban on a model judge, so that is a
+measurement argument now rather than a rule, and a model judge here would need
+one measured against this code first.
 
 **A refusal degrades one item; it never fails a build.** The caller writes the
 item with no picture and records the check that refused it (`CLAUDE.md` section

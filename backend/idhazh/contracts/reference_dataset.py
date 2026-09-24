@@ -19,8 +19,8 @@ in place stops matching, and `build_reference_dataset.py verify` is what says so
 
 **This repository is public, so every article text under `corpus/` is readable by
 anyone.** That cost was taken on 2026-08-28 and is restated here rather than
-assumed (`CLAUDE.md` section 0a). Nothing renders
-this text, links to it or serves it.
+assumed: `corpus/` is the one place this project commits article text, and
+nothing renders this text, links to it or serves it.
 
 **Who wrote the labels is the one fact a number taken on this set depends on, so
 it is written here rather than inferred.** The committed pass of 2026-09-13 was
@@ -28,9 +28,10 @@ produced by agents reading each article in full at the owner's direction and on
 the owner's behalf, and the owner ruled that it records `labelled_by` of
 `human` (owner decision, 2026-09-13, `CLAUDE.md` section 0). The set's datasheet
 carries the same sentence and what it costs. A model verdict here reaches no
-reader and selects nothing to publish, which is the `CLAUDE.md` section 0a
-property; what it does mean is that a figure comparing this project's classifier
-against these labels is not a model measured against a person.
+reader and selects nothing to publish, which used to be what made one allowed at
+all; `CLAUDE.md` section 1a has since lifted that ban. What has not changed is
+what it would mean: a figure comparing this project's classifier against
+model-written labels is not a model measured against a person.
 """
 
 from __future__ import annotations

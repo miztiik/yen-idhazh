@@ -337,7 +337,8 @@ def test_the_captures_land_beside_the_items_and_never_inside_them(
     """`items/` is downloaded whole by assemble and has a different retention window.
 
     A rendered prompt carries the article body inside it, so the directory it
-    lands in decides who ends up holding that text (CLAUDE.md section 0a).
+    lands in decides who ends up holding that text, and an article body is never
+    republished to a reader.
     """
     run_a_shard(tmp_path, monkeypatch, caplog)
 

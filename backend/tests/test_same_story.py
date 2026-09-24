@@ -81,8 +81,8 @@ def labelled_day() -> tuple[list[DigestItem], DigestEmbeddings]:
 
     Only the four fields `collapse_same_story` reads are stored, so `item()`
     fills the rest. A title or a summary in here would be article text in the
-    repository for no reader (`CLAUDE.md` section 0a) and would not change one
-    grouping.
+    repository for no reader - `corpus/` is the one place this project commits
+    article text - and would not change one grouping.
     """
     payload = json.loads(read_text(LABELLED_DAY_FIXTURE))
     assert payload["date"] == LABELLED_DATE, "the fixture is not the day the labels were read off"

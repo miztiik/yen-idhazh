@@ -82,10 +82,10 @@ class FinetuneConfig(Model):
     """The training corpus and the schedules that maintain it.
 
     Nothing here runs on the runner. Training needs a GPU and the runner has
-    none (section 0a), so these knobs size a file CI commits and a notebook
-    somewhere else reads. `teacher` names a KEY in `models` rather than a model,
-    because the summarizer slot has already moved twice and a knob that spells a
-    model name is stale the day the config moves.
+    none (CLAUDE.md Guardrail #2), so these knobs size a file CI commits and a
+    notebook somewhere else reads. `teacher` names a KEY in `models` rather than
+    a model, because the summarizer slot has already moved twice and a knob that
+    spells a model name is stale the day the config moves.
 
     There is no `student`. It named the small visual planner, retired when the
     two calls moved onto the summarizer's weights, and a distillation session

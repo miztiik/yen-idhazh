@@ -30,9 +30,8 @@ and changes no default: `evaluation.chunk_words` is what it measures, not what
 it moves.
 
 The pairs are the ones the run actually scored, from
-`backend/idhazh/evals/evidence.py`. They are gitignored (`CLAUDE.md`
-section 0a - an article body is not ours to republish) and reach this tool as a
-workflow artifact:
+`backend/idhazh/evals/evidence.py`. They are gitignored, because an article body
+is never republished to a reader, and reach this tool as a workflow artifact:
 
     gh run download <run-id> --pattern 'evidence-*' --dir <dir>
     python backend/utilities/grader_length_bias.py --evidence <dir>

@@ -13,7 +13,7 @@ reason a specific failure cannot happen:
   closing marker, the block is what was asked for and is discarded here instead
   - a refusal that fires on the normal path is not a control.
 - A reply that copies the source instead of summarizing it is refused, because
-  republishing an article body is a non-goal (CLAUDE.md section 0a) and not a
+  an article body is never republished to a reader. That is a rule and not a
   quality score to be tuned.
 - A reply that carries an address into our own words is refused. The sanitizer
   runs before the model; this runs after it, so an address a page asked for has

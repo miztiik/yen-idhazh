@@ -13,8 +13,8 @@ questions about two documents and their disagreement would measure that instead
 of scorer error.
 
 **Not committed and not served.** `backend/var/evidence/` is gitignored. An
-article body is not ours to republish (`CLAUDE.md` section 0a), so it reaches a
-labeller as a workflow artifact with a retention date, or not at all.
+article body is never republished to a reader, so it reaches a labeller as a
+workflow artifact with a retention date, or not at all.
 
 **One file per measurement, named by the measurement.** The name is a digest of
 the four fields `state/scores.csv` identifies a row by, so a ledger row finds its
