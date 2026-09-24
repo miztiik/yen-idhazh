@@ -1,6 +1,6 @@
 # Qwen3.5-9B-Q4_K_M
 
-**Last Updated**: 2026-09-21
+**Last Updated**: 2026-09-24
 **Status: incumbent.** It has summarized every published item since 2026-08-27.
 `incumbent` is one of three words a dossier's status line may hold - `evaluated`,
 `incumbent`, `superseded` - and this line is the only place this model's
@@ -283,6 +283,49 @@ question, are on the instrument log
 `state/item-health/` carries no column naming the weights and its rows
 span both this model and the retired one, so its range is a reading of the job
 ([The ledger's own worst row](../pipeline-cost.md#the-ledgers-own-worst-row-moved-to-1382-gib)).
+
+### What the machine had free while these weights worked, and the day it changed
+
+**Measured 2026-09-24** over the 1,981 rows of `state/item-health/` that carry
+`os_mem_available_min_bytes` - the lowest `/proc/meminfo` `MemAvailable` seen
+while the model worked on that one item. Every one of those rows names
+`qwen3-5-9b-q4-k-m`, so unlike the peak column above this one is a reading of
+these weights. Stock GitHub-hosted `ubuntu-latest`, 4 vCPU, 15.61 GiB.
+
+| Day | Items | Lowest free | Median free | Items under 1.0 GiB |
+| --- | --- | --- | --- | --- |
+| 2026-09-19 | 77 | 5.08 GiB | 7.58 GiB | 0 |
+| 2026-09-20 | 367 | 2.04 GiB | 7.22 GiB | 0 |
+| 2026-09-21 | 297 | **0.69 GiB** | 4.42 GiB | 15 |
+| 2026-09-22 | 364 | 0.76 GiB | 3.36 GiB | 14 |
+| 2026-09-23 | 728 | 0.69 GiB | 3.52 GiB | 16 |
+| 2026-09-24 | 148 | 0.84 GiB | 3.13 GiB | 4 |
+
+**The floor falls seven-fold on 2026-09-21 and stays down, and the ledger names
+the day rather than leaving it to be inferred.** `weights_pinned` is empty on
+every row up to 2026-09-20 and reads `True` on every row after, which is commit
+`e5aa8f9a2` turning on three memory settings at once in
+`config/models/qwen3.5-9b-q4km.json`: `load_mode` `mmap+mlock`, which pins the
+5.29 GiB of weights so the kernel can no longer reclaim them; `cache_ram` 4096,
+a prompt-cache pool the server fills up to 4 GiB; and `ctx_checkpoints` 64. The
+same commit turned both KV caches to `q8_0`, which saves memory, so the fall is
+the net of all four.
+
+**Which of the three did it is not separated, because they shipped in one
+commit.** The median moved 2.80 GiB across that boundary, which is larger than
+the whole 16,384-to-65,536 window difference and about the size of the
+`cache_ram` pool, so the pool is where to look first. Separating them needs no
+run: `llama_major_faults`, `os_mem_cached_bytes` and `os_swap_free_bytes` are
+already on the same rows either side of the date.
+
+**This is a headroom regression and it is not yet a failure.** No code reads
+this column back and nothing compares it to a threshold; the 1.0 GiB figure it
+is being read against comes from a plan that closed, so it is a dated decision
+rather than a standing limit. Over the four days below it no run failed and no
+job was killed, and swap free never fell far. What changed is the shape of the
+pressure: before the pin, pressure fell on evictable weight pages and cost
+re-reads; after it, the weights cannot be reclaimed at all, so everything else
+absorbs it.
 
 ### Model load time
 

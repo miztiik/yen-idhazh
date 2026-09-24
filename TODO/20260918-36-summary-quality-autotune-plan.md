@@ -388,7 +388,8 @@ disjointness check, never the letter (execute-a-plan.md).
   | # | Decision | Authority |
   | --- | --- | --- |
   | 1 | The stamp lives on `EvalRow`, not the published item: a withheld item is ABSENT from the day, so it cannot be stamped there, and `EvalRow` records every scored item including the withheld | Fowler |
-  | 2 | `hhem` and `coverage` already exist; `coherence`/`semantic_coverage` are added by plan 35 row 8; plan 36 only adds `geval` + the two decision columns | Fowler |
+  | 2 | `hhem` exists; `coherence`/`semantic_coverage` were added by plan 35 row 8; plan 36 only adds `geval` + the two decision columns | Fowler |
+  | 3 | There is no `coverage` column to fold. Plan 35 row 7 retired it into `DROPPED_CELLS` (it measured the survival of the article's opening, on a different scale), so row 8 named the new one `semantic_coverage` rather than reuse a name committed shards already carry meaning something else | plan 35 row 8, Fowler |
 
 ### Row #4 - the fold
 
@@ -653,7 +654,7 @@ removed in the same commit.
 
 - [`docs/architecture/publishing/autotune-content-similarity.md`](../docs/architecture/publishing/autotune-content-similarity.md) - the
   merge line that fits itself: the loop this plan mirrors, and the fit core Row 1 extracts.
-- [`20260918-35-search-eval-key-points-plan.md`](20260918-35-search-eval-key-points-plan.md) - the
-  cleanup and the recorded-only scorers this plan consumes.
+- [`docs/concepts/evaluation.md`](../docs/concepts/evaluation.md) - the two measures that left the
+  eval row and the two that arrived, and what the departure did to `scorer_version`.
 - [`docs/architecture/publishing/autotune-summary-quality.md`](../docs/architecture/publishing/autotune-summary-quality.md) - the
   metrics, the formulas, and the loop diagram.

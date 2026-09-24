@@ -1,6 +1,6 @@
 # The model's own file
 
-**Last Updated**: 2026-09-23
+**Last Updated**: 2026-09-24
 
 What `config/` says about a set of weights: which model runs, what runtime
 settings are declared for those exact bytes, how a turn is written for it, and
@@ -174,6 +174,13 @@ provenance here:
 | Entry | `declared_for` | Where the numbers came from |
 | --- | --- | --- |
 | `models.summarizer` (`qwen3-5-9b-q4-k-m`) | `03b74727...b7e8` | The owner selected the explicit runtime settings on 2026-09-20 and approved the 65,536-token window on 2026-09-21. Both caches use q8_0 and the answer budget is 2,000 tokens. The article and candidate limits are unchanged. This combination has not been benchmarked. Earlier measurements used different settings and do not establish this combination's speed, memory use or output quality. The committed model file is the complete list of selected values. |
+
+**One of those quantities has since been read off the ledger rather than
+benchmarked.** `load_mode`, `cache_ram` and `ctx_checkpoints` took effect on
+2026-09-21 and the runner's free memory fell with them; what it fell to, and
+what that does and does not threaten, is on
+[the model's own dossier](../../reference/models/qwen3.5-9b-q4km.md#what-the-machine-had-free-while-these-weights-worked-and-the-day-it-changed).
+Speed and output quality for this combination are still unmeasured.
 
 The row says the uncomfortable thing, which is the point of writing it
 down: the file now states a pairing where before it implied one. `declared_for`
