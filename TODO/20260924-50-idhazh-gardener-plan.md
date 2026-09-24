@@ -13,7 +13,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | Field | Value |
 | --- | --- |
 | Why this plan exists | Four programs delete things on four unrelated schedules, one `--dry-run` flag covers eleven independent decisions, every store writes its own format by hand, and two schedulers disagree about when a day is closed. This makes one utility with one verb per task, one config, one persistence door, one record and one safe way to commit. |
-| Hard scope - in | - `backend/idhazh/store/` is the one door a payload takes to disk, parquet or JSON, with exactly one module importing the parquet engine.<br>- `state/raw/<store>/<shard>` is where a new writer files; `state/compact/<store>/<YYYY>/<MM>/settled.parquet` is what compaction leaves.<br>- `backend/idhazh/gardener/` holds the registry, the schedule, the record and the commit loop.<br>- All eleven passes in `backend/idhazh/stages/prune_state.py` become eleven tasks, each with its own window and its own `dry_run`.<br>- The corpus squash leaves inline shell for a tested Python module.<br>- `backend/utilities/prune_artifacts.py` gets a schedule for the first time.<br>- `.github/workflows/prune.yml` names no task: a standard-library `plan` job asks what is due, a sharded `run-tasks` job runs it, a `history` job rewrites the corpus last.<br>- `digest.yml`'s compaction step moves to the gardener, so one scheduler decides when a day is closed.<br>- One console panel reads parquet in the browser and is drawn in d3, so the charting plan starts from a house style instead of a blank page. |
+| Hard scope - in | - `backend/idhazh/store/` is the one door a payload takes to disk, parquet or JSON, with exactly one module importing the parquet engine.<br>- `state/raw/<store>/<shard>` is where a new writer files; `state/compact/<store>/<YYYY>/<MM>/settled.parquet` is what compaction leaves.<br>- `backend/idhazh/gardener/` holds the registry, the schedule, the record and the commit loop.<br>- All eleven passes in `backend/idhazh/stages/prune_state.py` become eleven tasks, each with its own window and its own `dry_run`.<br>- The corpus squash leaves inline shell for a tested Python module.<br>- `backend/utilities/prune_artifacts.py` gets a schedule for the first time.<br>- `.github/workflows/prune.yml` names no task: a standard-library `plan` job asks what is due, a sharded `run-tasks` job runs it, a `history` job rewrites the corpus last.<br>- `digest.yml`'s compaction step moves to the gardener, so one scheduler decides when a day is closed.<br>- One console panel reads parquet in the browser and is drawn in d3, so the charting plan starts from a house style instead of a blank page.<br>- The Hardware route stops counting every job twice, which it has done for as long as the machine ledger has had two halves. |
 | Hard scope - out | see the table below |
 | ESCALATE triggers | 1. A task whose window would include today - stop; it can delete what a running job just wrote.<br>2. A second module importing the parquet engine - stop; the single-import rule is what makes it swappable and row 2's oracle enforces it.<br>3. Row 5's removal of the `pruned_date` alias - stop before the commit that removes it, not before the commit that adds it.<br>4. Any behaviour change to the tip-moved refusal in `backend/utilities/push_rewritten_history.py`, including its exit code.<br>5. Migrating an existing CSV tree to `state/raw/` or to parquet, **other than the two section 5.8 marks for row 2** - stop. Every other store moves in its own plan.<br>6. A measured figure that contradicts section 4 - stop and re-price rather than proceeding on the written number.<br>7. Any row that would add a tenth prerendered route, a charting library that is not d3, a new payload under `frontend/public/`, or a writer outside the two roots - stop. Each one moves a telemetry-intent statement further away, and no row needs it.<br>8. Row 8's question of how the browser reaches the bytes - stop. `state/` is not published today, N7 wants the console reading `state/` rather than a projection, and N8 wants no telemetry under `frontend/` in git. That is a Level 5 contract decision and row 8 does not settle it alone. |
 | Chosen strategy | Register the two new roots, lay the persistence door, then move tasks in one PR per outcome, reader before writer, behaviour unchanged until the row that changes it. Ruled by Fowler (CLAUDE.md section 14). |
@@ -65,8 +65,9 @@ One row is one pull request. Fourteen rows were merged into seven because the me
 | 5 | The corpus squash becomes Python | 3 | C | PENDING | - | - | - |
 | 6 | `prune.yml` becomes `idhazh-gardener.yml`; the GitHub tasks get a schedule | 4, 5 | D | PENDING | - | - | - |
 | 7 | The month compaction, and the diagram moves into the page | 6 | E | PENDING | - | - | - |
-| 8 | One panel end to end: parquet at rest, parsed in the browser, drawn in d3 | 2 | B | PENDING | - | - | - |
+| 8 | One panel end to end: parquet at rest, parsed in the browser, drawn in d3 | 2, 10 | B | PENDING | - | - | - |
 | 9 | The console shell: a stuck tab strip, the span control on it, four named anchors | - | B | PENDING | - | - | - |
+| 10 | The Hardware route stops counting every job twice | - | A | PENDING | - | - | - |
 
 Rows 1 and 2 are the only genuinely concurrent pair, and they still collide on `backend/tests/test_marks.py`. Everything from row 3 down is serial on `backend/idhazh/gardener/tasks.py` and `config/idhazh_gardener.json` - except rows 8 and 9, which touch `frontend/` and one backend writer and share no file with any of them. They are the two rows that could run beside the others; whether to widen N past 1 for them is the owner's call at dispatch.
 
@@ -871,7 +872,7 @@ If the speed ramp lands, one sentence is added and nothing else: `Darker bars ar
 
 **What this row refuses, each with its reason.** The throughput spread per machine kind - this panel answers what we were given, the machine cards and shard board own variance, so the readout row links to them instead. Splits by `vm_location`, `vm_size` or `runner_name` - location is not actionable, size is nearly the same fact as the machine kind, and the runner name is a high-cardinality identifier with no reader meaning, while colour is already carrying an ordered variable. Any figure about the next job. Animating between windows.
 
-**Two defects are in this row's way and neither is this row's to fix.** Defect 33 in `TODO/20260823-known-defects-plan.md` doubles every count this panel draws and is what makes `Other machines` read as the second commonest machine; until it lands, every number here is wrong by about a fifth. The fold line renders `drawn as one bar: .` because `PlatformMixPanel.svelte` reads `series.at(-1)` while `fleet.ts` merges into an existing series and pushes nothing, so the last series is a real machine with an empty `folded` list - an optional chain swallows it. **Both are fixed before this row starts, not inside it**, because a redraw that inherits a wrong number ships a prettier wrong number.
+**Two defects are in this row's way and row 10 clears them first.** Defect 33 in `TODO/20260823-known-defects-plan.md` doubles every count this panel draws and is what makes `Other machines` read as the second commonest machine; until it lands, every number here is wrong by about a fifth. The fold line renders `drawn as one bar: .` because `PlatformMixPanel.svelte` reads `series.at(-1)` while `fleet.ts` merges into an existing series and pushes nothing, so the last series is a real machine with an empty `folded` list - an optional chain swallows it. **Row 10 fixes both before this row starts, and neither is fixed inside it**, because a redraw that inherits a wrong number ships a prettier wrong number.
 
 - **Files touched:**
   - `backend/idhazh/telemetry/silicon.py` (writes through the row 2 door), `backend/idhazh/contracts/host_fingerprint.py` (`version` stamp, one `changelog` line)
@@ -941,6 +942,44 @@ Ruled by Susan on 2026-09-24. The complaint it answers: the Hardware route is fi
 
 - **Acceptance gates:** the browser smoke on all five console routes at 360 px, 640 px, 1024 px and 1536 px (CLAUDE.md section 12); the stuck strip is one row at every width it sticks at; zero new `[error]` and zero new `404`. Local `npm --prefix frontend run test:changed -- --list` then the selected checks.
 - **Oracle:** at each of the four widths, the strip's measured height equals one row and the four anchors reach their headings. It cannot settle whether 1024 px is the right breakpoint; that is a judgement, and decision 4 makes it a knob so it can move without a code change.
+
+---
+
+### Row #10 - The Hardware route stops counting every job twice
+
+- **Scope:** both console readers of `state/host-fingerprint/` settle by key, and the fold line names the machines it folded. No backend change, no store change, no panel redesign, no d3 and no parquet.
+- **Depends on:** nothing. It can go today, on its own, ahead of every other row in this plan.
+
+**Two defects, one pull request, because they are the same panel's two wrong sentences** and a reviewer reads them together. Neither waits on anything else in this plan, and row 8 waits on both.
+
+**Defect 33 - the double count.** Every job writes its machine row in two halves by design: the probe half first, the clock half after the last item. `ledger.extend_segment` says in its own docstring that it settles nothing and that `day_shards.settled_rows` decides what two rows of one key mean. `frontend/src/lib/server/host-fingerprint.ts` and `machine-counters.ts` both call `readDayShards`, the plain reader, so both halves reach the page as two job placements - one carrying the machine and one carrying only `job_seconds`, which lands in `Other machines`. Measured 2026-09-24: 41 of 56 per-writer files over fourteen days hold exactly two rows. Both call sites move to `settledDayShards` with a `HOST_FINGERPRINT_KEY` copy placed beside `ITEM_HEALTH_KEY` in `payload.ts`.
+
+**The fold line - `drawn as one bar: .`** `PlatformMixPanel.svelte` reads `series.at(-1)` for the folded names, but `fleet.ts` merges into an existing series and pushes nothing when the ramp has already folded, so the last series is a real machine whose `folded` list is empty. An optional chain swallows it and the sentence ends on a bare full stop. **The fix is that the fold says which series carries it rather than the reader guessing it is the last one** - guessing is what made a rename invisible, and a second reader would guess again.
+
+- **Files touched:**
+  - `frontend/src/lib/server/host-fingerprint.ts`, `frontend/src/lib/server/machine-counters.ts` (the reader), `frontend/src/lib/server/payload.ts` (the key copy)
+  - `frontend/src/lib/charts/fleet.ts` (the fold names which series holds it), `frontend/src/lib/console/machine/PlatformMixPanel.svelte` (stops guessing)
+  - `frontend/tests/` - the machine-route specs, plus the contract-copy test that binds a key to its Pydantic original
+  - `TODO/20260823-known-defects-plan.md` (defect 33 closes in the commit that closes it)
+- **Acceptance gates:** local `npm --prefix frontend run test:changed -- --list` then the selected checks, and the browser smoke on `/console/machine` (CLAUDE.md section 12). CI runs the full suite.
+- **Oracle:** three checks. Over a fixture day holding one job's two halves, the reader returns **one** row carrying both the machine and the clock. Over the canary day, the placement count equals the count of distinct `(date, run_id, job, shard)`. And with a folded bucket present, the panel's sentence names as many machines as `folded` claims, asserted off the rendered text - which is the one assertion an optional chain cannot pass by staying quiet.
+- **Decisions:**
+
+  | # | Decision | Authority |
+  | --- | --- | --- |
+  | 1 | **Every machine count on the Hardware route drops by about a fifth when this lands. That is the correction, not a regression.** Said here because a reviewer watching four panels fall at once will otherwise read it as the defect | Owner, 2026-09-24 |
+  | 2 | The producer is right and is not touched. Two rows of one key is what `extend_segment` is for, and `day_shards.settled_rows` is where the meaning of two rows lives | Fowler. Same shape as defects 20 and 32 |
+  | 3 | Both readers move in one commit. One settled and one raw is worse than two raw, because then two panels on one route disagree and neither says why | Fowler |
+  | 4 | **The key guard this adds a key to is itself defect 26** - the settlement-key check reads one constant twice, so it cannot see a key lose a cell. This row adds a third key to a guard that cannot fully guard it. Either fix 26 here or say in the pull request that the new key is guarded no better than the other two | Fowler. The owner decides which at dispatch |
+  | 5 | The fold fix is a structural one, not a null guard. Adding `?? []` to the empty list would make the sentence say `0 rarest kinds` and pass every gate | Guardrail #5 |
+
+- **Rejected alternatives:**
+
+  | # | Option | Why rejected | What it would cost to take | Authority |
+  | --- | --- | --- | --- | --- |
+  | 1 | Settle in the producer so one row lands | It is a sound design and it is not this defect. The producer cannot know the clock at probe time, which is why there are two halves | Its own plan, and it moves a persisted contract | Fowler |
+  | 2 | Sweep every remaining raw `readDayShards` call in one row | It is the right instinct and the wrong row. Defect 32 fixed one store, this fixes one store, and a sweep needs a per-store ruling on which key settles each | A follow-up that reads section 5.8's map and rules store by store | Fowler |
+  | 3 | Wait and fold it into row 8 | Row 8 is parquet, a browser query and a redraw. A correction buried in a rewrite is a correction nobody can revert alone | Zero; costs the revert | Owner, 2026-09-24 |
 
 ---
 
