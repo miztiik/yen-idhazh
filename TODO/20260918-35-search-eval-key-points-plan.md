@@ -219,7 +219,7 @@ row) in the opening window, sustained **2**, collapsing to **1** on the serial s
 
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | Raise `truncation_cap_tokens` to 30000, pin to `n_ctx` (+ fingerprint move, C5) | - | A / cap | IN REVIEW | p35cap | - | Carmack |
+| 1 | Raise `truncation_cap_tokens` to 30000, pin to `n_ctx` (+ fingerprint move, C5) | - | A / cap | IN REVIEW | p35cap | #1092 | Carmack |
 | 5 | Live-day search - instant + semantic (+ frontend `key_points` owner, C2) | - | A / search | PENDING | - | - | - |
 | 6 | Remove `new_fact_rate` + `key_point_weight` (+#34 field, judge stages, C3) | #34 | A / eval-core | PENDING (F2 ack) | - | - | - |
 | 7 | Remove `lead_coverage` (+ day-metrics bucket + qualification, C4) | - | A / eval-core | PENDING | - | - | - |
