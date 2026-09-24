@@ -189,11 +189,11 @@ class Sample:
 def corpus_samples(corpus: Path, template: Article) -> list[Sample]:
     """Every corpus row as an `Article`, longest body first.
 
-    The corpus is the only committed source text in this repository
-    (`CLAUDE.md` section 0a), so it is the only place real article prose can
-    come from. It is not where the cap's worst case comes from: its longest body
-    is whatever `extract.truncation_cap_tokens` allowed on the day it was
-    harvested, which is what `sample_at_the_cap` exists for.
+    The corpus is the only committed source text in this repository, so it is
+    the only place real article prose can come from. It is not where the cap's
+    worst case comes from: its longest body is whatever
+    `extract.truncation_cap_tokens` allowed on the day it was harvested, which
+    is what `sample_at_the_cap` exists for.
 
     Everything except the text, the title and the counts derived from them is
     the committed fixture's: none of it reaches a prompt, and inventing values

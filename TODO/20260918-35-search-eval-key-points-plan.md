@@ -142,7 +142,7 @@ row's `Files touched` is the exact surface; every persisted change stamps its sc
 
 | # | Decision | Ruling | Advisor overruled |
 | --- | --- | --- | --- |
-| K0 | `truncation_cap_tokens` | 20000 -> 30000. Fits: model `n_ctx` is 65536, so 30000 + prompt + output leaves >50% headroom (Carmack). | - |
+| K0 | `truncation_cap_tokens` | **20000 -> 26000 (owner, 2026-09-24, superseding the 30000 this row was written with).** The original sum sized ONE model call. Production sends two, and the second replays the first call's prompt and reply, so the window has to hold the pair. Searching `dag.sequence_tokens` at `elements.max_per_article` 256 puts the largest cap whose pair fits the committed 65,536 window at 26,511, where the margin is 1 token; 26,000 is committed for a real margin, and its pair is 64,699 with 837 spare. No context window moves. The raise buys headroom, not coverage: 20000 has never cut an article - the longest one on record is 11,525 words and 20000 already admitted 14,675. | the plan's own one-call arithmetic (K0, F5) |
 | K1 | `key_points` | FULL removal - published, internal decode, corpus. Served only search; production tags entities from title+body, and key points derive from the body, so they add nothing there. | Fowler |
 | K2 | Live-day search | BUILD BOTH - instant substring + semantic (reuse month vectors + 43 MB encoder). | Fowler + Carmack |
 | K3 | `lead_coverage` | REMOVE - many articles/blogs start slow, so lead survival is not a quality signal. | Andre |
@@ -157,7 +157,7 @@ row's `Files touched` is the exact surface; every persisted change stamps its sc
 | F2 | Plans #29/#34 lose the key-point signal | CONFIRMED. Do NOT modify #29/#34 beyond a one-line comment that `key_points` and `key_point_weight` are gone. Row 6 also retires the committed `key_point_weight` field on #34's `StorySimilarityDistribution` (a cross-plan contract PR, sequenced after #34 lands). |
 | F3 | "Needs human labels" | WITHDRAWN. No human labelling. Bands are a percentile of each metric's own rolling distribution, folded and fitted daily like plan #34's line (block p01, watch p05, damped, gated), self-correcting on sane defaults. This is plan #36. |
 | F4 | G-Eval placement | Council-only, next-day, judging FLUENCY only, on a stratified sample of ~30 summaries/day. Not per-item, not in the digest job. Plan #36. |
-| F5 | Read cap vs context window | Fits (n_ctx 65536). Row 1 pins the cap check to the model's `n_ctx` rather than a bare literal, so a future 32 k model swap fails loudly. |
+| F5 | Read cap vs context window | **Restated 2026-09-24.** "Fits with >50% headroom" sized one call. The two-call pair at the committed 26000 cap sizes at 64,699 against an `n_ctx` of 65536, so the headroom is 837 tokens, not half a window. Row 1 pins the cap check to the model's `n_ctx` rather than a bare literal, so a future 32 k model swap fails loudly. |
 
 ### Section 0d - what moves to plan #36 (the autotune loop)
 
@@ -183,7 +183,7 @@ landed surface, and the eval work serializes on two shared files. The correction
 | C2 | **Row 4 undercounts the retire surface.** It must ALSO touch: frontend `payload/project.ts` ITEM_FIELDS + `payload/types.ts` (or the drift gate fails); the 12 browser specs naming `key_points` + a browser smoke; the decode knobs `key_points_min/max` in `knobs/summarize.py` + `config/idhazh.json` + `app-config.schema.json`; the 3 prompt files (`summarize.txt`, `summarize_and_plan_visual.txt`, `write_about_the_item.txt`) + their committed classify fixtures + the pipeline fingerprint move; `stages/common.py`, `stages/work.py`, `telemetry/spans.py`. The frontend `key_points` ownership is Row 4's, not Row 5's. | As written Row 4 fails its own contract-drift gate and leaves orphaned frontend/prompt/decode surface. |
 | C3 | **Row 6 undercounts the `key_point_weight` coupling.** Beyond stamps.py/placement.py/fold.py/`without_retired_keys` (already named), ALSO the landed #34 stages [pick_item_pairs.py:73](../backend/idhazh/stages/pick_item_pairs.py) and [set_merge_line.py:190](../backend/idhazh/stages/set_merge_line.py) (both read it), `evals/archive.py`, the `new_fact_rate` name in `day_metrics.py`, and 6 similarity test modules. **D5:** `assemble.py` and `set_merge_line.py` recompute `cosine*cw + key_point*kpw` and must drop the second term in lockstep or crash. Browser smoke for the removed panel. | Runtime `AttributeError` on landed #34 code; the weight-sum validator rewrite (decision 2) is incomplete without the recompute sites. |
 | C4 | **Row 7 undercounts the `lead_coverage` coupling.** Beyond corpus.py/qualify.py/`scorer_version` (already named), ALSO `day_metrics.py` (`lead_missing` field + the sum validator -> a `day-metrics.schema.json` change if the bucket goes), `qualification.py` (`lead_coverage` field), `stages/assemble.py` and `stages/qualify.py` (both pass `lead_coverage=`), `telemetry/publish/day_metrics.py`. Browser smoke for the removed panel. | Payload-parse failure on committed day-metrics; orphaned writers. |
-| C5 | **Row 1 (cap) coupling.** The cap is a `PipelineInputs` field ([fingerprint.py](../backend/idhazh/contracts/fingerprint.py)) - 20000->30000 **moves `pipeline_fingerprint`** (name the move + the re-harvest it implies). Reuse the existing `n_ctx` fit check at [classify/dag.py:241](../backend/idhazh/classify/dag.py), do not write a second. Band word-counts derive from the cap ([knobs/summarize.py:156](../backend/idhazh/contracts/knobs/summarize.py)) - confirm they still hold. VERIFY the committed `models.summarize.inference.n_ctx` is 65536 before asserting it (F5 pin). | An unstated fingerprint move silently re-runs the whole day; an unverified `n_ctx` makes the F5 pin a guess. |
+| C5 | **Row 1 (cap) coupling.** The cap is a `PipelineInputs` field ([fingerprint.py](../backend/idhazh/contracts/fingerprint.py)) - 20000->26000 **moves `pipeline_fingerprint`** (name the move + the re-harvest it implies). Reuse the existing `n_ctx` fit check at [classify/dag.py:241](../backend/idhazh/classify/dag.py), do not write a second. Band word-counts derive from the cap ([knobs/summarize.py:156](../backend/idhazh/contracts/knobs/summarize.py)) - confirm they still hold. VERIFY the committed `models.summarize.inference.n_ctx` is 65536 before asserting it (F5 pin). | An unstated fingerprint move silently re-runs the whole day; an unverified `n_ctx` makes the F5 pin a guess. |
 | C6 | **The `EvalRow` CSV needs a header-migration, not the JSON popper.** `without_retired_keys` is a Pydantic `mode=before` JSON hook - right for the 3 committed #34 JSON payloads, but the `EvalRow` removals drop CSV **columns** from committed day-shards, which needs a tolerant read / DROPPED-cell path. Name it in the eval-core PR. | A width change read back under `extra=forbid` fails the shard parse. |
 | C7 | **Browser smokes missing.** Rows 3, 6, 7, 8 each change a published console surface and name no browser smoke (section 12). The eval-core PR carries one smoke for the two removed + two added panels; the chart PR carries Row 3's. | Section-12 gate cannot be satisfied without them. |
 
@@ -219,32 +219,35 @@ row) in the opening window, sustained **2**, collapsing to **1** on the serial s
 
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | Raise `truncation_cap_tokens` to 30000, pin to `n_ctx` (+ fingerprint move, C5) | - | A / cap | PENDING | - | - | - |
+| 1 | Raise `truncation_cap_tokens` to 26000, pin to `n_ctx` (+ fingerprint move, C5) | - | A / cap | DONE | - | 1092 | Carmack |
 | 5 | Live-day search - instant + semantic (+ frontend `key_points` owner, C2) | - | A / search | DONE | - | 1094 | Susan |
-| 6 | Remove `new_fact_rate` + `key_point_weight` (+#34 field, judge stages, C3) | #34 | A / eval-core | IN REVIEW | p35eval | - | Carmack, Andre |
-| 7 | Remove `lead_coverage` (+ day-metrics bucket + qualification, C4) | - | A / eval-core | IN REVIEW | p35eval | - | Andre |
-| 8 | Add coherence + coverage scorers (recorded-only) | - | A / eval-core | IN REVIEW | p35eval | - | Carmack, Andre |
+| 6 | Remove `new_fact_rate` + `key_point_weight` (+#34 field, judge stages, C3) | #34 | A / eval-core | DONE | - | 1093 | Carmack, Andre |
+| 7 | Remove `lead_coverage` (+ day-metrics bucket + qualification, C4) | - | A / eval-core | DONE | - | 1093 | Andre |
+| 8 | Add coherence + coverage scorers (recorded-only) | - | A / eval-core | DONE | - | 1093 | Carmack, Andre |
 | 2 | Redesign + re-label the faithfulness chart; docs glyph-link | 8 | B / chart | IN REVIEW | p35chart | - | Susan, Andre |
 | 3 | Reword recorded-only copy; relabel `compression` | 8 | B / chart | IN REVIEW | p35chart | - | Susan, Andre |
 | 4 | Retire `key_points` completely (published + internal + corpus + `output_digest`) | 5, 6, 7 | B / retire | PENDING | - | - | - |
 
 ## Section 2 - Row detail
 
-### Row #1 - Raise `truncation_cap_tokens` to 30000, pinned to `n_ctx`
+### Row #1 - Raise `truncation_cap_tokens` to 26000, pinned to `n_ctx`
 
-- **Scope:** the read cap rises 20000 -> 30000, with a build-time assertion that it fits the model's
-  `n_ctx` minus the prompt and output budget.
+- **Scope:** the read cap rises 20000 -> 26000 (K0, owner 2026-09-24), with a build-time assertion that
+  it fits the model's `n_ctx` minus the prompt and output budget. No `--ctx-size` moves.
+  `finetune.sequence_length` rises 32768 -> 49152, because the training window sizes the single call
+  and the worst single call at 26000 is 35,970 tokens; that window is GPU memory on a machine that is
+  not the runner.
 - **Files touched:** `config/idhazh.json`; the extract or config validator that reads the cap.
 - **Acceptance gates:** config schema validates; an assertion fails if `truncation_cap_tokens + system
-  + max_output` exceeds `n_ctx`. Record a prefill-time note on a long fixture (Carmack: real feeds
-  never reach 15000 words, so the practical delta is ~zero).
-- **Oracle:** a test shows a 30000-token body passes uncut and the fit assertion catches a cap set
+  + max_output` exceeds `n_ctx`. No wall-clock reading: 20000 has never cut an article, so a higher
+  ceiling reads no extra word and there is no prefill delta to measure (Guardrail #10).
+- **Oracle:** a test shows a 26000-token body passes uncut and the fit assertion catches a cap set
   past `n_ctx`; it cannot settle runtime cost on a pathological input (the request timeout backstops it).
 - **Decisions:**
 
   | # | Decision | Authority |
   | --- | --- | --- |
-  | 1 | 30000, pinned to `n_ctx` not a bare literal | owner (K0), Carmack (F5) |
+  | 1 | 26000, pinned to `n_ctx` not a bare literal | owner (K0, 2026-09-24) |
 
 ### Row #2 - Redesign + re-label the faithfulness chart; docs glyph-link
 
@@ -472,5 +475,5 @@ row) in the opening window, sustained **2**, collapsing to **1** on the serial s
 | Can UniEval run on the runner? | Not as a drop-in - it is a T5 encoder-decoder needing a GGUF/llama.cpp path or a second runtime; we are not using it (reuse the summariser for G-Eval). |
 | Where do metrics run? | HHEM same-day in the `work` shard (per item, with the summariser). Coverage (ROUGE, no model) same-day. Coherence in the `assemble` job, reusing the MiniLM already loaded there for the search index - the summariser is gone by then, so no 3-model peak. G-Eval fluency next-day in the council, sampled. |
 | Feedback-loop contracts? | Extend `EvalRow`; new fixed-size `MetricScoreDistribution` + per-day `FittedMetricBand` (mirror #34's `Fit`); a `publish_decision` stamp on the item. All in plan #36. |
-| Model context fit for 30000? | `n_ctx` 65536 - fits with >50% headroom. |
+| Model context fit for 26000? | The two-call pair sizes at 64,699 against an `n_ctx` of 65536 - 837 tokens spare. 26,511 is the largest cap that window holds. |
 | Decode saving from dropping key_points? | Real at 4 tok/s: ~21 s/item typical, ~1.75 h off a 300-item day. |

@@ -82,10 +82,10 @@ class FinetuneConfig(Model):
     """The training corpus and the schedules that maintain it.
 
     Nothing here runs on the runner. Training needs a GPU and the runner has
-    none (section 0a), so these knobs size a file CI commits and a notebook
-    somewhere else reads. `teacher` names a KEY in `models` rather than a model,
-    because the summarizer slot has already moved twice and a knob that spells a
-    model name is stale the day the config moves.
+    none (CLAUDE.md Guardrail #2), so these knobs size a file CI commits and a
+    notebook somewhere else reads. `teacher` names a KEY in `models` rather than
+    a model, because the summarizer slot has already moved twice and a knob that
+    spells a model name is stale the day the config moves.
 
     There is no `student`. It named the small visual planner, retired when the
     two calls moved onto the summarizer's weights, and a distillation session
@@ -198,9 +198,9 @@ class FinetuneConfig(Model):
             "because that is the shape a training row has: a prompt the pipeline "
             "could have sent and an answer it could have returned, and the corpus "
             "holds single-call rows. At the committed extract.truncation_cap_tokens "
-            "of 20,000 the worst case is 997 tokens of prompt overhead, 23,259 for "
-            "the longest and hardest-tokenizing article the cap lets through, and 900 "
-            "of answer - 25,156 tokens, which config/idhazh.json covers at 32,768 and "
+            "of 26,000 the worst case is 997 tokens of prompt overhead, 30,238 for "
+            "the longest and hardest-tokenizing article the cap lets through, and 4,735 "
+            "of answer - 35,970 tokens, which config/idhazh.json covers at 49,152 and "
             "this default does not. It does not follow "
             "--ctx-size on the teacher entry: that window holds the two-call pair, "
             "and nothing trains on a two-call row. A row longer than this is "

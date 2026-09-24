@@ -13,7 +13,7 @@ name: Model validation
 # slice exactly once, hashes the bytes, writes the hashes down, and only then
 # starts calling the model - three times over the same bytes. The article
 # bodies never leave the job that captured them; only hashes and measurements
-# travel (CLAUDE.md section 0a).
+# travel. An article body is never republished to a reader.
 #
 # Never scheduled. A model swap is an ESCALATE, so this is dispatched by a
 # human who intends to read the answer.
@@ -373,8 +373,8 @@ jobs:
 
       # Hashes, counts and timings. The frozen article payloads stay under
       # backend/var/qualification/<date>/ on this runner and are thrown away
-      # with it - this repository is public and an article body is not ours to
-      # publish (CLAUDE.md section 0a).
+      # with it - this repository is public and an article body is never
+      # republished to a reader.
       - uses: actions/upload-artifact@v7
         with:
           name: qualification-${{ matrix.shard }}
@@ -383,8 +383,8 @@ jobs:
 
       # Our own summaries, so a person can read the writing the scores judged.
       # Its own artifact rather than a field on the shard, because a gate must
-      # not learn to read it. Still no article body: the source is a link
-      # (CLAUDE.md section 0a).
+      # not learn to read it. Still no article body: the source is a link, and
+      # an article body is never republished to a reader.
       - uses: actions/upload-artifact@v7
         with:
           name: qualification-samples-${{ matrix.shard }}

@@ -2,9 +2,9 @@
 
 Two things are asserted here that are not about correctness. One is that the
 draw is deterministic, so a queue is reproducible instead of remembered. The
-other is that the ledger is hard to fill with a machine - LLM-as-judge is a
-project non-goal (`CLAUDE.md` section 0a), and a non-goal that is only
-discouraged is not a control.
+other is that the ledger is hard to fill with a machine. `CLAUDE.md` section 1a
+lifted the ban on a model judge, so that second one is a deliberate choice now
+rather than a rule - and a choice that is only discouraged is not a control.
 
 No mocks and no network (Guardrail #7). The draw runs over a ledger built here, not
 over `state/`: measured 2026-09-06 the committed ledger held 6,966 rows over 15

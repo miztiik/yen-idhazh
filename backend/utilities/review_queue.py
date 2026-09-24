@@ -3,7 +3,8 @@
 The question is the one nothing has asked yet - **is the visual the machine kept
 the visual a human would have kept?** This builds the place to ask it. It gates
 nothing: no publish decision reads the tree, and nothing here selects what
-publishes (`CLAUDE.md` section 0a).
+publishes. `CLAUDE.md` section 1a lifted the ban that kept a model verdict out of
+a publish decision, so that is a choice now rather than a rule.
 
 Operator tooling. It is not a stage, not a page on the published site, and it
 never writes into the published tree.
