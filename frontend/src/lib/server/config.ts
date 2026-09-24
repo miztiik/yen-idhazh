@@ -40,6 +40,11 @@ export interface UiConfig {
 	/** How many characters a reader types before an in-place filter narrows a
 	 * list. The day page and the archive share one panel, so they share this. */
 	filter_min_chars: number;
+	/** How long the count beside the field waits before it catches up with the
+	 * list. Zero on the narrowing, a settle on the count: a list redrawing is the
+	 * answer the reader asked for, and a count re-wrapping its own line on every
+	 * letter moves the text under the hand that is typing. */
+	filter_settle_ms: number;
 	/** How many topic pills stay on the row before an auto-created one goes in a
 	 * disclosure. A soft cap: a desk a person put in `config/taxonomy.json` is
 	 * never folded away, so it bounds only the model-proposed desks beside them. */
@@ -408,6 +413,7 @@ const DEFAULTS: UiConfig = {
 	draw_same_story: true,
 	show_filter: true,
 	filter_min_chars: 2,
+	filter_settle_ms: 120,
 	topic_pills_max: 5,
 	pill_move_min: 2,
 	desk_thin_max: 12,

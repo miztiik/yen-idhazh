@@ -424,6 +424,7 @@
     "desk_thin_max": 12,
     "draw_same_story": true,
     "filter_min_chars": 3,
+    "filter_settle_ms": 200,
     "items_per_topic": 5,
     "lead_also_covered_weight": 0.05,
     "lead_cluster_floor": 2,
