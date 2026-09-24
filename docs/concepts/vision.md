@@ -55,7 +55,7 @@ reasons to weaken the product contract
 ## What it is not
 
 - **Not a news reader or a feed.** No accounts, no personalisation, no notifications, no infinite scroll.
-- **Not a republisher.** The pipeline publishes a link and our own summary. The article body is never committed and never served.
+- **Not a republisher.** The pipeline publishes a link and our own summary. **An article body is never served to a reader** - no page renders one, and no committed payload the site reads carries one. It is committed in exactly one place: `corpus/corpus.jsonl`, the training corpus, which holds 14.2 MB of source text across 1,490 rows as training samples. Nothing renders that file, no reader-facing page may read it, and the scheduled prune rewrites the history it sits in. `EvidenceItem` holds the same text and is gitignored, because it exists to be shown to a person rather than to train anything.
 - **Not a service.** There is no backend in production. `backend/` is a producer that runs in CI and on a developer machine.
 - **Not model-agnostic by accident.** The model is chosen against a measured budget and a measured quality bar, and swapping it is a contract-level decision.
 
