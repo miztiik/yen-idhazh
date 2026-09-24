@@ -1,6 +1,6 @@
 # How to author an execution-ready plan-doc
 
-**Last Updated**: 2026-09-18
+**Last Updated**: 2026-09-24
 
 The procedure for turning a rough idea or draft into a `TODO/<YYYYMMDD>-<slug>-plan.md` that an autonomous agent can run end-to-end with no further instruction. This is the canonical home for the authoring ritual; the [`prepare-plan`](../../.claude/skills/prepare-plan/SKILL.md) skill is a thin wrapper that points here, mirroring how [`bootstrap`](../../.claude/skills/bootstrap/SKILL.md) points at [../agents/bootstrap.md](../agents/bootstrap.md).
 
@@ -62,6 +62,7 @@ The plan is a tabular instrument for parallel dispatch, not a narrative. It cont
  - **Scope:** one sentence, what ships.
  - **Files touched:** bullet list of exact paths.
  - **Acceptance gates:** name local checks separately from CI checks. Use the project's test selector and name the focused Oracle. A full-suite requirement belongs to CI unless the row states why it must also run locally. Record the selected inputs and results so the orchestrator can verify them without repeating an unchanged check.
+ - **A live run is not a gate when what it proves is a side effect.** A gate that dispatches a workflow which writes committed data cannot be repeated, cannot run unattended, and ends with somebody reverting a commit before the merge - and the clauses under it are usually already covered by tests that run on every pull request. Split it: what is decidable from committed files becomes a test, and what genuinely needs a live runner becomes a named observation of the next scheduled run, saying what to read and what to do when it is wrong.
  - **Oracle:** ONE load-bearing check (bijection / coverage / contract / parity) that proves correctness, **and one sentence naming what it cannot settle.** An oracle over a quantity that varies states the tolerance AND the noise it sits in; where the noise is wider than the effect, say so rather than inventing a tolerance that reads crisp and fails on the weather (Guardrail #10).
  - **Decisions** (enumerated table):
 
