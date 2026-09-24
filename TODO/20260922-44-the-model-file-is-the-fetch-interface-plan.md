@@ -86,7 +86,7 @@ Measured on `origin/main`, 2026-09-22, by reading the files.
 | 3 | The model path becomes one Python program, and the verbs are renamed | 1 | B | DONE | p44r3 | - | R3 |
 | 4 | The pipeline-test case runner becomes Python | 3 | C | DONE | p44r4 | - | R4 |
 | 5 | The memory sampler joins the one that already exists | 3 | C | DONE | p44r5 | - | R5 |
-| 6 | The last three scripts go | plan 46 all-DONE, met 2026-09-23 | D | READY | - | - | - |
+| 6 | The last three scripts go | plan 46 all-DONE, met 2026-09-23 | D | DONE | p44c1, p44c2 | - | C1, C2 |
 | 7 | The benchmark arms learn the server died, and the repeat count is config | - | E | DONE | p42p5 | - | P5 |
 | 8 | The harness keeps only what more than one module reads | - | F | COLLAPSED | - | - | - |
 
