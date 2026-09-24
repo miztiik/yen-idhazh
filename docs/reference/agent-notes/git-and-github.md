@@ -1,6 +1,6 @@
 # Agent Notes - Git and GitHub
 
-**Last Updated**: 2026-09-23
+**Last Updated**: 2026-09-24
 
 Traps in `git`, worktrees, merges and the `gh` CLI. Index and scope:
 [../agent-notes.md](../agent-notes.md).
@@ -244,7 +244,13 @@ gh api "repos/<owner>/<repo>/commits/<sha>/check-runs" --jq '.check_runs[]|.name
 
 **`gh pr checks` exit codes: 8 while anything is pending, 0 when every check is green, 1 when one failed.** It also prints `no checks reported` for about a minute after a push. A job can report `status: in_progress` with `conclusion: success` while the run is complete, so a settle loop keyed on exit 0 polls for ever - key it on `gh run view <id> --json status,conclusion` instead.
 
-**An empty check list has three causes and only one is worth waiting out.** The head is new and the runner is catching up (wait); the pull request was opened against a base stale enough that no workflow started (rebase and push); or the pull request is `CONFLICTING`, in which case GitHub builds nothing, indefinitely. **Ask `gh pr view <n> --json mergeable` before the first poll, not after it** - a pull request that was green an hour ago goes `CONFLICTING` the moment a sibling merges something that touches one of its files, and the only visible symptom is that the new head registers no checks at all. Two poll loops were spent on a commit whose `mergeable` had already read `CONFLICTING`. Merging `origin/main` in and pushing clears it and starts the run in the same move.
+**An empty check list has four causes and only one is worth waiting out.** The head is new and the runner is catching up (wait); the pull request was opened against a base stale enough that no workflow started (rebase and push); the pull request is `CONFLICTING`, in which case GitHub builds nothing, indefinitely; or the head commit was pushed by a job carrying the Actions token, which GitHub refuses to let start another workflow. **Ask `gh pr view <n> --json mergeable` before the first poll, not after it** - a pull request that was green an hour ago goes `CONFLICTING` the moment a sibling merges something that touches one of its files, and the only visible symptom is that the new head registers no checks at all. Two poll loops were spent on a commit whose `mergeable` had already read `CONFLICTING`. Merging `origin/main` in and pushing clears it and starts the run in the same move.
+
+**The fourth cause has no wait and no repair, because the run was never created** ([../../how-to/run-the-gates.md](../../how-to/run-the-gates.md)) - measured 2026-09-23, zero check runs on a data commit a job pushed. What settles such a merge instead is tree equality: two identical tree ids mean the candidate is byte-identical to a commit CI has already passed.
+
+```powershell
+git rev-parse '<already-green-sha>^{tree}' '<head-sha>^{tree}'
+```
 
 **A `--jq` filter or a `--json` list assembled by PowerShell is silently mangled.** `--json tagName, assets, url` becomes three arguments (`accepts at most 1 arg(s)`), and a filter built with `+` concatenation outside parentheses hands `gh` three operands - it takes the first, ignores the rest, and prints an empty result that reads as "no run has started yet". Quote the whole list, build the string first, or let PowerShell filter:
 
@@ -254,6 +260,8 @@ $runs = gh run list --repo <owner/repo> --branch <branch> --limit 10 --json name
 ```
 
 **A `workflow_dispatch` cannot reach a workflow that is not on the default branch.** `gh workflow run <file> --ref <my-branch>` answers `HTTP 404: workflow <file> not found on the default branch` even when the file is committed and pushed on that branch, because GitHub resolves the workflow id from `main` first. So a row that ships a new dispatch-only workflow cannot use it before the merge - plan the row around it.
+
+**A dispatch on a branch cannot prove a program that rebases onto `main`.** `backend/utilities/commit_and_push.py` fetches `origin main` and rebases onto it before every push. On a branch the branch's own commits are not on `main`, so the rebase tries to replay them and stops on a conflict production never meets - which reads as a defect in the program. Measured 2026-09-23: the `plan` job pushed cleanly and `assemble` hit it. A branch dispatch proves the argument list and the staging; only a run on `main` proves the push.
 
 **`gh run list` intermittently answers `error connecting to api.github.com`** on a box with several agents making calls at once. Retry before you go and read CI; two failures in a row on different subcommands is a different signal.
 

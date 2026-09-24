@@ -40,7 +40,6 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260921-39-delete-the-scaffolding-plan.md](20260921-39-delete-the-scaffolding-plan.md) | 21 | 0 | 1 | 0 |
 | [20260921-40-bonsai-probe-plan.md](20260921-40-bonsai-probe-plan.md) | 7 | 0 | 7 | 4 |
 | [20260921-41-lane-a-model-file-plan.md](20260921-41-lane-a-model-file-plan.md) | 7 | 0 | 7 | 0 |
-| [20260922-44-the-model-file-is-the-fetch-interface-plan.md](20260922-44-the-model-file-is-the-fetch-interface-plan.md) | 5 | 1 | 4 | 0 |
 
 ## In flight - 5
 
