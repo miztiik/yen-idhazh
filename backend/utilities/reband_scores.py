@@ -54,13 +54,8 @@ def _faithfulness(value: str) -> float | None:
 
 
 def _reason(row: dict[str, str], config: EvaluationConfig) -> str:
-    low_coverage = float(row["coverage"]) < config.lead_coverage_min
     dropped_hedge = _bool_cell(row["hedge_dropped"])
     unsupported = int(row["unsupported_numbers"] or 0) > 0
-    if low_coverage and dropped_hedge:
-        return "lead coverage and dropped hedge"
-    if low_coverage:
-        return "lead coverage"
     if dropped_hedge:
         return "dropped hedge"
     if unsupported:
@@ -122,7 +117,6 @@ def reband(rows: Iterable[dict[str, str]], config: EvaluationConfig) -> RebandRe
         new = band(
             _faithfulness(row["hhem"]),
             unsupported_numbers=int(row["unsupported_numbers"] or 0),
-            lead_coverage=float(row["coverage"]),
             hedge_dropped=_bool_cell(row["hedge_dropped"]),
             config=config,
         ).value

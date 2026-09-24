@@ -32,17 +32,10 @@
 		evalColumnLabels,
 		evalWithin,
 		flagReadings,
-		leadColumns,
-		leadDays,
-		leadFloorNote,
-		leadHeadline,
-		leadSeries,
 		matchColumns,
 		matchDays,
 		matchHeadline,
 		matchSeries,
-		newFactBands,
-		newFactWithin,
 		recordedReadings,
 		recordedText,
 		widerNote
@@ -437,20 +430,8 @@
 	const matchStrip = $derived(matchColumns(matchWindow));
 	const matchHead = $derived(matchHeadline(evalWindow, windowDays));
 	const matchWider = $derived(widerNote(evalWindow, windowDays));
-	const leadWindow = $derived(leadDays(evalWindow));
-	const leadPlot = $derived(stacked(evalColumnLabels(leadWindow), leadSeries(leadWindow), 'lines'));
-	const leadStrip = $derived(leadColumns(leadWindow));
-	const leadHead = $derived(leadHeadline(evalWindow, windowDays));
-	const leadFloorText = $derived(leadFloorNote(evalWindow, windowDays, data.leadFloor));
 	const recorded = $derived(recordedReadings(evalWindow));
 	const flags = $derived(flagReadings(evalWindow));
-	/** The share of key points that add a fact, by length band, over the same days
-	 * the panels above name. The server summed per day, so narrowing the window
-	 * sums fewer days and divides once - the strip is a mean over the window's
-	 * items, never a mean of daily means. */
-	const newFact = $derived(
-		newFactBands(newFactWithin(data.newFactRate, modelSpan), data.summarizeBands)
-	);
 
 	/** The throughput candles, over the same window the cards and the eval panels
 	 * name. Each day is already one small object, so narrowing is a filter and
@@ -816,70 +797,6 @@
 			{/if}
 		</div>
 
-		<!-- The one instrument that catches a summary leaving out what the article
-		     led with. It is drawn apart from faithfulness because a summary can be
-		     entirely supported by its article and still drop every name in it. -->
-		<div
-			data-eval-panel="lead-coverage"
-			data-model-lead-days={windowDays}
-			data-model-lead-from={modelSpan.start}
-			data-model-lead-to={modelSpan.end}
-		>
-			<h2 class="console-h2">How much of the opening survived</h2>
-			<p class="mt-1 text-[0.8125rem] text-text-tertiary" data-model-lead-intro>
-				The checker counts the names and figures in the article's opening lines and asks how many
-				reached the summary. The line is how many of that day's summaries kept too few of them.
-				<strong class="font-semibold text-text-secondary" data-model-lead-rule
-					>The share is drawn, and the count is in the strip</strong
-				>: eleven of ninety and eleven of seven hundred are different days, and a bare count reads
-				as the same one.
-			</p>
-
-			{#if leadHead}
-				<p class="mt-2 text-[0.9375rem] text-text-secondary" data-model-lead-headline>
-					{leadHead}
-				</p>
-			{/if}
-			{#if leadFloorText}
-				<p class="mt-2 text-[0.8125rem] text-text-tertiary" data-model-lead-floor>
-					{leadFloorText}
-				</p>
-			{/if}
-
-			{#if leadWindow.length === 0}
-				<p class="mt-2 text-[0.9375rem] text-text-secondary" data-model-lead="empty">
-					No day in these {windowDays} days carries a checked summary, so there is nothing to draw.
-				</p>
-			{:else}
-				<Chart
-					svg={data.leadSvg ?? ''}
-					option={leadPlot.option}
-					width={data.console.chart_width}
-					height={data.console.chart_height}
-					label="How many summaries kept too little of their article's opening, per day, over {windowDays} days, as a percentage of the summaries checked that day."
-					columns={leadStrip}
-					readoutName="lead-coverage"
-					readoutMaxShare={data.chart.readout_max_share}
-					restingNote=", the newest day"
-					hint="Point at a day to read the count and the middle summary together. Left and Right step through the days, Escape returns to the newest."
-				/>
-				<ul class="sr-only" data-lead-days>
-					{#each leadWindow as day (day.date)}
-						<li
-							data-lead-day={day.date}
-							data-lead-under={day.leadUnder}
-							data-lead-under-pct={day.leadUnderPct}
-							data-lead-mid={day.leadMid}
-							data-lead-checked={day.led}
-						>
-							{day.date}: {day.leadUnder} of {day.led} summaries kept too little of the opening, and
-							the middle summary kept {day.leadMid}%.
-						</li>
-					{/each}
-				</ul>
-			{/if}
-		</div>
-
 		<!-- The rest of what the checker writes down. Every one of these is
 		     recorded on every summary and read by nothing: no band, no card, no
 		     rule. Drawing them is not an argument that they should be - it is so
@@ -893,7 +810,7 @@
 		>
 			<h2 class="console-h2">Measured, and nothing acts on it</h2>
 			<p class="mt-1 text-[0.8125rem] text-text-tertiary" data-model-recorded-intro>
-				Six more instruments run on every summary. None of them changes a band, a card or a rule.
+				Eight more instruments run on every summary. None of them changes a band, a card or a rule.
 				<strong class="font-semibold text-text-secondary" data-model-recorded-rule
 					>A day here is that day's middle summary</strong
 				>, and the two columns beside it are the quietest and loudest day in these {windowDays} days
@@ -947,67 +864,6 @@
 										>{reading.fired === 0
 											? `Never, on ${grouped(reading.of)} summaries`
 											: `${grouped(reading.fired)} of ${grouped(reading.of)} summaries`}</td
-									>
-								</tr>
-							{/each}
-						</tbody>
-					</table>
-				</div>
-			{/if}
-		</div>
-
-		<!-- The share of a summary's key points that state a fact the prose does not
-		     already carry, by the length band the article fell in. Measured on every
-		     summary and read by nothing - no band, no card, no rule - because best-of-N
-		     against it would optimise key points for difference from the summary, which
-		     is the Goodhart form of this exact number. -->
-		<div
-			data-eval-panel="new-fact-rate"
-			data-model-new-fact-days={windowDays}
-			data-model-new-fact-from={modelSpan.start}
-			data-model-new-fact-to={modelSpan.end}
-		>
-			<h2 class="console-h2">How often a key point adds to the summary</h2>
-			<p class="mt-1 text-[0.8125rem] text-text-tertiary" data-model-new-fact-intro>
-				A key point earns its line by stating a fact the summary does not already carry. This is
-				the share that did, by article length - the shortest band asks for one key point and the
-				longest for five, so a low share is expected where the article is short and there is little
-				to add. It is measured against our own summary, not the article, so it is not a check for
-				invented facts - the faithfulness panel is.
-				<strong class="font-semibold text-text-secondary" data-model-new-fact-rule
-					>Nothing acts on it</strong
-				>: it measures whether the prompt found facts, and is never an input to a band. This is the
-				word-overlap reading; a later one keys on the elements a key point cites.
-			</p>
-
-			{#if newFact.every((band) => band.rate === null)}
-				<p class="mt-2 text-[0.9375rem] text-text-secondary" data-model-new-fact="empty">
-					No summary in these {windowDays} days carries a new-fact reading, so there is nothing to report.
-				</p>
-			{:else}
-				<div class="console-scroll mt-3">
-					<table class="w-full border-collapse text-[0.8125rem]" data-model-new-fact-table>
-						<thead>
-							<tr class="border-b border-border-subtle text-left text-text-tertiary">
-								<th scope="col" class="py-1.5 pr-3 font-medium">Article length</th>
-								<th scope="col" class="py-1.5 pr-3 text-right font-medium">Share adding a fact</th>
-								<th scope="col" class="py-1.5 pr-3 text-right font-medium">Summaries</th>
-							</tr>
-						</thead>
-						<tbody>
-							{#each newFact as band (band.key)}
-								<tr class="border-b border-border-subtle/60" data-new-fact-row={band.key}>
-									<th scope="row" class="py-1.5 pr-3 text-left font-normal text-text-secondary">
-										{band.label}
-									</th>
-									<td
-										class="py-1.5 pr-3 text-right tabular-nums text-text-secondary"
-										data-new-fact-rate={band.rate ?? ''}
-										>{band.rate === null ? 'No summary' : `${band.rate}%`}</td
-									>
-									<td
-										class="py-1.5 pr-3 text-right tabular-nums text-text-tertiary"
-										data-new-fact-items={band.items}>{grouped(band.items)}</td
 									>
 								</tr>
 							{/each}

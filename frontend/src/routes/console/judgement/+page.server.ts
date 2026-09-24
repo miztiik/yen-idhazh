@@ -72,7 +72,6 @@ export function load() {
 	const committed = committedWeights();
 	const weights: ScoreWeights = {
 		cosineWeight: newest?.cosineWeight ?? committed.cosine_weight,
-		keyPointWeight: newest?.keyPointWeight ?? committed.key_point_weight,
 		fittedOn: newest === null ? null : newest.date
 	};
 	// One hand-typed file, plus one published day per distinct date it names. The

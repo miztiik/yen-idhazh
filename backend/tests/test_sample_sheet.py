@@ -31,7 +31,6 @@ def _pair(score: float, key: str) -> Pair:
         pair_key=key,
         score=score,
         cosine=score,
-        key_point=0.0,
         headline=False,
         band=band_of(score, LINE, corridor=CORRIDOR),
         left=side,

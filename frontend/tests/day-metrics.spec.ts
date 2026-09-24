@@ -142,7 +142,6 @@ test('dayMetrics degrades a malformed record instead of failing the build', () =
 // --- the reducers take the count from the record where it has one -----------
 
 const DATE = '2026-08-29';
-const LEAD_FLOOR = 0.3;
 
 /**
  * A day whose ledger holds more rows than the day published: item `a` re-scored
@@ -163,14 +162,14 @@ const SETTLED = new Map<string, DayScoredCounts>([
 ]);
 
 test('evalDays without a record counts the ledger rows, as it always did', () => {
-	const [day] = evalDays(ROWS, LEAD_FLOOR);
+		const [day] = evalDays(ROWS);
 	expect(day.scored).toBe(4);
 	expect(day.fired.determinism_violation).toBe(3);
 	expect(day.fired.extraction_suspect).toBe(2);
 });
 
 test('evalDays with a record counts the distinct-published items', () => {
-	const [day] = evalDays(ROWS, LEAD_FLOOR, SETTLED);
+		const [day] = evalDays(ROWS, SETTLED);
 	// The three published-set counts are corrected.
 	expect(day.scored).toBe(2);
 	expect(day.fired.determinism_violation).toBe(1);
@@ -178,7 +177,7 @@ test('evalDays with a record counts the distinct-published items', () => {
 	// Every measurement distribution still reads every row: four hhem readings,
 	// and the median is the same number the rows gave without the record.
 	expect(day.matched).toBe(4);
-	expect(day.matchMid).toBe(evalDays(ROWS, LEAD_FLOOR)[0].matchMid);
+		expect(day.matchMid).toBe(evalDays(ROWS)[0].matchMid);
 });
 
 const SCORES: Record<string, string>[] = ROWS.map((row) => ({ ...row, model_id: 'm' })) as Record<

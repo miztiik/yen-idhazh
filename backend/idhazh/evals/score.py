@@ -16,19 +16,14 @@ from idhazh.contracts.article import Article
 from idhazh.contracts.base import fit_field
 from idhazh.contracts.eval_row import BandReason, ConfidenceBand, EvalRow
 from idhazh.contracts.knobs.evaluation import EvaluationConfig
-from idhazh.contracts.knobs.summarize import SummarizeConfig
 from idhazh.contracts.run_plan import PlannedItem
 from idhazh.contracts.summary import Summary
-from idhazh.evals import metrics
+from idhazh.evals import embedding_metrics, metrics
+from idhazh.evals.embedding_metrics import Encoder
 from idhazh.fingerprint import text_digest
 
 _DELTA_PLACES: Final = 6
 _UNTITLED: Final = "Untitled item"
-#: The distinctness ceiling `to_summary` drops a restating key point on, reused
-#: here so the recorded new-fact rate and the drop can never disagree about a
-#: single line. The production caller passes the configured value; this default
-#: keeps the pure composition callable without a summarize config in hand.
-_DEFAULT_RESTATEMENT_CEILING: Final = SummarizeConfig().key_point_restatement_ceiling
 
 
 class Verdict(NamedTuple):
@@ -46,22 +41,22 @@ def verdict(
     faithfulness: float | None,
     *,
     unsupported_numbers: int,
-    lead_coverage: float,
     hedge_dropped: bool,
     config: EvaluationConfig,
 ) -> Verdict:
     """The band, and why it is not the top one.
 
     An unsupported figure forces the bottom band. Nothing else in the row can
-    see that defect, so nothing else may outvote it. Missing lead facts and
-    dropped hedges cap confidence at medium rather than forcing low.
+    see that defect, so nothing else may outvote it. A dropped hedge caps
+    confidence at medium rather than forcing low.
 
     A `high` item carries no reason. It has nothing to explain, and copy about
     the absence of a problem is ink a reader cannot act on.
 
-    When both counterweights fail, the missing lead is named. Dropped facts are
-    the larger loss: a flattened hedge changes how a sentence reads, and a
-    missing lead means the story's who, what and how-much never arrived.
+    Whether the article's opening survived used to cap the band here as well,
+    and it was the reason named first when both counterweights failed. It no
+    longer runs: plenty of good articles and blogs open slowly, so a summary
+    that left the opening behind was not a worse summary for it.
     """
     if unsupported_numbers:
         return Verdict(ConfidenceBand.LOW, BandReason.UNSUPPORTED_NUMBER)
@@ -74,11 +69,8 @@ def verdict(
     else:
         scored, reason = ConfidenceBand.LOW, BandReason.FAITHFULNESS
 
-    if scored is ConfidenceBand.HIGH:
-        if lead_coverage < config.lead_coverage_min:
-            return Verdict(ConfidenceBand.MEDIUM, BandReason.LEAD_MISSING)
-        if hedge_dropped:
-            return Verdict(ConfidenceBand.MEDIUM, BandReason.HEDGE_DROPPED)
+    if scored is ConfidenceBand.HIGH and hedge_dropped:
+        return Verdict(ConfidenceBand.MEDIUM, BandReason.HEDGE_DROPPED)
     return Verdict(scored, reason)
 
 
@@ -86,7 +78,6 @@ def band(
     faithfulness: float | None,
     *,
     unsupported_numbers: int,
-    lead_coverage: float,
     hedge_dropped: bool,
     config: EvaluationConfig,
 ) -> ConfidenceBand:
@@ -94,7 +85,6 @@ def band(
     return verdict(
         faithfulness,
         unsupported_numbers=unsupported_numbers,
-        lead_coverage=lead_coverage,
         hedge_dropped=hedge_dropped,
         config=config,
     ).band
@@ -116,7 +106,7 @@ def to_eval_row(
     scored_at: str,
     extraction_suspect: bool = False,
     determinism_violation: bool = False,
-    restatement_ceiling: float = _DEFAULT_RESTATEMENT_CEILING,
+    encoder: Encoder | None = None,
 ) -> EvalRow:
     """Everything measured about one item, in the shape the ledger keeps forever.
 
@@ -145,11 +135,12 @@ def to_eval_row(
     neither the article nor the pair, and it is recorded and not banded for the
     same reason.
 
-    `new_fact_rate` takes the item's key points against the summary. It is the
-    aggregate inverse of the drop `to_summary` makes, read at the same
-    `restatement_ceiling`, so a key point that counts here is exactly one the drop
-    keeps. Recorded and not banded: it is the instrument for whether the reordered
-    key-point prompt found facts, and nothing acts on it (`docs/concepts/evaluation.md`).
+    `encoder` is the one model this function touches, and it is optional: a
+    caller with no encoder in hand records a null `coherence` and every other
+    column exactly as before. The work shard is the only production caller and
+    it is where the row is composed, so that is where the encoder is loaded -
+    the jobs that hold it already only ever read this row back
+    (`docs/concepts/evaluation.md`).
 
     `source_word_count` and `source_seen_word_count` both come off `article`,
     never off a text this function counts for itself. They are a before-the-cap
@@ -159,10 +150,8 @@ def to_eval_row(
     """
     text = summary.summary or ""
     unsupported = metrics.unsupported_numbers(text, full_text)
-    coverage = metrics.lead_coverage(text, full_text)
     hedge = metrics.hedge_dropped(text, full_text)
     verbatim = metrics.verbatim_run(text, full_text)
-    new_fact = metrics.new_fact_rate(summary.key_points, text, ceiling=restatement_ceiling)
     # An article payload written before extract recorded the pre-cap length knows
     # its own full length only when nothing was cut. Otherwise it stays None: the
     # post-cap count would say the article was exactly as long as the part we read.
@@ -198,7 +187,6 @@ def to_eval_row(
         hhem_full=hhem_full,
         hhem_delta=delta,
         truncation_flagged=article.truncated,
-        coverage=coverage,
         compression=metrics.compression(text, full_text),
         extractiveness=metrics.extractiveness(text, full_text),
         verbatim_run=verbatim,
@@ -207,12 +195,14 @@ def to_eval_row(
         evidential_density=metrics.evidential_density(full_text),
         speculative_density=metrics.speculative_density(full_text),
         self_repetition=metrics.self_repetition(text),
-        new_fact_rate=new_fact,
+        coherence=(
+            embedding_metrics.coherence(text, encoder=encoder) if encoder is not None else None
+        ),
+        semantic_coverage=metrics.semantic_coverage(text, full_text),
         extraction_suspect=extraction_suspect,
         band=band(
             hhem,
             unsupported_numbers=unsupported,
-            lead_coverage=coverage,
             hedge_dropped=hedge,
             config=config,
         ),

@@ -32,15 +32,6 @@ class EvaluationConfig(Model):
     )
     band_high_min: float = Field(default=0.80, ge=0.0, le=1.0)
     band_medium_min: float = Field(default=0.50, ge=0.0, le=1.0)
-    lead_coverage_min: float = Field(
-        default=0.30,
-        ge=0.0,
-        le=1.0,
-        description=(
-            "Below this the summary missed the source lead. It caps a high band at "
-            "medium rather than forcing low."
-        ),
-    )
     brief_compression_ceiling: float = Field(
         default=0.5,
         gt=0.0,

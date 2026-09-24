@@ -4,7 +4,6 @@
   "applied_line": 0.931,
   "cosine_weight": 0.7,
   "date": "2026-09-20",
-  "key_point_weight": 0.3,
   "labelled_two_story_pairs": 4,
   "labeller": "claude-opus-4-1-20250805",
   "merged_and_one_story": 4,

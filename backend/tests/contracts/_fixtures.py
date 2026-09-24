@@ -104,6 +104,10 @@ def paragraph_after(text: str, lead: str) -> str:
 # The one `app-config` fixture. Its name is its invariant: every knob in it holds
 # a value the committed `config/idhazh.json` does not, so a reader that ignored
 # the file and fell back to a default would fail rather than pass.
+#
+# One knob cannot keep it: `assemble.same_story.cosine_weight` has exactly one
+# legal value since the cosine became the whole score, so this file carries the
+# committed 1.0 and the validator is what proves a reader cannot ignore it.
 APP_CONFIG_EVERY_KNOB_DIFFERS: Final = (
     CONTRACT_FIXTURES_DIR / "app-config" / "every-knob-differs-from-the-committed-config.json"
 )

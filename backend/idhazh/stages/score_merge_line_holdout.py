@@ -137,7 +137,6 @@ def stage_score_merge_line_holdout(
         marks,
         digest_root=digest_root,
         cosine_weight=scorer.cosine_weight,
-        key_point_weight=scorer.key_point_weight,
     )
     cells = holdout.count_cells(reading, line=line)
     _warn_on_a_stale_maximum(reading)
@@ -170,7 +169,6 @@ def stage_score_merge_line_holdout(
         labelled_two_story_pairs=cells.two_story_marks,
         scorer_model=scorer.scorer_model,
         cosine_weight=scorer.cosine_weight,
-        key_point_weight=scorer.key_point_weight,
     )
     _append(state, date, row)
     LOG.info(

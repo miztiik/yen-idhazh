@@ -98,7 +98,6 @@ def _eval_row(month: str) -> EvalRow:
         hhem_full=0.9,
         hhem_delta=0.0,
         truncation_flagged=False,
-        coverage=0.8,
         compression=0.2,
         extractiveness=0.4,
         band=ConfidenceBand.HIGH,

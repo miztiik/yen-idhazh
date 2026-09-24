@@ -48,8 +48,7 @@ KNOBS: Final = SimilarityThresholdConfig(band_low=0.50, band_high=0.62, bin_widt
 
 
 def a_scorer() -> ScorerStamp:
-    return ScorerStamp(scorer_model="all-minilm-l6-v2-quantized", cosine_weight=1.0,
-                       key_point_weight=0.0)
+    return ScorerStamp(scorer_model="all-minilm-l6-v2-quantized", cosine_weight=1.0)
 
 
 def a_judge() -> JudgeStamp:
@@ -127,7 +126,6 @@ def a_row(
             "pair_key": key,
             "scorer_model": scorer.scorer_model,
             "cosine_weight": scorer.cosine_weight,
-            "key_point_weight": scorer.key_point_weight,
             "judge_model": stamped.judge_model,
             "prompt_digest": stamped.prompt_digest,
             "grammar_digest": stamped.grammar_digest,
@@ -215,9 +213,7 @@ def test_counting_a_date_the_record_already_holds_raises() -> None:
 def test_a_changed_scorer_stamp_archives_and_starts_empty() -> None:
     """A different weight puts the same pair in a different slot."""
     record = a_record()
-    moved = ScorerStamp(
-        scorer_model="all-minilm-l6-v2-quantized", cosine_weight=0.8, key_point_weight=0.2
-    )
+    moved = ScorerStamp(scorer_model="all-minilm-l6-v2-quantized", cosine_weight=0.8)
 
     assert counting.inputs_changed(record, knobs=KNOBS, scorer=a_scorer(), judge=a_judge()) is None
     assert counting.inputs_changed(record, knobs=KNOBS, scorer=moved, judge=a_judge()) == ("1.0", "0.8")
@@ -462,7 +458,6 @@ def a_ruler_moved(settings: config.Settings) -> config.Settings:
     """
     app = settings.app.model_copy(deep=True)
     app.assemble.same_story.cosine_weight = 0.8
-    app.assemble.same_story.key_point_weight = 0.2
     return dataclasses.replace(settings, app=app)
 
 

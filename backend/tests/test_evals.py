@@ -26,6 +26,7 @@ from pydantic import ValidationError
 from idhazh import cli, day_shards, ledger
 from idhazh.contracts.article import Article
 from idhazh.contracts.base import ServerJob, derive_url_key
+from idhazh.contracts.eval_row import DROPPED_CELLS as DROPPED_EVAL_CELLS
 from idhazh.contracts.eval_row import ConfidenceBand, EvalRow
 from idhazh.contracts.feed_health import FetchOutcome
 from idhazh.contracts.knobs.evaluation import EvaluationConfig
@@ -47,11 +48,10 @@ from idhazh.evals.metrics import (
     evidential_density,
     extractiveness,
     hedge_dropped,
-    lead_coverage,
-    new_fact_rate,
     restates_summary,
     scorer_version,
     self_repetition,
+    semantic_coverage,
     speculative_density,
     unsupported_numbers,
     verbatim_run,
@@ -111,64 +111,60 @@ FAITHFUL = (
 )
 
 
-def test_a_faithful_summary_keeps_the_lead() -> None:
-    assert lead_coverage(FAITHFUL, ARTICLE) >= 0.8
+#: One article and one summary of it, small enough for a reader to work the
+#: answer out by hand. `mars`, `rock` and `rover` are used three times each and
+#: `nasa` and `tube` twice, so the five most-used content words are exactly the
+#: five with a count above one and no tie-break is needed to see the reference.
+#: The summary carries three of the five.
+_COVERAGE_SOURCE = (
+    "Mars rover drilled rock. The rover sealed a rock sample in a tube. "
+    "NASA said the Mars rover will drill more rock samples on Mars, "
+    "and NASA praised the tube design."
+)
+_COVERAGE_SUMMARY = "The rover sealed a rock sample on Mars."
 
 
-def test_a_summary_that_dropped_the_story_scores_low() -> None:
-    """The defect: everything true, nothing that made it news."""
-    vague = "A utility has placed an order with a reactor supplier. Approval is still pending."
-    assert lead_coverage(vague, ARTICLE) < 0.3
+def test_semantic_coverage_is_the_share_of_the_top_terms_the_summary_kept() -> None:
+    """Worked by hand, so a reader can check the arithmetic without running it.
+
+    Reference at five terms: mars 3, rock 3, rover 3, nasa 2, tube 2. The
+    summary carries mars, rock and rover and drops nasa and tube, so 3 of 5.
+    """
+    assert semantic_coverage(_COVERAGE_SUMMARY, _COVERAGE_SOURCE, terms=5) == 0.6
 
 
-def test_a_summary_with_no_lead_coverage_cannot_band_high() -> None:
-    assert (
-        band(
-            0.99,
-            unsupported_numbers=0,
-            lead_coverage=0.0,
-            hedge_dropped=False,
-            config=EvaluationConfig(),
-        )
-        is ConfidenceBand.MEDIUM
-    )
+def test_a_source_with_no_content_word_is_unmeasured_rather_than_zero() -> None:
+    """Null and 0.0 are two different facts, and only one of them is a reading."""
+    assert semantic_coverage(_COVERAGE_SUMMARY, "") is None
+    assert semantic_coverage(_COVERAGE_SUMMARY, "The and of to in on at") is None
+
+
+def test_semantic_coverage_stays_inside_the_zero_to_one_bound() -> None:
+    """A summary can carry every reference term and cannot carry more than all."""
+    assert semantic_coverage(_COVERAGE_SOURCE, _COVERAGE_SOURCE, terms=5) == 1.0
+    assert semantic_coverage("nothing whatever in common", _COVERAGE_SOURCE, terms=5) == 0.0
+
+
+def test_semantic_coverage_does_not_grow_with_the_article() -> None:
+    """The denominator is the reference size, never the article's own length.
+
+    Recall against the whole article is the shape this replaced: it falls as the
+    article lengthens whatever the summary says, which is a length measure
+    wearing a quality measure's name. Here the article is tripled with words it
+    uses once each, so none of them can displace a term the article keeps
+    returning to - and the reading does not move at all.
+    """
+    padding = " ".join(f"filler{index}" for index in range(120))
+    unchanged = semantic_coverage(_COVERAGE_SUMMARY, f"{_COVERAGE_SOURCE} {padding}", terms=5)
+
+    assert unchanged == semantic_coverage(_COVERAGE_SUMMARY, _COVERAGE_SOURCE, terms=5) == 0.6
 
 
 def test_a_dropped_hedge_caps_high_at_medium() -> None:
     assert (
-        band(
-            0.99,
-            unsupported_numbers=0,
-            lead_coverage=1.0,
-            hedge_dropped=True,
-            config=EvaluationConfig(),
-        )
+        band(0.99, unsupported_numbers=0, hedge_dropped=True, config=EvaluationConfig())
         is ConfidenceBand.MEDIUM
     )
-
-
-def test_lead_coverage_separates_the_two() -> None:
-    """A metric with no dynamic range is a constant dressed as a measurement."""
-    vague = "A utility has placed an order with a reactor supplier."
-    assert lead_coverage(FAITHFUL, ARTICLE) - lead_coverage(vague, ARTICLE) > 0.5
-
-
-def test_a_lead_with_nothing_salient_is_vacuously_covered() -> None:
-    assert lead_coverage("anything at all", "it happened. and then it stopped.") == 1.0
-
-
-def test_a_title_line_cannot_glue_to_a_capitalised_body_line() -> None:
-    source = (
-        "The Intrinsic Valuation of Biodiversity Loss\n"
-        "We explore the welfare costs of the loss of animal life in a utilitarian framework. "
-        "Moral philosophy and neuroscience define sentience as the capacity for experience."
-    )
-    summary = (
-        "The authors report that biodiversity loss has welfare costs because animal sentience "
-        "has intrinsic value."
-    )
-
-    assert lead_coverage(summary, source) >= EvaluationConfig().lead_coverage_min
 
 
 # --- The defect nothing else can see: a wrong number -----------------------
@@ -321,14 +317,13 @@ CONTROL = f"{_SHARED} {_CLAUSE} {_ELSEWHERE}"
 def test_a_looping_summary_is_invisible_to_every_metric_that_reads_the_source() -> None:
     """The blind spot, stated as an equality rather than as an opinion.
 
-    Same length, same 4-gram overlap with the article, same longest copied run,
-    same surviving lead facts. Four numbers that cannot separate a summary that
-    said one thing three times from a summary that said three things.
+    Same length, same 4-gram overlap with the article, same longest copied run.
+    Three numbers that cannot separate a summary that said one thing three times
+    from a summary that said three things.
     """
     assert word_count(LOOPED) == word_count(CONTROL) == 26
     assert extractiveness(LOOPED, ARTICLE) == extractiveness(CONTROL, ARTICLE)
     assert verbatim_run(LOOPED, ARTICLE) == verbatim_run(CONTROL, ARTICLE)
-    assert lead_coverage(LOOPED, ARTICLE) == lead_coverage(CONTROL, ARTICLE)
 
     assert self_repetition(CONTROL) == 0.0
     assert self_repetition(LOOPED) > 0.0
@@ -401,46 +396,6 @@ def test_restatement_stays_inside_the_zero_to_one_bound() -> None:
         assert 0.0 <= restates_summary(point, _KP_SUMMARY) <= 1.0
 
 
-# --- How often a key point adds a fact ---------------------------------------
-#
-# `new_fact_rate` is the aggregate inverse of `restates_summary`, read at the
-# ceiling `to_summary`'s drop uses, so a key point that counts here is exactly
-# one the drop keeps. Recorded and never acted on - it is the instrument for
-# whether the reordered key-point prompt found facts, not an input to any band.
-
-_KP_LIFTED = "The bank held its policy rate at four percent"
-_KP_DISTINCT = "The rate has not moved since the bank last met in July."
-
-
-def test_every_key_point_restating_the_summary_adds_nothing() -> None:
-    assert new_fact_rate([_KP_LIFTED, _KP_LIFTED], _KP_SUMMARY, ceiling=0.5) == 0.0
-
-
-def test_every_key_point_stating_a_new_fact_adds_one_each() -> None:
-    assert new_fact_rate([_KP_DISTINCT, _KP_DISTINCT], _KP_SUMMARY, ceiling=0.5) == 1.0
-
-
-def test_a_mixed_reply_reports_the_share_that_added() -> None:
-    assert new_fact_rate([_KP_LIFTED, _KP_DISTINCT], _KP_SUMMARY, ceiling=0.5) == 0.5
-
-
-def test_a_reply_with_no_key_points_added_no_fact() -> None:
-    assert new_fact_rate([], _KP_SUMMARY, ceiling=0.5) == 0.0
-
-
-def test_the_new_fact_rate_stays_inside_the_zero_to_one_bound() -> None:
-    for points in ([], [_KP_LIFTED], [_KP_DISTINCT], [_KP_LIFTED, _KP_DISTINCT]):
-        assert 0.0 <= new_fact_rate(points, _KP_SUMMARY, ceiling=0.5) <= 1.0
-
-
-def test_a_key_point_counts_here_exactly_when_the_drop_would_keep_it() -> None:
-    """One ceiling, read by the metric and by the drop, so they never disagree."""
-    ceiling = 0.5
-    points = [_KP_LIFTED, _KP_DISTINCT]
-    kept = sum(1 for point in points if restates_summary(point, _KP_SUMMARY) <= ceiling)
-    assert new_fact_rate(points, _KP_SUMMARY, ceiling=ceiling) == kept / len(points)
-
-
 def test_the_ledger_row_carries_the_repetition_and_leaves_faithfulness_alone() -> None:
     """The wiring, and the one metric this suite cannot compute itself.
 
@@ -479,7 +434,7 @@ def test_the_ledger_row_carries_the_repetition_and_leaves_faithfulness_alone() -
     assert control.hhem_full == looped.hhem_full == 0.89
     assert control.extractiveness == looped.extractiveness
     assert control.verbatim_run == looped.verbatim_run
-    assert control.coverage == looped.coverage
+    assert control.semantic_coverage == looped.semantic_coverage
     assert control.band == looped.band
 
     assert control.self_repetition == 0.0
@@ -487,47 +442,44 @@ def test_the_ledger_row_carries_the_repetition_and_leaves_faithfulness_alone() -
     assert looped.self_repetition > 0.0
 
 
-def test_the_row_carries_the_new_fact_rate_of_the_summarys_key_points() -> None:
-    """The wiring, not the metric: a scored row reports the share of its own key
-    points that add a fact, read at the ceiling the drop uses (0.5 by default)."""
-    item = RunPlan.from_json(read_text(CONTRACT_FIXTURES_DIR / "run-plan" / "one-day.json")).items[
-        0
-    ]
-    article = Article.from_json(read_text(CONTRACT_FIXTURES_DIR / "article" / "ok.json"))
-    written = Summary.from_json(read_text(CONTRACT_FIXTURES_DIR / "summary" / "ok.json"))
+def test_a_row_still_carrying_the_two_retired_cells_reads_through_the_migration() -> None:
+    """The read-side migration `CLAUDE.md` section 11 owes a removed column.
 
-    row = to_eval_row(
-        item=item,
-        article=article,
-        summary=written,
-        full_text=ARTICLE,
-        premise=ARTICLE,
-        hhem=0.91,
-        hhem_full=0.89,
-        config=EvaluationConfig(),
-        date="2026-08-21",
-        run_id="2026-08-21-1",
-        scorer_version="hhem-2.1-open@aaaaaaaa;weights-bbbbbbbb;metrics-3;bands=0.80/0.50",
-        scored_at="2026-08-21T06:18:02Z",
-    )
-
-    assert written.key_points, "the summary fixture must carry key points to measure"
-    assert row.new_fact_rate == new_fact_rate(
-        written.key_points, written.summary or "", ceiling=0.5
-    )
-
-
-def test_an_eval_row_written_before_the_new_fact_rate_column_still_loads() -> None:
-    """Nullable, so a row already in the ledger is not a release blocker (section 11).
-
-    The pre-change shape is a committed row with the key removed, which is what
-    every row in `state/scores/` carried before the migration. Null is the honest
-    value: 0.0 would claim a scored reply whose every key point restated.
+    A work shard seals one `.eval.json` per item and two later jobs read it back
+    hours afterwards, so a column that leaves the row in between is a key
+    `extra="forbid"` would refuse - and the run that wrote the payload would lose
+    its whole day. The fixture is the wide shape as it stood before the
+    narrowing: the two cells are put back onto a committed payload by hand.
     """
     payload = json.loads(read_text(CONTRACT_FIXTURES_DIR / "eval-row" / "high.json"))
-    del payload["new_fact_rate"]
+    wide = {**payload, "coverage": 0.62, "new_fact_rate": 0.5}
 
-    assert EvalRow.model_validate(payload).new_fact_rate is None
+    row = EvalRow.model_validate(wide)
+
+    assert not hasattr(row, "coverage")
+    assert not hasattr(row, "new_fact_rate")
+    assert row.hhem == payload["hhem"], "the rest of the row survives the drop"
+    assert {"coverage", "new_fact_rate"} == DROPPED_EVAL_CELLS
+
+
+def test_a_committed_shard_under_the_wide_header_still_parses_row_by_row() -> None:
+    """The CSV half of the same migration, driven from a bounded fixture.
+
+    A day shard an earlier run wrote names both retired headings in its header
+    line. `from_csv_row` has to place the cells it still knows and drop the two
+    it does not, and `ledger.SCORES_CARRIED` has to name them so the header
+    repair can re-file the file rather than refusing it.
+    """
+    row = EvalRow.from_json(read_text(CONTRACT_FIXTURES_DIR / "eval-row" / "high.json"))
+    wide_columns = (*EvalRow.csv_columns(), "coverage", "new_fact_rate")
+    wide_cells = {**row.csv_row(), "coverage": "0.62", "new_fact_rate": "0.5"}
+
+    read_back = EvalRow.from_csv_row(wide_cells)
+
+    assert read_back.hhem == row.hhem
+    assert read_back.csv_row().keys() == set(EvalRow.csv_columns())
+    unplaceable = set(wide_columns) - set(EvalRow.csv_columns()) - ledger.SCORES_CARRIED
+    assert unplaceable == set(), "a heading the repair cannot place leaves the day unappendable"
 
 
 def test_an_eval_row_written_before_this_column_still_loads() -> None:
@@ -747,15 +699,14 @@ def test_a_page_left_whole_is_not_flagged_whatever_the_two_scores_did() -> None:
 
 
 def test_the_counterweights_did_not_change_meaning() -> None:
-    """Nothing in `metrics.py` moved, so the constant that names it may not either.
+    """Nothing in `metrics.py` moved for this column, so the constant may not either.
 
     `METRICS_VERSION` sits inside `scorer_version`, and a new scorer version
     restarts the ten-run-day count `docs/concepts/evaluation.md` requires before
     any threshold may move. `truncation_flagged` is not a `band()` input and no
-    derived column reads it, so every row written under `metrics-3` still says
-    exactly what it said.
+    derived column reads it, so the stamp did not move for it.
     """
-    assert METRICS_VERSION == "3"
+    assert METRICS_VERSION == "4"
 
 
 # --- Recorded, never flagged -------------------------------------------------
@@ -791,18 +742,19 @@ def test_scorer_version_spells_its_components() -> None:
     )
     assert (
         version == f"hhem-2.1-open@a1b2c3d4;weights-9f8e7d6c;metrics-{METRICS_VERSION};"
-        "window=900/150/anchored;bands=0.80/0.50;lead=0.30"
+        "window=900/150/anchored;bands=0.80/0.50"
     )
 
 
-def test_the_counterweights_version_did_not_move_for_the_window() -> None:
-    """`METRICS_VERSION` names the definitions in `metrics.py`, and none changed.
+def test_the_counterweights_version_moved_when_the_set_of_counterweights_did() -> None:
+    """`METRICS_VERSION` names the definitions in `metrics.py`, and the set changed.
 
-    Moving it would assert a change to the counterweights that did not happen,
-    and it is the same string the ten-run-day label gate counts on. The window
-    geometry is recorded by its own field instead.
+    It stayed at 3 through a window geometry change and two added columns,
+    because none of those changed what an existing column meant. It moves to 4
+    because two columns LEFT and two arrived, so a row cannot be read as if it
+    came from the same set of instruments.
     """
-    assert METRICS_VERSION == "3"
+    assert METRICS_VERSION == "4"
 
 
 def test_a_moved_window_moves_the_scorer_version() -> None:
@@ -847,16 +799,22 @@ def test_a_moved_band_moves_the_scorer_version() -> None:
     )
 
 
-def test_a_moved_lead_floor_moves_the_scorer_version() -> None:
-    """A counterweight threshold change makes a derived column mean something else."""
-    args = {
-        "scorer_id": "hhem-2.1-open",
-        "scorer_revision": "a1b2c3d4e5f6",
-        "weights_sha256": "9f8e7d6c" + "0" * 56,
-    }
-    assert scorer_version(evaluation=EvaluationConfig(), **args) != scorer_version(
-        evaluation=EvaluationConfig(lead_coverage_min=0.40), **args
+def test_the_scorer_version_no_longer_names_a_counterweight_nothing_reads() -> None:
+    """It carried a `lead=` component until 2026-09-24.
+
+    The band input behind it is retired, so the string stops naming it - which
+    moves every row's `scorer_version` once and restarts the run-day count in
+    `evaluation.label_min_run_days`. Pinned here so a later change that puts a
+    dead threshold back into the stamp fails rather than lands.
+    """
+    stamp = scorer_version(
+        scorer_id="hhem-2.1-open",
+        scorer_revision="a1b2c3d4e5f6",
+        weights_sha256="9f8e7d6c" + "0" * 56,
+        evaluation=EvaluationConfig(),
     )
+    assert "lead=" not in stamp
+    assert stamp.endswith("bands=0.80/0.50")
 
 
 # --- The instrument is pinned, and says so -----------------------------------

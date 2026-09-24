@@ -366,7 +366,6 @@ def _score_item(
         verbatim_run=metrics.verbatim_run(text, frozen.full_text),
         extractiveness=metrics.extractiveness(text, frozen.full_text),
         compression=metrics.compression(text, frozen.full_text),
-        lead_coverage=metrics.lead_coverage(text, frozen.full_text),
         unsupported_numbers=metrics.unsupported_numbers(text, frozen.full_text),
         hedge_dropped=metrics.hedge_dropped(text, frozen.full_text),
         evidential_density=metrics.evidential_density(frozen.full_text),
