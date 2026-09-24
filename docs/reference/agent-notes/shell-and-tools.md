@@ -1,6 +1,6 @@
 # Agent Notes - Shell and Tools
 
-**Last Updated**: 2026-09-23
+**Last Updated**: 2026-09-24
 Traps in PowerShell, MSYS, the editor's own file and search tools, the Python
 environment, npm and the libraries that lie about what they returned. Index and
 scope: [../agent-notes.md](../agent-notes.md).
@@ -78,6 +78,8 @@ if (-not (Get-Command shellcheck -ErrorAction SilentlyContinue)) { 'shellcheck A
 "TAG=<row> PWD=$($PWD.Path)"; <command>
 ```
 
+The tag finds the fault and does not get the answer back, so have the command write its result to a file and read the file with `Get-Content` - a lost return then costs one read rather than a re-run.
+
 **Re-issue only after checking whether the first copy is running.** Three launches each reported nothing and all three ran, so three builds wrote one shared output directory and the byte gate measured a half-written tree.
 
 **`Set-Location -LiteralPath` to a path that does not exist fails, and the rest of the line still runs** - in the previous directory, which under parallel agents is often a sibling's worktree, and the tag above does not catch it because the tag prints first. Gate on `$PWD` in the same line, so exit 9 means the command never ran rather than ran somewhere else:
@@ -133,6 +135,8 @@ git -C <the worker's worktree> status --porcelain
 ```
 
 The fix belongs in the brief rather than in the tool: tell a worker to commit before any long gate, and to leave the full browser project to CI.
+
+**A search subagent's "it is not there" is the answer to check.** A read-only reconnaissance agent reported several symbols absent from this tree; `git grep` found 79 hits for one of them and the others were present too, so a row dispatched on that report would have skipped most of its own surface. The two directions are not symmetric: a wrong positive costs one grep to disprove and is usually right, while a wrong negative shrinks the work silently and nothing downstream can notice. Confirm every absence with `git grep` before acting on it.
 
 ## The Python environment
 
