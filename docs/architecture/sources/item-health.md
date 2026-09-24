@@ -557,21 +557,27 @@ that happens, and what a change in either rate is allowed to prove, is
 
 ## What counts against a source
 
-Twenty codes never count against a source:
+Nineteen codes never count against a source:
 
 `not_attempted`, `robots_denied`, `robots_unreachable`, `blocked_address`,
-`http_rate_limited`, `boilerplate`, `contaminated`, `too_short`, `not_prose`,
+`http_rate_limited`, `boilerplate`, `contaminated`, `not_prose`,
 `model_unreachable`, `model_refused`, `model_timed_out`, `shard_out_of_time`,
 `context_exceeded`, `output_truncated`,
 `labels_truncated`, `bad_shape`, `length_out_of_range`, `copied_source`,
 `leaked_address`
 
-All four extract signals are on that list, and the reason is mechanical rather
-than generous: `counts_against_source` reads the code and never the outcome, and
-all four ride on an `ok` row while their `reject_*` switch is false. A signal
-that publishes and still counted would charge a feed for every story it
-published. Flipping any of those switches is the moment to ask the question
-again.
+A row that reached the digest never counts either, whatever code it carries.
+`counts_against_source` reads the outcome before it reads the list, so a signal
+that records and still publishes is free twice over.
+
+Three of the four extract signals are on that list, and the reason is mechanical
+rather than generous: each rides on an `ok` row while its `reject_*` switch is
+false, and a signal that publishes and still counted would charge a feed for
+every story it published. `too_short` is the fourth and is NOT on the list,
+because the committed config turns its switch on: a stub it rejects never
+publishes, so charging it is charging a real failure. The outcome rule is what
+keeps that honest for a feed registered as publishing abstracts, whose short
+items still publish and so still cost it nothing.
 
 `boilerplate` left that list on 2026-09-17 and came back the same day, and it is
 the only code that has ever moved. It went when a store started feeding the
@@ -581,10 +587,10 @@ store was reverted and the ratio is back to dividing by an empty set. A signal
 that cannot fire must not count against a publisher, because the only thing it
 could do then is be wrong.
 
-The remaining eight can count against the source:
+The remaining nine can count against the source:
 
 `http_client_error`, `http_server_error`, `network_error`,
-`no_text`, `no_title`, `paywalled`, `unsupported_form`, `unknown`
+`no_text`, `no_title`, `paywalled`, `too_short`, `unsupported_form`, `unknown`
 
 The contract carries this as data on the enum side, not as prose only, because a
 later source-health reader uses it.
@@ -910,12 +916,24 @@ signal still matters to the editor. They never count against a source by
 default. Only a paywall, an unsupported form, or genuine missing text stops
 extract. Authority: Owner override O3.
 
-Each of the four has a switch that closes it, all four false
+Each of the four has a switch that closes it
 ([../../concepts/config/summary-length.md](../../concepts/config/summary-length.md)). O3 is what the DEFAULT
 says, not what the code can express, and the difference matters: a curator who
-turns one on is taking a decision O3 left them, not overriding it.
+turns one on is taking a decision O3 left them, not overriding it. **The
+committed config turns `reject_too_short` on, so in production a short body
+also stops extract**; the other three switches are still false.
 `reject_too_short` additionally never fires on a feed registered as `abstract`,
 because short is the property that feed was registered for.
+
+A rejected item fails, but the feed is still charged nothing for it.
+`counts_against_source` asks only which code is on the row, and `too_short` is
+in the neutral set, so the switch changes what the reader sees and not what the
+source scores. The neutral set holds that code because the signal used to
+publish, and with the switch on it no longer does for an ordinary feed - so the
+reason and the membership have come apart. Closing that gap would have to spare
+a feed declared `abstract`, whose row still publishes, which means reading the
+row's outcome rather than its code. Left open deliberately: it moves what source
+yield means for every code at once, and the retirement loop reads that number.
 
 **`contaminated` asks the page how long its own article is, rather than asking
 for a better extractor.** An extraction that returns a publisher's front page is

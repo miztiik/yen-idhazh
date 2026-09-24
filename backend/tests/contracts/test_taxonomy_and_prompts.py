@@ -218,29 +218,43 @@ def test_the_console_fallback_bands_match_the_committed_ladder() -> None:
 
 
 def test_recorded_item_health_codes_never_count_against_a_source() -> None:
-    assert len(SOURCE_NEUTRAL_FAILURE_CODES) == 20
+    assert len(SOURCE_NEUTRAL_FAILURE_CODES) == 19
     assert FailureCode.NOT_ATTEMPTED in SOURCE_NEUTRAL_FAILURE_CODES
     assert FailureCode.MODEL_UNREACHABLE in SOURCE_NEUTRAL_FAILURE_CODES
     assert FailureCode.MODEL_REFUSED in SOURCE_NEUTRAL_FAILURE_CODES
     assert FailureCode.NOT_PROSE in SOURCE_NEUTRAL_FAILURE_CODES
+    assert FailureCode.TOO_SHORT not in SOURCE_NEUTRAL_FAILURE_CODES
     assert FailureCode.HTTP_CLIENT_ERROR not in SOURCE_NEUTRAL_FAILURE_CODES
 
 
 def test_a_signal_that_publishes_is_never_charged_to_a_source() -> None:
-    """`counts_against_source` reads the code and not the outcome.
+    """`counts_against_source` reads the outcome before it reads the code.
 
-    So a signal that records and still publishes would charge its feed for every
-    story the feed published. All four shape signals ride on an `ok` row -
-    `reject_*` is false for each of them - and all four are therefore neutral.
-    Flip one of those switches and this test is the reason to think again.
+    A signal that records and still publishes would otherwise charge its feed for
+    every story the feed published. The three shape signals whose switch is off
+    ride on an `ok` row and are neutral twice over - by outcome and by the set.
+    `too_short` is the one whose switch the committed config turns on, so it is
+    free where the item published and charged where the item was rejected, which
+    is what spares a feed registered as publishing abstracts.
     """
     for code in (
-        FailureCode.TOO_SHORT,
         FailureCode.NOT_PROSE,
         FailureCode.BOILERPLATE,
         FailureCode.CONTAMINATED,
     ):
         assert code in SOURCE_NEUTRAL_FAILURE_CODES, f"{code.value} rides on an ok row"
+
+    published = ItemHealthRow.from_json(
+        read_text(CONTRACT_FIXTURES_DIR / "item-health-row" / "published.json")
+    )
+    short_and_published = published.model_copy(
+        update={"outcome": ItemOutcome.OK, "code": FailureCode.TOO_SHORT}
+    )
+    short_and_rejected = published.model_copy(
+        update={"outcome": ItemOutcome.FAILED, "code": FailureCode.TOO_SHORT}
+    )
+    assert not short_and_published.counts_against_source
+    assert short_and_rejected.counts_against_source
 
 
 def test_a_signal_that_cannot_fire_is_never_charged_to_a_source() -> None:

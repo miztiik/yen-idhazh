@@ -1276,6 +1276,11 @@ def test_the_labelled_short_source_oracle_matches_disposition_and_reason() -> No
 
 #: Enough prose that every other refusal declines and the headline is the only
 #: question left on the payload.
+#: The body every title test shares. It clears `extract.min_source_words`, and
+#: that is load-bearing rather than incidental: the committed config rejects a
+#: body under the brief floor, and the shape check runs before the headline
+#: fallback, so a shorter body would report `too_short` and no title test would
+#: reach the branch it was written for. Keep it over the floor when editing.
 _PAGE_BODY = (
     "<article>"
     "<p>The regulator cleared the interconnector for 2027, and construction "
@@ -1283,6 +1288,11 @@ _PAGE_BODY = (
     "the two grids once it is energised.</p>"
     "<p>The developer said the cost estimate has not moved since the last "
     "filing, and that the schedule assumes no further consultation rounds.</p>"
+    "<p>Both grid operators have signed the connection agreements, and the "
+    "regulator will review the first construction milestone in the autumn. "
+    "The developer expects the seabed survey to finish before that review, "
+    "and said the route avoids the two protected areas the earlier plan "
+    "crossed.</p>"
     "</article>"
 )
 
