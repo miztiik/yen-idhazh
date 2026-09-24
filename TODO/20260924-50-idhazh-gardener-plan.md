@@ -13,9 +13,9 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | Field | Value |
 | --- | --- |
 | Why this plan exists | Four unrelated programs delete things on four unrelated schedules, the biggest has one `--dry-run` flag covering eleven independent decisions, and every store writes its own format by hand. This makes one utility with one verb per task, one config, one persistence door, and one safe way to commit. |
-| Hard scope - in | - `backend/idhazh/store/` becomes the one door a payload goes through to reach disk, in parquet or in JSON, with exactly one module importing the parquet engine so it can be swapped in one file.<br>- Parquet becomes the persistence format for what this plan writes. `state/raw/<store>/<shard>` is where a writer files; `state/compact/<store>/<shard>` is what the seven-day compaction leaves.<br>- `backend/idhazh/gardener/` becomes the single home for every retention task: a router copying `telemetry/cli.py`'s shape, a task registry, a due-date schedule, a record writer and a commit loop.<br>- The eleven passes inside `backend/idhazh/stages/prune_state.py` become eleven tasks, each with its own `dry_run`.<br>- The corpus history squash moves out of inline shell in `.github/workflows/prune.yml` into Python.<br>- `backend/utilities/prune_artifacts.py` becomes a scheduled task for the first time.<br>- `config/idhazh_gardener.json` becomes the one place a retention age is set.<br>- `.github/workflows/prune.yml` stops naming a task: it asks the gardener what is due and runs that, one job per task, no ordering between them.<br>- The console learns to read parquet before any writer starts producing it.<br>- A seven-day compaction task folds `state/raw/` into `state/compact/`.<br>- `backend/idhazh/retention.py` loses its site-size half to a module of its own. |
+| Hard scope - in | - `backend/idhazh/store/` becomes the one door a payload goes through to reach disk, in parquet or in JSON, with exactly one module importing the parquet engine so it can be swapped in one file.<br>- Parquet becomes the persistence format for what this plan writes. `state/raw/<store>/<shard>` is where a writer files; `state/compact/<store>/<shard>` is what the seven-day compaction leaves.<br>- `backend/idhazh/gardener/` becomes the single home for every retention task: a router copying `telemetry/cli.py`'s shape, a task registry, a due-date schedule, a record writer and a commit loop.<br>- The eleven passes inside `backend/idhazh/stages/prune_state.py` become eleven tasks, each with its own `dry_run`.<br>- The corpus history squash moves out of inline shell in `.github/workflows/prune.yml` into Python.<br>- `backend/utilities/prune_artifacts.py` becomes a scheduled task for the first time.<br>- `config/idhazh_gardener.json` becomes the one place a retention age is set.<br>- `.github/workflows/prune.yml` stops naming a task: it asks the gardener what is due and runs that, one job per task, no ordering between them.<br>- The console learns to read parquet before any writer starts producing it.<br>- A seven-day compaction task folds `state/raw/` into `state/compact/`.<br>- `docs/architecture/publishing/idhazh-gardener.md` becomes the page that owns the gardener's architecture, carrying the workflow diagram.<br>- `backend/idhazh/retention.py` loses its site-size half to a module of its own. |
 | Hard scope - out | see the table below |
-| ESCALATE triggers | 1. Any row that would make a gardener task read a collection whose size grows with the archive (Guardrail #12) - stop and price it.<br>2. Row 11's rename of the persisted key `corpus/corpus.meta.json:pruned_date` - stop before the commit that removes the alias, not before the commit that adds it.<br>3. Row 12's rewrite of the force-push step - stop if the tip-moved refusal in `backend/utilities/push_rewritten_history.py` would change behaviour in any way, including its exit code.<br>4. Any task whose window would include today (`Window.older_than` refuses `days < 1` for this reason) - stop; a task that can delete what a running job just wrote is a design error, not a tuning error.<br>5. Any row that would make a second module import the parquet engine directly - stop; the single-import rule is what makes the engine swappable and row 2's oracle enforces it.<br>6. A migration of an existing CSV tree to parquet - stop. This plan moves what it creates plus `visual_prune`; the rest is a separate plan. |
+| ESCALATE triggers | 1. Any row that would make a gardener task read a collection whose size grows with the archive (Guardrail #12) - stop and price it.<br>2. Row 11's rename of the persisted key `corpus/corpus.meta.json:pruned_date` - stop before the commit that removes the alias, not before the commit that adds it.<br>3. Row 12's rewrite of the force-push step - stop if the tip-moved refusal in `backend/utilities/push_rewritten_history.py` would change behaviour in any way, including its exit code.<br>4. Any task whose window would include today (`Window.older_than` refuses `days < 1` for this reason) - stop; a task that can delete what a running job just wrote is a design error, not a tuning error.<br>5. Any row that would make a second module import the parquet engine directly - stop; the single-import rule is what makes the engine swappable and row 2's oracle enforces it.<br>6. A migration of an existing CSV tree to parquet - stop. This plan moves what it creates plus `visual-prune`; the rest is a separate plan. |
 | Chosen strategy | One persistence door first, then the router pattern that already works (`idhazh telemetry`), then tasks one risk class at a time, reader before writer throughout. Ruled by Fowler (architecture, contracts, module structure - CLAUDE.md section 14). |
 | Execution | autonomous orchestrator per docs/how-to/execute-a-plan.md. Parallel N = 3. |
 
@@ -48,6 +48,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | 11 | `prune.yml` stops naming a task | 8, 10 | E | PENDING | - | - | - |
 | 12 | The GitHub collections task gets a schedule | 8 | D | PENDING | - | - | - |
 | 13 | The seven-day compaction: raw folds to compact | 8 | D | PENDING | - | - | - |
+| 14 | The architecture page, and the diagram moves into it | 11, 13 | F | PENDING | - | - | - |
 
 `Parallel-group` is a hint. Rows 6, 7, 8 and 12 each add one import line and one tuple entry to `backend/idhazh/gardener/tasks.py`, and rows 6, 7 and 8 each delete from `backend/idhazh/retention.py`. That is a shared surface, so they are serial whatever the pool width says (execute-a-plan.md, "Rows that share one surface do not parallelise"). Rows 10 and 13 share neither and run beside them.
 
@@ -57,10 +58,10 @@ Confirmed against the owner's instruction, 2026-09-24. A writer files under `raw
 
 ```
 state/raw/gardener/<YYYY>/<MM>/<DD>/<run_id>-<attempt>-<job>-<shard>.parquet
-state/raw/visual_prune/<YYYY>/<MM>/<DD>/<run_id>-<attempt>-<job>-<shard>.parquet
+state/raw/visual-prune/<YYYY>/<MM>/<DD>/<run_id>-<attempt>-<job>-<shard>.parquet
 
 state/compact/gardener/<YYYY>/<MM>/<DD>/settled.parquet
-state/compact/visual_prune/<YYYY>/<MM>/<DD>/settled.parquet
+state/compact/visual-prune/<YYYY>/<MM>/<DD>/settled.parquet
 ```
 
 Worked example - run 17482910337, first attempt, the seen-shard task at matrix index 03, on 2026-09-24:
@@ -70,8 +71,6 @@ state/raw/gardener/2026/09/24/17482910337-1-tend-03.parquet
 ```
 
 The shard pattern is `ledger.segment_name()` unchanged, with `.parquet` passed as its `suffix` - the parameter that already exists on it for exactly this, because one tree's writer files were already not CSV. Two writers cannot take one path: two tasks in one run differ by matrix index, two runs differ by run id, two attempts differ by attempt.
-
-The store names are the owner's spelling: `gardener`, `visual_prune`. That is an underscore where every existing state directory uses a hyphen (`state/visual-prunes/`, `state/feed-health/`, `state/day-metrics/`), so the trees that migrate later follow the new spelling and the two conventions coexist until they do. Stated as a consequence, not a question.
 
 ## 3. What was measured, 2026-09-24
 
@@ -96,6 +95,75 @@ Every number below was taken on this machine and is quoted in the rows that use 
 | 1,000 | 80,495 B | 35,592 B | 15,949 B |
 
 Read plainly: a single-row parquet file is about seventeen times the size of the same row as CSV, because a parquet footer is a fixed cost of roughly 3.5 KB whatever it carries. Parquet draws level at about 91 rows and wins from there - at a thousand rows it is 44 percent of the CSV with snappy and 20 percent with zstd. Two decisions follow, and they are in rows 5 and 13: **a job writes one file holding all of its rows, never one file per row**, and **the seven-day compaction is what turns the fixed cost into the win**, not a nicety.
+
+## 4. The shape this plan builds
+
+The workflow the owner approved on 2026-09-24: the plan job asks what is due, one `tend` job runs each due task with no ordering between them, and the history job rewrites the corpus after every other push has landed.
+
+**This diagram is the plan's copy and it is expected to move.** It is drawn to the Mermaid contract in [docs/reference/documentation-structure.md](../docs/reference/documentation-structure.md) so it can be lifted unchanged, and row 14 lifts it into the architecture page. While the plan is being refined the diagram is refined here; once row 14 lands, the page owns it and this section becomes a link (Guardrail #4).
+
+```mermaid
+%%{init: {"theme": "base", "themeVariables": {"background": "#0f1117", "primaryColor": "#222834", "primaryTextColor": "#e6e9f0", "primaryBorderColor": "#4b5468", "lineColor": "#8b93a7", "textColor": "#e6e9f0", "clusterBkg": "#1a1e27", "clusterBorder": "#3a4254", "titleColor": "#e6e9f0", "edgeLabelBackground": "#1a1e27", "fontSize": "14px"}}}%%
+flowchart TB
+  CRON["schedule, once a day"]
+
+  subgraph OPS["Idhazh Gardener - prune.yml"]
+    PLAN["plan<br/>idhazh gardener due --json"]
+    ANY{"any task due?"}
+    IDLE["no tend job runs"]
+    TEND["tend<br/>one job per due task<br/>fail-fast false, max-parallel 5"]
+    RUN["idhazh gardener run --task NAME<br/>select, report, delete"]
+    LANDED{"already landed<br/>on origin/main?"}
+    BYTES["exit 2<br/>same path, different bytes"]
+    REAPPLY["reset --mixed origin/main<br/>recompute against the new tip<br/>stage owned paths, commit"]
+    PUSHED{"push accepted?"}
+    OK["exit 0"]
+    LOST["exit 3<br/>attempts exhausted"]
+    HIST["history<br/>needs: tend<br/>squash the corpus, force push"]
+  end
+
+  subgraph TREE["The committed tree - state/"]
+    RAW[("state/raw/store/YYYY/MM/DD/*.parquet")]
+    COMPACT[("state/compact/store/YYYY/MM/DD/settled.parquet")]
+  end
+
+  CRON --> PLAN
+  PLAN --> ANY
+  ANY -->|"no"| IDLE
+  ANY -->|"yes"| TEND
+  TEND --> RUN
+  RUN --> RAW
+  RUN --> LANDED
+  LANDED -->|"yes"| OK
+  LANDED -->|"same path, other bytes"| BYTES
+  LANDED -->|"no"| REAPPLY
+  REAPPLY --> PUSHED
+  PUSHED -->|"yes"| OK
+  PUSHED -->|"no, attempts left"| LANDED
+  PUSHED -->|"no, attempts gone"| LOST
+  OK --> HIST
+  RAW -->|"the compaction task, every 7 days"| COMPACT
+
+  classDef stage fill:#222834,stroke:#4b5468,stroke-width:1px,color:#e6e9f0;
+  classDef decision fill:#11141c,stroke:#5b6477,stroke-width:1.5px,color:#ffffff;
+  classDef yes fill:#176032,stroke:#2ea04f,stroke-width:1.5px,color:#ffffff;
+  classDef no fill:#a32020,stroke:#d23b3b,stroke-width:1.5px,color:#ffffff;
+  classDef warn fill:#7a5400,stroke:#c08a12,stroke-width:1.5px,color:#ffffff;
+  classDef store fill:#1b3a5c,stroke:#2d6ca3,stroke-width:1.5px,color:#ffffff;
+  classDef sysOps fill:#1a1e27,stroke:#8b93a7,stroke-width:1.5px,color:#c8cdd8;
+  classDef sysPublish fill:#1a1e27,stroke:#3f8fb8,stroke-width:1.5px,color:#a5d6ea;
+
+  class CRON,PLAN,TEND,RUN,REAPPLY,HIST stage;
+  class ANY,LANDED,PUSHED decision;
+  class OK yes;
+  class BYTES,LOST no;
+  class IDLE warn;
+  class RAW,COMPACT store;
+  class OPS sysOps;
+  class TREE sysPublish;
+```
+
+**`digest.yml` is not on the picture, and that is the point.** It runs five times a day and writes today; every gardener window is strictly in the past, so no task can touch what a running job just wrote. Row 3 decision 7 turns that from an arrangement into a check: a task whose window would include today is refused at config load.
 
 ---
 
@@ -396,7 +464,7 @@ Read plainly: a single-row parquet file is about seventeen times the size of the
 
 ### Row #8 - The visuals task moves in and `prune-state` retires
 
-- **Scope:** `_clean_the_visuals` becomes the last task and writes its record as parquet under `state/raw/visual_prune/`; `stages/prune_state.py` is deleted; `digest.yml` stops calling it; `prune-state` survives one release as an alias.
+- **Scope:** `_clean_the_visuals` becomes the last task and writes its record as parquet under `state/raw/visual-prune/`; `stages/prune_state.py` is deleted; `digest.yml` stops calling it; `prune-state` survives one release as an alias.
 - **Files touched:**
   - `backend/idhazh/gardener/tasks/visual_prune.py` (new)
   - `backend/idhazh/gardener/tasks.py` (one import line, one tuple entry)
@@ -406,11 +474,11 @@ Read plainly: a single-row parquet file is about seventeen times the size of the
   - `backend/idhazh/cli.py` (`prune-state` forwards to `gardener run` and warns; the removal condition sits on the declaring line)
   - `.github/workflows/digest.yml` (the assemble job's prune step is removed; the commit step is left as it is)
   - `config/idhazh_gardener.json` (one task block, `dry_run: true`)
-  - `frontend/src/lib/server/payload.ts` (the visual-prune read follows the tree to `state/raw/visual_prune/`, through row 4's parquet reader)
+  - `frontend/src/lib/server/payload.ts` (the visual-prune read follows the tree to `state/raw/visual-prune/`, through row 4's parquet reader)
   - `backend/tests/gardener/tasks/test_visual_prune.py`, `backend/tests/workflows/`, `frontend/tests/`
   - `backend/tests/test_marks.py`
   - `docs/architecture/publishing/one-visual-one-file-and-the-race-between-two-runs.md`, `docs/concepts/adaptive-pruning.md`, `docs/architecture/publishing/retention.md`
-- **The read-side migration.** `state/visual-prunes/` holds committed CSV days and `state/raw/visual_prune/` will hold parquet ones. The reader reads both for one release: the old tree until its last committed day ages out, the new tree from this row on. The removal condition for the old branch sits on the line that declares it - it goes when no committed day remains under `state/visual-prunes/`.
+- **The read-side migration.** `state/visual-prunes/` holds committed CSV days and `state/raw/visual-prune/` will hold parquet ones. The reader reads both for one release: the old tree until its last committed day ages out, the new tree from this row on. The removal condition for the old branch sits on the line that declares it - it goes when no committed day remains under `state/visual-prunes/`.
 - **Acceptance gates:**
   - Local: `ruff check .`; `mypy backend`; `pytest backend/tests/gardener backend/tests/workflows -q`; `npm --prefix frontend run test:changed -- --list` then the selected checks; the browser smoke on the console page that shows visual prunes, including the case where the new tree is empty; `git grep -n 'prune-state\|prune_state'` returns only the alias and its removal condition.
   - CI: full suite.
@@ -419,11 +487,10 @@ Read plainly: a single-row parquet file is about seventeen times the size of the
 
   | # | Decision | Authority |
   | --- | --- | --- |
-  | 1 | The store is `state/raw/visual_prune/`, in the owner's spelling | Owner, 2026-09-24 |
-  | 2 | `dry_run` stays `true`. This row moves the task; it does not switch deletion on | Plan `20260905-13-switch-on-deletion-plan.md`, row titled "The fuse comes out, and one run is watched". That plan is updated after this one delivers, per the owner, 2026-09-24, and its subject changes from a CLI flag to `config/idhazh_gardener.json`'s `visual-prune.dry_run` |
-  | 3 | The alias `prune-state` carries its removal condition on its declaring line and goes one release later | Guardrail #6 |
-  | 4 | `digest.yml`'s assemble job loses the prune step entirely rather than keeping a no-op. The step existed to run after the day was committed; once row 11 lands, the gardener runs in its own workflow and the ordering constraint is gone | Owner, 2026-09-24 |
-  | 5 | The visuals task owns paths under `frontend/public/digest/`, which no other task owns. That is what lets it stage its own deletions - the thing `digest.yml`'s commit step never staged, and the reason the deletion could not be switched on there | Fowler |
+  | 1 | `dry_run` stays `true`. This row moves the task; it does not switch deletion on | Plan `20260905-13-switch-on-deletion-plan.md`, row titled "The fuse comes out, and one run is watched". That plan is updated after this one delivers, per the owner, 2026-09-24, and its subject changes from a CLI flag to `config/idhazh_gardener.json`'s `visual-prune.dry_run` |
+  | 2 | The alias `prune-state` carries its removal condition on its declaring line and goes one release later | Guardrail #6 |
+  | 3 | `digest.yml`'s assemble job loses the prune step entirely rather than keeping a no-op. The step existed to run after the day was committed; once row 11 lands, the gardener runs in its own workflow and the ordering constraint is gone | Owner, 2026-09-24 |
+  | 4 | The visuals task owns paths under `frontend/public/digest/`, which no other task owns. That is what lets it stage its own deletions - the thing `digest.yml`'s commit step never staged, and the reason the deletion could not be switched on there | Fowler |
 
 - **Rejected alternatives:**
 
@@ -612,7 +679,7 @@ Read plainly: a single-row parquet file is about seventeen times the size of the
   | 4 | This is why the parquet footer cost is acceptable. A raw day of thirteen one-job files carries thirteen footers; compaction turns them into one, and at that point parquet is smaller than the CSV it replaced | Measured 2026-09-24, section 3. This row is what makes row 2's format decision pay |
   | 5 | It is a fold writer kind: add-only for `settled.parquet`, then delete-only for the raw files, in one commit | Fowler |
   | 6 | The console reads `compact` before `raw`, so a day present in both is read once from the settled file | Fowler |
-  | 7 | The task compacts only the stores this plan created - `gardener` and `visual_prune`. A CSV tree joins when it migrates | ESCALATE trigger 6 |
+  | 7 | The task compacts only the stores this plan created - `gardener` and `visual-prune`. A CSV tree joins when it migrates | ESCALATE trigger 6 |
 
 - **Rejected alternatives:**
 
@@ -621,6 +688,39 @@ Read plainly: a single-row parquet file is about seventeen times the size of the
   | 1 | Compact into the same `state/raw/` tree, as the existing CSV fold does with `settled.csv` | A reader then cannot tell a compacted tree from an uncompacted one by path, and a prune over `raw` would have to know which files are outputs | Zero to take; costs the property that `raw` holds only writer files | Owner, 2026-09-24, specifying two roots |
   | 2 | Roll a whole month into one file instead of a day | Larger files and a better ratio, but a month cannot be folded until it ends, so the newest thirty days keep the worst ratio | The measurement that would settle it: `bytes_freed` across a quarter of day folds. It is the next compaction level, not a reason to skip this one | Carmack |
   | 3 | Skip compaction and accept the footer cost | At one row per file, parquet is seventeen times the CSV, committed for ever | Measured; taking it costs the whole size argument for the format | Carmack, measured 2026-09-24 |
+
+---
+
+### Row #14 - The architecture page, and the diagram moves into it
+
+- **Scope:** one page owns how the gardener runs, and the workflow diagram moves out of this plan into it.
+- **Files touched:**
+  - `docs/architecture/publishing/idhazh-gardener.md` (new: the job graph and the diagram, the task registry and the path-ownership rule, the record layout, the three `already_landed` kinds and the commit loop, the compaction)
+  - `TODO/20260924-50-idhazh-gardener-plan.md` (section 4 becomes a link to the page)
+  - `docs/architecture/publishing/retention.md`, `docs/concepts/adaptive-pruning.md` (each links to the new page for how, and keeps what is deleted and why)
+  - `docs/reference/github-actions.md` (the `prune.yml` section points at the new page rather than restating the job graph)
+  - `docs/architecture/publishing/layout.md`, `docs/concepts/glossary.md` (the index links)
+- **Acceptance gates:**
+  - Local: `python backend/utilities/doc_load.py` before and after, and every column it prints is read rather than compared to a threshold; the six diagram checks in [docs/reference/documentation-structure.md](../docs/reference/documentation-structure.md) run by eye on a light page and a dark one; `npm --prefix frontend run test:changed -- --list` then the selected checks, because a frontend spec reads `docs/` and a moved heading breaks it.
+  - CI: full suite.
+- **Oracle:** the diagram in the page passes all six merge checks in `documentation-structure.md` - the `%%{init}%%` line naming `theme: base`, every node in a class, every arrow out of a diamond labelled, `yes` and `no` on outcomes rather than subjects, every subgraph carrying a `sys*` accent with a title a reader can open, and read once light and once dark. It cannot settle whether the page answers one question rather than two; the split test in `documentation-structure.md` does that, and this row applies it to every page it adds a section to.
+- **Decisions:**
+
+  | # | Decision | Authority |
+  | --- | --- | --- |
+  | 1 | The page lives beside `retention.md`, which already answers what is deleted and why. This one answers how it runs | `docs/reference/documentation-structure.md` routing |
+  | 2 | The diagram is drawn to the repository's Mermaid contract from the moment it enters the plan, so this row is a move rather than a redraw | Owner, 2026-09-24 |
+  | 3 | The subgraph accents are `sysOps` for the workflow and `sysPublish` for the committed tree. The gardener serves the pipeline rather than the reader, which is what `sysOps` covers | `docs/reference/documentation-structure.md`, the accent table |
+  | 4 | The plan keeps a link, not a copy. Two pictures of one job graph disagree the first time the workflow changes | Guardrail #4 |
+  | 5 | This row runs last, after rows 11 and 13, so the page describes what shipped rather than what was planned | Fowler |
+
+- **Rejected alternatives:**
+
+  | # | Option | Why rejected | What it would cost to take | Authority |
+  | --- | --- | --- | --- | --- |
+  | 1 | Add the gardener as a section of `retention.md` | That page answers what is deleted and for how long; the job graph, the commit loop and the record layout are a second question, and the split test in `documentation-structure.md` is what a page pays when a section is added to it | Zero to take; costs the page its single question, and the next reader a longer search | `docs/reference/documentation-structure.md` |
+  | 2 | Leave the diagram in the plan only | A plan-doc is a cache of `docs/`; a picture that lives only there is lost when the plan closes | Zero to take; costs the diagram | Guardrail #4 |
+  | 3 | Write the page first, before the rows ship | It would describe an intention, and every row that changed a detail would leave it wrong | Zero to take; costs the page its accuracy for the length of the plan | Fowler |
 
 ---
 
