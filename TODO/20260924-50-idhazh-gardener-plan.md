@@ -30,6 +30,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | Evicting `corpus/corpus.jsonl` rows as a task | The row cap stays with the harvest | It is a count bound, not an age bound, and `corpus.roll()` at harvest time is its only reader |
 | An `enabled` flag per task | A task is switched off with `dry_run`, which still reports | Nothing. Two off-switches means two places to look when a task did not run |
 | A rollback for a deletion | A wrong deletion is recovered from git history | Nothing. `one_at_a_time.py` already refuses to carry one, on purpose |
+| Migrating `digest.yml`'s committing steps to this naming | The one genuine conflict source there stays: `corpus/corpus.jsonl` and `corpus/corpus.meta.json` are shared filenames with no merge driver, not in `paths.DERIVED`, and `commit_and_push.py` refuses a conflict on them because the path carries no writer identity | Its own plan. Everything else `digest.yml` commits is already safe - `state/` shards carry a per-writer name, three trees take a union driver, and every path under `frontend/public/` is in `paths.DERIVED` and rebuilt on a race. **The published payloads can never take this naming**: a reader fetches `/<YYYY>/<MM>/<DD>/digest.json` at that exact URL, so the name is the contract |
 
 ## 1. Status Reckoner
 
@@ -304,18 +305,16 @@ git sparse-checkout set --cone config backend .github
 
 ```python
 def publish(shard: Shard, message: str, *, attempts: int) -> int:
-    """Land this job's own paths on main, re-running the work against a moved tip."""
+    """Land the files this job already produced. The work is not done again."""
     for _ in range(attempts):
         git("fetch", "origin", "main", "--depth=1")
 
-        landed = already_landed(shard.record_path)      # the two tiers below
-        if landed is Verdict.SAME_BYTES or landed is Verdict.SAME_IDENTITY:
-            return EXIT_OK
-        if landed is Verdict.OTHER_IDENTITY:
-            return EXIT_INTEGRITY
+        if exists_on_remote(shard.record_path):
+            if remote_blob(shard.record_path) == local_blob(shard.record_path):
+                return EXIT_OK                          # an earlier push won
+            return EXIT_INTEGRITY                       # two writers, one path
 
         git("reset", "--mixed", "origin/main")          # index moves, working tree does not
-        shard.run_every_task()                          # recomputed against the new tip
         for path in shard.owned_paths | {shard.record_path}:
             git("add", "--sparse", "--", path)          # outside the cone, so --sparse
         git("commit", "-m", message)
@@ -325,9 +324,9 @@ def publish(shard: Shard, message: str, *, attempts: int) -> int:
     return EXIT_PUSH_KEPT_LOSING
 ```
 
-**Landed is decided in two tiers, because a record is not byte-reproducible.** First: does this job's record path exist on `origin/main`? If not, publish. If it does, compare the local blob against the remote one - **same path and same bytes is a successful retry, exit 0**. Where the bytes differ, read the remote file's envelope and compare its identity fields (`unit_id`, `dataset`, `covers_date`, `run_id`, `attempt`, `job`, `shard`). Same identity means an earlier push won and its measurements differ only in `written_at_ms` and `duration_ms`; keep theirs and exit 0. **Different identity at one path is a data-integrity error, exit 2**, because the name is a hash of the identity and two identities cannot mint one name.
+**The work happens once, before the loop. The loop only stages and pushes.** That is what keeps a job's cost flat however many times it loses a race, and it is why nothing here has to be recomputed against the new tip: every path this job touches is one the registry proves no other task owns, so a moved tip cannot have changed them.
 
-A plain byte comparison was the first design and it does not survive contact: `duration_ms` is a measurement, so the same unit written twice is never byte-identical. The envelope is what makes the invariant checkable - which is the whole reason identity lives inside the file rather than in the name (section 5.7).
+**Same path and same bytes is a successful retry. Same path and different bytes is a data-integrity error.** The invariant holds as written, with no second tier, because **the file is written once and its name is minted once**. A retry re-stages the same bytes; it does not re-produce them. Two different contents at one path would mean two writers minted one identifier, which the identifier's construction (section 5.7) makes impossible - so exit 2 is an assertion that should never fire, which is exactly what it is for.
 
 **Every task is one kind: add its record, always; then delete its selected paths, possibly none, in one commit.** Three writer kinds were three ways to get this wrong - the worst being that a dry run selects nothing, so a "nothing left to delete" verdict would report success and publish no record at all.
 
@@ -355,28 +354,27 @@ This plan applies the rule to the stores it creates. The seventeen existing tree
 ```python
 NAMESPACE = uuid.uuid5(uuid.NAMESPACE_URL, "github.com/miztiik/yen-idhazh")
 
-def unit_id(*, run_started_at_ms: int, dataset: str, run_id: str,
-            attempt: int, job: str, shard: int) -> uuid.UUID:
-    """The name of one unit of work. A pure function of who wrote it and when the run began."""
+def unit_id(*, dataset: str, run_id: str, attempt: int, job: str, shard: int) -> uuid.UUID:
+    """The name of one file. Minted once, when the file is written, and then kept."""
     seed = f"{NAMESPACE}|{dataset}|{run_id}|{attempt}|{job}|{shard}".encode()
     digest = hashlib.sha256(seed).digest()
     return _pack_v8(
-        run_started_at_ms & 0xFFFFFFFFFFFF,
+        time.time_ns() // 1_000_000 & 0xFFFFFFFFFFFF,   # the clock, at this instant
         int.from_bytes(digest[0:2], "big") & 0xFFF,
         int.from_bytes(digest[2:10], "big") & ((1 << 62) - 1),
     )
 ```
 
-Measured 2026-09-24 against `uuid.uuid8`: version 8, variant RFC 4122, four shards of one run share the 13-character clock prefix, sort order equals time order across milliseconds, and identical inputs give an identical name.
+Measured 2026-09-24 against `uuid.uuid8`: version 8, variant RFC 4122, files written in the same millisecond share the 13-character clock prefix, and sort order equals time order across milliseconds.
 
 | # | Decision | Why |
 | --- | --- | --- |
-| 1 | **The clock cell is the run's start instant, passed in - never `now()` at write time.** | With a write-time clock a retry mints a different name for the same unit, so the commit loop's "already landed" check never matches and every retry duplicates the unit. With the run's instant the name is reproducible inside a run, which is exactly what the loop needs |
-| 2 | `attempt` is in the hash input | GitHub keeps `run_id` stable across a re-run, so without it attempt 1 and attempt 2 of one run collide |
-| 3 | `_pack_v8` is hand-written, about ten lines | `uuid.uuid8` arrived in Python 3.14 and `requires-python` is `>=3.12`. The RFC 9562 layout is fixed, so packing it ourselves costs less than raising the floor |
-| 4 | Within one millisecond the order is arbitrary | The bits after the clock are a hash. Ordering is a property across time, not within an instant. Said plainly because the four-shard example looks ordered and is not |
-| 5 | The name is deterministic, so **two different byte-contents at one path is a genuine defect** | This restores the integrity check the earlier draft had to drop when the name carried a write-time clock |
-| 6 | What it costs: a person reading a git diff no longer sees the run, attempt, job and shard in the filename | The path still carries `<store>/<YYYY>/<MM>/<DD>`, so the loss is only within a day, and the commit message names the run. A reader who needs more opens the envelope |
+| 1 | **The name is minted once, when the file is written, and held in a variable.** A retry re-stages that same path; it never mints a second one | The caller keeps the file and the name across push attempts, exactly as the checkout recipe in section 5.6 does. Nothing has to recompute a name, so nothing has to be reproducible |
+| 2 | The clock is the write instant | It makes the name sort by time, which is what a listing and any later object store both want |
+| 3 | The other 74 bits are a hash of `dataset`, `run_id`, `attempt`, `job` and `shard` | Two writers in one millisecond cannot collide, because no two writers share all five. `attempt` is in there because GitHub keeps `run_id` stable across a re-run |
+| 4 | `_pack_v8` is hand-written, about ten lines | `uuid.uuid8` arrived in Python 3.14 and `requires-python` is `>=3.12`. The RFC 9562 layout is fixed, so packing it ourselves costs less than raising the floor |
+| 5 | Within one millisecond the order is arbitrary | The bits after the clock are a hash. Ordering is a property across time, not within an instant. Said plainly because a group of files from one run looks ordered and is not |
+| 6 | What it costs: a person reading a git diff no longer sees the run, attempt, job and shard in the filename | The path still carries `<store>/<YYYY>/<MM>/<DD>`, the commit message names the run, and the envelope inside the file carries all four. A reader who needs more opens the file |
 
 #### The envelope
 
@@ -394,17 +392,16 @@ So the rule: **a field is a column when a query filters or groups on it**, becau
 | 4 | `dataset` | Which ledger: `gardener`, `visual-prune`, `item-health` | yes - the commonest filter |
 | 5 | `covers_date` | The day the rows describe, **not** the day they were written | yes, as `date` - every time filter uses it |
 | 6 | `partition` | The `state/raw/<store>/<YYYY>/<MM>/<DD>` it was written under, so a moved file still knows where it came from | no |
-| 7 | `written_at_ms` | Arrival time, epoch milliseconds. **This is where the clock lives** | no - never filtered, and as a column it is 250 bytes for one value |
-| 8 | `run_started_at_ms` | The instant the name was minted from, so the name can be recomputed and checked | no |
-| 9 | `run_id`, `attempt`, `job`, `shard` | Which writer produced it | yes, all four - tracing a bad run is a filter on `run_id` |
-| 10 | `unit_id` | The identifier in the filename. Deduplication is `GROUP BY unit_id`, never a filename convention | yes - you cannot group by a footer key |
-| 11 | `content_sha256` | Over the row bytes. Tells two files apart after a rename and proves a copy is a copy | no |
-| 12 | `git_sha` | The commit the producing run checked out. The one field tying a data file to the code that made it | no |
-| 13 | `writer` | `idhazh.store.parquet`. The parquet footer's own `created_by` names pyarrow, not us | no |
-| 14 | `writer_version` | The engine version, because a footer is not byte-stable across engine versions | no |
-| 15 | `compression` | `snappy` or `zstd` | no |
-| 16 | `name_strategy` | `uuid8-unit` today. It exists so a later strategy can arrive without a reader guessing which one made a name | no |
-| 17 | `folded_from` | On a `compact` file only: how many raw files it read. Absent on a raw file | no |
+| 7 | `written_at_ms` | Arrival time, epoch milliseconds. **This is the clock that is in the name** | no - never filtered, and as a column it is 250 bytes for one value |
+| 8 | `run_id`, `attempt`, `job`, `shard` | Which writer produced it | yes, all four - tracing a bad run is a filter on `run_id` |
+| 9 | `unit_id` | The identifier in the filename. Deduplication is `GROUP BY unit_id`, never a filename convention | yes - you cannot group by a footer key |
+| 10 | `content_sha256` | Over the row bytes. Tells two files apart after a rename and proves a copy is a copy | no |
+| 11 | `git_sha` | The commit the producing run checked out. The one field tying a data file to the code that made it | no |
+| 12 | `writer` | `idhazh.store.parquet`. The parquet footer's own `created_by` names pyarrow, not us | no |
+| 13 | `writer_version` | The engine version, because a footer is not byte-stable across engine versions | no |
+| 14 | `compression` | `snappy` or `zstd` | no |
+| 15 | `name_strategy` | `uuid8-unit` today. It exists so a later strategy can arrive without a reader guessing which one made a name | no |
+| 16 | `folded_from` | On a `compact` file only: how many raw files it read. Absent on a raw file | no |
 
 **`row_count` is deliberately not a key.** The parquet footer already carries `num_rows`, free and authoritative, and the footer is written last so its presence already proves the file is complete. A second spelling is two answers to one question (Guardrail #4).
 
@@ -415,7 +412,7 @@ A worked envelope, and what it costs:
   "envelope_version": "2026-09-24", "schema_version": "2026-09-24", "tier": "raw",
   "dataset": "gardener", "covers_date": "2026-09-24",
   "partition": "state/raw/gardener/2026/09/24",
-  "written_at_ms": "1790200000431", "run_started_at_ms": "1790200000000",
+  "written_at_ms": "1790200000431",
   "run_id": "17482910337", "attempt": "1", "job": "run-tasks", "shard": "03",
   "unit_id": "01a0d03c-2e00-8461-98e0-a67898e9a802",
   "content_sha256": "9f2c...", "git_sha": "0735031c2...",
