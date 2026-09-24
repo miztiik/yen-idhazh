@@ -66,15 +66,23 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 export const HOST_FINGERPRINT_KEY = ['date', 'run_id', 'job', 'shard'] as const;
 ```
 
-**The settle rule is a merge, not a preference, and that is this plan's load-bearing decision.** `ITEM_HEALTH_RULE` keeps one row of a key and drops the rest. Two host-fingerprint rows of one key are two halves of one row, so the rule takes the first non-empty value per column across them:
+**The settle rule is a cell merge, and the mechanism this repository already has cannot express one. That is this row's real work.** `settledDayShards(dir, key, prefer, days)` takes `Preference = (later, kept) => boolean`, a predicate that chooses **one whole row** and throws the other away. Two host-fingerprint rows of one key are two halves of one row, so choosing either loses cells.
+
+So `payload.ts` grows a second, narrower door beside the one it has:
 
 ```ts
 /** Two rows of one key are one job's two halves: the hardware probe wrote one
  *  before the heaviest step, the clock wrote the other after the last item.
- *  Neither is preferred; the cells are unioned. A column both rows fill is a
- *  defect, so the later value wins and the count is asserted in the test. */
-export const HOST_FINGERPRINT_RULE: SettleRule = 'merge-cells';
+ *  Neither row is preferred - the cells are unioned, and a cell present in both
+ *  is a defect the test below counts. */
+export function mergedDayShards(
+	dir: string,
+	key: readonly string[],
+	days?: number
+): CsvTable;
 ```
+
+`settledDayShards` is untouched, because `state/scores/` and `state/item-health/` genuinely do want one row of the two. **A merge is not a preference with a different name**, and expressing it as one is what would have lost the cells quietly.
 
 **Settlement is per day.** The key carries a `date` cell, so a re-measurement of the same job on a later day cannot be deleted by settling over the whole window.
 
@@ -90,11 +98,16 @@ export async function slice(
 	opts: { columns: readonly string[]; from: string; to: string; where?: string }
 ): Promise<Row[]>;
 
+/** One parquet row as the engine hands it back. */
+export type Row = Record<string, string | number | boolean | null>;
+
 /** The stores this console may query. A closed set: a panel cannot name a path. */
 export type StoreName = 'host-fingerprint';
 ```
 
-`StoreName` is a closed union and grows one member per panel migrated. A panel that could name a path could name any path, and the allow-list in ESCALATE trigger 1 would stop being the bound.
+**`StoreName` maps to an address inside this module and nowhere else.** The address is `${base}/state/<store>/` where `base` is SvelteKit's own `base` - the repository path prefix - because getting that prefix wrong is the commonest failure on this host. A panel that could name a path could name any path, and the allow-list in ESCALATE trigger 1 would stop being the bound.
+
+**The browser cannot list a directory, and plan 50 gives every file a random name.** A raw shard is `<unit_id>.parquet`, which no reader can derive from a date, so **the store the browser queries is the compact tier, whose month file is derivable, plus a manifest for the days not yet folded.** The manifest is one JSON file per store, written by the staging step, holding the raw filenames it staged and nothing else. It is bounded by the staged window rather than by the archive, and it is the one file the door fetches before any query.
 
 **`SELECT *` is refused at this door**, not by convention: `columns` is required, non-empty, and the door raises by name on an empty list ([how-a-console-chart-gets-its-data.md](../docs/concepts/console-design/how-a-console-chart-gets-its-data.md) rule 5).
 
@@ -121,6 +134,12 @@ Every value below is a knob (Guardrail #6). Three exist and two are minted.
 | `console.fleet_top_kinds` | Exists | `4`, unchanged | Row 3's fold |
 | `frame.breakpoints_px` | Exists as `[640, 1024, 1400]` | unchanged | Row 2 sticks at `breakpoints_px[1]`. **No second key naming 1024** |
 | `console.absent_hatch_degrees` | **New** | `45` | Row 3's hatch for a known machine with no throughput reading |
+| `console.span_choices_days` | **New** | `[1, 7, 14, 30, 90]` | Row 2's five-segment control. The five values were a hard-coded list and this is the knob that holds them |
+| `page_weight.payload_ceilings_bytes."state/"` | **New** | to be set in row 3 from the staged store's measured size, with headroom | `frontend/scripts/bundle-gate.mjs` and `backend/tests/contracts/test_page_ceilings.py` |
+
+**Three page-weight gates fire before the 1 GB site cap and row 3 must clear all three.** `page_weight.cold_console_load_bytes` is 3,400,000 bytes - what a console reader's first load may cost - so **the query engine ships behind a dynamic import**, the same rule the gate already enforces for the on-device encoder. `page_weight.payload_ceilings_bytes` caps each fetched payload and has **no key covering `state/`** today, so a staged store is a payload no gate can see until the key above is minted. And `test_page_ceilings.py` asserts `cold_console_load_bytes` sits between the worst page and that page plus the telemetry ceiling, so adding a payload key moves the assertion and row 3 says which way.
+
+**The alarm, not the cap, is the number an operator sees first.** `PAGES_HARD_CAP_MB` is 1024 and is where the host refuses; `retention.site_budget_mb` is 800 and is where the console prints a warning. Measured to the alarm the runway is about 723 days, not the 959 measured to the cap.
 
 ### 2.5 What a panel may not do
 
@@ -281,7 +300,9 @@ given and predicts nothing about the next job. Darker bars are faster machines.
 - **Files touched:**
   - `backend/idhazh/telemetry/silicon.py` (writes through plan 50's door), `backend/idhazh/contracts/host_fingerprint.py` (`version` stamp, one `changelog` line)
   - `backend/idhazh/ledger.py` (`SegmentLedger.HOST_FINGERPRINT` leaves `write_segment`), `backend/idhazh/paths.py`
-  - `frontend/scripts/stage-state.mjs` (new: the allow-list staging step; **blocked on ESCALATE trigger 1**), `.gitignore`, `frontend/vite.config.ts`
+  - `frontend/scripts/copy-visuals.mjs` (the staging step joins the one that already stages into `frontend/static/`; **a second staging script is Guardrail #4**), `.gitignore` (an eleventh line beside the ten payload directories already there)
+  - `frontend/scripts/build-canary.mjs` (the staging step reads its `STATE_ROOT` switch and **fails loudly when the root is missing**, because an empty store and a working store both render)
+  - `frontend/scripts/bundle-gate.mjs`, `backend/tests/contracts/test_page_ceilings.py` (the new `state/` payload ceiling)
   - `frontend/package.json`, `frontend/package-lock.json`
   - `frontend/src/lib/data/store.ts` (new, section 2.2 - **the only module that imports the engine**)
   - `frontend/src/lib/charts/d3/scale.ts`, `axis.ts`, `ordered-colour.ts`, `motion.ts`, `empty.ts` (new directory, no other row in either plan touches it)
@@ -291,7 +312,7 @@ given and predicts nothing about the next job. Darker bars are faster machines.
   - `docs/architecture/publishing/console-charts.md`, `docs/architecture/publishing/what-a-month-shard-holds-and-how-it-reaches-a-browser.md` (a scope clause on its two rejected-alternative rows, which were ruled for the search vector file and not for slicing a telemetry store)
 - **Acceptance gates:** the browser smoke on `/console/machine` (CLAUDE.md section 12) - zero new `[error]`, zero new `404`, **the panel still renders when its store is absent, empty, or when the engine fails to start**. `ci.yml`'s bundle gate and site-cap measurement both walk the built tree, so both are re-read after the staging step lands. Local `npm --prefix frontend run test:changed -- --list` then the selected checks; `ruff check .`, `mypy backend`, `pytest backend/tests/telemetry -q`. CI runs the full suite.
   - **No measurement gates this row.** Two facts are owed and neither is a gate: whether the published host answers a byte-range request, which decides how the store is published rather than how it is read, and the engine asset's transferred size, which the site-cap budget consumes (section 3).
-- **Oracle:** the d3 panel and the ECharts panel, given the same fixture day, draw the same series - same point count, same ordering, same labels, same colours - asserted off the DOM rather than off a screenshot. It cannot settle whether the d3 drawing is good enough to ship; Susan rules that (CLAUDE.md section 14).
+- **Oracle:** given a recorded `slice()` response for one fixture day, the d3 panel draws one mark per machine kind per day, with the kinds in median-throughput order, the unrecorded kind last and outside the fold, and every readout row carrying an absolute rate. **It is not a comparison against the ECharts panel**: this row rewrites `fleet.ts` from an option builder into a draw, so the old panel does not survive the commit, and the row's own scope changes the colour count, the shape under the threshold, the fold rule and the readout position - so "same colours, same labels" would be false by design. It cannot settle whether the drawing is good enough to ship; Susan rules that (CLAUDE.md section 14).
 - **Decisions:**
 
   | # | Decision | Authority |
