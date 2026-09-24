@@ -107,13 +107,23 @@ export type StoreName = 'host-fingerprint';
 
 **`StoreName` maps to an address inside this module and nowhere else.** The address is `${base}/state/<store>/` where `base` is SvelteKit's own `base` - the repository path prefix - because getting that prefix wrong is the commonest failure on this host. A panel that could name a path could name any path, and the allow-list in ESCALATE trigger 1 would stop being the bound.
 
-**The browser cannot list a directory, and plan 50 gives every committed file an unguessable name.** A raw shard is `<unit_id>.parquet` and so is a compacted month, so no reader can derive either from a date.
+**The browser cannot list a directory, and every committed file is named `<uuid8>.parquet` in both tiers.** Owner ruling, 2026-09-24: telemetry-intent N9 binds every tier, so no address is computable from a date. The committed tree is not changed to suit a reader.
 
-**The staging step names its output for the reader: `state/<store>/<YYYY-MM>.parquet`, one file a month, derivable from a date and nothing else.** The committed store keeps its per-writer names untouched. Plan 50's naming rule governs **writers of the ledger** - it exists so two runs cannot take one path - and nothing about it survives the copy into a published tree that one builder writes from scratch.
+**So the staging step writes an index, and the index is generated, never updated.** It is a JSON file per store listing the filenames that step just copied - it already knows every one of them, because it copied them. The browser fetches it once and then queries the files it names.
 
-This is how every console payload already works: `frontend/public/machine/<YYYY-MM>.csv` and `frontend/public/span-rollup/<YYYY-MM>.csv` both carry a computable month name, and no console surface has ever had to list a directory.
+**Generated and never updated is the whole of why this is safe, and it is the one sentence a later change must not undo.** An index that appended only the newest day would be read-modify-write on a shared path, which is the shape uuid8 exists to end. Written from scratch there is no ancestor, no edit and nothing to merge.
 
-**It does not breach N7.** N7 is aimed at the nine *reduced* views the console reads instead of the ledgers. A copy of the ledger's own rows at a computable address reduces nothing - the console still reads the rows, and no shape is pre-decided for it.
+| # | Why concurrent runs cannot collide here | |
+| --- | --- | --- |
+| 1 | A digest run writes `<uuid8>.parquet` into `state/` and pushes. It never touches the index | No job that commits also builds the site |
+| 2 | Only `pages.yml` builds, and its build job is `cancel-in-progress: true`, so a second build cancels the first | One builder, always |
+| 3 | The index and the files it names are produced by one process from one checkout and shipped in one artefact | **Consistency by construction, not by locking** - so adding runners upstream cannot break it |
+
+The residual is staleness rather than conflict: a day committed after the build checked out is absent until the next build, which is the same staleness `frontend/public/machine/<YYYY-MM>.csv` carries today.
+
+**The date still does real work.** The browser computes `<YYYY>/<MM>/<DD>` backwards from today for the span it draws, so the index only has to cover the staged window and the door only fetches the days it needs.
+
+**Nothing in the index enters git.** It is created on the runner inside `npm run build`, copied into `build/` by the bundler, uploaded as the Pages artefact, and thrown away with the runner. Eight directories under `frontend/static/` are gitignored and published this way today - `console`, `day-metrics`, `digest`, `index`, `machine`, `run-days`, `span-rollup` and `telemetry`. **Gitignored is not unpublished**, and the ignore line is doing N8's job: keeping a second copy of telemetry out of git.
 
 **`SELECT *` is refused at this door**, not by convention: `columns` is required, non-empty, and the door raises by name on an empty list ([how-a-console-chart-gets-its-data.md](../docs/concepts/console-design/how-a-console-chart-gets-its-data.md) rule 5).
 
@@ -331,7 +341,9 @@ given and predicts nothing about the next job. Darker bars are faster machines.
   | 6 | The d3 modules are the narrow ones (`d3-selection`, `d3-shape`, `d3-axis`), never the `d3` meta-package. `d3-array@3.2.4` and `d3-scale@4.0.2` are already installed | Carmack, Guardrail #8 |
   | 7 | **Landing d3 now and the engine later is refused.** That exact trade was taken on 2026-09-24 and reversed the same day: a reader designed around the smallest panel guarantees a second reader arrives with the first large one. The cost of deferring is one extra pass over one panel, and it is the pass that has to re-decide the reader under time pressure | Owner, 2026-09-24 |
   | 8 | `console.machine_colour_stops` moves from 7 to 5 in this row. Three panels share machine colour, so a silent mismatch ships | Susan |
-  | 9 | **The published copy is named `<YYYY-MM>.parquet` and the committed store keeps its per-writer names.** A reader has to be able to compute an address, and a writer has to be unable to collide on one. Those are two requirements, not one, and one name cannot serve both | Owner, 2026-09-24 |
+  | 9 | **N9 binds every tier, so no published address is computable and the staging step writes a generated index instead.** The committed tree is not reshaped to suit a reader | Owner, 2026-09-24 |
+  | 10 | **The index is generated from scratch on every build, never appended to.** An append is read-modify-write on a shared path, and that is what brings every concurrency question back | Owner, 2026-09-24 |
+  | 11 | The staging step joins the existing build chain between `copy-visuals` and `vite build`, and is not a new script. Two reasons: a second staging step is Guardrail #4, and the site-weight gate measures `build/` after `vite build`, so a step outside the chain would have the gate measuring a tree without the new bytes | Carmack |
 
 - **Rejected alternatives:**
 
@@ -343,8 +355,9 @@ given and predicts nothing about the next job. Darker bars are faster machines.
   | 4 | Delete `waterfall.ts` and `donut.ts` here | They are ECharts modules with no importer anywhere in `frontend/src`, found 2026-09-24 - real dead code and a free deletion, but not this row's question | A one-line change of its own | Fowler |
   | 5 | Commit the store's published copy under `frontend/public/` | Satisfies neither N7 nor N8, and it is the thing N8 exists to end | Zero; costs both intents and a merge driver | Carmack |
   | 6 | Serve the store from the repository over raw content | Zero published bytes, and cross-origin requests do work. But this project's own prune force-pushes `main` on a schedule, so a commit-pinned address stops resolving and a branch-pinned one changes under a reader mid-session | Zero; costs the reader a broken page after every prune | Carmack |
-  | 7 | A manifest listing what was staged, so the browser knows the filenames | **A manifest in `state/` is a shared mutable path**: every run rewrites it, two runs rewrite it at once, and the push race and the merge driver both return - which is precisely what per-writer names were introduced to end. A manifest built only into the published output has no race, and is still a list of names where one computable name does the job | Zero; costs a fetch before every query, and invites the committed version the next time somebody wants the raw tier | Owner, 2026-09-24 |
+  | 7 | An index committed into `state/` beside the shards | **It is a shared mutable path**: every run rewrites it, two runs rewrite it at once, and the push race and the merge driver both return - which is precisely what per-writer names were introduced to end. The generated build artefact above is the opposite shape: one writer, from scratch, never committed | Zero; costs the race back | Owner, 2026-09-24 |
   | 8 | Put a date in front of the `unit_id` so the name is derivable | It is not derivable. The directory already carries the date and the rest of the name is still unguessable, so this copies a fact the path states and solves nothing | Zero; costs a second spelling of the partition | Owner, 2026-09-24 |
+  | 9 | Name the published copy for the month so no index is needed | It is computable and it is a second sharding grammar, which N11 forbids with no exceptions. Ruled out on 2026-09-24 in favour of A1: the committed naming stands and the reader is given an index | Zero; costs N11 its "no exceptions" | Owner, 2026-09-24 |
 
 - **ESCALATE - how the browser reaches the bytes.** `state/` is not published today. N7 says the console reads `state/` rather than a projection of it; N8 says telemetry does not live under `frontend/` in git. **The priced recommendation is a build step staging an allow-list into `frontend/static/state/`, with that path in `.gitignore`**, so the dev server and the build see one tree and git sees nothing: 76,306 bytes for this store, 0.007 percent of the site, against 51.4 MiB and about 53 days of the cap's runway if all of `state/` were staged. Two conditions ride with it: `ci.yml`'s bundle gate and cap measurement both walk the built tree, and a canary build must never copy the real archive. **Once plan 50's compaction lands, the standing rule is the compact tier plus a declared number of raw days.** This is Level 5 and the row stops until the owner rules.
 
