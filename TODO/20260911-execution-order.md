@@ -16,7 +16,7 @@ Derived 2026-09-11 in a worktree at `origin/main`, by parsing each row's own `Fi
 
 | Plan | Rows | Live rows | Groups | Parallel N it declares |
 | --- | --- | --- | --- | --- |
-| [`20260905-11-two-call-planner-plan.md`](20260905-11-two-call-planner-plan.md) | 8 | 4 | 8 | 1 |
+| the two-call summariser plan (delivered) | 8 | 4 | 8 | 1 |
 | [`20260910-23-article-classification-plan.md`](20260910-23-article-classification-plan.md) | 28 | 28 | 16 | 2 |
 | [`20260910-24-day-sharded-ledgers-plan.md`](20260910-24-day-sharded-ledgers-plan.md) | 8 | 8 | 6 | 2 |
 | [`20260910-25-placement-plan.md`](20260910-25-placement-plan.md) | 15 | 14 | 9 | 2 |
@@ -228,7 +228,7 @@ It changes no decision, no oracle, no measurement and no vocabulary in any plan.
 - [`20260911-handover.md`](20260911-handover.md) - **start here with no context.** The queue reader, the reading order, the standing traps, and which section of this page a row has to refresh.
 - [`../docs/how-to/execute-a-plan.md`](../docs/how-to/execute-a-plan.md) - how a worker runs a row, and where the no-two-rows-one-file rule comes from.
 - [`../docs/how-to/author-a-plan.md`](../docs/how-to/author-a-plan.md) - the shape every row in the five plans is written in.
-- [`20260905-11-two-call-planner-plan.md`](20260905-11-two-call-planner-plan.md) - one model, two calls. Four live rows, and two of them are in the top five poles.
+- The two-call summariser plan - one model, two calls; delivered and removed from TODO/.
 - [`20260910-23-article-classification-plan.md`](20260910-23-article-classification-plan.md) - what an article is about. 28 rows, and seven of the nine critical-path waves.
 - [`20260910-24-day-sharded-ledgers-plan.md`](20260910-24-day-sharded-ledgers-plan.md) - five ledgers file by day. Its row #1 is a prerequisite of four rows in plan 23.
 - [`20260910-25-placement-plan.md`](20260910-25-placement-plan.md) - where a story goes. Four edges run between it and plan 23.

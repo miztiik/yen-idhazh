@@ -3,7 +3,7 @@
 **Last Updated**: 2026-09-13
 **Level**: 5 (core design: where a drawing becomes pixels, a persisted contract, the drawn surface, and two build-failing floors)
 
-**Chain**: previous [`20260905-11-two-call-planner-plan.md`](20260905-11-two-call-planner-plan.md) | next [`20260905-13-switch-on-deletion-plan.md`](20260905-13-switch-on-deletion-plan.md).
+**Chain**: previous the two-call summariser plan (delivered, removed from TODO/) | next [`20260905-13-switch-on-deletion-plan.md`](20260905-13-switch-on-deletion-plan.md).
 **Reference**: [`20260902-visual-planner-pseudo-plan.md`](20260902-visual-planner-pseudo-plan.md) - O4, O5, O18, O19, O20, O36, O47, rows 22 to 37, sections 2.2, 7, 7.2, 7.5.
 
 Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delegates a row where delegation pays; keep parallel N = 4 rows in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0. AUTHOR-AND-STOP until the user authorizes.
@@ -254,5 +254,5 @@ deletion plus a drawing over data already on the wire.
 ## See also
 
 - [`20260902-visual-planner-pseudo-plan.md`](20260902-visual-planner-pseudo-plan.md) - the decision record this group executes.
-- [`20260905-11-two-call-planner-plan.md`](20260905-11-two-call-planner-plan.md) - the previous plan.
+- The two-call summariser plan - the previous plan, delivered and removed from TODO/.
 - [`20260905-13-switch-on-deletion-plan.md`](20260905-13-switch-on-deletion-plan.md) - the next plan.

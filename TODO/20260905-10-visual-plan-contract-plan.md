@@ -3,7 +3,7 @@
 **Last Updated**: 2026-09-05
 **Level**: 5 (a persisted contract, and the rule that decides what a reader is allowed to be shown)
 
-**Chain**: previous [`20260905-09-pin-the-runtime-plan.md`](20260905-09-pin-the-runtime-plan.md) | next [`20260905-11-two-call-planner-plan.md`](20260905-11-two-call-planner-plan.md).
+**Chain**: previous [`20260905-09-pin-the-runtime-plan.md`](20260905-09-pin-the-runtime-plan.md) | next the two-call summariser plan (delivered, removed from TODO/).
 **Reference**: [`20260902-visual-planner-pseudo-plan.md`](20260902-visual-planner-pseudo-plan.md) - O45, O47, rows 14, 15, 18, 19, 45, sections 7.5, 12.8 X2, X6, 12.13 G29, G32, 12.9 G13, 12.11 G21.
 
 Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-isolated worker subagent per row; workers consult personas on ambiguity; AUTO-merge on green gates; parallel N = 1; honor the ESCALATE triggers in section 0. AUTHOR-AND-STOP until the user authorizes.
@@ -329,4 +329,4 @@ element table, which the plan deliberately does not carry. That is row 3's
 
 - [`20260902-visual-planner-pseudo-plan.md`](20260902-visual-planner-pseudo-plan.md) - the decision record this group executes.
 - [`20260905-09-pin-the-runtime-plan.md`](20260905-09-pin-the-runtime-plan.md) - the previous plan.
-- [`20260905-11-two-call-planner-plan.md`](20260905-11-two-call-planner-plan.md) - the next plan.
+- The two-call summariser plan - the next plan, delivered and removed from TODO/.

@@ -9,10 +9,9 @@ The two-call summariser sends the summarize-and-plan call with the label call's 
 of it, so most of the summarize-and-plan call's prompt should be answered from the server's prefix
 cache. The one earlier reading printed `FLOOR BROKEN - 4 tokens` and was taken on
 the retired 8B. This run replaces it on the configured weights and splits every
-token the server prefilled into three causes, so the two rows that exist to
-remove two of them can be priced against their own numbers
-([`../../../TODO/20260905-11-two-call-planner-plan.md`](../../../TODO/20260905-11-two-call-planner-plan.md)
-rows #3c and #3e).
+token the server prefilled into three causes, so the two changes that remove two
+of them - owning the prompt bytes and moving the instructions in front of the
+article - can be priced against their own numbers.
 
 ## Conditions
 
@@ -208,5 +207,5 @@ the article length in the same sentence.
 
 - [`../../architecture/summarize/throughput.md`](../../architecture/summarize/throughput.md) - the rate this reading is priced against, and the figure now in force.
 - [`../../architecture/summarize/prompt.md`](../../architecture/summarize/prompt.md) - why the summarize-and-plan call appends to the label call's message array.
-- [`../../../TODO/20260905-11-two-call-planner-plan.md`](../../../TODO/20260905-11-two-call-planner-plan.md) - rows #3c, #3e and #3f, which this reading prices.
+- [`two-call-window-sizing.md`](two-call-window-sizing.md) - what the window that holds these two calls was sized to.
 - [`day-window-read.md`](day-window-read.md) - the record that created this directory.

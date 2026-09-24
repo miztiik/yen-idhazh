@@ -208,9 +208,8 @@ So the reason was **search without an embedding model**, costed at the time at
 about 50 tokens and 4.5 minutes a shard. It was never for dedup and never for
 the title.
 
-[`TODO/20260905-11-two-call-planner-plan.md`](20260905-11-two-call-planner-plan.md)
-line 175 carried it into the two-call design as part of "about 140 output
-tokens, 12.5 minutes of shard wall clock at 20 items".
+The two-call summariser plan (delivered) carried it into its design as part of
+"about 140 output tokens, 12.5 minutes of shard wall clock at 20 items".
 
 **The premise then died.** Search now runs on an embedding vector in the month
 index (`backend/idhazh/contracts/observation_index.py`), which carries date,
