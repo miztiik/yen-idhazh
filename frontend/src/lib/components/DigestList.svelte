@@ -5,13 +5,48 @@
 	 * Read-state lives here and touches nothing but appearance. The item set and
 	 * its order are computed before any of it is consulted, which is what makes
 	 * two readers at the same URL see the same page.
+	 *
+	 * **One field, two tiers.** A keystroke narrows this day by substring and
+	 * fetches nothing at all - that is the common path and it stays instant and
+	 * download-free. The Enter key asks a question instead, on the reader's own
+	 * device, over the month shards the archive already publishes, and it can
+	 * answer from days this page is not showing. The line under the panel says
+	 * which of the two produced the list, and it names what the second one costs
+	 * before a key can spend it (Susan, 2026-09-24). Nothing about the reading
+	 * route waits on the model: a browser that cannot run it, weights that will not
+	 * download and a month with no vectors all leave the day exactly as it was and
+	 * say so in one sentence.
 	 */
 	import DayNotice from '$lib/components/DayNotice.svelte';
 	import DigestItemView from '$lib/components/DigestItem.svelte';
 	import EmptyDay from '$lib/components/EmptyDay.svelte';
 	import FilterBar from '$lib/components/FilterBar.svelte';
+	import FoundStories from '$lib/components/FoundStories.svelte';
 	import LeadingStories from '$lib/components/LeadingStories.svelte';
-	import { restoreAnchor } from '$lib/assist/day';
+	import SearchState from '$lib/components/SearchState.svelte';
+	import { base } from '$app/paths';
+	import { loadDay, restoreAnchor } from '$lib/assist/day';
+	import { loadIndex, loadVectors } from '$lib/assist/index';
+	import {
+		cachedEncoder,
+		DOWNLOAD_MB,
+		DOWNLOAD_MB_ELSEWHERE,
+		embedQuery,
+		supported,
+		type CachedEncoder
+	} from '$lib/assist/loader';
+	import { monthsBackFrom } from '$lib/assist/month';
+	import {
+		costNote,
+		newSearch,
+		NO_SCOPE,
+		scopeSentence,
+		stateSentence,
+		type SearchPhase,
+		type SearchScope
+	} from '$lib/assist/session';
+	import type { SearchHit, SearchOutcome } from '$lib/assist/search';
+	import { plural } from '$lib/format';
 	import {
 		deskCount,
 		deskOf,
@@ -65,6 +100,44 @@
 	let restored = '';
 
 	const PAGE = 12;
+
+	/** What the two origins cost. Both figures live in `assist/loader`, beside
+	 * the code that fetches them; the words that print them are in `session`. */
+	const COST = { here: DOWNLOAD_MB, elsewhere: DOWNLOAD_MB_ELSEWHERE };
+
+	/** How wide and how close a question reaches, straight off `config/`.
+	 *
+	 * **A define, because this route has no server.** A dated URL is one shell
+	 * with a universal load, so there is no `+page.server.ts` to read
+	 * `assistConfig()` and hand it down - and the layout above every route may
+	 * not carry it either, because whatever the layout returns is inlined into
+	 * every prerendered document on the site including `/404`. `vite.config.ts`
+	 * resolves it once per build out of the same reader the archive's load uses,
+	 * so the four numbers ride only in the chunk that opens them
+	 * (`docs/concepts/config.md`). No literal here (Guardrail #6). */
+	const ASSIST = __ASSIST_CONFIG__;
+
+	/** A question the reader asked, or null while the field is a filter. */
+	let found = $state<SearchOutcome | null>(null);
+	let phase = $state<SearchPhase>({ name: 'offer' });
+	let cached = $state<CachedEncoder>('unknown');
+	/** True once the encoder has answered in this tab, which is the difference
+	 * between "the download is done" and a price still to pay. Held here rather
+	 * than read off the session, because a session is rebuilt when the reader
+	 * walks into another month and the encoder is not. */
+	let held = $state(false);
+	let scope = $state<SearchScope>(NO_SCOPE);
+	/** One entry per result day, so a re-render draws a day the moment it lands. */
+	let foundDays = $state<Record<string, DayForPage | null>>({});
+	/** Whether this tab has asked its own disk about the encoder. Asked once, on
+	 * the first keystroke, because it reads cache storage rather than the network
+	 * and a reader who never types never pays for the question. */
+	let askedDisk = false;
+	/** The narrowed count, one settle behind the list. The list itself narrows on
+	 * the keystroke; this is the number beside it, which would otherwise re-wrap
+	 * the line under a reader's own hand on every letter (Susan, 2026-09-24).
+	 * `ui.filter_settle_ms`, never a number written here (Guardrail #6). */
+	let settledCount = $state(0);
 
 	onMount(() => {
 		hideRead = loadHideRead();
@@ -136,7 +209,22 @@
 		}
 		return desks.length > 0 ? desks.reduce((sum, ref) => sum + deskCount(ref), 0) : scoped.length;
 	});
-	const needle = $derived(filterNeedle(query, ui.filter_min_chars));
+	/** What the field holds, once it holds enough to narrow by. It is read even
+	 * while a question is up, because it is what decides whether the line under
+	 * the panel names the cost of the next key. */
+	const typed = $derived(filterNeedle(query, ui.filter_min_chars));
+	/** What the day is being narrowed by. Null once an answer is up, because a
+	 * question is not a substring and the answer is drawn where the day was.
+	 *
+	 * **An answer, and not the press that asked for one.** Enter starts a 43 MB
+	 * download and it can end in a refusal, so a needle dropped on the press
+	 * would un-narrow the day the moment a reader asked a question of it - they
+	 * would watch their twelve stories become the day's four hundred, and a
+	 * search that then refused would leave them there with their own words still
+	 * in the box. The day stays narrowed while the encoder warms and stays
+	 * narrowed if the question never runs: the second tier is additive, and it
+	 * never takes the first one away (`CLAUDE.md` section 1a). */
+	const needle = $derived(found !== null ? null : typed);
 	// The day's searchable text, lowercased, and every story's place in it.
 	// Derived from `scoped` rather than captured, so when a reading route's fetch
 	// lands the whole day is re-indexed and the filter runs over all of it - an
@@ -154,6 +242,124 @@
 	const filtering = $derived(needle !== null);
 	const visible = $derived(list.visible);
 
+	// The months a question may reach, derived from the day in the address rather
+	// than from a published list: a dated route is one shell with a universal
+	// load, so it can read no server data, and baking the archive's month list
+	// into the reading bundle would grow it as the archive grows (Guardrail #12).
+	//
+	// Exactly `search_months` of them, and never the speculative extra the
+	// archive takes when its newest shard is thin. The archive holds the list of
+	// months that exist, so its extra shard is a real one; here it would be a
+	// guess, and a guess that misses is a refused request on every search a
+	// reader runs from a day page. What that costs the reader is reach: a search
+	// early in a month covers few days, and the empty state points at the
+	// archive, which is the page whose job is the whole corpus (Susan's ruling 4).
+	const months = $derived(monthsBackFrom(day.date, ASSIST.search_months - 1));
+	// One session per scope. Rebuilt when the months move, because a session holds
+	// the shards it opened and a reader who walks from one month into another must
+	// not be answered out of the month they left.
+	const search = $derived.by(() => {
+		void months;
+		return newSearch(
+			{ supported, loadIndex, loadVectors, embed: embedQuery },
+			ASSIST
+		);
+	});
+	const report = {
+		onPhase: (next: SearchPhase) => (phase = next),
+		onScope: (next: SearchScope) => (scope = next)
+	};
+	// The line under the panel, and the two tiers are the two shapes it takes.
+	// Nothing at rest: a reading page that opens with a 43 MB advert above the
+	// stories is furniture a reader who never searches pays for every day.
+	const searchSentence = $derived(
+		phase.name === 'offer'
+			? costNote(COST)
+			: stateSentence({ phase, held, cached, cost: COST })
+	);
+	// Shown while there is something to say: a download in flight, a refusal, or a
+	// price the reader has not paid and is one key away from spending. Never
+	// without the field, because every sentence it prints is about a key there is
+	// nowhere to press.
+	const searchShown = $derived(
+		ui.show_filter &&
+			(phase.name !== 'offer' || (typed !== null && !held && cached !== 'present'))
+	);
+	const answered = $derived(found !== null);
+
+	/** Which tier produced the list under the field, in the reader's words. */
+	const caption = $derived.by(() => {
+		if (found !== null) {
+			const searched = `Searched ${found.scope} - ${plural(found.searched, 'story', 'stories')}.`;
+			return found.hits.length === 0
+				? `No stories match. ${searched}`
+				: `${plural(found.hits.length, 'story', 'stories')} found. ${searched}`;
+		}
+		if (!filtering) return 'Typing filters this page. Press Enter to search other days.';
+		return (
+			`${settledCount} of ${plural(total, 'story', 'stories')} on this page. ` +
+			'Press Enter to search other days.'
+		);
+	});
+
+	// The count settles behind the list rather than with it. `visible.length` is
+	// read here so the timer restarts on every keystroke and only the last one
+	// lands, which is what stops the line re-wrapping letter by letter.
+	$effect(() => {
+		const next = visible.length;
+		const wait = setTimeout(() => (settledCount = next), ui.filter_settle_ms);
+		return () => clearTimeout(wait);
+	});
+
+	/** Fetch the day behind every result on screen. Once each, never twice. */
+	async function fetchDays(hits: SearchHit[]) {
+		const dates = [...new Set(hits.map((hit) => hit.entry.date))];
+		await Promise.all(
+			dates.map(async (date) => {
+				const whole = await loadDay(date);
+				foundDays = { ...foundDays, [date]: whole };
+			})
+		);
+	}
+
+	/** The Enter key, and the button behind it. */
+	async function ask() {
+		if (query.trim() === '') return;
+		const outcome = await search.ask(months, query, report);
+		// Null is a search that did not run, and the phase already says why. The day
+		// under the field is untouched either way.
+		if (outcome === null) return;
+		held = true;
+		found = outcome;
+		void fetchDays(outcome.hits);
+	}
+
+	/** Put the day back. The field's next keystroke does this too, which is what
+	 * makes an accidental Enter cost one key rather than a hunt for a control. */
+	function clearSearch() {
+		found = null;
+	}
+
+	// A topic pill moves the reader to another desk, and a cross-day answer drawn
+	// over it would make that pill look like a control that does nothing. Only the
+	// topic: a dated route nulls its day on a date change, so the whole component
+	// is rebuilt there, and this is the one move that reuses it.
+	$effect(() => {
+		void vertical;
+		clearSearch();
+	});
+
+	function onType() {
+		clearSearch();
+		// This device's own disk, never the network: the library caches every model
+		// file it fetches under a same-origin key, so the answer is a lookup. Asked
+		// on the first keystroke rather than on mount, so a reader who only reads
+		// never asks it (`assist/loader.ts`).
+		if (askedDisk) return;
+		askedDisk = true;
+		void cachedEncoder().then((state) => (cached = state));
+	}
+
 	// Chosen by the pipeline over the whole day and published on the payload.
 	// The block only draws on the all-topics view: a topic route and a filter
 	// both already have a subject, and a block whose leads sit outside what the
@@ -161,7 +367,7 @@
 	// `visible` for the same reason - a lead a reader has hidden drops out of the
 	// block rather than leaving a dead anchor behind.
 	const leads = $derived(
-		vertical === null && !filtering ? leadingStories(day.leads ?? [], visible) : []
+		vertical === null && !filtering && !answered ? leadingStories(day.leads ?? [], visible) : []
 	);
 	const leading = $derived(new Set(leads.map((story) => story.item_id)));
 
@@ -255,7 +461,7 @@
 		<LeadingStories stories={leads} />
 	{:else if section === 'topics' && desks.length > 0}
 		<FilterBar
-			label="Topics and filter"
+			label="Topics and search"
 			verticals={desks}
 			active={vertical}
 			{total}
@@ -264,19 +470,41 @@
 			{datePrefix}
 			bind:query
 			fieldId="page-filter"
-			fieldLabel="Filter today's stories"
-			placeholder="Filter today's stories"
+			fieldLabel="Filter this page, or press Enter to search other days"
+			placeholder="Filter this page"
 			showField={ui.show_filter}
+			submitLabel="Search other days"
+			submitVisible={false}
+			onSubmit={() => void ask()}
+			{onType}
 			deskThinMax={ui.desk_thin_max}
-			matchNote={filtering ? `${visible.length} of ${total}` : ''}
-			noscriptNote="Filtering needs JavaScript. Every topic above is a link and still works."
+			matchNote={ui.show_filter ? caption : ''}
+			noscriptNote="Filtering and search need JavaScript. Every topic above is a link and still works."
 		/>
+		{#if searchShown}
+			<SearchState
+				{phase}
+				sentence={searchSentence}
+				scope={answered ? '' : scopeSentence(scope)}
+				surface="day"
+				onStop={() => search.stop(report)}
+				onRetry={() => void ask()}
+			/>
+		{/if}
 	{:else if section === 'items'}
-		{#if day.items.length === 0}
+		{#if found !== null && found.hits.length > 0}
+			<FoundStories {found} days={foundDays} {verticalNames} onClear={clearSearch} />
+		{:else if found !== null}
+			<p class="py-12 text-base text-text-secondary" data-day-found="empty">
+				Nothing matched &ldquo;{found.query}&rdquo; in the days we can search. The
+				<a href="{base}/archive/" class="text-accent hover:underline">archive</a> lists every
+				published day.
+			</p>
+		{:else if day.items.length === 0}
 			<EmptyDay date={day.date} />
 		{:else if list.matched === 0}
 			<p class="py-12 text-base text-text-secondary">
-				Nothing on today's page matches &ldquo;{query}&rdquo;.
+				Nothing on this page matches &ldquo;{query}&rdquo;. Press Enter to search other days.
 			</p>
 		{:else}
 			{#if read.size > 0}
@@ -312,6 +540,7 @@
 						showMark={ui.source_mark}
 						stack={stackOf(item)}
 						onDate={day.date}
+						{needle}
 						read={read.has(item.item_id)}
 						onRead={() => (read = markRead(item.item_id, read, day.date))}
 					/>
