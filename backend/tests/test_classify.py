@@ -1475,7 +1475,7 @@ class TestTheInstructionsSitInFrontOfTheArticle:
 
         for moved in (
             "keep every figure exactly as the item wrote it",
-            '"key_points" - one sentence each',
+            '"summary" - coherent prose explaining the main event',
             "Decide whether this item wants a picture at all",
             '"confidence" - how sure you are',
         ):
@@ -1530,15 +1530,13 @@ class TestTheInstructionsSitInFrontOfTheArticle:
         """
         ask = config.load(CONFIG_DIR).app.summarize
         band = ask.band_for(0)
-        floor, ceiling = summarize.key_point_rail(ask, None, False)
         system = label_system_prompt(ask)
         turn = summarize_and_plan_user_turn(ask)
 
         assert f"{band.target_words_min} to {band.target_words_max} words" in turn
-        assert f"{floor} to {ceiling} key points" in turn
         assert f"{band.target_words_min} to {band.target_words_max}" not in system
         assert f"{ask.title_words_min} to {ask.title_words_max} words" in system
-        assert f"at most {ask.key_point_words_max} words" in system
+        assert f"at most {ask.max_verbatim_words} words" in system
 
     def test_the_number_ban_names_the_job_it_belongs_to(self) -> None:
         """One turn carries both jobs, and they disagree about figures.
@@ -1606,33 +1604,35 @@ class TestTheSummarizeAndPlanShape:
 
         assert (dense.text or "") not in added
 
-    def test_the_ask_and_the_decoder_hold_the_same_band(self, dense: Article) -> None:
-        """A prompt that asks for more key points than the decoder allows loses the item."""
+    def test_the_ask_and_the_decoder_leave_room_for_the_band(self, dense: Article) -> None:
+        """A prompt that asks for a longer summary than the decoder admits loses the item."""
         ask = config.load(CONFIG_DIR).app.summarize
         band = ask.band_for(dense.band_source_words)
         turn = summarize_and_plan_user_turn(ask, source_words=dense.band_source_words)
         schema = summarize_and_plan_schema(ask, source_words=dense.band_source_words)
-        points = schema["$defs"]["SummaryDraft"]["properties"]["key_points"]
+        summary = schema["$defs"]["SummaryDraft"]["properties"]["summary"]
 
-        assert f"{band.key_points_min} to {band.key_points_max} key points" in turn
-        assert (points["minItems"], points["maxItems"]) == (
-            band.key_points_min,
-            band.key_points_max,
-        )
+        assert f"{band.target_words_min} to {band.target_words_max} words" in turn
+        assert summary["maxLength"] >= band.target_words_max
+        assert summary["minLength"] <= band.target_words_min * 12
 
-    def test_they_still_agree_when_no_article_names_a_band(self) -> None:
-        """The union rail, and the prompt has to state it too.
+    def test_the_reply_shape_is_the_same_whichever_band_is_named(self) -> None:
+        """The rails are the envelope every band fits inside, so no band narrows them.
 
-        With no article named the decoder holds the envelope every band fits
-        inside. A prompt reading the shortest band's numbers off `band_for(0)`
-        would ask for one key point where the grammar admits five.
+        Key points made the shape band-keyed until 2026-09-24 - a note was held to
+        one and a long read to five - and the prompt had to state the same two
+        numbers or lose an item for doing what it was told. With the points gone
+        the only rails left are the widest any band can publish, so the grammar
+        stopped varying and that whole class of disagreement went with it.
         """
         ask = SummarizeConfig()
-        points = summarize_and_plan_schema(ask)["$defs"]["SummaryDraft"]["properties"]["key_points"]
-        floor, ceiling = summarize.key_point_rail(ask, None, False)
+        shapes = [
+            summarize_and_plan_schema(ask, source_words=band.min_source_words)
+            for band in ask.bands
+        ]
 
-        assert (points["minItems"], points["maxItems"]) == (floor, ceiling)
-        assert f"{floor} to {ceiling} key points" in summarize_and_plan_user_turn(ask)
+        assert all(shape == shapes[0] for shape in shapes)
+        assert summarize_and_plan_schema(ask, brief=True) == shapes[0]
 
     def test_the_plan_the_decoder_sees_carries_neither_field_code_stamps(self) -> None:
         """`version` and `plan_version` are facts code holds, not questions for a model."""
@@ -1670,7 +1670,7 @@ class TestTheDerivedBudget:
     def test_a_bound_that_moves_moves_the_budget_with_it(self) -> None:
         """Re-derived, not restated. This is what "derived" has to mean to be worth saying."""
         ask = SummarizeConfig()
-        wider = ask.model_copy(update={"key_point_words_max": ask.key_point_words_max * 2})
+        wider = ask.model_copy(update={"title_words_max": ask.title_words_max * 2})
 
         assert summarize_and_plan_budget_tokens(wider) > summarize_and_plan_budget_tokens(ask)
 
@@ -1714,7 +1714,7 @@ class TestARepliedCutByTheBudget:
         """The one case where there is genuinely nothing to publish."""
         body = json.loads(read_text(SUMMARIZE_AND_PLAN_REPLIES / "cut-in-the-plan.json"))
         content = body["choices"][0]["message"]["content"]
-        early = content[: content.index('"key_points"')]
+        early = content[: content.index(', "summary": ')]
 
         assert recovered_completion(Completion(content=early, finish_reason="length")) is None
 
@@ -1743,10 +1743,10 @@ class TestARepliedCutByTheBudget:
     ) -> None:
         """The recovery hands back a single-call reply, so nothing downstream is relaxed.
 
-        The length verdict, the copied-source reject, the address reject and the
-        restatement drop all read the recovered words the same way they read any
-        others. Recovery stops an item being thrown away unread; it decides
-        nothing about whether it may publish.
+        The length verdict, the copied-source reject and the address reject all
+        read the recovered words the same way they read any others. Recovery
+        stops an item being thrown away unread; it decides nothing about whether
+        it may publish.
         """
         body = json.loads(read_text(SUMMARIZE_AND_PLAN_REPLIES / "cut-in-the-plan.json"))
         cut = Completion(
@@ -1765,7 +1765,6 @@ class TestARepliedCutByTheBudget:
 
         assert summary.status is SummaryStatus.OK
         assert summary.summary and "34 percent" in summary.summary
-        assert summary.key_points
 
     def test_the_same_bytes_uncut_still_fail_the_way_they_always_did(
         self, article_ok: Article

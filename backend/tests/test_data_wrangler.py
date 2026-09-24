@@ -365,7 +365,6 @@ def a_digest_item(article: Article, published: Published) -> DigestItem:
             "vertical": article.vertical,
             "title": published.title,
             "summary": published.summary,
-            "key_points": list(published.key_points),
             "source_url": article.canonical_url,
             "source_id": "grid-newsroom",
             "source_form": article.source_form,

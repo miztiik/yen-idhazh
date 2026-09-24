@@ -122,7 +122,7 @@ def test_a_story_past_the_seed_is_the_one_this_gate_exists_for(
 
     Two arms over one built day, because the second alone would pass against a
     gate that refused everything: the whole day is accepted, and the same day is
-    refused once its last story loses its key points.
+    refused once its last story loses its summary.
     """
     seed = UiConfig().shell_seed_items
     day = a_day_longer_than_the_seed(seed)
@@ -130,7 +130,7 @@ def test_a_story_past_the_seed_is_the_one_this_gate_exists_for(
 
     assert stage_validate_days(a_tree_holding(tmp_path / "whole", day), run_id=A_RUN) == 0
 
-    day["items"][-1]["key_points"] = []
+    day["items"][-1]["summary"] = ""
     root = a_tree_holding(tmp_path / "past-the-seed", day)
     with caplog.at_level(logging.ERROR):
         assert stage_validate_days(root, run_id=A_RUN) == 1

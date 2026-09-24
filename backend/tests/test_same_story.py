@@ -154,7 +154,6 @@ def item(
     run: int = 1,
     title: str | None = None,
     outlet: str | None = None,
-    points: list[str] | None = None,
     when: str | None = None,
 ) -> DigestItem:
     return DigestItem(
@@ -165,7 +164,6 @@ def item(
         source_id=source,
         source_name=outlet if outlet is not None else source.title(),
         summary="A summary long enough to be a summary.",
-        key_points=points if points is not None else ["One point."],
         band=ConfidenceBand.HIGH,
         rank_score=score,
         introduced_by_run=run,
@@ -954,8 +952,8 @@ def test_the_shipped_weight_puts_the_whole_score_on_the_cosine() -> None:
     assert shipped.cosine_weight == 1.0
 
     items = [
-        item("world-01", source="wire", points=["Ash closed the airport."]),
-        item("india-02", source="paper", points=["Nothing whatever in common."]),
+        item("world-01", source="wire"),
+        item("india-02", source="paper"),
     ]
     vectors = block({"world-01": unit(0), "india-02": unit(18)})
 
@@ -1063,10 +1061,9 @@ def test_the_floor_is_what_decides_a_group_the_cosine_nearly_made() -> None:
     and a floor at 0.95 joins them. The key-point term used to be the thing
     this test moved; with the cosine as the whole score, the floor is.
     """
-    shared = ["Ash from the volcano closed the airport."]
     items = [
-        item("world-01", source="wire", points=shared),
-        item("india-02", source="paper", points=shared),
+        item("world-01", source="wire"),
+        item("india-02", source="paper"),
     ]
     vectors = block({"world-01": unit(0), "india-02": unit(18)})
 

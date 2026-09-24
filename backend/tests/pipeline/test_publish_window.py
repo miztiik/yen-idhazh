@@ -1055,7 +1055,7 @@ def test_a_later_run_cannot_rewrite_the_words_a_reader_already_read() -> None:
         retention_window_months=-1,
     )
     rewritten = original.model_copy(
-        update={"summary": "Different words for the same address.", "key_points": ["Rewritten."]}
+        update={"summary": "Different words for the same address."}
     )
     second = assemble.build_day(
         plan=plan(),
@@ -1069,7 +1069,6 @@ def test_a_later_run_cannot_rewrite_the_words_a_reader_already_read() -> None:
 
     kept = second.items[0]
     assert kept.summary == original.summary
-    assert kept.key_points == original.key_points
     assert kept.introduced_by_run == 1
     assert kept.updated_at is None
     assert kept.updated_by_run is None

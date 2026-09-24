@@ -78,7 +78,6 @@ def _item(
         source_id=source_id,
         source_name=source_id.replace("-", " ").title(),
         summary="A short summary of one grid story.",
-        key_points=["The reserve margin held."],
         band=band,
         band_reason=reason,
         truncated=truncated,

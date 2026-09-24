@@ -320,48 +320,36 @@
     "asks_for_a_visual_plan": true,
     "bands": [
       {
-        "key_points_max": 1,
-        "key_points_min": 1,
         "min_source_words": 0,
         "over_length_action": "trim",
         "target_words_max": 45,
         "target_words_min": 30
       },
       {
-        "key_points_max": 2,
-        "key_points_min": 1,
         "min_source_words": 60,
         "over_length_action": "trim",
         "target_words_max": 80,
         "target_words_min": 45
       },
       {
-        "key_points_max": 3,
-        "key_points_min": 2,
         "min_source_words": 700,
         "over_length_action": "trim",
         "target_words_max": 130,
         "target_words_min": 70
       },
       {
-        "key_points_max": 4,
-        "key_points_min": 2,
         "min_source_words": 2000,
         "over_length_action": "publish",
         "target_words_max": 160,
         "target_words_min": 95
       },
       {
-        "key_points_max": 5,
-        "key_points_min": 2,
         "min_source_words": 4000,
         "over_length_action": "publish",
         "target_words_max": 200,
         "target_words_min": 120
       }
     ],
-    "key_point_restatement_ceiling": 0.5,
-    "key_point_words_max": 80,
     "length_policy": {
       "absolute_floor_words": 25,
       "floor_applies_above_source_words": 700,

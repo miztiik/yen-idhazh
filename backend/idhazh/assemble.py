@@ -203,7 +203,6 @@ def to_digest_item(
         # so this label describes the time above and not a second one.
         time_source=planned.time_source if planned is not None else None,
         summary=summary.summary or "",
-        key_points=summary.key_points,
         lenses=article.lenses,
         events=article.events,
         entities=article.entities,

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Any, Self
+from typing import Self
 
 from pydantic import Field, model_validator
 
@@ -97,33 +97,10 @@ class SummaryBand(Model):
             "the tail is how a summary becomes wrong rather than merely long."
         ),
     )
-    key_points_min: int = Field(
-        default=2,
-        ge=1,
-        description=(
-            "The fewest key points this band asks for, and the decoder's floor for the "
-            "band. The prompt and the response schema read this same number. Never below "
-            "1: the published digest refuses an item with no key points."
-        ),
-    )
-    key_points_max: int = Field(
-        default=5,
-        ge=1,
-        description=(
-            "The most key points this band asks for, and the decoder's ceiling for the "
-            "band. A short band asks for fewer: a 40-word summary of a 60-word post "
-            "cannot carry five distinct facts on top of itself, so the extra key points "
-            "only restate it. On the band, not the whole config, so the shortest band "
-            "asks for one where the longest asks for five."
-        ),
-    )
-
     @model_validator(mode="after")
     def _the_range_is_ordered(self) -> Self:
         if self.target_words_min >= self.target_words_max:
             raise ValueError("target_words_min must sit below target_words_max")
-        if self.key_points_min > self.key_points_max:
-            raise ValueError("key_points_min must not exceed key_points_max")
         return self
 
 
@@ -158,32 +135,25 @@ def _default_bands() -> list[SummaryBand]:
     same ask. A rung above it would grade articles by a length the model never
     saw.
 
-    Each band carries its own key-point ask, graded from one at the note to five
-    at the long read: a note holds one fact, and asking it for five requests
-    facts the article does not have. Each also carries what to do when a reply
-    runs long - see `SummaryBand.over_length_action`.
+    Each band also carries what to do when a reply runs long - see
+    `SummaryBand.over_length_action`.
     """
     return [
         SummaryBand(
             min_source_words=0, target_words_min=30, target_words_max=45,
-            key_points_min=1, key_points_max=1,
         ),
         SummaryBand(
             min_source_words=60, target_words_min=45, target_words_max=80,
-            key_points_min=1, key_points_max=2,
         ),
         SummaryBand(
             min_source_words=700, target_words_min=70, target_words_max=130,
-            key_points_min=2, key_points_max=3,
         ),
         SummaryBand(
             min_source_words=2000, target_words_min=95, target_words_max=160,
-            key_points_min=2, key_points_max=4,
             over_length_action=OverLengthAction.PUBLISH,
         ),
         SummaryBand(
             min_source_words=4000, target_words_min=120, target_words_max=200,
-            key_points_min=2, key_points_max=5,
             over_length_action=OverLengthAction.PUBLISH,
         ),
     ]
@@ -205,10 +175,7 @@ class SummarizeConfig(Model):
 
     Every band and title number here is substituted into the prompt text at
     render time, so the prompt cannot drift from the bounds the pipeline enforces
-    (Guardrail #6). `key_point_restatement_ceiling` is the one value that is not asked
-    for: it is a post-parse check `to_summary` runs on what the model returned,
-    and it lives here because the count it protects - the band's key_points_min -
-    does too.
+    (Guardrail #6).
     """
 
     bands: list[SummaryBand] = Field(
@@ -260,39 +227,6 @@ class SummarizeConfig(Model):
             "answer."
         ),
     )
-    key_point_words_max: int = Field(
-        default=80,
-        ge=1,
-        description=(
-            "Longest key point the decoder will emit, spent as a character rail at 12 "
-            "characters a word the same way the title and the summary are. There was no "
-            "rail here at all until the two-call planner needed one: with an unbounded "
-            "string in the reply shape, the worst-case reply length is not arithmetic, "
-            "and a budget derived from bounds that do not exist is a guess with a table "
-            "next to it. Deliberately above anything observed rather than tight to it - "
-            "a maxLength is a hard grammar stop that truncates mid-word, so a rail set "
-            "at the observed maximum turns a slightly long key point into a parse "
-            "failure for the whole item. It sits well above the longest key point the "
-            "pipeline has published, so only a reply of a different order reaches it."
-        ),
-    )
-    key_point_restatement_ceiling: float = Field(
-        default=0.5,
-        gt=0.0,
-        le=1.0,
-        description=(
-            "Above this share of a key point's four-word phrases already appearing in "
-            "the summary, `to_summary` drops the key point as a restatement and keeps the "
-            "item with the rest. A distinctness floor, not a word ban: only the overlap "
-            "ratio counts, never a single shared word, so a key point may reuse the "
-            "summary's words and still add a fact. A starting point, not a calibrated "
-            "threshold (Guardrail #10): it sits in the wide gap between a key point that "
-            "adds a fact and one that is a verbatim slice of the summary. The drop never "
-            "removes the last key point - "
-            "the payload requires one - so a reply whose every key point restates still "
-            "publishes with the least-restating up to the band's key_points_min."
-        ),
-    )
     paragraphs_max: int = Field(
         default=2,
         ge=1,
@@ -334,36 +268,6 @@ class SummarizeConfig(Model):
             "refuses articles that would have fitted."
         ),
     )
-
-    @model_validator(mode="before")
-    @classmethod
-    def _key_point_counts_moved_onto_the_band(cls, data: Any) -> Any:
-        """Read a config that still names the old global key-point counts onto each band.
-
-        `key_points_min` and `key_points_max` used to sit here, one pair for every
-        band. They moved onto `SummaryBand` so the shortest band can ask for fewer
-        than the longest - a note carries one fact, and asking it for five requests
-        facts the article does not hold. `config/` is a persisted surface and every
-        model here forbids unknown keys, so a file written before the move would be
-        refused outright (section 11). This distributes an old global value onto any
-        band that does not carry its own, then drops the global key.
-        """
-        if not isinstance(data, dict):
-            return data
-        bands = data.get("bands")
-        if not isinstance(bands, list):
-            return data
-        migrated = dict(data)
-        migrated["bands"] = list(bands)
-        for name in ("key_points_min", "key_points_max"):
-            if name not in migrated:
-                continue
-            carried = migrated.pop(name)
-            migrated["bands"] = [
-                {**band, name: band.get(name, carried)} if isinstance(band, dict) else band
-                for band in migrated["bands"]
-            ]
-        return migrated
 
     @model_validator(mode="after")
     def _the_bands_cover_every_article(self) -> Self:

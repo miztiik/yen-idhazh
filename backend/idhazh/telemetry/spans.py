@@ -124,7 +124,6 @@ class AttrKey(StrEnum):
     HIT_THE_BUDGET = "hit_the_budget"
     REASONED = "reasoned"
     SUMMARY_WORDS = "summary_words"
-    KEY_POINTS = "key_points"
     BAND = "band"
     VISUAL_KIND = "visual_kind"
     VISUAL_STATE = "visual_state"
@@ -356,4 +355,3 @@ def summary_attributes(span: OpenSpan, summary: Summary) -> None:
     span.set(AttrKey.FAILURE_CODE, None if failure is None else failure.value)
     span.set(AttrKey.OUTPUT_DIGEST, summary.output_digest)
     span.set(AttrKey.SUMMARY_WORDS, len((summary.summary or "").split()))
-    span.set(AttrKey.KEY_POINTS, len(summary.key_points))
