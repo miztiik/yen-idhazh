@@ -539,7 +539,8 @@ It mints the name from `naming.unit_id` (section 5.7), builds the path through `
   - `backend/idhazh/gardener/__init__.py`, `cli.py` (the router - a copy of `backend/idhazh/telemetry/cli.py`'s shape), `tasks.py` (the registry, section 5.5), `schedule.py`, `runner.py` (the shard loop and the ownership assertion), `publish.py` (section 5.6)
   - `backend/utilities/gardener_due.py` (new: the standard-library-only dueness reader the `plan` job runs before any install)
   - `backend/idhazh/contracts/knobs/gardener.py` (section 5.2), `config/idhazh_gardener.json`, `backend/idhazh/config.py` (load, and every refusal in section 5.2)
-  - `backend/idhazh/contracts/collection_prune.py` (widened per section 5.1, with its `version` stamp and one `changelog` line), `backend/idhazh/contracts/gardener_stamp.py` (section 5.3), `backend/idhazh/prune/report.py` (fills the six new columns)
+  - `backend/idhazh/contracts/collection_prune.py` (widened per section 5.1, with its `version` stamp and one `changelog` line), `backend/idhazh/contracts/gardener_stamp.py` (section 5.3), `backend/idhazh/contracts/knobs/prune.py` (folds into `knobs/gardener.py`)
+  - `backend/idhazh/prune/` (deleted: `one_at_a_time.py` and `report.py` move to `gardener/`, `github_collections.py` to `gardener/tasks/`), `backend/idhazh/telemetry/prune.py` and `backend/utilities/prune_artifacts.py` (their imports follow), `backend/tests/prune/` (moves with them)
   - `backend/idhazh/contracts/base.py` (`ServerJob` gains `TEND` and `HISTORY`)
   - `backend/idhazh/cli.py` (the `gardener` verb joins the `choices` tuple)
   - `schemas/`, `backend/tests/gardener/`, `backend/tests/contracts/`, `backend/tests/test_marks.py`, `tests/fixtures/gardener/`
