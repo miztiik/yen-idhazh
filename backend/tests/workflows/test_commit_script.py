@@ -452,7 +452,15 @@ def test_a_push_rejected_more_times_than_the_old_loop_allowed_still_lands(
     runner: that is what the printed line exists to collect, over twenty runs.
     """
     staged_paths, settings = _commit_call("plan")
-    deadline = 60
+    # The deadline is scaffolding here, not the subject, so it is set wide
+    # enough that only a regression can reach it. Five real pushes cost 36s on
+    # an idle Windows box, but 53s, 78s and 93s on three runs of the suite
+    # eight-wide - so at 60s this gave up before the fifth push landed on two
+    # of those three, and the count it reported was right rather than wrong.
+    # Nothing else bounds a hang: the harness sets no subprocess timeout, so
+    # this number is also the worst case when the loop really is broken, and it
+    # stops at the deadline the program itself defaults to.
+    deadline = 300
     settings = {**settings, "PUSH_DEADLINE_SECONDS": str(deadline)}
     env = _isolated_env(tmp_path)
     origin, runner = _scripted_origin(tmp_path, env, staged_paths)
@@ -503,6 +511,17 @@ def test_a_push_nothing_will_take_gives_up_on_the_clock_and_says_what_it_spent(
     no rebase in progress, print the caller's own sentence, and name the attempt
     it really reached - which is what a reader needs to tell a run that spent
     its budget from a run that stopped on the first conflict.
+
+    **How many attempts fit in three seconds is a fact about the machine.** This
+    asserted two until 2026-09-24, and failed on a box running several test
+    suites at once: one rejected push there costs more than the whole deadline,
+    so the loop gets a single attempt and the count is right rather than wrong.
+    The claim it was reaching for - that the deadline is a clock and not a retry
+    counter - is proven without a stopwatch by the test above, which reaches a
+    fifth attempt against a deadline set wide enough that only a regression can
+    reach it, and could not pass against the three-try loop this replaced. What
+    is left here is what only this case can show, and none of it depends on how
+    fast the push was.
     """
     staged_paths, settings = _commit_call("plan")
     settings = {**settings, "PUSH_DEADLINE_SECONDS": "3"}
@@ -517,8 +536,12 @@ def test_a_push_nothing_will_take_gives_up_on_the_clock_and_says_what_it_spent(
     assert result.returncode == 1
     assert settings["PUSH_FAILED_MESSAGE"] in result.stderr
     spent = _push_attempts(result.stdout)
-    assert len(spent) >= 2, "a deadline that allows one attempt is a counter again"
+    assert spent, "a run that gave up without attempting a push reports nothing to read"
+    # The count it names is the count it printed, whether the box fitted one
+    # attempt into the deadline or seven.
     assert f"the push was given up on attempt {len(spent)} after 3s" in result.stderr
+    assert [row["attempt"] for row in spent] == list(range(1, len(spent) + 1))
+    assert all(row["outcome"] == "rejected" for row in spent)
     assert _git(origin, env, "rev-parse", "main").strip() == before
     assert not _mid_rebase(runner)
 
