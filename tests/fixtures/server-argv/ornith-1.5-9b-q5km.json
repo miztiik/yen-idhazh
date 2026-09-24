@@ -1,7 +1,7 @@
 {
   "--alias": "ornith-1-5-9b-q5-k-m",
   "--batch-size": "512",
-  "--ctx-size": "81920",
+  "--ctx-size": "65536",
   "--metrics": null,
   "--model": "var/models/weights.gguf",
   "--no-context-shift": null,

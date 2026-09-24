@@ -109,8 +109,8 @@ by "never more than two pages". Every trade that abstracts at scale opens with a
 ratio and closes with a ceiling, and so does this ladder.
 
 **The top rung is at 4,000 rather than at the cut point.** At the
-`extract.truncation_cap_tokens` of 30000 committed now the model is handed 22,013
-words, so a 44,000-word piece and a 22,013-word piece are handed the same words
+`extract.truncation_cap_tokens` of 26000 committed now the model is handed 19,078
+words, so a 38,000-word piece and a 19,078-word piece are handed the same words
 and get the same ask, which is right. Every source past 4,000 arrives with much
 the same evidence for the same reason, so a rung nearer the cut point would grade
 articles by a length nobody read - and the model would close the gap by
@@ -659,8 +659,8 @@ content refresh. Re-read the figure then, and again when plan 11 is distilled pe
 
 ### What the two calls cost at the truncation cap, and the window that holds them
 
-`extract.truncation_cap_tokens` is 30,000 tokens, which
-`extract.truncate_to_tokens` spends as 22,013 words. **The committed corpus
+`extract.truncation_cap_tokens` is 26,000 tokens, which
+`extract.truncate_to_tokens` spends as 19,078 words. **The committed corpus
 cannot supply an article that long** - its longest body is 3,846 words, cut by
 an older cap - so every reading below comes from articles built out of corpus
 prose and cut by `truncate_to_tokens` itself. `CLAUDE.md` section 13 is the rule
@@ -676,17 +676,17 @@ runner. The session that took them is
 | Term | Tokens | Where it comes from |
 | --- | --- | --- |
 | the label call's scaffold, before a word or a menu row | 2,167 | `idhazh.measured.LABEL_SCAFFOLD_TOKENS`; the system turn alone is 2,055 |
-| plus the article and the address in front of every sentence | 49,055 | 2.2285 a word over 22,013 words, worst of the eight builds |
+| plus the article and the address in front of every sentence | 42,515 | 2.2285 a word over 19,078 words, worst of the eight builds |
 | plus a candidate menu at `elements.max_per_article` | 8,733 | 34.115 tokens a row over 256 rows, worst of the eight |
-| **the label call's prompt** | **59,955** | |
-| plus the label call's own output budget | 66,446 | `label_budget_tokens()` is 6,491 |
-| plus the seam the summarize-and-plan call adds in front of its reply | 66,504 | `idhazh.measured.SUMMARIZE_AND_PLAN_SEAM_TOKENS` |
-| plus the reply the summarize-and-plan call's grammar may write | **71,239** | `summarize_and_plan_budget_tokens()` is 4,735 |
-| `--ctx-size` on the summarize entry | 81,920 | the active model file |
-| **spare** | **10,681** | 87 percent of the window used |
+| **the label call's prompt** | **53,415** | |
+| plus the label call's own output budget | 59,906 | `label_budget_tokens()` is 6,491 |
+| plus the seam the summarize-and-plan call adds in front of its reply | 59,964 | `idhazh.measured.SUMMARIZE_AND_PLAN_SEAM_TOKENS` |
+| plus the reply the summarize-and-plan call's grammar may write | **64,699** | `summarize_and_plan_budget_tokens()` is 4,735 |
+| `--ctx-size` on the summarize entry | 65,536 | the active model file |
+| **spare** | **837** | 99 percent of the window used |
 
 **The label call's reply is paid twice** - once as its own decode, once again inside
-the summarize-and-plan call's prompt - which is why the pair is 1.8 times the single call's 40,622.
+the summarize-and-plan call's prompt - which is why the pair is 1.8 times the single call's 35,970.
 `test_the_two_calls_fit_the_window_at_the_cap` is the assertion, and it reads
 the cap, the element cap and the window from `config/` on both sides so it
 follows the next move of any of the three.
@@ -704,7 +704,7 @@ time a term moves.
 element count rather than the 256-row cap - and an article over the window lands
 as `FailureCode.CONTEXT_EXCEEDED` having cost nothing. `summarize.fits_context`
 is the other check and it is not this one: it sums the single call the
-qualification harness sends, which is 40,622 at the same cap, and using it here
+qualification harness sends, which is 35,970 at the same cap, and using it here
 would admit articles the sequence cannot hold. Over the trailing 30 days ending
 2026-09-13 this check would have refused none of 8,938 items.
 
@@ -719,31 +719,29 @@ are in
 
 **A cap-length article saturates the candidate menu, and that is the corpus's
 own reading rather than a construction.** Over the 1,444 committed corpus rows
-the 95th-percentile element density is 0.0659 a word, which is 1,451 elements at
-22,013 words against an `elements.max_per_article` of 256; the median is 0.0167,
-which is 368. One real row already reaches 256. So a menu at its cap costs
-8,733 tokens - 12 percent of the sequence - on better than one cap-length
+the 95th-percentile element density is 0.0659 a word, which is 1,257 elements at
+19,078 words against an `elements.max_per_article` of 256; the median is 0.0167,
+which is 318. One real row already reaches 256. So a menu at its cap costs
+8,733 tokens - 13 percent of the sequence - on better than one cap-length
 article in twenty.
 
 **What the window costs is memory, and memory is not what chose it.**
 [`../../reference/pipeline-cost.md`](../../reference/pipeline-cost.md) carries the
-cases; the short version is that KV runs at most 32 KiB a token over 8 attention
-layers of 32 - the other 24 are recurrent and cost a fixed 50.25 MiB whatever the
-window is - so 81,920 is 2,560.00 MiB of KV against 512.00 at 16,384, and about
-2,100 MiB more all told. The 32 KiB reading was taken before `-ctk` and `-ctv`
-went to `q8_0` on 2026-09-21, so it is now a ceiling rather than a reading, which
-is the right number to size with. The tightest moment the runner has ever
-reported left 2.76 GiB available against a 1.0 GiB bar, and the 512 MiB the move
-from 65,536 adds clears it by better than four times. The weights train to
-262,144, so nothing is scaled.
+cases; the short version is that KV runs 32 KiB a token over 8 attention layers
+of 32 - the other 24 are recurrent and cost a fixed 50.25 MiB whatever the
+window is - so 65,536 is 2,048.00 MiB of KV against 512.00 at 16,384, and 1,584
+MiB more all told. The runner's measured low-water free is 6.84 GiB against a
+1.0 GiB bar. The weights train to 262,144, so nothing is scaled. Every candidate
+from 32,768 to 65,536 clears that bar by more than four times, so half a
+gigabyte either way is noise.
 
-**What chose 81,920 is the sized pair.** It is the first whole multiple of both
-16,384 and the 512-token batch that holds 71,239, and it leaves 10,681 spare.
+**What chose 65,536 is the sized pair.** It is the first whole multiple of both
+16,384 and the 512-token batch that holds 64,699, and it leaves 837 spare.
 Wider costs almost nothing in memory and costs the assertion its reach: the gate
 is the product on this path, and it cannot report a sequence that grew until the
 sequence has outgrown the window. **Re-derive it when the truncation cap or
-`elements.max_per_article` moves** - the cap's rise to 30,000 on 2026-09-24 is
-what moved it from 65,536, which the pair had already outgrown by 5,703 tokens.
+`elements.max_per_article` moves** - the cap's rise to 26,000 on 2026-09-24 spent
+all but 837 tokens of it, and 26,511 is the largest cap this window still holds.
 
 **When the sizing is wrong anyway, the failure now has a name.** With
 `--no-context-shift` a decode that runs into the wall stops there rather than
@@ -924,8 +922,8 @@ only the conversion, and it differs because the shapes do.
 **Rejected: the summarize-and-plan call's rule applied unchanged to the label call.** It gives 12,953 tokens
 and leaves 117 tokens of margin across the two-call sequence at 32,768. The row
 that owns the window called 75 tokens "luck rather than a margin", and 117 is
-the same thing. **The premise is worse than that: the pair sizes at 71,239
-tokens, so 32,768 holds no margin at all and the window is 81,920.**
+the same thing. **The premise is worse than that: the pair sizes at 64,699
+tokens, so 32,768 holds no margin at all and the window is 65,536.**
 
 **Rejected: clamping the budget against `n_ctx`.** A `min()` silently shrinks
 the budget, which reproduces the exact failure being fixed - a quiet cut with

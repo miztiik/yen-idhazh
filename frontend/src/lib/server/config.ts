@@ -466,7 +466,7 @@ const SAME_STORY_FLOOR = 0.94;
 // it on the cosine, which is how the floor above was measured.
 const SAME_STORY_WEIGHTS = { cosine_weight: 1.0, key_point_weight: 0.0 };
 // The value a checkout with no config file runs on. `config/models/` pins
-// `--ctx-size` at 81920 and every real page reads that; this only fires for a
+// `--ctx-size` at 65536 and every real page reads that; this only fires for a
 // checkout with no model file at all, and such a checkout summarizes nothing.
 // Naming the committed window here would have the console state a window the
 // unconfigured pipeline does not use.

@@ -173,7 +173,7 @@ provenance here:
 
 | Entry | `declared_for` | Where the numbers came from |
 | --- | --- | --- |
-| `models.summarizer` (`qwen3-5-9b-q4-k-m`) | `03b74727...b7e8` | The owner selected the explicit runtime settings on 2026-09-20 and approved the 65,536-token window on 2026-09-21. The window went to 81,920 on 2026-09-24 because the read cap rose to 30,000 and the two-call pair outgrew 65,536; the sizing rule is in [../../architecture/summarize/prompt.md](../../architecture/summarize/prompt.md). Both caches use q8_0 and the answer budget is 2,000 tokens. The article and candidate limits are unchanged. This combination has not been benchmarked. Earlier measurements used different settings and do not establish this combination's speed, memory use or output quality. The committed model file is the complete list of selected values. |
+| `models.summarizer` (`qwen3-5-9b-q4-k-m`) | `03b74727...b7e8` | The owner selected the explicit runtime settings on 2026-09-20 and approved the 65,536-token window on 2026-09-21. Both caches use q8_0 and the answer budget is 2,000 tokens. The article and candidate limits are unchanged. This combination has not been benchmarked. Earlier measurements used different settings and do not establish this combination's speed, memory use or output quality. The committed model file is the complete list of selected values. |
 
 The row says the uncomfortable thing, which is the point of writing it
 down: the file now states a pairing where before it implied one. `declared_for`

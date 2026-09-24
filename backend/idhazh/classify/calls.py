@@ -373,8 +373,8 @@ def label_budget_tokens() -> int:
     reads the whole reply as structure and returns 20,229 tokens. The label call's reply
     is paid twice, once as its own decode and once inside the summarize-and-plan call's prompt, so
     that budget puts the pair at 39,927 tokens of reply alone, before the
-    article in front of them - against a window of 81,920 whose sizing already
-    spends 71,239 on the pair at the truncation cap. A ceiling that fits no
+    article in front of them - against a window of 65,536 whose sizing already
+    spends 64,699 on the pair at the truncation cap. A ceiling that fits no
     window is not a ceiling; it is a refusal to answer.
 
     **So the ceiling is converted at the one measured density instead**, which

@@ -215,8 +215,7 @@ repository's `config.json`: a candidate whose base declares less than the window
 you were going to match cannot be compared like for like, and the only other
 place that fact turns up is a server that quietly serves a shorter context than
 the entry asked for. Both candidates written on 2026-09-14 cleared it with room
-- 262,144 and 131,072 - and both still clear the 81,920 the window went to on
-2026-09-24.
+- 262,144 and 131,072 against a matched 65,536.
 
 **`declared_for` is the safety catch, and it holds this model's own digest.**
 Config load refuses an entry whose

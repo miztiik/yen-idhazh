@@ -29,7 +29,7 @@
   "cases": [
     {"asks_for_a_visual_plan": true,"id": "baseline","n_ctx": null,"n_parallel": null},
     {"asks_for_a_visual_plan": false,"id": "no-visual-decision","n_ctx": null,"n_parallel": null},
-    {"asks_for_a_visual_plan": true,"id": "parallel-2","n_ctx": 163840,"n_parallel": 2}
+    {"asks_for_a_visual_plan": true,"id": "parallel-2","n_ctx": 131072,"n_parallel": 2}
   ],
   "version": "2026-09-15"
 }
