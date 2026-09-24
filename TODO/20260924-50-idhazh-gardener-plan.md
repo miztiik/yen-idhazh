@@ -13,7 +13,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | Field | Value |
 | --- | --- |
 | Why this plan exists | Four programs delete things on four unrelated schedules, one `--dry-run` flag covers eleven independent decisions, every store writes its own format by hand, and two schedulers disagree about when a day is closed. This makes one utility with one verb per task, one config, one persistence door, one record and one safe way to commit. |
-| Hard scope - in | - `backend/idhazh/store/` is the one door a payload takes to disk, parquet or JSON, with exactly one module importing the parquet engine.<br>- `state/raw/<store>/<shard>` is where a new writer files; `state/compact/<store>/<YYYY>/<MM>/settled.parquet` is what compaction leaves.<br>- `backend/idhazh/gardener/` holds the registry, the schedule, the record and the commit loop.<br>- All eleven passes in `backend/idhazh/stages/prune_state.py` become eleven tasks, each with its own window and its own `dry_run`.<br>- The corpus squash leaves inline shell for a tested Python module.<br>- `backend/utilities/prune_artifacts.py` gets a schedule for the first time.<br>- `.github/workflows/prune.yml` names no task: a standard-library `plan` job asks what is due, a sharded `run-tasks` job runs it, a `history` job rewrites the corpus last.<br>- `digest.yml`'s compaction step moves to the gardener, so one scheduler decides when a day is closed. |
+| Hard scope - in | - `backend/idhazh/store/` is the one door a payload takes to disk, parquet or JSON, with exactly one module importing the parquet engine.<br>- `state/raw/<store>/<YYYY>/<MM>/<DD>/<unit_id>.parquet` is where a new writer files; `state/compact/<store>/<YYYY>/<MM>/<unit_id>.parquet` is what compaction leaves, one file to a month directory.<br>- `backend/idhazh/gardener/` holds the registry, the schedule, the record and the commit loop.<br>- All eleven passes in `backend/idhazh/stages/prune_state.py` become eleven tasks, each with its own window and its own `dry_run`.<br>- The corpus squash leaves inline shell for a tested Python module.<br>- `backend/utilities/prune_artifacts.py` is deleted and its work becomes two tasks; a utility that is also a task is two places to look.<br>- `.github/workflows/prune.yml` names no task: a standard-library `plan` job asks what is due, a sharded `run-tasks` job runs it, a `history` job rewrites the corpus last.<br>- `digest.yml`'s compaction step moves to the gardener, so one scheduler decides when a day is closed. |
 | Hard scope - out | see the table below |
 | ESCALATE triggers | 1. Removing the `pruned_date` read-side alias - stop before the commit that removes it, not before the commit that adds it.<br>2. Any behaviour change to the tip-moved refusal in `backend/utilities/push_rewritten_history.py`, including its exit code.<br>3. Migrating any CSV tree to `state/raw/` or to parquet beyond the two named in section 5.8.<br>4. A measured figure that contradicts section 4, **or** a measured chain in front of the force push that does not fit the gap it must sit in - the remedy for the second is a cron change, which moves when the site publishes.<br><br>**Four earlier triggers became controls instead**, because a control that fires is a red test and a test is a better stop than a note: a window including today is refused by name at config load (section 5.2); a second parquet importer is caught by row 2's oracle; a writer outside the two roots raises in `paths` (section 5.4); and a task in config with no registry entry fails the bijection refusal. |
 | Chosen strategy | Register the two new roots, lay the persistence door, then move tasks in one PR per outcome, reader before writer, behaviour unchanged until the row that changes it. Ruled by Fowler (CLAUDE.md section 14). |
@@ -25,7 +25,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | --- | --- | --- |
 | Migrating the rest of `state/` to `state/raw/` | Two layouts coexist: the gardener's own stores and the two row 2 takes sit under `state/raw/`, the rest stay where they are. Row 2 registers both roots so nothing reads them as strays. Section 5.8 lists what is left, with its producer and its consumer, so the later plan starts from a map rather than a survey | Its own plan. The owner's direction on 2026-09-24 is that `state/raw/` is where every writer lands **in future**; that is a rule for new writers, and moving committed data is a separate change with its own fixtures |
 | Migrating the remaining CSV day trees to parquet | They stay CSV, and `backend/idhazh/day_shards.py` stays CSV-only and says so in one docstring line. Section 5.8 shows the write side is two functions and the read side is two more, so the later plan is bounded work rather than a store-by-store slog | Its own plan, now that the store door has two producers rather than none |
-| The other nine console stores, and the other fifteen ECharts importers | One panel on `/console/machine` reads parquet and draws in d3; every other panel keeps its CSV reader and its ECharts option builder, and `echarts` stays installed. Two grammars coexist on one route until the charting plan closes it | The charting plan, which starts from that row's house style rather than inventing one |
+| The other nine console stores, and the other fifteen ECharts importers | One panel on `/console/machine` reads parquet and draws in d3; every other panel keeps its CSV reader and its ECharts option builder, and `echarts` stays installed. Two grammars coexist on one route until the charting plan closes it | The charting plan, which starts from the house style written by `TODO/20260924-51-console-fetches-and-draws-its-own-data-plan.md`'s row titled **One panel end to end: parquet at rest, queried in the browser, drawn in d3** |
 | Everything the console does: one panel reading parquet in the browser, the d3 house style, the console shell, and the Hardware route's double count | Telemetry-intent N2, N3 and N5 get no stone in this plan, and `/console/machine` keeps a count that is wrong by about a fifth until that plan lands | Nothing. It is `TODO/20260924-51-console-fetches-and-draws-its-own-data-plan.md`, whose row titled **One panel end to end: parquet at rest, queried in the browser, drawn in d3** waits on this plan's row titled **The payload store, the two roots, and two stores moved to parquet**. They were split because they share no consumer, no risk class and no escalation surface: these seven rows change what is deleted from `main` and what force-pushes it, and nothing in that plan can lose data |
 | Switching the visuals deletion on | The published tree keeps SVGs no day page links to | Plan `20260905-13-switch-on-deletion-plan.md`, row titled "The fuse comes out, and one run is watched". Row 4 moves that row's subject from a CLI flag to `config/idhazh_gardener.json`'s `visual-prune.dry_run` |
 | Evicting `corpus/corpus.jsonl` rows as a task | The row cap stays with the harvest | It is a count bound, not an age bound, and `corpus.roll()` at harvest time is its only reader |
@@ -51,7 +51,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | N10 | `state/` splits into `state/raw/` and `state/compact/` | **Delivered** by section 2 and section 5.4, as a refusal rather than a convention |
 | N11 | One shard pattern for every tree, keyed on `covers_date` | **Delivered for what this plan writes**, mapped for the rest in section 5.8 |
 
-**Five of the eleven are about the console and none of them is here.** They are `TODO/20260924-51-console-fetches-and-draws-its-own-data-plan.md`, which waits on this plan's row 2 and on nothing else. What this plan owes that one is a door and two roots that already work.
+**Five of the eleven are about the console and none of them is here.** They are `TODO/20260924-51-console-fetches-and-draws-its-own-data-plan.md`, which waits on this plan's row titled **The payload store, the two roots, and two stores moved to parquet**, and on nothing else. What this plan owes that one is a door and two roots that already work.
 
 ## 1. Status Reckoner
 
@@ -84,7 +84,7 @@ state/compact/<store>/<YYYY>/<MM>/<unit_id>.parquet
 
 **There is one `state/` tree and there always was.** `raw` and `compact` are two directories inside it, not two trees and not a second checkout. "The two roots" in this plan always means those two directories; "the two stores" always means the two things row 2 migrates, `feed-retirements.csv` and `visual-prunes`.
 
-Worked example - run 17482910337, first attempt, `run-tasks` shard 03, on 2026-09-24:
+Worked example - run 2026-09-24-17482910337, first attempt, `run-tasks` shard 03, on 2026-09-24:
 
 ```
 state/raw/gardener/2026/09/24/01a0d03c-2e00-8461-98e0-a67898e9a802.parquet
@@ -115,7 +115,7 @@ flowchart TB
     OWNED{"every staged path<br/>inside the task's owns?"}
     OUTSIDE["exit 2<br/>the ownership claim is wrong"]
     LANDED{"this job's record<br/>already on origin/main?"}
-    REAPPLY["reset --mixed origin/main<br/>re-run the shard against the new tip<br/>stage owned paths and the record"]
+    REAPPLY["reset --mixed origin/main<br/>re-stage the same files<br/>written_paths and deleted_paths"]
     PUSHED{"push accepted?"}
     OK["exit 0"]
     LOST["exit 3<br/>attempts exhausted, nothing written"]
@@ -175,9 +175,11 @@ Three readings drove a decision. Everything else was noise and is not kept. A fi
 
 **A constant column costs about 250 bytes flat, whatever the row count** - a page header, a dictionary page and statistics. That is what decides section 5.7's column-or-footer split: a column earns its 250 bytes only when a query filters on it, because row-group statistics then let a reader skip the whole file.
 
+**Every size in this section names its compression, because two of them were taken at different settings and the pair did not reconcile until they did.** 32 bytes a row is snappy. A month file is zstd, which row 2 decision 5 measured at 2.2 times smaller at a thousand rows. So a month of thirteen daily rows is about 390 rows and comes out near 8.9 KiB at zstd against CSV's 29.1 KiB, where the same rows at snappy would be about 16.2 KiB. **A worker pricing a new store off this section reads the compression before the number.**
+
 **pyarrow is the largest thing the gardener installs, so only the gardener installs it.** It is an optional extra, not a runtime dependency: `pip install -e .` appears at 18 call sites across 9 workflow files and `digest.yml` alone runs it 30 times a day. The installed size is re-taken on `ubuntu-latest` in row 2 before any sentence quotes it - the reading in hand is from Windows and the two platforms bundle different shared objects.
 
-**Zero published bytes, in this plan only.** Neither store row 2 migrates is drawn by the console, so nothing here reaches a reader's browser. This is not a standing property of the project: telemetry-intent N3 has the browser fetching its own data at view time, so the plan that moves a console store pays a real download and prices it then.
+**Zero published bytes, in this plan only.** Neither store row 2 migrates is drawn by the console, so nothing here reaches a reader's browser. This is not a standing property of the project: telemetry-intent N3 has the browser fetching its own data at view time, so plan 51's row 3 pays a real download, and its ESCALATE trigger 1 is where that price is ruled.
 
 ## 5. The contracts
 
@@ -256,7 +258,7 @@ Cross-field validators, existing ones kept and one amended: `selected <= candida
 | `tasks.<name>.owns` | list of POSIX path prefixes, repository-relative | Every path this task may delete under. One declaration yields four things: the disjointness proof, the sparse-checkout cone, the permitted delete set and the staging list |
 | `tasks.<name>.owns_everything_else_under` | list of POSIX path prefixes | The complement form, for the `trials` task only. The set is `under` minus every other task's `owns` minus the registered store names |
 
-**Load-time refusals, each naming the offender:** an `active` task in config with no registry entry, or a registry entry with no block; a `retired` task that still has a registry entry; a window that would include today; two tasks whose owned sets intersect or where one is a prefix of the other; more than one task using the complement form; `gardener.tasks.seen.window.value` shorter than `collect.seen_window_days`; `gardener.tasks.telemetry-fold` carrying a window shorter than any `observability` key it folds.
+**Load-time refusals, each naming the offender:** an `active` task in config with no registry entry, or a registry entry with no block; a `retired` task that still has a registry entry; a window that would include today; two tasks whose owned sets intersect or where one is a prefix of the other; more than one task using the complement form; `gardener.tasks.seen.window.value` shorter than `collect.seen_window_days`; `gardener.tasks.telemetry-fold` carrying a series window shorter than the `observability` key that series folds; a `deleted_paths` entry naming a directory rather than a file; an `owns` entry that is not a directory prefix, because the checkout's cone mode matches directories and a file-valued entry would silently match nothing.
 
 **Adding a task is a module and a block. Pausing one is a word. Retiring one is a word and a deletion.** The gardener is expected to carry a list that grows and occasionally shrinks, so the three states are in the contract from the first commit rather than bolted on when the first task needs retiring.
 
@@ -387,7 +389,9 @@ def publish(shard: Shard, message: str, *, attempts: int, deadline_seconds: int)
 **Three shapes this forces, and the first is load-bearing.**
 
 - **`Shard` carries `written_paths` and `deleted_paths`, two explicit file lists the tasks produced.** `owns` stays in config as the **permission** each path is checked against, never as the staging list. One field answering both questions is how a gardener deletes a file a digest run wrote twenty minutes earlier and exits 0.
-- **A wall-clock deadline, jittered backoff, and `attempts` as the secondary bound.** Five shards pushing at once burn five bare attempts in seconds. `backend/utilities/commit_and_push.py` already solved this with a monotonic `PUSH_DEADLINE_SECONDS`; a second answer is Guardrail #4. The knob is `gardener.push_deadline_seconds`, default 300.
+- **A wall-clock deadline, jittered backoff, and `attempts` as the secondary bound.** Five shards pushing at once burn five bare attempts in seconds. `backend/utilities/commit_and_push.py` already solved this with a monotonic deadline, and `config/idhazh.json` already declares `run.push_deadline_seconds: 300`. **The gardener reads that key rather than minting a second spelling of it** (Guardrail #4).
+- **The loop needs a git identity before its first commit**, set from the same constants `commit_and_push.py` uses: `miztiik <miztiik@users.noreply.github.com>` (CLAUDE.md section 8). Without it a bare runner exits 128 on `git commit`, and `backend/tests/workflows/_harness.py`'s identity-source tuple names `prune.yml` today, so it moves to the new filename in row 7 or loses its only member.
+- **`git config index.sparse true` immediately after checkout.** `git reset --mixed` expands the index to the whole repository unless the index is sparse, and `actions/checkout` does not set it - so without this the worktree cost is flat and the index cost is not.
 - **The index read-back is exit 2, beside the ownership assertion.** It is what stops this class of error returning later as a different prefix.
 
 **The work happens once, before the loop. The loop only stages and pushes.** That is what keeps a job's cost flat however many times it loses a race, and it is why nothing here has to be recomputed against the new tip: every path this job touches is one the registry proves no other task owns, so a moved tip cannot have changed them.
@@ -479,7 +483,7 @@ A worked envelope, and what it costs:
   "dataset": "gardener", "covers_date": "2026-09-24",
   "partition": "state/raw/gardener/2026/09/24",
   "written_at_ms": "1790200000431",
-  "run_id": "17482910337", "attempt": "1", "job": "run-tasks", "shard": "03",
+  "run_id": "2026-09-24-17482910337", "attempt": "1", "job": "run-tasks", "shard": "03",
   "unit_id": "01a0d03c-2e00-8461-98e0-a67898e9a802",
   "content_sha256": "9f2c...", "git_sha": "0735031c2...",
   "writer": "idhazh.store.parquet", "writer_version": "25.0.1",
@@ -504,7 +508,7 @@ Read back without touching a row: `pq.read_metadata(path).metadata[b"unit_id"]`,
 
 `backend/idhazh/store/` is the fifth door, and it is the one the other four eventually forward to. **That is what makes row 2 the load-bearing row of this plan**: it is not a utility the gardener happens to need, it is the door the other sixteen writers walk through later.
 
-**The stores, producer and consumer verified by call site on 2026-09-24.** A store with a console route is a store whose migration waits on N2.
+**The stores, producer and consumer verified by call site on 2026-09-24.** A store with a console route moves only when a plan owns its reader. `host-fingerprint` is the first, in plan 51's row titled **One panel end to end: parquet at rest, queried in the browser, drawn in d3**; the rest wait on the charting plan.
 
 | Store under `state/` | Producer | Consumer | Console route | Moved by |
 | --- | --- | --- | --- | --- |
@@ -582,13 +586,13 @@ Row 2's rejected alternative 4 forbids inferring a schema from the first row, so
 
 `DateStamp` stays a string because it is a `YYYY-MM-DD` stamp a person reads in a diff and a partition path, and a date type would make two spellings of one value. A `StrEnum` stays a string because a dictionary column's encoding is an engine's choice and this file is read by two engines.
 
-#### 5.9.3 `FileEnvelope` - fourteen keys, one shape, both tiers
+#### 5.9.3 `FileEnvelope` - seventeen keys, one shape, both tiers
 
 Section 5.7's table is the field list, minus the two keys cut on 2026-09-24: **`partition`** is exactly reconstructable from `tier` + `dataset` + `covers_date`, and **`name_strategy`** has no reader, no second strategy, and `envelope_version` already answers the question it was invented for.
 
 `folded_from: int | None` is the one key a raw file omits. **Every value serialises to a UTF-8 string**, because parquet file metadata is bytes to bytes, so the model declares both the typed field and its string form and the round-trip test asserts both directions.
 
-**One envelope shape, raw and compact alike.** Two shapes would be two contracts and a reader that has to know which one it is holding. The cost of carrying fourteen keys on a small raw file is bounded rather than growing: compaction folds raw away every seven days, so the whole of raw's envelope overhead sits at roughly 200 KiB at any moment, 0.4 percent of what `state/` weighs today.
+**One envelope shape, raw and compact alike.** Two shapes would be two contracts and a reader that has to know which one it is holding. The cost of carrying seventeen keys on a small raw file is bounded rather than growing: compaction folds raw away every seven days, so the whole of raw's envelope overhead sits at roughly 200 KiB at any moment, 0.4 percent of what `state/` weighs today.
 
 #### 5.9.4 `StoreConfig`, and the literal that goes in `config/idhazh.json`
 
@@ -608,7 +612,7 @@ Three fields, not two: decision 5 requires two compressions and one field cannot
 
 **`TaskPolicy` keys:** `state`, `cadence`, `window`, `dry_run`, `max_deletes_per_run`, `owns` or `owns_everything_else_under`, and `closed_after_days` where a compaction needs it. `closed_after_days` is an `int`, `ge=1`, default `7`, and it answers a different question from `cadence`: cadence is how often the task wakes, `closed_after_days` is how old a month must be before it may be folded.
 
-**The telemetry fold does not fit one window, and this is the one shape row 4 cannot transcribe.** `retention.prune_telemetry` reads eleven `observability` keys. One `{unit, value}` cannot hold them. **Ruling: the eleven become eleven named series entries under one task**, `telemetry-fold.series.<name>.window`, so the task keeps one policy and the eleven keep their own numbers. The eleven names are transcribed from `config/idhazh.json` in row 4 and the cross-file refusal in section 5.2 covers each.
+**The telemetry fold reads three `observability` keys, not one window and not eleven.** Verified 2026-09-24: `item_health_full_grain_months`, `item_health_aggregate_keep_months` and `public_telemetry_keep_months`. **Ruling: the three become three named series entries under one task**, `telemetry-fold.series.<name>.window`, so the task keeps one policy and the three keep their own numbers. `series` and `closed_after_days` are both `TaskPolicy` keys and both appear in section 5.2's key table; the cross-file refusal in 5.2 is stated per series, not once.
 
 #### 5.9.6 `Shard` - `backend/idhazh/gardener/publish.py`
 
@@ -647,7 +651,7 @@ A shard runs several tasks and exits with the **worst** code, and worst is not n
 
 #### 5.9.9 `run_id` is a dated address, and every example in this plan uses one
 
-`contracts/base.py` declares `RUN_ID_PATTERN` as `^\d{4}-\d{2}-\d{2}-[0-9]+$`. A bare workflow number fails it. Every worked example in sections 2, 5.1 and 5.7 reads `2026-09-24-17482910337`, and `unit_id` takes `run_id: RunId` rather than `str`, so a bad shape is refused before a name is minted from it.
+`contracts/base.py` declares `RUN_ID_PATTERN` as `^\d{4}-\d{2}-\d{2}-[0-9]+$`. A bare workflow number fails it. Every worked example in sections 2 and 5.7 reads `2026-09-24-17482910337`, and `unit_id` takes `run_id: RunId` rather than `str`, so a bad shape is refused before a name is minted from it.
 
 #### 5.9.10 The store is `visual-prune` wherever a new name is minted
 
@@ -656,6 +660,41 @@ The task, the config key, the envelope `dataset` and the directory under `state/
 #### 5.9.11 The true task count
 
 **Sixteen registry entries. Fifteen in the matrix. Thirteen due on an ordinary day.** Eleven retention tasks, two GitHub collection tasks, two compactions, and `squash-history`, which has its own job and so is not in the matrix. The two compactions wake every seven days, so a typical day's matrix carries thirteen. Every figure in sections 3 and 4 and in rows 6 and 7 is keyed to one of those three numbers and says which.
+
+#### 5.9.12 The workflow's own values, so row 7 transcribes rather than chooses
+
+| Key | Value | Reason |
+| --- | --- | --- |
+| `name` | `Idhazh Gardener` | The rename is the row's point; a display name left behind still reads `Corpus prune` in the Actions list |
+| `on.schedule.cron` | `24 23 * * *` | Derived from the three timeouts below, the way `prune.yml` derives its own. The push lands inside the 22:34 to 03:00 idle gap |
+| `on.workflow_dispatch` | keep the `force` boolean, redefined as "run every task, due or not" | The only way to take rows 5 and 7's named observations without waiting a day |
+| `timeout-minutes` | `plan: 5`, `run-tasks: 20`, `history: 30` | 30 is what `prune.yml` uses for the same history work. 5 for a job that reads two committed files. 20 covers a cold `.[parquet]` install, three tasks and a full push deadline |
+| `concurrency` | `group: idhazh-gardener`, `cancel-in-progress: false`, at workflow level | The history job force-pushes, and two copies push two histories. **Not keyed on `github.ref`**, or a dispatch and a schedule run together |
+| `permissions` | `contents: write` **and `actions: write`** | The second is missing from every workflow here today, and `github_collections.py` refuses by name without it - so the two collection tasks 403 on their first live run |
+| `env` on the run-tasks step | `GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}` | `github_collections.py` reads it from the environment and raises when unset. **`dry_run: true` still lists**, so row 7's observation is unreachable without it |
+| `persist-credentials` | left at the default `true` | It is the only thing that writes the credential header the later push uses |
+| `runs-on` | `ubuntu-latest`, all three jobs | Guardrail #2 |
+| python | `actions/setup-python@v7`, `3.12`, on `run-tasks` and `history` only | The `plan` job installs nothing and uses the runner's `python3`, as `prune.yml`'s due step does |
+| pip cache | `cache: pip`, `cache-dependency-path: pyproject.toml` | Repository convention. The extra changes the resolved set, so the first gardener run is a cold cache |
+| `max-parallel` | `${{ fromJSON(needs.plan.outputs.shards) }}` | The config value itself, so **the workflow test asserting `max-parallel` is not below `shards` is deleted**: it cannot fail |
+| the matrix | `include: ${{ fromJSON(needs.plan.outputs.matrix) }}` | `cone` must be a matrix member, not a sibling field. An expression naming a missing context property evaluates to the **empty string with no error**, so a missed `cone` checks out nothing and every deletion silently finds nothing |
+| zero-due day | `run-tasks`: `if: needs.plan.outputs.due == 'true'`. `history`: `needs: [plan, run-tasks]`, `if: always() && needs.plan.outputs.history_due == 'true' && (needs.run-tasks.result == 'success' \|\| needs.run-tasks.result == 'skipped')` | **A skipped `needs` skips the dependant**, so the force-push job would never run on an idle day. `history` also needs its own dueness output: the squash fires about twelve times a year and the windowed tasks fire daily, so one flag cannot serve both |
+| commit message | run-tasks: `gardener: <task names> on <date>`. history: `corpus: squash history older than <keep_days> days`, **byte-identical to today's** | The history line is the one string a person greps the rewritten history for |
+
+**The plan payload is emitted on one line** - `json.dumps(payload, separators=(",", ":"))` - because a value carrying a literal newline needs the heredoc form in `$GITHUB_OUTPUT` and the obvious pretty-printed version breaks it silently.
+
+#### 5.9.13 The helpers `publish()` calls
+
+`git`, `git_ok`, `exists_on_remote`, `remote_blob`, `local_blob`, `staged_names`, `sleep_with_jitter` and the three `EXIT_*` constants all live in `backend/idhazh/gardener/publish.py`. Four carry git semantics a worker would get wrong:
+
+| Helper | Body | Why it is not the obvious one |
+| --- | --- | --- |
+| `staged_names()` | `set(git("diff", "--cached", "--name-only", "-z").split("\0")) - {""}` | **`-z` is load-bearing.** Without it git C-quotes a path holding a non-ASCII byte and the set comparison fails on a path the repository may legally hold |
+| `exists_on_remote(p)` | `git_ok("cat-file", "-e", f"origin/main:{p}")` | - |
+| `remote_blob(p)` | `git("rev-parse", f"origin/main:{p}")` | - |
+| `local_blob(p)` | `git("hash-object", "--", str(p))` | It hashes the **working file**, not an index entry: the file is on disk and not yet staged when the check runs |
+
+**The index assertion is three checks, not one equality.** Every write must be staged; nothing outside the union may be staged; and a deletion that staged nothing is an error **only if it still exists on the remote**. A flat equality turns a benign race - `digest.yml` rebuilding a path the `visual-prune` task was about to delete - into exit 2, the one code that must never be retried.
 
 ---
 
@@ -717,9 +756,10 @@ def persist(
 ```
 
 It mints the name from `naming.unit_id` (section 5.7), builds the path through `paths.raw_path` or `paths.compact_path`, assembles the envelope, writes through a temp file and renames. **A producer never builds a path, never invents a filename and never assembles an envelope** - which is what makes the next producer's migration a change of call site rather than a change of design.
-  - `backend/idhazh/contracts/knobs/store.py` (`StoreConfig`: `format`, `compression`), `config/idhazh.json` (a `store` block, `parquet` and `snappy`)
+  - `backend/idhazh/contracts/knobs/store.py` (`StoreConfig`: `format`, `compression_raw`, `compression_compact` - **three fields**, per section 5.9.4), `config/idhazh.json` (the `store` block literal)
+  - `backend/idhazh/telemetry/source_health.py` (grows `file_retirements`), `backend/idhazh/stages/plan.py`, `backend/idhazh/stages/assemble.py` (the two `ledger.append_retirements` call sites), `backend/tests/test_source_health.py`
   - `backend/idhazh/contracts/feed_retirement.py` and `visual_prune.py` (`version` stamp and one `changelog` line each for the store move)
-  - `backend/idhazh/ledger.py` and `backend/idhazh/retention.py` (register `state/raw` and `state/compact` in the trial-roots subtraction; register `DAY_VALIDATIONS_DIRNAME`, absent today; `append_retirements` and `append_visual_prunes` forward to the door and their `extend_ledger_file` paths go)
+  - `backend/idhazh/ledger.py` and `backend/idhazh/stages/prune_state.py` (register `state/raw` and `state/compact` in `_trial_roots`, which lives in the second file and not in `retention.py`; register `DAY_VALIDATIONS_DIRNAME`, absent today; **`append_retirements` and `append_visual_prunes` are deleted, not left forwarding** - per decision 12 - and their `extend_ledger_file` paths go with them), `backend/tests/retention/test_trial_state.py`
   - `backend/idhazh/paths.py` (the `state/feed-retirements.csv` and `state/visual-prunes` union entries go), `.gitattributes` (the same two lines go, and `*.parquet binary -merge` arrives)
   - `backend/idhazh/day_shards.py` (one docstring line: this reader is CSV-only and parquet goes through `store/`)
   - `pyproject.toml` (`[project.optional-dependencies] parquet = ["pyarrow>=21"]`, and `dev` depends on it)
@@ -774,7 +814,7 @@ It mints the name from `naming.unit_id` (section 5.7), builds the path through `
 | `idhazh gardener run-task NAME` or `--shard N` | Runs one task, or one shard's worth |
 | `idhazh gardener squash-history` | The corpus history squash (row 5). Not a matrix task |
 
-**The verb says nothing about the work, and that is deliberate.** The fourteen tasks do three different kinds of work - delete behind a window, fold raw into compact, rewrite history - so any verb naming the work would be wrong for some of them; the task's own name already says which kind it is. An earlier draft used `tend`, which was gardening vocabulary rather than a description, and made a reader hold the metaphor to know what the command did (CLAUDE.md section 0b). The workflow job is `run-tasks` for the same reason, and `ServerJob` takes that spelling.
+**The verb says nothing about the work, and that is deliberate.** The sixteen tasks do three different kinds of work - delete behind a window, fold raw into compact, rewrite history - so any verb naming the work would be wrong for some of them; the task's own name already says which kind it is. An earlier draft used `tend`, which was gardening vocabulary rather than a description, and made a reader hold the metaphor to know what the command did (CLAUDE.md section 0b). The workflow job is `run-tasks` for the same reason, and `ServerJob` takes that spelling.
 - **Files touched:**
   - `backend/idhazh/gardener/__init__.py`, `cli.py` (the router - a copy of `backend/idhazh/telemetry/cli.py`'s shape), `tasks.py` (the registry, section 5.5), `schedule.py`, `runner.py` (the shard loop and the ownership assertion), `publish.py` (section 5.6)
   - `backend/utilities/gardener_due.py` (new: the standard-library-only dueness reader the `plan` job runs before any install)
@@ -805,7 +845,7 @@ It mints the name from `naming.unit_id` (section 5.7), builds the path through `
   | # | Option | Why rejected | What it would cost to take | Authority |
   | --- | --- | --- | --- | --- |
   | 1 | Resolve the registry from config with `importlib` | Turns a config string into an import path and makes the set of tasks invisible in code | Zero; costs the closed-set property `SegmentLedger` and `ServerJob` both rely on | Fowler |
-  | 2 | One flat `idhazh gardener-<task>` verb per task | Fourteen top-level verbs; the `choices` tuple stops being readable | Zero; costs the CLI its shape | Fowler |
+  | 2 | One flat `idhazh gardener-<task>` verb per task | Sixteen top-level verbs; the `choices` tuple stops being readable | Zero; costs the CLI its shape | Fowler |
   | 3 | Three writer kinds for `already_landed` | A dry run selects nothing, so a delete-only verdict reads as "already landed" and publishes no record - exactly the reading the dry run exists to produce | Zero; costs every dry run its output | Fowler |
   | 4 | Compare blobs to decide whether a record landed | `duration_ms` and the parquet footer are not byte-stable across a retry, so it fires the un-retryable code on the happy path | Zero; costs the loop its first iteration | Fowler |
 
@@ -817,7 +857,7 @@ It mints the name from `naming.unit_id` (section 5.7), builds the path through `
 - **The eleven, named so none is missed:** `_prune_seen_shards`, `_prune_counterfactual_shards`, `_prune_trace_shards`, `_prune_feed_health_shards`, `_prune_host_fingerprint_shards`, `_prune_score_shards`, `_prune_day_validation_shards`, `_prune_trial_shards`, `_prune_digest_fragments`, `retention.prune_telemetry`, `_clean_the_visuals`.
 - **Files touched:**
   - `backend/idhazh/gardener/tasks/` - one module per task: `seen.py`, `counterfactual_scores.py`, `traces.py`, `feed_health.py`, `host_fingerprint.py`, `scores.py`, `day_validations.py`, `trials.py`, `digest_fragments.py`, `telemetry_fold.py`, `visual_prune.py`
-  - `backend/idhazh/gardener/tasks.py` (eleven entries), `config/idhazh_gardener.json` (eleven blocks, each carrying the window moved from `config/idhazh.json`)
+  - `backend/idhazh/gardener/tasks/__init__.py` (eleven imports into the frozen tuple), `config/idhazh_gardener.json` (eleven blocks, each carrying the window moved from `config/idhazh.json` and naming the key it came from)
   - `config/idhazh.json` (the moved windows leave `observability` and `retention`; `collect.seen_window_days` and `lens_weights.window_days` stay)
   - `backend/idhazh/contracts/knobs/observability.py`, `retention.py` (the emptied keys; `refuse_windows_shorter_than` becomes the cross-file check at `config.load()`)
   - `backend/idhazh/retention.py` (the eleven prune functions leave), `backend/idhazh/stages/prune_state.py` (deleted), `backend/idhazh/telemetry/prune.py` (the body leaves; the verb forwards)
@@ -904,7 +944,7 @@ It mints the name from `naming.unit_id` (section 5.7), builds the path through `
   - `history` - `needs: run-tasks`, full clone with history, runs `idhazh gardener squash-history` and force-pushes with the tip-moved refusal.
 - **Files touched:**
   - `.github/workflows/prune.yml` renamed to `.github/workflows/idhazh-gardener.yml` and rewritten
-  - `backend/idhazh/gardener/tasks/github_collections.py` (new), `backend/idhazh/gardener/tasks.py` (two entries), `config/idhazh_gardener.json` (`workflow-artifacts` and `workflow-runs`, both `dry_run: true`), `config/idhazh.json` (the `prune.collections` block leaves)
+  - `backend/idhazh/gardener/tasks/github_collections.py` (new), `backend/idhazh/gardener/tasks/__init__.py` (two imports), `backend/utilities/prune_artifacts.py` (**deleted**; this module is its only home), `config/idhazh_gardener.json` (`workflow-artifacts` and `workflow-runs`, both `dry_run: true`), `config/idhazh.json` (the `prune.collections` block leaves)
   - `backend/tests/workflows/`, `backend/tests/gardener/tasks/test_github_collections.py` (driven from a recorded response, never the network - Guardrail #7), `backend/tests/test_marks.py`
   - `docs/reference/github-actions.md`, `docs/architecture/publishing/idhazh-gardener.md`, `docs/architecture/publishing/retention.md`
 - **Acceptance gates:** local `pytest backend/tests/workflows backend/tests/gardener -q`, `ruff check .`, `mypy backend`, and the workflow file parses as YAML. CI runs the full suite.
@@ -916,7 +956,7 @@ It mints the name from `naming.unit_id` (section 5.7), builds the path through `
   | # | Decision | Authority |
   | --- | --- | --- |
   | 1 | `max-parallel: 5`. Jobs beyond that queue, and a queue is fine | Owner, 2026-09-24. Settled |
-  | 2 | **The matrix is five shards of 2-3 tasks, not one job per task.** One job per task means one record row per file, so the 3,764-byte parquet footer never amortises: fourteen files at 53.1 KiB a day where five hold the same rows in 19.3 KiB. Each task keeps its own verb, its own config block and its own `dry_run`; a shard is a container, not a task | Carmack, on section 4. `digest.yml`'s own header already makes this argument: a worker takes a shard of several items rather than one item per machine |
+  | 2 | **The matrix is five shards of 2-3 tasks, not one job per task.** One job per task means one record row per file, so the 3,764-byte parquet footer never amortises: thirteen files at 48.2 KiB on an ordinary day, fifteen at 55.6 KiB when a compaction is due, where five shards hold the same rows in 18.8 KiB. Each task keeps its own verb, its own config block and its own `dry_run`; a shard is a container, not a task | Carmack, on section 4. `digest.yml`'s own header already makes this argument: a worker takes a shard of several items rather than one item per machine |
   | 3 | The runner catches per task, writes that task's row with `stopped_because: failed`, continues, and exits with the worst code. `fail-fast: false` protected twelve tasks from one failure when each had a job; sharding buys that back inside the job | Fowler |
   | 4 | `needs: run-tasks` on the history job is the only ordering, and it is not one task depending on another: it is everything else being pushed before history is rewritten | Owner, 2026-09-24 |
   | 5 | The workflow names no task. The matrix comes from the registry through the dueness reader, so adding a task is a module and a config block, never a workflow edit | Owner, 2026-09-24 |
@@ -929,7 +969,7 @@ It mints the name from `naming.unit_id` (section 5.7), builds the path through `
 
   | # | Option | Why rejected | What it would cost to take | Authority |
   | --- | --- | --- | --- | --- |
-  | 1 | One job per due task | The footer never amortises - 53.1 KiB a day against 19.3 KiB - and it costs 8 more job start-ups and two more waves in front of the force push | Measured, section 4 | Carmack |
+  | 1 | One job per due task | The footer never amortises - 48.2 KiB a day against 18.8 KiB - and it costs 8 more job start-ups and two more waves in front of the force push | Measured, section 4 | Carmack |
   | 2 | One job running every due task in sequence | One failure takes the rest, and one long-held checkout races every push for its whole duration | Zero; costs the parallelism and the isolation | Owner, 2026-09-24 |
   | 3 | A repository-wide concurrency group over `run-tasks` | Serialises the matrix, which is what the matrix is for | Zero; costs the parallelism | Owner, 2026-09-24 |
   | 4 | Have the `plan` job run `idhazh gardener find-due` | It would need `pip install` to print a JSON array, where today the same question is answered by standard-library code before any install | Zero; costs the plan job an install it has never needed | Carmack |
@@ -944,7 +984,7 @@ It mints the name from `naming.unit_id` (section 5.7), builds the path through `
 **Compaction is not one blanket pass over `state/raw/`.** One module, many task instances: `compact-gardener` and `compact-visual-prune` are separate registry entries pointing at the same callable, each with its own block, its own `cadence`, its own `closed_after_days` and its own `window` over the compacted tree. The gardener runs each when it is due, exactly as it runs every other task. A store that wants a weekly fold and a store that wants a monthly one do not have to agree, and adding a store to the compaction is a registry line and a config block.
 - **Files touched:**
   - `backend/idhazh/gardener/tasks/compaction.py` (new; absorbs `backend/idhazh/stages/compact.py`), `backend/idhazh/store/settle.py` (the read-side settlement over a raw day tree)
-  - `backend/idhazh/gardener/tasks.py` (one entry), `config/idhazh_gardener.json` (its block: `cadence` 7 days, `window` for the compact tree, `closed_after_days` 7)
+  - `backend/idhazh/gardener/tasks/compact.py` (new), `backend/idhazh/gardener/tasks/__init__.py` (two imports, one registry entry each for `compact-gardener` and `compact-visual-prune`), `config/idhazh_gardener.json` (two blocks: `cadence` 7 days, `window` over the compact tree, `closed_after_days` 7)
   - `config/idhazh.json` (`run.settled_fold_after_days` leaves), `backend/idhazh/contracts/knobs/run.py`
   - `backend/idhazh/cli.py` (the `compact` verb forwards with its removal condition), `.github/workflows/digest.yml` (the "Fold the days that can gain no more rows" step is removed)
   - `frontend/src/lib/server/payload.ts` (reads `state/compact/` then `state/raw/`, in that order)
