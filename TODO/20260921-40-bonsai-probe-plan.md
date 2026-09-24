@@ -260,7 +260,6 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 - **Files touched:**
   - `docs/reference/benchmarks/<the page this run creates>.md` (new)
   - `docs/reference/ci-model-runtime.md`
-  - `TODO/STATUS.md`
 - **Acceptance gates:** the dispatch itself; then the documentation load check before and after, and the split test on any page a section was added to. No application suite is required for a documentation-only closure. ESCALATE trigger 5 applies if the dispatch exceeds its bound.
 - **Oracle:** the write-up answers all five questions the plan was opened for, each with the instrument that produced it and the date, and a reader can tell from the page which binary and which packing produced every number. What it cannot settle: whether the model should be adopted. That is the qualification workflow's verdict, and this page is an input to it, never a substitute.
 - **The page records, at minimum:**
