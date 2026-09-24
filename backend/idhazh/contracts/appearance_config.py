@@ -499,6 +499,11 @@ class AppearanceConfig(Contract):
     __schema_stem__: ClassVar[str] = "appearance-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-24",
+            change="digest.filter_settle_ms, additive, default 120.",
+            why="The list narrows on the keystroke; the count beside it settles after one.",
+        ),
+        ChangelogEntry(
             version="2026-09-21T23:00",
             change="console.panel_groups.machine names prompt-reuse where it named prompt-cache.",
             why="The panel now reads one span a request rather than one column a day.",
@@ -512,11 +517,6 @@ class AppearanceConfig(Contract):
             version="2026-09-21T18:00",
             change="console.panel_groups.machine gains the disk-reads panel.",
             why="Memory taken back off the model is paid for on every later article.",
-        ),
-        ChangelogEntry(
-            version="2026-09-21T14:00",
-            change="console.panel_groups.machine gains memory-held, additive.",
-            why="What the machine's memory holds is a question the ceiling panel does not answer.",
         ),
         ChangelogEntry(
             version="2026-08-29",
