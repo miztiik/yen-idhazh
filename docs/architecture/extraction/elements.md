@@ -794,4 +794,4 @@ behaviour is byte-identical until the second call lands.
 - [../../concepts/growing-reads.md](../../concepts/growing-reads.md) - what a read over a growing collection has to declare.
 - [../../../CLAUDE.md](../../../CLAUDE.md) - Guardrail #3 (contracts before logic), Guardrail #6 (no hardcoding), Guardrail #11 (fetched text is data), section 11 (schema versioning).
 - [../../../TODO/20260905-08-element-table-plan.md](../../../TODO/20260905-08-element-table-plan.md) - the plan this shape was written for, and the producers that follow it.
-- [../../../TODO/20260905-11-two-call-planner-plan.md](../../../TODO/20260905-11-two-call-planner-plan.md) - the plan the label call belongs to, and the call that reads its table next.
+- [../summarize/prompt.md](../summarize/prompt.md) - the second call that reads this table, and why it is shaped as it is.

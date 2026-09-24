@@ -339,17 +339,16 @@ a payload.
 
 ## The second call writes this summary, and the article is read once
 
-A second prompt is being built beside this one.
+A second prompt sits beside this one.
 `backend/idhazh/prompts/label_article_elements.txt` asks a model what an
 article's already-extracted quantities and dates mean;
 `backend/idhazh/prompts/summarize_and_plan_visual.txt` and
 `backend/idhazh/prompts/plan_visual.txt` describe this page's summary and a plan
 for one picture, and the same model is asked for both later in the same
-conversation. Neither call is dispatched by any stage yet - the gate in front of
-them and the picture they lead to are later rows of
-[`../../../TODO/20260905-11-two-call-planner-plan.md`](../../../TODO/20260905-11-two-call-planner-plan.md).
-What is settled, and what this section owns, is why the second call is shaped
-the way it is.
+conversation. Both calls are dispatched per item in
+[`../../../backend/idhazh/classify/calls.py`](../../../backend/idhazh/classify/calls.py) -
+the label call first, then the summarize-and-plan call built on its reply. What
+this section owns is why the second call is shaped the way it is.
 
 **The summarize-and-plan call's prompt IS the label call's prompt, plus the label call's reply, plus one question.**
 The two calls do not go to the chat-completions route and hand a message array
@@ -639,12 +638,10 @@ run with no spread, so it says where the re-read tokens go and it sizes no day.
 [`../../../backend/idhazh/llm/server.py`](../../../backend/idhazh/llm/server.py),
 `Summary.cached_tokens` persists it per call, and
 [`../../../backend/idhazh/telemetry/publish/day_metrics.py`](../../../backend/idhazh/telemetry/publish/day_metrics.py)
-already derives `input_tokens - cached_tokens`. What is missing is a summarize-and-plan call to
-read it from: nothing dispatches either call, and the wiring is tracked in
-[`../../../TODO/20260905-11-two-call-planner-plan.md`](../../../TODO/20260905-11-two-call-planner-plan.md).
-So **the trigger is the first daily run after the wiring lands** - not the next
-content refresh. Re-read the figure then, and again when plan 11 is distilled per
-[`../../how-to/distill-a-plan.md`](../../how-to/distill-a-plan.md).
+already derives `input_tokens - cached_tokens`. Both calls are dispatched now, so
+the figure can be read from a real shard rather than this laptop run. **It is
+still owed**: re-read `cached_tokens` from the first daily run that carries the
+two calls, and replace the laptop figure above with it.
 
 ### What the two calls cost at the truncation cap, and the window that holds them
 

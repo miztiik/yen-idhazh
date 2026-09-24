@@ -3,7 +3,7 @@
 **Last Updated**: 2026-09-19
 **Level**: 5 (a persisted contract, the published vocabulary, the call structure and the trust boundary)
 
-**Chain**: previous [`20260905-11-two-call-planner-plan.md`](20260905-11-two-call-planner-plan.md).
+**Chain**: previous the two-call summariser plan (delivered, removed from TODO/).
 **Reference**: [`20260902-visual-planner-pseudo-plan.md`](20260902-visual-planner-pseudo-plan.md) - O40, O41, O43, O45, E1, E5.
 
 Execute per [`../docs/how-to/execute-a-plan.md`](../docs/how-to/execute-a-plan.md): the orchestrator dispatches one worktree-isolated worker per row; workers consult personas on ambiguity; AUTO-merge on green gates; **parallel N = 4**; honour the ESCALATE triggers in section 0. AUTHOR-AND-STOP until the user authorizes.
@@ -870,7 +870,7 @@ Today that re-render is the element table, and the pipeline already pays for it.
 
 **The three-call shape charged 29.5 minutes for the same job**, because a second boundary re-prefills the previous call's whole output **and** the next call's whole instruction - 67 plus the 805 definition tokens, so 872 an item rather than 67. Dropping the third call is where about 26 minutes a shard went, and it is the largest single saving in this amendment. **The earlier draft put that saving at 10 to 20 minutes**, on an uncounted definition block; the measurement makes the collapse worth more, not less.
 
-**Plan 11 row 3c, "own the prompt bytes", stays a candidate to land before this row.** It is DEFERRED today pending a runner measurement of 209 re-prefilled tokens ([`20260905-11-two-call-planner-plan.md`](20260905-11-two-call-planner-plan.md)). This row makes that measurement worth taking, because it grows the payload crossing the one boundary this pipeline has.
+**Plan 11 row 3c, "own the prompt bytes", stays a candidate to land before this row.** It is DEFERRED today pending a runner measurement of 209 re-prefilled tokens. This row makes that measurement worth taking, because it grows the payload crossing the one boundary this pipeline has.
 
 ### Decisions
 
@@ -1698,7 +1698,7 @@ Named here so they are not mistaken for work this plan is doing.
 
 - [`20260911-handover.md`](20260911-handover.md) - how to pick this queue up with no context: the queue reader, the reading order, and the standing traps.
 - [`20260911-execution-order.md`](20260911-execution-order.md) - the schedule across the five open plans: what can start today, the critical path, and the cross-plan file collisions no plan's own group check can see. **Seven of its nine waves run through this plan**, and its longest pole is row #P1 here.
-- [`20260905-11-two-call-planner-plan.md`](20260905-11-two-call-planner-plan.md) - the plan this one spawned from; its rows 4, 5 and 6 gate every labelling row here.
+- The two-call summariser plan - the plan this one spawned from, now delivered and removed from TODO/.
 - [`20260910-24-day-sharded-ledgers-plan.md`](20260910-24-day-sharded-ledgers-plan.md) - the five month-sharded ledgers section 0 puts out of scope, planned. **Its row #1 creates `backend/idhazh/day_partition.py`, which rows #14, #16, #17 and #21 here depend on** (section 0.1).
 - [`20260910-25-placement-plan.md`](20260910-25-placement-plan.md) - the plan this one spawned; it decides where a story goes, and its rows #7 and #8 are what stops a read desk turning a five-desk day into a one-desk day. **Its row #12 owns the producer, the contract and the payload of the `/console/judgement/` tab row #15 here draws** (row #15 decision 6a), **its row #9a extends the counterfactual ledger row #21 here creates** (row #21), **its row #9b is retired by row #17 here**, and **its row #2 and row #20 here both write `docs/concepts/placement.md`**.
 - [`20260911-26-retire-prerender-plan.md`](20260911-26-retire-prerender-plan.md) - the plan that took the prerender gap out of section 26; it rules that the six prerendered routes stay and the build-time guard goes.

@@ -1828,7 +1828,7 @@ index, not the plan.
 | 08 | [Every fact in an article, with the characters that prove it](20260905-08-element-table-plan.md) | The element table - a queryable fact table over every article |
 | 09 | [The runtime stops guessing which model it was tuned for](20260905-09-pin-the-runtime-plan.md) | A runtime whose settings are pinned to the weights they were measured on |
 | 10 | [A plan that cannot draw a number the article did not state](20260905-10-visual-plan-contract-plan.md) | The visual plan contract and its validator |
-| 11 | [One model, two calls](20260905-11-two-call-planner-plan.md) | One set of weights instead of two, and the cache saving that comes with it |
+| 11 | One model, two calls (delivered) | One set of weights instead of two, and the cache saving that comes with it |
 | 12 | [Visuals a reader can read](20260905-12-readable-visuals-plan.md) | Inline SVG, both themes resolving, full-width reflow |
 | 13 | [Deletion switched on](20260905-13-switch-on-deletion-plan.md) | Retention that actually deletes, with a visible backlog |
 | 14 | [The rest of the ship-or-not bar](20260905-14-sufficiency-bar-plan.md) | The sufficiency checks as a build gate rather than a habit |

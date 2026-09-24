@@ -11,9 +11,7 @@ cache cannot reach it and every token of it was read again on every item, for
 ever - **687 tokens, measured the same day** in
 [`two-call-re-read.md`](two-call-re-read.md). This run is
 the before and after of moving both jobs into the system turn, in front of the
-article, and leaving three lines behind
-([`../../../TODO/20260905-11-two-call-planner-plan.md`](../../../TODO/20260905-11-two-call-planner-plan.md)
-row #3e).
+article, and leaving three lines behind.
 
 It answers two questions, and the second is the one that made the row risky.
 **What did the move cost and save, in tokens?** And **did it change what the label call

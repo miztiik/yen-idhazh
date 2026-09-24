@@ -602,7 +602,7 @@ does - Intel Xeon 8573C ran at 41.00 tokens a second against 9.86 on EPYC 9V74.
 ### What plan 11 inherits, now that the KV reading is in
 
 **The margin is unchanged, because the reading confirmed rather than moved the
-projection.** [Plan 11](20260905-11-two-call-planner-plan.md)'s two-call worst
+projection.** Plan 11's two-call worst
 case at the current cap is still **15,889 tokens, 97 percent of 16,384, a margin
 of 1.03x**. Reading 1 came back at the confirming end, so nothing about that
 arithmetic changes.
