@@ -512,11 +512,13 @@ export function matchRules(thresholds: MatchThresholds, floor: number): StackRul
 		{
 			at: thresholds.high,
 			label: `${thresholds.high}% and up: ${BANDS.high.label.toLowerCase()}`,
+			side: 'above',
 			token: '--band-high'
 		},
 		{
 			at: thresholds.low,
 			label: `under ${thresholds.low}%: ${BANDS.low.label.toLowerCase()}`,
+			side: 'below',
 			token: '--band-low'
 		}
 	];
@@ -551,7 +553,9 @@ export function matchColumns(days: readonly EvalDay[]): DayReadout[] {
 			{
 				label: 'Summaries checked',
 				value: grouped(day.matched),
-				colour: 'var(--chart-marker)'
+				// No colour: nothing on the plot is this row's mark. A swatch here
+				// would be a key to a series that was never drawn.
+				colour: ''
 			}
 		]
 	}));

@@ -259,17 +259,46 @@ No chart on the console draws a key: the engine's `legend` component is not even
 registered in
 [../../../frontend/src/lib/charts/core.ts](../../../frontend/src/lib/charts/core.ts).
 
-**A key that does not stack is the strip with short labels in it.** A series
-label long enough to wrap turns one strip row into two, and three of those is a
-block of prose where a key should be. So a series name is written to fit on one
-line at the narrowest width the strip is drawn at - "Half scored above", not
-"Half of them scored above this article's own faithfulness score". Asked on
-2026-09-25 for a horizontal legend on the faithfulness plot, this is what
-shipped: the component that would draw one is not registered, registering it
-costs a lazy-chunk re-measurement against a ceiling the console is already close
-to, and the strip already prints every series in its own colour. What a reader
-gives up is a key visible without hovering. What they get back is the plot area
-the key would have taken, and one place the series names live.
+**Asked on 2026-09-25 for a horizontal legend, the answer was the strip and
+shorter labels in it.** A series name is written short - "Half scored above", not
+"Half of them scored above this article's own faithfulness score" - because a
+label long enough to wrap turns one strip row into two. Registering the engine's
+key component instead would cost a lazy-chunk re-measurement against a page
+weight the console is already close to, and the strip already prints every series
+in its own colour and rests on the newest column without a hover, so a reader
+with no pointer still sees the key.
+
+**Short labels are not the whole of it, and this rule does not claim they are.**
+Measured 2026-09-25: at a 1152 px window all three faithfulness rows fit on one
+line each, and at 394 px none of them does - the strip is capped at
+`chart.readout_max_share` of the plot, which is 119 px there. So the cap was
+written for a desktop and has never been re-measured at the width where it bites.
+What a reader on a narrow window gives up today is a key that reads as a key:
+they get a 174 px block of wrapped words beside an empty half of the plot. Every
+number is still present, prerendered and keyboard-reachable, so nothing is hidden
+- the three series and their values just cannot be scanned at a glance. Between
+394 px and 1152 px it is unmeasured, so no crossover is claimed.
+
+**The fix belongs to the strip, not to any one chart, and it is not yet done.**
+Lay the rows along one line and wrap them across the full plot width, then
+re-measure the cap at the width where it bites. Laying them out inside the
+present cap does not work: rows set not to wrap overflow a 119 px container
+instead of wrapping inside it, so the layout and the cap are one change. It
+reaches every console chart, and it rewrites three checks that guard the cap
+today - `readoutCapStyle`'s exact string in
+[../../../frontend/tests/console-chrome.spec.ts](../../../frontend/tests/console-chrome.spec.ts)
+and
+[../../../frontend/tests/console-timings.spec.ts](../../../frontend/tests/console-timings.spec.ts),
+and the latter's measurement that every rendered strip stays inside
+`readout_max_share`. That last one refuses the change correctly, because the
+change is bigger than the chart row that found it: a guard rewritten as a side
+effect of something else is the shape of a guard nobody meant to move. Susan,
+2026-09-25.
+
+**A row with no swatch is a row with nothing on the plot.** "Summaries checked"
+is the sample size, not a series, so it passes an empty colour exactly as
+`notMeasuredRow` does. A swatch there would be a key to a mark that was never
+drawn, which is the one failure this whole section exists to name.
 
 A chart with no shared column gets no strip - a ranked list, one target bar, a
 flow, two shares of one total. A strip there would print the row the cursor is

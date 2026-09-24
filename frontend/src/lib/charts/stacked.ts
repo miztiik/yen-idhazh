@@ -43,6 +43,11 @@ export interface StackRule {
 	at: number;
 	/** What crossing it means, in the reader's words. Drawn beside the line. */
 	label: string;
+	/** Which side of the line the caption sits on. A caption that says what being
+	 * ABOVE the line means belongs above it; one that says what being below it
+	 * means belongs below. The caller knows which, because the caller wrote the
+	 * sentence. */
+	side: 'above' | 'below';
 	token: ChartToken;
 }
 
@@ -178,7 +183,9 @@ export function stacked(
 									lineStyle: { color: paint(rule.token), width: 1.5, type: 'solid' as const },
 									label: {
 										formatter: rule.label,
-										position: 'insideEndTop' as const,
+										position: (rule.side === 'above'
+											? 'insideEndTop'
+											: 'insideEndBottom') as 'insideEndTop' | 'insideEndBottom',
 										color: paint('--color-text-tertiary'),
 										fontSize: 11
 									}

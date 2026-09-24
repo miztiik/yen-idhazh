@@ -792,14 +792,11 @@
 				Faithfulness is how much of a summary its own article supports. The checker reads each
 				summary back against the article it came from and scores it out of a hundred, and
 				<strong class="font-semibold text-text-secondary">higher is better</strong>. One point is
-				one day over these {windowDays} days, and the two lines are that day's middle summary and
-				the summary a quarter of the way up from the bottom.
+				one day over these {windowDays} days.
 				<strong class="font-semibold text-text-secondary" data-model-match-rule
 					>A published story is banded on two of these scores</strong
 				>: {data.matchThresholds.high}% and up is published as matching its source, and under {data
-					.matchThresholds.low}% is published as possibly not. Both are the pipeline's own numbers,
-				not a bar this panel invented, and a line crosses the plot at each one the days on it
-				reach.
+					.matchThresholds.low}% as possibly not.
 			</p>
 
 			{#if matchHead}
