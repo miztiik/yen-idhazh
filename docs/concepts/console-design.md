@@ -16,6 +16,7 @@ what the console may do with them.
 | [console-design/the-mark-shapes-a-panel-may-reach-for.md](console-design/the-mark-shapes-a-panel-may-reach-for.md) | Which shape does this reading want, and what can that shape not say? |
 | [console-design/how-the-machines-work-is-drawn-and-what-may-not-be-pooled.md](console-design/how-the-machines-work-is-drawn-and-what-may-not-be-pooled.md) | How is the machine a run drew reported, and why is no rate pooled across two of them? |
 | [console-design/what-the-quality-and-source-panels-draw.md](console-design/what-the-quality-and-source-panels-draw.md) | How are the model's own figures and the sources' health drawn? |
+| [console-design/how-a-console-chart-gets-its-data.md](console-design/how-a-console-chart-gets-its-data.md) | Where do a panel's bytes come from, and what may it never do to get them? |
 
 Three other pages meet here and do not overlap.
 [../architecture/publishing/console.md](../architecture/publishing/console.md)
@@ -202,6 +203,7 @@ pan, or a date span printed under the heading that already printed it.
 - [console-design/the-mark-shapes-a-panel-may-reach-for.md](console-design/the-mark-shapes-a-panel-may-reach-for.md) - the named shapes and what each cannot say.
 - [console-design/how-the-machines-work-is-drawn-and-what-may-not-be-pooled.md](console-design/how-the-machines-work-is-drawn-and-what-may-not-be-pooled.md) - the Hardware route and the run timeline.
 - [console-design/what-the-quality-and-source-panels-draw.md](console-design/what-the-quality-and-source-panels-draw.md) - the model's own figures and the sources' health.
+- [console-design/how-a-console-chart-gets-its-data.md](console-design/how-a-console-chart-gets-its-data.md) - the seven rules about a panel's bytes: design for every panel, ask for what you draw, one reader.
 - [../architecture/publishing/console.md](../architecture/publishing/console.md) - what each console panel is, and where its data comes from.
 - [../architecture/publishing/telemetry-series.md](../architecture/publishing/telemetry-series.md) - the published projection and the grain of every figure.
 - [config/appearance.md](config/appearance.md) - the knobs these rules read.
