@@ -224,9 +224,9 @@ row) in the opening window, sustained **2**, collapsing to **1** on the serial s
 | 6 | Remove `new_fact_rate` + `key_point_weight` (+#34 field, judge stages, C3) | #34 | A / eval-core | DONE | - | 1093 | Carmack, Andre |
 | 7 | Remove `lead_coverage` (+ day-metrics bucket + qualification, C4) | - | A / eval-core | DONE | - | 1093 | Andre |
 | 8 | Add coherence + coverage scorers (recorded-only) | - | A / eval-core | DONE | - | 1093 | Carmack, Andre |
-| 2 | Redesign + re-label the faithfulness chart; docs glyph-link | 8 | B / chart | PENDING | - | - | - |
-| 3 | Reword recorded-only copy; relabel `compression` | 8 | B / chart | PENDING | - | - | - |
-| 4 | Retire `key_points` completely (published + internal + corpus + `output_digest`) | 5, 6, 7 | B / retire | IN REVIEW | p35retire | - | worker |
+| 2 | Redesign + re-label the faithfulness chart; docs glyph-link | 8 | B / chart | IN REVIEW | p35chart | - | Susan, Andre |
+| 3 | Reword recorded-only copy; relabel `compression` | 8 | B / chart | IN REVIEW | p35chart | - | Susan, Andre |
+| 4 | Retire `key_points` completely (published + internal + corpus + `output_digest`) | 5, 6, 7 | B / retire | DONE | - | 1095 | worker |
 
 ## Section 2 - Row detail
 

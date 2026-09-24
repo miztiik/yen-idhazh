@@ -324,6 +324,18 @@ confidence, not no confidence. Re-cutting the `high` and `medium` thresholds is
 a separate Level 5 decision. The current rows have no human labels, so they do
 not supply an error rate for any cut.
 
+**The operator console draws both cuts.** `evaluation.band_high_min` and
+`evaluation.band_medium_min` are the two rules across the faithfulness plot on
+`/console/model/`, in the same words the published item uses - matches its
+source above the first, may not match below the second. They are read from
+config rather than written into the chart, so re-cutting them moves the plot and
+the published band together. The panel spells the two lines out in plain words
+as well: each point is one day's middle summary, meaning half that day's
+summaries scored higher and half lower, and the lower line is the summary a
+quarter of the way up from the bottom. Susan and Andre, 2026-09-25;
+[../architecture/publishing/why-a-summary-was-doubted-and-what-the-checker-measures.md](../architecture/publishing/why-a-summary-was-doubted-and-what-the-checker-measures.md)
+carries what that reversed and why.
+
 **A third counterweight capped the band until 2026-09-24**: whether the names and
 figures in the article's opening survived into the summary. It is retired,
 because plenty of good articles and blogs open slowly and a summary that left

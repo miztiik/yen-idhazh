@@ -125,6 +125,31 @@ class ConsoleConfig(Model):
             "in the readout, because the worst day is the one a hidden mark would cost."
         ),
     )
+    faithfulness_axis_step: int = Field(
+        default=5,
+        ge=1,
+        le=25,
+        description=(
+            "The grain the faithfulness plot's value axis floor rounds down to, and "
+            "the headroom it leaves under the lowest point drawn. A floor sitting "
+            "exactly on the lowest point puts that day's mark on the axis line, "
+            "where it reads as a missing day rather than as the worst one."
+        ),
+    )
+    faithfulness_axis_floor_max: int = Field(
+        default=75,
+        ge=10,
+        le=95,
+        description=(
+            "The highest the faithfulness plot's value axis floor may rise to, so a "
+            "fixed share of the scale is always on screen. Without it a fortnight "
+            "that never left the nineties fills the panel with a three-point wobble, "
+            "and an operator learns that a normal day is an incident. The floor's "
+            "lower bound is deliberately not a knob: it is evaluation.band_medium_min, "
+            "because below that score every summary carries the same published band "
+            "and there is nothing left to zoom into."
+        ),
+    )
     chart_height: int = Field(
         default=220,
         ge=120,
