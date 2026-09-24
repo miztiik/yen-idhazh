@@ -259,25 +259,14 @@ a cut piece the model never saw either. A 200-word summary that reads as
 complete and omits the denial is the worst item this pipeline can publish, and
 the sentence is what stops it.
 
-**`summarize.bands[].key_points_max` grades with the rung: 1, 2, 3, 4, 5 from
-the brief band to the longest whole read.** Each rung asks for its own count. The
-shortest asks for one, because a 30-to-45-word note carries about one distinct
-fact, and asking it for five requests facts the article does not hold - the
-extra bullets then restate the summary. The top rung keeps five, where a long
-read genuinely carries that many. `key_points_min` is per band too - 1 at the
-brief band, 2 from rung 2 up - because the prompt reads both numbers off the
-band, and the shortest rung's ceiling of one sits below a global floor of two.
-The decoder is held to the same per-band range, so the ceiling is a control and
-not a request: a note cannot emit the five bullets that would pad it.
-
-Each rung is checked against a simple bound: a key point is one sentence of about
-20 words, so a summary of W words carries about W/20 distinct facts, and no rung
-may ask for more key points than that. At the five committed rungs that bound is
-2, 4, 6, 8 and 10 facts against asks of 1, 2, 3, 4 and 5, so every rung sits
-under it with room to spare.
-`test_no_band_asks_for_more_key_points_than_its_summary_can_carry` reads the
-ladder from `config/` and asserts it per band, so a sixth rung cannot be added
-over its own bound by accident.
+**The band graded a key-point count too, and on 2026-09-24 the count went with
+the field.** Each rung asked for its own - one at the brief band, five at the
+longest whole read - because a 30-to-45-word note carries about one distinct
+fact and asking it for five requests facts the article does not hold. That was
+the one bound the decoder read per band, so the reply shape was rebuilt per
+article and the prompt had to state the same two numbers or lose an item for
+obeying them. With it gone every rung gets the same grammar and the band decides
+length alone.
 
 **Rung 2 is the expensive middle.** It covers about 30 percent of a day, so its
 ask is the one that costs the most to get wrong.
@@ -408,7 +397,7 @@ What stays behind the article is what cannot be shared, and it is three lines
 
 ```
 Now write about the item above.
-Summary: 30 to 45 words, 1 to 5 key points.
+Summary: 30 to 45 words.
 Write "summary", then "visual".
 ```
 
@@ -419,7 +408,7 @@ the top-level fields of the reply, read off the grammar rather than written out,
 so the recency position cannot disagree with the shape the decoder will enforce.
 That line is also the whole of what the reachability gate changes here: for a
 gated item the grammar is the summary draft alone and the line reads
-`Write "title", then "key_points", then "summary".`
+`Write "title", then "summary".`
 
 **What it is worth, measured on the configured weights, 2026-09-12.** The
 trailing turn went from **692 tokens to 42**, rendered and markers included - a
@@ -833,23 +822,22 @@ bound cannot move without the budget moving with it.
 
 The summarize-and-plan call decodes the summary and the plan through one ceiling, and that number is
 arithmetic over the two shapes' own bounds. Every array in them carries a
-`maxItems` and every decoded string a `maxLength` - which is why
-`summarize.key_point_words_max` exists at all, since a key point was the one
-decoded string in the reply with no upper end and a derivation with an unbounded
-term in it is not a derivation.
+`maxItems` and every decoded string a `maxLength`, so the longest reply the
+grammar admits is arithmetic rather than a hope.
 
 The two halves convert differently, because one rule would be wrong about one of
 them:
 
 | Part | Bound | Converted at |
 | --- | --- | --- |
-| `title`, `key_points`, `summary` | word counts from `config/`, spent as characters at 12 a word | 1.3628 tokens a word (`measured.TOKENS_A_WORD_AT_THE_CUT`), which is what `extract.approx_tokens` already spends the truncation cap at |
+| `title`, `summary` | word counts from `config/`, spent as characters at 12 a word | 1.3628 tokens a word (`measured.TOKENS_A_WORD_AT_THE_CUT`), which is what `extract.approx_tokens` already spends the truncation cap at |
 | everything else - keys, punctuation, element addresses, closed vocabularies | characters, from the generated schema | one token a character, because a token spans at least one |
 
 Against the committed bounds the widest reply is 11,692
 characters: 7,848 of prose, which is 891 tokens, and 3,844 of structure, of
-which the visual plan alone is 3,767. **The budget is 4,735 tokens and it is
-mostly the picture.**
+which the visual plan alone is 3,767. **The budget is 4,160 tokens and it is
+mostly the picture.** It was 4,735 until 2026-09-24: five key points of 80 words
+each were reserving 575 tokens of it, and they left with the field.
 
 **What that guarantees, and what it does not.** The structural half is a true
 ceiling. The prose half is a sizing: a reply that spent its whole character rail
@@ -973,8 +961,8 @@ how many words it had.
 
 **An address.** No published word of ours may carry a URL. Above the fence the
 sanitizer already replaced every address in the source with `[link]`, so a
-summary or a key point holding one is refused with `leaked_address`, and so is
-one still holding the `[link]` marker. `sanitize` owns what an address looks
+summary holding one is refused with `leaked_address`, and so is one still holding
+the `[link]` marker. `sanitize` owns what an address looks
 like and this reject reads it rather than writing a second pattern, so one pass
 over our own words answers both questions: a marker already there was lifted out
 of the fenced source, and a marker that only appears after the pass was a live
@@ -989,35 +977,12 @@ the source's own headline - so an address there drops the title and keeps the
 item, the same way a title outside the asked range does. The summary has no
 fallback, which is why the same leak there is fatal.
 
-**A restatement is dropped, not refused.** This is the one post-parse check that
-removes a part rather than the whole item. A key point that only restates the
-summary is a thin line, not a wrong one, so `to_summary` drops that key point and
-keeps the item - it degrades, it does not fail (`CLAUDE.md` section 1a).
-
-`restates_summary` is the `verbatim_run` idea pointed at our own summary instead
-of the article: the share of a key point's four-word phrases already in the
-summary. Above `summarize.key_point_restatement_ceiling` - `0.5` today, a
-starting point and not a calibrated threshold (Guardrail #10) - the key point carries
-more of the summary's phrasing than a fact of its own and is dropped. It is a
-floor on distinctness and never a word ban: only the overlap ratio counts, so a
-key point may reuse the summary's words and still add a fact. Measured 2026-09-07
-on the one well-formed reply fixture, its three distinct key points score 0.00,
-0.11 and 0.14 while a verbatim slice of the summary scores 1.00, so the ceiling
-sits in the wide gap between a new fact and a copy.
-
-The drop never removes the last key point. The published payload requires at
-least one, and each band carries its own `key_points_min`, so when every key
-point restates the least-restating up to that floor stay and the item still
-publishes with fewer key points. The knob lives in `summarize` rather than
-`evaluation` because the floor it must respect - the band's `key_points_min` -
-lives there too.
-
-The prompt still asks for this - "a key point that restates the summary is a
-wasted line" - but a prompt gives the model no definition of "restates" it can
-compute, and the restatement rate ran at seven in eight before the check
-existed. The deterministic drop is the control; the prompt sentence is the
-request it now backs, and tuning that sentence is a measured loop this change did
-not open.
+**A restatement drop lived here until 2026-09-24, and it went with the key
+points.** It was the one post-parse check that removed a part rather than the
+whole item: a key point whose four-word phrases were mostly already in the
+summary was dropped and the item kept. The measure it read, `restates_summary`,
+is deleted rather than left unused - it had no other caller, and a metric nobody
+calls is a metric somebody later trusts.
 
 ## Two spans on one call
 
@@ -1140,7 +1105,7 @@ in a failure detail.
 | --- | --- |
 | **Framing** | Names the task as epistemological, then says in plain words what that means to do: a reader must be able to tell, from the summary alone, how the article knows what it says. |
 | **Title** | A new title, written from the body and the headline together, `title_words_min` to `title_words_max` words, with the headline styles it must not adopt named. See below. |
-| **Length** | The band's word range, plus the band's `key_points_min` to `key_points_max` key points - one at the brief band, five at the longest. Each key point must add something the summary did not say. |
+| **Length** | The band's word range. |
 | **Source form** | The trusted line before the fenced text can say `Source form: abstract`. In that case the prompt tells the model to write "The authors report that..." or equivalent, because an abstract is the authors describing their own work. |
 | **Attribution** | Who said a thing, named as the article names it. Never "sources say" when the article named the source, never a source the article did not name, and a figure an organisation reports about itself is marked as its own. |
 | **Certainty** | Hedges are protected in both directions. Dropping one turns a claim into a fact; adding one turns a fact into a rumour. A plan, a proposal, a target, a forecast and a result stay apart, because the kind of claim is the claim. |
@@ -1239,8 +1204,8 @@ envelope's reach into the record.
 
 ## The changes are not retroactive
 
-A change to what the summariser writes - the decode reorder, the per-band
-key-point counts, the deterministic restatement drop - takes effect from the run
+A change to what the summariser writes - the decode reorder, the key points
+leaving the reply - takes effect from the run
 it lands in onward and never rewrites an already-published day. Two things hold
 the archive still: a committed digest is frozen output the site reads as-is, and
 the plan stage drops every already-run address (`ledger.load_published`, in
@@ -1293,7 +1258,7 @@ when nothing does. Both kinds are in the pass above:
 | The title reframe | A topic label instead of an event | **No.** Nothing in `backend/idhazh/evals/metrics.py` scores our title. |
 | "Never turn a claim into a fact" | A hedged claim published flat | **Yes.** `hedge_dropped` fires when the source's lead hedged and the summary did not. |
 | The quoting justifications | Longer copied runs | **Yes.** `verbatim_run` and `extractiveness`. |
-| "Each key point adds something" | Key points restate the summary | **No.** Nothing compares a key point to the summary. |
+| "Each key point adds something" | Key points restate the summary | **Moot since 2026-09-24.** The instruction and the field are both gone. |
 | The loaded-verb justification | "Slammed" comes back | **No.** No lexicon scores tone. The ban list itself survives verbatim, and it is what does the work. |
 
 **Three of those five have no alarm.** That is the price of the pass, written
@@ -1301,16 +1266,14 @@ down rather than discovered later. Each survives on a sibling line rather than
 on a measurement, and a human spot-check is the only thing that would catch the
 drift.
 
-**One of the three has now had that spot-check, and the line is not being
+**One of the three had that spot-check, and the line was not being
 obeyed.** Measured 2026-09-02 over twenty items drawn from the two longest
 summary bands, ninety key points read one at a time: **78 of 89 clear verdicts
 restate a claim the summary already makes**, and thirteen of the twenty items
 add nothing at all
 ([../../archive/measurements-2026-08.md](../../archive/measurements-2026-08.md#whether-an-items-key-points-repeat-its-own-summary-2026-09-02)).
-The instruction survives the terseness pass on the same argument as before - it
-is one line and the failure it prevents is worse than the failure it allows -
-but nobody may now claim the behaviour is intact. Nothing in the pipeline reads
-this count, and one hand count is not a gate.
+That count is what retired the field on 2026-09-24, so the instruction is gone
+and the other two survive on a sibling line rather than on a measurement.
 
 **The same reading found a defect in the summaries themselves, and it is the
 larger of the two.** Of the 110 items eligible for that draw, **20 came back
@@ -1379,13 +1342,14 @@ is the safe direction under that instruction. Making a firm statement sound
 tentative is the same error as making a rumour sound firm, and only one of the
 two has an obvious name.
 
-**Why a key point must add something.** Three restatements of the summary are
-three lines a reader skips, and they cost decode time on the slowest stage in the
-pipeline. That is also what the model does most of the time: seven key points in
-eight restate, measured 2026-09-02 on ninety points from twenty long-source
-items. The published item does not draw them, so today the cost is decode time
-rather than reader time - which is why the reading page refuses to render them
-([../../concepts/digest.md](../../concepts/digest.md#the-key-points-stay-off-the-item-and-the-count-is-why)).
+**Why a key point had to add something, until it stopped being asked for.** Three
+restatements of the summary are three lines a reader skips, and they cost decode
+time on the slowest stage in the pipeline. That is also what the model did most
+of the time: seven key points in eight restate, measured 2026-09-02 on ninety
+points from twenty long-source items. No published item ever drew them, so the
+cost was decode time rather than reader time - which is why the field left the
+pipeline on 2026-09-24
+([../../concepts/digest.md](../../concepts/digest.md#the-key-points-left-the-pipeline-and-the-count-is-why)).
 
 **Why the title is rewritten rather than cleaned up.** A repaired clickbait
 headline is still the clickbait writer's framing. "A major move in the nuclear
@@ -1459,8 +1423,6 @@ restamping and no committed `output_digest` stopped verifying (section 11).
 | Three calls, so a cut reply is retried in halves | It needs a measured timeout rate first, and there is none. The recovery above costs zero seconds and does not. |
 | Temperature jitter on a retry | It breaks the `seed: 0`, `temperature: 0.0` contract. A re-run that is not a re-run makes every other measurement on this page unrepeatable. |
 | Pick the output budget and check it against the bounds | A number somebody chose is a number nobody re-derives. It is computed on every import instead, and a bound that moves without it is an import error. |
-| Leave a key point unbounded and derive the budget from the rest | Then the derivation has a term with no upper end in it, which is a guess with a table next to it. |
-| Bound a key point at the longest one ever published | A `maxLength` is a hard grammar stop. The next slightly longer key point becomes a parse failure for the whole item. |
 
 ## See also
 

@@ -799,7 +799,6 @@ test.describe('one card, and every publisher on it is a way in', () => {
 			vertical: item_id.split('-')[0],
 			title: `Story ${item_id} from ${source_name}`,
 			summary: `What ${source_name} reported about ${item_id}.`,
-			key_points: [`${item_id} happened.`],
 			reader_note: null,
 			band: 'high',
 			band_reason: null,

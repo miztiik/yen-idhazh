@@ -77,7 +77,6 @@ const RENDERED_FIELDS = [
 	'desk',
 	'introduced_by_run',
 	'item_id',
-	'key_points',
 	'lenses',
 	'on_front_page',
 	'published_at',

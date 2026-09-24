@@ -2169,7 +2169,7 @@ reported as a cross-check rather than as the answer.
 This measurement was taken before any feature code was written, and the answer
 is what stopped the feature: key points on long items were dropped rather than
 built
-([../concepts/digest.md](../concepts/digest.md#the-key-points-stay-off-the-item-and-the-count-is-why)).
+([../concepts/digest.md](../concepts/digest.md#the-key-points-left-the-pipeline-and-the-count-is-why)).
 
 ### The rule, written before the sample was drawn
 

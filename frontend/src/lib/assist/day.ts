@@ -202,12 +202,12 @@ function hold(date: string, entry: HeldDay): void {
  * build. A reading document carries a seed now and these arrive by fetch, so
  * the only check between a malformed story and a reader is this one.
  *
- * Four names, and each is here because something dereferences it directly:
+ * Three names, and each is here because something dereferences it directly:
  * `item_id` is the element id a deep link and the leading block both aim at,
- * and `title`, `summary` and `key_points` are what the in-page filter reads on
- * every keystroke. A story missing `key_points` renders and then throws a
- * `TypeError` the first time a reader types - a page that broke on an action
- * rather than on arrival, which is the worst shape this failure has.
+ * and `title` and `summary` are what the in-page filter reads on every
+ * keystroke. A story missing `summary` renders and then throws a `TypeError`
+ * the first time a reader types - a page that broke on an action rather than on
+ * arrival, which is the worst shape this failure has.
  *
  * It is deliberately not a schema. A browser validating every field a served
  * item carries would need a validator on the reading path (Guardrail #1, Guardrail #8), and the
@@ -219,8 +219,7 @@ function renderable(item: DigestItem): boolean {
 		typeof item?.item_id === 'string' &&
 		item.item_id !== '' &&
 		typeof item.title === 'string' &&
-		typeof item.summary === 'string' &&
-		Array.isArray(item.key_points)
+		typeof item.summary === 'string'
 	);
 }
 

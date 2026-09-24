@@ -323,8 +323,7 @@ articles, which is **three** in `config/idhazh.json` today:
 
 - `runtime-summary.json`: per-repeat startup, work and per-item timings, the
  resident-set samples, the input and output drift verdicts, and **the summary
- each candidate wrote** - title, summary and key points, beside the digest of
- each;
+  each candidate wrote** - title and summary, beside the digest of each;
 - `cache-state.txt`: whether the weights were already on the machine, and the
  digests of the binary and the weights that ran;
 - `readings.json`: every quantity the page carries, machine-readable; and
@@ -716,9 +715,9 @@ model-dependent metric by `model_id` and do not recompute a long run's date
 between plan, model runs and decision.
 
 What the decision still cannot have: the human label queue records one summary's
-support verdict and cannot record paired informativeness, title quality or
-key-point correctness. Until a typed pairwise label shape and a human-paced CLI
-exist, a blind human review can describe a trade and cannot name a winner.
+support verdict and cannot record paired informativeness or title quality. Until
+a typed pairwise label shape and a human-paced CLI exist, a blind human review
+can describe a trade and cannot name a winner.
 
 **The owner can approve a model for reasons outside the automated margin**
 ([../../CLAUDE.md](../../CLAUDE.md) section 0). Record the approval and the

@@ -369,7 +369,6 @@ def _digest_items(digest_root: Path) -> dict[str, _Entry]:
                 published=corpus.Published(
                     title=item.title,
                     summary=item.summary,
-                    key_points=tuple(item.key_points),
                 ),
                 source_id=item.source_id,
                 source_form=item.source_form,

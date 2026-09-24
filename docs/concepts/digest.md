@@ -28,7 +28,7 @@ An item is the unit a reader consumes. It carries, at minimum:
 
 Everything else earns its place by surviving a deletion attempt.
 
-**The item's key points are not on it, and that is now measured rather than asserted.** The summarizer writes two to five key points per item and the published payload carries them, but no reading surface draws them. The reason used to be a judgement about screen space. Since 2026-09-02 it is a count: over twenty items drawn from the two longest summary bands, 78 of 89 key points restate a claim the summary already makes - seven in eight ([Design rationale](#the-key-points-stay-off-the-item-and-the-count-is-why) below).
+**The item's key points are not on it, and the field no longer exists.** The summarizer wrote two to five per item and the published payload carried them, and no reading surface ever drew them. The reason used to be a judgement about screen space. From 2026-09-02 it was a count: over twenty items drawn from the two longest summary bands, 78 of 89 key points restate a claim the summary already makes - seven in eight. On 2026-09-24 the field left the pipeline altogether ([Design rationale](#the-key-points-left-the-pipeline-and-the-count-is-why) below).
 
 ## The visual rule
 
@@ -172,22 +172,19 @@ The page must also render when its data file is absent or empty. That is a norma
 
 ## Design rationale
 
-### The key points stay off the item, and the count is why
+### The key points left the pipeline, and the count is why
 
 **Measured 2026-09-02: 78 of 89 key points restate a claim the item's own summary already makes.** Twenty items drawn from the two longest summary bands, ninety points read one at a time against a rule written before the sample was drawn. Thirteen of the twenty add nothing whatever, and on all thirteen the points are a strict subset - the summary carries facts the points drop, never the reverse. Six points in ninety, on four items of twenty, carry a claim a summary-only reader would not have. Hardware, method, the rule and the per-item table are in [../archive/measurements-2026-08.md](../archive/measurements-2026-08.md#whether-an-items-key-points-repeat-its-own-summary-2026-09-02).
 
 The idea the measurement was taken against was that length is the discriminator: a 30-to-45-word brief has no room for its points to differ, but a 3,000-word article compressed to 200 words leaves things only the points can carry. **The count says length does not discriminate.** Items with an addition have a median summary of 154 words and items with none 146 - eight words apart on a sample of twenty - and the longest summary drawn, at 210 words, produced one addition.
 
-**The one item where the points did real work is the shortest summary in the sample, not the longest.** A 3,195-word source in a band that asked for 150 to 230 words on the day of the draw came back with a 49-word summary, and three of its four points carry claims the summary never made. The points were doing the summary's job because the summary did not. That is a defect in the summary and it is not rare: 20 of the 110 eligible items, 18.2 percent, are shorter than their own band's floor, 13 of them in the longest band. Adding a second list under every item would hide that failure behind a feature instead of fixing it, and it would cost the other 87 percent of items the same words twice.
+**The one item where the points did real work is the shortest summary in the sample, not the longest.** A 3,195-word source in a band that asked for 150 to 230 words on the day of the draw came back with a 49-word summary, and three of its four points carry claims the summary never made. The points were doing the summary's job because the summary did not. That is a defect in the summary, and the answer that landed on 2026-09-10 is a tolerance around each band's ask plus a rule that no length except a failed-extraction floor may drop an item ([../architecture/summarize/prompt.md](../architecture/summarize/prompt.md)).
 
-So the refusal holds at every length. What the count does NOT settle is what to do about the short summaries it stumbled on. **A length floor is the obvious answer and it is wrong twice over.** A floor the model already missed on 18 percent of items is not a fix, it is the same request repeated louder; and the sample cannot support a length ruling in either direction, being twenty items drawn on one day from a pipeline whose prompt is still being tuned. What landed instead on 2026-09-10 is a tolerance around each band's ask, and a rule that no length except a failed-extraction floor may drop an item
-([../architecture/summarize/prompt.md](../architecture/summarize/prompt.md)).
+**Read the 18.2 percent as a hazard rather than a rate.** 20 of the 110 eligible items were shorter than their own band's floor on the day of the draw. It is one draw on one day, and the numbers underneath it move whenever the prompt does. It is quoted here because it was the reason the key-points question came up at all, and not as a measurement anything may be tuned against (Guardrail #10).
 
-**Read the 18.2 percent as a hazard rather than a rate.** It is one draw of 110 items on one day, and the numbers underneath it move whenever the prompt does. It is quoted here because it was the reason the key-points question came up at all, and not as a measurement anything may be tuned against (Guardrail #10).
+**The field stayed in the payload for one reader, and on 2026-09-24 it went** (owner, 2026-09-19). The in-page filter was that reader; it matches the title and the summary now, and the entity tagger already read the title and the body. So the points were the only thing on the item nothing consumed, and the decode that wrote them cost about 21 seconds an item - roughly 1.75 hours off a 300-item day.
 
-**What a reader loses** (guardrails: a veto names the loss). On four items in twenty they lose one fact each, and on one item in twenty they lose three. What they keep is an item they can skim in one pass instead of two, and a summary that is still the only thing on the item claiming to be complete.
-
-The field stays in the published payload. It is nine tenths of the projection's added weight and the in-page filter reads it, so removing it is a contract change rather than a rendering one ([../architecture/publishing/the-served-day-and-the-documents-that-stopped-being-written.md](../architecture/publishing/the-served-day-and-the-documents-that-stopped-being-written.md#two-projections-and-what-one-day-costs)).
+**What a reader loses** (guardrails: a veto names the loss). On four items in twenty they lose one fact each, and on one item in twenty they lose three. What they keep is an item they can skim in one pass instead of two, a summary that is still the only thing on the item claiming to be complete, and a day that finishes.
 
 ### The cut sentence carries the scale
 

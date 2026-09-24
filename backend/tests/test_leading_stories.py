@@ -86,7 +86,6 @@ def story(
         published_at=published_at,
         time_source=time_source,
         summary="A summary.",
-        key_points=["A point."],
         band=band,
         truncated=truncated,
         introduced_by_run=1,
