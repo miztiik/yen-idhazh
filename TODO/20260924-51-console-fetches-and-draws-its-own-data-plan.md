@@ -107,7 +107,13 @@ export type StoreName = 'host-fingerprint';
 
 **`StoreName` maps to an address inside this module and nowhere else.** The address is `${base}/state/<store>/` where `base` is SvelteKit's own `base` - the repository path prefix - because getting that prefix wrong is the commonest failure on this host. A panel that could name a path could name any path, and the allow-list in ESCALATE trigger 1 would stop being the bound.
 
-**The browser cannot list a directory, and plan 50 gives every file a random name.** A raw shard is `<unit_id>.parquet`, which no reader can derive from a date, so **the store the browser queries is the compact tier, whose month file is derivable, plus a manifest for the days not yet folded.** The manifest is one JSON file per store, written by the staging step, holding the raw filenames it staged and nothing else. It is bounded by the staged window rather than by the archive, and it is the one file the door fetches before any query.
+**The browser cannot list a directory, and plan 50 gives every committed file an unguessable name.** A raw shard is `<unit_id>.parquet` and so is a compacted month, so no reader can derive either from a date.
+
+**The staging step names its output for the reader: `state/<store>/<YYYY-MM>.parquet`, one file a month, derivable from a date and nothing else.** The committed store keeps its per-writer names untouched. Plan 50's naming rule governs **writers of the ledger** - it exists so two runs cannot take one path - and nothing about it survives the copy into a published tree that one builder writes from scratch.
+
+This is how every console payload already works: `frontend/public/machine/<YYYY-MM>.csv` and `frontend/public/span-rollup/<YYYY-MM>.csv` both carry a computable month name, and no console surface has ever had to list a directory.
+
+**It does not breach N7.** N7 is aimed at the nine *reduced* views the console reads instead of the ledgers. A copy of the ledger's own rows at a computable address reduces nothing - the console still reads the rows, and no shape is pre-decided for it.
 
 **`SELECT *` is refused at this door**, not by convention: `columns` is required, non-empty, and the door raises by name on an empty list ([how-a-console-chart-gets-its-data.md](../docs/concepts/console-design/how-a-console-chart-gets-its-data.md) rule 5).
 
@@ -325,6 +331,7 @@ given and predicts nothing about the next job. Darker bars are faster machines.
   | 6 | The d3 modules are the narrow ones (`d3-selection`, `d3-shape`, `d3-axis`), never the `d3` meta-package. `d3-array@3.2.4` and `d3-scale@4.0.2` are already installed | Carmack, Guardrail #8 |
   | 7 | **Landing d3 now and the engine later is refused.** That exact trade was taken on 2026-09-24 and reversed the same day: a reader designed around the smallest panel guarantees a second reader arrives with the first large one. The cost of deferring is one extra pass over one panel, and it is the pass that has to re-decide the reader under time pressure | Owner, 2026-09-24 |
   | 8 | `console.machine_colour_stops` moves from 7 to 5 in this row. Three panels share machine colour, so a silent mismatch ships | Susan |
+  | 9 | **The published copy is named `<YYYY-MM>.parquet` and the committed store keeps its per-writer names.** A reader has to be able to compute an address, and a writer has to be unable to collide on one. Those are two requirements, not one, and one name cannot serve both | Owner, 2026-09-24 |
 
 - **Rejected alternatives:**
 
@@ -336,6 +343,8 @@ given and predicts nothing about the next job. Darker bars are faster machines.
   | 4 | Delete `waterfall.ts` and `donut.ts` here | They are ECharts modules with no importer anywhere in `frontend/src`, found 2026-09-24 - real dead code and a free deletion, but not this row's question | A one-line change of its own | Fowler |
   | 5 | Commit the store's published copy under `frontend/public/` | Satisfies neither N7 nor N8, and it is the thing N8 exists to end | Zero; costs both intents and a merge driver | Carmack |
   | 6 | Serve the store from the repository over raw content | Zero published bytes, and cross-origin requests do work. But this project's own prune force-pushes `main` on a schedule, so a commit-pinned address stops resolving and a branch-pinned one changes under a reader mid-session | Zero; costs the reader a broken page after every prune | Carmack |
+  | 7 | A manifest listing what was staged, so the browser knows the filenames | **A manifest in `state/` is a shared mutable path**: every run rewrites it, two runs rewrite it at once, and the push race and the merge driver both return - which is precisely what per-writer names were introduced to end. A manifest built only into the published output has no race, and is still a list of names where one computable name does the job | Zero; costs a fetch before every query, and invites the committed version the next time somebody wants the raw tier | Owner, 2026-09-24 |
+  | 8 | Put a date in front of the `unit_id` so the name is derivable | It is not derivable. The directory already carries the date and the rest of the name is still unguessable, so this copies a fact the path states and solves nothing | Zero; costs a second spelling of the partition | Owner, 2026-09-24 |
 
 - **ESCALATE - how the browser reaches the bytes.** `state/` is not published today. N7 says the console reads `state/` rather than a projection of it; N8 says telemetry does not live under `frontend/` in git. **The priced recommendation is a build step staging an allow-list into `frontend/static/state/`, with that path in `.gitignore`**, so the dev server and the build see one tree and git sees nothing: 76,306 bytes for this store, 0.007 percent of the site, against 51.4 MiB and about 53 days of the cap's runway if all of `state/` were staged. Two conditions ride with it: `ci.yml`'s bundle gate and cap measurement both walk the built tree, and a canary build must never copy the real archive. **Once plan 50's compaction lands, the standing rule is the compact tier plus a declared number of raw days.** This is Level 5 and the row stops until the owner rules.
 
