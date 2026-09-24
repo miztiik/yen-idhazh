@@ -441,9 +441,9 @@ of 77 MB.
 `--ctx-size` on the teacher entry on 2026-09-13.** A training row is a prompt
 the pipeline could have sent and an answer it could have returned, and the
 corpus holds single-call rows - so the sum it has to cover is 997 tokens of
-prompt overhead, up to 23,259 for the longest and hardest-tokenizing article
-`extract.truncation_cap_tokens` lets through, and 900 of answer: **25,156 of the
-committed 32,768, or 77 percent**. The serving window is wider because it holds
+prompt overhead, up to 30,238 for the longest and hardest-tokenizing article
+`extract.truncation_cap_tokens` lets through, and 4,735 of answer: **35,970 of the
+committed 49,152, or 73 percent**. The serving window is wider because it holds
 the two-call pair, which nothing trains on. Both windows are still asserted in
 `backend/tests/contracts/` and against the cap, so a later move of the cap fails
 rather than drifts - **against two sums now rather than one**, because the two
@@ -456,7 +456,7 @@ training set every long article while production keeps summarizing them - a mode
 tuned on the short half of its own job. Dropping stays the right refusal; the
 point is that nothing has to be refused.
 
-**Nobody has measured what 32,768 costs a card, because nothing has trained
+**Nobody has measured what 49,152 costs a card, because nothing has trained
 yet** (Guardrail #10). If a session runs out of memory, `SEQUENCE_LENGTH_OVERRIDE` in
 the notebook lowers the window for that session and prints how many rows the
 lower value dropped. That is a session's choice and not a config edit, because
