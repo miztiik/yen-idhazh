@@ -219,8 +219,8 @@ export function filterNeedle(query: string, minChars: number): string | null {
 export interface DayIndex {
 	/** The stories, in the order the page draws them. */
 	items: DigestItem[];
-	/** Each story's searchable text, lowercased: its title, then its summary,
-	 * then its key points, in that order.
+	/** Each story's searchable text, lowercased: its title, then its summary, in
+	 * that order.
 	 *
 	 * **Kept as separate strings and never joined.** A join turns the end of one
 	 * field and the start of the next into a substring, so a needle would match
@@ -238,7 +238,6 @@ export function indexDay(items: DigestItem[]): DayIndex {
 	for (let row = 0; row < items.length; row += 1) {
 		const item = items[row];
 		const lowered = [item.title.toLowerCase(), item.summary.toLowerCase()];
-		for (const point of item.key_points) lowered.push(point.toLowerCase());
 		fields.push(lowered);
 		// First wins, which is what a scan down the day would have found. A
 		// payload cannot hold one id twice, so this only decides what happens if

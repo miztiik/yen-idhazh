@@ -233,8 +233,7 @@ test.describe('the home page anchors its leads', () => {
 			// Descending, so the reading order is the published order and the leads
 			// keep the positions this test put them in.
 			published_at: `2026-08-20T${String(23 - Math.floor(index / 2)).padStart(2, '0')}:00:00Z`,
-			summary: `Summary ${index}`,
-			key_points: [`Point ${index}`]
+			summary: `Summary ${index}`
 		}));
 		const leads = at.map((index) => items[index].item_id);
 		const dir = join(root, ...date.split('-'));

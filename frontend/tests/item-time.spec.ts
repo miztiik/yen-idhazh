@@ -84,7 +84,6 @@ function story(id: string, at: string | null, source: string | null): DigestItem
 		published_at: at,
 		time_source: source,
 		summary: id,
-		key_points: [],
 		lenses: [],
 		events: [],
 		entities: [],

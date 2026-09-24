@@ -113,7 +113,6 @@ export interface DigestItem {
 	source_kind: SourceKind;
 	published_at: string | null;
 	summary: string;
-	key_points: string[];
 	lenses: string[];
 	events: string[];
 	entities: string[];
@@ -320,7 +319,6 @@ export type DigestViewItem = Pick<
 	| 'covered_by'
 	| 'introduced_by_run'
 	| 'lenses'
-	| 'key_points'
 > & { visual: DigestViewVisual | null };
 
 /** `<base>/digest/<YYYY>/<MM>/<DD>/digest.json` - the day a browser fetches.
