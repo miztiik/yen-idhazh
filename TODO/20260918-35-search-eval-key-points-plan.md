@@ -226,7 +226,7 @@ row) in the opening window, sustained **2**, collapsing to **1** on the serial s
 | 8 | Add coherence + coverage scorers (recorded-only) | - | A / eval-core | IN REVIEW | p35eval | - | Carmack, Andre |
 | 2 | Redesign + re-label the faithfulness chart; docs glyph-link | 8 | B / chart | PENDING | - | - | - |
 | 3 | Reword recorded-only copy; relabel `compression` | 8 | B / chart | PENDING | - | - | - |
-| 4 | Retire `key_points` completely (published + internal + corpus + `output_digest`) | 5, 6, 7 | B / retire | PENDING | - | - | - |
+| 4 | Retire `key_points` completely (published + internal + corpus + `output_digest`) | 5, 6, 7 | B / retire | IN REVIEW | p35retire | - | worker |
 
 ## Section 2 - Row detail
 

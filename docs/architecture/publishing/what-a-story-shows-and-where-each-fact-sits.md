@@ -228,7 +228,7 @@ Spending the colour per item rather than at the day level is the resolution of a
 | Topic tabs including empty ones | An empty tab reads as broken software or an absent desk. Only present verticals are rendered. | Reader |
 | A colour per topic | A category-to-colour map that must be re-picked every time the taxonomy changes, carrying nothing the count does not. | Jony |
 | An estimated reading time per topic | An unmeasured number printed as a fact, and it changes nothing a reader does. | Jony, Guardrail #10 |
-| `key_points` shown alongside the summary | The same content twice, at the cost of the hierarchy and half the items per screen. | Jony |
+| `key_points` shown alongside the summary | The same content twice, at the cost of the hierarchy and half the items per screen. Settled for good on 2026-09-24: the field left the payload, so there is nothing to show. | Jony |
 | A flat list of read ids with no date | An id that came round again greyed out an article the reader had never opened, and nothing in the list could decide which marks to drop. | owner |
 | Migrating undated read marks rather than discarding them | There is no honest way to say which day they belonged to, and a wrong mark costs a reader an article. | owner |
 | A read mark that hides or demotes an item by default | Two people at the same URL would see different pages, and a shared link would stop showing the recipient what the sender saw. | Reader |
