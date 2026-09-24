@@ -77,6 +77,17 @@ harvests, about 280 days - and `tests/fixtures/reference/reference.jsonl` is
 frozen, so it would never have cleared at all. The strip dropped one key from
 each assistant turn and moved no other byte.
 
+**The system prompt on those rows was left alone, and it still asks for key
+points.** `messages[0]` is recorded rather than rendered - it is what the run
+actually sent - so rewriting it would make the row a claim about a prompt that
+was never used. The target is the opposite case: it is already re-derived
+through `draft_model` at harvest, so re-deriving it is what the producer itself
+does. What that leaves is a prompt asking for a section the target no longer
+has, on every row harvested before 2026-09-24, which is what `stats` means by
+"the prompt has moved since this window was harvested". Those rows still have to
+age out. `stats` is the only place that check runs; the notebook does not make
+it, because it reads config as JSON and never imports the backend.
+
 A row is dropped, never degraded, when the summary has no title, when the item
 was not scored, or when it fails one of the deterministic counterweights below.
 
