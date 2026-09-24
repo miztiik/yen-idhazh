@@ -579,6 +579,17 @@ publishes, so charging it is charging a real failure. The outcome rule is what
 keeps that honest for a feed registered as publishing abstracts, whose short
 items still publish and so still cost it nothing.
 
+**Charging `too_short` moves no feed that is still active, and that is the
+design rather than a gap.** Measured over the 31 days to 2026-09-24, the day the
+switch went on: the charge pushes one feed under `collect.source_yield_alarm_point`,
+and it is `lemonde-en`, which was already retired - 1.000 yield to 0.000 on 164
+charges. Every live feed stays where it was, because only 37 thin articles came
+from active feeds in that window, across 17 feeds, none losing more than 5, against
+an alarm that needs 30 decisions. So a feed that breaks in bulk is caught at once
+and a feed that occasionally runs short is left alone. Re-measure before quoting
+this: walk `state/item-health/**` for `code == "too_short"` and group by
+`source_id`.
+
 `boilerplate` left that list on 2026-09-17 and came back the same day, and it is
 the only code that has ever moved. It went when a store started feeding the
 comparison it rests on. Over one full run that store changed the signal exactly
