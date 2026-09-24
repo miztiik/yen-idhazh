@@ -12,13 +12,12 @@ a report on everything else. Nothing here touches the network: the encoder is
 committed under `frontend/static/` and the archive is committed under
 `frontend/public/` (Guardrail #7).
 
-**Three of the four reads here carry a cover, and the fourth says why it has
-none.** The gate reads the days through `assist.eval_corpus_through`, because
-nothing it asks can be answered by a day the pin excludes. The index comparison
-reads the shard that pin names. The knob check reads a listing. The live
-reading opens every published day, and `live_corpus` below carries the reason
-that is the only honest answer. The one question none of them fits - does the
-index name every published item - is `backend/utilities/measure_retrieval.py`.
+**Every read here carries a cover.** The gate reads the days through
+`assist.eval_corpus_through`, because nothing it asks can be answered by a day
+the pin excludes. The index comparison reads the shard that pin names. The knob
+check and the answer-key placement below read a directory listing and open no
+shard at all. The one question none of them fits - does the index name every
+published item - is `backend/utilities/measure_retrieval.py`.
 """
 
 from __future__ import annotations
@@ -376,6 +375,59 @@ def test_every_labelled_answer_is_still_in_the_archive(
     assert missing == []
 
 
+def test_the_frozen_answer_key_sits_inside_the_pin_the_gate_scores(
+    queries: tuple[LabelledQuery, ...], config: AppConfig
+) -> None:
+    """Where the frozen key sits in the calendar: against the pin, and the window.
+
+    `assist.eval_corpus_through` bounds the corpus the gate scores. Move the pin
+    earlier and the judged answers past it stop being scorable, so the gate
+    quietly measures a smaller key against an unchanged bar. The membership test
+    above goes red on the same edit, but it names a vanished gold item, which is
+    the wrong cause. This one names the pin. Measured 2026-09-23: all 297 judged
+    answers fall between 2026-08-21 and 2026-08-26, against a pin of 2026-08-26.
+
+    The printed line is the other half and carries no bar. A reader's tab reads
+    the newest `assist.search_months` shards, and the key was written in one
+    sitting that nobody has extended, so the overlap between the two only falls
+    as the archive moves. Measured 2026-09-23 it is 0 of 297, because the key
+    closes in August and the window is September - which is where the key sits
+    in the calendar, not a search failure. A bar on it would gate the merge on
+    the publishing date.
+
+    Both halves are fixed cost. The months come off their own file names, so
+    this opens the query fixture and nothing else. Whether `search_min_days`
+    pulls one more shard in cannot be known without opening one, so the line
+    names the floor rather than guessing at it.
+    """
+    judged = [(query.id, date, item_id) for query in queries for (date, item_id) in query.relevant]
+
+    stems = retrieval.index_months(REPO_ROOT)
+    if stems:
+        days = sorted(date for (_, date, _) in judged)
+        window = sorted(stems[-config.assist.search_months :])
+        reachable = [row for row in judged if row[1][:7] in set(window)]
+        print(
+            f"\nanswer key against the reader's window: {len(reachable)} of {len(judged)} "
+            f"judged answers fall in {', '.join(window)}, the newest "
+            f"{config.assist.search_months} of {len(stems)} months on file, and one more "
+            f"month is read when the newest holds under {config.assist.search_min_days} "
+            f"days. The key runs {days[0]} to {days[-1]}, so this is where the key sits "
+            "in the calendar and not a search failure."
+        )
+
+    pin = config.assist.eval_corpus_through
+    if pin is None:
+        pytest.skip("the gate reads every published day, so no answer can fall outside it")
+    outside = sorted(
+        f"{query_id}: {date}/{item_id}" for (query_id, date, item_id) in judged if date > pin
+    )
+    assert outside == [], (
+        f"assist.eval_corpus_through is {pin} and {len(outside)} of {len(judged)} judged "
+        "answers are published after it, so the gate cannot score them: " + ", ".join(outside[:5])
+    )
+
+
 def test_the_pin_holds_the_competitor_set_still() -> None:
     """`through` drops what was published later and keeps the boundary day."""
     corpus = Corpus(
@@ -417,45 +469,7 @@ def report(
     )
 
 
-@pytest.fixture(scope="session")
-def live_corpus() -> Corpus:
-    """Every published day. Cover: `-1`, and the reason is the question itself.
-
-    This is the one read in this module a cover cannot take, and it is declared
-    rather than bounded (`docs/concepts/growing-reads.md`). The question is how
-    far the frozen labels have drifted from the archive, and every item
-    published since they closed is a competitor for the same ten slots - so the
-    answer is about the items outside any window, not the ones inside it.
-
-    Measured 2026-09-22: the trailing window `assist.search_months` names holds
-    7,044 items and not one labelled answer, because the labels close on
-    `assist.eval_corpus_through` and the window reaches the newest month only.
-    The reading over it is 0.000 with all 60 queries unanswerable, which is a
-    fact about the window rather than about search.
-    """
-    return retrieval.load_corpus(REPO_ROOT)
-
-
-@pytest.fixture(scope="session")
-def live_report(
-    live_corpus: Corpus,
-    queries: tuple[LabelledQuery, ...],
-    embedded: list[list[float]],
-    config: AppConfig,
-) -> RetrievalReport:
-    """The same measurement over the whole archive. Reported, never gated."""
-    return retrieval.evaluate(
-        live_corpus,
-        queries,
-        embedded,
-        limit=config.assist.result_limit,
-        floor=config.assist.similarity_floor,
-    )
-
-
-def test_the_ranking_clears_its_bar(
-    report: RetrievalReport, live_report: RetrievalReport, config: AppConfig
-) -> None:
+def test_the_ranking_clears_its_bar(report: RetrievalReport, config: AppConfig) -> None:
     """recall@10 over the answers that carry a vector. The single gate metric.
 
     Coverage is deliberately out of it. An item the pipeline never embedded is
@@ -465,12 +479,9 @@ def test_the_ranking_clears_its_bar(
 
     The corpus is pinned to `assist.eval_corpus_through`. Unpinned, this gate
     scores the ranking and the publishing rate at once, and the second term is
-    unbounded - see the field description. The live number is printed below the
-    gated one because it is what a reader actually gets, and it is what a rise
-    in coverage or a re-label should be read against.
+    unbounded - see the field description.
     """
     print("\ngated  " + report.summary())
-    print("live   " + live_report.summary())
     assert report.recall_reachable >= config.assist.recall_min, (
         f"reachable recall@{report.result_limit} is {report.recall_reachable:.3f} "
         f"+/- {report.standard_error_reachable:.3f} over {len(report.answerable)} answerable "

@@ -96,7 +96,7 @@ class Corpus:
         written. Only the first is something a merge candidate can change. The
         second is unbounded and monotone - every new item that outranks a gold
         item evicts it from a fixed slot count - so no constant bar survives it.
-        Pin the gate here; report the live number beside it.
+        Pin the gate here.
 
         Dates are `YYYY-MM-DD`, so the comparison is the ordering.
         """
