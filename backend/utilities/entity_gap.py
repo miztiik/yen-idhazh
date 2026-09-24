@@ -101,7 +101,7 @@ def rematched(vocabulary: Vocabulary) -> Seen:
     """
 
     def seen(item: DigestItem) -> Iterable[str]:
-        return tag.tags(vocabulary, item.title, item.summary, *item.key_points)
+        return tag.tags(vocabulary, item.title, item.summary)
 
     return seen
 

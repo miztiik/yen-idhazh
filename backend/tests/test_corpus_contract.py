@@ -213,7 +213,7 @@ def test_the_assistant_turn_is_spelled_in_decode_order(settings: AppConfig) -> N
     row = CorpusRow.from_json(contract_fixture("corpus-row", "harvested"))
     target = json.loads(row.assistant)
 
-    assert list(target) == ["title", "key_points", "summary"]
+    assert list(target) == ["title", "summary"]
 
 
 # --- Config ----------------------------------------------------------------

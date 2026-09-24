@@ -151,13 +151,6 @@ export interface SummaryBand {
 	min_source_words: number;
 	target_words_min: number;
 	target_words_max: number;
-	/** The fewest and most key points this band asks for. Graded by length: the
-	 * shortest band asks for one, the longest for five. Optional here because the
-	 * console's chart reads only the word range; the committed config and the
-	 * fallback ladder below both carry the values, which the backend contract
-	 * test pins against `config/idhazh.json`. */
-	key_points_min?: number;
-	key_points_max?: number;
 }
 
 export interface SummarizeConfig {
@@ -482,11 +475,11 @@ const OBSERVABILITY_DEFAULTS: ObservabilityConfig = {
 const COLLECT_DEFAULTS: CollectConfig = { availability_strikes_before_rest: 5 };
 const SUMMARIZE_DEFAULTS: SummarizeConfig = {
 	bands: [
-		{ min_source_words: 0, target_words_min: 30, target_words_max: 45, key_points_min: 1, key_points_max: 1 },
-		{ min_source_words: 60, target_words_min: 45, target_words_max: 80, key_points_min: 1, key_points_max: 2 },
-		{ min_source_words: 700, target_words_min: 70, target_words_max: 130, key_points_min: 2, key_points_max: 3 },
-		{ min_source_words: 2000, target_words_min: 95, target_words_max: 160, key_points_min: 2, key_points_max: 4 },
-		{ min_source_words: 4000, target_words_min: 120, target_words_max: 200, key_points_min: 2, key_points_max: 5 }
+		{ min_source_words: 0, target_words_min: 30, target_words_max: 45 },
+		{ min_source_words: 60, target_words_min: 45, target_words_max: 80 },
+		{ min_source_words: 700, target_words_min: 70, target_words_max: 130 },
+		{ min_source_words: 2000, target_words_min: 95, target_words_max: 160 },
+		{ min_source_words: 4000, target_words_min: 120, target_words_max: 200 }
 	]
 };
 const CONSOLE_DEFAULTS: ConsoleConfig = {

@@ -70,7 +70,6 @@ test.describe('the day a document seeds', () => {
 			source_kind: 'reporting',
 			published_at: new Date(at - index * 60_000).toISOString(),
 			summary: item_id,
-			key_points: [],
 			lenses: [],
 			events: [],
 			entities: [],

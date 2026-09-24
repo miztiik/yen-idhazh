@@ -119,19 +119,16 @@ The summary.
 "title" - a new title of 6 to 14 words naming
 the main actor and action. Do not copy or repair the source headline.
 
-"key_points" - one sentence each, at most 80 words. A key
-point that restates the summary is a wasted line.
-
 "summary" - coherent prose explaining the main event, its basis and any
 response or limitation needed to understand it accurately.
-Follow the question below for length and key-point count. Do not pad.
+Follow the question below for length. Do not pad.
 
   Write the summary as one paragraph, or as at most 2 paragraphs with one
   empty line between them. Use a second paragraph only where the summary
   runs to 90 words or more and the subject turns. A break in a short summary
   makes two half-thoughts.
 
-For all three: keep every figure exactly as the item wrote it.
+For both: keep every figure exactly as the item wrote it.
 A quotation is at most 20 words, in double
 quotes, with the speaker in the same sentence.
 Plain third-person English, neutral verbs, no address to the reader.
@@ -201,7 +198,7 @@ Quantities and dates already found in it:
 {"labels": [{"element_id": "quantity-149-159", "measure": "cost per million tokens", "dimension": "model", "entity": "Example Lab", "time_element_id": "", "attribution": "self_reported", "hedge": false, "salience": "primary"}, {"element_id": "quantity-197-201", "measure": "throughput on commodity CPUs", "dimension": "model", "entity": "Example Lab", "time_element_id": "", "attribution": "self_reported", "hedge": false, "salience": "supporting"}, {"element_id": "quantity-500-512", "measure": "an address no pass minted", "dimension": "", "entity": "", "time_element_id": "", "attribution": "unattributed", "hedge": false, "salience": "background"}], "proposed": [{"sentence_id": "s0", "surface": "fell by about a third"}], "entity_mentions": [{"mentions": [{"sentence_id": "s0", "surface": "Example Lab"}], "name": "Example Lab", "salience": "primary"}], "place_mentions": [{"mentions": [{"sentence_id": "s0", "surface": "Denmark"}], "name": "Denmark", "salience": "background"}], "quotes": [{"sentence_start_id": "s0", "sentence_end_id": "s0", "speaker": "Example Lab", "attribution": "self_reported", "hedge": true}], "claims": [{"sentence_start_id": "s1", "sentence_end_id": "s1", "speaker": "", "attribution": "unattributed", "hedge": false}], "keyphrases": ["inference cost", "throughput"], "lede_sentence_ids": ["s0"]}<|im_end|>
 <|im_start|>user
 Now write about the item above.
-Summary: 70 to 130 words, 2 to 3 key points.
+Summary: 70 to 130 words.
 Write "summary", then "visual".
 <|im_end|>
 <|im_start|>assistant

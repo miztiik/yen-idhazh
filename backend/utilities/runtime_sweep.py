@@ -384,7 +384,6 @@ def collect(date: str, label: str, repeat: int, *, items: int) -> Collected:
                 "output_digest": data["output_digest"],
                 "title": data["title"],
                 "summary": data["summary"],
-                "key_points": data["key_points"],
                 **{
                     key: data[key]
                     for key in (

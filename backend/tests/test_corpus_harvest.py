@@ -7,6 +7,7 @@ than from a copy of it.
 
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 
@@ -25,6 +26,7 @@ from conftest import (
 from idhazh import config, corpus, summarize
 from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.article import Article
+from idhazh.contracts.base import canonical_json, derive_output_digest
 from idhazh.contracts.corpus import ChatRole, ChatTurn, CorpusMeta, CorpusRow
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.knobs.models import ModelsConfig
@@ -372,7 +374,6 @@ def test_a_refilled_row_carries_the_published_words_as_its_target(app: AppConfig
     target = json.loads(rows[0].messages[2].content)
     assert target["title"] == REFILL_PUBLISHED.title
     assert target["summary"] == REFILL_PUBLISHED.summary
-    assert target["key_points"] == list(REFILL_PUBLISHED.key_points)
     assert rows[0].messages[1].content == summarize.user_turn(article)
 
 
@@ -380,8 +381,8 @@ def test_a_refilled_row_is_the_same_bytes_as_a_harvested_row(app: AppConfig) -> 
     """Both paths hand `harvest_rows` a `Scored`, so both must spell one row alike.
 
     This fails the day `rescored` puts a field somewhere the live pipeline does
-    not - a title into the summary slot, key points in a different order - which
-    no metric would catch and which would teach the model the wrong shape.
+    not - a title into the summary slot - which no metric would catch and which
+    would teach the model the wrong shape.
     """
     article, full_text = refetched(REFILL_BODY, app)
     recorded = refill_recorded(article, REFILL_PUBLISHED)
@@ -396,7 +397,6 @@ def test_a_refilled_row_is_the_same_bytes_as_a_harvested_row(app: AppConfig) -> 
             url_key=recorded.url_key,
             title=REFILL_PUBLISHED.title,
             summary=REFILL_PUBLISHED.summary,
-            key_points=list(REFILL_PUBLISHED.key_points),
             output_digest=recorded.output_digest,
             model_id=recorded.model_id,
             attempt=recorded.attempt,
@@ -489,6 +489,45 @@ def test_the_join_refuses_a_summary_a_later_run_rewrote(app: AppConfig) -> None:
     rewritten = REFILL_PUBLISHED._replace(summary=REFILL_PUBLISHED.summary + " It was updated.")
 
     assert not corpus.published_is_the_scored_one(rewritten, recorded=recorded)
+
+
+def test_the_join_stops_matching_a_row_scored_before_key_points_left(app: AppConfig) -> None:
+    """The accepted break, pinned so it is read here rather than found in a run.
+
+    Key points were in the digested payload until 2026-09-24. A row scored
+    before that holds a digest taken over three fields, and this join recomputes
+    two, so it can never agree. Nothing raises: the harvest finds no output to
+    pair with that row and refills from days written since.
+
+    The old formula is spelled out rather than imported, because the function
+    that produced it is gone. That is the point of the test - it is the only
+    place left in the tree that can still say what the digest used to be.
+    """
+    article, _ = refetched(REFILL_BODY, app)
+    era = {
+        "key_points": ["Reserve margin stays near 12 percent into February"],
+        "summary": REFILL_PUBLISHED.summary,
+        "title": REFILL_PUBLISHED.title,
+    }
+    before = hashlib.sha256(canonical_json(era).encode("utf-8")).hexdigest()
+    recorded = refill_recorded(article, REFILL_PUBLISHED).model_copy(
+        update={"output_digest": before}
+    )
+
+    assert not corpus.published_is_the_scored_one(REFILL_PUBLISHED, recorded=recorded)
+    assert derive_output_digest(REFILL_PUBLISHED.summary, title=REFILL_PUBLISHED.title) != before
+
+
+def test_the_digest_is_taken_over_the_summary_and_the_title_and_nothing_else() -> None:
+    """The new formula, stated once so a later change has to come past it."""
+    digest = derive_output_digest("The margin held.", title="A headline")
+
+    assert digest == derive_output_digest("The margin held.", title="A headline")
+    assert digest != derive_output_digest("The margin held.", title="Another headline")
+    assert digest != derive_output_digest("The margin slipped.", title="A headline")
+    assert derive_output_digest("The margin held.") != digest, (
+        "a null title is left out of the payload rather than digested as null"
+    )
 
 
 # --- The roll --------------------------------------------------------------

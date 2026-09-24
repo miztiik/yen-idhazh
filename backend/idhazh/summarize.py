@@ -34,13 +34,12 @@ from collections.abc import Mapping
 from functools import lru_cache
 from pathlib import Path
 from string import Template
-from typing import Annotated, Any, Final, NamedTuple
+from typing import Any, Final, NamedTuple
 
 from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
-    StringConstraints,
     ValidationError,
     create_model,
 )
@@ -58,7 +57,7 @@ from idhazh.contracts.item_health import FailureCode
 from idhazh.contracts.knobs.evaluation import EvaluationConfig
 from idhazh.contracts.knobs.summarize import OverLengthAction, SummarizeConfig, SummaryBand
 from idhazh.contracts.summary import LengthAction, Summary, SummaryStatus
-from idhazh.evals.metrics import restates_summary, verbatim_run
+from idhazh.evals.metrics import verbatim_run
 from idhazh.llm.server import Completion, TurnMarkers, request_payload, window
 from idhazh.sanitize import LINK_PLACEHOLDER, sanitize, untrusted_block
 
@@ -131,9 +130,8 @@ class SummaryDraft(BaseModel):
     reaching a payload - the shape is the control, not the prompt.
 
     The bounds declared here are the permissive base. `draft_model` narrows them
-    to the numbers config holds, because a decoder counting key points
-    differently from the prompt rejects a reply that did exactly what it was
-    told.
+    to the numbers config holds, because a decoder counting words differently
+    from the prompt rejects a reply that did exactly what it was told.
 
     `title` is required here and optional on the payload. Grammar-constrained
     decoding is free to skip a property that is not required, so an optional
@@ -144,10 +142,12 @@ class SummaryDraft(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    # Field order is decode order: key points before the summary, so the model
-    # finds the facts first and then writes prose that connects them.
+    # Field order is decode order. A list of key points was decoded before the
+    # summary until 2026-09-24, so the model found the facts first and then
+    # wrote prose connecting them. Nothing read the points afterwards and the
+    # extra decode cost about 21 seconds an item, so the scaffold went with
+    # them: the title is now the facts-first step and the summary follows it.
     title: str = Field(min_length=1)
-    key_points: list[str] = Field(min_length=1)
     summary: str = Field(min_length=1)
 
 
@@ -158,53 +158,16 @@ def _template() -> Template:
 
 @lru_cache(maxsize=16)
 def _draft_model(
-    key_points_min: int,
-    key_points_max: int,
     min_chars: int,
     max_chars: int,
     title_max_chars: int,
-    key_point_max_chars: int,
 ) -> type[SummaryDraft]:
     """Keyed on plain ints, because a Pydantic config object is not hashable."""
     return create_model(
         "SummaryDraft",
         __base__=SummaryDraft,
         title=(str, Field(min_length=1, max_length=title_max_chars)),
-        key_points=(
-            list[Annotated[str, StringConstraints(min_length=1, max_length=key_point_max_chars)]],
-            Field(min_length=key_points_min, max_length=key_points_max),
-        ),
         summary=(str, Field(min_length=min_chars, max_length=max_chars)),
-    )
-
-
-def key_point_rail(
-    ask: SummarizeConfig, source_words: int | None, brief: bool
-) -> tuple[int, int]:
-    """The key-point floor and ceiling the decoder is held to.
-
-    When an article is named - the production path, through `build_request` and
-    the matching `parse_draft` - the rail is the chosen band's own range, so the
-    band's ceiling is a control the decoder enforces rather than a request the
-    prompt makes: a note is held to one key point, an investigation to five.
-
-    When no article is named - the fingerprint, an offline harness, a schema
-    check - the rail is the union across every band, the permissive envelope any
-    band's valid reply fits inside.
-
-    Public because the prompt has to state the same two numbers the decoder
-    enforces. A prompt asking for more key points than the grammar admits loses
-    the item for doing exactly what it was told.
-    """
-    if brief:
-        band = ask.band_for(0)
-        return band.key_points_min, band.key_points_max
-    if source_words is not None:
-        band = ask.band_for(source_words)
-        return band.key_points_min, band.key_points_max
-    return (
-        min(band.key_points_min for band in ask.bands),
-        max(band.key_points_max for band in ask.bands),
     )
 
 
@@ -216,26 +179,23 @@ def draft_model(
 ) -> type[SummaryDraft]:
     """The shape the decoder is held to, built from the numbers config holds.
 
-    `source_words` and `brief` pick the band, so the key-point count the decoder
-    enforces is the one that band asks for. With neither, the rail is the union
-    across every band - the envelope the fingerprint and the offline harnesses
-    hold a reply to when no single article applies.
-
     The word rails come from the ladder and its tolerance, never from a global
     pair. They are the widest any band can publish, because the decoder enforces
     them as a character budget: a reply past the rail fails to parse, and a reply
     that cannot parse never reaches the verdict that would have trimmed it or
     published it long.
+
+    `source_words` and `brief` are taken and not read. They picked the band whose
+    key-point count the decoder enforced, and the two rails that are left are the
+    widest any band can publish, so every band now gets the same shape. They stay
+    on the signature because the caller that knows the article passes them, and a
+    band-keyed rail that returns is a rail this function reads again.
     """
     ask = prompt_config or SummarizeConfig()
-    key_points_min, key_points_max = key_point_rail(ask, source_words, brief)
     return _draft_model(
-        key_points_min,
-        key_points_max,
         ask.decoder_words_min() * _MIN_CHARS_PER_WORD,
         ask.decoder_words_max() * _MAX_CHARS_PER_WORD,
         ask.title_words_max * _MAX_CHARS_PER_WORD,
-        ask.key_point_words_max * _MAX_CHARS_PER_WORD,
     )
 
 
@@ -628,7 +588,7 @@ def _failed(
         version=Summary.schema_version(),
         item_id=article.item_id,
         url_key=article.url_key,
-        output_digest=derive_output_digest(None, []),
+        output_digest=derive_output_digest(None),
         model_id=model_id,
         source_truncated=article.truncated,
         length_action=length_action,
@@ -676,30 +636,6 @@ def _publishable_title(raw: str, ask: SummarizeConfig) -> str | None:
     if _leaked_address(title) is not None:
         return None
     return title
-
-
-def _distinct_key_points(
-    points: list[str], summary: str, *, ceiling: float, floor: int
-) -> list[str]:
-    """Drop each key point that restates the summary, and keep the item.
-
-    `restates_summary` is the measure the prompt could only ask for: the share of
-    a key point's four-word phrases already in the summary. Above `ceiling` the
-    key point carries more of the summary's phrasing than a fact of its own, so
-    it is dropped - a restating key point is a thin line, not a wrong one, so the
-    item degrades and never fails (section 1a).
-
-    The drop never falls below `floor`, the band's own `key_points_min`, which is
-    never below one because the published payload requires at least one key point
-    (`DigestItem.key_points`). When every key point restates, the least-restating
-    up to the floor stay and the item still publishes. Order is preserved for the
-    survivors, so the payload reads in the order the model wrote them.
-    """
-    scored = [(restates_summary(point, summary), index) for index, point in enumerate(points)]
-    distinct = sum(1 for score, _ in scored if score <= ceiling)
-    keep = max(floor, distinct)
-    kept = {index for _, index in sorted(scored)[:keep]}
-    return [point for index, point in enumerate(points) if index in kept]
 
 
 def to_summary(
@@ -819,30 +755,16 @@ def to_summary(
             failure_code=FailureCode.COPIED_SOURCE,
         )
 
-    # A key point that only restates the summary is dropped, not failed, and the
-    # drop never removes the last one, so the item always keeps a publishable
-    # floor of key points. The address check below then reads what we will
-    # actually publish.
-    key_points = _distinct_key_points(
-        draft.key_points,
-        draft.summary,
-        ceiling=ask.key_point_restatement_ceiling,
-        floor=band.key_points_min,
-    )
-
-    published: list[tuple[str, str]] = [("summary", draft.summary)]
-    published += [("key point", point) for point in key_points]
-    for field, text in published:
-        leaked = _leaked_address(text)
-        if leaked is not None:
-            return _failed(
-                article,
-                model_id=model_id,
-                detail=f"the {field} may not be published: {leaked}",
-                generated_at=generated_at,
-                completion=completion,
-                failure_code=FailureCode.LEAKED_ADDRESS,
-            )
+    leaked = _leaked_address(draft.summary)
+    if leaked is not None:
+        return _failed(
+            article,
+            model_id=model_id,
+            detail=f"the summary may not be published: {leaked}",
+            generated_at=generated_at,
+            completion=completion,
+            failure_code=FailureCode.LEAKED_ADDRESS,
+        )
 
     title = _publishable_title(draft.title, ask)
     # The stage makes one call today, so the item total is that call's numbers -
@@ -855,8 +777,7 @@ def to_summary(
         url_key=article.url_key,
         title=title,
         summary=draft.summary,
-        key_points=key_points,
-        output_digest=derive_output_digest(draft.summary, key_points, title=title),
+        output_digest=derive_output_digest(draft.summary, title=title),
         model_id=model_id,
         attempt=attempt,
         source_truncated=article.truncated,

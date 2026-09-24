@@ -47,7 +47,6 @@ def story(
         source_id=source_id,
         source_name=source_id,
         summary="A summary.",
-        key_points=["A point."],
         band=ConfidenceBand.HIGH,
         introduced_by_run=introduced_by_run,
         published_at=published_at,

@@ -13,7 +13,6 @@ import hashlib
 import json
 import re
 import unicodedata
-from collections.abc import Sequence
 from enum import StrEnum
 from pathlib import Path
 from typing import Annotated, Any, ClassVar, Final, Self, get_args
@@ -585,9 +584,7 @@ def records_json(payload: Any) -> str:
     return _record_lines(payload, "") + "\n"
 
 
-def derive_output_digest(
-    summary: str | None, key_points: Sequence[str], *, title: str | None = None
-) -> str:
+def derive_output_digest(summary: str | None, *, title: str | None = None) -> str:
     """What a later run compares against to detect a determinism violation.
 
     Digests the published words only. A re-run that produced the same text in a
@@ -598,8 +595,17 @@ def derive_output_digest(
     is what keeps this additive: every digest written before the model wrote
     titles still recomputes to the same value, so no committed payload had to be
     restamped (CLAUDE.md section 11).
+
+    **Key points were in this payload until 2026-09-24 and their removal is not
+    additive.** Every digest taken before then was taken over a different
+    payload, so it cannot recompute to the value stored beside it. The one
+    recomputation against committed data is the corpus join
+    (`corpus.published_is_the_scored_one`), which stops matching a pre-change
+    eval row rather than failing. That was accepted rather than migrated: every
+    other carrier stores the digest and never recomputes it, and a re-harvest
+    resets to days written after the change.
     """
-    payload: dict[str, Any] = {"key_points": list(key_points), "summary": summary}
+    payload: dict[str, Any] = {"summary": summary}
     if title is not None:
         payload["title"] = title
     return hashlib.sha256(canonical_json(payload).encode("utf-8")).hexdigest()

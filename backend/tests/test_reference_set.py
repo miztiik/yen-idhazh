@@ -72,9 +72,7 @@ def an_answer(app: AppConfig, band: int) -> str:
     """A target inside `band`'s word range that the decoder would accept."""
     asked = app.summarize.bands[band]
     words = " ".join(["word"] * asked.target_words_min)
-    return json.dumps(
-        {"title": "A title", "summary": words, "key_points": ["one point", "two point"]}
-    )
+    return json.dumps({"title": "A title", "summary": words})
 
 
 # --- reading the stratification off a row ----------------------------------
@@ -238,7 +236,6 @@ def test_check_refuses_a_summary_outside_the_band_it_was_asked_for(
         {
             "title": "A title",
             "summary": " ".join(["word"] * 150),
-            "key_points": ["one point", "two point"],
         }
     )
     rest = [task for task in tasks if task.url_key != loose.url_key]

@@ -103,6 +103,29 @@ def test_version_is_stamped_when_a_writer_omits_it() -> None:
     assert load_summary(payload).version == BY_STEM["summary"].schema_version()
 
 
+@pytest.mark.parametrize(
+    ("stem", "fixture"),
+    [("digest-day", "two-runs.json"), ("digest-view", "one-day.json")],
+)
+def test_a_published_day_that_still_carries_key_points_reads(stem: str, fixture: str) -> None:
+    """Section 11's release blocker, for a field that left a frozen payload.
+
+    Every day published before 2026-09-24 carries `key_points` on every item,
+    and a published day is never rewritten. `extra="forbid"` would refuse one
+    outright, so the read side drops the key by name - and this is the arm that
+    proves it, because the canonical fixture no longer carries the key and so
+    proves only the new shape.
+    """
+    payload = json.loads(read_text(CONTRACT_FIXTURES_DIR / stem / fixture))
+    for item in payload["items"]:
+        item["key_points"] = ["A point the day used to publish."]
+
+    day = BY_STEM[stem].model_validate(payload)
+
+    assert day.items, "a day with no items proves nothing here"  # type: ignore[attr-defined]
+    assert not any(hasattr(item, "key_points") for item in day.items)  # type: ignore[attr-defined]
+
+
 def test_a_manifest_written_before_the_verbosity_knob_still_reads() -> None:
     """Section 11's release blocker, for the other document the knob reached.
 
