@@ -1,8 +1,9 @@
 # Known defects
 
-**Last Updated**: 2026-09-23
+**Last Updated**: 2026-09-24
 
-**Four defects are open.** Two need evidence or a ruling and two need code.
+**Twelve defects are open.** Two of them need evidence or a ruling before any code
+is worth writing; the rest are known fixes with named blast radiuses.
 Defect 2 needed three repairs before a person could label anything, and all three
 shipped. The owner settled the counting rule on 2026-08-27, which took the
 draw from 32 of 60 to 60 of 60. What is left is **60 human labels** and eight
@@ -10,7 +11,9 @@ more run-days at one scorer, and neither is code. Defect 18 is the opposite
 shape: the code now works and the measurement it produces still cannot fire, so
 what it needs is a ruling on which instrument to keep. Defects 23 and 24 were
 filed on 2026-09-21 by the plan that rebuilt the Hardware route; each is a known
-fix with a named blast radius rather than an open question. **This file cannot
+fix with a named blast radius rather than an open question. Defect 33 was filed on
+2026-09-24 and is defect 32 again, one store over: the same raw read of a store
+that needs settling, missed when 32 was fixed. **This file cannot
 be deleted by writing more of it.**
 
 Defects 15, 16 and 17 closed on 2026-08-27. Defects 19 and 20 were filed later,
@@ -50,6 +53,48 @@ decision. Current project behaviour belongs in `docs/` (Guardrail #4).
 | 30 | A third spelling of the vector norm lives in the canary builder | 1 | **OPEN - the one it duplicates is now public** |
 | 31 | The council's selection artifact is named for one date and carries several | 1 | **OPEN - cosmetic today, wrong the day somebody reads the name** |
 | 32 | The console reads the score ledger raw, so the newest day counts twice | 2 | CLOSED 2026-09-23 |
+| 33 | The console reads the machine ledger raw, so every job counts twice and one copy has no machine | 3 | **OPEN - defect 32 again, one store over** |
+
+## 33 - The Hardware route counts every job twice, and one copy has no machine (OPEN)
+
+**This is defect 32 again, one store over.** That one fixed `state/scores/`; the
+sibling readers of `state/host-fingerprint/` were not swept with it.
+
+Every job writes its machine row in two halves, by design. The probe half lands
+first (`silicon.stage_fingerprint` through `ledger.write_segment`), because the
+bandwidth reading wants an idle machine. The clock half lands after the last item
+(`silicon.stage_job_clock` through `ledger.extend_segment`). `extend_segment` says
+in its own docstring that it settles nothing and that `day_shards.settled_rows` is
+the one place that decides what two rows of one key mean, and
+`ledger.HOST_FINGERPRINT_KEY` is `(date, run_id, job, shard)`.
+
+**The console never settles them.** `frontend/src/lib/server/host-fingerprint.ts`
+and `frontend/src/lib/server/machine-counters.ts` both call `readDayShards`, the
+plain reader, where `payload.ts` calls `settledDayShards` with `ITEM_HEALTH_KEY`
+for the item census. So both halves reach the page as two separate job placements.
+
+Measured 2026-09-24 over the fourteen newest day directories of
+`state/host-fingerprint/`: **41 of 56 per-writer files hold exactly two rows**, one
+carrying the machine and one carrying only `job_seconds`. That is 41 of 205 rows,
+about a fifth. The settled and pre-partition folds in the same tree are fully
+named, which is the settle rule working where it does run.
+
+**What a reader sees.** On `What kinds of machine we keep being given`, every job
+that recorded a clock is counted twice - once as its machine and once as
+`Other machines` - which is why that bucket reads as the second most common machine
+the platform gives us. It is neither a fleet of rare machines nor a failed probe.
+`job_seconds` also never sits beside the machine it was measured on, so any panel
+that joins cost to machine kind is reading a row with no machine in it.
+
+**The fix is one call on the read side, and it is Level 3 because of what it
+drags.** `settledDayShards` already exists and already takes a key, so both call
+sites move together. What makes it cross a boundary is the key itself: the frontend
+would carry a `HOST_FINGERPRINT_KEY` copy of a Pydantic original, so the two tests
+that bind a contract copy to its model come with it (CLAUDE.md section 9). Nothing
+on the backend changes; the producer is right and the reader is wrong, which is the
+shape defects 20 and 32 both had.
+
+Found on 2026-09-24 by plan 50's row 8, while specifying the panel it distorts.
 
 ## 32 - The console reads the score ledger raw, so the newest day counts twice (CLOSED 2026-09-23)
 
