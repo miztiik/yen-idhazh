@@ -552,10 +552,12 @@ FAILURE_CODE_STAGES: Final[Mapping[FailureCode, frozenset[ItemStage]]] = Mapping
 #: against a publisher - the only thing it could do is be wrong.
 #:
 #: **`CONTAMINATED` is here because it rides on an `ok` row and because it is
-#: our extractor failing rather than the publisher.** `counts_against_source`
-#: asks only whether a code is on the row, so a signal that publishes would
-#: otherwise charge a feed for every story it published - which is why the three
-#: shape signals beside it are all here too. The page does carry the article, and
+#: our extractor failing rather than the publisher.** Its outcome already spares
+#: it, because `counts_against_source` charges nothing that reached the digest;
+#: naming it here says it stays free on the day somebody turns its switch on.
+#: `TOO_SHORT` is the one shape signal not on this list, because the committed
+#: config turns its switch on and a rejected stub IS the publisher's doing.
+#: The page does carry the article, and
 #: the same page yields it correctly when read through the container its own
 #: markup names; a front page laid out beside the story is ordinary news-site
 #: furniture. The argument the other way is real - a publisher whose pages
@@ -573,7 +575,6 @@ SOURCE_NEUTRAL_FAILURE_CODES: Final[frozenset[FailureCode]] = frozenset(
         FailureCode.HTTP_RATE_LIMITED,
         FailureCode.BOILERPLATE,
         FailureCode.CONTAMINATED,
-        FailureCode.TOO_SHORT,
         FailureCode.MODEL_UNREACHABLE,
         FailureCode.MODEL_REFUSED,
         FailureCode.MODEL_TIMED_OUT,
@@ -1275,8 +1276,18 @@ class ItemHealthRow(Contract):
 
     @property
     def counts_against_source(self) -> bool:
-        """Does this failure count against the source in later source-health reads?"""
-        return self.code is not None and self.code not in SOURCE_NEUTRAL_FAILURE_CODES
+        """Does this failure count against the source in later source-health reads?
+
+        A row that reached the digest never counts, whatever code it carries. A
+        shape signal can ride on an `ok` row, and charging a feed for a story it
+        published would read the signal as a verdict when it is only evidence.
+        This is what spares a feed registered as publishing abstracts: its short
+        items still publish, so `too_short` on its rows stays free even though
+        the same code charges an ordinary feed whose item was rejected.
+        """
+        if self.code is None or self.outcome is ItemOutcome.OK:
+            return False
+        return self.code not in SOURCE_NEUTRAL_FAILURE_CODES
 
     @model_validator(mode="before")
     @classmethod

@@ -30,6 +30,7 @@ from idhazh.contracts.base import canonical_json, derive_output_digest
 from idhazh.contracts.corpus import ChatRole, ChatTurn, CorpusMeta, CorpusRow
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.knobs.models import ModelsConfig
+from idhazh.contracts.sources import SourceForm
 from idhazh.contracts.summary import Summary, SummaryStatus
 
 DATE = "2026-08-28"
@@ -334,7 +335,9 @@ def test_a_refetched_body_earns_its_own_band_rather_than_the_recorded_one(
     system turns from the same ledger row, which is what this asserts.
     """
     long_article, long_text = refetched(REFILL_BODY, app)
-    short_article, short_text = refetched(" ".join(REFILL_BODY.split()[:40]), app)
+    short_article, short_text = refetched(
+        " ".join(REFILL_BODY.split()[:40]), app, form=SourceForm.ABSTRACT
+    )
     recorded = refill_recorded(long_article, REFILL_PUBLISHED)
 
     long_row = corpus.rescored(

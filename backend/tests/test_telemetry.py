@@ -157,6 +157,9 @@ def row_for(code: FailureCode) -> ItemHealthRow:
                         b"<p>This sentence has enough words to count as article prose today.</p>"
                         b"<p>Another sentence has enough words to count as article prose today.</p>"
                         b"<p>A third sentence has enough words to count as article prose today.</p>"
+                        b"<p>The fourth sentence has enough words to count as article prose too.</p>"
+                        b"<p>Its fifth neighbour has enough words to count as article prose too.</p>"
+                        b"<p>One final sentence has enough words to count as article prose too.</p>"
                         b"</article></body></html>"
                     ),
                 ),

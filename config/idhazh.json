@@ -190,7 +190,7 @@
     "reject_boilerplate": false,
     "reject_contaminated": false,
     "reject_not_prose": false,
-    "reject_too_short": false,
+    "reject_too_short": true,
     "request_timeout_seconds": 20.0,
     "truncation_cap_tokens": 26000,
     "user_agent": "yen-idhazh/1.0 (+https://github.com/miztiik/yen-idhazh)"

@@ -29,6 +29,7 @@ from idhazh.contracts.knobs.extract import ElementsConfig
 from idhazh.contracts.knobs.models import ModelsConfig
 from idhazh.contracts.knobs.run import RunConfig
 from idhazh.contracts.run_plan import PlannedItem
+from idhazh.contracts.sources import SourceForm
 from idhazh.contracts.span_rollup import SpanRollupRow
 from idhazh.contracts.summary import Summary
 from idhazh.contracts.taxonomy import SourceTier
@@ -329,9 +330,18 @@ def refill_page(body: str) -> bytes:
 
 
 def refetched(
-    body: str, app: AppConfig, *, url: str = REFILL_URL, item_id: str = "energy-01"
+    body: str,
+    app: AppConfig,
+    *,
+    url: str = REFILL_URL,
+    item_id: str = "energy-01",
+    form: SourceForm = SourceForm.ARTICLE,
 ) -> tuple[Article, str]:
-    """One page through the real extractor, exactly as a refill sees it."""
+    """One page through the real extractor, exactly as a refill sees it.
+
+    `form` is a keyword because a body under the brief floor only survives the
+    committed config when its feed publishes abstracts.
+    """
     item = PlannedItem(
         item_id=item_id,
         url_key=derive_url_key(url),
@@ -340,6 +350,7 @@ def refetched(
         source_id="grid-newsroom",
         tier=SourceTier.INSTITUTION,
         vertical="energy",
+        source_form=form,
         title="Nordic grid publishes its winter outlook",
         rank_score=1.0,
     )
