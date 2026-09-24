@@ -30,6 +30,17 @@ the signal and publish, which is Owner override O3. True means reject the item.
 There were two until 2026-09-17, and the third's absence was an asymmetry nobody
 chose rather than a decision anybody took.
 
+**The committed `config/idhazh.json` turns `reject_too_short` on.** The default
+stays false, because O3 is about the default and a fresh clone still publishes a
+short item. Turning one on is the decision O3 left a curator, not an override of
+it. What it costs, measured over the 31 days to 2026-09-24: 196 short items
+published, and 159 of them came from three hosts that are now retired. The live
+cost is the other 37 - about one card a day out of 343, from 17 feeds, none of
+them losing more than 5 over the month. Every one of those bodies held between
+35 and 59 words against a brief floor of 60, so the card carried a headline and
+almost no article. None were on a feed declared `abstract`, so the guard below
+spared nothing; it is insurance for a feed nobody has registered yet.
+
 **`reject_too_short` carries a guard the other two do not need: it never rejects
 a feed a curator registered as `abstract`.** That feed publishes abstracts
 because a person said so, and an abstract is short by definition - rejecting one

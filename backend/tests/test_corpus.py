@@ -23,6 +23,7 @@ from idhazh.contracts.feed_health import FetchOutcome
 from idhazh.contracts.knobs.extract import ExtractConfig
 from idhazh.contracts.qualification import CorpusItem
 from idhazh.contracts.run_plan import PlannedItem, RunPlan, VerticalPlan
+from idhazh.contracts.sources import SourceForm
 from idhazh.contracts.taxonomy import SourceTier
 from idhazh.evals import qualify
 from idhazh.fetch import FetchResult
@@ -83,6 +84,10 @@ def planned(index: int, band: int) -> PlannedItem:
         source_id="grid-newsroom",
         tier=SourceTier.INSTITUTION,
         vertical="energy",
+        # The bottom tier sits under `extract.min_source_words`, and the committed
+        # config rejects a body that short unless its feed publishes abstracts -
+        # which is the only way the digest still carries one.
+        source_form=SourceForm.ABSTRACT if band == 0 else SourceForm.ARTICLE,
         title=f"Example Grid item {index}",
         rank_score=1.0,
     )
