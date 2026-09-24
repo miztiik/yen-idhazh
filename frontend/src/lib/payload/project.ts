@@ -54,7 +54,7 @@ export interface CoverageSource {
  * file and fails if it and the contract disagree, which is what stops the two
  * halves of one payload drifting across two languages.
  */
-export const VIEW_VERSION = '2026-09-22';
+export const VIEW_VERSION = '2026-09-24';
 
 /** How many publisher names a served item may carry.
  *
