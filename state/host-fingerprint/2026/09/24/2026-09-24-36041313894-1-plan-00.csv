@@ -1,0 +1,3 @@
+version,date,run_id,job,shard,fingerprint,cpu_model,cpu_vendor,cpu_family,cpu_model_number,cpu_stepping,microcode,cores,threads,l3_cache_bytes,mhz_max,mhz_at_probe,flags,boot_seconds,memcpy_gib_s,memcpy_probe_mib,vm_size,vm_location,vm_zone,vm_fault_domain,runner_name,measured_at,model_load_ms,job_seconds,server_prompt_tokens,server_prompt_seconds
+2026-09-20,2026-09-24,2026-09-24-36041313894,plan,0,1a5cef038ebd6b8d,Intel(R) Xeon(R) Platinum 8370C CPU @ 2.80GHz,GenuineIntel,6,106,6,0xffffffff,2,4,50331648,,2972.8875,avx2 avx512_vnni avx512f f16c fma sse4_2,176.8,24.681592036738408,512,Standard_D4ds_v5,WestUS3,,0,GitHub Actions 1000039137,2026-09-24T18:29:36Z,,,,
+2026-09-20,2026-09-24,2026-09-24-36041313894,plan,0,,,,,,,,,,,,,,,,,,,,,,,,149,,
