@@ -104,9 +104,15 @@ from idhazh.contracts.base import RUN_ID_PATTERN, ServerJob
 from idhazh.contracts.council_shard_outcome import CouncilShardOutcome
 from idhazh.contracts.counterfactual_score import CounterfactualScoreRow
 from idhazh.contracts.day_validation import DayValidationReceipt
+from idhazh.contracts.eval_row import (
+    DROPPED_CELLS as DROPPED_EVAL_CELLS,
+)
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.feed_health import FeedHealthRow, supersedes
 from idhazh.contracts.feed_retirement import FeedRetirementRow
+from idhazh.contracts.fitted_similarity_threshold import (
+    DROPPED_CELLS as DROPPED_FIT_CELLS,
+)
 from idhazh.contracts.fitted_similarity_threshold import FittedSimilarityThreshold
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.item_health import (
@@ -1360,6 +1366,13 @@ ITEM_HEALTH_CARRIED: Final[frozenset[str]] = frozenset(RETIRED_CELLS) | DROPPED_
 #: names the contract holds now and the dropped heading simply goes.
 STORY_SIMILARITY_PAIR_CARRIED: Final[frozenset[str]] = DROPPED_PAIR_CELLS
 
+#: The same again, for the eval ledger. Two columns have left that row and none
+#: has moved, so a committed shard still re-files and the two cells go.
+SCORES_CARRIED: Final[frozenset[str]] = DROPPED_EVAL_CELLS
+
+#: The same again, for the fitted line's day files.
+FITTED_SIMILARITY_THRESHOLD_CARRIED: Final[frozenset[str]] = DROPPED_FIT_CELLS
+
 
 def _header_and_keys(
     path: Path, key: tuple[str, ...]
@@ -1745,7 +1758,7 @@ _TREE_SHAPES: Final[dict[SegmentLedger, _TreeShape]] = {
     SegmentLedger.ITEM_HEALTH: _TreeShape(ITEM_HEALTH_KEY, ItemHealthRow, ITEM_HEALTH_CARRIED),
     SegmentLedger.HOST_FINGERPRINT: _TreeShape(HOST_FINGERPRINT_KEY, HostFingerprintRow),
     SegmentLedger.SPAN_ROLLUP: _TreeShape(SPAN_ROLLUP_KEY, SpanRollupRow),
-    SegmentLedger.SCORES: _TreeShape(OBSERVATION_KEY, EvalRow),
+    SegmentLedger.SCORES: _TreeShape(OBSERVATION_KEY, EvalRow, SCORES_CARRIED),
     SegmentLedger.SCORE_INDEX: _TreeShape(OBSERVATION_INDEX_KEY, ObservationIndexRow),
     SegmentLedger.VALIDATION: _TreeShape(VALIDATION_KEY, ValidationRow),
     SegmentLedger.HEALTH: _TreeShape(FEED_HEALTH_KEY, FeedHealthRow),
@@ -2041,6 +2054,7 @@ def keyed_paths(state_dir: Path, *, date: str | None) -> list[KeyedLedger]:
                 fitted_thresholds_path(state_dir, date),
                 STORY_SIMILARITY_THRESHOLD_KEY,
                 FittedSimilarityThreshold,
+                FITTED_SIMILARITY_THRESHOLD_CARRIED,
             ),
             KeyedLedger(
                 scored_pairs_path(state_dir, date),
@@ -2061,7 +2075,12 @@ def keyed_paths(state_dir: Path, *, date: str | None) -> list[KeyedLedger]:
             for path in day_partition.day_files(state_dir / VISUAL_PRUNES_DIRNAME)
         ),
         *(
-            KeyedLedger(path, STORY_SIMILARITY_THRESHOLD_KEY, FittedSimilarityThreshold)
+            KeyedLedger(
+                path,
+                STORY_SIMILARITY_THRESHOLD_KEY,
+                FittedSimilarityThreshold,
+                FITTED_SIMILARITY_THRESHOLD_CARRIED,
+            )
             for path in day_partition.day_files(
                 state_dir / CONTENT_SIMILARITY_JUDGE_DIRNAME / FITTED_THRESHOLDS_DIRNAME
             )

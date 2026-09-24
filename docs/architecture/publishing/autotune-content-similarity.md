@@ -30,7 +30,7 @@ flowchart TD
   veto -- yes --> apart
   veto -- no --> shape{"Do the headlines reduce to the same<br/>words AND do their figures agree?"}
   shape -- yes --> fits["Reads as one story"]
-  shape -- no --> comp["Weighted score:<br/>same_story.cosine_weight x cosine<br/>+ same_story.key_point_weight x key-point overlap"]
+  shape -- no --> comp["Score:<br/>same_story.cosine_weight x cosine"]
   comp --> floor{"At or above<br/>assemble.same_story.floor_min?"}
   floor -- yes --> fits
   floor -- no --> apart
@@ -451,13 +451,13 @@ flowchart TD
 
 **`HOLDOUT_TWO_STORY_MAX` has one declaration and one instrument.** The constant is what the config validator reads, because a validator cannot open a CSV; the verb retakes the reading on its way past and prints both numbers when they disagree. It stores nothing - a committed copy would be the second source the constant is not allowed to have (Guardrail #10).
 
-**Two terms are reproduced and two overrides are not.** The panel and the verb both compute `cosine_weight * cosine + key_point_weight * key_point_overlap`, which is exactly what the floor is applied to. Neither reproduces the two overrides in `_pair_terms`: a matching reduced headline joining at 1.0, and a clash of figures refusing outright. Neither is a function of the line - they fire or they do not whatever the floor is set to - so neither can move the margin the panel measures, and counting them would credit the line with a merge it did not make.
+**One term is reproduced and two overrides are not.** The panel and the verb both compute `cosine_weight * cosine`, which is exactly what the floor is applied to. Neither reproduces the two overrides in `_pair_terms`: a matching reduced headline joining at 1.0, and a clash of figures refusing outright. Neither is a function of the line - they fire or they do not whatever the floor is set to - so neither can move the margin the panel measures, and counting them would credit the line with a merge it did not make.
 
 **What that costs the reader, stated.** A pair somebody marked apart whose headlines reduce identically would be merged at 1.0 whatever the line is, and the panel would show it sitting harmlessly below the rule. None of the four marked-apart pairs is such a pair today: all four score below 1.0 on their words, and none of them clashes on a figure either. That is a reading of today's file and not a property of the design, so it is the thing to re-check when a mark is added.
 
 **The word reduction is a second spelling of one rule, and it was measured rather than asserted.** `key_point_overlap` needs the key points reduced to words, and `assemble._reduce` is a Python string function that no contract can be generated from - so `$lib/console/holdout.ts` carries a TypeScript copy. Measured 2026-09-19 on a developer machine / Node 24.12.0 / Python 3.14.2, over every key-point block in the 29 committed days: **10,328 of 10,328 reduce to the same word set**. The first attempt kept combining marks and disagreed on 3 of them, all Devanagari - Python's `\w` is alphanumeric plus the underscore and a matra is neither, so a matra is a separator there and now here too. The reading is cheap to retake and is the check to run when either side moves.
 
-**The key-point term is weighted zero today, which bounds what the copy can cost.** A drift in the reduction changes a printed score by `key_point_weight` times the difference, and `key_point_weight` is 0.0 in `config/idhazh.json`. That is why a second spelling was acceptable at all; raise the weight and the measurement above becomes load-bearing rather than reassuring.
+**The key-point term is gone as of 2026-09-24, and so is the word reducer that fed it.** It shipped at a weight of 0.0 and was never raised, so it never moved a published group; the cosine is the whole score now and the console reproduces one multiplication rather than two. The second spelling of the reduction rule went with it, which removes the drift this paragraph used to bound.
 
 ## One headline, two outlets, and why 0.94 was not what changed
 

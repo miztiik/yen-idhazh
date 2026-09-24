@@ -1,7 +1,6 @@
 import {
 	chartConfig,
 	consoleConfig,
-	evaluationConfig,
 	observabilityConfig,
 	summarizeConfig,
 	uiConfig
@@ -11,11 +10,8 @@ import {
 	evalColumnLabels,
 	evalDays,
 	evalWithin,
-	leadDays,
-	leadSeries,
 	matchDays,
 	matchSeries,
-	newFactDays,
 	type DayScoredCounts
 } from '$lib/console/eval-instruments';
 import {
@@ -199,8 +195,7 @@ export async function load() {
 	// 6,966 rows and growing, and the page draws about a dozen numbers a day off
 	// it. Inlining the rows to re-derive those numbers in a browser would put the
 	// whole checker's output into every prerendered document.
-	const leadFloor = evaluationConfig().lead_coverage_min;
-	const evaluated = evalWithin(evalDays(rows, leadFloor, settledCounts), {
+	const evaluated = evalWithin(evalDays(rows, settledCounts), {
 		start: widest.start,
 		end: widest.end
 	});
@@ -216,15 +211,6 @@ export async function load() {
 				width: console.chart_width,
 				height: console.chart_height
 			});
-	const openLead = leadDays(openEval);
-	const leadPlot = stacked(evalColumnLabels(openLead), leadSeries(openLead), 'lines');
-	const leadSvg = leadPlot.empty
-		? null
-		: await renderToSvg(leadPlot.option, {
-				width: console.chart_width,
-				height: console.chart_height
-			});
-
 	const observability = observabilityConfig();
 	/** The days each instrument answered for, so the page can name a day one of
 	 * them missed rather than drawing it as a day nothing happened. */
@@ -298,14 +284,10 @@ export async function load() {
 		reasonsSvg,
 		// One entry per scored day inside the widest span, holding what the checker
 		// measured on that day's summaries: the faithfulness quartiles, how many
-		// summaries the whole article scores differently, the lead coverage, and
-		// the four instruments nothing bands. The browser filters this array.
+		// summaries the whole article scores differently, and the six instruments
+		// nothing bands. The browser filters this array.
 		evaluated,
 		matchSvg,
-		leadSvg,
-		// Printed beside the count it governs, so the panel says which share it is
-		// counting against instead of asking a reader to know it (Guardrail #6).
-		leadFloor,
 		// Not windowed. A swap is a point in time and its two sides are however
 		// many articles ran on each model.
 		modelSwap: modelSwap(rows, itemRows, bands, console.min_attempts_for_rate),
@@ -316,12 +298,6 @@ export async function load() {
 		// copied onto this page: two machines and two workloads, so a gap between a
 		// bench number and a run reads as a regression nobody measured.
 		measurementsReference: `${uiConfig().repo_url.replace(/\/+$/, '')}/blob/main/docs/reference/pipeline-cost.md`,
-		// One entry per committed day, each holding the item count and summed
-		// new-fact rate per length band. The browser filters this to the open window
-		// and divides once, so the strip is a mean over the window's items and never
-		// a mean of daily means. state/scores/ holds a fixed number of months, so
-		// this seed is bounded however long the pipeline runs.
-		newFactRate: newFactDays(rows, bands),
 		// The bands the strip buckets and labels on, so the page reads one ladder.
 		summarizeBands: bands,
 		console,

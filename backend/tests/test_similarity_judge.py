@@ -317,11 +317,9 @@ def _a_drawn_row(
             "right_url_key": keys[1],
             "composite_score": cosine,
             "cosine": cosine,
-            "key_point": 0.0,
             "headline": False,
             "scorer_model": "all-minilm-l6-v2-quantized",
             "cosine_weight": 1.0,
-            "key_point_weight": 0.0,
         }
     )
 

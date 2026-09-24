@@ -3,7 +3,7 @@
 The load-bearing test here is `test_a_candidate_the_judge_prefers_but_the_scorers_refuse_leaves_the_incumbent`.
 It is the whole point of the row: a model judge that prefers a worse candidate
 must not be able to promote it. Every other test guards a piece of that - the
-gate is a Pareto beat, `new_fact_rate` is never a gate target, and the number
+gate is a Pareto beat over three copy-and-invention defects, and the number
 checker the gate leans on agrees with an independent count.
 
 The judge and the summariser are driven by recorded fixtures. The model is not
@@ -19,8 +19,6 @@ import pytest
 
 from idhazh.evals.metrics import (
     hedge_dropped,
-    lead_coverage,
-    new_fact_rate,
     unsupported_numbers,
     verbatim_run,
 )
@@ -33,10 +31,6 @@ from utilities.prompt_loop import (
     run_loop,
     score_prompt,
 )
-
-_LEAD_MIN = 0.3
-_CEILING = 0.5
-
 
 # --- Recorded judges and summarisers (no model, no network) -----------------
 
@@ -131,8 +125,6 @@ def _loop(*, prefers: bool, iterations: int = 1) -> LoopResult:
         judge=judge,
         rubric="the editor rubric",
         iterations=iterations,
-        lead_coverage_min=_LEAD_MIN,
-        restatement_ceiling=_CEILING,
         seed=7,
     )
 
@@ -171,7 +163,7 @@ def test_the_gate_promotes_a_real_winner_even_when_the_judge_is_against_it() -> 
 
     The two summary sets differ on item "a" by one token - the source figure 250
     against an invented 999 - so the word count, and with it `verbatim_run`, is held
-    equal while `unsupported_numbers` and `lead_missing` improve. The judge does NOT
+    equal while `unsupported_numbers` improves. The judge does NOT
     prefer the winner. It is promoted regardless, because the deterministic gate is
     the whole decision.
     """
@@ -184,8 +176,8 @@ def test_the_gate_promotes_a_real_winner_even_when_the_judge_is_against_it() -> 
         ItemSummary("b", "The council cleared 1320 homes for next spring.", ("Homes were cleared.",)),
     ]
     # Precondition: prove the crafted sets are a clean Pareto beat before the loop.
-    worse_card = score_prompt(worse, _ITEMS, lead_coverage_min=_LEAD_MIN, restatement_ceiling=_CEILING)
-    better_card = score_prompt(better, _ITEMS, lead_coverage_min=_LEAD_MIN, restatement_ceiling=_CEILING)
+    worse_card = score_prompt(worse, _ITEMS)
+    better_card = score_prompt(better, _ITEMS)
     assert beats_incumbent(better_card, worse_card) is True
 
     summarizer = RecordedSummarizer({_INCUMBENT: worse, _CANDIDATE: better})
@@ -197,8 +189,6 @@ def test_the_gate_promotes_a_real_winner_even_when_the_judge_is_against_it() -> 
         judge=judge,
         rubric="the editor rubric",
         iterations=1,
-        lead_coverage_min=_LEAD_MIN,
-        restatement_ceiling=_CEILING,
         seed=7,
     )
 
@@ -207,24 +197,20 @@ def test_the_gate_promotes_a_real_winner_even_when_the_judge_is_against_it() -> 
     assert result.rounds[0].judge_preferred is False
 
 
-# --- The gate is a Pareto beat over the four targets ------------------------
+# --- The gate is a Pareto beat over the three targets -----------------------
 
 _BASE = Scorecard(
     unsupported_numbers=0.5,
-    lead_missing_rate=0.2,
     hedge_dropped_rate=0.1,
     verbatim_run=0.3,
-    new_fact_rate=0.6,
 )
 
 
 def test_a_candidate_no_worse_everywhere_and_better_on_one_target_wins() -> None:
     better = Scorecard(
         unsupported_numbers=0.5,
-        lead_missing_rate=0.2,
         hedge_dropped_rate=0.1,
         verbatim_run=0.25,  # strictly better, rest equal
-        new_fact_rate=0.6,
     )
     assert beats_incumbent(better, _BASE) is True
 
@@ -236,39 +222,22 @@ def test_a_tie_on_every_target_does_not_win() -> None:
 def test_worse_on_any_target_does_not_win_however_much_better_elsewhere() -> None:
     mixed = Scorecard(
         unsupported_numbers=0.0,  # much better here
-        lead_missing_rate=0.2,
         hedge_dropped_rate=0.1,
         verbatim_run=0.9,  # but worse here
-        new_fact_rate=0.6,
     )
     assert beats_incumbent(mixed, _BASE) is False
 
 
-# --- new_fact_rate is recorded, never a gate target -------------------------
+def test_the_gate_targets_are_the_three_copy_and_invention_defects() -> None:
+    """The card carried two more targets until 2026-09-24, and both are gone.
 
-
-def test_a_candidate_that_only_raises_the_new_fact_rate_does_not_win() -> None:
-    """The Goodhart guard, at the gate. A candidate equal on every gate target but
-    with a higher new-fact rate must not win - acting on that number is exactly the
-    optimisation the metric's own contract forbids (metrics.new_fact_rate).
+    A candidate can no longer win by front-loading the article's opening, which
+    is what the lead target steered toward and what nothing showed reads better.
     """
-    only_new_fact = Scorecard(
-        unsupported_numbers=0.5,
-        lead_missing_rate=0.2,
-        hedge_dropped_rate=0.1,
-        verbatim_run=0.3,
-        new_fact_rate=0.99,  # the only change, and it is not a gate target
-    )
-    assert beats_incumbent(only_new_fact, _BASE) is False
-
-
-def test_new_fact_rate_is_absent_from_the_gate_targets() -> None:
     from utilities.prompt_loop import GATE_TARGETS
 
-    assert "new_fact_rate" not in GATE_TARGETS
     assert set(GATE_TARGETS) == {
         "unsupported_numbers",
-        "lead_missing_rate",
         "hedge_dropped_rate",
         "verbatim_run",
     }
@@ -278,9 +247,7 @@ def test_new_fact_rate_is_absent_from_the_gate_targets() -> None:
 
 
 def test_score_prompt_applies_each_metric_to_its_own_source_and_averages() -> None:
-    card = score_prompt(
-        _INCUMBENT_SUMMARIES, _ITEMS, lead_coverage_min=_LEAD_MIN, restatement_ceiling=_CEILING
-    )
+    card = score_prompt(_INCUMBENT_SUMMARIES, _ITEMS)
     pairs = [
         (_INCUMBENT_SUMMARIES[0].summary, _SOURCE_A),
         (_INCUMBENT_SUMMARIES[1].summary, _SOURCE_B),
@@ -288,30 +255,16 @@ def test_score_prompt_applies_each_metric_to_its_own_source_and_averages() -> No
     assert card.unsupported_numbers == pytest.approx(
         sum(unsupported_numbers(s, src) for s, src in pairs) / 2
     )
-    assert card.lead_missing_rate == pytest.approx(
-        sum(1 for s, src in pairs if lead_coverage(s, src) < _LEAD_MIN) / 2
-    )
     assert card.hedge_dropped_rate == pytest.approx(
         sum(1 for s, src in pairs if hedge_dropped(s, src)) / 2
     )
-    assert card.verbatim_run == pytest.approx(
-        sum(verbatim_run(s, src) for s, src in pairs) / 2
-    )
-    expected_new_fact = (
-        new_fact_rate(list(_INCUMBENT_SUMMARIES[0].key_points), _INCUMBENT_SUMMARIES[0].summary, ceiling=_CEILING)
-        + new_fact_rate(list(_INCUMBENT_SUMMARIES[1].key_points), _INCUMBENT_SUMMARIES[1].summary, ceiling=_CEILING)
-    ) / 2
-    assert card.new_fact_rate == pytest.approx(expected_new_fact)
+    assert card.verbatim_run == pytest.approx(sum(verbatim_run(s, src) for s, src in pairs) / 2)
 
 
 def test_the_injected_figure_is_the_only_unsupported_number_across_the_set() -> None:
     """The candidate set carries exactly one invented figure; the incumbent carries none."""
-    incumbent = score_prompt(
-        _INCUMBENT_SUMMARIES, _ITEMS, lead_coverage_min=_LEAD_MIN, restatement_ceiling=_CEILING
-    )
-    candidate = score_prompt(
-        _CANDIDATE_SUMMARIES, _ITEMS, lead_coverage_min=_LEAD_MIN, restatement_ceiling=_CEILING
-    )
+    incumbent = score_prompt(_INCUMBENT_SUMMARIES, _ITEMS)
+    candidate = score_prompt(_CANDIDATE_SUMMARIES, _ITEMS)
     assert incumbent.unsupported_numbers == pytest.approx(0.0)
     assert candidate.unsupported_numbers == pytest.approx(0.5)  # one of two items
 

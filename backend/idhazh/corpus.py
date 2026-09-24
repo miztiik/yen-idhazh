@@ -302,15 +302,19 @@ def rescored(
 
     Every counterweight is measured here rather than read off `recorded`, and
     that is the entire reason this function exists. The recorded numbers scored
-    a body this process has not seen. A page edited since would keep a coverage
-    figure that waves through a summary its own article no longer supports, so
-    re-measuring is what lets `keeps_its_counterweights` judge the exact pair the
-    row is about to teach.
+    a body this process has not seen. A page edited since would keep figures that
+    wave through a summary its own article no longer supports, so re-measuring is
+    what lets `keeps_its_counterweights` judge the exact pair the row is about to
+    teach.
 
     `determinism_violation` is the one measure carried across untouched. It is a
     property of two decodes of one prompt rather than of the text, so a re-fetch
     learns nothing new about it, and recomputing it as False would silently
     un-fail an item the run had already caught.
+
+    `coherence` is carried across for a different reason: it reads the summary
+    alone, so a re-fetched body cannot move it, and this process holds no
+    encoder to recompute it with.
 
     The row it returns is a gate input and never a ledger row: `hhem` and its two
     companions still describe the old body, because nothing here can rescore
@@ -321,13 +325,13 @@ def rescored(
     row = EvalRow.model_validate(
         {
             **recorded.model_dump(mode="json"),
-            "coverage": metrics.lead_coverage(text, full_text),
             "compression": metrics.compression(text, full_text),
             "extractiveness": metrics.extractiveness(text, full_text),
             "verbatim_run": metrics.verbatim_run(text, full_text),
             "unsupported_numbers": metrics.unsupported_numbers(text, full_text),
             "hedge_dropped": metrics.hedge_dropped(text, full_text),
             "self_repetition": metrics.self_repetition(text),
+            "semantic_coverage": metrics.semantic_coverage(text, full_text),
             "evidential_density": metrics.evidential_density(full_text),
             "speculative_density": metrics.speculative_density(full_text),
             "summary_word_count": metrics.word_count(text),
@@ -387,13 +391,20 @@ def keeps_its_counterweights(row: EvalRow, *, evaluation: EvaluationConfig) -> b
     Never on the faithfulness score. That scorer is the alarm this project reads
     a run by, and a corpus filtered on it trains a model against its own monitor -
     after which the monitor is measuring something it helped shape.
+
+    And never on `semantic_coverage`, which is the column that replaced the lead
+    coverage this filter used to read. That one is recorded only and nothing has
+    yet shown what a low reading means: over the committed corpus its low tail
+    holds faithful abstractions as readily as omissions, so filtering on it would
+    teach a model to repeat the article's most frequent words. The corpus keeps
+    the criteria that catch copying and invention, which are the two failures a
+    string measure can see without a label.
     """
     return (
         not row.hedge_dropped
         and row.unsupported_numbers == 0
         and not row.extraction_suspect
         and not row.determinism_violation
-        and row.coverage >= evaluation.lead_coverage_min
         and row.extractiveness < evaluation.verbatim_reject_ceiling
         and row.compression < evaluation.verbatim_reject_ceiling
     )

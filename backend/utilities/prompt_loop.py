@@ -14,10 +14,12 @@ happen because of it:
   preference is recorded and never promotes anything. A model that shares a
   summary's failure modes cannot wave its own output through (CLAUDE.md section
   0a, the LLM-as-judge non-goal).
-- **`new_fact_rate` is recorded, never a gate target.** A metric used to choose an
-  output can no longer detect that outputs are getting worse. The new-fact rate
-  is read to report and never to select - best-of-N against it is the Goodhart
-  form the metric's own contract forbids (`idhazh.evals.metrics.new_fact_rate`).
+- **The three gate targets are all copy-or-invention defects**, which is what a
+  string measure can see without a label. Two scorers left this card on
+  2026-09-24 with the columns behind them: whether the article's opening
+  survived, and how many key points added a fact. A candidate can no longer win
+  by moving either, which is the direction that matters - the lead one steered
+  toward summaries that front-load, and nothing showed that reads better.
 - **It runs offline.** The frozen set is committed article text. The loop makes no
   open-web fetch (Guardrail #7); its only network call is to a local model server on
   loopback. It runs on a developer machine or a manual dispatch and is never
@@ -45,8 +47,6 @@ from idhazh.contracts.article import Article, ArticleStatus
 from idhazh.contracts.knobs.summarize import SummarizeConfig
 from idhazh.evals.metrics import (
     hedge_dropped,
-    lead_coverage,
-    new_fact_rate,
     unsupported_numbers,
     verbatim_run,
 )
@@ -96,13 +96,12 @@ class ItemSummary:
 
 # --- The deterministic scorecard (the DISPOSE) ------------------------------
 
-#: The gate reads these four, and only these four. Every one is a defect rate
+#: The gate reads these three, and only these three. Every one is a defect rate
 #: where lower is better, and none needs a model, a label, or a network call.
-#: `new_fact_rate` is deliberately absent: it is recorded on the scorecard and is
-#: never a gate target (see the module docstring and `beats_incumbent`).
+#: They are the copy-and-invention defects, which is the set a string measure can
+#: judge without a label - see the module docstring and `beats_incumbent`.
 GATE_TARGETS: Final[tuple[str, ...]] = (
     "unsupported_numbers",
-    "lead_missing_rate",
     "hedge_dropped_rate",
     "verbatim_run",
 )
@@ -112,74 +111,51 @@ GATE_TARGETS: Final[tuple[str, ...]] = (
 class Scorecard:
     """The deterministic reading of one prompt over the whole frozen set.
 
-    The four gate fields are defect rates: lower is better. `new_fact_rate` sits
-    beside them and is NOT a gate field - acting on it is the Goodhart form the
-    metric's own contract forbids, so the loop reads it to report and never to
-    choose.
+    Every field is a defect rate: lower is better, and every one is a gate
+    target. The card carried two more until 2026-09-24 - a lead-survival rate
+    that was a gate target, and a new-fact rate that deliberately was not - and
+    both went with the eval columns behind them.
     """
 
     unsupported_numbers: float
-    lead_missing_rate: float
     hedge_dropped_rate: float
     verbatim_run: float
-    new_fact_rate: float
 
     def gate_values(self) -> dict[str, float]:
-        """The four numbers the gate compares. `new_fact_rate` is not among them."""
+        """The three numbers the gate compares."""
         return {name: float(getattr(self, name)) for name in GATE_TARGETS}
 
     def as_row(self) -> dict[str, float]:
         """Every number on the card, for the committed scores artefact."""
         return {
             "unsupported_numbers": self.unsupported_numbers,
-            "lead_missing_rate": self.lead_missing_rate,
             "hedge_dropped_rate": self.hedge_dropped_rate,
             "verbatim_run": self.verbatim_run,
-            "new_fact_rate": self.new_fact_rate,
         }
 
 
 def score_prompt(
     summaries: Sequence[ItemSummary],
     items: Sequence[FrozenItem],
-    *,
-    lead_coverage_min: float,
-    restatement_ceiling: float,
 ) -> Scorecard:
-    """Reduce a prompt's summaries over the frozen set to one deterministic card.
-
-    `lead_coverage_min` is `evaluation.lead_coverage_min` - the same threshold the
-    published band reason `lead_missing` uses, so the loop steers by the defect a
-    reader is told about. `restatement_ceiling` is
-    `summarize.key_point_restatement_ceiling`, the distinctness floor
-    `new_fact_rate` is measured against.
-    """
+    """Reduce a prompt's summaries over the frozen set to one deterministic card."""
     by_key = {item.key: item.source for item in items}
     total = len(summaries)
     if total == 0:
-        return Scorecard(0.0, 0.0, 0.0, 0.0, 0.0)
+        return Scorecard(0.0, 0.0, 0.0)
     unsupported = 0.0
-    lead_missing = 0
     hedged = 0
     copied = 0.0
-    new_facts = 0.0
     for produced in summaries:
         source = by_key[produced.key]
         unsupported += unsupported_numbers(produced.summary, source)
-        if lead_coverage(produced.summary, source) < lead_coverage_min:
-            lead_missing += 1
         if hedge_dropped(produced.summary, source):
             hedged += 1
         copied += verbatim_run(produced.summary, source)
-        new_facts += new_fact_rate(
-            list(produced.key_points), produced.summary, ceiling=restatement_ceiling
-        )
     return Scorecard(
         unsupported_numbers=unsupported / total,
-        lead_missing_rate=lead_missing / total,
         hedge_dropped_rate=hedged / total,
         verbatim_run=copied / total,
-        new_fact_rate=new_facts / total,
     )
 
 
@@ -188,9 +164,7 @@ def beats_incumbent(candidate: Scorecard, incumbent: Scorecard) -> bool:
 
     True iff the candidate is no worse than the incumbent on EVERY gate target and
     strictly better on at least one - a Pareto beat over the deterministic
-    scorers, not an optimiser and not a weighted sum. It never reads
-    `new_fact_rate`: a candidate cannot win by moving a number nothing is allowed
-    to steer by.
+    scorers, not an optimiser and not a weighted sum.
     """
     cand = candidate.gate_values()
     inc = incumbent.gate_values()
@@ -263,8 +237,6 @@ def run_loop(
     judge: Judge,
     rubric: str,
     iterations: int,
-    lead_coverage_min: float,
-    restatement_ceiling: float,
     seed: int,
 ) -> LoopResult:
     """Write-critique-revise, bounded by `iterations`.
@@ -275,7 +247,7 @@ def run_loop(
     promotion on every round is `beats_incumbent(...)` alone - the judge's
     preference is recorded and never consulted for the decision.
     """
-    scored = _score(summarizer, incumbent_prompt, items, lead_coverage_min, restatement_ceiling)
+    scored = _score(summarizer, incumbent_prompt, items)
     winning_prompt = incumbent_prompt
     winning_scores = scored
     incumbent_scores = scored
@@ -283,9 +255,7 @@ def run_loop(
     promoted_any = False
     for index in range(iterations):
         candidate = judge.revise(winning_prompt, rubric, winning_scores, index)
-        candidate_scores = _score(
-            summarizer, candidate, items, lead_coverage_min, restatement_ceiling
-        )
+        candidate_scores = _score(summarizer, candidate, items)
         judge_preferred = judge.prefers_candidate(winning_prompt, candidate, rubric)
         # Promotion is the gate's call, and only the gate's. `judge_preferred` is
         # recorded on the round and is never read here.
@@ -318,15 +288,8 @@ def _score(
     summarizer: Summarizer,
     prompt: str,
     items: Sequence[FrozenItem],
-    lead_coverage_min: float,
-    restatement_ceiling: float,
 ) -> Scorecard:
-    return score_prompt(
-        summarizer.summarize(prompt, items),
-        items,
-        lead_coverage_min=lead_coverage_min,
-        restatement_ceiling=restatement_ceiling,
-    )
+    return score_prompt(summarizer.summarize(prompt, items), items)
 
 
 # --- The live implementations (the bounded run) -----------------------------
@@ -620,8 +583,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         judge=judge,
         rubric=rubric,
         iterations=args.iterations,
-        lead_coverage_min=settings.app.evaluation.lead_coverage_min,
-        restatement_ceiling=settings.app.summarize.key_point_restatement_ceiling,
         seed=args.seed,
     )
 

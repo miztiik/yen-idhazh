@@ -147,18 +147,6 @@ export interface CollectConfig {
 	availability_strikes_before_rest: number;
 }
 
-/** The one checker knob a console panel has to name to be honest.
- *
- * The lead-coverage panel draws how many summaries fell under this share, so it
- * has to print the share itself - and Guardrail #6 forbids the literal in the
- * component. The rest of the `evaluation` block sets bands the pipeline applies
- * and the page only ever reads the outcome of, so nothing else from it is here.
- */
-export interface EvaluationConfig {
-	/** How much of an article's opening a summary keeps to stay top band. */
-	lead_coverage_min: number;
-}
-
 export interface SummaryBand {
 	min_source_words: number;
 	target_words_min: number;
@@ -468,9 +456,10 @@ const SIMILARITY_DEFAULTS: SimilarityConfig = {
 };
 // `SameStoryConfig.floor_min`'s own default, for a checkout with no config file.
 const SAME_STORY_FLOOR = 0.94;
-// `SameStoryConfig`'s own defaults for the two terms of the score. The whole of
-// it on the cosine, which is how the floor above was measured.
-const SAME_STORY_WEIGHTS = { cosine_weight: 1.0, key_point_weight: 0.0 };
+// `SameStoryConfig`'s own default for the one term of the score. The whole of
+// it on the cosine, which is how the floor above was measured and now the only
+// legal value.
+const SAME_STORY_WEIGHTS = { cosine_weight: 1.0 };
 // The value a checkout with no config file runs on. `config/models/` pins
 // `--ctx-size` at 65536 and every real page reads that; this only fires for a
 // checkout with no model file at all, and such a checkout summarizes nothing.
@@ -491,10 +480,6 @@ const OBSERVABILITY_DEFAULTS: ObservabilityConfig = {
 	sample_rate: 1
 };
 const COLLECT_DEFAULTS: CollectConfig = { availability_strikes_before_rest: 5 };
-// The same value `EvaluationConfig` declares in the contract, so a checkout with
-// no config file counts against the documented share rather than against zero,
-// which would report every summary as clearing a bar nobody set.
-const EVALUATION_DEFAULTS: EvaluationConfig = { lead_coverage_min: 0.3 };
 const SUMMARIZE_DEFAULTS: SummarizeConfig = {
 	bands: [
 		{ min_source_words: 0, target_words_min: 30, target_words_max: 45, key_points_min: 1, key_points_max: 1 },
@@ -646,7 +631,6 @@ interface RawConfig {
 	run?: Partial<RunConfig>;
 	retention?: Partial<RetentionConfig>;
 	collect?: Partial<CollectConfig>;
-	evaluation?: Partial<EvaluationConfig>;
 	summarize?: Partial<SummarizeConfig>;
 	console?: ConsoleBlock;
 	assist?: Partial<AssistConfig>;
@@ -926,18 +910,17 @@ export function committedFloor(): number {
 	return raw().assemble?.same_story?.floor_min ?? SAME_STORY_FLOOR;
 }
 
-/** What the two terms of the score are worth, before any fit has moved them.
+/** What the one term of the score is worth, before any fit has moved it.
  *
  * The fallback the holdout panel scores under on a day no fit has run. A fitted
- * row carries its own pair of weights and they win, because the margin has to
- * be read under the ruler the line was set with rather than under the one the
- * config happens to hold today.
+ * row carries its own weight and it wins, because the margin has to be read
+ * under the ruler the line was set with rather than under the one the config
+ * happens to hold today.
  */
-export function committedWeights(): { cosine_weight: number; key_point_weight: number } {
+export function committedWeights(): { cosine_weight: number } {
 	const block = raw().assemble?.same_story;
 	return {
-		cosine_weight: block?.cosine_weight ?? SAME_STORY_WEIGHTS.cosine_weight,
-		key_point_weight: block?.key_point_weight ?? SAME_STORY_WEIGHTS.key_point_weight
+		cosine_weight: block?.cosine_weight ?? SAME_STORY_WEIGHTS.cosine_weight
 	};
 }
 
@@ -967,10 +950,6 @@ export function observabilityConfig(): ObservabilityConfig {
 
 export function collectConfig(): CollectConfig {
 	return { ...COLLECT_DEFAULTS, ...(raw().collect ?? {}) };
-}
-
-export function evaluationConfig(): EvaluationConfig {
-	return { ...EVALUATION_DEFAULTS, ...(raw().evaluation ?? {}) };
 }
 
 export function summarizeConfig(): SummarizeConfig {

@@ -120,15 +120,11 @@ def scored(left: str, right: str, *, score: float) -> ScoredPair:
     ties the terms to the composite is the contract's, exercised by the
     integration test below.
     """
-    return ScoredPair(
-        left=left, right=right, cosine=score, key_points=score, headline=False, score=score
-    )
+    return ScoredPair(left=left, right=right, cosine=score, headline=False, score=score)
 
 
-def stamp(*, cosine_weight: float = 1.0, key_point_weight: float = 0.0) -> ScorerStamp:
-    return ScorerStamp(
-        scorer_model=EMBEDDER_ID, cosine_weight=cosine_weight, key_point_weight=key_point_weight
-    )
+def stamp(*, cosine_weight: float = 1.0) -> ScorerStamp:
+    return ScorerStamp(scorer_model=EMBEDDER_ID, cosine_weight=cosine_weight)
 
 
 def a_band_of_fifty_five() -> list[ScoredPair]:
@@ -252,7 +248,7 @@ def test_a_changed_scorer_stamp_changes_the_order() -> None:
         line=LINE,
         budget=10,
         date=DATE,
-        stamp=stamp(cosine_weight=0.9, key_point_weight=0.1),
+        stamp=stamp(cosine_weight=0.9),
     )
 
     assert named(under_cosine) != named(under_both)
@@ -488,4 +484,3 @@ def test_the_stamp_is_the_committed_config_and_the_encoder_that_ran() -> None:
 
     assert taken.scorer_model == EMBEDDER_ID
     assert taken.cosine_weight == settings.app.assemble.same_story.cosine_weight
-    assert taken.key_point_weight == settings.app.assemble.same_story.key_point_weight

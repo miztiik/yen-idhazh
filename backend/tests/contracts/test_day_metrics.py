@@ -83,7 +83,7 @@ def _day_metrics_sample() -> DayMetrics:
                     count=5, total=4.3, p25=0.78, p50=0.88, p75=0.94, minimum=0.55, maximum=0.99
                 ),
             ),
-            DayInstrument(column="new_fact_rate", stat=DayDistribution(count=0, total=0.0)),
+            DayInstrument(column="coherence", stat=DayDistribution(count=0, total=0.0)),
         ],
         sources=[
             DaySource(source_id="the-hindu", published=4, doubted=1, truncated=1),
@@ -117,7 +117,7 @@ def test_day_metrics_keeps_an_empty_aggregate_apart_from_a_zero_one() -> None:
     reloaded = DayMetrics.from_json(_day_metrics_sample().to_json())
     plan = next(stage for stage in reloaded.stage_timing if stage.stage == ItemStage.PLAN)
     assert plan.timed == 0 and plan.sum_ms is None and plan.p50_ms is None
-    empty = next(item for item in reloaded.instruments if item.column == "new_fact_rate")
+    empty = next(item for item in reloaded.instruments if item.column == "coherence")
     assert empty.stat.count == 0 and empty.stat.total == 0.0 and empty.stat.p50 is None
 
 

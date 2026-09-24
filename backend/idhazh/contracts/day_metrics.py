@@ -72,14 +72,14 @@ INSTRUMENT_COLUMNS: frozenset[str] = frozenset(
         "hhem",
         "hhem_full",
         "hhem_delta",
-        "coverage",
         "compression",
         "extractiveness",
         "verbatim_run",
         "self_repetition",
         "evidential_density",
         "speculative_density",
-        "new_fact_rate",
+        "coherence",
+        "semantic_coverage",
         "source_word_count",
         "source_seen_word_count",
         "summary_word_count",
@@ -113,7 +113,15 @@ class DayReasons(Model):
 
     unsupported_number: int = Field(ge=0)
     not_scored: int = Field(ge=0)
-    lead_missing: int = Field(ge=0)
+    lead_missing: int = Field(
+        ge=0,
+        description=(
+            "Zero on every day recorded from 2026-09-24: the band stopped reading whether "
+            "the article's opening survived. The bucket stays because published days "
+            "before that carry the reason, and a record that dropped the column could not "
+            "be read back or added into a window."
+        ),
+    )
     hedge_dropped: int = Field(ge=0)
     faithfulness: int = Field(ge=0)
     unattributed: int = Field(

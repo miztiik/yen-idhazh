@@ -14,7 +14,6 @@
   "grammar_digest": "c0426bfa5af2e178d25538a7710f36187a35ae540a9e4293072d866b17df756b",
   "held_reason": "none",
   "judge_model": "qwen3-5-9b-q4-k-m",
-  "key_point_weight": 0.0,
   "max_down_step": 0.01,
   "max_up_step": 0.003,
   "merge_count": 22,

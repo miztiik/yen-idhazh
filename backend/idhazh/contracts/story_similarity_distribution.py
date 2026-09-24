@@ -90,6 +90,11 @@ class StorySimilarityDistribution(Contract):
     __schema_stem__: ClassVar[str] = "story-similarity-distribution"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-24",
+            change="key_point_weight is gone. A record that still carries the key loads.",
+            why="The term shipped at a weight of zero and never moved a score.",
+        ),
+        ChangelogEntry(
             version="2026-09-21T20:00",
             change="Added judged_dates. An older record reads its counted dates as its memory.",
             why="A reset archives the counts, and which nights were read is not a count.",
@@ -103,11 +108,6 @@ class StorySimilarityDistribution(Contract):
             version="2026-09-21T12:00",
             change="`folded_dates` is now `counted_dates`. The old key still reads.",
             why="Borrowed vocabulary for the count this field already holds.",
-        ),
-        ChangelogEntry(
-            version="2026-09-21",
-            change="Added judge_temperature, decode_digest and judge_thinks, and stamped them.",
-            why="Two samplers and two decode envelopes were counted as one population.",
         ),
         ChangelogEntry(
             version="2026-09-18",
@@ -156,12 +156,6 @@ class StorySimilarityDistribution(Contract):
             "puts the same pair in a different slot, so a change archives the record "
             "rather than reinterpreting it."
         ),
-    )
-    key_point_weight: float | None = Field(
-        default=None,
-        ge=0.0,
-        le=1.0,
-        description="What the key-point term was worth. Same reason as the cosine weight.",
     )
     judge_model: JudgeModelId | None = Field(
         default=None,
@@ -241,7 +235,8 @@ class StorySimilarityDistribution(Contract):
         column was deleted rather than renamed, so there is nothing to carry the
         value into. The committed record and every archive under
         `state/content-similarity-judge/archive/` still hold the key, and both
-        have to keep loading.
+        have to keep loading. `key_point_weight` left the same way on
+        2026-09-24 and reaches this line through the same set.
         """
         if not isinstance(data, dict):
             return data
@@ -339,10 +334,10 @@ class StorySimilarityDistribution(Contract):
         silence.
 
         **A value leaving moves the stamp the same way.** `decode_digest` was in
-        this payload until 2026-09-21, so the first record counted after that
-        archives under its old name and the new one starts empty. Nothing ever
-        re-derives an archive's name, so every file already written stays
-        readable under the name it has.
+        this payload until 2026-09-21 and `key_point_weight` until 2026-09-24,
+        so the first record counted after each archives under its old name and
+        the new one starts empty. Nothing ever re-derives an archive's name, so
+        every file already written stays readable under the name it has.
         """
         payload: dict[str, Any] = {
             "band_high": self.band_high,
@@ -353,7 +348,6 @@ class StorySimilarityDistribution(Contract):
             "judge_model": self.judge_model,
             "judge_temperature": self.judge_temperature,
             "judge_thinks": self.judge_thinks,
-            "key_point_weight": self.key_point_weight,
             "prompt_digest": self.prompt_digest,
             "scorer_model": self.scorer_model,
         }

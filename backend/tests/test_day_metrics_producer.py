@@ -170,7 +170,7 @@ def _score(
     source_id: str,
     band: ConfidenceBand,
     hhem: float,
-    coverage: float,
+    semantic_coverage: float,
     compression: float,
     *,
     determinism: bool = False,
@@ -193,7 +193,7 @@ def _score(
         hhem_full=hhem,
         hhem_delta=0.0,
         truncation_flagged=False,
-        coverage=coverage,
+        semantic_coverage=semantic_coverage,
         compression=compression,
         extractiveness=0.2,
         verbatim_run=0.1,
@@ -448,12 +448,12 @@ def test_instruments_are_nearest_rank_quartiles(tmp_path: Path) -> None:
     assert hhem.stat.p75 == pytest.approx(0.90)
     assert hhem.stat.maximum == pytest.approx(0.90)
 
-    coverage = _instrument(metrics, "coverage")
+    coverage = _instrument(metrics, "semantic_coverage")
     assert coverage.stat.count == 3
     assert coverage.stat.total == pytest.approx(1.50)
 
     # A column no row measured is left out, never stored as a row of zeroes.
-    assert not any(entry.column == "new_fact_rate" for entry in metrics.instruments)
+    assert not any(entry.column == "coherence" for entry in metrics.instruments)
 
 
 def test_a_correction_rewrites_the_record_whole(tmp_path: Path) -> None:

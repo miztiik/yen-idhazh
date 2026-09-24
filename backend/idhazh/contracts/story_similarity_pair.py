@@ -42,7 +42,9 @@ from idhazh.contracts.base import (
 #: that nothing replaced. `decode_digest` went on 2026-09-21: it proved two runs
 #: asked the decoder for the same thing, and this project does not claim
 #: determinism, so the value answered no question a person asks
-#: (`docs/architecture/contracts/determinism.md`).
+#: (`docs/architecture/contracts/determinism.md`). `key_point` and
+#: `key_point_weight` went with the key points themselves: the term shipped at a
+#: weight of 0.0, so it never moved a score, and the cosine is now the whole one.
 #:
 #: **This is a contract, not a courtesy.** `ledger.migrate_header` refuses any
 #: heading that is neither a current column nor one the reader carries, so a
@@ -53,11 +55,13 @@ from idhazh.contracts.base import (
 #: through `ledger.STORY_SIMILARITY_PAIR_CARRIED`; a JSON payload reaches it
 #: through the before-validator on the row. A removal declared once is therefore
 #: honoured wherever the row is read.
-DROPPED_CELLS: Final[frozenset[str]] = frozenset({"decode_digest"})
+DROPPED_CELLS: Final[frozenset[str]] = frozenset(
+    {"decode_digest", "key_point", "key_point_weight"}
+)
 
 #: How far a recomputed composite may sit from the one on the row before the row
-#: is refused. The score is a sum of two products of floats, so the rule and the
-#: row can differ in the last bit or two without anybody having changed a weight.
+#: is refused. The score is a product of two floats, so the rule and the row can
+#: differ in the last bit or two without anybody having changed a weight.
 #: A millionth is far below the resolution any fitted line is read at.
 SCORE_TOLERANCE: Final = 1e-6
 
@@ -113,14 +117,12 @@ def scorer_stamp(
     *,
     scorer_model: ScorerModelId,
     cosine_weight: float,
-    key_point_weight: float,
 ) -> str:
-    """The three scorer columns as one value, for the places that need one."""
+    """The two scorer columns as one value, for the places that need one."""
     return derive_text_digest(
         canonical_json(
             {
                 "cosine_weight": cosine_weight,
-                "key_point_weight": key_point_weight,
                 "scorer_model": scorer_model,
             }
         )
@@ -151,6 +153,11 @@ class StorySimilarityPair(Contract):
     __schema_stem__: ClassVar[str] = "story-similarity-pair"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-24",
+            change="key_point and key_point_weight go. Both headings are carried and dropped.",
+            why="The term shipped at a weight of zero and never moved a score.",
+        ),
+        ChangelogEntry(
             version="2026-09-21T14:00",
             change="decode_digest is gone. Its heading is carried and dropped on read.",
             why="It proved two runs asked alike, and this project does not claim that.",
@@ -166,14 +173,9 @@ class StorySimilarityPair(Contract):
             why="A raw top-two gap over three tokens subtracted one verdict from itself.",
         ),
         ChangelogEntry(
-            version="2026-09-21",
-            change="Added the judge-call stamp columns and the judging run id, and keyed on it.",
-            why="A verdict named no sampler, and a re-judge collided with the row it replaced",
-        ),
-        ChangelogEntry(
             version="2026-09-18",
-            change="Initial shape: one pair, two readings, and the scorer and judge behind them.",
-            why="The merge line was one person's reading, and nothing recorded what it cost.",
+            change="Earlier changes are in this file's git history.",
+            why="A changelog says what moved lately; git is the archive.",
         ),
     )
 
@@ -225,14 +227,6 @@ class StorySimilarityPair(Contract):
             "a later reweighting can be computed from the row rather than re-run."
         ),
     )
-    key_point: float = Field(
-        ge=0.0,
-        le=1.0,
-        description=(
-            "The share of key-point words the two items have in common, on the same 0 to "
-            "1 scale. Recorded raw for the same reason as the cosine."
-        ),
-    )
     headline: bool = Field(
         description=(
             "Whether the two items shared a headline, which makes the score 1.0 outright "
@@ -255,11 +249,6 @@ class StorySimilarityPair(Contract):
             "config at scoring time. On the row rather than in a file a reader has to go "
             "and find, so a window spanning a config edit is still readable."
         ),
-    )
-    key_point_weight: float = Field(
-        ge=0.0,
-        le=1.0,
-        description="What the key-point term was worth. Same reason as the cosine weight.",
     )
     verdict: SameStoryVerdict | None = Field(
         default=None,
@@ -432,9 +421,9 @@ class StorySimilarityPair(Contract):
         """The row carries the terms AND the answer, so the two have to agree.
 
         The composite comes out of one of two rules - a shared headline is 1.0
-        outright, anything else is the weighted sum - and a reader looking at the
-        row afterwards cannot tell which one ran. Recomputing it here is what
-        stops a row recording a score no rule on this row produces.
+        outright, anything else is the cosine at its weight - and a reader
+        looking at the row afterwards cannot tell which one ran. Recomputing it
+        here is what stops a row recording a score no rule on this row produces.
         """
         if self.headline:
             if abs(self.composite_score - 1.0) > SCORE_TOLERANCE:
@@ -443,11 +432,11 @@ class StorySimilarityPair(Contract):
                     f"{self.composite_score}"
                 )
             return self
-        weighted = self.cosine * self.cosine_weight + self.key_point * self.key_point_weight
+        weighted = self.cosine * self.cosine_weight
         if abs(self.composite_score - weighted) > SCORE_TOLERANCE:
             raise ValueError(
-                f"composite_score is {self.composite_score}, and the terms and weights on "
-                f"this row sum to {weighted}"
+                f"composite_score is {self.composite_score}, and the term and weight on "
+                f"this row come to {weighted}"
             )
         return self
 

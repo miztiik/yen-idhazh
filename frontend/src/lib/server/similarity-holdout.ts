@@ -31,9 +31,7 @@ import { join } from 'node:path';
 // suite loads this module in plain Node, where no Vite alias resolves.
 import {
 	cosineInt8,
-	keyPointOverlap,
 	pairScore,
-	reduceWords,
 	type HoldoutMark,
 	type HoldoutSkip,
 	type ScoreWeights
@@ -80,10 +78,9 @@ function urlKey(canonicalUrl: string): string {
 	return createHash('sha256').update(canonicalUrl, 'utf8').digest('hex');
 }
 
-/** One published item, reduced to the three things a score needs. */
+/** One published item, reduced to the two things a score needs. */
 interface ScoredItem {
 	title: string;
-	words: string[];
 	vector: Int8Array | null;
 }
 
@@ -105,7 +102,7 @@ function dayItems(
 	const path = join(digestRoot, year, month, day, 'digest.json');
 	if (!existsSync(path)) return null;
 	let parsed: {
-		items?: { item_id?: string; source_url?: string; title?: string; key_points?: string[] }[];
+		items?: { item_id?: string; source_url?: string; title?: string }[];
 		embeddings?: { vectors?: Record<string, string> } | null;
 	};
 	try {
@@ -124,7 +121,6 @@ function dayItems(
 		const raw = vectors[item.item_id ?? ''];
 		found.set(key, {
 			title: item.title ?? '',
-			words: reduceWords((item.key_points ?? []).join(' ')),
 			vector: raw === undefined ? null : new Int8Array(Buffer.from(raw, 'base64'))
 		});
 	}
@@ -190,11 +186,7 @@ export function holdoutReading(
 			sameStory: (row.same_story ?? '').trim().toLowerCase() === 'true',
 			markedOn: row.marked_on ?? '',
 			note: row.note ?? '',
-			score: pairScore(
-				cosineInt8(left.vector, right.vector),
-				keyPointOverlap(left.words, right.words),
-				weights
-			)
+			score: pairScore(cosineInt8(left.vector, right.vector), weights)
 		});
 	}
 	return { marks, skipped, marked: table.rows.length, daysOpened: dates.size };

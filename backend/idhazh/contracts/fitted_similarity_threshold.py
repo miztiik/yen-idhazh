@@ -29,8 +29,19 @@ from idhazh.contracts.base import (
     DateStamp,
     RunId,
     Sha256,
+    without_retired_keys,
 )
 from idhazh.contracts.story_similarity_pair import JudgeModelId, ScorerModelId
+
+#: Headings a committed day file still carries that this row no longer names and
+#: that nothing replaced. `key_point_weight` went with the key points
+#: themselves: the term shipped at a weight of 0.0, so it never moved a fit.
+#:
+#: **This is a contract, not a courtesy.** `ledger.migrate_header` refuses any
+#: heading that is neither a current column nor one the reader carries, so a
+#: column deleted below without an entry here leaves every committed day file
+#: unrepairable. `ledger.keyed_paths` hands this set to that repair.
+DROPPED_CELLS: Final[frozenset[str]] = frozenset({"key_point_weight"})
 
 #: How far two lines may sit apart and still count as the same line. The applied
 #: value is a difference of floats on a 0-to-1 scale, so a held row's "applied
@@ -84,6 +95,11 @@ class FittedSimilarityThreshold(Contract):
     __schema_stem__: ClassVar[str] = "fitted-similarity-threshold"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-24",
+            change="key_point_weight is gone. Its heading is carried and dropped on read.",
+            why="The term shipped at a weight of zero and never moved a score.",
+        ),
+        ChangelogEntry(
             version="2026-09-21",
             change="held_reason `legs_missing` is now `shards_missing`. The old value still reads.",
             why="`leg` was a second name for the shard the rest of this feature already names.",
@@ -100,8 +116,8 @@ class FittedSimilarityThreshold(Contract):
         ),
         ChangelogEntry(
             version="2026-09-18",
-            change="Initial shape: the four steps, the gates, and what the record held.",
-            why="A line that moves itself has to leave a row on the days it did not move.",
+            change="Earlier changes are in this file's git history.",
+            why="A changelog says what moved lately; git is the archive.",
         ),
     )
 
@@ -313,11 +329,6 @@ class FittedSimilarityThreshold(Contract):
         le=1.0,
         description="What the cosine was worth in the record this fit read.",
     )
-    key_point_weight: float = Field(
-        ge=0.0,
-        le=1.0,
-        description="What the key-point term was worth. Same reason as the cosine weight.",
-    )
     judge_model: JudgeModelId | None = Field(
         default=None,
         description=(
@@ -404,6 +415,17 @@ class FittedSimilarityThreshold(Contract):
     @classmethod
     def csv_columns(cls) -> tuple[str, ...]:
         return tuple(cls.model_fields)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _without_the_columns_this_row_stopped_naming(cls, data: Any) -> Any:
+        """The read-side migration `CLAUDE.md` section 11 owes a removed column.
+
+        The keys come from `DROPPED_CELLS`, which `ledger.keyed_paths` also hands
+        the header repair, so the CSV side and the JSON side cannot name
+        different sets.
+        """
+        return without_retired_keys(data, *DROPPED_CELLS)
 
     def csv_row(self) -> dict[str, str]:
         payload = self.model_dump(mode="json")

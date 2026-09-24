@@ -45,9 +45,8 @@ from idhazh.contracts.similarity_holdout_pair import SimilarityHoldoutPair
 
 @dataclass(frozen=True, slots=True)
 class _Article:
-    """One published story reduced to the three things a pair score reads."""
+    """One published story reduced to the two things a pair score reads."""
 
-    words: frozenset[str]
     vector: array[int]
     norm: float
 
@@ -152,7 +151,6 @@ def _day_articles(
             continue
         vector = array("b", raw)
         found[key] = _Article(
-            words=assemble.key_point_words(item),
             vector=vector,
             norm=assemble.vector_norm(vector),
         )
@@ -164,7 +162,6 @@ def score_marks(
     *,
     digest_root: Path,
     cosine_weight: float,
-    key_point_weight: float,
 ) -> Reading:
     """Score every marked pair, and count the ones the tree cannot answer for.
 
@@ -190,11 +187,10 @@ def score_marks(
         cosine = assemble.cosine_int8(
             left.vector, right.vector, left_norm=left.norm, right_norm=right.norm
         )
-        overlap = assemble.key_point_overlap(left.words, right.words)
         scored.append(
             ScoredMark(
                 same_story=mark.same_story,
-                score=cosine_weight * cosine + key_point_weight * overlap,
+                score=cosine_weight * cosine,
             )
         )
     return Reading(

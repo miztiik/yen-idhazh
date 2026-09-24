@@ -445,7 +445,7 @@ def test_the_counterweights_are_measured_against_the_body_that_came_back(
     )
 
     assert rebuilt.row is not None
-    assert rebuilt.row.coverage < recorded.coverage
+    assert rebuilt.row.unsupported_numbers > recorded.unsupported_numbers
     assert not corpus.keeps_its_counterweights(rebuilt.row, evaluation=app.evaluation)
     assert not corpus.harvest_rows(
         [rebuilt], date=DATE, prompt_config=app.summarize, evaluation=app.evaluation

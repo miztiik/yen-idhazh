@@ -14,75 +14,40 @@ pytestmark = pytest.mark.slow
 def test_the_bands_come_from_config() -> None:
     tuned = EvaluationConfig(band_high_min=0.9, band_medium_min=0.6)
     assert (
-        band(
-            0.95,
-            unsupported_numbers=0,
-            lead_coverage=1.0,
-            hedge_dropped=False,
-            config=tuned,
-        )
-        is ConfidenceBand.HIGH
+        band(0.95, unsupported_numbers=0, hedge_dropped=False, config=tuned) is ConfidenceBand.HIGH
     )
     assert (
-        band(
-            0.7,
-            unsupported_numbers=0,
-            lead_coverage=1.0,
-            hedge_dropped=False,
-            config=tuned,
-        )
-        is ConfidenceBand.MEDIUM
+        band(0.7, unsupported_numbers=0, hedge_dropped=False, config=tuned) is ConfidenceBand.MEDIUM
     )
-    assert (
-        band(
-            0.5,
-            unsupported_numbers=0,
-            lead_coverage=1.0,
-            hedge_dropped=False,
-            config=tuned,
-        )
-        is ConfidenceBand.LOW
-    )
+    assert band(0.5, unsupported_numbers=0, hedge_dropped=False, config=tuned) is ConfidenceBand.LOW
 
 
 def test_an_invented_number_outvotes_a_perfect_faithfulness_score() -> None:
     """Nothing else in the row can see that defect, so nothing else may outvote it."""
     assert (
-        band(
-            1.0,
-            unsupported_numbers=1,
-            lead_coverage=1.0,
-            hedge_dropped=False,
-            config=EvaluationConfig(),
-        )
+        band(1.0, unsupported_numbers=1, hedge_dropped=False, config=EvaluationConfig())
         is ConfidenceBand.LOW
     )
 
 
 def test_a_band_below_the_top_says_what_is_missing() -> None:
-    """A grade tells a reader an item is worse. A reason tells them what to check.
-
-    Both counterweights were already computed and neither reached the page.
-    """
+    """A grade tells a reader an item is worse. A reason tells them what to check."""
     tuned = EvaluationConfig()
 
     def reason_for(
         faithfulness: float | None,
         *,
         unsupported_numbers: int = 0,
-        lead_coverage: float = 1.0,
         hedge_dropped: bool = False,
     ) -> tuple[ConfidenceBand, BandReason | None]:
         return verdict(
             faithfulness,
             unsupported_numbers=unsupported_numbers,
-            lead_coverage=lead_coverage,
             hedge_dropped=hedge_dropped,
             config=tuned,
         )
 
     assert reason_for(0.95) == (ConfidenceBand.HIGH, None), "nothing to explain"
-    assert reason_for(0.95, lead_coverage=0.0) == (ConfidenceBand.MEDIUM, BandReason.LEAD_MISSING)
     assert reason_for(0.95, hedge_dropped=True) == (ConfidenceBand.MEDIUM, BandReason.HEDGE_DROPPED)
     assert reason_for(0.6) == (ConfidenceBand.MEDIUM, BandReason.FAITHFULNESS)
     assert reason_for(0.2) == (ConfidenceBand.LOW, BandReason.FAITHFULNESS)
@@ -92,29 +57,42 @@ def test_a_band_below_the_top_says_what_is_missing() -> None:
         BandReason.UNSUPPORTED_NUMBER,
     )
 
-    # Both counterweights fail together on real rows. The reader gets one
-    # sentence, and dropped facts are the larger loss.
-    assert reason_for(0.95, lead_coverage=0.0, hedge_dropped=True) == (
-        ConfidenceBand.MEDIUM,
-        BandReason.LEAD_MISSING,
-    )
+
+def test_no_verdict_names_the_reason_nothing_produces_any_more() -> None:
+    """The article's opening stopped being a band input, so nothing may name it.
+
+    The member survives on `BandReason` because committed published days carry
+    it, and a reader of one of those days still has to be told why. What must not
+    survive is a live path that reaches it, which would put a reason on a new
+    item for a rule nothing applies.
+    """
+    reached = {
+        verdict(
+            faithfulness,
+            unsupported_numbers=unsupported,
+            hedge_dropped=hedged,
+            config=EvaluationConfig(),
+        ).reason
+        for faithfulness in (None, 0.0, 0.2, 0.6, 0.95, 1.0)
+        for unsupported in (0, 1)
+        for hedged in (False, True)
+    }
+    assert BandReason.LEAD_MISSING not in reached
+    assert BandReason.LEAD_MISSING in set(BandReason), "a committed day still reads this reason"
 
 
 def test_the_band_and_its_reason_are_decided_once() -> None:
     """Two code paths would eventually print a reason that is not why."""
     for faithfulness in (None, 0.2, 0.6, 0.95):
-        for coverage in (0.0, 1.0):
-            for hedged in (False, True):
-                assert band(
-                    faithfulness,
-                    unsupported_numbers=0,
-                    lead_coverage=coverage,
-                    hedge_dropped=hedged,
-                    config=EvaluationConfig(),
-                ) is verdict(
-                    faithfulness,
-                    unsupported_numbers=0,
-                    lead_coverage=coverage,
-                    hedge_dropped=hedged,
-                    config=EvaluationConfig(),
-                ).band
+        for hedged in (False, True):
+            assert band(
+                faithfulness,
+                unsupported_numbers=0,
+                hedge_dropped=hedged,
+                config=EvaluationConfig(),
+            ) is verdict(
+                faithfulness,
+                unsupported_numbers=0,
+                hedge_dropped=hedged,
+                config=EvaluationConfig(),
+            ).band

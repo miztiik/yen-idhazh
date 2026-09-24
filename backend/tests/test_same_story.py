@@ -36,7 +36,7 @@ from idhazh.assemble import (
     EarlierDay,
     collapse_same_story,
     cosine_int8,
-    key_point_overlap,
+    cross_source_pairs,
     numbers_agree,
     story_key,
 )
@@ -913,60 +913,45 @@ def test_a_headline_with_one_number_is_never_one_with_two() -> None:
 
 
 def test_every_term_runs_zero_to_one() -> None:
-    """Both terms sit on the floor's scale, or the floor means nothing.
+    """The one term sits on the floor's scale, or the floor means nothing.
 
-    The cosine is bounded by construction. The key-point term is not, and a
-    ratio written the wrong way round is how it would break - so it is driven
-    from both ends and from a case whose answer is arithmetic rather than a
-    round number.
+    The cosine is bounded by construction, so this reads it off real pairs
+    rather than asserting the construction back at itself.
     """
-    ash = frozenset({"ash", "jakarta", "flights"})
-    assert key_point_overlap(ash, ash) == 1.0
-    assert key_point_overlap(ash, frozenset({"budget", "session"})) == 0.0
-    assert key_point_overlap(ash, frozenset()) == 0.0, "no words is no evidence, not a match"
-    assert key_point_overlap(frozenset(), frozenset()) == 0.0
-    assert key_point_overlap(frozenset({"a", "b"}), frozenset({"b", "c"})) == pytest.approx(1 / 3)
-    for other in (frozenset({"ash"}), frozenset({"ash", "smoke", "java", "masks"})):
-        assert 0.0 <= key_point_overlap(ash, other) <= 1.0
+    items = [
+        item("world-01", source="wire"),
+        item("india-02", source="paper"),
+        item("tech-03", source="feed"),
+    ]
+    vectors = block({"world-01": unit(0), "india-02": unit(18), "tech-03": unit(90)})
+    scored = list(cross_source_pairs(items, vectors))
+    assert scored, "three outlets make three cross-source pairs"
+    for pair in scored:
+        assert 0.0 <= pair.cosine <= 1.0
+        assert 0.0 <= pair.score <= 1.0
 
 
-@pytest.mark.parametrize(
-    ("cosine_weight", "key_point_weight"),
-    [(1.0, 0.5), (0.5, 0.0), (0.0, 0.0), (0.7, 0.4)],
-)
-def test_weights_that_do_not_sum_to_one_are_refused(
-    cosine_weight: float, key_point_weight: float
-) -> None:
+@pytest.mark.parametrize("cosine_weight", [0.5, 0.0, 0.7, 0.99])
+def test_a_cosine_weight_that_is_not_one_is_refused(cosine_weight: float) -> None:
     """A score off 0 to 1 cannot be compared against a floor on 0 to 1.
 
-    The failure this refuses is silent rather than loud: weights that sum to
-    1.5 push every pair up, the floor stops meaning what the labels measured,
-    and the day publishes a merge nobody chose.
+    The failure this refuses is silent rather than loud: a weight of 0.5 pushes
+    every pair down, the floor stops meaning what the labels measured, and the
+    day splits a story nobody chose to split. The cosine is the only term, so
+    the rule that used to say the weights sum to 1.0 now says this.
     """
-    with pytest.raises(ValueError, match=re.escape("must sum to 1.0")):
-        SameStoryConfig(cosine_weight=cosine_weight, key_point_weight=key_point_weight)
+    with pytest.raises(ValueError, match=re.escape("the whole same_story score")):
+        SameStoryConfig(cosine_weight=cosine_weight)
 
 
-def test_a_split_written_in_decimal_is_accepted() -> None:
-    """0.7 and 0.3 add up to 0.9999999999999999 in binary, and are a legal split.
+def test_the_shipped_weight_puts_the_whole_score_on_the_cosine() -> None:
+    """The committed config scores exactly what the single floor scored.
 
-    Exact equality against 1.0 would refuse a pair of numbers a person would
-    reasonably write, which is why the check carries a tolerance.
-    """
-    knobs = SameStoryConfig(cosine_weight=0.7, key_point_weight=0.3)
-
-    assert (knobs.cosine_weight, knobs.key_point_weight) == (0.7, 0.3)
-
-
-def test_the_shipped_weights_put_the_whole_score_on_the_cosine() -> None:
-    """The composite ships scoring exactly what the single floor scored.
-
-    The row's own claim, as an assertion. A pair whose key points have nothing
-    in common still groups at its cosine alone, so no published day can move
-    until a person moves the weights.
+    The block's own claim, as an assertion. A pair groups at its cosine alone,
+    so no published day can move until a person moves the floor.
     """
     shipped = config.load(CONFIG_DIR).app.assemble.same_story
-    assert (shipped.cosine_weight, shipped.key_point_weight) == (1.0, 0.0)
+    assert shipped.cosine_weight == 1.0
 
     items = [
         item("world-01", source="wire", points=["Ash closed the airport."]),
@@ -1071,14 +1056,12 @@ def test_the_veto_reads_the_headline_and_goes_when_the_headline_rule_goes() -> N
     )
 
 
-def test_the_second_term_can_carry_a_group_the_cosine_alone_cannot() -> None:
-    """The key-point term reaches the arithmetic, not only the log line.
+def test_the_floor_is_what_decides_a_group_the_cosine_nearly_made() -> None:
+    """The score reaches the arithmetic, not only the log line.
 
-    It ships at weight 0.0, so this is the only place the repository proves the
-    weights are wired at all. Half and half over a pair scoring 0.9511 on the
-    vectors and word-for-word on its key points: the cosine alone leaves them
-    apart at a floor of 0.96, and the pair clears it once the second term is
-    weighted.
+    One pair scoring 0.9511 on the vectors: a floor at 0.96 leaves them apart
+    and a floor at 0.95 joins them. The key-point term used to be the thing
+    this test moved; with the cosine as the whole score, the floor is.
     """
     shared = ["Ash from the volcano closed the airport."]
     items = [
@@ -1086,11 +1069,9 @@ def test_the_second_term_can_carry_a_group_the_cosine_alone_cannot() -> None:
         item("india-02", source="paper", points=shared),
     ]
     vectors = block({"world-01": unit(0), "india-02": unit(18)})
-    cosine_only = SameStoryConfig(cosine_weight=1.0, key_point_weight=0.0, floor_min=0.96)
-    both = SameStoryConfig(cosine_weight=0.5, key_point_weight=0.5, floor_min=0.96)
 
-    assert groups_of(collapse_same_story(items, vectors, same_story=cosine_only)) == {}
-    assert groups_of(collapse_same_story(items, vectors, same_story=both)) != {}
+    assert groups_of(collapse_same_story(items, vectors, same_story=SameStoryConfig(floor_min=0.96))) == {}
+    assert groups_of(collapse_same_story(items, vectors, same_story=SameStoryConfig(floor_min=0.95))) != {}
 
 
 def test_a_config_still_spelling_the_old_floor_is_refused_by_name() -> None:

@@ -58,11 +58,9 @@ def _drawn_row(
         right_url_key=right,
         composite_score=pair.score,
         cosine=pair.cosine,
-        key_point=pair.key_points,
         headline=pair.headline,
         scorer_model=stamp.scorer_model,
         cosine_weight=stamp.cosine_weight,
-        key_point_weight=stamp.key_point_weight,
     )
 
 
