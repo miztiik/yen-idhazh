@@ -31,7 +31,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | Evicting `corpus/corpus.jsonl` rows as a task | The row cap stays with the harvest | It is a count bound, not an age bound, and `corpus.roll()` at harvest time is its only reader |
 | An `enabled` flag per task | A task is switched off with `dry_run`, which still reports | Nothing. Two off-switches means two places to look when a task did not run |
 | A rollback for a deletion | A wrong deletion is recovered from git history | Nothing. `one_at_a_time.py` already refuses to carry one, on purpose |
-| Applying this naming to what `digest.yml` commits | The one path pair that can still lose a race stays as it is: `corpus/corpus.jsonl` and `corpus/corpus.meta.json` have no merge driver, are in neither `paths.DERIVED` nor `paths.UNION_SAFE`, and carry no writer identity in their names - so where the rebase replay conflicts, `commit_and_push.py` cannot choose a side and the push fails | Its own plan. Everything else `digest.yml` commits is already safe - `state/` shards carry a per-writer name, nine collections take a union driver, and every path under `frontend/public/` is in `paths.DERIVED` and rebuilt against the tip before the rebase. **The published payloads can never take this naming**: a static site cannot list a directory, so something must answer at a known address, and moving the reader only moves that requirement up one level |
+| Applying this naming to what `digest.yml` commits | The one path pair that can still lose a race stays as it is: `corpus/corpus.jsonl` and `corpus/corpus.meta.json` have no merge driver, are in neither `paths.DERIVED` nor `paths.UNION_SAFE`, and carry no writer identity in their names - so where the rebase replay conflicts, `commit_and_push.py` cannot choose a side and the push fails | Its own plan. Everything else `digest.yml` commits is already safe - `state/` shards carry a per-writer name, nine collections take a union driver, and every path under `frontend/public/` is in `paths.DERIVED` and rebuilt against the tip before the rebase. **The published payloads can never take this naming**: a static site cannot list a directory, so something must answer at a known address, and moving the reader only moves that requirement up one level. **That known address exists and is `console/band.json`**, which the console layout already fetches before any panel mounts and which has carried a months list since 2026-09-09; plan 51 adds the store map to it |
 
 ### The intent this plan serves
 
@@ -40,7 +40,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | # | The intent, in short | What plan 50 does about it |
 | --- | --- | --- |
 | N1 | Parquet at rest, PyArrow writes it, CSV retired | **Stone laid.** Row 2 builds `backend/idhazh/store/` as the one door and takes two stores through it. Section 5.8 names every store still on CSV, its producer and its consumer |
-| N2 | The browser queries the parquet itself | **Not here.** `TODO/20260924-51-console-fetches-and-draws-its-own-data-plan.md` |
+| N2 | The browser queries the parquet itself | **Not here.** `TODO/20260924-51-console-fetches-and-draws-its-own-data-plan.md`. **What this plan owes it is the compact tier**: that is what the site stages, so no row here may change the compact grain or its fold cadence without plan 51's row titled "One panel end to end: parquet at rest, queried in the browser, drawn in d3" |
 | N3 | The browser fetches its own data at view time | **Not here.** Plan 51, and no row here may make it harder |
 | N4 | Prerendering is an anti-pattern; the prerendered routes come off it | **Not here.** Nine files under `frontend/src` carry `export const prerender` today, verified 2026-09-24, and plan 51 leaves all nine |
 | N5 | d3.js is the only charting library; ECharts is retired | **Not here.** Plan 51 writes the house style and moves one importer of fifteen. Two of the fifteen, `waterfall.ts` and `donut.ts`, have no importer at all |
@@ -470,7 +470,7 @@ So the rule: **a field is a column when a query filters or groups on it**, becau
 | 12 | `writer` | `idhazh.store.parquet`. The parquet footer's own `created_by` names pyarrow, not us | no |
 | 13 | `writer_version` | The engine version, because a footer is not byte-stable across engine versions | no |
 | 14 | `compression` | `snappy` or `zstd` | no |
-| 15 | `name_strategy` | `uuid8-unit` today. It exists so a later strategy can arrive without a reader guessing which one made a name | no |
+| 15 | - | *(`name_strategy` was here and is cut. It had a beneficiary only under a design where a reader computes a name and must know which algorithm minted it; that design died on N6 on 2026-09-25, so the key has no reader and `envelope_version` already answers the question it was invented for)* | - |
 | 16 | `folded_from` | On a `compact` file only: how many raw files it read. Absent on a raw file | no |
 
 **`row_count` is deliberately not a key.** The parquet footer already carries `num_rows`, free and authoritative, and the footer is written last so its presence already proves the file is complete. A second spelling is two answers to one question (Guardrail #4).
@@ -487,7 +487,7 @@ A worked envelope, and what it costs:
   "unit_id": "01a0d03c-2e00-8461-98e0-a67898e9a802",
   "content_sha256": "9f2c...", "git_sha": "0735031c2...",
   "writer": "idhazh.store.parquet", "writer_version": "25.0.1",
-  "compression": "snappy", "name_strategy": "uuid8-unit",
+  "compression": "snappy",
 }
 ```
 
@@ -508,7 +508,7 @@ Read back without touching a row: `pq.read_metadata(path).metadata[b"unit_id"]`,
 
 `backend/idhazh/store/` is the fifth door, and it is the one the other four eventually forward to. **That is what makes row 2 the load-bearing row of this plan**: it is not a utility the gardener happens to need, it is the door the other sixteen writers walk through later.
 
-**The stores, producer and consumer verified by call site on 2026-09-24.** A store with a console route moves only when a plan owns its reader. `host-fingerprint` is the first, in plan 51's row titled **One panel end to end: parquet at rest, queried in the browser, drawn in d3**; the rest wait on the charting plan.
+**The stores, producer and consumer verified by call site on 2026-09-24.** A store with a console route moves only when a plan owns its reader. `host-fingerprint` is the first, in plan 51's row titled **One panel end to end: parquet at rest, queried in the browser, drawn in d3**; the rest wait on the charting plan. **A store the console draws is named in `StoreConfig.published` (section 5.9.4), which is the staging allow-list and the input to the daily-fold refusal.**
 
 | Store under `state/` | Producer | Consumer | Console route | Moved by |
 | --- | --- | --- | --- | --- |
@@ -600,11 +600,16 @@ Section 5.7's table is the field list, minus the two keys cut on 2026-09-24: **`
 "store": {
   "format": "parquet",
   "compression_raw": "snappy",
-  "compression_compact": "zstd"
+  "compression_compact": "zstd",
+  "published": ["visual-prune"]
 }
 ```
 
-Three fields, not two: decision 5 requires two compressions and one field cannot hold them. `format` defaults to `parquet`, `compression_raw` to `snappy`, `compression_compact` to `zstd`. The matching non-default entry goes in `tests/fixtures/contracts/app-config/every-knob-differs-from-the-committed-config.json` in the same commit.
+Four fields, not two: decision 5 requires two compressions and one field cannot hold them, and `published` is the allow-list the console's staging step reads. **`published` is the one field in this plan a second plan depends on** - `TODO/20260924-51-console-fetches-and-draws-its-own-data-plan.md` stages the compact tier of every store named here, so a store joins the console by being added to this list and by nothing else.
+
+**A published store folds daily; every other store folds monthly.** The fold rewrites a month file each time it runs and git stores a whole new blob rather than a delta, so a daily fold across all stores would add roughly 360 MB to the history the prune has to bound. Per store it collapses: `state/host-fingerprint/` is 76,306 bytes in total. `cadence` is already a per-task config block, so this is a value rather than a design - and section 5.2 gains a load-time refusal naming a published store whose cadence is not daily.
+
+`format` defaults to `parquet`, `compression_raw` to `snappy`, `compression_compact` to `zstd`, `published` to an empty list. The matching non-default entry goes in `tests/fixtures/contracts/app-config/every-knob-differs-from-the-committed-config.json` in the same commit.
 
 #### 5.9.5 `GardenerConfig`, `TaskPolicy`, and all sixteen blocks
 
@@ -931,7 +936,7 @@ It mints the name from `naming.unit_id` (section 5.7), builds the path through `
 
 ---
 
-### Row #6 - `prune.yml` becomes `idhazh-gardener.yml`; the GitHub tasks get a schedule
+### Row #7 - `prune.yml` becomes `idhazh-gardener.yml`, and the whole garden is scheduled
 
 - **Scope:** the workflow is renamed for what it now does, asks what is due and runs it with no ordering between tasks; and the GitHub artifacts and runs pruners are scheduled for the first time.
 
@@ -977,7 +982,7 @@ It mints the name from `naming.unit_id` (section 5.7), builds the path through `
 
 ---
 
-### Row #7 - Compaction, one task per store, and the diagram moves into the page
+### Row #6 - Compaction, one task per store, and the diagram moves into the page
 
 - **Scope:** every compacted store gets **its own** compaction task with its own cadence; `digest.yml`'s own fold moves in, so one config decides when a day is closed; the architecture page takes the diagram.
 
