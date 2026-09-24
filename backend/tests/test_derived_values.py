@@ -9,8 +9,9 @@ first passes on a build that draws a figure nothing resolves.
 
 No model runs here and none can: every input is a committed file under
 `tests/fixtures/visual-validator/` or a shape built in this file, and one test
-reads the derived-value module's own imports to keep it that way (`CLAUDE.md`
-section 0a).
+reads the derived-value module's own imports to keep it that way. `CLAUDE.md`
+section 1a lifted the ban on a model judge, so that guard is this module's own
+choice rather than a rule.
 
 Constant cost in the size of one plan and one article's table (Guardrail #12). No
 test here reads a collection a run appends to.
@@ -522,9 +523,10 @@ def test_no_model_can_reach_the_arithmetic() -> None:
     """Code does the arithmetic, and the module's own imports are the proof.
 
     The same guard the validator carries, for the same reason: a judge
-    sharing the failure modes of the thing judged is not a measurement
-    (`CLAUDE.md` section 0a), and here the thing judged is a figure a reader will
-    read off an axis.
+    sharing the failure modes of the thing judged is not a measurement, and here
+    the thing judged is a figure a reader will read off an axis. `CLAUDE.md`
+    section 1a lifted the ban on a model judge, so that is a measurement
+    argument now rather than a rule.
     """
     tree = ast.parse(DERIVED_MODULE.read_text(encoding="utf-8"))
     imported: set[str] = set()

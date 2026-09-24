@@ -3,7 +3,9 @@
 A purpose-built cross-encoder rather than a language model asked to grade
 another language model: a judge built from the same technology shares the
 failure modes of the thing it judges and agrees with it for exactly the reasons
-you needed an independent check (`CLAUDE.md` section 0a).
+you needed an independent check. That was a rule until `CLAUDE.md` section 1a
+lifted it. It is now the measurement argument for keeping this scorer, and a
+plan is free to measure a model judge against it.
 
 Three mechanics matter more than they look:
 

@@ -12,9 +12,9 @@ second stage (Fowler). A republished day rewrites its record whole rather than
 adding to a running total: a total needs a decrement path for every correction,
 and a missed decrement is silent and permanent (owner, 2026-09-06).
 
-The record carries counts and facts about a day and never a line of article text
-(CLAUDE.md section 0a). Every path it could name is relative and POSIX
-(section 2).
+The record carries counts and facts about a day and never a line of article
+text. Every path it could name is relative and POSIX (CLAUDE.md
+section 2).
 
 The day's slice is read from that one day alone - not the whole ledger - so the
 cost does not rise as the ledger keeps more months (Guardrail #12).

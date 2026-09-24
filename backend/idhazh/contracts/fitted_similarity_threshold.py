@@ -13,7 +13,8 @@ counts rather than as a verdict, so a held day says why it was held in numbers a
 person can check.
 
 Nothing here is a model verdict. The fit is arithmetic over counts, and the row
-records the arithmetic (CLAUDE.md section 0a).
+records the arithmetic. That is a property of this design and no longer a rule -
+CLAUDE.md section 1a lifted the ban on a model verdict deciding what publishes.
 """
 
 from __future__ import annotations

@@ -4,8 +4,9 @@ Pure and deterministic: the same ledger and the same draw id give the same 60
 rows on any machine, so a draw is reproducible rather than remembered. No model
 runs here and nothing in this module may import one - the whole point of the
 instrument is that it measures the scorer against a human, and a judge that
-shares the failure modes of the thing judged is not a measurement
-(`CLAUDE.md` section 0a).
+shares the failure modes of the thing judged is not a measurement. `CLAUDE.md`
+section 1a lifted the ban on a model judge, so that sentence is an argument
+about what this instrument measures rather than a rule.
 
 The draw is uniform across `hhem` deciles, not concentrated at the cuts. The
 question these labels answer first is a level question - what does `high` mean at

@@ -29,7 +29,9 @@ the order is this module's tuple rather than the order somebody wrote two
 statements in.
 
 **Nothing here decides what publishes.** A node returns labels and prose; which
-items run is deterministic code elsewhere (`CLAUDE.md` section 0a).
+items run is deterministic code elsewhere. That is this module's shape and no
+longer a rule - `CLAUDE.md` section 1a lifted the ban on a model verdict
+reaching a publish decision.
 """
 
 from __future__ import annotations

@@ -7,7 +7,9 @@ alone is a check nobody can retire, tune or trust.
 
 No model runs here and none can: every input is a committed file under
 `tests/fixtures/visual-validator/`, and one test reads the validator's own
-source to prove it imports nothing that could reach one (`CLAUDE.md` section 0a).
+source to prove it imports nothing that could reach one. `CLAUDE.md` section 1a
+lifted the ban on a model judge, so that guard is the validator's own choice
+rather than a rule.
 """
 
 from __future__ import annotations
@@ -389,11 +391,13 @@ def test_no_check_can_reach_a_model(module: str) -> None:
     """ESCALATE trigger 1, asserted rather than promised.
 
     A judge that shares the failure modes of the thing judged is not a
-    measurement (`CLAUDE.md` section 0a), so the validator is deterministic code
-    over committed data. The cheapest way to keep it that way is to read its own
-    imports: nothing that can open a socket or start a server is among them. The
-    vocabulary the checks read is held to the same list, or moving a table out
-    of the validator would move it out from under this guard.
+    measurement, so the validator is deterministic code over committed data.
+    `CLAUDE.md` section 1a lifted the ban on a model judge, so that is a
+    measurement argument now rather than a rule. The cheapest way to keep it
+    that way is to read its own imports: nothing that can open a socket or start
+    a server is among them. The vocabulary the checks read is held to the same
+    list, or moving a table out of the validator would move it out from under
+    this guard.
     """
     source = read_text(Path(__file__).resolve().parents[1] / "idhazh" / f"{module}.py")
     imported: set[str] = set()

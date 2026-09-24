@@ -247,8 +247,8 @@ def test_a_text_that_moved_by_one_character_names_the_first_span_that_moved() ->
 
 def test_the_re_slice_added_no_field_to_the_persisted_shape() -> None:
     """The text a span indexes is not in the payload and is not going into it -
-    `span_excerpt` is article body text, which no published payload may carry
-    (`CLAUDE.md` section 0a). So the check is a method over a text the caller
+    `span_excerpt` is article body text, and an article body is never
+    republished to a reader. So the check is a method over a text the caller
     already holds, and the shape did not have to move for it."""
     assert callable(ElementTable.span_drift)
     assert "span_drift" not in ElementTable.model_fields

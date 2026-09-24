@@ -15,10 +15,10 @@ is written inline on every row rather than referenced: measured 2026-08-27 over
 and 98 KB once git compresses it - about 3 percent of a row's compressed size.
 
 **Committed on purpose, and it is the one payload in this project that carries
-article text into git.** `CLAUDE.md` section 0a permits it by name: the corpus
-holds source text as training samples, nothing renders it, and no reader-facing
-page may read it. `EvidenceItem` holds the same text and is gitignored, because
-it exists to be shown to a person rather than to train anything.
+article text into git.** That is the whole of the exception: the corpus holds
+source text as training samples, nothing renders it, and no reader-facing page
+may read it. `EvidenceItem` holds the same text and is gitignored, because it
+exists to be shown to a person rather than to train anything.
 
 **A contract under Guardrail #3 and not a migration surface under section 11**, on
 the precedent `EvidenceItem` set on 2026-08-27. The window is regenerable from

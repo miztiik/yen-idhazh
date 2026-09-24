@@ -138,9 +138,9 @@ test('the stories still list with the whole model directory gone', async ({ page
 	// The runtime half of the CI model-absent gate. That gate parks `static/assist`
 	// and asserts the bundle carries no `assist/`; this fails every request under
 	// that path and asks for the stories anyway. Browsing is not an on-device model
-	// feature, so nothing the list needs may be served from the encoder's directory
-	// (`CLAUDE.md` section 0a). Staging the index there is what broke both, and this
-	// is the test that would have caught it.
+	// feature, so nothing the list needs may be served from the encoder's
+	// directory. Staging the index there is what broke both, and this is the test
+	// that would have caught it.
 	await page.route('**/assist/**', (route) => route.fulfill({ status: 404, body: 'not found' }));
 
 	await page.goto('/archive/');
