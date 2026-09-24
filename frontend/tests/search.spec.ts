@@ -422,3 +422,141 @@ test('the digest is complete before search is ever offered', async ({ page }) =>
 	await expect(page.locator('article').first()).toBeVisible();
 	expect(requests.filter((url) => url.includes('/assist/'))).toEqual([]);
 });
+
+/**
+ * The day page's second tier, which is the half that spends the encoder.
+ *
+ * The caption, the mark and the claim that typing asks for nothing are in
+ * `filter-bar.spec.ts`, beside the panel. What is here is everything that costs
+ * the 43 MB or blocks it, because this is the group that already pays for that.
+ *
+ * **One thing this build cannot show, and it is worth naming**: the canary
+ * publishes stories on one day, so a question asked from a day page cannot come
+ * back with a story from another day here. What is checked is the shape the
+ * answer takes and that the day is one keystroke away throughout; the cross-day
+ * reach is checked on the real build, where two months are published.
+ */
+test('a question from a day page draws an answer, and the day is one key away', async ({
+	page
+}) => {
+	await page.goto('/2026-08-20/');
+	await expect(page.locator('article.item').first()).toBeVisible();
+	const day = await page.locator('article.item').count();
+	expect(day, 'the day drew no stories').toBeGreaterThan(0);
+
+	await page.fill('#page-filter', gold.queries[0]!.query);
+	await page.locator('#page-filter').press('Enter');
+	await expect(page.locator('[data-day-found], [data-day-found="empty"]')).toHaveCount(1, {
+		timeout: 180_000
+	});
+
+	// The caption is the mode tell: it stops counting this page and starts
+	// naming what was searched.
+	await expect(page.locator('[data-filter-note]')).toHaveText(
+		/^(No stories match|\d+ (story|stories) found)\. Searched .+ - \d+ (story|stories)\.$/
+	);
+
+	// And the way back is free. The control is one of two; the other is typing.
+	// It hands the day back narrowed by whatever is still in the box, which is
+	// what the box now says - so emptying it is what returns the whole day.
+	const found = page.locator('[data-day-found-rows] li');
+	if ((await found.count()) > 0) {
+		await expect(found.first().locator('article, a')).toBeVisible();
+		await page.locator('[data-day-found-clear]').click();
+	}
+	await page.fill('#page-filter', '');
+	await expect(page.locator('article.item')).toHaveCount(day);
+});
+
+test('a day page that cannot answer keeps the reader narrowing it', async ({ page }) => {
+	// The rule the whole row rests on, at the one moment it is easiest to break:
+	// the second tier is additive and never takes the first one away. A reader who
+	// has cut the day down and then asks a question keeps their cut while the
+	// encoder warms, and keeps it when the question refuses. Dropping the needle on
+	// the Enter press would hand them the whole day back the moment they asked for
+	// less of it - and then leave them there, with their own words still in the box.
+	await page.route(VECTORS, (route) => route.fulfill({ status: 404, body: 'not found' }));
+	await page.goto('/2026-08-20/');
+	await expect(page.locator('article.item').first()).toBeVisible();
+
+	// A word off the page, so the needle really narrows and really matches.
+	const word = await page
+		.locator('article.item .title')
+		.first()
+		.evaluate((title) =>
+			(title.textContent ?? '')
+				.split(/\s+/)
+				.map((part) => part.replace(/[^A-Za-z]/g, ''))
+				.find((part) => part.length > 4)
+		);
+	expect(word, 'no title on the day carries a word long enough to narrow by').toBeTruthy();
+
+	await page.fill('#page-filter', (word as string).toLowerCase());
+	const marks = page.locator('article.item mark');
+	await expect(marks.first(), 'the needle marked nothing, so it narrowed nothing').toBeVisible();
+	const narrowed = await page.locator('article.item').count();
+	expect(narrowed, 'the needle kept nothing').toBeGreaterThan(0);
+
+	await page.locator('#page-filter').press('Enter');
+	await expect(page.locator('[data-search-state]')).toContainText(
+		'these stories cannot be searched on this device'
+	);
+	// The mark is the tell, because it is drawn only while a needle is narrowing
+	// the day. A page that dropped the needle on the Enter press would lose every
+	// one of them and quietly show the whole day again.
+	await expect(marks.first(), 'a refused question took the reader narrowing away').toBeVisible();
+	await expect(
+		page.locator('article.item'),
+		'a refused question changed what the day was showing'
+	).toHaveCount(narrowed);
+});
+
+test('a day page whose vectors are gone keeps every story it drew', async ({ page }) => {
+	// Degrade, do not fail. The day is what the reader came for; a question is
+	// additive, and a month with no vectors must cost them the question and
+	// nothing else.
+	const errors: string[] = [];
+	page.on('console', (message) => {
+		if (message.type() === 'error') errors.push(message.text());
+	});
+
+	await page.route(VECTORS, (route) => route.fulfill({ status: 404, body: 'not found' }));
+	await page.goto('/2026-08-20/');
+	await expect(page.locator('article.item').first()).toBeVisible();
+	const day = await page.locator('article.item').count();
+
+	// A question nothing on this page holds as a substring, so the day under it is
+	// unnarrowed and the count below is the whole day.
+	await page.fill('#page-filter', gold.queries[0]!.query);
+	await page.locator('#page-filter').press('Enter');
+
+	await expect(page.locator('[data-search-state]')).toContainText(
+		'these stories cannot be searched on this device'
+	);
+	// Every story is still drawn, and the field is still a filter.
+	await expect(page.locator('article.item')).toHaveCount(day);
+	await expect(page.locator('#page-filter')).toBeEnabled();
+
+	const ours = errors.filter((text) => !text.includes('Failed to load resource'));
+	expect(ours, 'a missing vector file must degrade, not error').toEqual([]);
+});
+
+test('a day page on a browser that cannot run the encoder still filters', async ({ page }) => {
+	// A field that can never answer a question is still a field that narrows a
+	// day. On the archive the box goes away, because there the box IS the search;
+	// here it is the filter, and taking it away would cost a reader the tier that
+	// never needed a model.
+	await page.addInitScript(() => {
+		Object.defineProperty(window, 'Worker', { value: undefined, configurable: true });
+	});
+	await page.goto('/2026-08-20/');
+	await expect(page.locator('article.item').first()).toBeVisible();
+
+	await page.fill('#page-filter', gold.queries[0]!.query);
+	await page.locator('#page-filter').press('Enter');
+
+	await expect(page.locator('[data-search-state]')).toHaveText(
+		'Search is unavailable here - this browser cannot run it. Everything above still works.'
+	);
+	await expect(page.locator('#page-filter'), 'the filter went away with the search').toBeEnabled();
+});

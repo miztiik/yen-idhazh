@@ -193,6 +193,52 @@ export function filterNeedle(query: string, minChars: number): string | null {
 	return needle.length >= Math.max(minChars, 1) ? needle : null;
 }
 
+/** One run of a story's text, and whether the field's needle is what it is.
+ *
+ * A part rather than a string, because the mark is drawn by slicing text into
+ * nodes. Nothing here produces markup.
+ */
+export interface TextPart {
+	text: string;
+	/** True where the needle sits, which is what gets a `<mark>` around it. */
+	hit: boolean;
+}
+
+/** A story's text, split where the needle sits, so a card can mark it.
+ *
+ * **It returns text and never markup, and that is the whole point.** The needle
+ * is untrusted reader text and the story is untrusted payload text, so building
+ * a `<mark>` by wrapping one in the other and handing the result to `{@html}`
+ * would make every headline this site publishes a script tag waiting for a
+ * matching query. The caller renders each part as a text node and puts the tag
+ * around the ones that hit, so neither side is ever parsed as markup
+ * (`CLAUDE.md` Guardrail #11).
+ *
+ * The needle arrives already lowercased and trimmed from `filterNeedle`; the
+ * text does not, so the search is done on a lowered copy and every part is
+ * sliced out of the original. A reader sees their own capitalisation marked,
+ * not a lowercased echo of it.
+ *
+ * A null or empty needle is one part with no hit, which is the ordinary page:
+ * the caller draws the string it was always drawing and pays one array.
+ */
+export function markParts(text: string, needle: string | null): TextPart[] {
+	if (needle === null || needle === '') return [{ text, hit: false }];
+	const haystack = text.toLowerCase();
+	const parts: TextPart[] = [];
+	let at = 0;
+	for (;;) {
+		const found = haystack.indexOf(needle, at);
+		if (found < 0) break;
+		if (found > at) parts.push({ text: text.slice(at, found), hit: false });
+		parts.push({ text: text.slice(found, found + needle.length), hit: true });
+		at = found + needle.length;
+	}
+	if (parts.length === 0) return [{ text, hit: false }];
+	if (at < text.length) parts.push({ text: text.slice(at), hit: false });
+	return parts;
+}
+
 /** A day's stories with the two things the page asks about them over and over.
  *
  * **Built once per day, read once per keystroke.** A needle arrives lowercase
