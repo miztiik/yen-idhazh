@@ -452,7 +452,15 @@ def test_a_push_rejected_more_times_than_the_old_loop_allowed_still_lands(
     runner: that is what the printed line exists to collect, over twenty runs.
     """
     staged_paths, settings = _commit_call("plan")
-    deadline = 60
+    # The deadline is scaffolding here, not the subject, so it is set wide
+    # enough that only a regression can reach it. Five real pushes cost 36s on
+    # an idle Windows box, but 53s, 78s and 93s on three runs of the suite
+    # eight-wide - so at 60s this gave up before the fifth push landed on two
+    # of those three, and the count it reported was right rather than wrong.
+    # Nothing else bounds a hang: the harness sets no subprocess timeout, so
+    # this number is also the worst case when the loop really is broken, and it
+    # stops at the deadline the program itself defaults to.
+    deadline = 300
     settings = {**settings, "PUSH_DEADLINE_SECONDS": str(deadline)}
     env = _isolated_env(tmp_path)
     origin, runner = _scripted_origin(tmp_path, env, staged_paths)
@@ -510,9 +518,10 @@ def test_a_push_nothing_will_take_gives_up_on_the_clock_and_says_what_it_spent(
     so the loop gets a single attempt and the count is right rather than wrong.
     The claim it was reaching for - that the deadline is a clock and not a retry
     counter - is proven without a stopwatch by the test above, which reaches a
-    fifth attempt inside sixty seconds and could not pass against the three-try
-    loop this replaced. What is left here is what only this case can show, and
-    none of it depends on how fast the push was.
+    fifth attempt against a deadline set wide enough that only a regression can
+    reach it, and could not pass against the three-try loop this replaced. What
+    is left here is what only this case can show, and none of it depends on how
+    fast the push was.
     """
     staged_paths, settings = _commit_call("plan")
     settings = {**settings, "PUSH_DEADLINE_SECONDS": "3"}
