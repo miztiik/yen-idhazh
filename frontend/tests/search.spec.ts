@@ -461,7 +461,17 @@ test('a question from a day page draws an answer, and the day is one key away', 
 	// what the box now says - so emptying it is what returns the whole day.
 	const found = page.locator('[data-day-found-rows] li');
 	if ((await found.count()) > 0) {
-		await expect(found.first().locator('article, a')).toBeVisible();
+		const row = found.first();
+		await expect(row).toBeVisible();
+		// A result is a whole card when the day it names is in hand and a bare
+		// title when it is not, so what is asserted is the thing both shapes owe
+		// the reader rather than which of the two drew: a way through to the
+		// story, at the dated address the result itself names. Matching the card
+		// OR the link instead would resolve to three elements on the card - the
+		// article, its date link and its source link - which is a locator that
+		// says nothing rather than an assertion that holds either way.
+		const date = await row.getAttribute('data-day-found-date');
+		await expect(row.locator(`a[href*="/${date}/#"]`)).toBeVisible();
 		await page.locator('[data-day-found-clear]').click();
 	}
 	await page.fill('#page-filter', '');
@@ -511,7 +521,7 @@ test('a day page that cannot answer keeps the reader narrowing it', async ({ pag
 	).toHaveCount(narrowed);
 });
 
-test('a day page whose vectors are gone keeps every story it drew', async ({ page }) => {
+test('a day page whose vectors are gone loses the question and nothing else', async ({ page }) => {
 	// Degrade, do not fail. The day is what the reader came for; a question is
 	// additive, and a month with no vectors must cost them the question and
 	// nothing else.
@@ -525,17 +535,29 @@ test('a day page whose vectors are gone keeps every story it drew', async ({ pag
 	await expect(page.locator('article.item').first()).toBeVisible();
 	const day = await page.locator('article.item').count();
 
-	// A question nothing on this page holds as a substring, so the day under it is
-	// unnarrowed and the count below is the whole day.
+	// A whole question in the box, which is what a reader has typed by the time
+	// they press Enter. A question is a phrase and the tier under it matches
+	// substrings, so the list it leaves is usually short and on this day it is
+	// empty - and that short list is the page's honest answer to what was typed.
+	// It is read off the page rather than assumed, because what a refused question
+	// costs is measured against the page as the reader left it, not against the
+	// page before they touched it. The note is waited on first so the list has
+	// settled under the count.
 	await page.fill('#page-filter', gold.queries[0]!.query);
+	await expect(page.locator('[data-filter-note]')).toContainText(`of ${day} stories on this page`);
+	const narrowed = await page.locator('article.item').count();
+
 	await page.locator('#page-filter').press('Enter');
 
 	await expect(page.locator('[data-search-state]')).toContainText(
 		'these stories cannot be searched on this device'
 	);
-	// Every story is still drawn, and the field is still a filter.
-	await expect(page.locator('article.item')).toHaveCount(day);
+	// The refusal changed nothing: the same list, and the field is still a filter.
+	await expect(page.locator('article.item')).toHaveCount(narrowed);
 	await expect(page.locator('#page-filter')).toBeEnabled();
+	// And the day the reader came for is one keystroke away throughout.
+	await page.fill('#page-filter', '');
+	await expect(page.locator('article.item')).toHaveCount(day);
 
 	const ours = errors.filter((text) => !text.includes('Failed to load resource'));
 	expect(ours, 'a missing vector file must degrade, not error').toEqual([]);
