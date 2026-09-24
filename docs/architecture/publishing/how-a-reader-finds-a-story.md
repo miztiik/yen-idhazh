@@ -279,6 +279,108 @@ The whole block is still secondary by construction. Delete
 the first search reports the download did not finish and offers to try again.
 No digest assertion moves.
 
+## The day page: one field, two tiers
+
+A reading page has the same field, and since 2026-09-24 it answers two different
+questions. A keystroke narrows this day by substring - the title, the summary and
+the key points, on text lowered once when the day loads - and asks for nothing at
+all. The Enter key asks a question instead, over the same month shards and the
+same encoder the archive uses, and it can answer from days this page is not
+showing.
+
+**The common path stays instant and download-free, and that is the constraint
+everything else here bends around.** Nothing on the reading route touches the
+month index, the vectors or the encoder until a reader presses Enter.
+`frontend/tests/filter-bar.spec.ts` counts the requests a page makes while
+somebody types and both counts are zero;
+`frontend/tests/search.spec.ts` holds the older half of the same claim, that a
+dated page reaches complete with no `/assist/` request at all.
+
+**The line under the panel is the mode tell, and it names the price before a key
+can spend it.** At rest it reads `Typing filters this page. Press Enter to search
+other days.` - which is also the only way a reader learns the second tier is
+there, because there is no visible button. While narrowing it counts
+(`12 of 431 stories on this page.`) and while an answer is up it names what was
+searched (`8 stories found. Searched 1 to 20 August 2026 - 431 stories.`). The
+43 MB sentence appears the moment the field holds enough to narrow by, and not
+before: the archive is a page a reader arrives at to search, so a standing cost
+sentence is honest furniture there, and a day page is a page they arrived at to
+read. What that costs is a privacy-anxious reader who never types and is never
+told; it is paid back by the archive carrying the sentence permanently and by
+this one arriving two characters before Enter can do anything (Susan,
+2026-09-24).
+
+**The count settles behind the list rather than with it.** `ui.filter_settle_ms`
+is 120 and the narrowing is zero: a list redrawing is the answer the reader asked
+for, and a count re-wrapping its own line on every letter moves the text under the
+hand that is typing.
+
+**The caption sits under the panel and not inside it.** At 1024px and up the
+field is one 18rem column of a sticky band - about 39 characters a line - so a
+sentence in there wraps to several lines and pins them to the top of the screen
+for the whole scroll, re-wrapping as the count changes.
+
+**There is no visible Search button, and the form is still a form.** A control
+placeheld `Filter this page` beside a button reading `Search` is two verbs on one
+field, and at the wide breakpoint the button eats about a third of the band. What
+the reader loses is discoverability, which the at-rest caption pays back in
+words. The `<form>` and its named button stay and the button is only moved off
+screen, because Enter submitting a form is the browser's own behaviour and a
+keydown handler in its place would drop the control's name; focus brings it back.
+
+**An answer replaces the day, and the day is one keystroke away.** The next
+keystroke in the field restores it, narrowed, and `Show this day again` is the
+second way back for a reader who does not type. The leading block, the zone note
+and the hide-read control do not draw while an answer is up: they are facts about
+this day, and under a cross-day answer they read as part of it. What the reader
+loses is the day they came to read, while an answer is up - which is why the
+return costs one key rather than a hunt for a control (Susan, 2026-09-24).
+
+**A match is marked by slicing text, never by building markup.**
+`markParts` in `frontend/src/lib/day-shape.ts` returns the story's own words split
+where the needle sits, and the card puts a `<mark>` round the parts that hit. The
+needle is untrusted reader text and the story is untrusted payload text, so
+wrapping one in the other and handing the result to `{@html}` would make every
+headline this site publishes a script tag waiting for a matching query
+(`CLAUDE.md` Guardrail #11). The mark is a per-theme tint with the ink left
+alone: `--color-mark`, two values, because one alpha over a dark ground and a
+white one is one of them wrong.
+
+**The months a question reaches are derived from the address, and stop at what
+config says.** A dated route is one shell with a universal load, so it can read no
+server data and there is no published month list on it; baking one into the
+reading bundle would grow it as the archive grows (Guardrail #12) and rewrite it
+the day a month starts. So the scope is the day's own month and the
+`assist.search_months - 1` before it - exactly what config says a search reads,
+and never the speculative extra shard the archive takes when its newest is thin.
+The archive holds the list of months that exist, so its extra shard is a real
+one; here it would be a guess, and a guess that misses is a refused request on
+every search run from a day page. What that costs the reader is reach: early in a
+month a question covers few days, and the empty state points at the archive,
+which is the page whose job is the whole corpus.
+
+**Every refusal leaves the day exactly as it was.** A browser that cannot run the
+encoder, a month with no vectors, and a download that did not finish are three
+sentences and one outcome: the stories stay drawn, the field stays a filter, and
+the archive's own `Stop` and `Try again` are the controls. **Narrowed, if that is
+how the reader left it.** The day stops being narrowed when an answer arrives and
+not when Enter is pressed, so a reader who cut 431 stories to twelve and then
+asked a question keeps their twelve while the encoder warms, and keeps them if
+the question never runs. Dropping the needle on the press would hand them the
+whole day back the moment they asked for less of it. The archive takes its field
+away when search is blocked, because there the field IS the search; here it is
+the filter as well, and taking it away would cost a reader the tier that never
+needed a model. A refusal is also repeated rather than remembered quietly: a
+reader who presses Enter again gets the same sentence, from what the session
+already knows, instead of a Stop button waiting on a download that is not
+running.
+
+**One machine, two surfaces.** The phases, the scope and the five state sentences
+live in `frontend/src/lib/assist/session.ts`, which fetches nothing itself - the
+month loader, the vector loader and the encoder arrive as arguments, so the rules
+are driven in Node by `frontend/tests/day-search.spec.ts`. Two phase machines and
+two spellings of one privacy promise are how they drift apart.
+
 ## Design rationale
 
 The search scope is a floor of days rather than a count of calendar shards,

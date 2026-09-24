@@ -114,6 +114,21 @@ class UiConfig(Model):
             "reader would think to type."
         ),
     )
+    filter_settle_ms: int = Field(
+        default=120,
+        ge=0,
+        le=2_000,
+        description=(
+            "How long the count beside the field waits before it catches up with "
+            "the list. The list itself narrows on the keystroke and this number "
+            "does not: zero on the narrowing, a settle on the count. The two are "
+            "different jobs. A list redrawing is the answer the reader asked for; "
+            "a count re-wrapping its own line on every letter moves the text under "
+            "the hand that is typing. Zero is legal and turns the settle off, "
+            "which is the revert path; over two seconds the number is describing a "
+            "list the reader has already stopped looking at."
+        ),
+    )
     items_per_topic: int = Field(
         default=3,
         ge=1,

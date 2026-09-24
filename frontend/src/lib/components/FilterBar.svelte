@@ -58,6 +58,7 @@
 		placeholder,
 		showField = true,
 		submitLabel = null,
+		submitVisible = true,
 		onSubmit = null,
 		onType = null,
 		matchNote = '',
@@ -87,10 +88,28 @@
 		/** Set it and the field becomes a form with that button. The archive's
 		 * search costs a 43 MB download, so it is named before it is paid for. */
 		submitLabel?: string | null;
+		/** False keeps the button in the document and off the screen.
+		 *
+		 * A reading page carries this field to filter the day, and the second tier
+		 * is the Enter key. At 1024px and up the field is one 18rem column of a
+		 * sticky band, and a button eats about a third of it - and a field placed
+		 * "Filter today's stories" beside a button reading "Search" is two verbs on
+		 * one control (Susan, 2026-09-24). The form and its named button stay,
+		 * because Enter submitting a form is the browser's own behaviour and a
+		 * keydown handler in its place would drop the control's name; focus brings
+		 * it back on screen for a reader moving by keyboard. */
+		submitVisible?: boolean;
 		onSubmit?: (() => void) | null;
 		onType?: (() => void) | null;
-		/** What the field has narrowed to, drawn beside it. Never a sentence
-		 * shared with a pill count: they count different things. */
+		/** What the field has narrowed to, drawn UNDER the panel rather than in it.
+		 * Never a sentence shared with a pill count: they count different things.
+		 *
+		 * Under it, because at 1024px and up the field is an 18rem column of a
+		 * sticky band - about 39 characters a line - so a caption that also has to
+		 * name what the next key costs would wrap to several lines and glue them to
+		 * the top of the screen for the whole scroll. It also re-wrapped as the
+		 * count changed, which moved the band under the reader's own hand. In the
+		 * content column it is one line in normal flow (Susan, 2026-09-24). */
 		matchNote?: string;
 		noscriptNote: string;
 		/** The story count at or under which the topic being read explains itself.
@@ -220,16 +239,16 @@
 			{#if submitLabel}
 				<form class="field-row" onsubmit={submit}>
 					{@render box()}
-					<button type="submit" class="submit">
+					<button
+						type="submit"
+						class={submitVisible ? 'submit' : 'submit sr-only focus:not-sr-only'}
+					>
 						<Icon id="search" size={14} />
 						{submitLabel}
 					</button>
 				</form>
 			{:else}
 				<div class="field-row">{@render box()}</div>
-			{/if}
-			{#if matchNote}
-				<span class="note" data-filter-note>{matchNote}</span>
 			{/if}
 		</div>
 	{/if}
@@ -249,6 +268,10 @@
 		<p class="noscript-note" data-filter-noscript>{noscriptNote}</p>
 	{/if}
 </section>
+
+{#if matchNote}
+	<p class="note" data-filter-note>{matchNote}</p>
+{/if}
 
 {#if shortfall}
 	<p class="shortfall" data-desk-shortfall>
@@ -387,9 +410,12 @@
 		color: var(--color-accent);
 	}
 
+	/* Outside `.filter-bar`, in the content column, for the reason the prop's own
+	   note gives: the panel's field is 18rem at the wide breakpoint and this line
+	   has to hold a sentence. Spaced like `.shortfall` below, because they are the
+	   same kind of thing - one line under the panel, read once. */
 	.note {
-		display: block;
-		margin-block-start: var(--space-1);
+		margin-block-end: var(--space-4);
 		font-size: var(--text-sm);
 		line-height: var(--leading-sm);
 		color: var(--color-text-secondary);

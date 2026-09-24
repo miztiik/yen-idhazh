@@ -27,7 +27,7 @@
 	 * story has one.
 	 */
 	import { KIND_WORTH_SAYING, SOURCE_KINDS } from '$lib/bands';
-	import { deskOf } from '$lib/day-shape';
+	import { deskOf, markParts } from '$lib/day-shape';
 	import { itemTime, paragraphsOf, shortDate } from '$lib/format';
 	import Icon from '$lib/icons/Icon.svelte';
 	import type { DigestCoverage, DigestItem } from '$lib/payload/types';
@@ -47,6 +47,7 @@
 		read = false,
 		day,
 		onDate = '',
+		needle = null,
 		onRead
 	}: {
 		item: DigestItem;
@@ -71,6 +72,14 @@
 		 * front of its clock. Empty on a search result, which has no one date and
 		 * draws the day link in this slot instead. */
 		onDate?: string;
+		/** What the reader's field is narrowing by, already lowercased and trimmed.
+		 * Where it sits in the title and the summary is marked, so a reader who cut
+		 * 431 stories to twelve can see which word did it rather than re-reading
+		 * twelve summaries at a 68-character measure (Susan, 2026-09-24).
+		 *
+		 * Null is every other page and every other list, and it draws exactly what
+		 * was always drawn: `markParts` hands back one unmarked part. */
+		needle?: string | null;
 		onRead?: () => void;
 	} = $props();
 
@@ -99,6 +108,14 @@
 	 * agree on every story nothing relabelled. */
 	const desk = $derived(deskOf(item));
 </script>
+
+<!-- One run of the story's own words, with the reader's needle marked where it
+     sits. Every part is a text node and the tag goes round the parts that hit,
+     so neither the payload nor the query is ever parsed as markup - which is
+     the whole reason there is no `{@html}` anywhere near a card (Guardrail #11). -->
+{#snippet marked(text: string)}{#each markParts(text, needle) as part, at (at)}{#if part.hit}<mark
+				class="hit">{part.text}</mark
+			>{:else}{part.text}{/if}{/each}{/snippet}
 
 <article
 	id={item.item_id}
@@ -185,11 +202,13 @@
 			>
 				<!-- The ring and the weight say this to a reader looking at the page and
 				     to nobody else. The word is what a screen reader gets. -->
-				{#if read}<span class="sr-only">Read. </span>{/if}{item.title}
+				{#if read}<span class="sr-only">Read. </span>{/if}{@render marked(item.title)}
 			</svelte:element>
 
 			{#each summaryParagraphs as paragraph, index (index)}
-				<p class="summary text-text" class:mt-3={index > 0} data-item-summary>{paragraph}</p>
+				<p class="summary text-text" class:mt-3={index > 0} data-item-summary
+					>{@render marked(paragraph)}</p
+				>
 			{/each}
 			{#if item.reader_note}
 				<p class="mt-2 text-base text-text-secondary">
@@ -249,6 +268,21 @@
 	.summary {
 		font-size: inherit;
 		line-height: var(--leading-lg);
+	}
+
+	/* Where the reader's own word landed. A tint the accent makes, with the ink
+	   left exactly as it was: a browser's default yellow is glare on the dark
+	   ground, and recolouring the word itself would give a reader a second thing
+	   to read rather than a place to look. The two grounds are far enough apart
+	   that one alpha over both is one of them wrong, so `--color-mark` is tuned
+	   per theme in `tokens.css` (Susan, 2026-09-24).
+
+	   Inline, with no padding, no radius and no size of its own, so a card
+	   carrying a mark lays out to the pixel like a card without one - which is
+	   what leaves every measurement the item specs take still true. */
+	.hit {
+		background: var(--color-mark);
+		color: inherit;
 	}
 
 	/* Below the side-rail breakpoint the item is one column and the rail simply

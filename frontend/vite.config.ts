@@ -2,7 +2,7 @@ import { sveltekit } from '@sveltejs/kit/vite';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vite';
 import { assetBaseUrl, encoderSource } from './asset-base.js';
-import { uiConfig } from './src/lib/server/config';
+import { assistConfig, uiConfig } from './src/lib/server/config';
 
 export default defineConfig({
 	plugins: [tailwindcss(), sveltekit()],
@@ -28,6 +28,20 @@ export default defineConfig({
 		// the three layers, the defaults and the build-only keys it strips all stay
 		// in the one module that owns them (Guardrail #6).
 		__UI_CONFIG__: JSON.stringify(uiConfig()),
+		// What on-device search reads, keeps and shows.
+		//
+		// The archive gets these through its own `load`, which is a server load
+		// because that route is prerendered. A reading route is not: one shell
+		// answers every dated URL and its load is universal, so there is no server
+		// reader on it at all. Putting them on the root layout instead would inline
+		// four numbers into every prerendered document on the site, `/404` among
+		// them, for two surfaces that use them - so they ride as a define and land
+		// only in the chunk that opens them.
+		//
+		// `assistConfig()` itself rather than a second merge written here, so the
+		// keep-list that decides what a browser may see stays in the one module that
+		// owns it (Guardrail #6).
+		__ASSIST_CONFIG__: JSON.stringify(assistConfig()),
 		// Where the encoder comes from when our own origin cannot serve it, and the
 		// SHA-256 of every file the browser will accept.
 		//

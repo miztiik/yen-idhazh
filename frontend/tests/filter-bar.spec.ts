@@ -456,7 +456,7 @@ test('with no script the field is gone, one sentence replaces it, and a pill is 
 		await expect(page.locator('#page-filter'), 'a dead input was left on the page').toBeHidden();
 		await expect(page.locator('[data-filter-noscript]')).toBeVisible();
 		await expect(page.locator('[data-filter-noscript]')).toHaveText(
-			'Filtering needs JavaScript. Every topic above is a link and still works.'
+			'Filtering and search need JavaScript. Every topic above is a link and still works.'
 		);
 
 		// And the half that survives: a topic is still one address away.
@@ -514,5 +514,91 @@ test('the panel sticks at the wide breakpoint and nowhere below it', async ({ pa
 	] as const) {
 		await page.setViewportSize({ width, height: 900 });
 		await expect(panel, `the panel is not ${wanted} at ${width}px`).toHaveCSS('position', wanted);
+	}
+});
+
+/**
+ * The day page's field is two tiers, and the line under it says which one made
+ * the list.
+ *
+ * The second tier - a question, on Enter - costs a 43 MB encoder, so the tests
+ * that spend it or block it are in `search.spec.ts` with the rest of the
+ * encoder work. What is here is the half a reader meets on an ordinary day: the
+ * caption, the mark, and the claim the whole row rests on - that the common
+ * path asks for nothing at all.
+ */
+test('the line under the day page says which tier made the list', async ({ page }) => {
+	await page.goto(`/${DAY}/`);
+	const note = page.locator('[data-filter-note]');
+
+	// At rest it names the gesture rather than a count, because there is nothing
+	// to count and a reader has no other way to learn the Enter key does anything.
+	await expect(note).toHaveText('Typing filters this page. Press Enter to search other days.');
+	// And it sits under the panel rather than inside it: at 1024px and up the
+	// field is one 18rem column of a sticky band, and a sentence in there wraps to
+	// several lines and pins them to the top of the screen for the whole scroll.
+	await expect(page.locator('[data-filter-bar] [data-filter-note]')).toHaveCount(0);
+
+	const stories = page.locator('article.item');
+	const before = await stories.count();
+	expect(before, 'the day drew no stories, so there is nothing to narrow').toBeGreaterThan(1);
+
+	await page.fill('#page-filter', 'zzqqxx-matches-nothing');
+	// The count settles behind the list by `ui.filter_settle_ms`, so the line is
+	// waited on rather than read once.
+	await expect(note).toHaveText(/^0 of \d+ stories on this page\. Press Enter to search other days\.$/);
+});
+
+test('typing on a day page asks for nothing at all', async ({ page }) => {
+	// The claim the row rests on. A reading page that fetched a month index or a
+	// model file because somebody typed would have made the second tier a toll on
+	// the first.
+	const asked = new Watched();
+	page.on('request', (request) => asked.take(request));
+
+	await page.goto(`/${DAY}/`, { waitUntil: 'networkidle' });
+	await expect(page.locator('#page-filter')).toBeEnabled();
+	const before = asked.count(/./);
+
+	await page.fill('#page-filter', 'a');
+	await page.fill('#page-filter', 'ab');
+	await page.fill('#page-filter', 'abc');
+	await expect(page.locator('[data-filter-note]')).toContainText('on this page');
+
+	console.log(
+		`[filter-bar] day-page requests while typing: ${asked.count(/./) - before},` +
+			` model directory: ${asked.count(MODEL_DIR)}, month index: ${asked.count(MONTH)}`
+	);
+	expect(asked.count(MODEL_DIR), 'typing started the on-device encoder download').toBe(0);
+	expect(asked.count(MONTH), 'typing fetched a month index').toBe(0);
+});
+
+test('a narrowed card marks the word that kept it', async ({ page }) => {
+	await page.goto(`/${DAY}/`);
+	await expect(page.locator('article.item').first()).toBeVisible();
+
+	// A word off the page rather than one written here, and one that really
+	// narrows: a needle matching every story would prove nothing.
+	const words = await page
+		.locator('article.item .title')
+		.evaluateAll((titles) =>
+			titles.flatMap((title) =>
+				(title.textContent ?? '')
+					.split(/\s+/)
+					.map((part) => part.replace(/[^A-Za-z]/g, ''))
+					.filter((part) => part.length > 4)
+			)
+		);
+	const word = words[0];
+	expect(word, 'no title on the day carries a word long enough to narrow by').toBeTruthy();
+
+	await page.fill('#page-filter', (word as string).toLowerCase());
+	const marks = page.locator('article.item mark');
+	await expect(marks.first(), 'the field narrowed the day and marked nothing').toBeVisible();
+
+	// The mark is the reader's own word, in the story's own capitalisation, and it
+	// is an element rather than parsed markup - which is the Guardrail #11 half.
+	for (const marked of await marks.allInnerTexts()) {
+		expect(marked.toLowerCase()).toBe((word as string).toLowerCase());
 	}
 });

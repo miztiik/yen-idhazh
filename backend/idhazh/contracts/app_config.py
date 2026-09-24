@@ -100,6 +100,11 @@ class AppConfig(Contract):
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-24",
+            change="ui.filter_settle_ms, additive, default 120.",
+            why="The list narrows on the keystroke; the count beside it settles after one.",
+        ),
+        ChangelogEntry(
             version="2026-09-23",
             change="model_server.base_url, additive, default http://127.0.0.1:8080.",
             why="The address a stage posts to was three python constants and no config value.",
@@ -113,11 +118,6 @@ class AppConfig(Contract):
             version="2026-09-22T14:00",
             change="observability.tracing_enabled drops the hosted-host sentence. No knob moved.",
             why="A span has one destination now, and it is the committed file.",
-        ),
-        ChangelogEntry(
-            version="2026-09-22T12:00",
-            change="run.push_deadline_seconds, additive, default 300.",
-            why="The push loop is bounded by a clock now, not by three attempts.",
         ),
         ChangelogEntry(
             version="2026-08-21",
