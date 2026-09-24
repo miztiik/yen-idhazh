@@ -1,6 +1,6 @@
 # The summarizer prompt
 
-**Last Updated**: 2026-09-21
+**Last Updated**: 2026-09-24
 What the Summarize stage asks a model for, and where every number in that ask
 comes from.
 
@@ -719,14 +719,21 @@ article in twenty.
 cases; the short version is that KV runs 32 KiB a token over 8 attention layers
 of 32 - the other 24 are recurrent and cost a fixed 50.25 MiB whatever the
 window is - so 65,536 is 2,048.00 MiB of KV against 512.00 at 16,384, and 1,584
-MiB more all told. The runner's measured low-water free is 6.84 GiB against a
-1.0 GiB bar. The weights train to 262,144, so nothing is scaled. Every candidate
-from 32,768 to 65,536 clears that bar by more than four times, so half a
-gigabyte either way is noise.
+MiB more all told. The weights train to 262,144, so nothing is scaled. **The
+margin this paragraph used to quote has gone.** 6.84 GiB free against a 1.0 GiB
+bar is a correct reading of the run of 2026-09-09, and it predates the three
+memory settings of 2026-09-21; the runner's lowest free memory since is 0.69
+GiB, under the 1,584 MiB the window itself costs
+([the model's dossier](../../reference/models/qwen3.5-9b-q4km.md#what-the-machine-had-free-while-these-weights-worked-and-the-day-it-changed)).
+The conclusion survives on other evidence: every row of that reading was taken
+at 65,536, so this is a cost the machine has already paid 1,537 times with no
+failed run.
 
 **What chose 65,536 is the sized pair.** It is the first whole multiple of both
 16,384 and the 512-token batch that holds 64,699, and it leaves 837 spare.
-Wider costs almost nothing in memory and costs the assertion its reach: the gate
+Narrowing is not close - 32,768 buys back about 1.0 GiB of KV and does not hold
+the sequence at all, so it deletes the second call rather than trading memory
+for it. Wider costs the assertion its reach: the gate
 is the product on this path, and it cannot report a sequence that grew until the
 sequence has outgrown the window. **Re-derive it when the truncation cap or
 `elements.max_per_article` moves** - the cap's rise to 26,000 on 2026-09-24 spent

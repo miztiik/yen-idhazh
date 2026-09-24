@@ -1,6 +1,6 @@
 # Autotuning summary quality: the metrics and the loop
 
-**Last Updated**: 2026-09-20
+**Last Updated**: 2026-09-24
 
 How yen-idhazh measures whether a summary is good, and how the thresholds tune themselves with no human
 in the loop.
@@ -195,6 +195,12 @@ coherence all land on one committed eval row same-day; the council next-day only
 into distributions, fits the bands, and spends the one decode G-Eval fluency needs on a small daily
 sample.
 
+## Rejected alternatives
+
+| Option | Why it was rejected | What would bring it back |
+| --- | --- | --- |
+| UniEval, a learned judge scoring all four axes at once (T5-base, about 220 MB) | It is an encoder-decoder, so llama.cpp cannot serve it as it stands. Adopting it means either a GGUF conversion path nobody has walked or a second inference runtime on a 4 vCPU runner beside the one already there, and it was never measured against the four cheap instruments it would replace. | The four above failing to separate a good summary from a bad one, which is a question the recorded-only columns answer before any of them gates anything. Authority: Andre on the quality case, Carmack on the runtime cost, 2026-09-18. |
+
 ## See also
 
 - [../../concepts/evaluation.md](../../concepts/evaluation.md) - the eval ledger, HHEM, and the metrics that ship today. Faithfulness is defined there, not here.
@@ -202,4 +208,3 @@ sample.
 - [autotune-content-similarity.md](autotune-content-similarity.md) - the merge line that already fits itself: the `LLM-COUNCIL` workflow and the fold-fit pattern this loop reuses.
 - [../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md) - where the next-day council sits in the two loops.
 - [../../../TODO/20260918-36-summary-quality-autotune-plan.md](../../../TODO/20260918-36-summary-quality-autotune-plan.md) - the plan that builds this, and names this page its design of record.
-- [../../../TODO/20260918-35-search-eval-key-points-plan.md](../../../TODO/20260918-35-search-eval-key-points-plan.md) - the cleanup that precedes this loop.
