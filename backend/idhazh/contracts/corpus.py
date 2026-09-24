@@ -21,12 +21,20 @@ may read it. `EvidenceItem` holds the same text and is gitignored, because it
 exists to be shown to a person rather than to train anything.
 
 **A contract under Guardrail #3 and not a migration surface under section 11**, on
-the precedent `EvidenceItem` set on 2026-08-27. The window is regenerable from
-the run's own payloads, it is read by a notebook a person re-runs rather than by
-a build, and the prune rewrites its history every `finetune.prune_every_days`.
-So a shape change here owes a re-harvest, never a read-side migration. The
-`version` field is carried because every `Contract` carries one and because it
-tells a training session which build wrote the rows in front of it.
+the precedent `EvidenceItem` set on 2026-08-27. The window is read by a notebook a
+person re-runs rather than by a build, and the prune rewrites its history every
+`finetune.prune_every_days`. So a shape change here owes a re-harvest, never a
+read-side migration: no reader ever learns to accept two shapes. The `version` field
+is carried because every `Contract` carries one and because it tells a training
+session which build wrote the rows in front of it.
+
+**A re-harvest cannot reach the rows already on disk, so a shape change owes them a
+strip as well.** Changing the target changes `output_digest` with it, and that digest
+is the join between a committed digest entry and its ledger row - so the join fails
+for every day scored before the change, and neither `backfill` nor `refill` rebuilds
+one. Only a new day adds rows. The answer is a one-off rewrite of the committed
+lines, which leaves no branch in any reader and is therefore the opposite of the
+read-side migration the paragraph above refuses.
 
 **The prompt is not restated here.** `messages[0]` and `messages[1]` are
 whatever `idhazh.summarize.system_prompt` and `idhazh.summarize.user_turn`
