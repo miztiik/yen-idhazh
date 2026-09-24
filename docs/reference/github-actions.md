@@ -591,7 +591,7 @@ edited it would leave the next case reading whatever the last one wrote.
 
 **The parallel case doubles `n_ctx` because llama-server divides the window it is
 given between its slots.** Two slots on the committed 65,536 is a 32,768-token
-slot, and the worst article the truncation cap admits needs 54,887 - so leaving
+slot, and the worst article the truncation cap admits needs 64,699 - so leaving
 the window alone would make that case a test of a smaller window wearing a
 concurrency case's name. The slot count is fixed when the process starts, which
 is why that case costs a restart and a second model load.

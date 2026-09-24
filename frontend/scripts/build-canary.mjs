@@ -17,6 +17,22 @@ import { join, resolve } from 'node:path';
 const CANARY = resolve(process.cwd(), '..', 'backend', 'var', 'canary');
 const ROOT = resolve(CANARY, 'digest');
 const STATE = resolve(CANARY, 'state');
+const CONFIG = resolve(process.cwd(), '..', 'config');
+
+/** The window the committed model file opens, read rather than spelled.
+ *
+ * Found through `models_file` so pointing the pointer elsewhere moves it too,
+ * which is the same route `frontend/tests/console-machine-data.spec.ts` takes
+ * to check this fixture against the config. */
+const COMMITTED_CTX_SIZE = JSON.parse(
+	readFileSync(
+		resolve(
+			CONFIG,
+			JSON.parse(readFileSync(resolve(CONFIG, 'idhazh.json'), 'utf8')).models_file
+		),
+		'utf8'
+	)
+).summarizer.server['--ctx-size'];
 
 if (!existsSync(ROOT)) {
 	console.error(
@@ -582,7 +598,7 @@ function writeItemHealthCanary() {
 						os_mem_available_min_bytes: kernelRecorded ? floor : '',
 						os_mem_available_bytes: kernelRecorded ? floor + (scatter % 300) * 1000000 : ''
 					}),
-			n_ctx_configured: 65536,
+			n_ctx_configured: COMMITTED_CTX_SIZE,
 			// Last, so the three disk-read cells beat `READINGS` on the one day both
 			// name. `READINGS` sets the copies flat across that day, and this day is
 			// here to say the copies did not move - the same fact, written by the
