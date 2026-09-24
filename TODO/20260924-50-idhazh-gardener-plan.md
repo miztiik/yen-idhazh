@@ -49,21 +49,25 @@ Rows 1 and 2 are the only genuinely concurrent pair, and they still collide on `
 
 ## 2. The layout this plan establishes
 
+**North star, and it binds every writer added after this plan.** Everything under `state/` goes to one of two roots and nothing else: `state/raw/` for data as a writer left it, `state/compact/` for what a fold left behind. A third root is not a thing. The seventeen stores that sit directly under `state/` today predate the rule and move in their own plan (ESCALATE trigger 5); what this plan owes is that **nothing new is ever born outside the two roots**, and section 5.4 makes that a refusal rather than a convention.
+
 ```
-state/raw/<store>/<YYYY>/<MM>/<DD>/<run_id>-<attempt>-<job>-<shard>.parquet
-state/compact/<store>/<YYYY>/<MM>/settled.parquet
-state/gardener-stamps/<task>.json
+state/raw/<store>/<YYYY>/<MM>/<DD>/<unit_id>.parquet
+state/compact/<store>/<YYYY>/<MM>/<unit_id>.parquet
+state/raw/gardener-stamp/<task>.json
 ```
 
 Worked example - run 17482910337, first attempt, `tend` shard 03, on 2026-09-24:
 
 ```
-state/raw/gardener/2026/09/24/17482910337-1-tend-03.parquet
-state/compact/gardener/2026/09/settled.parquet
-state/gardener-stamps/seen.json
+state/raw/gardener/2026/09/24/01a0d03c-2e00-8461-98e0-a67898e9a802.parquet
+state/compact/gardener/2026/09/01a0d03c-6f10-8b22-91c4-3ea70d51bb9e.parquet
+state/raw/gardener-stamp/seen.json
 ```
 
-`<store>` is `gardener` or `visual-prune`; this plan creates no others. The identity segment is `ledger.segment_name(..., suffix=".parquet")` unchanged - that function already takes a `suffix` because one tree's writer files were never CSV. Two writers cannot take one path: two jobs of a run differ by shard index, two runs by run id, two attempts by attempt.
+`<store>` is `gardener`, `visual-prune` or `gardener-stamp`; this plan creates no others. `<unit_id>` is section 5.7's identifier. Two writers cannot take one path because the identifier is a hash of the writer's identity.
+
+**The stamp store is JSON and sits under `raw/`, and both facts need their reason.** Under `raw/` because the two-root rule has no exceptions. JSON because its only reader is the `plan` job, which runs before any `pip install` and therefore cannot open a parquet file (section 5.2). It is the one store the compaction skips: there is nothing to fold when a task owns exactly one file that it overwrites.
 
 **Compaction is month grain, not day grain.** Section 4 says why with the numbers.
 
@@ -94,7 +98,7 @@ flowchart TB
 
   subgraph TREE["The committed tree - state/"]
     RAW[("state/raw/store/YYYY/MM/DD/*.parquet")]
-    STAMP[("state/gardener-stamps/task.json")]
+    STAMP[("state/raw/gardener-stamp/task.json")]
     COMPACT[("state/compact/store/YYYY/MM/settled.parquet")]
   end
 
@@ -219,7 +223,7 @@ Cross-field validators, existing ones kept and one amended: `selected <= candida
   "version": "2026-09-24",
   "attempts": 5,
   "shards": 5,
-  "stamps_dir": "state/gardener-stamps",
+  "stamps_dir": "state/raw/gardener-stamp",
   "tasks": {
     "seen": {
       "cadence": { "unit": "days", "value": 1 },
@@ -259,7 +263,7 @@ Cross-field validators, existing ones kept and one amended: `selected <= candida
 
 ### 5.3 The stamp
 
-`state/gardener-stamps/<task>.json`, contract `GardenerStamp`. One file per task, so two tasks never write one path and the disjointness proof holds.
+`state/raw/gardener-stamp/<task>.json`, contract `GardenerStamp`. One file per task, so two tasks never write one path and the disjointness proof holds. It is the one store whose filename is a name rather than an identifier, because the `plan` job has to find a known task's stamp without listing a directory.
 
 | Field | Type | Meaning |
 | --- | --- | --- |
@@ -267,14 +271,19 @@ Cross-field validators, existing ones kept and one amended: `selected <= candida
 | `task` | `Slug` | The task this belongs to. Equals the filename stem; a mismatch is refused |
 | `last_run` | `DateStamp` | The day the task last completed. **The only key the standard-library plan job reads**, so widening this shape can never break it |
 | `last_run_id` | `str`, `RUN_ID_PATTERN` | The execution that wrote it |
+| `last_unit_id` | `str`, UUID | The record file that run wrote, so a stamp leads to the evidence |
 
 Dueness, computed with `datetime` alone: a missing file means never run, which means due; otherwise due when `today - last_run` is at least the cadence. A refused push writes no stamp, so the task is due again at the next daily wake - it costs one day, not one cadence.
 
-### 5.4 The paths
+### 5.4 The paths, and the refusal that keeps the two roots true
 
-`backend/idhazh/store/paths.py` is the only module that builds these: `raw_path(store, date, *, run_id, attempt, job, shard)`, `compact_path(store, month)`, `stamp_path(task)`. Grammar in section 2. `.gitattributes` gains `*.parquet binary -merge` - no end-of-line conversion, no diff, no union driver.
+`backend/idhazh/store/paths.py` is the only module that builds these: `raw_path(store, date, unit_id)`, `compact_path(store, month, unit_id)`, `stamp_path(task)`. Grammar in section 2. `.gitattributes` gains `*.parquet binary -merge` - no end-of-line conversion, no diff, no union driver.
 
-`state/raw`, `state/compact` and `state/gardener-stamps` are subtracted from the trial-roots computation in the same commit that creates them. Without that, `retention._trial_roots` reads them as unknown directories and the gardener deletes its own records.
+**The door refuses a path whose second segment is neither `raw` nor `compact`, by name, at build time.** Not a lint, not a review habit - a `ValueError` naming the offending path and the rule. A test proves the refusal fires.
+
+This needs no allow-list and no register of exceptions. The seventeen existing stores do not call this door; they build paths through `ledger.day_shard_path`, which is untouched. A store migrates by moving to the door, and inherits the rule the moment it does. When the last one has moved, `ledger.day_shard_path` is deleted and the rule is the only way to build a state path.
+
+`state/raw` and `state/compact` are subtracted from the trial-roots computation in the same commit that creates them. Without that, `retention._trial_roots` reads them as unknown directories and the gardener deletes its own records.
 
 ### 5.5 The task registry
 
@@ -336,6 +345,92 @@ def publish(shard: Shard, message: str, *, attempts: int) -> int:
 
 `git reset --hard` stays banned (CLAUDE.md section 8); `--mixed` is not on that list and keeps the working tree. `--force-with-lease` is not used - a lease names the commit a rejection has just made stale. The loop never merges and never rebases: a deletion rebased onto an append to the same union-merged file keeps both sides and the deleted rows come back at exit zero.
 
+### 5.7 The unit identifier, and the envelope inside the file
+
+**North star, and it binds every store added after this plan. A filename carries identity, never meaning. Everything a reader needs to know about a file is inside the file.** A filename that is parsed is an undeclared, unversioned, unvalidated schema, and renaming a file becomes a breaking change. With the envelope inside, a file can be renamed, moved or re-partitioned and every reader still knows what it holds - which is the thing a filename cannot survive when one query opens a hundred files at once.
+
+This plan applies the rule to the stores it creates. The seventeen existing trees keep their parsed names until they migrate, because `ledger.SEGMENT_NAME` is a compiled pattern that `idhazh.paths` uses to answer whether a committed path has exactly one writer, and retiring that is the migration plan's work, not this one's.
+
+#### The identifier
+
+`backend/idhazh/store/naming.py`. A version-8 UUID: a 48-bit millisecond clock, then 74 bits derived from the writer's identity.
+
+```python
+NAMESPACE = uuid.uuid5(uuid.NAMESPACE_URL, "github.com/miztiik/yen-idhazh")
+
+def unit_id(*, run_started_at_ms: int, dataset: str, run_id: str,
+            attempt: int, job: str, shard: int) -> uuid.UUID:
+    """The name of one unit of work. A pure function of who wrote it and when the run began."""
+    seed = f"{NAMESPACE}|{dataset}|{run_id}|{attempt}|{job}|{shard}".encode()
+    digest = hashlib.sha256(seed).digest()
+    return _pack_v8(
+        run_started_at_ms & 0xFFFFFFFFFFFF,
+        int.from_bytes(digest[0:2], "big") & 0xFFF,
+        int.from_bytes(digest[2:10], "big") & ((1 << 62) - 1),
+    )
+```
+
+Measured 2026-09-24 against `uuid.uuid8`: version 8, variant RFC 4122, four shards of one run share the 13-character clock prefix, sort order equals time order across milliseconds, and identical inputs give an identical name.
+
+| # | Decision | Why |
+| --- | --- | --- |
+| 1 | **The clock cell is the run's start instant, passed in - never `now()` at write time.** | With a write-time clock a retry mints a different name for the same unit, so the commit loop's "already landed" check never matches and every retry duplicates the unit. With the run's instant the name is reproducible inside a run, which is exactly what the loop needs |
+| 2 | `attempt` is in the hash input | GitHub keeps `run_id` stable across a re-run, so without it attempt 1 and attempt 2 of one run collide |
+| 3 | `_pack_v8` is hand-written, about ten lines | `uuid.uuid8` arrived in Python 3.14 and `requires-python` is `>=3.12`. The RFC 9562 layout is fixed, so packing it ourselves costs less than raising the floor |
+| 4 | Within one millisecond the order is arbitrary | The bits after the clock are a hash. Ordering is a property across time, not within an instant. Said plainly because the four-shard example looks ordered and is not |
+| 5 | The name is deterministic, so **two different byte-contents at one path is a genuine defect** | This restores the integrity check the earlier draft had to drop when the name carried a write-time clock |
+| 6 | What it costs: a person reading a git diff no longer sees the run, attempt, job and shard in the filename | The path still carries `<store>/<YYYY>/<MM>/<DD>`, so the loss is only within a day, and the commit message names the run. A reader who needs more opens the envelope |
+
+#### The envelope
+
+Parquet file-level key-value metadata, written by `backend/idhazh/store/parquet.py`, declared as `FileEnvelope` in `backend/idhazh/contracts/file_envelope.py`. Parquet metadata is bytes to bytes, so every value is a UTF-8 string and any structure is JSON inside one.
+
+**What goes in a column and what goes in the footer, with the measurement that decides it.** A constant column costs about **250 bytes flat, whatever the row count** - a page header, a dictionary page and statistics. Six identity columns are about 1,500 bytes: 30 percent of a 3-row raw file, 4.5 percent of a 420-row month file. The envelope costs about **1,920 bytes for 612 bytes of JSON**, because pyarrow stores schema metadata twice, once as parquet key-value and once base64-encoded inside `ARROW:schema`. `store_schema=False` saves 3,244 bytes and **deletes the envelope entirely**, so it cannot be used.
+
+So the rule: **a field is a column when a query filters or groups on it**, because row-group statistics then let a reader skip a whole file without decompressing anything - measured, a constant column carries `min == max` and that is what a skip reads. **Everything else is footer only**, where it is provenance a person reads after the fact and costs nothing per row.
+
+| # | Key | Value | Also a column? |
+| --- | --- | --- | --- |
+| 1 | `envelope_version` | `YYYY-MM-DD`. The envelope's own stamp, distinct from the row schema's, so the envelope can evolve | no |
+| 2 | `schema_version` | `YYYY-MM-DD` of the row contract (CLAUDE.md section 11) | yes, as `version` - a reader selects rows of one shape |
+| 3 | `tier` | `raw` or `compact`. A folded file says it is one | no - the path already says it, and this is the copy that survives a move |
+| 4 | `dataset` | Which ledger: `gardener`, `visual-prune`, `item-health` | yes - the commonest filter |
+| 5 | `covers_date` | The day the rows describe, **not** the day they were written | yes, as `date` - every time filter uses it |
+| 6 | `partition` | The `state/raw/<store>/<YYYY>/<MM>/<DD>` it was written under, so a moved file still knows where it came from | no |
+| 7 | `written_at_ms` | Arrival time, epoch milliseconds. **This is where the clock lives** | no - never filtered, and as a column it is 250 bytes for one value |
+| 8 | `run_started_at_ms` | The instant the name was minted from, so the name can be recomputed and checked | no |
+| 9 | `run_id`, `attempt`, `job`, `shard` | Which writer produced it | yes, all four - tracing a bad run is a filter on `run_id` |
+| 10 | `unit_id` | The identifier in the filename. Deduplication is `GROUP BY unit_id`, never a filename convention | yes - you cannot group by a footer key |
+| 11 | `content_sha256` | Over the row bytes. Tells two files apart after a rename and proves a copy is a copy | no |
+| 12 | `git_sha` | The commit the producing run checked out. The one field tying a data file to the code that made it | no |
+| 13 | `writer` | `idhazh.store.parquet`. The parquet footer's own `created_by` names pyarrow, not us | no |
+| 14 | `writer_version` | The engine version, because a footer is not byte-stable across engine versions | no |
+| 15 | `compression` | `snappy` or `zstd` | no |
+| 16 | `name_strategy` | `uuid8-unit` today. It exists so a later strategy can arrive without a reader guessing which one made a name | no |
+| 17 | `folded_from` | On a `compact` file only: how many raw files it read. Absent on a raw file | no |
+
+**`row_count` is deliberately not a key.** The parquet footer already carries `num_rows`, free and authoritative, and the footer is written last so its presence already proves the file is complete. A second spelling is two answers to one question (Guardrail #4).
+
+A worked envelope, and what it costs:
+
+```python
+{
+  "envelope_version": "2026-09-24", "schema_version": "2026-09-24", "tier": "raw",
+  "dataset": "gardener", "covers_date": "2026-09-24",
+  "partition": "state/raw/gardener/2026/09/24",
+  "written_at_ms": "1790200000431", "run_started_at_ms": "1790200000000",
+  "run_id": "17482910337", "attempt": "1", "job": "tend", "shard": "03",
+  "unit_id": "01a0d03c-2e00-8461-98e0-a67898e9a802",
+  "content_sha256": "9f2c...", "git_sha": "0735031c2...",
+  "writer": "idhazh.store.parquet", "writer_version": "25.0.1",
+  "compression": "snappy", "name_strategy": "uuid8-unit",
+}
+```
+
+Read back without touching a row: `pq.read_metadata(path).metadata[b"unit_id"]`, and `pq.read_metadata(path).num_rows`. Verified to round-trip intact, 2026-09-24.
+
+**The oracle for this, in row 2:** every file the door writes carries a complete envelope, the envelope round-trips byte-identically, `unit_id` in the envelope equals the filename stem, and `unit_id` recomputed from the envelope's own identity fields equals both. That last clause is what makes the name checkable rather than merely unique.
+
 ---
 
 ### Row #1 - The site-size instruments leave the prune module
@@ -373,7 +468,7 @@ def publish(shard: Shard, message: str, *, attempts: int) -> int:
 - **Files touched:**
   - `backend/idhazh/store/__init__.py`, `persist.py` (`persist(rows, *, path, fmt)` and `load(path, model)`, temp-file-plus-rename), `parquet.py` (**the only module that imports pyarrow**), `json_lines.py`, `arrow_schema.py`, `paths.py`
   - `backend/idhazh/contracts/knobs/store.py` (`StoreConfig`: `format`, `compression`), `config/idhazh.json` (a `store` block, `parquet` and `snappy`)
-  - `backend/idhazh/ledger.py` and `backend/idhazh/retention.py` (register `state/raw`, `state/compact`, `state/gardener-stamps` in the trial-roots subtraction; register `DAY_VALIDATIONS_DIRNAME`, absent today)
+  - `backend/idhazh/ledger.py` and `backend/idhazh/retention.py` (register `state/raw` and `state/compact` in the trial-roots subtraction; register `DAY_VALIDATIONS_DIRNAME`, absent today)
   - `backend/idhazh/day_shards.py` (one docstring line: this reader is CSV-only and parquet goes through `store/`)
   - `pyproject.toml` (`[project.optional-dependencies] parquet = ["pyarrow>=21"]`, and `dev` depends on it)
   - `.gitattributes` (`*.parquet binary -merge`)
@@ -382,7 +477,7 @@ def publish(shard: Shard, message: str, *, attempts: int) -> int:
   - `docs/architecture/contracts/persistence.md` (new: the door, the two formats, the swap procedure)
 - **Acceptance gates:** local `ruff check .`, `mypy backend`, `pytest backend/tests/store backend/tests/retention -q`, `python -m idhazh.contracts.export` leaves the tree clean. CI runs the full suite including the schema drift gate.
   - **Named measurement before merge:** re-take pyarrow's installed size and install time on `ubuntu-latest` (throwaway workflow off `main`, n=3, installed bytes before and after, cold and warm cache), and correct section 4. The Windows figure is 96.9 MiB; the estimate is 120-135 MiB.
-- **Oracle:** three checks. Round-trip parity - for every model this plan persists, `load(persist(rows))` returns rows equal to the input in both formats. The single-engine rule - `git grep -l pyarrow` over `backend/` and `frontend/` returns exactly one path. The trial-roots check - over a tree holding only `raw/`, `compact/` and `gardener-stamps/`, the trial-roots computation returns empty. It cannot settle whether the arrow type mapping is the best one, only that it round-trips.
+- **Oracle:** four checks. Round-trip parity - for every model this plan persists, `load(persist(rows))` returns rows equal to the input in both formats. The single-engine rule - `git grep -l pyarrow` over `backend/` and `frontend/` returns exactly one path. The two-root refusal - `raw_path` and `compact_path` raise by name on any path whose second segment is neither `raw` nor `compact`. The trial-roots check - over a tree holding only `raw/` and `compact/`, the trial-roots computation returns empty. It cannot settle whether the arrow type mapping is the best one, only that it round-trips.
 - **Decisions:**
 
   | # | Decision | Authority |
