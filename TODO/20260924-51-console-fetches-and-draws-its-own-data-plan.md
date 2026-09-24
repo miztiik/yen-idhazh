@@ -15,7 +15,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | Why this plan exists | The Hardware route counts every job twice, its span control sits fifteen panels above the reader who wants it, and every chart on the console is drawn from data baked into the page by the build. This makes one panel prove the whole chain - query the store in the browser, draw it in d3 - and writes the house style the rest follow. |
 | Hard scope - in | - `state/host-fingerprint/` is read settled, so a job counts once.<br>- The five-tab console strip sticks, and the span control rides on it.<br>- `state/host-fingerprint/` becomes parquet and reaches the browser, which queries it for the columns and days one panel draws.<br>- `frontend/src/lib/data/` holds the one query door every later panel uses; `frontend/src/lib/charts/d3/` holds the house style every later chart uses. |
 | Hard scope - out | see the table below |
-| ESCALATE triggers | 1. **How the browser reaches the bytes** - whether `state/` is published, by what step, and under which allow-list. Level 5. Row 3 stops until it is ruled.<br>2. A tenth prerendered route, or retiring an existing one.<br>3. A charting library that is not d3.<br>4. A new committed payload under `frontend/public/`.<br>5. A measured figure that contradicts section 3. |
+| ESCALATE triggers | 1. A tenth prerendered route, or retiring an existing one.<br>2. A charting library that is not d3.<br>3. A new committed payload under `frontend/public/`.<br>4. A measured figure that contradicts section 3.<br>5. Any change to `ConsoleBand` beyond the one additive field row 3 declares - it is the payload every console route fetches first.<br><br>**"How the browser reaches the bytes" was trigger 1 and is settled**, 2026-09-25: the staging step copies the compact tier of every published store plus the unclosed raw days into gitignored `frontend/static/state/`, and `console/band.json` - which the console layout already fetches first - carries the store map. |
 | Chosen strategy | Correct the number first, move the chrome second, change the grammar last. Ruled by Fowler (CLAUDE.md section 14). |
 | Execution | autonomous orchestrator per docs/how-to/execute-a-plan.md. Parallel N = 2. |
 
@@ -41,7 +41,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | N4 | Prerendering is an anti-pattern | **Not here.** Nine files keep `export const prerender`, and ESCALATE trigger 2 stops a row adding a tenth |
 | N5 | d3 is the only charting library | **Stone laid by row 3**, which writes the house style and moves one importer of fifteen |
 | N6 | One writer per path | **Stone laid by row 3**, by routing `host-fingerprint` through plan 50's door |
-| N7, N8 | `state/` is the only source; no production artefact under `frontend/` in git | **Not here**, and ESCALATE trigger 1 is the decision that decides how they are met |
+| N7, N8 | `state/` is the only source; no production artefact under `frontend/` in git | **Stone laid by row 3.** The staged copy is byte-identical and gitignored, so `state/` stays the only source and nothing production lands under `frontend/` in git |
 | N9, N10, N11 | The name, the two roots, the one shard pattern | **Inherited** from plan 50's door. This plan mints no naming rule of its own |
 
 ## 1. Status Reckoner
@@ -105,25 +105,43 @@ export type Row = Record<string, string | number | boolean | null>;
 export type StoreName = 'host-fingerprint';
 ```
 
-**`StoreName` maps to an address inside this module and nowhere else.** The address is `${base}/state/<store>/` where `base` is SvelteKit's own `base` - the repository path prefix - because getting that prefix wrong is the commonest failure on this host. A panel that could name a path could name any path, and the allow-list in ESCALATE trigger 1 would stop being the bound.
+**`StoreName` maps to an address inside this module and nowhere else.** The door composes `${base}/state/<store>/<YYYY-MM>.parquet?v=<band.generated_at>` for each month `band.stores[store].months` lists, and `${base}/state/<store>/<YYYY-MM-DD>/<NN>.parquet?v=...` for each open day, `NN` running from `0` to `files - 1`. `base` is SvelteKit's own repository prefix, because getting that wrong is the commonest failure on this host. A panel that could name a path could name any path, and the staging allow-list would stop being the bound.
 
-**The browser cannot list a directory, and every committed file is named `<uuid8>.parquet` in both tiers.** Owner ruling, 2026-09-24: telemetry-intent N9 binds every tier, so no address is computable from a date. The committed tree is not changed to suit a reader.
+**Whole files are fetched and handed to the engine as buffers**, the same way the month search index already is. No byte ranges. Column projection then saves parse time rather than bytes, and the plan says that rather than implying the fetch got smaller.
 
-**So the staging step writes an index, and the index is generated, never updated.** It is a JSON file per store listing the filenames that step just copied - it already knows every one of them, because it copied them. The browser fetches it once and then queries the files it names.
+**Cost, one store over 90 days: about 9 requests in two round-trip waves.** One of them is the band, which `+layout.ts` already fetches. Three stores is about 27 requests and roughly 445 ms of round trip at the measured 89 ms edge.
 
-**Generated and never updated is the whole of why this is safe, and it is the one sentence a later change must not undo.** An index that appended only the newest day would be read-modify-write on a shared path, which is the shape uuid8 exists to end. Written from scratch there is no ancestor, no edit and nothing to merge.
+**The browser cannot list a directory, and every committed file is named `<uuid8>.parquet` in both tiers.** Owner ruling, 2026-09-24: telemetry-intent N9 binds every tier. The committed tree is not changed to suit a reader.
+
+**There is no index to invent. `console/band.json` is already the address book, and `frontend/src/routes/console/+layout.ts` already fetches it before any panel mounts.** Its contract has said so since 2026-09-09, in its own words: *"The months list rides along and that is the point. A shell cannot ask for a month until it knows which months exist, so a band that left the list out would make the list a second serial hop and the first month a third."* It already carries `months`, `covers_through`, `compaction_lag_days`, `rows_uncompacted` and `generated_at`, and it has a 2,000-byte ceiling. **This row adds one field to it, and no new file anywhere.**
+
+**N9 binds a telemetry payload in a tree under `state/`, not a published address.** Its own text settles it twice: the thing it replaces is `<date>-<run>-<attempt>-<job>-<shard>.csv`, a parsed payload name, and its last three words are *"nothing reads it"* - which a file whose whole job is to be read is not. N11 scopes it explicitly to trees under `state/`, and plan 50 section 5.4 makes that structural by raising on any second segment that is not `raw` or `compact`.
+
+| # | What is written | By whom | Where | At what name |
+| --- | --- | --- | --- | --- |
+| 1 | Raw shard | the producing stage, through plan 50's door | committed | `state/raw/<store>/<YYYY>/<MM>/<DD>/<uuid8>.parquet` |
+| 2 | Compact shard | plan 50's fold task | committed | `state/compact/<store>/<YYYY>/<MM>/<uuid8>.parquet` |
+| 3 | Published month | the staging step, **a byte copy of 2** | `frontend/static/state/`, gitignored, into `build/` | `state/<store>/<YYYY-MM>.parquet` |
+| 4 | Published open day | the staging step, **byte copies of 1** for days the fold has not closed, sorted by name and numbered | same | `state/<store>/<YYYY-MM-DD>/<NN>.parquet`, `NN` zero-padded from `00` |
+| 5 | The address book | `telemetry/publish/console_band.py`, generated whole every run | committed and staged | `console/band.json`, address unchanged |
+
+**Row 3 is a byte copy, not a projection, and that distinction is what answers N7.** `frontend/public/machine/<YYYY-MM>.csv` is a projection: it is the `machine-shard-row` fold of one store **joined to** another. A byte copy joins nothing, folds nothing and drops no column, and N10 already blesses the compact tier as derived and rebuildable.
+
+**The published bundle already runs four address grammars and two of them are unnamed by N8.** `digest/<YYYY>/<MM>/<DD>/digest.json` and `assist/index/<YYYY-MM>.json` are reader-facing, gated and shipped, and N8's replacement list names neither. So N11 cannot bind the published bundle without outlawing them - and it does not try to: it says *every tree under `state/`*. What N8 retires about the projections is the phrase **"in git"**, which is the committed copy and not the address.
+
+**The band carries a count, never a filename**: `open_days: [{date, files: 4}]`. That keeps the band contract's own promise - none of it is an address, so no cell exists that fetched text could arrive in (Guardrail #11) - and nothing probes, because the count is declared and a 404 is a defect rather than a loop terminator.
+
+**`generated_at` rides every data URL as `?v=`.** The current month's file and today's ordinal files change between builds and the host caches assets; the browse index lives with that staleness because a stale list is harmless, and telemetry staleness is not.
+
+**Nothing new enters git.** The staged copies are created on the runner inside `npm run build`, copied into `build/` by the bundler, uploaded as the Pages artefact and thrown away with the runner. Ten directories under `frontend/static/` are gitignored and published exactly this way today. **Gitignored is not unpublished**, and the ignore line is doing N8's job.
 
 | # | Why concurrent runs cannot collide here | |
 | --- | --- | --- |
-| 1 | A digest run writes `<uuid8>.parquet` into `state/` and pushes. It never touches the index | No job that commits also builds the site |
-| 2 | Only `pages.yml` builds, and its build job is `cancel-in-progress: true`, so a second build cancels the first | One builder, always |
-| 3 | The index and the files it names are produced by one process from one checkout and shipped in one artefact | **Consistency by construction, not by locking** - so adding runners upstream cannot break it |
+| 1 | A digest run writes `<uuid8>.parquet` into `state/` and pushes. It never stages and never builds | No job that commits also builds the site |
+| 2 | Only `pages.yml` builds, and its build job is `cancel-in-progress: true` | One builder, always |
+| 3 | The band and the files it names are produced from one checkout and shipped in one artefact | **Consistency by construction, not by locking** - adding runners upstream cannot break it |
 
-The residual is staleness rather than conflict: a day committed after the build checked out is absent until the next build, which is the same staleness `frontend/public/machine/<YYYY-MM>.csv` carries today.
-
-**The date still does real work.** The browser computes `<YYYY>/<MM>/<DD>` backwards from today for the span it draws, so the index only has to cover the staged window and the door only fetches the days it needs.
-
-**Nothing in the index enters git.** It is created on the runner inside `npm run build`, copied into `build/` by the bundler, uploaded as the Pages artefact, and thrown away with the runner. Eight directories under `frontend/static/` are gitignored and published this way today - `console`, `day-metrics`, `digest`, `index`, `machine`, `run-days`, `span-rollup` and `telemetry`. **Gitignored is not unpublished**, and the ignore line is doing N8's job: keeping a second copy of telemetry out of git.
+**The band is generated whole on every run and never appended to**, which is how it is already written. An append would be read-modify-write on a shared path, the shape uuid8 exists to end.
 
 **`SELECT *` is refused at this door**, not by convention: `columns` is required, non-empty, and the door raises by name on an empty list ([how-a-console-chart-gets-its-data.md](../docs/concepts/console-design/how-a-console-chart-gets-its-data.md) rule 5).
 
@@ -137,7 +155,7 @@ The residual is staleness rather than conflict: a day committed after the build 
 | `axis.ts` | `dateAxis`, `valueAxis` | Tick counts, formats and the label rule, from `config/appearance.json` |
 | `ordered-colour.ts` | `orderedRamp`, `RESERVED_GREY`, `ABSENT_HATCH` | The five-step speed ramp, the grey for an absence and the hatch for a known machine with no reading |
 | `motion.ts` | `transition`, `prefersReducedMotion` | One duration, one easing, and the reduced-motion branch written once |
-| `empty.ts` | `emptyState` | The three empty states the console already tells apart: recording off, record lost, nothing yet |
+| `empty.ts` | `emptyState` | **The four states `waiting.ts` already tells apart**: `loading`, `quiet`, `missing`, `unreachable`. Not three - telling `missing` from `unreachable` is the whole reason that file exists, and a three-state helper silently re-merges the pair it was written to separate |
 
 ### 2.4 The appearance knobs these rows read
 
@@ -151,7 +169,7 @@ Every value below is a knob (Guardrail #6). Three exist and two are minted.
 | `frame.breakpoints_px` | Exists as `[640, 1024, 1400]` | unchanged | Row 2 sticks at `breakpoints_px[1]`. **No second key naming 1024** |
 | `console.absent_hatch_degrees` | **New** | `45` | Row 3's hatch for a known machine with no throughput reading |
 | `console.span_choices_days` | **New** | `[1, 7, 14, 30, 90]` | Row 2's five-segment control. The five values were a hard-coded list and this is the knob that holds them |
-| `page_weight.payload_ceilings_bytes."state/"` | **New** | to be set in row 3 from the staged store's measured size, with headroom | `frontend/scripts/bundle-gate.mjs` and `backend/tests/contracts/test_page_ceilings.py` |
+| `page_weight.payload_ceilings_bytes."state/<store>/"` | **New, one per published store** | set in row 3 from the staged store's measured size, with headroom | `frontend/scripts/bundle-gate.mjs` and `backend/tests/contracts/test_page_ceilings.py`. **Per store, not one shared key**: the gate multiplies a directory key by the months a page touches, so one key under-counts a page drawing two stores. It lives in `config/idhazh.json`, not `config/appearance.json` |
 
 **Three page-weight gates fire before the 1 GB site cap and row 3 must clear all three.** `page_weight.cold_console_load_bytes` is 3,400,000 bytes - what a console reader's first load may cost - so **the query engine ships behind a dynamic import**, the same rule the gate already enforces for the on-device encoder. `page_weight.payload_ceilings_bytes` caps each fetched payload and has **no key covering `state/`** today, so a staged store is a payload no gate can see until the key above is minted. And `test_page_ceilings.py` asserts `cold_console_load_bytes` sits between the worst page and that page plus the telemetry ceiling, so adding a payload key moves the assertion and row 3 says which way.
 
@@ -175,10 +193,20 @@ Two facts are owed before row 3 starts and neither is a gate on a design choice.
 
 | # | Fact | Why it is not a gate | What it decides | Cost |
 | --- | --- | --- | --- | --- |
-| 1 | Does the published host answer a byte-range request - `206` with `Accept-Ranges: bytes` | It is a capability probe about a host, not a benchmark of a design | **How the store is published**, not how it is read. If the host does not answer ranges, rule 2 is met by sharding the published store by month, as every other console payload already is | One `curl -sI -H 'Range: bytes=0-99'` |
-| 2 | The query engine asset's transferred bytes, raw and gzipped | It consumes a budget rather than settling a choice | Whether the asset is bundled or fetched from a third party, which is a Guardrail #2 site-cap question and the cap is a boundary an agent surfaces and never overrules | `npm i`, byte-count the built asset and its gzip, once |
+| 1 | Does the published host answer a byte-range request | **Answered 2026-09-25: yes, `206` with `Accept-Ranges: bytes`.** On a binary type the offsets are true; on a text type they are the compressed offsets, which is a trap worth knowing | **Nothing here.** This row issues no range request; whole files are fetched. It is recorded so a later plan does not re-take it. One probe is still owed for the record - whether the host maps `.parquet` to a compressible type - and the tree already carries counter-evidence that it gzips `application/octet-stream` at level 5 | Taken |
+| 2 | The query engine asset's transferred bytes | It consumes a budget rather than settling a choice | **Answered 2026-09-25: 7,321,471 bytes brotli on the wire** - 7,124,338 of wasm plus the worker and the loader. See the ceiling ruling below | Taken |
 
-**Measured 2026-09-24 and not re-derived:** `state/host-fingerprint/` is 76,306 bytes in 58 files, which is 0.007 percent of the 98.7 MB published site. All of `state/` is 51.4 MiB in 719 files, about 53 days of the site cap's 959-day runway - which is why the allow-list in ESCALATE trigger 1 is the bound and not a preference.
+**The engine and the console's load ceiling are not the same instrument, and the row ships.** `page_weight.cold_console_load_bytes` is 3,400,000 bytes and `bundle-gate.mjs` computes it by summing **only the fetched data payload keys**; it never opens a script or a wasm file. Comparing 7.3 MB of code against 3.4 MB of data is a category error. The rule that governs code weight is that anything reached only through a dynamic `import()` is not first-load - and the precedent is not marginal: the on-device encoder is 16.22 MB on the wire and ships under it today.
+
+| # | The condition that makes it legal | Enforced by |
+| --- | --- | --- |
+| 1 | The engine is reached only through a dynamic `import()` | The `FORBIDDEN` list in `bundle-gate.mjs` gains the engine's module and wasm symbols. **Without that line the rule is a habit rather than a control**, and a careless static import passes review |
+| 2 | The panel renders with the engine absent or failed | Row 3's acceptance gates |
+| 3 | The shell and the freshness sentence paint before the engine is requested | Row 2 ships the sentence, and row 2 ships first |
+
+Against the site cap, 7.3 MB is 0.71 percent of 1 GB and 0.91 percent of the 800 MB alarm - about seven days of the site's runway, paid once. Carmack confirms it against the built tree in row 3.
+
+**Measured 2026-09-24 and not re-derived:** `state/host-fingerprint/` is 76,306 bytes in 58 files, which is 0.007 percent of the 98.7 MB published site. All of `state/` is about 52 MiB - which is why the staging allow-list is the bound and not a preference: a store joins it by setting `StoreConfig.published`, one store at a time, as its panel migrates.
 
 **The threaded engine build is not available on this platform and nobody should spend a day finding out.** It needs cross-origin isolation, which needs response headers a static host cannot set. The single-threaded build is the pick and the engine's own bundle selector already chooses it when the page is not cross-origin isolated.
 
@@ -227,7 +255,21 @@ Two facts are owed before row 3 starts and neither is a gate on a design choice.
 
 ### Row #2 - The console shell: a stuck tab strip, the span control on it, four named anchors
 
-- **Scope:** the chrome every console route sits in. No panel changes, no store is read differently, and no data moves.
+- **Scope:** the chrome every console route sits in, and **the sentence that says how complete the page is**. No panel changes, no store is read differently, and no data moves.
+
+**Row 2 ships before row 3, and that ordering is the requirement rather than a convenience.** Every chart on the console draws the newest days that **exist**, not the last N days - so when data stops, a chart gains no gap at the right edge. It slides back in time and looks exactly as full as it did yesterday. Reader's verdict on that, 2026-09-24: *"I read a month-old chart, believed it, and closed the tab satisfied."* A page that can go quiet without saying so is worse than useless, so the sentence exists before anything starts fetching.
+
+**The two sentences go in verbatim** and are computable today from fields that already exist - `covers_through`, `generated_at`, `compaction_lag_days`. **No contract changes for this.**
+
+```
+Complete to Monday 24 September. Today's runs are not in this yet.
+```
+
+```
+Nothing has been recorded since Friday 20 September. Four days are missing.
+```
+
+The load-bearing word is **complete**: it is a promise about the left side and an admission about the right, and once it is read a gap is a fact rather than a defect. It is a sentence, not a badge, not a colour and not a grey timestamp.
 
 Ruled by Susan on 2026-09-24. The complaint: the Hardware route is fifteen panels long with no quick way back, and the span control sits at the top where a reader nine panels down cannot reach it.
 
@@ -341,9 +383,10 @@ given and predicts nothing about the next job. Darker bars are faster machines.
   | 6 | The d3 modules are the narrow ones (`d3-selection`, `d3-shape`, `d3-axis`), never the `d3` meta-package. `d3-array@3.2.4` and `d3-scale@4.0.2` are already installed | Carmack, Guardrail #8 |
   | 7 | **Landing d3 now and the engine later is refused.** That exact trade was taken on 2026-09-24 and reversed the same day: a reader designed around the smallest panel guarantees a second reader arrives with the first large one. The cost of deferring is one extra pass over one panel, and it is the pass that has to re-decide the reader under time pressure | Owner, 2026-09-24 |
   | 8 | `console.machine_colour_stops` moves from 7 to 5 in this row. Three panels share machine colour, so a silent mismatch ships | Susan |
-  | 9 | **N9 binds every tier, so no published address is computable and the staging step writes a generated index instead.** The committed tree is not reshaped to suit a reader | Owner, 2026-09-24 |
-  | 10 | **The index is generated from scratch on every build, never appended to.** An append is read-modify-write on a shared path, and that is what brings every concurrency question back | Owner, 2026-09-24 |
-  | 11 | The staging step joins the existing build chain between `copy-visuals` and `vite build`, and is not a new script. Two reasons: a second staging step is Guardrail #4, and the site-weight gate measures `build/` after `vite build`, so a step outside the chain would have the gate measuring a tree without the new bytes | Carmack |
+  | 9 | **N9 binds a telemetry payload in a tree under `state/`, not a published address.** Its replacement clause names a parsed payload name and its last three words are "nothing reads it", which a file whose job is to be read is not. The published address is computed from the month and the band | Fowler, on the owner's 2026-09-24 ruling |
+  | 10 | **The band is generated whole every run and never appended to**, which is how it is already written. An append is read-modify-write on a shared path, the shape uuid8 exists to end | Owner, 2026-09-24 |
+  | 11 | The staging step joins the existing build chain between `copy-visuals` and `vite build`, and is not a new script. A second staging step is Guardrail #4, and the site-weight gate measures `build/` after `vite build`, so a step outside the chain would have the gate measuring a tree without the new bytes | Carmack |
+  | 12 | **The reader sees today because the site rebuilds after every digest run, not because the fold ran.** The fold serves git; the build serves the reader. `pages.yml` fires on the content workflow and `digest.yml` runs five times a day, so a staged open day is hours old and is copied straight out of the raw tier with no fold involved | Fowler, reconciling Carmack's refusal of a daily fold with Reader's refusal of closed-periods-only |
 
 - **Rejected alternatives:**
 
@@ -355,11 +398,15 @@ given and predicts nothing about the next job. Darker bars are faster machines.
   | 4 | Delete `waterfall.ts` and `donut.ts` here | They are ECharts modules with no importer anywhere in `frontend/src`, found 2026-09-24 - real dead code and a free deletion, but not this row's question | A one-line change of its own | Fowler |
   | 5 | Commit the store's published copy under `frontend/public/` | Satisfies neither N7 nor N8, and it is the thing N8 exists to end | Zero; costs both intents and a merge driver | Carmack |
   | 6 | Serve the store from the repository over raw content | Zero published bytes, and cross-origin requests do work. But this project's own prune force-pushes `main` on a schedule, so a commit-pinned address stops resolving and a branch-pinned one changes under a reader mid-session | Zero; costs the reader a broken page after every prune | Carmack |
-  | 7 | An index committed into `state/` beside the shards | **It is a shared mutable path**: every run rewrites it, two runs rewrite it at once, and the push race and the merge driver both return - which is precisely what per-writer names were introduced to end. The generated build artefact above is the opposite shape: one writer, from scratch, never committed | Zero; costs the race back | Owner, 2026-09-24 |
-  | 8 | Put a date in front of the `unit_id` so the name is derivable | It is not derivable. The directory already carries the date and the rest of the name is still unguessable, so this copies a fact the path states and solves nothing | Zero; costs a second spelling of the partition | Owner, 2026-09-24 |
-  | 9 | Name the published copy for the month so no index is needed | It is computable and it is a second sharding grammar, which N11 forbids with no exceptions. Ruled out on 2026-09-24 in favour of A1: the committed naming stands and the reader is given an index | Zero; costs N11 its "no exceptions" | Owner, 2026-09-24 |
+  | 7 | An index committed into `state/` beside the shards | **It is a shared mutable path**: every run rewrites it, two runs rewrite it at once, and the push race and the merge driver both return - which is precisely what per-writer names were introduced to end | Zero; costs the race back | Owner, 2026-09-24 |
+  | 8 | Compute the `<uuid8>` from `(dataset, tier, covers_date)` so both sides derive the same name, and have no index at all | Elegant, and **it dies on N6 rather than on derivability**. A backfill can add rows to a closed day, the fold re-runs, and a computed name means different bytes at the same path - N6 broken at the one place it is load-bearing. You can have an immutable address or a rebuildable derived tier, not both | Zero; costs N6 | Fowler |
+  | 9 | An index file the staging step generates | It was the answer until somebody read the payload the console layout already fetches. `console/band.json` has carried a `months` list since 2026-09-09 for exactly this reason, and inventing a second address book beside it is Guardrail #4 | Zero; costs a file nobody needed | Fowler |
+  | 10 | Ask the host's own contents API for a directory listing | It is a service rather than a static asset, rate-limited per address, untestable offline, and it breaks if the repository is renamed. Guardrail #1 says a design must not need one | Zero; costs Guardrail #1 | Carmack |
+  | 11 | Write an `index.html` into each month directory so the host lists it | It turns the host's limitation into the mechanism, and costs one round trip per store-month instead of one in total, plus 234 extra files | Zero; costs a round trip per month | Carmack |
 
-- **ESCALATE - how the browser reaches the bytes.** `state/` is not published today. N7 says the console reads `state/` rather than a projection of it; N8 says telemetry does not live under `frontend/` in git. **The priced recommendation is a build step staging an allow-list into `frontend/static/state/`, with that path in `.gitignore`**, so the dev server and the build see one tree and git sees nothing: 76,306 bytes for this store, 0.007 percent of the site, against 51.4 MiB and about 53 days of the cap's runway if all of `state/` were staged. Two conditions ride with it: `ci.yml`'s bundle gate and cap measurement both walk the built tree, and a canary build must never copy the real archive. **Once plan 50's compaction lands, the standing rule is the compact tier plus a declared number of raw days.** This is Level 5 and the row stops until the owner rules.
+- **The staging allow-list, which closes this row's old ESCALATE.** The staging step copies the compact tier of every store whose `StoreConfig.published` is true, plus the raw days the fold has not yet closed. Nothing else. `state/` in the repository stays the only source (N7) and nothing production lands under `frontend/` in git (N8), because the staged tree is gitignored and rebuilt each build. **The question of how the browser reaches the bytes is settled and is no longer an escalation.**
+
+- **`ConsoleBand` gains one field**, and it is the only contract change in this plan: `stores: dict[Slug, StoreReach]`, where `StoreReach` carries `months: list[MonthStamp]` and `open_days: list[{date: DateStamp, files: int}]`. Additive and optional, so a band an earlier run wrote still validates and a panel with no entry draws `missing`. `version` stamped, one `changelog` line, and the frontend hand copy with its two binding tests in the same commit.
 
 ## Dependent plans
 
