@@ -10,7 +10,9 @@ import {
 	RECORDED,
 	evalDays,
 	flagReadings,
+	matchFloor,
 	matchHeadline,
+	matchRules,
 	recordedReadings,
 	recordedText,
 	widerNote,
@@ -166,6 +168,51 @@ test.describe('the map', () => {
 });
 
 test.describe('the arithmetic', () => {
+	test('the axis floor frames the data without ever cropping a mark', () => {
+		const axis = { step: 5, floorMax: 75 };
+		const thresholds = { high: 80, low: 50 };
+		const days = (...values: number[]) =>
+			values.map((value) => ({ matchMid: value, matchLow: value }));
+
+		// A tight fortnight in the nineties still keeps a quarter of the scale, so
+		// a three-point wobble stays a three-point wobble.
+		expect(matchFloor(days(95, 97), thresholds, axis)).toBe(75);
+		// A normal spread rounds down to the step below the lowest figure.
+		expect(matchFloor(days(95, 73), thresholds, axis)).toBe(65);
+		// Nothing floors below the doubt threshold, because every summary under it
+		// already carries the same published band.
+		expect(matchFloor(days(95, 52), thresholds, axis)).toBe(50);
+		// And the doubt threshold yields to a mark beneath it. This is the day an
+		// operator opened the panel for, so it is the one day the axis must show.
+		expect(matchFloor(days(95, 30), thresholds, axis)).toBe(30);
+		// No day drawn at all: the highest floor, so an empty plot is not silently
+		// a full-scale one.
+		expect(matchFloor([], thresholds, axis)).toBe(75);
+	});
+
+	test('the rules drawn are the thresholds handed in, in the published wording', () => {
+		const rules = matchRules({ high: 80, low: 50 }, 50);
+		expect(rules.map((rule) => rule.at)).toEqual([80, 50]);
+		// The confidence ramp, and only here: these two are a threshold somebody
+		// agreed to, which is the one case the console lends it.
+		expect(rules.map((rule) => rule.token)).toEqual(['--band-high', '--band-low']);
+		for (const rule of rules) {
+			expect(rule.label, `a rule caption prints a score instead of a percent`).not.toMatch(/\d\.\d/);
+			expect(rule.label).toContain('%');
+		}
+	});
+
+	test('a rule under the axis floor is dropped rather than drawn off the plot', () => {
+		// The engine clips a rule outside the axis, so handing one over draws
+		// nothing and leaves the panel's own sentence naming a line a reader cannot
+		// find. On the committed record the floor sits at 65 percent, above the
+		// doubt score, so this is the ordinary case and not the edge one.
+		expect(matchRules({ high: 80, low: 50 }, 65).map((rule) => rule.at)).toEqual([80]);
+		// And the doubt rule returns on the day the floor drops to meet a figure
+		// beneath it - the day an operator opened the panel for.
+		expect(matchRules({ high: 80, low: 50 }, 30).map((rule) => rule.at)).toEqual([80, 50]);
+	});
+
 	test('a day is reduced by position, and a missing reading never enters as a zero', () => {
 		const days = evalDays(FIXTURE);
 		expect(days.map((day) => day.date)).toEqual([
@@ -320,6 +367,47 @@ test.describe('the panels, in a browser', () => {
 		}
 	});
 
+	test('THE ORACLE: the axis floor is the one the drawn days ask for', async ({ page }) => {
+		// The rule, written out rather than imported, for the same reason byHand()
+		// is: round the lowest drawn figure down to the step below it, hold that
+		// between the doubt threshold and the highest floor allowed, and then never
+		// let it rise above a mark - a day that fell through the doubt line is the
+		// day the panel was opened for, and an axis that clipped it would answer a
+		// question nobody asked.
+		const rows = canaryRows();
+		expect(
+			rows.length,
+			'the canary score ledger is missing. Build it: python backend/utilities/build_canary_day.py'
+		).toBeGreaterThan(0);
+		const knobs = JSON.parse(readFileSync(resolve(REPO, 'config', 'appearance.json'), 'utf8')) as {
+			console?: { faithfulness_axis_step?: number; faithfulness_axis_floor_max?: number };
+		};
+		const config = JSON.parse(readFileSync(resolve(REPO, 'config', 'idhazh.json'), 'utf8')) as {
+			evaluation?: { band_medium_min?: number };
+		};
+		const step = knobs.console?.faithfulness_axis_step ?? 5;
+		const floorMax = knobs.console?.faithfulness_axis_floor_max ?? 75;
+		const doubt = Math.round((config.evaluation?.band_medium_min ?? 0.5) * 100);
+
+		await page.goto('/console/model/');
+		const drawn: number[] = [];
+		for (const day of await page.locator('[data-match-day]').all()) {
+			for (const attribute of ['data-match-mid', 'data-match-low']) {
+				const value = Number(await day.getAttribute(attribute));
+				if (Number.isFinite(value)) drawn.push(value);
+			}
+		}
+		expect(drawn.length, 'the panel drew no day, so there is no floor to check').toBeGreaterThan(0);
+
+		const down = (value: number) => Math.floor(value / step) * step;
+		const lowest = Math.min(...drawn);
+		const want = Math.min(Math.min(Math.max(down(lowest - step), doubt), floorMax), down(lowest));
+
+		const floor = Number(await page.locator('[data-eval-panel="faithfulness"]').getAttribute('data-match-floor'));
+		expect(floor, `the lowest figure drawn is ${lowest}%`).toBe(want);
+		expect(floor, 'the floor hides a figure the panel drew').toBeLessThanOrEqual(lowest);
+	});
+
 	test('the recorded table draws every instrument, and neither list is silently short', async ({
 		page
 	}) => {
@@ -338,14 +426,31 @@ test.describe('the panels, in a browser', () => {
 		}
 	});
 
-	test('the two panels state what they count, and set no bar', async ({ page }) => {
+	test('the two panels state what they count, and name the bar they draw', async ({ page }) => {
 		await page.goto('/console/model/');
-		await expect(page.locator('[data-model-match-rule]')).toContainText('Nothing here sets a bar');
+		// Until 2026-09-25 this asserted the opposite - that the panel set no bar
+		// at all - and the reason it gave was that fifteen committed days could
+		// not settle a threshold. True, and beside the point: the two the plot now
+		// draws were never taken off this window. They are the scores every
+		// published item is already banded on, so the panel showing them is the
+		// panel agreeing with the page a reader sees. Susan and Andre, 2026-09-25.
+		const rule = page.locator('[data-model-match-rule]');
+		await expect(rule).toContainText('banded on');
+		const config = JSON.parse(readFileSync(resolve(REPO, 'config', 'idhazh.json'), 'utf8')) as {
+			evaluation?: { band_high_min?: number; band_medium_min?: number };
+		};
+		const high = Math.round((config.evaluation?.band_high_min ?? 0.8) * 100);
+		const low = Math.round((config.evaluation?.band_medium_min ?? 0.5) * 100);
+		const intro = await page.locator('[data-model-match-intro]').innerText();
+		expect(intro, 'the panel names a threshold the pipeline does not band on').toContain(`${high}%`);
+		expect(intro, 'the panel names a threshold the pipeline does not band on').toContain(`${low}%`);
+
 		await expect(page.locator('[data-model-recorded-rule]')).toHaveCount(1);
-		// Decision 2 of the row: every alarm ships in record-only mode until a
-		// corpus month exists to set it from. A tint here would be that alarm.
+		// The two rules are drawn on the plot itself, so no reading in the panel
+		// is tinted: a threshold across the scale says what a score has to clear,
+		// where a coloured figure says this one is bad, which nothing here knows.
 		const tinted = await page.locator('[data-eval-panel="faithfulness"] [data-band]').count();
-		expect(tinted, 'a new panel colours a reading against a threshold nobody set').toBe(0);
+		expect(tinted, 'a reading is coloured as if the panel had judged it').toBe(0);
 	});
 
 	test('a reading is a percentage or a rate, never the score the checker wrote', async ({

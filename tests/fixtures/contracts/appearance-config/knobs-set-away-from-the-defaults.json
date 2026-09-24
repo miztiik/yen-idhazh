@@ -45,6 +45,8 @@
     "default_window_days": 30,
     "doubt_rows": 10,
     "failure_list_max": 25,
+    "faithfulness_axis_floor_max": 60,
+    "faithfulness_axis_step": 10,
     "feed_rows": 10,
     "fleet_min_rows": 160,
     "fleet_top_kinds": 4,

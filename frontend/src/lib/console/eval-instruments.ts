@@ -15,19 +15,22 @@
  * next month fails a test instead of quietly going undrawn for a year, which is
  * how `hhem` got here.
  *
- * **Nothing here sets an alarm.** No threshold, no red, no band tint, no
- * polarity. The committed window is fifteen days and the summarizer is about to
- * change twice, so a threshold drawn from it would be a guess wearing a
- * measurement's clothes. Draw the numbers, set no alarm, colour nothing.
+ * **Only the agreed thresholds are drawn.** The faithfulness plot carries a rule
+ * at each of the two scores the pipeline bands a summary on, because those two
+ * decide what a published item says about itself - a panel that drew its own
+ * line would be inventing one. Every other instrument here still sets no alarm:
+ * no threshold, no red, no band tint, no polarity. Draw the numbers, and borrow
+ * a threshold only where somebody already agreed it.
  *
  * Relative imports only, and no `$lib` alias, so the browser suite can import
  * this module in plain Node and re-derive every drawn figure from the ledger
  * without standing up Vite.
  */
 
+import { BANDS } from '../bands';
 import type { DayReadout } from '../charts/frame';
 import { bandFor, grouped, type SummaryBand } from '../charts/series';
-import type { StackSeries } from '../charts/stacked';
+import type { StackRule, StackSeries } from '../charts/stacked';
 import { dayMonth } from '../format';
 
 /** One surface on the console that answers for at least one ledger column.
@@ -47,7 +50,7 @@ export const EVAL_PANELS: readonly EvalPanel[] = [
 	{ id: 'daily-figures', title: 'What the model did', route: '/console/model/' },
 	{
 		id: 'faithfulness',
-		title: 'How closely a summary matched its article',
+		title: 'Summary faithfulness, day by day',
 		route: '/console/model/'
 	},
 	{ id: 'recorded-only', title: 'Measured, and nothing acts on it', route: '/console/model/' },
@@ -137,9 +140,9 @@ export interface RecordedInstrument {
 export const RECORDED: readonly RecordedInstrument[] = [
 	{
 		id: 'compression',
-		label: 'Summary length against article length',
+		label: 'How long the summary came out against its article',
 		unit: 'percent',
-		note: 'Neither direction is wrong on its own - a short article and a long one are asked for different lengths.'
+		note: 'A length and not a mark. It is here to read the other lines against: a summary that scores badly at a tenth of the article length is a different problem from one that scores badly at half.'
 	},
 	{
 		id: 'self_repetition',
@@ -421,7 +424,7 @@ export function evalColumnLabels(days: readonly EvalDay[]): string[] {
 export function matchSeries(days: readonly EvalDay[]): StackSeries[] {
 	return [
 		{
-			label: 'Half of them scored above',
+			label: 'Half scored above',
 			token: '--chart-6',
 			values: days.map((day) => day.matchMid ?? 0)
 		},
@@ -433,13 +436,112 @@ export function matchSeries(days: readonly EvalDay[]): StackSeries[] {
 	];
 }
 
+/** The two scores the pipeline bands a published summary on, as whole percents.
+ *
+ * Whole percents because the plot is in whole percents. The pipeline holds them
+ * as scores between zero and one in `evaluation.band_high_min` and
+ * `evaluation.band_medium_min`, and the page converts once, here, so the rule a
+ * reader sees and the rule a run applied cannot be two different numbers.
+ */
+export interface MatchThresholds {
+	/** At or above this a published item says it matches its source. */
+	high: number;
+	/** Below this a published item says it may not. */
+	low: number;
+}
+
+/** How the value axis is bounded, where the data alone would mislead.
+ *
+ * Two knobs rather than three: the floor's lower bound is the doubt edge above,
+ * because below it every summary carries the same band and there is nothing
+ * left to zoom into.
+ */
+export interface MatchAxis {
+	/** The grain the floor rounds down to, and the headroom left under the
+	 * lowest drawn point. */
+	step: number;
+	/** The floor never rises above this, so a fixed share of the scale is always
+	 * on screen and a flat fortnight cannot be magnified into a crisis. */
+	floorMax: number;
+}
+
+/** The value axis floor, so the plot fills with the range the days actually hold.
+ *
+ * A fixed zero floor drew fifteen days of 73 to 95 percent inside the top
+ * quarter of the panel, where a four-point move is two pixels. This rounds down
+ * to the step below the lowest point drawn and then bounds it both ways.
+ *
+ * The lower bound is the doubt edge and the upper is `floorMax`. There is one
+ * more rule and it outranks both: **the floor never hides a mark.** A day whose
+ * lower quarter fell under the doubt edge is exactly the day an operator opened
+ * the panel for, and an axis that clipped it would answer a worse question than
+ * the one it was asked.
+ */
+export function matchFloor(
+	days: readonly Pick<EvalDay, 'matchMid' | 'matchLow'>[],
+	thresholds: MatchThresholds,
+	axis: MatchAxis
+): number {
+	const values = days
+		.flatMap((day) => [day.matchMid, day.matchLow])
+		.filter((value): value is number => value !== null);
+	if (values.length === 0) return axis.floorMax;
+	const down = (value: number) => Math.floor(value / axis.step) * axis.step;
+	const lowest = Math.min(...values);
+	const bounded = Math.min(Math.max(down(lowest - axis.step), thresholds.low), axis.floorMax);
+	return Math.min(bounded, down(lowest));
+}
+
+/** The band rules the plot can actually draw, in the words the published item uses.
+ *
+ * The labels are `bands.ts`'s own, so an operator reading this panel and a
+ * reader looking at a story are told the same thing about the same score. The
+ * confidence ramp is lent to these two and to nothing else on the panel: it is
+ * a threshold somebody agreed to, which is the only case the console lends it
+ * (`docs/concepts/console-design/what-the-quality-and-source-panels-draw.md`).
+ *
+ * A rule under the floor is dropped rather than handed over. The floor rises to
+ * fill the panel with the range the days hold, and on the committed record that
+ * puts it at 65 percent - above the doubt score. The engine clips a rule outside
+ * the axis, so passing it anyway draws nothing and leaves the panel's own
+ * sentence claiming a line a reader cannot find. The doubt rule appears on the
+ * day it matters, because the floor drops to meet a figure beneath it.
+ */
+export function matchRules(thresholds: MatchThresholds, floor: number): StackRule[] {
+	const rules: StackRule[] = [
+		{
+			at: thresholds.high,
+			label: `${thresholds.high}% and up: ${BANDS.high.label.toLowerCase()}`,
+			side: 'above',
+			token: '--band-high'
+		},
+		{
+			at: thresholds.low,
+			label: `under ${thresholds.low}%: ${BANDS.low.label.toLowerCase()}`,
+			side: 'below',
+			token: '--band-low'
+		}
+	];
+	return rules.filter((rule) => rule.at >= floor);
+}
+
+/** How many summaries each drawn day is a reading over.
+ *
+ * The tooltip's third line. Two percentiles with no denominator is the shape of
+ * a figure nobody can act on: a day that put half of four summaries above 95
+ * percent and a day that did it over four hundred are not the same day.
+ */
+export function matchNotes(days: readonly EvalDay[]): string[] {
+	return days.map((day) => `${grouped(day.matched)} summaries checked`);
+}
+
 export function matchColumns(days: readonly EvalDay[]): DayReadout[] {
 	return days.map((day) => ({
 		x: 0,
 		date: day.date,
 		rows: [
 			{
-				label: 'Half of them scored above',
+				label: 'Half scored above',
 				value: `${day.matchMid}%`,
 				colour: 'var(--chart-6)'
 			},
@@ -451,7 +553,9 @@ export function matchColumns(days: readonly EvalDay[]): DayReadout[] {
 			{
 				label: 'Summaries checked',
 				value: grouped(day.matched),
-				colour: 'var(--chart-marker)'
+				// No colour: nothing on the plot is this row's mark. A swatch here
+				// would be a key to a series that was never drawn.
+				colour: ''
 			}
 		]
 	}));

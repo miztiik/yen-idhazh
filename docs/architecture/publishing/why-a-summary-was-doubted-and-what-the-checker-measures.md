@@ -92,13 +92,38 @@ A chart of a number that is flat on 99.9 percent of rows teaches an operator to
 stop looking; a sentence saying how often it parts, and by how much, is the same
 fact at the size it is worth.
 
-**Nothing sets a bar.** No threshold line, no red, no band tint, no polarity -
-and the spec fails the build if a tinted element appears inside either score
-panel. The committed window is fifteen days and the summarizer is about to change
-twice, so a threshold taken off it would be a guess wearing a measurement's
-clothes. No number on this page is a bar at all, which is a change from how it
-read until 2026-09-24: the one threshold it drew - the share of an article's
-opening a summary had to keep - is retired, because plenty of good articles
+**Two bars, and they are the pipeline's own.** The faithfulness plot draws a rule
+at each of the two scores a published story is banded on - `band_high_min` and
+`band_medium_min` in [../../../config/idhazh.json](../../../config/idhazh.json),
+0.80 and 0.50 as committed - and nothing else on either panel sets a bar. No
+reading is tinted, no day is coloured, and the spec still fails the build if a
+tinted element appears inside either score panel.
+
+**A rule under the axis floor is dropped, not handed over.** The floor rises to
+fill the panel with the range the days hold, and on the committed record it sits
+at 65 percent - above the doubt score. The engine clips a rule outside the axis,
+so passing it anyway draws nothing and leaves the panel's own sentence naming a
+line a reader cannot find. So the plot ships the rules its own scale reaches,
+and the panel says "a line crosses the plot at each one the days on it reach"
+rather than promising two. The doubt rule comes back on the day the floor drops
+to meet a figure beneath it, which is the day an operator opened the panel for.
+
+The distinction is between a threshold and a verdict. A rule across the scale
+says what a score has to clear before a reader is told the story matches its
+source; a coloured figure says this one is bad, which is a judgement no fifteen
+committed days can support. Until 2026-09-25 this page refused both, on the
+ground that a threshold taken off this window would be a guess wearing a
+measurement's clothes. That reasoning was sound and answered a different
+question: these two were never taken off this window. They are already in force -
+every published item carries the band they decide - so a panel that hid them was
+an operator panel disagreeing with the page a reader sees. Susan and Andre,
+2026-09-25. What it cost: an operator can no longer read the plot as a bare
+measurement, because a line on it is policy. What it bought: the plot now
+answers the question the operator actually has, which is whether today's
+summaries clear the bar the site is publishing against.
+
+The one threshold this page did draw until 2026-09-24 - the share of an article's
+opening a summary had to keep - stays retired, because plenty of good articles
 open slowly.
 
 **Two lines on faithfulness.** Measured 2026-09-06 over the
@@ -115,29 +140,44 @@ a quantity, and neither is one day's share added to the next day's. The conditio
 for carrying that control is that both shapes read the same array honestly. Bars
 here would not.
 
-**A day is that day's middle summary, and the recorded table says so.** A median
-over the whole window needs every summary's reading, and carrying 6,966 of them
-into the page to print four figures is not a trade worth making. The table prints
-the quietest day, the middle day and the loudest day, each by its own middle
-summary, and names that in the panel rather than leaving a reader to assume a
-window median.
+**A day is that day's middle summary, and the recorded table says so in full.** A
+median over the whole window needs every summary's reading, and carrying 6,966 of
+them into the page to print four figures is not a trade worth making. The table
+prints the quietest day, the middle day and the loudest day, each by its own
+middle summary. It used to name that in four words - "that day's middle summary" -
+which is only a definition to somebody who already knew it. It now spells the
+median out: half of that day's summaries scored higher, half lower. Susan,
+2026-09-25.
 
 **The two densities are drawn per thousand words, not per word.** Per word they
 are 0.011 and 0.004 - two numbers a reader cannot tell apart, neither of which
 reads as a quantity of anything. Per thousand words they are 11.0 and 4.0
 markers, which is a count of phrases in about four pages.
 
-**The faithfulness plot fails a sufficiency check on purpose.** Its axis runs
-from zero to a hundred, so the fifteen committed days sit in the top fifth of the
-plot and four fifths of it is empty - which is
+**The faithfulness plot's axis is fitted to the days it drew, and bounded both
+ways.** The floor is the lowest figure on the plot rounded down to the step below
+it, held between the doubt threshold and
+`console.faithfulness_axis_floor_max`; the ceiling is a hundred, because a
+percentage has a top the data does not get to move.
+
+Until 2026-09-25 the axis ran from zero, and the page recorded that as a
+sufficiency check failed on purpose: the fifteen committed days sat in the top
+fifth of the plot and four fifths of it was empty, which is
 [../../concepts/design-system.md](../../concepts/design-system.md)'s first check,
-does it use the space it is on, answered no. Cropping the axis to the data would
-fill the plot and would also turn a four-point drift into a cliff. This panel
-exists because a band could not show a four-point move; a plot that shows a
-four-point move as a collapse is the same failure with the sign flipped. The
-empty four fifths is what tells an operator the movement is small, and that is
-worth more than the space. Recorded here rather than waved through, per
-`CLAUDE.md` section 9.
+does it use the space it is on, answered no. The reason given was real - cropping
+to the data turns a four-point drift into a cliff, and this panel exists because
+a band could not show a four-point move. The fix keeps that reason and drops the
+empty four fifths: the floor may not rise above
+`faithfulness_axis_floor_max`, so a quarter of the scale is on screen whatever
+the data does, and a four-point move is drawn as a sixth of the panel rather than
+as a collapse. Susan, 2026-09-25.
+
+Two bounds and no third. The floor's lower limit is not a knob - it is
+`evaluation.band_medium_min`, because below that score every summary carries the
+same published band and there is nothing left to zoom into. And one rule outranks
+all of them: **the floor never hides a mark.** A day whose lower quarter fell
+through the doubt line is the day an operator opened the panel for, so the floor
+drops to meet it.
 
 What these panels weigh, and every live page ceiling, is
 [../../reference/site-weight.md](../../reference/site-weight.md#the-page-guardrails-and-what-each-route-weighs-2026-09-10);
