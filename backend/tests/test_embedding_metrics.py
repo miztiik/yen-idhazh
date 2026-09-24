@@ -13,6 +13,7 @@ slower as the archive grows (CLAUDE.md section 13).
 from __future__ import annotations
 
 import math
+from itertools import pairwise
 
 import pytest
 
@@ -123,7 +124,7 @@ def test_the_reading_is_the_dot_product_the_encoder_itself_would_give() -> None:
     vectors = encoder.encode(parts)
     by_hand = sum(
         sum(left * right for left, right in zip(one, two, strict=True))
-        for one, two in zip(vectors, vectors[1:], strict=False)
+        for one, two in pairwise(vectors)
     ) / (len(vectors) - 1)
 
     assert coherence(summary, encoder=encoder) == pytest.approx(by_hand)
