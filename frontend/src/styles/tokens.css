@@ -31,6 +31,12 @@
 	--color-accent-strong: #a5a5ff;
 	--color-on-accent: #0b0e14;
 	--color-focus: #8b8bf5;
+	/* The ground under a word the reader's own field matched. The accent at about
+	   a fifth, mixed into --color-surface rather than laid over it, so a card and
+	   a mark are one paint. Tuned per theme and never one alpha over both: this
+	   ground is dark and the light theme's is white, so the same share reads as a
+	   whisper on one and a block on the other. --color-text stays the ink on top. */
+	--color-mark: #2e3250;
 
 	--band-high: #4bbd84;
 	--band-medium: #d6a743;
@@ -189,6 +195,9 @@
 	--color-accent-strong: #3f37c9;
 	--color-on-accent: #ffffff;
 	--color-focus: #4f46e5;
+	/* A smaller share than the dark theme's, because this ground is white: the
+	   same fifth that reads as a whisper on #141922 reads as a block here. */
+	--color-mark: #dfdefa;
 
 	--band-high: #1a7f4b;
 	--band-medium: #8a6300;

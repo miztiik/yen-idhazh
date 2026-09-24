@@ -1,6 +1,6 @@
 # Growing Reads
 
-**Last Updated**: 2026-09-22
+**Last Updated**: 2026-09-23
 One question, asked of every read:
 
 > **Does this read cost more when a run appended more?**
@@ -200,20 +200,6 @@ read**, and where it is, the read needs nothing.
 opens one file, never a collection, and half a payload validated is a payload
 reported good on the half that happened to be first.
 
-**A bounded window can be the wrong window, and 2026-09-22 measured one.** The
-retrieval eval's live line scores every published day against a label set frozen
-on `assist.eval_corpus_through`. The obvious cover was the trailing window
-`assist.search_months` already names - bounded, and the shards a reader's tab
-actually fetches. It holds **7,044 items and not one labelled answer**, because
-the labels close in the oldest month and the window reaches the newest, so the
-reading came out at recall 0.000 with all 60 queries unanswerable. **That number
-is a fact about the window rather than about search**, and it is why this read is
-declared instead of covered: the question is how far the labels have drifted from
-the archive, and the items that answer it are the ones a window excludes. The two
-reads either side of it in the same module took their covers and every gated
-number stayed identical to the last digit
-([search-quality.md](search-quality.md#design-rationale)).
-
 **And three whole-tree walks that stayed.** `assemble.site_size` and
 `retention.measure` read the size of every file in the tree;
 `retention.count_published_items` parses every staged day payload. Each says so
@@ -291,7 +277,6 @@ reads are here and not how many. These are `backend/`'s;
 | `item_health_provenance.archive_columns` | every shard of every day of `state/item-health/` | the question is whether ANY run has ever written a column, and a window answers only for the days inside it - so it would report a column retired last year and a column nothing was ever wired to fill as the same thing. It is a verb a person types, off the daily path, and what it prints is pasted into [the column report](../architecture/sources/item-health-columns.md). No test repeats it (`CLAUDE.md` section 13) |
 | `empty_column_census.census` | every shard of every day of `state/item-health/` and of `state/host-fingerprint/` | same question as the row above, asked of every published ledger rather than one, and crossed with the reader map on each contract so that a column with neither a reader nor a writer exits non-zero. A window cannot answer it for the same reason, and a test cannot hold it for a second one: an assertion that a column is empty goes red the day it first fills, which is a date rather than an edit. It is a verb a person types, off the daily path. Measured 2026-09-21: 29 day files and 14,026 item rows, 6 day files and 76 host rows |
 | `sample_sheet.index` | every committed `digest.json` under `frontend/public/digest/` | a drawn pair can straddle midnight, so its two articles are not always on the draw's own date - resolving against that date alone lost 2,035 of the 2,804 pairs drawn over 29 days. It is a verb a person types when labelling the holdout ([../how-to/label-the-similarity-holdout.md](../how-to/label-the-similarity-holdout.md)), off the daily path, and nothing in the pipeline reads what it writes |
-| the retrieval eval's live reading | every published day, through `load_corpus` with no `through` | it asks how far the frozen labels have drifted from the archive, so the answer is about the items OUTSIDE any window: every story published since the labels closed competes for the same ten slots. It is the one read in that module a cover cannot take, and the paragraph below records the window that was tried |
 | `measure_retrieval.report` | every published day and every committed month shard | it asks whether the index names every published item. A window would compare the days inside it and say nothing about the ones outside, which is the only place a dropped item can hide. It is a verb a person types, off the daily path, and it was a gated test until 2026-09-22 |
 
 **Two reads on this table are scheduled by nothing, and that is the whole of
@@ -865,5 +850,6 @@ them apart.
 - [../architecture/sources/freshness.md](../architecture/sources/freshness.md#the-published-ledger-files-by-day-and-the-read-carries-a-cover) - the published cover, the day grain, and the argument it reversed.
 - [../architecture/publishing/retention.md](../architecture/publishing/retention.md#what-bounds-the-committed-state-tree) - what bounds each committed collection, and the state-prune measurement.
 - [telemetry.md](telemetry.md#the-committed-traces-briefly) - a store bounded by its prune rather than by a read.
+- [../architecture/publishing/autotune-search-quality.md](../architecture/publishing/autotune-search-quality.md) - why the retrieval eval's whole-archive reading left this table on 2026-09-23, and what the project gave up with it.
 - [../reference/data-growth.md](../reference/data-growth.md) - where growing work is heading, what a replacement owes before the old path goes, and the shortcuts that are not answers.
 - [../../CLAUDE.md](../../CLAUDE.md) - Guardrail #12, which this page is the address of, and Guardrail #10 on what a measurement obliges.
