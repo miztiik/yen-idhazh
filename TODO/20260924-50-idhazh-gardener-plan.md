@@ -13,11 +13,11 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | Field | Value |
 | --- | --- |
 | Why this plan exists | Four programs delete things on four unrelated schedules, one `--dry-run` flag covers eleven independent decisions, every store writes its own format by hand, and two schedulers disagree about when a day is closed. This makes one utility with one verb per task, one config, one persistence door, one record and one safe way to commit. |
-| Hard scope - in | - `backend/idhazh/store/` is the one door a payload takes to disk, parquet or JSON, with exactly one module importing the parquet engine.<br>- `state/raw/<store>/<YYYY>/<MM>/<DD>/<unit_id>.parquet` is where a new writer files; `state/compact/<store>/<period>/...` is what compaction leaves, named for the period it covers - `daily/2026/09/23.parquet`, `monthly/2026/08.parquet`.<br>- `backend/idhazh/gardener/` holds the registry, the schedule, the record and the commit loop.<br>- All eleven passes in `backend/idhazh/stages/prune_state.py` become eleven tasks, each with its own window and its own `dry_run`.<br>- The corpus squash leaves inline shell for a tested Python module.<br>- `backend/utilities/prune_artifacts.py` is deleted and its work becomes two tasks; a utility that is also a task is two places to look.<br>- `.github/workflows/prune.yml` names no task: a standard-library `plan` job asks what is due, a sharded `run-tasks` job runs it, a `history` job rewrites the corpus last.<br>- `digest.yml`'s compaction step moves to the gardener, so one scheduler decides when a day is closed. |
+| Hard scope - in | - `backend/idhazh/store/` is the one door a payload takes to disk, parquet or JSON, with exactly one module importing the parquet engine.<br>- `state/raw/<store>/<YYYY>/<MM>/<DD>/<unit_id>.parquet` is where a new writer files; `state/compact/<store>/<period>/...` is what compaction leaves, named for the period it covers - `daily/2026/09/23.parquet`, `monthly/2026/08.parquet`.<br>- `backend/idhazh/gardener/` holds the registry, the schedule, the record and the commit loop.<br>- All eleven passes in `backend/idhazh/stages/prune_state.py` become eleven tasks, each with its own window and its own `dry_run`.<br>- The corpus squash leaves inline shell for a tested Python module.<br>- `backend/utilities/prune_artifacts.py` is deleted and its work becomes two tasks; a utility that is also a task is two places to look.<br>- `.github/workflows/prune.yml` names no task: a standard-library `plan` job asks what is due, a sharded `run-tasks` job runs it, a `history` job rewrites the corpus last.<br>- `digest.yml`'s compaction step moves to the gardener, so one scheduler decides when a day is closed.<br>- **Every store the console reads moves to parquet here**: `item-health`, `scores`, `host-fingerprint` and `span-rollup`, plus the two small stores that prove the door. That is four producers in two modules, and it is what lets a later plan delete the six projections under `frontend/public/` that exist only because the build had to do the work in advance. |
 | Hard scope - out | see the table below |
 | ESCALATE triggers | 1. Removing the `pruned_date` read-side alias - stop before the commit that removes it, not before the commit that adds it.<br>2. Any behaviour change to the tip-moved refusal in `backend/utilities/push_rewritten_history.py`, including its exit code.<br>3. Migrating any CSV tree to `state/raw/` or to parquet beyond the two named in section 5.8.<br>4. A measured figure that contradicts section 4, **or** a measured chain in front of the force push that does not fit the gap it must sit in - the remedy for the second is a cron change, which moves when the site publishes.<br><br>**Four earlier triggers became controls instead**, because a control that fires is a red test and a test is a better stop than a note: a window including today is refused by name at config load (section 5.2); a second parquet importer is caught by row 2's oracle; a writer outside the two roots raises in `paths` (section 5.4); and a task in config with no registry entry fails the bijection refusal. |
 | Chosen strategy | Register the two new roots, lay the persistence door, then move tasks in one PR per outcome, reader before writer, behaviour unchanged until the row that changes it. Ruled by Fowler (CLAUDE.md section 14). |
-| Execution | autonomous orchestrator per docs/how-to/execute-a-plan.md. Parallel N = 2; rows 3 and 4 are the one genuinely disjoint pair, and every other pair shares `config/idhazh_gardener.json`. |
+| Execution | autonomous orchestrator per docs/how-to/execute-a-plan.md. Parallel N = 2; rows 3 and 4 are disjoint and so are rows 9 and 10, and every other pair shares `config/idhazh_gardener.json`. |
 
 ### Hard scope - out
 
@@ -55,7 +55,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 
 ## 1. Status Reckoner
 
-One row is one pull request, and there are eight. No row merges into another: each is one outcome that can be verified and reverted on its own, and none mixes a deletion with anything else. The console rows that used to sit here are `TODO/20260924-51-console-fetches-and-draws-its-own-data-plan.md` - they share no consumer, no risk class and no escalation surface with these eight.
+One row is one pull request, and there are ten. No row merges into another: each is one outcome that can be verified and reverted on its own, and none mixes a deletion with anything else. The console rows are `TODO/20260924-51-console-fetches-and-draws-its-own-data-plan.md` - they share no consumer, no risk class and no escalation surface with these ten.
 
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -67,10 +67,14 @@ One row is one pull request, and there are eight. No row merges into another: ea
 | 6 | The corpus squash becomes Python | 4 | E | PENDING | - | - | - |
 | 7 | The index task, two compact periods, and the diagram moves into the page | 5 | F | PENDING | - | - | - |
 | 8 | `prune.yml` becomes `idhazh-gardener.yml`, and the whole garden is scheduled | 6, 7 | G | PENDING | - | - | - |
+| 9 | The three stores `work.py` writes become parquet | 7 | H | PENDING | - | - | - |
+| 10 | `span-rollup` becomes parquet | 7 | H | PENDING | - | - | - |
 
-**One pair runs two-wide and it is rows 3 and 4.** Their `Files touched` lists were diffed and share nothing: row 3 holds `backend/idhazh/ledger.py`, `backend/idhazh/paths.py`, `backend/idhazh/stages/prune_state.py`, the two migrated contracts and `.gitattributes`; row 4 holds `backend/idhazh/gardener/`, `backend/idhazh/prune/`, `backend/idhazh/cli.py`, `backend/idhazh/config.py` and `config/idhazh_gardener.json`. Rows 5 to 8 all write `config/idhazh_gardener.json`, so they are serial whatever their letters say.
+**Two pairs run two-wide, and both were checked by diffing their `Files touched` lists.** Rows 3 and 4 share nothing: row 3 holds `backend/idhazh/ledger.py`, `backend/idhazh/paths.py`, `backend/idhazh/stages/prune_state.py`, the two migrated contracts and `.gitattributes`; row 4 holds `backend/idhazh/gardener/`, `backend/idhazh/prune/`, `backend/idhazh/cli.py`, `backend/idhazh/config.py` and `config/idhazh_gardener.json`. Rows 9 and 10 share nothing either: row 9 is `backend/idhazh/stages/work.py` and three contracts, row 10 is `backend/idhazh/telemetry/publish/day_metrics.py` and one. Rows 5 to 8 all write `config/idhazh_gardener.json`, so they are serial whatever their letters say.
 
-**Row 2 is the door and row 3 is the migration, and the split is the point.** Row 2 adds code and moves no committed byte, so it reverts to nothing. Row 3 is the only one-way change in this plan: once it lands the committed CSV is gone and committed parquet is there. In one pull request, reverting the migration would revert the door, and reverting the door would leave committed parquet nothing can read.
+**Rows 9 and 10 wait on row 7 rather than on row 2.** Migrating a store before the index task and the compaction exist would leave per-writer parquet shards with nothing to consolidate them, which section 4 measures at 15.1 times the CSV they replace.
+
+**Rows 3, 9 and 10 are the only one-way changes in this plan, and each is alone in its own pull request.** Once one lands, its committed CSV is gone and committed parquet is there. Row 2 adds code and moves no committed byte, so it reverts to nothing - which is why the door and the first migration are two rows and not one.
 
 **Every new test module a row adds carries a module-level `pytestmark`, so `backend/tests/test_marks.py` is not in its `Files touched`.** That file holds `UNMARKED_MODULES`, the set of test modules carrying no mark, and it appears only in a row that moves or renames one of those. This is the sentence that makes any row here parallel with any other; without it every row shares one file and `Parallel N` is fiction.
 
@@ -236,9 +240,9 @@ flowchart TB
   RAWF[("raw/store/YYYY/MM/DD/unit_id.parquet<br/>write-once, many writers")]
 
   subgraph GARDEN["Idhazh Gardener - idhazh-gardener.yml"]
-    IDXJOB["index task<br/>re-lists every raw day but today<br/>the only writer of a day list"]
-    GATE{"listing matches the index<br/>the compaction is about to read?"}
-    RELIST["rewrite the index first,<br/>then compact the true contents"]
+    IDXJOB["index task<br/>lists every eligible raw day<br/>the only writer of a day list"]
+    GATE{"a whole day ended<br/>since that day ended?"}
+    HOLD["leave it, ask at the next wake"]
     CD["daily compaction"]
     CM["monthly compaction"]
   end
@@ -253,12 +257,11 @@ flowchart TB
   W2 --> RAWF
   W3 --> RAWF
   WN --> RAWF
-  RAWF --> IDXJOB
+  RAWF --> GATE
+  GATE -->|"no, a run may still be writing"| HOLD
+  GATE -->|"yes, today minus two or older"| IDXJOB
   IDXJOB --> RIDXF
-  RIDXF --> GATE
-  GATE -->|"no, a backfill reopened the day"| RELIST
-  GATE -->|"yes"| CD
-  RELIST --> CD
+  RIDXF -->|"one day at a time, from the watermark"| CD
   CD -->|"data first, watermark last"| DAILY
   DAILY -->|"every day of the month older than daily_keep_days"| CM
   CM --> MONTHLY
@@ -277,37 +280,44 @@ flowchart TB
 
   class W1,W2,W3,WN,IDXJOB,CD,CM,READER stage;
   class GATE decision;
-  class RELIST warn;
+  class HOLD warn;
   class RAWF,RIDXF,DAILY,MONTHLY,CIDXF store;
   class REFRESH sysPublish;
   class GARDEN sysOps;
 ```
 
-**A re-list, not a clock, is what makes the index trustworthy.** `digest.yml` has no concurrency group, and `.github/workflows/backfill.yml` commits into closed days by design, so no elapsed time can promise a day is finished. The index task re-lists every raw day but today at every wake, and the daily compaction re-lists again before it reads. A day below the watermark that has gained files is compacted again and its file rewritten - measured at 1,649 bytes packed, which is what makes that affordable.
+**A whole day must have ended before a day is read, which makes the rule today minus two.** At a wake just after midnight, yesterday ended half an hour ago and the day before ended twenty-four and a half hours ago. The second is taken and the first is left. No run can still be writing into a day that ended a full day ago, and the one case that can - a re-run of a failed job, which GitHub permits for thirty days - is absorbed by re-compacting that day rather than guarded against by waiting longer.
 
-**Every step is resumable and none of them reconciles anything.** A compaction takes one period at a time, writes the data file, rewrites the index, then advances the watermark. A run that dies in the middle leaves the watermark behind the truth, so the next wake redoes that one period and no more. The opposite order - watermark first - would leave a period in no tier and in no index, gone with no error and no test able to see it.
+**Every step is resumable and none of them reconciles anything.** A compaction takes one day at a time, writes that day's file, rewrites the index, then advances the watermark. Two days missed produce two files. A run that dies in the middle leaves the watermark behind the truth, so the next wake redoes that one day and no more. The opposite order - watermark first - would leave a day in no period and in no index, gone with no error and no test able to see it.
 
 ## 4. What was measured, 2026-09-24
 
 Three readings drove a decision. Everything else was noise and is not kept. A figure that contradicts one of these is ESCALATE trigger 6.
 
-**Parquet does not draw level with CSV until about 91 rows in a file, and that break-even is a function of column count.** The footer is a fixed cost of roughly 3,764 bytes and each column adds about 250 to 300 bytes whatever the row count. A gardener day holds fourteen rows of a 13-column shape; `host-fingerprint` has 31 columns and never draws level below about 45 rows. **The break-even is re-taken per store and recorded here rather than inherited from the gardener's narrow row.** One consequence is not optional: a job writes one file for all its tasks rather than one per task.
+**Parquet's cost is a fixed charge per file plus a charge per column in that file, so the only number that matters is how many rows share one file.** The footer is about 3,764 bytes. A column costs roughly 200 bytes when it is empty and its own data when it is not. **So the format is expensive at one row and cheap at several hundred, and consolidation is the whole design.**
 
-**A daily period costs bytes in proportion to the store's column count, and the bill is not one number.** For the gardener's 13-column row a day file is 4,212 bytes. For `host-fingerprint`'s 31 columns it is 13,245 bytes a day, measured 2026-09-25 over nine real committed days: **96,925 bytes of CSV become 119,207 bytes of daily-period parquet, 1.23 times larger - not 3.3 times smaller.** At `daily_keep_days: 45` a published store's daily period is about 710 KiB and its monthly period about 200 KiB, roughly 1.6 percent of the 58,427,904 bytes `state/` weighs today.
+**Measured 2026-09-25 against the eight newest committed `item-health` files - 220 rows, 122 columns.**
 
-**What the monthly period buys is the file count, not the reader's span.** At `host_fingerprint_keep_months: 14` a store with no monthly period holds about 426 daily files; with one it holds 55 daily plus 13 monthly. It also serves the one span that reaches it: a 90-day span is 2 monthly files plus 55 daily files instead of 90 daily files.
+| What | Bytes | Against the CSV |
+| --- | --- | --- |
+| The eight committed CSV files as they are | 225,711 | - |
+| One parquet file, every column | **87,714** | **2.6 times smaller** |
+| One parquet file, the 83 columns a page reads | 62,304 | 3.6 times smaller, and 29 percent below the line above |
+| One parquet file, every column, per-column statistics off | 81,739 | saves 6.8 percent |
 
-**Git delta-compresses a rewritten period file rather than storing a whole new blob.** Measured 2026-09-25 over nine real `host-fingerprint` days: 119,207 bytes written becomes 37,315 bytes packed, and one period-file rewrite costs 1,649 bytes. Five rewrites a day is about 8 KB, and 742 KB over the 90 days `finetune.prune_keep_days: 60` and `prune_every_days: 30` allow history to hold. An earlier draft asserted "roughly 360 MB" for daily compaction across every store; that was arithmetic on a false premise and is 33 times too high. **The churn was never the constraint, so cadence is a preference about what a reader gains.**
+**And measured at the other extreme, against three days of `host-fingerprint` - 79 per-writer shards of one or two rows each: 57,888 bytes of CSV become 873,872 bytes of parquet, 15.1 times larger.** That is the same format and the same data, split 79 ways instead of one. A one-row file of 31 columns is about 9,300 bytes of page, dictionary and statistics overhead around 370 bytes of data.
 
-**The raw period is where parquet is expensive.** Measured 2026-09-25 over three real days and 79 real `host-fingerprint` shards: **57,888 bytes of CSV become 873,872 bytes of parquet, 15.1 times larger**, because a one-row file of 31 columns is about 9,300 bytes of page, dictionary and statistics overhead. Git absorbs it - those 79 files pack to 58,993 bytes, 6.7 percent - but a reader fetching them verbatim does not. **That is why no raw file is ever published** (section 5.9.4).
+**Those two readings are the whole argument for this plan.** A store written per writer and never consolidated is the worst thing parquet does; the same store consolidated into one file a day is better than the CSV it replaces. **Nothing is published from the raw tier**, and every compact period is one file.
 
-**A constant column costs about 250 bytes flat, whatever the row count** - a page header, a dictionary page and statistics. That is what decides section 5.7's column-or-footer split: a column earns its 250 bytes only when a query filters on it, because row-group statistics then let a reader skip the whole file.
+**A constant column costs about 250 bytes flat** - a page header, a dictionary page and statistics. That is what decides section 5.7's column-or-footer split: a column earns its 250 bytes only when a query filters on it, because row-group statistics then let a reader skip the whole file.
 
-**Every size in this section names its compression, because two of them were taken at different settings and the pair did not reconcile until they did.** 32 bytes a row is snappy. A month file is zstd, which row 2 decision 5 measured at 2.2 times smaller at a thousand rows. So a month of thirteen daily rows is about 390 rows and comes out near 8.9 KiB at zstd against CSV's 29.1 KiB, where the same rows at snappy would be about 16.2 KiB. **A worker pricing a new store off this section reads the compression before the number.**
+**Git delta-compresses a rewritten period file rather than storing a whole new blob.** Measured over nine real `host-fingerprint` days: 119,207 bytes written becomes 37,315 bytes packed, and one period-file rewrite costs 1,649 bytes. Five rewrites a day is about 8 KB, and 742 KB over the 90 days `finetune.prune_keep_days: 60` and `prune_every_days: 30` allow history to hold. An earlier draft asserted "roughly 360 MB" for daily compaction across every store; that was arithmetic on a false premise and is 33 times too high. **The churn was never the constraint, so cadence is a preference about what a reader gains.**
 
-**pyarrow is the largest thing the gardener installs, so only the gardener installs it.** It is an optional extra, not a runtime dependency: `pip install -e .` appears at 18 call sites across 9 workflow files and `digest.yml` alone runs it 30 times a day. The installed size is re-taken on `ubuntu-latest` in row 2 before any sentence quotes it - the reading in hand is from Windows and the two platforms bundle different shared objects.
+**Every size in this section names its compression.** 32 bytes a row is snappy; a period file is zstd, which row 2 decision 5 measured at 2.2 times smaller at a thousand rows. **A worker pricing a new store off this section reads the compression before the number, and re-takes the reading for that store's own column count** - the break-even is a function of width, and `host-fingerprint`'s 31 columns and `item-health`'s 122 do not behave alike.
 
-**Zero published bytes, in this plan only.** Neither store row 3 migrates is drawn by the console, so nothing here reaches a reader's browser. This is not a standing property of the project: telemetry-intent N3 has the browser fetching its own data at view time, so plan 51 pays a real download, and its ESCALATE trigger 4 is where that price is ruled.
+**pyarrow is the largest thing the gardener installs.** It is an optional extra, not a runtime dependency: `pip install -e .` appears at 18 call sites across 9 workflow files and `digest.yml` alone runs it 30 times a day. **Row 9 puts it into three of those job kinds**, so the installed size is re-taken on `ubuntu-latest` in row 2 before any sentence quotes it - the reading in hand is from Windows and the two platforms bundle different shared objects.
+
+**Zero published bytes, in this plan only.** Nothing this plan writes reaches a reader's browser; it lays the store and the periods, and `TODO/20260924-51-console-fetches-and-draws-its-own-data-plan.md` is where a download is first paid for and priced.
 
 ## 5. The contracts
 
@@ -422,13 +432,22 @@ The question splits four ways, and every answer reads a file that already exists
 
 #### The daily compaction, in order
 
-1. Re-list the raw day directory before reading that day's index. On a mismatch, rewrite the index first, then compact against the true contents. **It never skips.**
-2. Write `state/compact/<store>/daily/<YYYY>/<MM>/<DD>.parquet` from exactly the files the index names.
-3. Rewrite `state/compact/<store>/index/daily.json`.
-4. Delete the raw files it read.
-5. Advance `state/compact/<store>/daily/watermark.json` **last**.
+**A day is eligible once a whole day has ended since it ended.** Not "today minus one" - **today minus two**, which falls out of the arithmetic rather than being asserted.
 
-It also processes **every raw day directory that exists at or below its own watermark**. A directory below the watermark means a backfill reopened a day that was already absorbed: the task rewrites that day's compact file from the union, deletes the raw files, and leaves the watermark where it is.
+Worked example. The gardener wakes at 00:30 on the 25th.
+
+| Day | Ended at | Elapsed | Eligible |
+| --- | --- | --- | --- |
+| the 24th | 00:00 on the 25th | 30 minutes | **no** - a run that started on the 24th may still be writing |
+| the 23rd | 00:00 on the 24th | 24.5 hours | **yes** |
+| the 22nd and older | - | - | yes, if the watermark has not passed them |
+
+1. Take the days from the watermark plus one up to the newest eligible day, at most `max_periods_per_run` of them, **and do each one separately**.
+2. For each day: read that day's index, read exactly the files it names, write `state/compact/<store>/daily/<YYYY>/<MM>/<DD>.parquet`, rewrite `index/daily.json`, delete the raw files, then advance the watermark.
+
+**Two days that were missed produce two files, never one.** If the run on the 25th fails and the next one is on the 26th, the watermark still says the 22nd, so the task compacts the 23rd into `23.parquet` and the 24th into `24.parquet`. **Merging two days into one file is a defect, not an optimisation**: the file is named for the day it covers, and a file named `23.parquet` holding the 24th's rows makes every date query wrong.
+
+**A day already below the watermark that still has raw files is compacted again.** Its compact file is rewritten from the union and the watermark stays where it is. This is how a re-run of a failed job - GitHub allows one for thirty days, and it writes into its original day - is absorbed without a second mechanism.
 
 #### The monthly compaction, in order, and no step may be reordered
 
@@ -852,12 +871,11 @@ The browser never reads this list; one backend test asserts that every store a c
 
 | Knob | Type | Whose | What it acts on |
 | --- | --- | --- | --- |
+| `compact_after_hours` | `int`, `ge=1`, default `24` | index and daily compaction | How long after a day ends before that day may be read. **At the current wake time every value from 1 to 24 produces the same answer** - the day before yesterday is eligible and yesterday is not - because the job starts about half an hour after midnight. The knob exists so the rule survives a change to the cron, and its default states the rule it means: a whole day must have ended |
 | `raw_index_keep_days` | `int`, `ge=1`, default `90` | index | How long `state/raw/<store>/index/<YYYY-MM-DD>.json` survives. **Without it the raw index tree grows by 365 files a store a year forever**: it is written by the index task, read by the daily compaction once, and after that day is in the daily period nothing reads it again. It outlives the daily period deliberately, so a compaction that was reverted still has its input |
 | `daily_keep_days` | `int`, `ge=1`, default `45` | monthly compaction | **How old every day of a month must be before that month is absorbed.** It is not a per-file age test. A daily file is never deleted before its month's file exists, so the daily period holds between `daily_keep_days` and `daily_keep_days + 31` days |
 | `monthly_keep_months` | `int`, `ge=1`, default `13` | monthly compaction | How long a month file survives. With `daily_keep_days` this is the store's real retention floor once it goes through the door: about 14 months at the defaults |
 | `max_periods_per_run` | `int`, `ge=1`, default `8` | compaction | How many eligible periods one wake may consume. **This is what keeps a first run's cost off the size of the archive** (Guardrail #12) and what makes "starts at the watermark plus one" and "one period at a time" the same program |
-
-**`max_late_arrival_hours` is deleted, and no clock replaces it.** It was declared at 6 hours against a gardener that wakes once a day at 00:04 to 00:34, so a day is never six hours old at a wake and every value from 1 to 24 behaved identically - a control that cannot be observed to fire. It would have been the wrong control at any cadence: `.github/workflows/backfill.yml` is a `workflow_dispatch` that commits into closed days by design, and GitHub allows a failed-jobs re-run to write into its original day for thirty days. **No elapsed time covers either. A re-list does** (section 5.9.13).
 
 **`yearly_keep_years` is not declared**, because no yearly period ships (section 2).
 
@@ -1003,13 +1021,15 @@ class Watermark(Contract):
 
 A `model_validator(mode="after")` on `RawDayIndex` asserts `files == sorted(files)`, `len(set(files)) == len(files)` and `file_count == len(files)`. One on `CompactIndex` asserts every `entries[].covers` matches the granularity its `period` declares.
 
-**`sealed_at` says when the index task last agreed with the tree. It never says the tree can no longer change.**
+**`sealed_at` says when the index task last agreed with the tree.**
 
-**The index task** runs at every wake. For every raw day directory of its store that is not today, it lists the directory, computes `file_count` and `content_sha256` over the sorted filename list, and writes the index whole. It restates an index it has written before, because a directory listing is cheap and a stale index is what the compaction would act on.
+**The index task** runs at every wake and writes an index for every raw day directory of its store that is eligible under `compact_after_hours`. It lists the directory, computes `file_count` and `content_sha256` over the sorted filename list, and writes the index whole.
 
-**The daily compaction** re-lists a day's directory before it reads that day's index. On a mismatch it rewrites the index first, then compacts against the true contents. It never skips. It also processes every raw day directory at or below its own watermark - a directory below the watermark means a backfill reopened a day that was already absorbed - rewriting that day's compact file from the union, deleting the raw files, and leaving the watermark where it is. A period-file rewrite costs 1,649 bytes packed, which is what makes re-listing affordable rather than merely correct.
+**The daily compaction** reads the index for the day it is about to take. It re-lists that one directory first and, on a mismatch, rewrites the index before compacting - one listing, for one day, at the moment it matters. It never skips.
 
-**An empty sealed day writes an index with `files: []`.** The day was looked at and produced nothing. Writing nothing instead would have the browser ask for a file that is not there.
+**A day already below the watermark that has raw files again** was written into by a re-run of a failed job, which GitHub permits for thirty days. The compaction rewrites that day's compact file from the union, deletes the raw files and leaves the watermark alone. A period-file rewrite costs 1,649 bytes packed, which is what makes absorbing a late arrival cheaper than guarding against one.
+
+**An empty eligible day writes an index with `files: []`.** The day was looked at and produced nothing. Writing nothing instead would have the browser ask for a file that is not there.
 
 **What a reader does with a stamp it does not know.** On the Python side `Contract.read()` already refuses a stale payload by name. In the browser the rule is: the query door compares an index's `version` against the one the bundle was built with, and on any mismatch it renders the `unreachable` state with both stamps in the console and fetches nothing. A build and the tree it reads ship from one checkout in one artefact, so a mismatch is a deployment fault rather than a data fault, and reading past it would draw a chart from a shape nobody checked.
 
@@ -1311,8 +1331,8 @@ It mints the name from `naming.unit_id` (section 5.7), builds the path through `
   | --- | --- | --- |
   | 1 | **Two periods, not three and not one.** A single month grain makes a reader fetch 56 days for a 39-day span. A single day grain makes a 90-day span 92 requests and holds about 426 files for a 14-month store. Daily plus monthly serves every span the console offers and bounds the tree at 68 files a store. **No yearly period ships**: at `monthly_keep_months: 13` the monthly period is already bounded, and the first yearly file could not be written before January 2028 - twenty-seven months with no writer and no reader. It is minted by the plan that needs it | Owner, 2026-09-25, on section 4 |
   | 2 | **A compact file is named for the period it covers**, `daily/2026/09/23.parquet`, not for a minted `unit_id`. A compact period has exactly one writer, so a minted name buys no collision safety and costs the browser a computable address. Raw keeps `<unit_id>`, which is where the rule earns its keep | Owner, 2026-09-25, overturning the 2026-09-24 ruling that bound the name to every tier |
-  | 3 | **A re-list, not a clock, is the control.** `max_late_arrival_hours` was deleted: the gardener wakes once a day just after midnight, so a day is never six hours old at a wake and every value behaved identically. And no elapsed time could have been right - `.github/workflows/backfill.yml` commits into closed days by design, and GitHub allows a failed-jobs re-run to write into its original day for thirty days. The index task re-lists, and the compaction re-lists before it reads (section 5.9.13) | Carmack, 2026-09-25, replacing an earlier ruling of Fowler's |
-  | 4 | **`index-<store>` and `compact-<store>-daily` run in the same shard, index first.** They are two tasks with one dependency and the matrix has no ordering. Split across shards, the compaction reads an index its sibling has not pushed yet, finds nothing, and the day lands one wake late - which doubles the reader's open period and is invisible in every log, because both tasks report success | Carmack, 2026-09-25 |
+  | 3 | **A day is eligible when a whole day has ended since it ended**, which makes the rule "today minus two" at a wake just after midnight. `compact_after_hours` carries it, and at the current cron every value from 1 to 24 gives the same answer - the knob exists so the rule survives a cron change rather than to be tuned. **The watermark is what makes a missed run cost nothing**: two missed days produce two files, never one merged file | Owner, 2026-09-25 |
+  | 4 | **A re-run of a failed job is absorbed, not guarded against.** GitHub permits one for thirty days and it writes into its original day. The compaction re-lists the one day it is about to take, and a day below the watermark that has raw files again is compacted again from the union. Nothing else re-reads anything | Carmack, 2026-09-25 |
   | 5 | **Data first, watermark last**, in every period. The failure modes are not symmetric: watermark-behind costs one repeated period, watermark-ahead loses data with no error | Fowler |
   | 6 | **A month is absorbed whole or not at all**, and its daily files are deleted in the same commit. A partial month file would put a date in two periods, and the browser's coarsest-period rule would read a month file that does not hold the day it asked for. The price is that the daily period holds `daily_keep_days` to `daily_keep_days + 31` days | Carmack, 2026-09-25 |
   | 7 | **The compaction carries the bound on its own stores.** Each period absorbs the one below and drops its own files past its own window, in one pass. A second task windowing `state/compact/` would have to own a root this task already owns, which the disjointness rule forbids | Carmack |
@@ -1321,6 +1341,7 @@ It mints the name from `naming.unit_id` (section 5.7), builds the path through `
   | 10 | **`max_periods_per_run` bounds a first run.** Without it, "starts at the watermark plus one" and "one period at a time" are two different programs, and the first store published with history either takes one long job or drains one period a day for two months | Carmack, 2026-09-25 |
   | 11 | **`frontend/src/lib/server/payload.ts` is not touched.** A build-time reader walking the compact periods would be a second parquet importer in `frontend/`, which plan 51 forbids. The first reader of a compact period is that plan's query door, at view time | Fowler |
   | 12 | The plan keeps a link, not a copy of the diagrams. Two pictures of one job graph disagree the first time the workflow changes | Guardrail #4 |
+  | 13 | **`index-<store>` and `compact-<store>-daily` run in the same shard, index first.** They are two tasks with one dependency and the matrix has no ordering. Split across shards, the compaction reads an index its sibling has not pushed yet, finds nothing, and the day lands one wake late - which doubles the reader's open period and is invisible in every log, because both tasks report success | Carmack, 2026-09-25 |
 
 - **Rejected alternatives:**
 
@@ -1335,7 +1356,7 @@ It mints the name from `naming.unit_id` (section 5.7), builds the path through `
   | 7 | Let each producer append its own filename to the day's index | Many writers on one path: the push race and the merge driver both return, and an append is read-modify-write on a shared file | Zero; costs the single-writer property | Owner, 2026-09-25 |
   | 8 | Derive dueness from the newest directory instead of a watermark file | A listing cannot distinguish a period that produced nothing from one never attempted, so a gap is retried every day forever | Zero; costs a task that never settles | Fowler |
   | 9 | One watermark file per store carrying both dates | Two tasks writing one path, which is the race the design removes | Zero; costs the single-writer property | Fowler |
-  | 10 | Keep `max_late_arrival_hours` and add a second daily wake so it can fire | A named elapsed-time guarantee that still does not cover `backfill.yml` or a failed-jobs re-run | A second cron and a second push window | Carmack, 2026-09-25 |
+  | 10 | Keep a six-hour late-arrival allowance rather than a whole day | At a wake just after midnight it gives the same answer as a whole day, so it reads as a tuned value that was never tuned. The default states the rule instead | Zero; costs the sentence its meaning | Owner, 2026-09-25 |
   | 11 | Write partial month files and rewrite them as days age in | The monthly period would be current within a day, at 1,649 bytes a rewrite - and a date would sit in two periods for up to 30 days a month | Zero; costs the one-file-per-date invariant | Carmack, 2026-09-25 |
   | 12 | Add the gardener page as a section of `retention.md` | That page answers what is deleted and for how long; the job graph, the commit loop and the record layout are a second question | Zero; costs the page its single question | `docs/reference/documentation-structure.md` |
 
@@ -1391,7 +1412,84 @@ It mints the name from `naming.unit_id` (section 5.7), builds the path through `
 
 ---
 
+### Row #9 - The three stores `work.py` writes become parquet
+
+- **Scope:** `state/item-health/`, `state/scores/` and `state/host-fingerprint/` move through the door, producer and consumer. One module writes all three, so this is one migration at three call sites.
+
+**These three are what the console draws, so this is the row that makes a browser query possible at all.** 122 columns, 36 and 31; 220 rows over the eight newest item-health files; 30 host-fingerprint shards a day from `plan`, `work` and `assemble` across five runs.
+
+**Every column is kept.** `UNREAD_CELLS` in `backend/idhazh/contracts/item_health.py` names 39 of item-health's 122 as having no reader on any page today. **They stay recorded**: item quality, feed quality and search quality work is pending and those columns are its input. What they cost is a reader's download, and that is answered by consolidation rather than by deletion - section 4 measures the same 122 columns at 2.6 times smaller than the CSV once a day is one file.
+
+**pyarrow enters `digest.yml`'s hot path here, and this row pays for it.** These three stores are written by `plan` (1 job), `work` (4 shards) and `assemble` (1 job) on each of five runs a day - **30 jobs a day**. Row 2 made pyarrow an optional extra to keep it out of those installs; this row gives that back on three job kinds. **Row 2's owed `ubuntu-latest` install measurement lands before this row merges, not after.**
+- **Files touched:**
+  - `backend/idhazh/stages/work.py` (three call sites move to `persist()`), `backend/idhazh/telemetry/silicon.py`, `backend/idhazh/telemetry/record.py`
+  - `backend/idhazh/store/migrate_work_stores.py` (new, one-shot; its removal condition is on the line that declares it and row 8's successor deletes it)
+  - `backend/idhazh/contracts/item_health.py`, `backend/idhazh/contracts/eval_row.py`, `backend/idhazh/contracts/host_fingerprint.py` (**no `version` stamp**: no field moves, only the address)
+  - `backend/idhazh/contracts/file_envelope.py` (`StoreName` gains `ITEM_HEALTH`, `SCORES`, `HOST_FINGERPRINT`)
+  - `config/idhazh_gardener.json` (an index block and two compaction blocks for each of the three stores), `backend/idhazh/gardener/tasks/__init__.py`
+  - `backend/idhazh/ledger.py`, `backend/idhazh/day_shards.py` (the read side for these three moves to `store/settle.py`)
+  - `frontend/src/lib/server/payload.ts`, `frontend/src/lib/server/host-fingerprint.ts`, `frontend/src/lib/server/machine-counters.ts`, `frontend/src/lib/server/model-work.ts` (**see the escalation below**)
+  - `.github/workflows/digest.yml` (`plan`, `work` and `assemble` install `.[parquet]`)
+  - `backend/tests/store/test_migrate_work_stores.py`, `backend/tests/test_ledger.py`, `backend/tests/telemetry/`, `frontend/tests/`
+- **ESCALATE before the first commit.** Four build-time readers under `frontend/src/lib/server/` open these stores as CSV and serve every panel the console has. Moving the stores breaks all four, and the answer decides a plan rather than a row: a build-time parquet reader, a dual write for one release, or holding each reader until its route moves to the browser. **This is Level 5 and it is settled before any code is written.**
+- **Acceptance gates:** local `ruff check .`, `mypy backend`, `pytest backend/tests/store backend/tests/telemetry backend/tests/workflows -q`, `npm --prefix frontend run test:changed -- --list` then the selected checks, and the browser smoke on every console route. CI runs the full suite.
+- **Oracle:** **migration parity, per store.** Every row in each committed CSV tree reads back from the parquet the migration wrote, field for field, no row lost and none invented, and **the column set is identical** - 122, 36 and 31, with `UNREAD_CELLS` still naming 39 of the first. It cannot settle whether the browser can query them; plan 51 does that.
+- **Decisions:**
+
+  | # | Decision | Authority |
+  | --- | --- | --- |
+  | 1 | **Three stores in one row, because one module writes all three.** Splitting them would put three pull requests through the same file in sequence for no independent revert - reverting one call site of three leaves `work.py` half migrated | Fowler |
+  | 2 | **Every column is kept.** 39 of item-health's 122 have no reader on a page today; they are the input to work that has not started. A reader's download is answered by consolidation, not by deletion | Owner, 2026-09-26 |
+  | 3 | This row waits on the index task and the compaction, not on the door. Per-writer parquet with nothing to consolidate it is 15.1 times the CSV it replaces | Carmack, section 4 |
+  | 4 | `digest.yml` gains `[parquet]` on three job kinds and no others. The remaining jobs never touch the format | Carmack |
+
+- **Rejected alternatives:**
+
+  | # | Option | Why rejected | What it would cost to take | Authority |
+  | --- | --- | --- | --- | --- |
+  | 1 | Drop the 39 unread columns while migrating | It saves 29 percent of the published file and throws away the input to the item, feed and search quality work | Zero to take, and it costs a workstream | Owner, 2026-09-26 |
+  | 2 | Migrate `host-fingerprint` in plan 51 instead | Three call sites in one file across two plans, so the two collide on `work.py` and neither can run beside the other | Zero; costs the parallelism | Fowler |
+  | 3 | Keep a CSV copy for the build-time readers indefinitely | Two writers of one fact, and the CSV is the format this workstream exists to retire | Zero; costs the single-writer rule | Fowler |
+
+---
+
+### Row #10 - `span-rollup` becomes parquet
+
+- **Scope:** `state/span-rollup/` moves through the door, producer and consumer. Five columns, one writer, one reader.
+
+**It is the fourth and last store the console reads.** Small, narrow and written by one module, so it is the cheapest of the four and it shares no file with row 9.
+- **Files touched:**
+  - `backend/idhazh/telemetry/publish/day_metrics.py` (the write moves to `persist()`), `backend/idhazh/contracts/span_rollup.py` (**no `version` stamp**)
+  - `backend/idhazh/store/migrate_span_rollup.py` (new, one-shot, removal condition on its declaring line)
+  - `config/idhazh_gardener.json` (an index block and two compaction blocks), `backend/idhazh/gardener/tasks/__init__.py`
+  - `frontend/src/lib/server/span-rollup.ts`
+  - `backend/tests/store/test_migrate_span_rollup.py`, `backend/tests/telemetry/test_span_rollup.py`
+- **Acceptance gates:** local `ruff check .`, `mypy backend`, `pytest backend/tests/store backend/tests/telemetry -q`, `npm --prefix frontend run test:changed -- --list` then the selected checks. CI runs the full suite.
+- **Oracle:** migration parity - every committed span-rollup row reads back from the parquet, field for field. It cannot settle whether the timeline panel still draws; plan 51's successor does that.
+- **Decisions:**
+
+  | # | Decision | Authority |
+  | --- | --- | --- |
+  | 1 | Its own row, not folded into row 9. A different module writes it, so the two are disjoint and run two-wide | Fowler |
+  | 2 | Five columns means the fixed cost dominates at any row count, so this store gains most from the monthly period and least from the daily one. Its config block says so | Carmack |
+
+- **Rejected alternatives:**
+
+  | # | Option | Why rejected | What it would cost to take | Authority |
+  | --- | --- | --- | --- | --- |
+  | 1 | Leave it CSV because it is small | It is one of the four stores the console reads, and one CSV reader left standing keeps a second grammar alive in the query door | Zero; costs the door its single format | Fowler |
+  | 2 | Merge it into `item-health` | Different grain - a span is per run and per stage, an item-health row is per item. Merging would repeat every span row once per item. **And measured 2026-09-25, two stores in one file save 24 bytes against two files**, so there is no size argument either | Carmack |
+
+---
+
 ## Dependent plans
 
-- `TODO/20260924-51-console-fetches-and-draws-its-own-data-plan.md`. Its row titled **`host-fingerprint` becomes parquet, is compacted every run, and is published** waits on **two** rows of this plan: **The payload store, the two roots, and the arrow mapping** builds the door and `StoreConfig.published`, and **The index task, two compact periods, and the diagram moves into the page** writes every index, every watermark and every compact file the browser addresses, and carries the one-file-per-date oracle that plan's design rests on. Nothing else in this plan is a predecessor there.
+- `TODO/20260924-51-console-fetches-and-draws-its-own-data-plan.md`. Its row titled **The four stores the console reads are published** waits on this plan's rows titled **The index task, two compact periods, and the diagram moves into the page**, **The three stores `work.py` writes become parquet** and **`span-rollup` becomes parquet**. Nothing else in this plan is a predecessor there.
+- **The route plan, not yet written.** One row per console route. Each row moves that route's panels to the query door, and **each row's scope line ends with the projection under `frontend/public/` it deletes**: `/console/machine` deletes `machine`, the model route deletes `telemetry`, and the last route out deletes `day-metrics`, `run-days`, `run-timeline` and `span-rollup`. About 4.1 MB leaves the published site and six directories go. `console/band.json` stays - it is the freshness header every route fetches first, not a projection. **A route is not done while the projection it fed survives.**
+- **Susan rules every chart on that plan again, from scratch** (CLAUDE.md section 14). The charts on those routes were drawn against what a build-time projection could carry - twenty columns in the machine projection's case, aggregated per shard before any page saw them. A browser that can query the store can ask questions the projection could not answer, so **the existing chart is evidence of an old limit rather than a decision to preserve**. Her mandate on each route is what the data now allows, not what it used to show.
 - `TODO/20260905-13-switch-on-deletion-plan.md`, row titled "The fuse comes out, and one run is watched": its subject moves from the `--dry-run` flag on `digest.yml`'s assemble step to `config/idhazh_gardener.json`'s `visual-prune.dry_run`. That plan is updated after this one delivers, per the owner, 2026-09-24.
+
+## Open questions, for the route plan rather than for a row here
+
+- **Is `scores` named for what it measures?** It is keyed per item per run per attempt, so if what it scores is the feed rather than the item, the store and its columns are misnamed and no migration fixes that. Verified as out of scope for this plan; recorded so the route plan starts from the question rather than discovering it.
+- **Does `span-rollup` belong inside `item-health`?** Different grain - per run and per stage against per item - so merging would repeat a span row once per item. **Measured 2026-09-25: two stores in one file save 24 bytes against two separate files**, so there is no size argument for merging any pair of these stores. If they merge it is for modelling reasons, and those are the route plan's to argue.
