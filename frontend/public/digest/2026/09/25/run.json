@@ -201,6 +201,207 @@
           "published": 0
         }
       ]
+    },
+    {
+      "charts_drafted": 16,
+      "commit_sha": "7c2345989ed3900161110ea723128525bf3a34c4",
+      "completed_at": "2026-09-25T14:57:33Z",
+      "config_digests": [
+        {
+          "path": "config/idhazh.json",
+          "sha256": "707fc33dd4b5558f78be725ae035851b14a71f53b84d3975f8bc7ed9be3c4ff2"
+        },
+        {
+          "path": "config/models/qwen3.5-9b-q4km.json",
+          "sha256": "43ab695e4bd5cdf3da78c9a59761376ceb3b74fedac181faac5a360ce2d1ce26"
+        },
+        {
+          "path": "config/sources.json",
+          "sha256": "2193df45bf3cf9382a56408c1d7fcdca0c328748c5a83fdac3ea8815c92f3536"
+        },
+        {
+          "path": "config/taxonomy.json",
+          "sha256": "088edce9b28fdd2c3572859234b827319bfa05e177d29cd3c4483098a129f724"
+        },
+        {
+          "path": "config/watchlist.json",
+          "sha256": "f11d1aa2d876f2507a695fa6088ba5581b1ea7df578673fb66747b191210572f"
+        }
+      ],
+      "determinism_violations": 0,
+      "evaluation_enabled": true,
+      "evaluation_sample_rate": 1.0,
+      "evaluation_sampled": true,
+      "inputs": {
+        "chat_template_sha256": "7f0e529032c25183bcd66c7f238da2d377f43be754a94e2725a58c4e16d2ed67",
+        "extractor_version": "trafilatura-2.2.0-idhazh-3",
+        "model_sha256": "03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8",
+        "n_batch": 2048,
+        "n_ctx": 65536,
+        "n_threads": 4,
+        "n_ubatch": 512,
+        "output_schema_sha256": "432f39f97f9b099f754024b4e86625ec8683fd047d865d1e8b395e6da755284a",
+        "prompt_sha256": "1bf544fa505403a92017e2ab687f7c5f2d3d480d0f7ec1c6ca638df338e9feaf",
+        "quantisation": "Q4_K_M",
+        "runner_class": "github-hosted/linux/x64",
+        "runtime_build": "b10598",
+        "runtime_flags": {
+          "--cache-prompt": "set",
+          "--jinja": "set",
+          "--no-cache-prompt": "runtime-default",
+          "--no-jinja": "runtime-default",
+          "--no-reasoning-preserve": "runtime-default",
+          "--reasoning-preserve": "set",
+          "-cms": "512",
+          "-cram": "4096",
+          "-ctk": "q8_0",
+          "-ctv": "q8_0",
+          "-ctxcp": "64",
+          "-fa": "on",
+          "-np": "1",
+          "-sps": "0.1",
+          "-tb": "4"
+        },
+        "sampling": {
+          "dry_multiplier": "0.0000",
+          "frequency_penalty": "0.0000",
+          "min_p": "0.0500",
+          "mirostat": "0",
+          "presence_penalty": "0.0000",
+          "repeat_last_n": "64",
+          "repeat_penalty": "1.0000",
+          "seed": "0",
+          "temperature": "0.2000",
+          "top_k": "40",
+          "top_p": "1.0000",
+          "typical_p": "1.0000",
+          "xtc_probability": "0.0000"
+        },
+        "sanitizer_version": "idhazh-sanitizer-3",
+        "truncation_cap_tokens": 26000,
+        "turn_markers_sha256": "9452f73d310f7ade57dc24a49e1ea158e16008ae1878e08062b4ed22636816d9"
+      },
+      "items_failed": 9,
+      "items_planned": 80,
+      "items_prefiltered": 0,
+      "items_routed": 71,
+      "items_skipped": 0,
+      "items_succeeded": 71,
+      "models": [
+        {
+          "model_ref": {
+            "byte_count": 5680522464,
+            "companion_files": [],
+            "draft": null,
+            "file": "Qwen3.5-9B-Q4_K_M.gguf",
+            "hf_base_repo": "Qwen/Qwen3.5-9B",
+            "id": "qwen3-5-9b-q4-k-m",
+            "inference": {},
+            "quantisation": "Q4_K_M",
+            "repo": "unsloth/Qwen3.5-9B-GGUF",
+            "request": {},
+            "revision": "3885219b6810b007914f3a7950a8d1b469d598a5",
+            "server": {
+              "--batch-size": 2048,
+              "--cache-prompt": null,
+              "--cpu-range": "0-3",
+              "--cpu-strict": 1,
+              "--ctx-size": 65536,
+              "--jinja": null,
+              "--metrics": null,
+              "--prio": 1,
+              "--reasoning-preserve": null,
+              "--threads": 4,
+              "--ubatch-size": 512,
+              "-cms": 512,
+              "-cram": 4096,
+              "-ctk": "q8_0",
+              "-ctv": "q8_0",
+              "-ctxcp": 64,
+              "-fa": "on",
+              "-lm": "mmap+mlock",
+              "-lv": 4,
+              "-np": 1,
+              "-sps": 0.1,
+              "-tb": 4
+            },
+            "sha256": "03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8"
+          },
+          "role": "summarize"
+        }
+      ],
+      "n": 2,
+      "note": null,
+      "rank_version": "idhazh-rank-6",
+      "route_ms": 4,
+      "run_id": "2026-09-25-36132006504",
+      "runner": "ubuntu-latest",
+      "same_story_floor_applied": 0.94,
+      "scorer_version": "hhem-2.1-open@8e4a2e6e;weights-841b70e0;metrics-4;window=900/150/anchored;bands=0.80/0.50",
+      "shards": 4,
+      "site_bytes": 31597332,
+      "site_files": 70,
+      "source_list_stale": false,
+      "started_at": "2026-09-25T11:55:32Z",
+      "status": "partial",
+      "verticals": [
+        {
+          "below_feed_floor": false,
+          "eligible_feeds": 51,
+          "feed_floor": 35,
+          "id": "ai",
+          "planned": 13,
+          "published": 10
+        },
+        {
+          "below_feed_floor": false,
+          "eligible_feeds": 23,
+          "feed_floor": 21,
+          "id": "energy",
+          "planned": 4,
+          "published": 3
+        },
+        {
+          "below_feed_floor": false,
+          "eligible_feeds": 24,
+          "feed_floor": 21,
+          "id": "business-economy",
+          "planned": 11,
+          "published": 8
+        },
+        {
+          "below_feed_floor": false,
+          "eligible_feeds": 30,
+          "feed_floor": 21,
+          "id": "world",
+          "planned": 21,
+          "published": 20
+        },
+        {
+          "below_feed_floor": false,
+          "eligible_feeds": 22,
+          "feed_floor": 21,
+          "id": "india",
+          "planned": 31,
+          "published": 30
+        },
+        {
+          "below_feed_floor": true,
+          "eligible_feeds": 0,
+          "feed_floor": 21,
+          "id": "science",
+          "planned": 0,
+          "published": 0
+        },
+        {
+          "below_feed_floor": true,
+          "eligible_feeds": 0,
+          "feed_floor": 21,
+          "id": "climate",
+          "planned": 0,
+          "published": 0
+        }
+      ]
     }
   ],
   "version": "2026-09-23"
