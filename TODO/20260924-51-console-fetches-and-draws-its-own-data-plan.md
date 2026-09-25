@@ -131,6 +131,37 @@ export type StoreName = 'host-fingerprint';
 
 **The band carries a count, never a filename**: `open_days: [{date, files: 4}]`. That keeps the band contract's own promise - none of it is an address, so no cell exists that fetched text could arrive in (Guardrail #11) - and nothing probes, because the count is declared and a 404 is a defect rather than a loop terminator.
 
+#### The band's size is bounded by config, never by the archive
+
+**This is Guardrail #12 pointed at a reader, and it needs a control rather than an assurance.** Every console page fetches the band. A `months` list that gained an entry every month would make a reader's first request grow for as long as the project runs.
+
+**The law: the band's size is a function of the number of published stores multiplied by their retention months. Both are values a person sets in config. Neither is a function of how long the project has been running.** A store's compact tier never holds more months than its own window, because pruning it to that window is the entire reason the gardener exists.
+
+**The control, because the law is not true today.** Three retention windows are `null` in `config/idhazh.json` right now - `item_health_aggregate_keep_months`, `score_archive_keep_months` and `visual_aggregate_keep_months` - and `null` means never delete. Two of those stores are ones the console draws. `host_fingerprint_keep_months` is 14 but its type is `int | None`, so it can become null without anything complaining.
+
+So plan 50 gains a load-time refusal, named in its section 5.2 beside the others: **a store in `StoreConfig.published` whose retention window is null is refused at config load, naming the store and the knob.** Publishing a store is what makes its window load-bearing for a reader, and that is the moment to insist on one.
+
+At 14 months and ten published stores the lists hold about 140 month stamps, roughly 1.4 KB raw and far less compressed because `"2026-09"` repeats. The ceiling is 2,000 bytes and `bundle-gate.mjs` measures it on every build, so a breach arrives as a red gate naming the number.
+
+**If it ever does breach, the escape hatch is a per-store index and its trigger is that gate.** It is not the answer today: the band is already fetched, so the store map rides in at zero new requests, where a per-store file costs one round trip per store before any data request goes out - about 270 ms for a three-store page at the measured 89 ms edge.
+
+#### What the door does with a date range
+
+A panel asks for a span; the door turns it into whole files. **There are no byte-range requests anywhere in this plan** - a date-range query and an HTTP range request are different things, and only the first is used.
+
+| # | Step |
+| --- | --- |
+| 1 | Read the band, which `+layout.ts` has already fetched |
+| 2 | Take every month in `band.stores[store].months` that intersects the span, and fetch `state/<store>/<YYYY-MM>.parquet` for each |
+| 3 | Take every entry in `band.stores[store].open_days` inside the span, and fetch its `files` ordinals |
+| 4 | Hand every buffer to the engine as one query with a date predicate |
+
+**A date is inside a month file or in `open_days`, and never both.** This is an invariant with a test, not a convention: a day copied into both places is read twice and every number on the panel doubles - which is the same defect class as the double count filed as 33, arriving through a different door. The staging step asserts it when it writes the band, and the door asserts it before it fetches.
+
+**Month grain over-fetches the edge month, and that is the stated price.** A 39-day span ending on 25 September pulls all of August, September to the 24th, and today - **56 days of data for 39 requested, about 44 percent over**. For `host-fingerprint` at tens of KB a month that is noise; for a store the size of `item-health` at roughly 2.8 MB a month it is real, and a free-date-range surface would make it the normal case rather than the edge.
+
+**The daily fold is what makes an arbitrary span affordable at all.** For a published store the fold runs daily, so the open period is today. The same 39-day span is two month files plus today - about 6 to 9 requests. At a weekly fold it would be one month file plus every day of September as raw shards: about 176 files and over 500 requests, which is the shape Carmack measured at 88 seconds.
+
 **`generated_at` rides every data URL as `?v=`.** The current month's file and today's ordinal files change between builds and the host caches assets; the browse index lives with that staleness because a stale list is harmless, and telemetry staleness is not.
 
 **Nothing new enters git.** The staged copies are created on the runner inside `npm run build`, copied into `build/` by the bundler, uploaded as the Pages artefact and thrown away with the runner. Ten directories under `frontend/static/` are gitignored and published exactly this way today. **Gitignored is not unpublished**, and the ignore line is doing N8's job.
@@ -387,6 +418,8 @@ given and predicts nothing about the next job. Darker bars are faster machines.
   | 10 | **The band is generated whole every run and never appended to**, which is how it is already written. An append is read-modify-write on a shared path, the shape uuid8 exists to end | Owner, 2026-09-24 |
   | 11 | The staging step joins the existing build chain between `copy-visuals` and `vite build`, and is not a new script. A second staging step is Guardrail #4, and the site-weight gate measures `build/` after `vite build`, so a step outside the chain would have the gate measuring a tree without the new bytes | Carmack |
   | 12 | **The reader sees today because the site rebuilds after every digest run, not because the fold ran.** The fold serves git; the build serves the reader. `pages.yml` fires on the content workflow and `digest.yml` runs five times a day, so a staged open day is hours old and is copied straight out of the raw tier with no fold involved | Fowler, reconciling Carmack's refusal of a daily fold with Reader's refusal of closed-periods-only |
+  | 13 | **The band's size is bounded by published stores times their retention months, never by the archive.** A published store with a null retention window is refused at config load. Without that refusal the payload every console page fetches first grows for as long as the project runs, which is Guardrail #12 aimed at a reader | Owner, 2026-09-25 |
+  | 14 | **A date is inside a month file or in `open_days`, never both**, asserted by the producer and again by the door. A day in both is read twice and every number doubles - the defect class filed as 33, arriving through a different door | Fowler |
 
 - **Rejected alternatives:**
 
