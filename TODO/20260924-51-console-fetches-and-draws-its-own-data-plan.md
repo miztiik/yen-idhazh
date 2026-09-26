@@ -4,7 +4,7 @@
 
 **Level**: 5 (CLAUDE.md section 6). Row 3 decides whether `state/` reaches a browser, which is a publishing contract, and sections 2.6 to 2.10 are a design contract fifty-one panels are built to. Rows 1 and 2 are Level 3 and Level 2 and carry no contract change beyond one copied settlement key.
 
-**Chain** (CLAUDE.md section 0d). **Intent**: [docs/concepts/telemetry-intent.md](../docs/concepts/telemetry-intent.md) N2, N3 and N5 - the browser queries the store for the slice it draws, fetches at view time, and d3 draws it. **Contract**: section 2 declares every shape, key, signature and config literal these three rows need. **Code**: the three rows.
+**Chain** (CLAUDE.md section 0d). **Intent**: [docs/concepts/telemetry-intent.md](../docs/concepts/telemetry-intent.md) N2, N3 and N5 - the browser queries the ledger for the slice it draws, fetches at view time, and d3 draws it. **Contract**: section 2 declares every shape, key, signature and config literal these three rows need. **Code**: the three rows.
 
 Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delegates a row where delegation pays; keep parallel N = 2 - rows 1 and 2 share no source file, and so do rows 5 and 6; merge each pull request before dispatching the next; consult a persona only where two answers would lead to different code; AUTO-merge on green gates where no ESCALATE trigger fired; honor the ESCALATE triggers in section 0. AUTHOR-AND-STOP until the user authorizes.
 
@@ -12,10 +12,10 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 
 | Field | Value |
 | --- | --- |
-| Why this plan exists | The Hardware route counts every job twice, its span control sits fifteen panels above the reader who wants it, and every chart on the console is drawn from data baked into the page by the build. This makes one panel prove the whole chain - query the store in the browser, draw it in d3 - and writes the vocabulary, the hover strip and the gates the other fifty follow. |
+| Why this plan exists | The Hardware route counts every job twice, its span control sits fifteen panels above the reader who wants it, and every chart on the console is drawn from data baked into the page by the build. This makes one panel prove the whole chain - query the ledger in the browser, draw it in d3 - and writes the vocabulary, the hover strip and the gates the other fifty follow. |
 | Hard scope - in | - `state/host-fingerprint/` is read settled, so a job counts once.<br>- The five-tab console strip sticks, and the span control rides on it.<br>- `state/host-fingerprint/` becomes parquet and reaches the browser, which queries it for the columns and days one panel draws.<br>- `frontend/src/lib/data/` holds the one query door every later panel uses; `frontend/src/lib/charts/d3/` holds the house style every later chart uses. |
 | Hard scope - out | see the table below |
-| ESCALATE triggers | 1. A tenth prerendered route, or retiring an existing one.<br>2. A charting library that is not d3.<br>3. A new committed payload under `frontend/public/`.<br>4. A measured figure that contradicts section 3.<br>5. Any change to `ConsoleBand` beyond the one additive field row 7 declares - it is the payload every console route fetches first.<br>6. **A chart type that is not one of the nine in section 2.6.** A tenth is a design question, not an improvisation.<br><br>**"How the browser reaches the bytes" was trigger 1 and is settled**, 2026-09-25: `state/` carries its own indexes, declared by plan 50's section titled "The shapes a worker must not invent" and committed; the build copies the published stores' compact periods verbatim into gitignored `frontend/static/state/` and generates nothing.<br><br>**The build-time readers were a trigger here and are now plan 50's.** Four modules under `frontend/src/lib/server/` open these stores as CSV and serve every panel the console has; moving the stores breaks all four. That escalation sits on plan 50's row titled **The three stores `work.py` writes become parquet**. |
+| ESCALATE triggers | 1. A tenth prerendered route, or retiring an existing one.<br>2. A charting library that is not d3.<br>3. A new committed payload under `frontend/public/`.<br>4. A measured figure that contradicts section 3.<br>5. Any change to `ConsoleBand` beyond the one additive field row 7 declares - it is the payload every console route fetches first.<br>6. **A chart type that is not one of the nine in section 2.6.** A tenth is a design question, not an improvisation.<br><br>**"How the browser reaches the bytes" was trigger 1 and is settled**, 2026-09-25: `state/` carries its own indexes, declared by plan 50's section titled "The shapes a worker must not invent" and committed; the build copies the published ledgers' compact periods verbatim into gitignored `frontend/static/state/` and generates nothing.<br><br>**The build-time readers were a trigger here and are now plan 50's.** Four modules under `frontend/src/lib/server/` open these ledgers as CSV and serve every panel the console has; moving the ledgers breaks all four. That escalation sits on plan 50's row titled **The three ledgers `work.py` writes become parquet**. |
 | Chosen strategy | Correct the number first, move the chrome second, change the grammar last. Ruled by Fowler (CLAUDE.md section 14). |
 | Execution | autonomous orchestrator per docs/how-to/execute-a-plan.md. Parallel N = 2. |
 
@@ -23,7 +23,6 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 
 | What is out | What it costs to leave out | What would bring it in |
 | --- | --- | --- |
-| The word `store` in this plan's prose | **The identifiers are already renamed** - `LedgerName`, `LedgerConfig`, `frontend/src/lib/data/ledger.ts`. About 110 occurrences of the word in ordinary sentences here are not | [`20260926-53-one-door-into-state-plan.md`](20260926-53-one-door-into-state-plan.md) row 1, one sweep with a ratchet test behind it |
 | The other fifty panels, on all five console routes | Two grammars coexist: one panel queries parquet and draws in d3, fifty read CSV at build time and draw in ECharts. `echarts@^5.6.0` stays installed with sixteen importers | [`20260926-52-fifty-panels-move-and-six-projections-go-plan.md`](20260926-52-fifty-panels-move-and-six-projections-go-plan.md), which starts from the vocabulary, the strip and the gates in sections 2.6 to 2.9, and from the panel-by-panel contract in section 2.10. **Rows 4 to 7 exist to make that plan cheap, not to be it** |
 | Panel ids on `/console/model/`, `/console/voices/` and `/console/judgement/` | Those three routes import neither `Panel.svelte` nor `PanelGroup.svelte`, so they draw no `data-console-panel-id` and **no gate and no capture can reach them**. Row 6's judged set is 26 panels on two routes, and a panel on the other three ships unseen | A route-plan row that wraps those three routes' sections in `Panel.svelte` and adds their route keys to `console.panel_groups`. It is a prerequisite of a full capture, not a follow-up |
 | Three `/console/` panels nested inside another panel's body | "Reading the prompt", "Writing the summary" and "How much of each prompt was already in memory" are `<Panel>` elements inside another panel and carry no id, so the capture never sees them | A route-plan row that either gives each an id and its parent's group, or takes its `Panel.svelte` wrapper away. It is one or the other, not both |
@@ -38,13 +37,13 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 
 | # | The intent, in short | What this plan does about it |
 | --- | --- | --- |
-| N1 | Parquet at rest, CSV retired | **Not here.** Plan 50 moves all four stores; row 3 publishes them |
+| N1 | Parquet at rest, CSV retired | **Not here.** Plan 50 moves all four ledgers; row 3 publishes them |
 | N2 | The browser queries the parquet itself | **Stone laid by row 7.** One module owns the engine and every later panel queries through it |
 | N3 | The browser fetches its own data at view time | **Stone laid by row 7**, on one panel that fetches after mount |
 | N4 | Prerendering is an anti-pattern | **Not here.** Nine files keep `export const prerender`, and ESCALATE trigger 1 stops a row adding a tenth |
 | N5 | d3 is the only charting library | **Stone laid by rows 4 to 6**, which write the nine chart types, the hover strip and the ten gates, and by row 7, which moves one importer of fifteen |
 | N6 | One writer per path | **Inherited** from plan 50's door |
-| N7, N8 | `state/` is the only source; no production artefact under `frontend/` in git | **Stone laid by row 3.** What reaches the site is the store itself, copied unchanged and gitignored, so it cannot say anything `state/` does not. **The six projections that can are retired by plan 52**, each in the pull request that moves its last reader |
+| N7, N8 | `state/` is the only source; no production artefact under `frontend/` in git | **Stone laid by row 3.** What reaches the site is the ledger itself, copied unchanged and gitignored, so it cannot say anything `state/` does not. **The six projections that can are retired by plan 52**, each in the pull request that moves its last reader |
 | N9, N10, N11 | The name, the two roots, the one shard pattern | **Inherited** from plan 50's door. This plan mints no naming rule of its own |
 
 ## 1. Status Reckoner
@@ -53,11 +52,11 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | The Hardware route stops counting every job twice | - | A | PENDING | - | - | - |
 | 2 | The console shell: a stuck tab strip, the span control on it, four named anchors | - | A | PENDING | - | - | - |
-| 3 | The four stores the console reads are published | plan 50's rows titled "The index task, two compact periods, and the diagram moves into the page", "The three stores `work.py` writes become parquet" and "`span-rollup` becomes parquet" | B | PENDING | - | - | - |
+| 3 | The four ledgers the console reads are published | plan 50's rows titled "The index task, two compact periods, and the diagram moves into the page", "The three ledgers `work.py` writes become parquet" and "`span-rollup` becomes parquet" | B | PENDING | - | - | - |
 | 4 | The chart vocabulary and the house style, with no panel moved | - | B | PENDING | - | - | - |
 | 5 | One readout strip, every chart, and hover a keyboard can reach | 4 | C | PENDING | - | - | - |
 | 6 | The ten sufficiency gates and the panel capture group | 4 | C | PENDING | - | - | - |
-| 7 | One panel end to end: the browser fetches the store and draws it in d3 | 1, 2, 3, 4, 5, 6 | D | PENDING | - | - | - |
+| 7 | One panel end to end: the browser fetches the ledger and draws it in d3 | 1, 2, 3, 4, 5, 6 | D | PENDING | - | - | - |
 
 **Two pairs run two-wide and both were checked by diffing their `Files touched` lists.** Rows 1 and 2 share nothing: row 1 holds `payload.ts`, `host-fingerprint.ts`, `machine-counters.ts`, `fleet.ts`, `PlatformMixPanel.svelte` and `machine/+page.server.ts`; row 2 holds `+layout.svelte`, `ConsoleNav.svelte`, `SiteHeader.svelte`, `band.ts` and `app.css`. **Rows 5 and 6 both edit `config/appearance.json`** - row 5 the `chart.readout_max_share` value, row 6 the `console.panel_groups` object - so whoever lands second rebases that one file by hand; nothing else is shared.
 
@@ -65,7 +64,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 
 **The seam is after row 6, and the reason is a type rather than a preference.** Row 5 replaces one exported type: `DayReadout` has **ten producing functions across eight files** and thirteen consumers under `frontend/src`, so **there is no intermediate commit where half the console is on the new shape and the tree compiles**. That is why it cannot be split by panel, and why its `Files touched` runs to twenty-odd paths rather than four. Row 4 alone would ship a vocabulary nothing has exercised, which is a rule that rots with no page going red.
 
-**Row 3 publishes; it migrates nothing.** Plan 50 moves all four stores, because one module writes three of them and two plans editing that file would collide. What this row adds is the copy step, the allow-list, the measured ceiling and the test that binds a panel's store to that list. It reverts to nothing.
+**Row 3 publishes; it migrates nothing.** Plan 50 moves all four ledgers, because one module writes three of them and two plans editing that file would collide. What this row adds is the copy step, the allow-list, the measured ceiling and the test that binds a panel's ledger to that list. It reverts to nothing.
 
 **Rows 1 and 7 share three files** - `fleet.ts`, `PlatformMixPanel.svelte` and `machine/+page.server.ts` - which is why row 7 waits on row 1 rather than running beside it.
 
@@ -116,15 +115,15 @@ export async function slice(
 /** One parquet row as the engine hands it back. */
 export type Row = Record<string, string | number | boolean | null>;
 
-/** The stores this console may query. A closed set: a panel cannot name a path. */
+/** The ledgers this console may query. A closed set: a panel cannot name a path. */
 export type LedgerName = 'host-fingerprint';
 ```
 
-**`LedgerName` maps to an address inside this module and nowhere else.** The door joins `visuals.asset_base_url` - or SvelteKit's own repository prefix when that knob is empty, which is the shipped default - onto the committed path unchanged: `state/compact/<store>/index/daily.json`, `state/compact/<store>/daily/<YYYY>/<MM>/<DD>.parquet`, `state/compact/<store>/monthly/<YYYY>/<MM>.parquet`. Getting the prefix wrong is the commonest failure on this host, so one module owns it. A panel that could name a path could name any path, and the published list would stop being the bound.
+**`LedgerName` maps to an address inside this module and nowhere else.** The door joins `visuals.asset_base_url` - or SvelteKit's own repository prefix when that knob is empty, which is the shipped default - onto the committed path unchanged: `state/compact/<ledger>/index/daily.json`, `state/compact/<ledger>/daily/<YYYY>/<MM>/<DD>.parquet`, `state/compact/<ledger>/monthly/<YYYY>/<MM>.parquet`. Getting the prefix wrong is the commonest failure on this host, so one module owns it. A panel that could name a path could name any path, and the published list would stop being the bound.
 
 **Whole files are fetched and handed to the engine as buffers**, the same way the month search index already is. No byte ranges. Column projection then saves parse time rather than bytes, and the plan says that rather than implying the fetch got smaller.
 
-**Cost, one store, per span the control offers.** `console.window_presets` is `[1, 7, 14, 30, 90]`. At `daily_keep_days: 45` a span of 30 or less is served entirely from the daily period; only the 90-day span reaches a monthly file.
+**Cost, one ledger, per span the control offers.** `console.window_presets` is `[1, 7, 14, 30, 90]`. At `daily_keep_days: 45` a span of 30 or less is served entirely from the daily period; only the 90-day span reaches a monthly file.
 
 | span | index requests | monthly files | daily files | total requests | bytes |
 | --- | --- | --- | --- | --- | --- |
@@ -135,7 +134,7 @@ export type LedgerName = 'host-fingerprint';
 
 At the measured 89 ms edge the two index requests are one round-trip wave of about 180 ms before the first byte of data. **The one-day span is the cheapest in the set, which is only true because no raw file is published** - the paragraph below says what that cost.
 
-**The browser cannot list a directory, so the store carries its own indexes.** Owner ruling, 2026-09-25: **`state/` presents its own index, and the build generates nothing.** Plan 50's section titled "The shapes a worker must not invent" declares the small JSON files that do it, each committed, each with exactly one writer. This plan invents no address book, declares no contract of its own, and adds no generating step.
+**The browser cannot list a directory, so the ledger carries its own indexes.** Owner ruling, 2026-09-25: **`state/` presents its own index, and the build generates nothing.** Plan 50's section titled "The shapes a worker must not invent" declares the small JSON files that do it, each committed, each with exactly one writer. This plan invents no address book, declares no contract of its own, and adds no generating step.
 
 **Three findings settled it, and none of them is the byte ceiling that prompted the question.**
 
@@ -147,31 +146,31 @@ At the measured 89 ms edge the two index requests are one round-trip wave of abo
 
 | # | File | Writer | Why that writer is safe | Committed |
 | --- | --- | --- | --- | --- |
-| 1 | `state/compact/<store>/index/<period>.json` | that period's compaction | one period, one task, one writer | **yes** |
-| 2 | `state/compact/<store>/<period>/watermark.json` | that period's compaction | same task, written after the data | **yes** |
+| 1 | `state/compact/<ledger>/index/<period>.json` | that period's compaction | one period, one task, one writer | **yes** |
+| 2 | `state/compact/<ledger>/<period>/watermark.json` | that period's compaction | same task, written after the data | **yes** |
 
 #### What the build does, which is copy bytes and nothing else
 
-**The staged tree is a verbatim subtree copy, so the published path and the committed path are the same string.** The step copies, for every store whose `LedgerConfig.published` names it: the two compact periods, their indexes and their watermarks. Nothing else, and nothing is renamed, merged, re-sorted or regenerated.
+**The staged tree is a verbatim subtree copy, so the published path and the committed path are the same string.** The step copies, for every ledger whose `LedgerConfig.published` names it: the two compact periods, their indexes and their watermarks. Nothing else, and nothing is renamed, merged, re-sorted or regenerated.
 
 | # | What reaches the site | Published address |
 | --- | --- | --- |
-| 1 | Compact data, both periods | `state/compact/<store>/daily/<YYYY>/<MM>/<DD>.parquet`, `state/compact/<store>/monthly/<YYYY>/<MM>.parquet` |
-| 2 | Compact indexes and watermarks | `state/compact/<store>/index/<period>.json`, `state/compact/<store>/<period>/watermark.json` |
+| 1 | Compact data, both periods | `state/compact/<ledger>/daily/<YYYY>/<MM>/<DD>.parquet`, `state/compact/<ledger>/monthly/<YYYY>/<MM>.parquet` |
+| 2 | Compact indexes and watermarks | `state/compact/<ledger>/index/<period>.json`, `state/compact/<ledger>/<period>/watermark.json` |
 
-**The raw tier is not published, and that is what the per-run compaction buys.** Measured 2026-09-25, one open day of `host-fingerprint` is 30 per-writer shards and about 342 KB as parquet against 21,930 bytes as CSV - 15.1 times larger, because a one-row file of 31 columns is about 9,300 bytes of page, dictionary and statistics overhead. Publishing it would make the smallest span the control offers the worst value in the set: 33 requests and 342 KB to draw 25 rows. **The daily compaction runs at the end of every content run instead**, so the newest compact daily file is at most one run old and a one-day span is two index requests and one file of about 13 KB. The cost is git churn, measured at about 8 KB of history a day per store.
+**The raw tier is not published, and that is what the per-run compaction buys.** Measured 2026-09-25, one open day of `host-fingerprint` is 30 per-writer shards and about 342 KB as parquet against 21,930 bytes as CSV - 15.1 times larger, because a one-row file of 31 columns is about 9,300 bytes of page, dictionary and statistics overhead. Publishing it would make the smallest span the control offers the worst value in the set: 33 requests and 342 KB to draw 25 rows. **The daily compaction runs at the end of every content run instead**, so the newest compact daily file is at most one run old and a one-day span is two index requests and one file of about 13 KB. The cost is git churn, measured at about 8 KB of history a day per ledger.
 
-**What answers N7 is that the published file is the store, and that the projections go.** The test is not whether a copy is byte-identical - it is whether a published file can say something `state/` does not. A copy cannot, however it is packed. **`frontend/public/machine/<YYYY-MM>.csv` can**: it joins `host-fingerprint` to `item-health` rows summed per shard, so it carries values neither store holds alone and either store can move underneath it. That is the shape N7 exists to retire, and plan 52 deletes it along with five more - about 4.1 MB and six directories - each in the pull request that moves its last reader. N10 already blesses a compact period as derived and rebuildable.
+**What answers N7 is that the published file is the ledger, and that the projections go.** The test is not whether a copy is byte-identical - it is whether a published file can say something `state/` does not. A copy cannot, however it is packed. **`frontend/public/machine/<YYYY-MM>.csv` can**: it joins `host-fingerprint` to `item-health` rows summed per shard, so it carries values neither ledger holds alone and either ledger can move underneath it. That is the shape N7 exists to retire, and plan 52 deletes it along with five more - about 4.1 MB and six directories - each in the pull request that moves its last reader. N10 already blesses a compact period as derived and rebuildable.
 
 **The published bundle already runs four address grammars and two of them are unnamed by N8.** `digest/<YYYY>/<MM>/<DD>/digest.json` and `assist/index/<YYYY-MM>.json` are reader-facing, gated and shipped, and N8's replacement list names neither. So N11 cannot bind the published bundle without outlawing them - and it does not try to: it says *every tree under `state/`*. What N8 retires about the projections is the phrase **"in git"**, which is the committed copy and not the address.
 
 **An index carries filenames and periods, and nothing else about them.** No URL, no host, no prefix - the door composes the address from `visuals.asset_base_url`, a constant it already holds, so there is no cell a fetched article could arrive in (Guardrail #11).
 
-#### What the browser reaches for, and why it needs no store list
+#### What the browser reaches for, and why it needs no ledger list
 
-**Two things get a panel to its data, and both are already in hand.** The base URL is `visuals.asset_base_url` in `config/idhazh.json`, read by [frontend/asset-base.js](../frontend/asset-base.js), which also computes the `connect-src` allow-list from the same value so the address and the browser policy cannot disagree. The store is named by the panel: a machine-mix panel draws machine fingerprints, and that cannot vary without it becoming a different panel.
+**Two things get a panel to its data, and both are already in hand.** The base URL is `visuals.asset_base_url` in `config/idhazh.json`, read by [frontend/asset-base.js](../frontend/asset-base.js), which also computes the `connect-src` allow-list from the same value so the address and the browser policy cannot disagree. The ledger is named by the panel: a machine-mix panel draws machine fingerprints, and that cannot vary without it becoming a different panel.
 
-**So `LedgerConfig.published` never reaches the browser**, and there is no second copy of it to keep in step. It decides what the build copies, which is a backend question. **One backend test holds the two sides together**: it reads the console panel sources, collects the store names they name, and asserts every one is published. Same home and same shape as `backend/tests/contracts/test_frontend_vocabularies.py`.
+**So `LedgerConfig.published` never reaches the browser**, and there is no second copy of it to keep in step. It decides what the build copies, which is a backend question. **One backend test holds the two sides together**: it reads the console panel sources, collects the ledger names they name, and asserts every one is published. Same home and same shape as `backend/tests/contracts/test_frontend_vocabularies.py`.
 
 #### What the door does with a date range
 
@@ -184,7 +183,7 @@ A panel asks for a span; the door turns it into whole files. **There are no byte
 | 3 | For each date in the span take the **coarsest period that covers it** - monthly, then daily - and fetch that file once |
 | 4 | Hand every buffer to the engine as one query with a date predicate |
 
-**A date is reachable through exactly one file, and that is an invariant with a test rather than a convention.** A date in two periods is read twice and every number on the panel doubles - the same defect class as the double count filed as 33. Plan 50's row titled **The index task, two compact periods, and the diagram moves into the page** carries the oracle that asserts it, over a fixture store carrying both periods, in one process, at one moment.
+**A date is reachable through exactly one file, and that is an invariant with a test rather than a convention.** A date in two periods is read twice and every number on the panel doubles - the same defect class as the double count filed as 33. Plan 50's row titled **The index task, two compact periods, and the diagram moves into the page** carries the oracle that asserts it, over a fixture ledger carrying both periods, in one process, at one moment.
 
 **A hole is `unreachable`, never a low chart.** A date at or before the daily watermark that is named in neither index is a hole: the door renders the `unreachable` state with the date in the console and draws nothing. Drawing the rest would be an undercount nobody could see.
 
@@ -198,15 +197,15 @@ A panel asks for a span; the door turns it into whole files. **There are no byte
 
 **The law: an index holds `keep_window` entries and no more. `daily.json` holds at most `daily_keep_days + 31`, `monthly.json` at most `monthly_keep_months`. Two config values a person sets, and no term of elapsed time.**
 
-**Two controls, because the law is not true by itself.** First, a published store may not leave either of its windows null - three windows are null in `config/idhazh.json` today (`item_health_aggregate_keep_months`, `score_archive_keep_months`, `visual_aggregate_keep_months`) and null means never delete. Plan 50's section titled "`config/idhazh_gardener.json`" refuses it at load, along with **a `monthly_keep_months` that does not cover the largest value in `console.window_presets` once `daily_keep_days` is subtracted**. **The daily window is deliberately narrower than the widest span** - that is what the monthly period is for - so binding `daily_keep_days` to 90 would refuse the shipped config and delete the reason two periods exist. Second, `page_weight.payload_ceilings_bytes` gains a measured entry for `daily.json`, and `bundle-gate.mjs` checks it every build.
+**Two controls, because the law is not true by itself.** First, a published ledger may not leave either of its windows null - three windows are null in `config/idhazh.json` today (`item_health_aggregate_keep_months`, `score_archive_keep_months`, `visual_aggregate_keep_months`) and null means never delete. Plan 50's section titled "`config/idhazh_gardener.json`" refuses it at load, along with **a `monthly_keep_months` that does not cover the largest value in `console.window_presets` once `daily_keep_days` is subtracted**. **The daily window is deliberately narrower than the widest span** - that is what the monthly period is for - so binding `daily_keep_days` to 90 would refuse the shipped config and delete the reason two periods exist. Second, `page_weight.payload_ceilings_bytes` gains a measured entry for `daily.json`, and `bundle-gate.mjs` checks it every build.
 
-**That second one is a smoke alarm on a bounded thing, not a ceiling a growing store designs against.** It is derived from config and it moves when config moves - which is the distinction the band's 2,000-byte figure could not make, because the band was inlined into every prerendered document and its cap was a guess about that.
+**That second one is a smoke alarm on a bounded thing, not a ceiling a growing ledger designs against.** It is derived from config and it moves when config moves - which is the distinction the band's 2,000-byte figure could not make, because the band was inlined into every prerendered document and its cap was a guess about that.
 
 **The `+31` in the daily bound is not slack, it is the month-absorption rule.** A month is absorbed whole, so the daily period holds between `daily_keep_days` and `daily_keep_days + 31` days. A bound that said 45 would be wrong for most of every month.
 
 No contract-level cap on an index's length: a second bound over one quantity fires on a legitimate config change rather than on a defect.
 
-**Each file carries its own version, taken from the index entry that names it.** `CompactIndex.entries` already holds `covers`, `rows` and `bytes` per file, and the door appends `?v=<rows>-<bytes>` from that entry. A daily file is written once and never rewritten, so its entry never changes and the browser caches it forever. **A single site-wide stamp would invalidate all 45 daily files every day to deliver one new one** - 596 KB re-fetched to buy 13 KB, 97.8 percent waste for a returning reader. The indexes themselves are fetched `cache: no-store`, because a stale index is what step 3 would act on.
+**Each file carries its own version, taken from the index entry that names it.** `CompactIndex.entries` already holds `covers`, `rows` and `bytes` per file, and the door appends `?v=<rows>-<bytes>` from that entry. A daily file is written once and never rewritten, so its entry never changes and the browser caches it forever. **A single site-wide stamp would invalidate all 45 daily files every day to deliver one new one** - 596 KB re-fetched to buy 13 KB, 97.8 percent waste for a returning reader. The indexes themselves are fetched `cache: no-ledger`, because a stale index is what step 3 would act on.
 
 **Nothing new enters git.** The staged copies are created on the runner inside `npm run build`, copied into `build/` by the bundler, uploaded as the Pages artefact and thrown away with the runner. Ten directories under `frontend/static/` are gitignored and published exactly this way today. **Gitignored is not unpublished**, and the ignore line is doing N8's job.
 
@@ -244,11 +243,11 @@ Every value below is a knob (Guardrail #6). Three exist and two are minted.
 | `frame.breakpoints_px` | Exists as `[640, 1024, 1400]` | unchanged | Row 2 sticks at `breakpoints_px[1]`. **No second key naming 1024** |
 | `console.absent_hatch_degrees` | **New** | `45` | Row 7's hatch for a known machine with no throughput reading |
 | `console.window_presets` | **Exists as `[1, 7, 14, 30, 90]`** | unchanged | Row 2's five-segment control reads it. **No second key naming the same five values** - an earlier draft minted `console.span_choices_days`, which is this knob under another name, and all five console routes plus `/archive/` read the existing one |
-| `page_weight.payload_ceilings_bytes."state/compact/<store>/index/"` | **New, one per published store** | set in row 3 from the measured `daily.json`, at least twice it per the field's own rule | `frontend/scripts/bundle-gate.mjs` and `backend/tests/contracts/test_page_ceilings.py`. **The key names the one directory that holds files directly**: `payloadsFor` does not recurse, so a key naming `state/compact/<store>/` returns nothing and fails the gate by name. It lives in `config/idhazh.json`, not `config/appearance.json` |
+| `page_weight.payload_ceilings_bytes."state/compact/<ledger>/index/"` | **New, one per published ledger** | set in row 3 from the measured `daily.json`, at least twice it per the field's own rule | `frontend/scripts/bundle-gate.mjs` and `backend/tests/contracts/test_page_ceilings.py`. **The key names the one directory that holds files directly**: `payloadsFor` does not recurse, so a key naming `state/compact/<ledger>/` returns nothing and fails the gate by name. It lives in `config/idhazh.json`, not `config/appearance.json` |
 
-**Three page-weight gates fire before the 1 GB site cap and row 3 must clear all three.** `page_weight.cold_console_load_bytes` is 3,400,000 bytes - what a console reader's first load may cost - so **the query engine ships behind a dynamic import**, the same rule the gate already enforces for the on-device encoder. `page_weight.payload_ceilings_bytes` caps each fetched payload and has **no key covering `state/`** today, so a staged store is a payload no gate can see until the key above is minted. And `test_page_ceilings.py` asserts `cold_console_load_bytes` sits between the worst page and that page plus the telemetry ceiling, so adding a payload key moves that two-sided assertion - **which is why the key, the number and the assertion move in one commit, row 3's.**
+**Three page-weight gates fire before the 1 GB site cap and row 3 must clear all three.** `page_weight.cold_console_load_bytes` is 3,400,000 bytes - what a console reader's first load may cost - so **the query engine ships behind a dynamic import**, the same rule the gate already enforces for the on-device encoder. `page_weight.payload_ceilings_bytes` caps each fetched payload and has **no key covering `state/`** today, so a staged ledger is a payload no gate can see until the key above is minted. And `test_page_ceilings.py` asserts `cold_console_load_bytes` sits between the worst page and that page plus the telemetry ceiling, so adding a payload key moves that two-sided assertion - **which is why the key, the number and the assertion move in one commit, row 3's.**
 
-**`cold_console_load_bytes` cannot see a day-grained fetch, and row 3 says so in one line.** `bundle-gate.mjs` computes `heaviest x copies` where `copies` is a count of months; the door fetches days. Row 3 sets the store's payload ceiling on `index/daily.json` only, and **the fetched-data total is bounded by `console.window_presets`' largest value against `daily_keep_days`** - which is the bound `test_page_ceilings.py` is given, in the same commit.
+**`cold_console_load_bytes` cannot see a day-grained fetch, and row 3 says so in one line.** `bundle-gate.mjs` computes `heaviest x copies` where `copies` is a count of months; the door fetches days. Row 3 sets the ledger's payload ceiling on `index/daily.json` only, and **the fetched-data total is bounded by `console.window_presets`' largest value against `daily_keep_days`** - which is the bound `test_page_ceilings.py` is given, in the same commit.
 
 **The alarm, not the cap, is the number an operator sees first.** `PAGES_HARD_CAP_MB` is 1024 and is where the host refuses; `retention.site_budget_mb` is 800 and is where the console prints a warning. Measured to the alarm the runway is about 723 days, not the 959 measured to the cap.
 
@@ -392,7 +391,7 @@ A reviewer fails a pull request on any of these. A panel that fails ships only w
 | 7 | **Every column it draws has a reader** | already enforced by `backend/tests/contracts/test_column_readers.py`, unchanged by this plan | a column drawn while its name is still in `UNREAD_CELLS`. The worker moves the name up rather than routing around the test |
 | 8 | **Four nothings, told apart** | the panel renders waiting, quiet, missing and unreachable as four distinct states, from the vocabulary `frontend/src/lib/console/waiting.ts` already owns | any two drawing the same thing. **A quiet pipeline and a broken fetch must never be the same picture** |
 | 9 | **The strip is declared** | `frontend/tests/console-readout.spec.ts`, unchanged - it already declares all five routes | a chart declaring neither attribute; a declared column count with no strip; a swatch drawn inside a chart that has one |
-| 10 | **It queries columns, not stores** | `frontend/tests/chart-vocabulary.spec.ts` walks the query door's call sites | `SELECT *`, an unbounded date range, or a store fetched whole. **A column store read as a row store has paid for the format and not used it** |
+| 10 | **It queries columns, not ledgers** | `frontend/tests/chart-vocabulary.spec.ts` walks the query door's call sites | `SELECT *`, an unbounded date range, or a ledger fetched whole. **A column ledger read as a row ledger has paid for the format and not used it** |
 
 **Gates 1, 2, 3, 5 and 8 are specs; gate 4 is a reviewer reading the component** against the capture section 2.9 produces, and it is not filed as a spec because "a bare table of numbers with no shape beside it" is not decidable by a selector. Gates 7 and 9 are tests that exist today and are listed so a worker does not write a second copy.
 
@@ -477,7 +476,7 @@ Two facts are owed before row 7 starts and neither is a gate on a design choice.
 
 Against the site cap, 7.3 MB is 0.71 percent of 1 GB and 0.91 percent of the 800 MB alarm - about seven days of the site's runway, paid once. Carmack confirms it against the built tree in row 3.
 
-**Measured 2026-09-24 and not re-derived:** `state/host-fingerprint/` is 76,306 bytes in 58 files, which is 0.007 percent of the 98.7 MB published site. All of `state/` is about 52 MiB - which is why the staging allow-list is the bound and not a preference: a store joins it by setting `LedgerConfig.published`, one store at a time, as its panel migrates.
+**Measured 2026-09-24 and not re-derived:** `state/host-fingerprint/` is 76,306 bytes in 58 files, which is 0.007 percent of the 98.7 MB published site. All of `state/` is about 52 MiB - which is why the staging allow-list is the bound and not a preference: a ledger joins it by setting `LedgerConfig.published`, one ledger at a time, as its panel migrates.
 
 **The threaded engine build is not available on this platform and nobody should spend a day finding out.** It needs cross-origin isolation, which needs response headers a static host cannot set. The single-threaded build is the pick and the engine's own bundle selector already chooses it when the page is not cross-origin isolated.
 
@@ -485,7 +484,7 @@ Against the site cap, 7.3 MB is 0.71 percent of 1 GB and 0.91 percent of the 800
 
 ### Row #1 - The Hardware route stops counting every job twice
 
-- **Scope:** both console readers of `state/host-fingerprint/` settle by key, and the merged-kinds line names the machines it merged. No backend change, no store change, no panel redesign, no parquet and no d3.
+- **Scope:** both console readers of `state/host-fingerprint/` settle by key, and the merged-kinds line names the machines it merged. No backend change, no ledger change, no panel redesign, no parquet and no d3.
 
 **Two defects, one pull request, because they are the same panel's two wrong sentences.**
 
@@ -502,7 +501,7 @@ Against the site cap, 7.3 MB is 0.71 percent of 1 GB and 0.91 percent of the 800
   - `frontend/tests/support/machine-rows.ts` (a fixture day holding one job's two halves)
   - `TODO/20260823-known-defects-plan.md` (defect 33 closes in this commit)
 - **Acceptance gates:** local `npm --prefix frontend run test:changed -- --list`, then the selected checks; the browser smoke on `/console/machine` (CLAUDE.md section 12) with zero new `[error]` and zero new `404`. CI runs the full suite.
-- **Oracle:** over a fixture day holding one job's two halves, the reader returns **one** row carrying both the machine and the clock, and the merged row's cell count equals the union of the two halves. It cannot settle whether any other store needs the same treatment; section 5.8 of plan 50 is the map for that.
+- **Oracle:** over a fixture day holding one job's two halves, the reader returns **one** row carrying both the machine and the clock, and the merged row's cell count equals the union of the two halves. It cannot settle whether any other ledger needs the same treatment; section 5.8 of plan 50 is the map for that.
 - **Decisions:**
 
   | # | Decision | Authority |
@@ -519,14 +518,14 @@ Against the site cap, 7.3 MB is 0.71 percent of 1 GB and 0.91 percent of the 800
   | # | Option | Why rejected | What it would cost to take | Authority |
   | --- | --- | --- | --- | --- |
   | 1 | Settle in the producer so one row lands | Sound design, wrong defect. The producer cannot know the clock at probe time, which is why there are two halves | Its own plan, and it moves a persisted contract | Fowler |
-  | 2 | Sweep every remaining raw `readDayShards` call in one row | Right instinct, wrong row. Each store needs its own ruling on which key settles it and whether the rule is a merge or a preference | A follow-up reading plan 50's section 5.8 map, store by store | Fowler |
+  | 2 | Sweep every remaining raw `readDayShards` call in one row | Right instinct, wrong row. Each ledger needs its own ruling on which key settles it and whether the rule is a merge or a preference | A follow-up reading plan 50's section 5.8 map, ledger by ledger | Fowler |
   | 3 | Merge this into row 7 | Row 7 is a browser query and a redraw. A correction buried in a rewrite is a correction nobody can revert alone | Zero; costs the revert | Owner, 2026-09-24 |
 
 ---
 
 ### Row #2 - The console shell: a stuck tab strip, the span control on it, four named anchors
 
-- **Scope:** the chrome every console route sits in, and **the sentence that says how complete the page is**. No panel changes, no store is read differently, and no data moves.
+- **Scope:** the chrome every console route sits in, and **the sentence that says how complete the page is**. No panel changes, no ledger is read differently, and no data moves.
 
 **Row 2 ships before row 3, and that ordering is the requirement rather than a convenience.** Every chart on the console draws the newest days that **exist**, not the last N days - so when data stops, a chart gains no gap at the right edge. It slides back in time and looks exactly as full as it did yesterday. Reader's verdict on that, 2026-09-24: *"I read a month-old chart, believed it, and closed the tab satisfied."* A page that can go quiet without saying so is worse than useless, so the sentence exists before anything starts fetching.
 
@@ -584,44 +583,44 @@ Ruled by Susan on 2026-09-24. The complaint: the Hardware route is fifteen panel
 
 ---
 
-### Row #3 - The four stores the console reads are published
+### Row #3 - The four ledgers the console reads are published
 
 - **Scope:** `item-health`, `scores`, `host-fingerprint` and `span-rollup` are named in `LedgerConfig.published`; their daily compaction runs at the end of every content run; the build copies their compact periods into the site; the ceilings are measured and set. **No migration, no browser code, no d3, no panel change.**
 
-**Plan 50 moves the stores. This row publishes them.** One module writes three of the four, so two plans editing it would collide - the migration belongs where the door is.
+**Plan 50 moves the ledgers. This row publishes them.** One module writes three of the four, so two plans editing it would collide - the migration belongs where the door is.
 
-**Publishing is what makes compaction time-critical.** No raw file reaches the site, so the newest thing a panel can draw is the newest compact daily file. `.github/workflows/digest.yml`'s assemble job therefore ends by running the daily compaction for every published store. **That is one scheduler, not two**: the policy is still the gardener's config block and the workflow step is a trigger, so the gardener's own wake finds the watermark already moved.
+**Publishing is what makes compaction time-critical.** No raw file reaches the site, so the newest thing a panel can draw is the newest compact daily file. `.github/workflows/digest.yml`'s assemble job therefore ends by running the daily compaction for every published ledger. **That is one scheduler, not two**: the policy is still the gardener's config block and the workflow step is a trigger, so the gardener's own wake finds the watermark already moved.
 
-**What that costs, measured 2026-09-25.** Git delta-compresses a rewritten period file, so five compactions a day cost about 8 KB of history per store against a 157 MiB pack. The figure of "roughly 360 MB" an earlier draft used for frequent compaction was arithmetic on a false premise and is 33 times too high.
+**What that costs, measured 2026-09-25.** Git delta-compresses a rewritten period file, so five compactions a day cost about 8 KB of history per ledger against a 157 MiB pack. The figure of "roughly 360 MB" an earlier draft used for frequent compaction was arithmetic on a false premise and is 33 times too high.
 
 **Nothing is narrowed on the way out.** All 122 columns of `item-health` are published, including the 39 that `UNREAD_CELLS` says no page reads today - they are the input to the item, feed and search quality work. The reader's bill is answered by consolidation: the same 122 columns are 2.6 times smaller than the CSV they replace once a day is one file.
 - **Files touched:**
-  - `config/idhazh.json` (`store.published` gains the four stores; `page_weight.payload_ceilings_bytes` gains a measured entry per published store's `index/daily.json`), `backend/idhazh/contracts/knobs/page_weight.py`
-  - `.github/workflows/digest.yml` (the assemble job ends by running the daily compaction for every published store)
+  - `config/idhazh.json` (`ledger.published` gains the four ledgers; `page_weight.payload_ceilings_bytes` gains a measured entry per published ledger's `index/daily.json`), `backend/idhazh/contracts/knobs/page_weight.py`
+  - `.github/workflows/digest.yml` (the assemble job ends by running the daily compaction for every published ledger)
   - `frontend/scripts/copy-visuals.mjs` (the copy step joins the chain that already stages into `frontend/static/`; **a second staging script is Guardrail #4**), `.gitignore` (an eleventh line beside the ten payload directories already there)
-  - `frontend/scripts/build-canary.mjs` (the copy step reads its `STATE_ROOT` switch and **fails loudly when the root is missing**, because an empty store and a working store both render)
+  - `frontend/scripts/build-canary.mjs` (the copy step reads its `STATE_ROOT` switch and **fails loudly when the root is missing**, because an empty ledger and a working ledger both render)
   - `backend/tests/contracts/test_published_stores_cover_the_panels.py` (new), `backend/tests/workflows/test_digest_workflow.py`, `frontend/tests/page-weight.spec.ts`
 - **Acceptance gates:** local `ruff check .`, `mypy backend`, `pytest backend/tests/contracts backend/tests/workflows -q`, `npm --prefix frontend run test:changed -- --list` then the selected checks. `ci.yml`'s bundle gate and site-cap measurement both walk the built tree, so both are re-read after the copy step lands. CI runs the full suite.
-- **Oracle:** **every published address resolves, and nothing else is published.** Over a built tree: every entry in every published `index/<period>.json` names a file that exists under `build/`, every published store is in `LedgerConfig.published`, every store a console panel names is in that list, and no path under `build/state/` belongs to the raw tier. It cannot settle whether a browser can query the files; row 4 does that.
+- **Oracle:** **every published address resolves, and nothing else is published.** Over a built tree: every entry in every published `index/<period>.json` names a file that exists under `build/`, every published ledger is in `LedgerConfig.published`, every ledger a console panel names is in that list, and no path under `build/state/` belongs to the raw tier. It cannot settle whether a browser can query the files; row 4 does that.
 - **Decisions:**
 
   | # | Decision | Authority |
   | --- | --- | --- |
   | 1 | **Publishing and migrating are two rows in two plans.** The migration is one-way and lives with the door; publishing reverts to nothing and lives with the reader | Fowler |
-  | 2 | **The daily compaction runs at the end of every content run**, not once a day. No raw file is published, so a store compacted daily would show the console nothing newer than yesterday. Measured: about 8 KB of history a day per store | Carmack |
-  | 3 | **All four stores at once, not one to prove it.** They share one copy step, one allow-list and one ceiling shape, so doing one first buys a rehearsal and costs three more merge cycles | Owner, 2026-09-26 |
+  | 2 | **The daily compaction runs at the end of every content run**, not once a day. No raw file is published, so a ledger compacted daily would show the console nothing newer than yesterday. Measured: about 8 KB of history a day per ledger | Carmack |
+  | 3 | **All four ledgers at once, not one to prove it.** They share one copy step, one allow-list and one ceiling shape, so doing one first buys a rehearsal and costs three more merge cycles | Owner, 2026-09-26 |
   | 4 | **Every column is published.** The 39 columns no page reads are the input to pending work, and the download is answered by consolidation rather than by a narrower copy | Owner, 2026-09-26 |
   | 5 | The ceiling is measured on each published `index/daily.json` and set in the same commit. A ceiling guessed ahead of the file is a number nothing checked | Guardrail #10 |
-  | 6 | One backend test binds the panels to `LedgerConfig.published`. Without it a panel can name a store the gardener does not index and the page fetches an address that 404s | Fowler |
+  | 6 | One backend test binds the panels to `LedgerConfig.published`. Without it a panel can name a ledger the gardener does not index and the page fetches an address that 404s | Fowler |
 
 - **Rejected alternatives:**
 
   | # | Option | Why rejected | What it would cost to take | Authority |
   | --- | --- | --- | --- | --- |
-  | 1 | Publish a narrower copy, dropping the 39 unread columns | Saves 29 percent of the file, measured - and throws away the input to the item, feed and search quality work. The published file also stops being the store, which is the property that makes it impossible for it to disagree | Zero to take; costs a workstream | Owner, 2026-09-26 |
+  | 1 | Publish a narrower copy, dropping the 39 unread columns | Saves 29 percent of the file, measured - and throws away the input to the item, feed and search quality work. The published file also stops being the ledger, which is the property that makes it impossible for it to disagree | Zero to take; costs a workstream | Owner, 2026-09-26 |
   | 2 | Publish the open raw days so the console shows the current hour | One open day of `host-fingerprint` is 30 per-writer shards, 33 requests and about 342 KB to draw 25 rows - 15.1 times the source bytes | Zero; costs the reader 29 requests on every view | Carmack |
-  | 3 | Compact once a day and accept a day-old console | Buys git about 6 KB a day and costs the reader today entirely | About 8 KB of history a day per store | Carmack |
-  | 4 | Publish one store first and the rest later | One copy step, one allow-list and one ceiling shape serve all four; doing one first is a rehearsal that costs three merge cycles | Three merge cycles | Owner, 2026-09-26 |
+  | 3 | Compact once a day and accept a day-old console | Buys git about 6 KB a day and costs the reader today entirely | About 8 KB of history a day per ledger | Carmack |
+  | 4 | Publish one ledger first and the rest later | One copy step, one allow-list and one ceiling shape serve all four; doing one first is a rehearsal that costs three merge cycles | Three merge cycles | Owner, 2026-09-26 |
 
 ---
 
@@ -728,13 +727,13 @@ Ruled by Susan on 2026-09-24. The complaint: the Hardware route is fifteen panel
 
 ---
 
-### Row #7 - One panel end to end: the browser fetches the store and draws it in d3
+### Row #7 - One panel end to end: the browser fetches the ledger and draws it in d3
 
-- **Scope:** the browser queries the published store for the columns and days the Platform Mix panel draws, and the panel is redrawn in d3 to the vocabulary rows 4 to 6 established. **No backend change and no store change** - plan 50 and row 3 did those; **no new chart type, no new strip behaviour and no new gate** - rows 4 to 6 did those.
+- **Scope:** the browser queries the published ledger for the columns and days the Platform Mix panel draws, and the panel is redrawn in d3 to the vocabulary rows 4 to 6 established. **No backend change and no ledger change** - plan 50 and row 3 did those; **no new chart type, no new strip behaviour and no new gate** - rows 4 to 6 did those.
 
 **Why this panel and not another.** `frontend/src/lib/charts/fleet.ts` has exactly two importers, against four for the next candidate. And the panel already takes an `svg` prop, which is the server-side renderer telemetry-intent N5 says exists only to serve ECharts - so this one panel is also the first evidence it can go.
 
-**The query door and the hover strip are the deliverable. The panel is the proof.** Rows 4 to 6 wrote the vocabulary, the strip and the gates; this row is the smallest thing that exercises all three at once and proves the browser can reach the store ([how-a-console-chart-gets-its-data.md](../docs/concepts/console-design/how-a-console-chart-gets-its-data.md) rule 1, which decides any scope argument inside this row). A change that ships one good panel and no shared parts has bought one panel and left the next fifty where they were.
+**The query door and the hover strip are the deliverable. The panel is the proof.** Rows 4 to 6 wrote the vocabulary, the strip and the gates; this row is the smallest thing that exercises all three at once and proves the browser can reach the ledger ([how-a-console-chart-gets-its-data.md](../docs/concepts/console-design/how-a-console-chart-gets-its-data.md) rule 1, which decides any scope argument inside this row). A change that ships one good panel and no shared parts has bought one panel and left the next fifty where they were.
 
 #### The panel this row delivers
 
@@ -753,7 +752,7 @@ machine on one day, over the last {windowDays} days. It counts what we were
 given and predicts nothing about the next job. Darker bars are faster machines.
 ```
 
-**Colour carries speed, ordered, bound to the whole record.** One hue, five steps (`console.machine_colour_stops`), ranked by each machine kind's median prompt throughput from `server_prompt_tokens / server_prompt_seconds` - both columns of `host-fingerprint`, so no second store is needed. Not the confidence hues: a machine that draws slow is a draw, not a failure. **Bound to the whole record and never to the open window**, because a machine must keep its colour when the operator changes the span, and surviving the span control is the one thing this colour has to do. A five-step key chip reads `slower` to `faster`, and every readout row prints an absolute rate, so no share, probability or pie returns.
+**Colour carries speed, ordered, bound to the whole record.** One hue, five steps (`console.machine_colour_stops`), ranked by each machine kind's median prompt throughput from `server_prompt_tokens / server_prompt_seconds` - both columns of `host-fingerprint`, so no second ledger is needed. Not the confidence hues: a machine that draws slow is a draw, not a failure. **Bound to the whole record and never to the open window**, because a machine must keep its colour when the operator changes the span, and surviving the span control is the one thing this colour has to do. A five-step key chip reads `slower` to `faster`, and every readout row prints an absolute rate, so no share, probability or pie returns.
 
 | Case | Colour |
 | --- | --- |
@@ -772,8 +771,8 @@ given and predicts nothing about the next job. Darker bars are faster machines.
 
 - **Files touched:**
   - `frontend/src/lib/charts/fleet.ts` (from an option builder into a draw), `frontend/src/lib/console/machine/PlatformMixPanel.svelte`, `frontend/src/routes/console/machine/+page.server.ts` (its second importer)
-  - `frontend/src/lib/data/` - the query door: `store.ts`, `engine.ts`, `slice.ts`
-  - `config/appearance.json` (`console.machine_colour_stops` 7 to 5, `console.absent_hatch_degrees`), `config/idhazh.json` if the panel's store needs a ceiling change
+  - `frontend/src/lib/data/` - the query door: `ledger.ts`, `engine.ts`, `slice.ts`
+  - `config/appearance.json` (`console.machine_colour_stops` 7 to 5, `console.absent_hatch_degrees`), `config/idhazh.json` if the panel's ledger needs a ceiling change
   - `frontend/src/lib/charts/machine-colour.ts` (**the arbitrary-key rule reverses - see decision 9**), `docs/concepts/console-design/how-the-machines-work-is-drawn-and-what-may-not-be-pooled.md`
   - `frontend/src/lib/server/config.ts` (the hardcoded `machine_colour_stops: 7` fallback), `frontend/tests/console-machine-split.spec.ts` (the "Seven stops for a machine" assertion)
   - `frontend/package.json`, `frontend/package-lock.json` (`@duckdb/duckdb-wasm` only; `d3-shape` landed in row 4)
@@ -785,16 +784,16 @@ given and predicts nothing about the next job. Darker bars are faster machines.
   - `frontend/src/lib/charts/fleet.ts` (the option builder becomes a d3 draw), `frontend/src/lib/console/machine/PlatformMixPanel.svelte`, `frontend/src/lib/server/host-fingerprint.ts`
   - `config/appearance.json`, `backend/idhazh/contracts/knobs/console.py` (section 2.4)
   - `frontend/tests/console-machine-panels.spec.ts`, `frontend/tests/console-machine-data.spec.ts`, `frontend/tests/console-cold-load.spec.ts`
-  - `docs/architecture/publishing/console-charts.md`, `docs/architecture/publishing/what-a-month-shard-holds-and-how-it-reaches-a-browser.md` (a scope clause on its two rejected-alternative rows, which were ruled for the search vector file and not for slicing a telemetry store)
-- **Acceptance gates:** the browser smoke on `/console/machine` (CLAUDE.md section 12) - zero new `[error]`, zero new `404`, **the panel still renders when its store is absent, empty, or when the engine fails to start**. `ci.yml`'s bundle gate and site-cap measurement both walk the built tree, so both are re-read after the copy step lands. Local `npm --prefix frontend run test:changed -- --list` then the selected checks; `ruff check .`, `mypy backend`, `pytest backend/tests/telemetry backend/tests/contracts -q`. CI runs the full suite.
-  - **No measurement gates this row.** Two facts are owed and neither is a gate: whether the published host answers a byte-range request, which decides how the store is published rather than how it is read, and the engine asset's transferred size, which the site-cap budget consumes (section 3).
+  - `docs/architecture/publishing/console-charts.md`, `docs/architecture/publishing/what-a-month-shard-holds-and-how-it-reaches-a-browser.md` (a scope clause on its two rejected-alternative rows, which were ruled for the search vector file and not for slicing a telemetry ledger)
+- **Acceptance gates:** the browser smoke on `/console/machine` (CLAUDE.md section 12) - zero new `[error]`, zero new `404`, **the panel still renders when its ledger is absent, empty, or when the engine fails to start**. `ci.yml`'s bundle gate and site-cap measurement both walk the built tree, so both are re-read after the copy step lands. Local `npm --prefix frontend run test:changed -- --list` then the selected checks; `ruff check .`, `mypy backend`, `pytest backend/tests/telemetry backend/tests/contracts -q`. CI runs the full suite.
+  - **No measurement gates this row.** Two facts are owed and neither is a gate: whether the published host answers a byte-range request, which decides how the ledger is published rather than how it is read, and the engine asset's transferred size, which the site-cap budget consumes (section 3).
 - **Oracle:** given a recorded `slice()` response for one fixture day, the d3 panel draws one mark per machine kind per day, with the kinds in median-throughput order, the unrecorded kind last and outside the merged group, and every readout row carrying an absolute rate. **It is not a comparison against the ECharts panel**: this row rewrites `fleet.ts` from an option builder into a draw, so the old panel does not survive the commit, and the row's own scope changes the colour count, the shape under the threshold, the merge rule and the readout position - so "same colours, same labels" would be false by design. It cannot settle whether the drawing is good enough to ship; Susan rules that (CLAUDE.md section 14).
 - **Decisions:**
 
   | # | Decision | Authority |
   | --- | --- | --- |
   | 1 | d3 is the drawing library, and this row writes the house style rather than one chart | Owner, 2026-09-24, on N5 |
-  | 2 | **`@duckdb/duckdb-wasm` is the reader.** A panel queries the store for the columns and days it draws instead of downloading it. **This is how every panel reads every store** - not a rule for the large ones, and no store has a carve-out. The engine is fetched once and cached; a store would be fetched on every view by every reader, and that asymmetry holds at any size | Owner, 2026-09-24 |
+  | 2 | **`@duckdb/duckdb-wasm` is the reader.** A panel queries the ledger for the columns and days it draws instead of downloading it. **This is how every panel reads every ledger** - not a rule for the large ones, and no ledger has a carve-out. The engine is fetched once and cached; a ledger would be fetched on every view by every reader, and that asymmetry holds at any size | Owner, 2026-09-24 |
   | 3 | **The single-threaded build is the pick.** The threaded one needs cross-origin isolation, which needs response headers a static host cannot set. The engine's own bundle selector already chooses correctly | Carmack. Written down so nobody spends a day discovering it |
   | 4 | One panel, not the route. `/console/machine` draws fifteen panels and prerenders; a row that moved it whole would carry `item-health` at 8.5 MB, fourteen more panels and the prerender decision, and would prove no more about d3 than one panel does | Fowler |
   | 5 | ECharts stays installed. This row moves one importer of fifteen; uninstalling is the last charting row's work | Fowler |
@@ -805,10 +804,10 @@ given and predicts nothing about the next job. Darker bars are faster machines.
   | 9 | **N9 binds a telemetry payload in a tree under `state/`, not a published address.** Its replacement clause names a parsed payload name and its last three words are "nothing reads it", which a file whose job is to be read is not. The published address is computed from the month and the band | Fowler, on the owner's 2026-09-24 ruling |
   | 10 | **Every index is generated whole by its own single writer and never appended to**, and none of them is generated by the build. An append is read-modify-write on a shared path, the shape a minted name exists to end | Owner, 2026-09-24 |
   | 11 | **The copy goes inside `frontend/scripts/copy-visuals.mjs`**, which already stages ten payload directories into `frontend/static/` and runs **before** `build-state.ts --begin` - so the tree a run certifies already holds the staged bytes. A second staging script is Guardrail #4, and a step after `--begin` would change the tree the run is certifying | Carmack |
-  | 12 | **The reader sees the newest compact daily file, which is at most one content run old.** No raw file is published, so `digest.yml`'s assemble job ends by running the daily compaction for every published store. The compaction serves git; the build serves the reader; and the two now move together | Fowler, on Carmack's measurement of 2026-09-25 |
-  | 13 | **An index holds at most its own keep-window of entries - `daily_keep_days + 31`, `monthly_keep_months`.** Two config values, no term of elapsed time. Held by two controls: a published store may leave neither window null, and a measured ceiling that moves when those values move | Owner, 2026-09-25 |
+  | 12 | **The reader sees the newest compact daily file, which is at most one content run old.** No raw file is published, so `digest.yml`'s assemble job ends by running the daily compaction for every published ledger. The compaction serves git; the build serves the reader; and the two now move together | Fowler, on Carmack's measurement of 2026-09-25 |
+  | 13 | **An index holds at most its own keep-window of entries - `daily_keep_days + 31`, `monthly_keep_months`.** Two config values, no term of elapsed time. Held by two controls: a published ledger may leave neither window null, and a measured ceiling that moves when those values move | Owner, 2026-09-25 |
   | 14 | **A date is reachable through exactly one file.** The door takes the coarsest period that covers a date, and plan 50's row titled **The index task, two compact periods, and the diagram moves into the page** carries the oracle that asserts it over a fixture holding both - one process, one moment. Under the band it would have had to hold across two processes at two times, which no test can assert | Fowler |
-  | 15 | **The index is fetched by the query door at view time, never by `+layout.ts`.** That loader prerenders, so anything it fetches is inlined into every console document and grows with the published stores. This is the reason the address book is not in the band, and it is sharper than the byte ceiling that prompted the move | Fowler, on the owner's 2026-09-25 ruling |
+  | 15 | **The index is fetched by the query door at view time, never by `+layout.ts`.** That loader prerenders, so anything it fetches is inlined into every console document and grows with the published ledgers. This is the reason the address book is not in the band, and it is sharper than the byte ceiling that prompted the move | Fowler, on the owner's 2026-09-25 ruling |
   | 16 | **One index per period, written by that period's own compaction.** Never one file for many writers: two periods are two tasks | Fowler |
 
 - **Rejected alternatives:**
@@ -819,30 +818,30 @@ given and predicts nothing about the next job. Darker bars are faster machines.
   | 2 | Keep the build-time read and swap only the drawing | It proves N5 and leaves N2 and N3 where they were, so the same panel gets done twice | Zero now; costs a second pass over one panel | Owner, 2026-09-24 |
   | 3 | Swap the drawing for every ECharts panel here | Fifteen importers, five routes and the server-side renderer in one pull request, before any house style has been reviewed | Its own plan | Fowler |
   | 4 | Delete `waterfall.ts` and `donut.ts` here | They are ECharts modules with no importer anywhere in `frontend/src`, found 2026-09-24 - real dead code and a free deletion, but not this row's question | A one-line change of its own | Fowler |
-  | 5 | Commit the store's published copy under `frontend/public/` | Satisfies neither N7 nor N8, and it is the thing N8 exists to end | Zero; costs both intents and a merge driver | Carmack |
-  | 6 | Serve the store from the repository over raw content | Zero published bytes, and cross-origin requests do work. But this project's own prune force-pushes `main` on a schedule, so a commit-pinned address stops resolving and a branch-pinned one changes under a reader mid-session | Zero; costs the reader a broken page after every prune | Carmack |
+  | 5 | Commit the ledger's published copy under `frontend/public/` | Satisfies neither N7 nor N8, and it is the thing N8 exists to end | Zero; costs both intents and a merge driver | Carmack |
+  | 6 | Serve the ledger from the repository over raw content | Zero published bytes, and cross-origin requests do work. But this project's own prune force-pushes `main` on a schedule, so a commit-pinned address stops resolving and a branch-pinned one changes under a reader mid-session | Zero; costs the reader a broken page after every prune | Carmack |
   | 7 | An index committed into `state/` and rewritten by **every run** | It would be a shared mutable path: every run rewrites it, two runs rewrite it at once, and the push race and the merge driver both return. **The indexes this plan reads are not this**: each has exactly one writer, and the raw day index is written only once the day is beyond every writer's reach | Zero; costs the race back | Owner, 2026-09-24 |
   | 8 | Compute a raw file's name from `(dataset, tier, covers_date)` so both sides derive it | Elegant, and **it dies on N6 rather than on derivability**. A re-run of a failed job writes into its original day, so a computed name would mean different bytes at the same path - N6 broken at the one place it is load-bearing. The compact periods do take a derivable name, because there the writer is single and the period is the name | Zero; costs N6 | Fowler |
   | 9 | Keep the address book in `console/band.json` | It was the answer for a day. Two things killed it: `+layout.ts` prerenders, so the band is inlined into every console document and that is what its 2,000-byte ceiling was really paying for; and the band is written during a digest run while the files are staged later, so with overlapping runs its open-day list would name fewer files than exist and the chart would be quietly low | Zero; costs a silent undercount and a per-document cost that grows | Owner, 2026-09-25 |
   | 10 | Have the build merge today's shards into one file at a derivable address | It needs a parquet writer in the build, and the indexes exist for the older periods regardless - so it is a second mechanism for a problem the first one already solved | A new build dependency | Fowler, Guardrail #4 |
   | 11 | Have the browser probe `00.parquet`, `01.parquet` until a 404 | A 404 stops being a defect signal and becomes a loop terminator, so a genuinely missing file reads as a normal end | Zero; costs the ability to tell an absence from a fault | Fowler |
-  | 12 | A single published address book naming every store | It needs a writer, and the only entity that sees every store at once is the build - which puts the list back one step from the tree it describes. It also buys nothing: a panel names its own store, and each store's indexes sit at a path the browser can compute | Zero; costs a mechanism | Owner, 2026-09-25 |
+  | 12 | A single published address book naming every ledger | It needs a writer, and the only entity that sees every ledger at once is the build - which puts the list back one step from the tree it describes. It also buys nothing: a panel names its own ledger, and each ledger's indexes sit at a path the browser can compute | Zero; costs a mechanism | Owner, 2026-09-25 |
   | 13 | Publish the open raw days and let the browser read them | **It makes the cheapest span the worst value in the set**: one open day of `host-fingerprint` is 30 per-writer shards, 33 requests and about 342 KB to draw 25 rows - 15.1 times the source bytes, because a one-row file of 31 columns is mostly column overhead | Zero to take, and it costs the reader 29 requests on every view. Measured 2026-09-25 | Carmack |
-  | 14 | Publish fewer columns so the file is smaller | It saves 29 percent, measured over the eight newest `item-health` files - and it throws away the input to the item, feed and search quality work, and makes the published file something other than the store | Zero to take; costs a workstream | Owner, 2026-09-26 |
-  | 15 | Compact once a day rather than after every run, and accept a day-old console | **It buys git about 6 KB a day and costs the reader today's data entirely**, because no raw file is published. Git delta-compresses these rewrites: measured 2026-09-25, one period-file rewrite is 1,649 bytes packed, so five a day is about 8 KB. The "roughly 360 MB" figure an earlier draft used was arithmetic on a false premise and is 33 times too high | About 8 KB of history a day per store | Carmack, 2026-09-25 |
+  | 14 | Publish fewer columns so the file is smaller | It saves 29 percent, measured over the eight newest `item-health` files - and it throws away the input to the item, feed and search quality work, and makes the published file something other than the ledger | Zero to take; costs a workstream | Owner, 2026-09-26 |
+  | 15 | Compact once a day rather than after every run, and accept a day-old console | **It buys git about 6 KB a day and costs the reader today's data entirely**, because no raw file is published. Git delta-compresses these rewrites: measured 2026-09-25, one period-file rewrite is 1,649 bytes packed, so five a day is about 8 KB. The "roughly 360 MB" figure an earlier draft used was arithmetic on a false premise and is 33 times too high | About 8 KB of history a day per ledger | Carmack, 2026-09-25 |
   | 16 | Ask the host's own contents API for a directory listing | A service rather than a static asset, rate-limited per address, untestable offline, and it breaks if the repository is renamed. Guardrail #1 says a design must not need one | Zero; costs Guardrail #1 | Carmack |
-  | 17 | Write an `index.html` into each month directory so the host lists it | One round trip per store-month instead of one in total, plus 234 extra files | Zero; costs a round trip per month | Carmack |
+  | 17 | Write an `index.html` into each month directory so the host lists it | One round trip per ledger-month instead of one in total, plus 234 extra files | Zero; costs a round trip per month | Carmack |
 
-- **What the build copies.** For every store whose `LedgerConfig.published` names it, the step copies both compact periods, their indexes and their watermarks - **verbatim, into the same relative paths**. It renames nothing, merges nothing, narrows nothing and generates nothing. No raw file is copied. `state/` in the repository stays the only source (N7) and nothing production lands under `frontend/` in git (N8), because the staged tree is gitignored and rebuilt each build.
+- **What the build copies.** For every ledger whose `LedgerConfig.published` names it, the step copies both compact periods, their indexes and their watermarks - **verbatim, into the same relative paths**. It renames nothing, merges nothing, narrows nothing and generates nothing. No raw file is copied. `state/` in the repository stays the only source (N7) and nothing production lands under `frontend/` in git (N8), because the staged tree is gitignored and rebuilt each build.
 
-- **The published file is the store, which is why it cannot disagree with it.** An earlier draft defended this by calling it byte-identical, which set the bar in the wrong place: the property that matters is whether a published file can say something `state/` does not. A copy cannot. **`frontend/public/machine/<YYYY-MM>.csv` can**, because it joins `host-fingerprint` to aggregated `item-health` rows, and a join carries values neither store holds on its own. That file is not defended here - it is deleted by plan 52, in the pull request that moves its last reader.
+- **The published file is the ledger, which is why it cannot disagree with it.** An earlier draft defended this by calling it byte-identical, which set the bar in the wrong place: the property that matters is whether a published file can say something `state/` does not. A copy cannot. **`frontend/public/machine/<YYYY-MM>.csv` can**, because it joins `host-fingerprint` to aggregated `item-health` rows, and a join carries values neither ledger holds on its own. That file is not defended here - it is deleted by plan 52, in the pull request that moves its last reader.
 
 - **This plan declares no new contract.** The three shapes it reads - `CompactEntry`, `CompactIndex` and `Watermark` - are declared by plan 50's section titled "The shapes a worker must not invent", committed by the gardener and read here. **The frontend's copy is hand-written in `frontend/src/lib/data/ledger.ts` and bound by a backend test**: `backend/tests/contracts/test_frontend_index_shapes.py` reads that module, collects the interfaces, and asserts each names exactly the fields the Pydantic model declares, in order, with the same type - the shape `test_frontend_field_set.py` already uses. **`ConsoleBand` gains nothing and is not touched.**
 
 ## Dependent plans
 
-- `TODO/20260924-50-idhazh-gardener-plan.md`. Row 3 waits on its rows titled **The index task, two compact periods, and the diagram moves into the page**, **The three stores `work.py` writes become parquet** and **`span-rollup` becomes parquet**. Nothing else in that plan is a predecessor here.
-- **[`20260926-52-fifty-panels-move-and-six-projections-go-plan.md`](20260926-52-fifty-panels-move-and-six-projections-go-plan.md), a placeholder and not yet a plan**, takes over after row 7. **Section 2.10 is its contract and Susan has already ruled it**: fifty-one panels, each KEEP, REDRAW, REPLACE, DELETE or NEW, with the columns each one queries and the chart it becomes. Nine of the redraws and seven of the new panels exist only because the browser can now query the store - the projection is what was stopping them. One row per route; each row moves that route's panels to the query door and **deletes the projection under `frontend/public/` that fed them**.
+- `TODO/20260924-50-idhazh-gardener-plan.md`. Row 3 waits on its rows titled **The index task, two compact periods, and the diagram moves into the page**, **The three ledgers `work.py` writes become parquet** and **`span-rollup` becomes parquet**. Nothing else in that plan is a predecessor here.
+- **[`20260926-52-fifty-panels-move-and-six-projections-go-plan.md`](20260926-52-fifty-panels-move-and-six-projections-go-plan.md), a placeholder and not yet a plan**, takes over after row 7. **Section 2.10 is its contract and Susan has already ruled it**: fifty-one panels, each KEEP, REDRAW, REPLACE, DELETE or NEW, with the columns each one queries and the chart it becomes. Nine of the redraws and seven of the new panels exist only because the browser can now query the ledger - the projection is what was stopping them. One row per route; each row moves that route's panels to the query door and **deletes the projection under `frontend/public/` that fed them**.
 - **What plan 52 is expected to cost, so nobody discovers it:** about seventeen pull requests in total, of which rows 4 to 7 here are four. The redraws batch by the type each becomes - about four pull requests, so one builder is edited once - and the new panels batch by which `UNREAD_CELLS` group they read, so each batch moves one group of names into `COLUMN_READERS` as one reviewable diff.
 - **Susan's ruling on the old charts, recorded so it is not re-argued.** Those charts were drawn against what a build-time projection could carry - twenty columns, summed per shard before any page saw them. **The existing chart is evidence of an old limit rather than a decision to preserve.** Thirty-nine columns of real answers sat unread on every item of every run while nobody's job was to say the page was not enough: why an article was chosen, why a fetch was slow, what the source actually answered, how old the news was, whether a summary was cut off mid-sentence and reported as a success, which rule refused a reply, and whether any trend moved because of the model or because somebody changed a setting.
 - `TODO/20260823-known-defects-plan.md`, defect 33, closes in row 1's pull request.

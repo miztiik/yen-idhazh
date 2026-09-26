@@ -82,7 +82,7 @@ requests, so one builder is edited once - and the new panels batch by which
 | --- | --- | --- |
 | 1 | Plan 51 section 0, Hard scope - out | **Three of the five routes draw no panel id today.** The gates and the captures reach 26 panels on two routes until a row here wraps the other three. A row must do that before those routes can be judged |
 | 2 | Plan 51, `echarts` | `echarts@^5.6.0` and sixteen importers stay installed while two grammars coexist. **The last row here uninstalls it**, and that deletion is the signal the plan is finished |
-| 3 | Plan 50 row titled *The three stores the console's routes read become parquet* | `backend/utilities/migrate_to_parquet.py` carries "delete when every `state/item-health`, `state/scores` and `state/host-fingerprint` CSV is gone from `main`". **The first row here names it in its scope line** |
+| 3 | Plan 50 row titled *The three ledgers the console's routes read become parquet* | `backend/utilities/migrate_to_parquet.py` carries "delete when every `state/item-health`, `state/scores` and `state/host-fingerprint` CSV is gone from `main`". **The first row here names it in its scope line** |
 | 4 | Plan 50 row titled *`span-rollup` becomes parquet* | `migrate_span_rollup.py` carries the same shape of condition for `state/span-rollup`. Same treatment |
 | 5 | Plan 51, telemetry-intent N7 and N8 | Neither gets its stone until the projections go. This plan is where they are answered |
 
