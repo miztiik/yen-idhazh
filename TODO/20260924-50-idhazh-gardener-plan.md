@@ -1487,6 +1487,17 @@ It mints `unit_id` and then `file_id` through `naming` (section 5.7), builds the
   - `backend/idhazh/stages/assemble.py` and `backend/idhazh/stages/record.py` (the two `item-health` call sites), `backend/idhazh/evals/writer.py` (the `scores` call site), `backend/idhazh/telemetry/silicon.py` (the two `host-fingerprint` call sites)
   - `backend/utilities/migrate_to_parquet.py` (new, one-shot; **its declaring line reads "delete when every `state/item-health`, `state/scores` and `state/host-fingerprint` CSV is gone from `main`"**, and plan 52's first row names it in its scope line)
   - `backend/idhazh/contracts/item_health.py`, `backend/idhazh/contracts/eval_row.py`, `backend/idhazh/contracts/host_fingerprint.py` (**no `version` stamp** - no field moves, only the address - **and one `changelog` entry each**, `"Rows move to state/raw/<ledger>/ as parquet; the CSV path is gone"`, because CLAUDE.md section 11 requires an entry for every change and the read-side migration is the module above, shipping in the same commit)
+
+**Four naming corrections ride in this row, and they ride here because the row is already rewriting every one of these rows.** Renaming a column while a migration rewrites the file is free; doing it afterwards is a second migration with its own read-side alias. Owner decision, 2026-09-26.
+
+| # | Today | Becomes | Why |
+| --- | --- | --- | --- |
+| 1 | `EvalRow.source_word_count` | `source_words` | `ItemHealthRow.source_words` is the same fact under a second spelling |
+| 2 | `EvalRow.summary_word_count` | `summary_words` | Same, against `ItemHealthRow.summary_words` |
+| 3 | `EvalRow.source_seen_word_count` | `source_words_before_cap` | Same, against `ItemHealthRow.source_words_before_cap`. **The two names also disagree about which end of the cap they mean**, which is worse than a duplicate: a reader cannot tell from either name whether the number is before or after truncation |
+| 4 | `EvalRow.attempt` | keeps its name, **gains a description** | It is declared `attempt: int = Field(ge=1)` with no description, so it is undeclared under Guardrail #3. It is set from `summary.attempt` - **which attempt at writing the summary produced the text being scored** - and it is **not** the `attempt` in the ledger's own filename, which is `<run_id>-<attempt>-<job>-<shard>` and carries the GitHub Actions re-run counter. One word, two meanings, one ledger |
+
+**These three renames DO stamp `version` and DO need a read-side alias**, unlike the address change above: a field that changed name is a breaking change (CLAUDE.md section 11), and the alias is a `model_validator(mode="before")` in the same commit, on the pattern `corpus.py` already uses for `pruned_date`.
   - `backend/idhazh/contracts/ledger_name.py` (`LedgerName` gains nothing - plan 53 row 3 already minted every member. **This row's contract change is the arrow mapping and the envelope, not the vocabulary**)
   - `config/idhazh_gardener.json` (an index block and two compaction blocks for each of the three ledgers), `backend/idhazh/gardener/tasks/__init__.py`
   - `backend/idhazh/ledger.py`, `backend/idhazh/day_shards.py` (the read side for these three moves to `ledger/settle.py`)
