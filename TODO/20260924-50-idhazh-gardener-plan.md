@@ -56,7 +56,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 
 ## 1. Status Reckoner
 
-**Nine pull requests in eight slots. One row is one pull request; rows 3 and 4 are the only pair that runs two-wide, and row 10 is collapsed.** The dispatcher is a running pool, not a wave ([execute-a-plan.md](../docs/how-to/execute-a-plan.md)): a slot frees when a worker returns its report, never when a pull request merges. `Depends-on` and the `Files touched` lists are the readiness test; `Parallel-group` is a hint.
+**Nine pull requests in six slots. One row is one pull request; three pairs run two-wide - rows 3 and 4, rows 5 and 6, rows 8 and 9 - and row 10 is collapsed.** The dispatcher is a running pool, not a wave ([execute-a-plan.md](../docs/how-to/execute-a-plan.md)): a slot frees when a worker returns its report, never when a pull request merges. `Depends-on` and the `Files touched` lists are the readiness test; `Parallel-group` is a hint.
 
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -79,7 +79,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 
 **Why the order is 5 before 6.** Row 5's acceptance is a gate; row 6's is an observation at the next scheduled wake. Numbering is an id, not a sequence - the dispatcher takes any ready row - so the preference is written above rather than encoded in the numbers, and a pointer from another plan cites a row by TITLE for the same reason.
 
-**Why the width is two and cannot be more.** Rows 5 to 9 all append to `config/idhazh_gardener.json` and `backend/idhazh/gardener/tasks/__init__.py`, so they are serial whatever their letters say. The only surface split that would break that join is a registry that reads a directory, which section 5.5 forbids by name, and the variant that survives the ban - land the task modules with no registry entry and wire them later - is modules no test can reach, which fails Guardrail #9. **Fewer and larger pull requests is the answer, not more width**, and the two merges that were priced and refused are recorded in the rejected-alternatives table of the rows they would have joined.
+**Why the width is two, and what row 4 does to it.** Rows 5 to 9 would all have appended to `config/idhazh_gardener.json` and `backend/idhazh/gardener/tasks/__init__.py`, and a plan whose second half shares one surface is serial whatever its letters say. **Row 4 removes both joins, because the task list is open** (owner ruling, 2026-09-26): a task is a declaration in `config/gardener/` and a module in `backend/idhazh/gardener/tasks/`, and no file anywhere lists them. Adding a task edits nothing anybody else owns. **Rows 5 and 7 stay serial**, because both remove a step from `.github/workflows/digest.yml`, and a workflow file is not relaxed for a slot: a bad merge in a doc page costs a paragraph, a bad merge in the daily workflow costs the run.
 
 **Three properties the grouping preserves, each of which a merge would have cost.**
 
@@ -155,7 +155,7 @@ state/compact/gardener/daily/watermark.json
 state/compact/gardener/index/daily.json
 ```
 
-`<ledger>` is `gardener`, `visual-prune`, `feed-retirements`, `item-health`, `scores`, `host-fingerprint` or `span-rollup`. Rows 3, 9 and 10 add the last five, and `LedgerName` (plan 53 row 3) is the closed set that refuses a typo.
+`<ledger>` is `gardener`, `visual-prune`, `feed-retirements`, `item-health`, `scores` or `host-fingerprint`. Rows 3, 7 and 9 add them, and `LedgerName` (plan 53 row 3) is the closed set that refuses a typo.
 
 **A data file is written once and never rewritten. Five small JSON files are rewritten in place, and each one has exactly one writer.** The raw day index of an open day, and the index and watermark of each compact period - `index/daily.json`, `index/monthly.json`, `daily/watermark.json`, `monthly/watermark.json`. **A raw day index stops being rewritten the moment its day is compacted** (section 5.9.13), which is what lets `raw_index_keep_days` hold a real listing rather than ninety days of empty ones. A path with one writer cannot lose a push race, needs no merge driver, and makes "same path, different identity" a detectable defect - so single writership is the property that matters here, not immutability, and section 5.4's `paths.py` is what makes it structural rather than hoped for.
 
@@ -370,11 +370,19 @@ Cross-field validators, existing ones kept and one amended: `selected <= candida
 
 **So the record carries the instant the work stopped, and git carries the instant it landed.** The push's cost for one shard is `git log -1 --format=%cI -- <record_path>` minus that row's `staged_at`: one bounded read per commit, no second push, and durable for as long as the history holds - 60 to 90 days, which the corpus squash bounds (CLAUDE.md section 8). **That is what turns `attempts` and `push_deadline_seconds` from estimates into knobs a reading can move** (Guardrail #10); row 8 decision 11 is where the estimate is stated today.
 
-### 5.2 `config/idhazh_gardener.json`
+### 5.2 `config/idhazh_gardener.json`, and one declaration a task under `config/gardener/`
 
-`GardenerConfig` in `backend/idhazh/contracts/knobs/gardener.py`.
+`GardenerConfig` in `backend/idhazh/contracts/knobs/gardener.py` holds `version`, `attempts` and `shards` and nothing else. **Every task declares itself in its own file, `config/gardener/<task-name>.json`**, validated by `TaskPolicy` in the same module. The filename stem is the task name; there is no `name` field inside, because a name written twice can disagree with itself - and because `json.loads` keeps the last value of a duplicate key silently, so two rows adding a block of one name to one file after a botched merge produce one block, no error, and a task that quietly stopped running. A directory refuses that at the filesystem.
 
-**Hard constraint: the shard plan must be computable from this file with `json`, `datetime` and `pathlib` alone**, because the `plan` job runs before any `pip install` - the discipline `backend/utilities/prune_due.py` already keeps and states. **The plan job opens no file outside `config/`**, which is what holds its checkout to two directories however many ledgers gain compactions (section 5.3).
+**The task list is open and there is no index.** The directory is the list (owner ruling, 2026-09-26). An index would be a file every row appends to - the join this shape exists to remove - and a second statement of a fact that can then disagree with the directory. **Nothing but a task declaration is ever placed in `config/gardener/`.**
+
+**The loader gathers the directory and validates the set; a declaration is never validated alone**, because half the refusals below read two tasks at once.
+
+**Retiring is a state change, never a file deletion.** `state: retired` keeps the declaration and keeps its `owns` prefixes in the disjointness check, so a later task claiming a retired task's paths is refused by name. Deleting the file instead is one line of `git rm` and it takes the tombstone with it - the one thing a single file made harder than a directory does, and the one rule that has to be written down because of it.
+
+**There is no `to-be-drafted` and no `to-be-onboarded`, for the same reason there is no `enabled`.** A declaration with `state: paused` is a draft; a declaration with `state: active` and `dry_run: true` is a task being onboarded. Two more states would be two more spellings of those, and at run time nothing could tell the new pair from the old. **Dropping the file in is the onboarding**, and `dry_run` being required with no default is what makes that safe: a new task computes its full delete set, writes its record and deletes nothing, no matter who dropped the file in. What forces a NEW declaration to ship `dry_run: true` is a review gate and is named as one - a contract test over the committed tree asserting that a declaration added in the same change as its module ships `dry_run: true`. ESCALATE trigger 6 covers the later flip.
+
+**Hard constraint: the shard plan must be computable from these files with `json`, `datetime` and `pathlib` alone**, because the `plan` job runs before any `pip install` - the discipline `backend/utilities/prune_due.py` already keeps and states. **The plan job opens no file outside `config/`**, which is what holds its checkout to two directories however many tasks the garden gains (section 5.3). **It never opens a task module, never imports anything from `idhazh`, and never reads `state/`, `corpus/` or `frontend/`.** The read is a sorted glob, and it takes four keys a declaration - `state`, `owns` or `owns_everything_else_under`, and `after` - ignoring every other key it finds; the Pydantic loader inside `run-tasks` takes all of them and keeps `extra="forbid"`. Validating everything in both would let a key added for one task break the matrix on every runner, before any install, with nothing able to catch it.
 
 ```json
 {
@@ -591,7 +599,26 @@ This needs no allow-list and no register of exceptions. The ledgers section 5.8 
 
 ### 5.5 The task registry
 
-`backend/idhazh/gardener/tasks/__init__.py` - a frozen tuple built from **explicit imports** of its sibling modules. A closed set, no dynamic import, and `ls backend/idhazh/gardener/tasks/` is the set. The registry holds a name and a callable and nothing else, because config decides what happens and when. **There is no `tasks.py` beside this package**: a module and a package of one name cannot both exist, and the package wins silently, which is how a registry ends up unimportable and nobody notices.
+**The registry is discovered, not listed. The task list is open and it keeps changing** (owner ruling, 2026-09-26). The registry holds a name and a callable and nothing else, because config decides what happens and when.
+
+`backend/idhazh/gardener/registry.py` holds one function, `discover() -> Mapping[Slug, Task]`, and it is the only walk. It lists `backend/idhazh/gardener/tasks/` with `pkgutil.iter_modules` - **depth one, `.py` only, sorted by module name, skipping any name beginning with `_`** - imports each module, and reads its module-level `TASKS: tuple[Task, ...]`. **One spelling, even for one task.** The result is memoised for the process, so a shard imports every module once, before its first task runs. **There is no `tasks.py` beside the package**: a module and a package of one name cannot both exist, and the package wins silently.
+
+**`backend/idhazh/gardener/tasks/__init__.py` holds a docstring and imports no sibling.** An `__init__.py` that imported every module would make every import site pay for every task, including a test that wants one.
+
+**A module serving several declarations of one kind builds its tuple from the loaded, validated policies of that kind** - `index_day.py`, `compaction.py` and `github_collections.py` each do - so adding a ledger is declarations and no Python.
+
+**No task module does work at import time.** Constructing a `Task` is a construction; opening a file, reading config or touching the network at import is a defect, because import is paid once a shard a wake, in every shard, whether or not that shard runs the task.
+
+**Four discovery failures. All are exit 2, all fire before anything is run, staged or deleted, and none is ever caught and skipped.**
+
+| Failure | What it means | What the shard does |
+| --- | --- | --- |
+| A declaration with no module | The matrix handed this shard a name `discover()` does not produce | Exit 2, naming the task |
+| A module that raises on import | `discover()` could not finish | Exit 2, naming the module, re-raising the original traceback. **Never caught and skipped**: a skipped module is a deletion that silently stopped running, and there is no frozen tuple left to notice its absence |
+| A module declaring no task | A non-`_` module in the package with no `TASKS`, or a `TASKS` of the wrong type | Exit 2, naming the module. A module beginning with `_` is support and is never imported by discovery, which is what makes this decidable rather than a judgement |
+| Two modules declaring one name | The defect the open list creates that a frozen tuple did not have - a tuple with a duplicate is a visible diff, a directory with a duplicate is two files nobody diffed together | Exit 2, naming the name and both modules. **Never last-one-wins** |
+
+**Exit 2 rather than exit 1 for all four: the tree is wrong and a retry cannot fix it.**
 
 ```python
 @dataclass(frozen=True, slots=True)
@@ -970,7 +997,7 @@ The browser never reads this list; one backend test asserts that every ledger a 
 
 #### 5.9.5 `GardenerConfig`, `TaskPolicy`, and all twenty blocks
 
-**`config/idhazh_gardener.json` ships from row 4 with `tasks: {}`, and every later row adds its own blocks and its own registry entries in the same commit.** The bijection refusal is what makes that structural rather than hoped for: a block with no registry entry is a load-time `ValueError` naming the task, so row 4 **cannot** ship twenty blocks against the empty registry it declares, and `paused` is no escape - a paused task with no registry entry is a fault too. The empty case is already a declared shape (section 5.9.7's `any_active_task: false`). **No value in any block is invented: every window is transcribed from a named `config/idhazh.json` key and the block carries that key's name**, so row 5's move is a transcription a reviewer can check against the source line. Two of those windows delete data, which is why a guessed value is not an acceptable outcome and why the refusal exists.
+**`config/gardener/` ships from row 4 as an empty directory, and every later row adds its own declarations and its own task modules in the same commit.** The shard pre-flight in section 5.5 is what makes that structural rather than hoped for: a declaration with no discovered task is exit 2 naming the task, so row 4 **cannot** ship declarations against the empty tasks package it creates, and `paused` is no escape - a paused declaration with no module is a fault too. **No value in any declaration is invented: every window is transcribed from a named `config/idhazh.json` key and the file carries that key's name**, so row 5's move is a transcription a reviewer can check against the source line. Two of those windows delete data, which is why a guessed value is not an acceptable outcome and why the refusal exists.
 
 **`TaskPolicy` is a discriminated union on a required `kind`.** Five members: `retention`, `collection`, `index`, `compaction`, `history`. A key on the wrong member is refused by name at load.
 
@@ -1044,7 +1071,11 @@ A shard runs several tasks and exits with the **worst** code, and worst is not n
 
 `contracts/base.py` declares `RUN_ID_PATTERN` as `^\d{4}-\d{2}-\d{2}-[0-9]+$`. A bare workflow number fails it. Every worked example in sections 2 and 5.7 reads `2026-09-24-17482910337`, and `unit_id` takes `run_id: RunId` rather than `str`, so a bad shape is refused before a name is minted from it.
 
-#### 5.9.10 The true task count
+#### 5.9.10 Nothing states a task count
+
+**The count is `ls config/gardener/` and nothing else writes it down.** `idhazh gardener list-tasks` prints every task, its state, its window and what it owns; `idhazh gardener plan-shards --json` prints the shards and the fullest one. A count in prose has nothing reading it, so nothing goes red when it drifts - and this one was wrong three different ways before it was deleted.
+
+**One derived number survives, and it is derived where it is used**: row 8's `timeout-minutes` is stated against the fullest shard that `plan-shards --json` reports, read from the named observation at the first scheduled run.
 
 **Counted 2026-09-26, and counted rather than fixed.** Twenty-three registry entries, twenty-two in the matrix and **all twenty-two due at every wake**, until row 9. Eleven retention tasks, two GitHub collection tasks, three index tasks, six compactions - a daily and a monthly for each of three ledgers - and `corpus-squash`, which has its own job and so is not in the matrix. **Twenty-two over five shards is 4.4 tasks a shard, and the fullest shard holds 5.**
 
@@ -1459,7 +1490,7 @@ It mints `unit_id` and then `file_id` through `naming` (section 5.7), builds the
 
 **The verb says nothing about the work, and that is deliberate.** The twenty tasks do four different kinds of work - delete behind a window, list a raw day, compact one period into the next, rewrite history - so any verb naming the work would be wrong for some of them; the task's own name already says which kind it is. An earlier draft used `tend`, which was gardening vocabulary rather than a description, and made a reader hold the metaphor to know what the command did (CLAUDE.md section 0b). The workflow job is `run-tasks` for the same reason, and `ServerJob` takes that spelling.
 - **Files touched:**
-  - `backend/idhazh/gardener/__init__.py`, `cli.py` (the router - a copy of `backend/idhazh/telemetry/cli.py`'s shape), `tasks/__init__.py` (the registry, section 5.5 - **a package, never a module called `tasks.py`**; an empty frozen tuple in this row, filled by rows 5, 7 and 8), `schedule.py`, `runner.py` (the shard loop and the ownership assertion), `publish.py` (section 5.6)
+  - `backend/idhazh/gardener/__init__.py`, `cli.py` (the router - a copy of `backend/idhazh/telemetry/cli.py`'s shape), `tasks/__init__.py` (**a package, never a module called `tasks.py`**; a docstring and no sibling imports - **the directory this row creates**, and rows 5, 7, 8 and 9 each add their own modules to it), `registry.py` (new: `discover()`, section 5.5 - the one walk, sorted, memoised), `schedule.py`, `runner.py` (the shard loop, the discovery pre-flight and the ownership assertion), `publish.py` (section 5.6)
   - `backend/utilities/gardener_shards.py` (new: the standard-library-only shard reader the `plan` job runs before any install. **It opens `config/idhazh_gardener.json` and nothing else** - section 5.3)
   - `backend/idhazh/contracts/knobs/gardener.py` (section 5.2), `config/idhazh_gardener.json`, `backend/idhazh/config.py` (load, and every refusal in section 5.2)
   - `backend/idhazh/contracts/collection_prune.py` (widened per section 5.1, with its `version` stamp and one `changelog` line), `backend/idhazh/contracts/knobs/prune.py` (merges into `knobs/gardener.py`)
@@ -1489,7 +1520,10 @@ It mints `unit_id` and then `file_id` through `naming` (section 5.7), builds the
 
   | # | Option | Why rejected | What it would cost to take | Authority |
   | --- | --- | --- | --- | --- |
-  | 1 | Resolve the registry from config with `importlib` | Turns a config string into an import path and makes the set of tasks invisible in code | Zero; costs the closed-set property `SegmentLedger` and `ServerJob` both rely on | Fowler |
+  | 1 | Resolve the registry from config with `importlib` on a path the declaration names | **Still rejected, and the open list does not revive it.** An import path in data lets a config file name any module in the tree, which is the Guardrail #11 surface. Discovery walks one fixed package and binds by declared name; the declaration never names a module | Zero; costs the property that only `backend/idhazh/gardener/tasks/` can ever be imported as a task | Fowler; re-stated against the open list, Owner, 2026-09-26 |
+  | 6 | Keep a frozen tuple in `tasks/__init__.py`, built from explicit imports | Adding a task then edits a file every other task lives in, which is the join the open list removes, and the owner ruled the list must not be closed | Zero to take; costs the property that one pass is one module and one declaration and nothing shared | Owner, 2026-09-26 |
+  | 7 | Generate an index file from the directory and have the `plan` job read one file | It re-creates the single append point the split removes, and a generated index can disagree with the directory - so there is then a refusal to write, a test to keep, and a question about which one is right | Zero to take; costs the property that the directory is the list | Fowler, 2026-09-26 |
+  | 8 | Discover lazily - import only the modules this shard's names need | A duplicate name is then invisible, because only one of the two modules is ever imported, and the pre-flight cannot answer before the first task runs | Zero to take; costs the duplicate-name refusal and the nothing-changed guarantee at exit 2 | Carmack, 2026-09-26 |
   | 2 | One flat `idhazh gardener-<task>` verb per task | Sixteen top-level verbs; the `choices` tuple stops being readable | Zero; costs the CLI its shape | Fowler |
   | 3 | Three writer kinds for `already_landed` | A dry run selects nothing, so a delete-only verdict reads as "already landed" and publishes no record - exactly the reading the dry run exists to produce | Zero; costs every dry run its output | Fowler |
   | 4 | Compare blobs to decide whether a record landed | `duration_ms` and the parquet footer are not byte-stable across a retry, so it fires the un-retryable code on the happy path | Zero; costs the loop its first iteration | Fowler |
@@ -1506,7 +1540,7 @@ It mints `unit_id` and then `file_id` through `naming` (section 5.7), builds the
 - **Files touched:**
   - `backend/idhazh/gardener/tasks/` - one module per task: `seen.py`, `counterfactual_scores.py`, `traces.py`, `feed_health.py`, `host_fingerprint.py`, `scores.py`, `day_validations.py`, `trials.py`, `digest_fragments.py`, `telemetry_aggregate.py`, `visual_prune.py`
   - `docs/concepts/growing-reads.md` (one entry: the `trials` task's `git ls-tree HEAD state/` at depth one, with what it reads, how cost scales, and why a bounded input cannot answer it)
-  - `backend/idhazh/gardener/tasks/__init__.py` (eleven imports into the frozen tuple), `config/idhazh_gardener.json` (eleven blocks, each carrying the window moved from `config/idhazh.json` and naming the key it came from)
+  - `config/gardener/` (eleven declarations, one file a task, each carrying the window moved from `config/idhazh.json` and naming the key it came from). **No registry file is edited**: each module declares its own `TASKS` and discovery finds it
   - `config/idhazh.json` (the moved windows leave `observability` and `retention`; `collect.seen_window_days` and `lens_weights.window_days` stay)
   - `backend/idhazh/contracts/knobs/observability.py`, `retention.py` (the emptied keys; `refuse_windows_shorter_than` becomes the cross-file check at `config.load()`)
   - `backend/idhazh/retention.py` (the eleven prune functions leave), `backend/idhazh/stages/prune_state.py` (deleted), `backend/idhazh/telemetry/prune.py` (the body leaves; the verb forwards)
@@ -1616,8 +1650,8 @@ It mints `unit_id` and then `file_id` through `naming` (section 5.7), builds the
   - `backend/idhazh/contracts/store_index.py` (new; `RawDayIndex`, `CompactEntry`, `CompactIndex`, `Watermark` per section 5.9.13), `backend/idhazh/contracts/__init__.py` (the three new contracts join `CONTRACTS` and `__all__`)
   - `backend/idhazh/contracts/file_envelope.py` (`FileEnvelope` takes a `changelog` entry for `built_from` being filled for the first time. **Additive and back-compatible**: `built_from` is `int | None = None` from row 2, so a row-3-era envelope reads unchanged and needs no migration)
   - `backend/idhazh/ledger/paths.py` (`raw_index_path`, `compact_path` takes a `Period`, `compact_index_path`, `watermark_path`)
-  - `backend/idhazh/gardener/tasks/__init__.py` (**nine imports, nine registry entries: an index task and two compactions for each of three ledgers** - `gardener`, `visual-prune` and `feed-retirements`), `config/idhazh_gardener.json` (nine blocks, carrying `raw_index_keep_days`, `daily_keep_days`, `monthly_keep_months`, `max_periods_per_run` and `period` per section 5.9.5)
-  - `docs/concepts/growing-reads.md` (three entries: the index task's per-day listing, the compaction's per-period read, and `settle()` over a raw day tree - each with what it reads, how cost scales, and why a bounded input cannot answer it)
+  - `config/gardener/` (**nine declarations: an index task and two compactions for each of three ledgers** - `gardener`, `visual-prune` and `feed-retirements` - carrying `raw_index_keep_days`, `daily_keep_days`, `monthly_keep_months`, `max_periods_per_run`, `period` and, on each daily compaction, `after` per section 5.9.5). **No registry file is edited**: `index_day.py` and `compaction.py` each build their `TASKS` from the loaded policies of their kind, so a fourth ledger is three declarations and no Python
+  - `docs/concepts/growing-reads.md` (three entries: the daily compaction's per-day listing, the compaction's per-period read, and `settle()` over a raw day tree - each with what it reads, how cost scales, and why a bounded input cannot answer it)
   - `backend/idhazh/gardener/schedule.py` (**`index-<ledger>` and `compact-<ledger>-daily` are placed in the same shard, index first** - per decision 4)
   - `config/idhazh.json` (`run.settled_fold_after_days` leaves), `backend/idhazh/contracts/knobs/run.py`, `backend/idhazh/contracts/knobs/removed.py` (the removed-knob entry, without which a local config fails silently)
   - `backend/idhazh/cli.py` (the `compact` verb forwards with its removal condition), `.github/workflows/digest.yml` (the step named `Fold the days that can gain no more rows` is removed)
