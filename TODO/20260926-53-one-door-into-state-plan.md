@@ -61,7 +61,7 @@ One row is one pull request. **Seven: six that change code, and one that distill
 
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | The retired word `store` leaves | - | A | PENDING | - | - | - |
+| 1 | The retired word leaves | - | A | PENDING | - | - | - |
 | 2 | `ledger.py` becomes the package, and its docstring becomes a page | 1 | B | PENDING | - | - | - |
 | 3 | One `LedgerName` for one ledger | 2 | C | PENDING | - | - | - |
 | 4 | `paths.py` becomes `path_classes.py` | 3 | P | PENDING | - | - | - |
@@ -357,7 +357,7 @@ Two functions leave, every reader that reaches them is repointed to the new home
 
 ---
 
-## Row #1 - The retired word `store` leaves
+## Row #1 - The retired word leaves
 
 **This row is the one place in the repository allowed to spell the retired word, because it is the row that removes it.** The ratchet in the oracle allow-lists exactly this section and nothing else. Everywhere the old spelling is needed inside the row it sits in a fenced block, so a later sweep cannot quietly flatten the instructions into `X -> X`. **Two spellings cannot be fenced and the ratchet has to name them**: this section's own heading, and the row's title cell in the Status Reckoner, which has to read the same (found while executing, 2026-09-26).
 
@@ -453,7 +453,7 @@ A count in prose that nothing reads is a number that goes wrong quietly.
 - **Files touched:**
   - `backend/idhazh/ledger.py` -> `backend/idhazh/ledger/__init__.py`
   - `backend/tests/pipeline/test_day_shards.py`, `backend/tests/workflows/test_ledger_staging.py` - the string literals naming the old path. Find them by grep rather than by the line numbers an earlier draft quoted; the file moves under them
-  - `TODO/` - every plan-doc statement naming `backend/idhazh/ledger.py`, `TODO/20260924-50-idhazh-gardener-plan.md` included
+  - `TODO/20260924-50-idhazh-gardener-plan.md` and every other plan-doc statement naming `backend/idhazh/ledger.py`
   - `docs/concepts/glossary.md` - the `ledger` and `segment` rows repoint to `ledger/__init__.py` and `ledger/filenames.py`
   - `docs/architecture/contracts/` - the new page carrying the module docstring
 - **Acceptance gates:** `ruff check .`, `mypy backend`, the changed-file selector locally; full `pytest backend/tests` on CI.
@@ -506,7 +506,7 @@ A count in prose that nothing reads is a number that goes wrong quietly.
   - `backend/idhazh/paths.py` -> `backend/idhazh/path_classes.py`
   - `backend/idhazh/cli.py` (the `refresh_paths` call site)
   - `backend/idhazh/ledger/__init__.py` - the `SEGMENT_NAME` comment reads "Public because `idhazh.paths` answers whether a committed path has exactly one writer, and it has to ask this pattern rather than carry a copy of it." It names the module this row renames, so it moves with it. That comment is the written form of section 4.5, and a rename that leaves it pointing at a module that no longer exists is how the rule gets quietly dropped
-  - `TODO/` - every plan-doc statement naming `backend/idhazh/paths.py`, for the same reason row 2 sweeps its own
+  - `TODO/20260924-50-idhazh-gardener-plan.md` and every other plan-doc statement naming `backend/idhazh/paths.py`, for the same reason row 2 sweeps its own. Plan 50 asked for this by name (handover, 2026-09-26): its text treats those statements as instruction, and a pointer at a module that no longer exists is one a worker follows into nothing
   - `backend/tests/contracts/test_derived_paths.py`, `backend/tests/contracts/test_path_classes.py`, and the other test files that `from idhazh import paths` (`retention/test_union_safe_repeats.py`, `workflows/_harness.py`, `workflows/test_daily_commit_steps.py`, `workflows/test_staged_paths.py`, `workflows/test_worker_ledgers.py`)
 - **Acceptance gates:** `ruff check .`, `mypy backend`, the changed-file selector locally; full `pytest backend/tests` on CI.
 - **Oracle:** `pytest --collect-only -q` byte-identical; mypy names any importer left on the old name. `ledger.py` is untouched - it never imports `idhazh.paths`.
@@ -572,7 +572,7 @@ A count in prose that nothing reads is a number that goes wrong quietly.
   4. **`day_shard_path` / `day_shard_relpath` parity**: for every `DAY_TREES` member at a fixed `(date, run_id, attempt, job, shard)`, the new composition `paths.path(...) / segment_name(...)` equals the old inline output. This is the one write-path body rewritten rather than moved, so no other oracle covers it.
   5. **No load-time cycle**: an AST assertion that no `ledger/*` submodule imports `day_shards` at module scope, PLUS two separate fresh interpreters - `subprocess.run([sys.executable, "-c", "import idhazh.ledger"])` and `subprocess.run([sys.executable, "-c", "import idhazh.day_shards"])`, each with `PYTHONPATH=backend` and each asserting return code zero (capture stderr so a failure is readable). The `day_shards`-first process is the load-bearing probe: it forces `day_shards`'s module-top import against a cold package. A same-process test is worthless - the suite has already imported both.
   6. **Facade does not load pyarrow**: a fresh interpreter with `PYTHONPATH=backend` runs `from idhazh import ledger` and, inside the `-c` string, `sys.exit(1)` if `pyarrow` or `idhazh.ledger.parquet` is in `sys.modules` - the parent cannot see the child's modules. Green now, load-bearing the day plan 50 adds an eager parquet import.
-  7. **The ledger owns every name** (section 4.5): `SEGMENT_NAME`, `SEGMENT_SUFFIX`, `REPAIR_NAME` and `REPAIR_STAMP` have no importer outside `backend/idhazh/ledger/` except `path_classes.py`, and no module outside the package builds a `state/` filename by joining a run id, attempt, job or shard.
+  7. **The ledger owns every name** (section 4.5): `SEGMENT_NAME`, `SEGMENT_SUFFIX`, `REPAIR_NAME` and `REPAIR_STAMP` have no importer outside `backend/idhazh/ledger/` except `path_classes.py`, and no module outside the package builds a `state/` filename by joining a run id, attempt, job or shard. **Every `write_atomic` destination under `state/` comes from a `ledger` path builder** rather than from a path the caller assembled - plan 50 asked for a write-site sweep here (handover, 2026-09-26), and this is the half of it that is this plan's question. The other half is not: **how** a file is written - whether a caller read-modify-writes a flat JSON, as `stages/count_verdicts.py` does - is write shape, not name ownership, and no structural row can fix it without changing behaviour (ESCALATE trigger 1). It belongs to plan 50, which owns the `persist` door and the envelope that makes a flat rewrite unnecessary.
 - **Decisions:**
 
   | # | Decision | Authority |
