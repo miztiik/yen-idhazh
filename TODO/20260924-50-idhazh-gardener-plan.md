@@ -981,7 +981,7 @@ A shard runs several tasks and exits with the **worst** code, and worst is not n
 
 #### 5.9.10 The true task count
 
-**Counted 2026-09-26, and counted rather than fixed.** Twenty registry entries, nineteen in the matrix and seventeen due on an ordinary day, until row 9. Eleven retention tasks, two GitHub collection tasks, two index tasks, four compactions - a daily and a monthly for each of two ledgers - and `corpus-squash`, which has its own job and so is not in the matrix. The two monthlies are not due on an ordinary day. **Seventeen over five shards is 3.4 tasks a shard.**
+**Counted 2026-09-26, and counted rather than fixed.** Twenty registry entries, nineteen in the matrix and seventeen due on an ordinary day, until row 9. Eleven retention tasks, two GitHub collection tasks, two index tasks, four compactions - a daily and a monthly for each of two ledgers - and `corpus-squash-history`, which has its own job and so is not in the matrix. The two monthlies are not due on an ordinary day. **Seventeen over five shards is 3.4 tasks a shard.**
 
 **Rows 9 and 10 take these to 32, 31 and 25**, which is **5.0 tasks a shard**, because each of the four ledgers they migrate gains an index task and two compactions. **Row 8's timeout derivation is stated against 5.0, not 3.4**, and section 3's diagram says 3-4 for the state of the tree at row 8.
 
@@ -1352,7 +1352,6 @@ It mints `unit_id` and then `file_id` through `naming` (section 5.7), builds the
   | 2 | `corpus/corpus.jsonl`'s row cap does not move here. It is a count bound applied by `corpus.roll()` at harvest time | Owner, 2026-09-24 |
   | 3 | **The squash is not a matrix task.** It rewrites every commit, force-pushes, and needs a full clone with history - none of which works in a depth-1 sparse-checkout matrix runner. It gets its own verb, its own config block and its own job | Fowler |
   | 4 | The force push keeps `--force`, not `--force-with-lease`: the rebase rewrote every commit a lease would name | `backend/utilities/push_rewritten_history.py`, carried over |
-  | 5 | **The task is `corpus-squash`, not `squash-history` and not `corpus-prune`.** `squash-history` said what it does to git and not what it is for, so nothing in the name connected it to the corpus that causes it. `corpus-prune` was the owner's first suggestion and it collides: **`prune` already means deleting rows from a ledger** everywhere in this repository - `prune.yml`, `prune_state.py`, `CollectionPruneRow`, the eleven prune passes - and this task deletes no row. It collapses commits. `corpus.roll()` is the thing that prunes corpus rows, and two tasks reading as the same verb is how somebody eventually runs the wrong one. Its task kind in section 5.3 is **Corpus** for the same reason: `History` named the mechanism and told a reader nothing about why it exists | Owner, 2026-09-26. CLAUDE.md section 0b: a word earns a name when its ordinary English meaning is what the thing does |
   | 5 | The tip-moved refusal is carried over verbatim including its exit code. Changing it is ESCALATE trigger 4 | CLAUDE.md section 8 |
   | 6 | `corpus/corpus.jsonl` stays JSON lines. It is the file a trainer loads, and TRL, Unsloth, Axolotl and LLaMA-Factory all read that shape | `backend/tests/test_corpus_contract.py` |
 
@@ -1455,7 +1454,6 @@ It mints `unit_id` and then `file_id` through `naming` (section 5.7), builds the
   | 3 | The runner catches per task, writes that task's row with `stopped_because: failed`, continues, and exits with the worst code. `fail-fast: false` protected twelve tasks from one failure when each had a job; sharding buys that back inside the job | Fowler |
   | 4 | `needs: [plan, run-tasks]` on the history job is the only ordering, and it is not one task depending on another: it is everything else being pushed before history is rewritten. **`if: always() && ... (success or skipped)`**, because a skipped `needs` skips the dependant and the force-push job would never run on an idle day | Owner, 2026-09-24 |
   | 5 | The workflow names no task. The matrix comes from the registry through the dueness reader, so adding a task is a module and a config block, never a workflow edit | Owner, 2026-09-24 |
-  | 6 | **No workflow, no test and no document states how many tasks there are.** The registry is the only answer to "how many", and every count in this plan carries the date it was taken. A number frozen into a test is a test that fails the day somebody adds the twelfth pass, and it fails for a reason that has nothing to do with what it was checking | Owner, 2026-09-26 |
   | 6 | **The header records that a `GITHUB_TOKEN` push triggers no workflow**, and a test asserts the `run-tasks` job uses the default token and sets no personal access token. Five pushes a day that triggered `ci.yml` would be five full CI runs a day; that recursion guard is the only thing between the two outcomes and it is invisible in the file that depends on it | Carmack |
   | 7 | **`pip install -e .[parquet]` on every `run-tasks` shard, and `cache-suffix: parquet`.** Every shard writes its own record through the ledger door (section 5.6), so every shard needs the engine - an earlier draft made the extra a matrix field for the four tasks that read parquet, which missed the record. `setup-python` keys its cache on the OS, the interpreter and the dependency file and **never on the extras**, so without a suffix this workflow and `digest.yml` share one entry whose contents depend on which ran first | Carmack, 2026-09-25 |
   | 8 | The force-push window derivation in `docs/reference/github-actions.md` is restated in this row, **after** the install measurement row 2 owes has landed. The chain in front of the push grows by the plan job and the `run-tasks` wave | Carmack. Guardrail #4: the change that makes a sentence false is the change that fixes it |
@@ -1492,10 +1490,18 @@ It mints `unit_id` and then `file_id` through `naming` (section 5.7), builds the
   - `backend/idhazh/contracts/ledger_name.py` (`LedgerName` gains nothing - plan 53 row 3 already minted every member. **This row's contract change is the arrow mapping and the envelope, not the vocabulary**)
   - `config/idhazh_gardener.json` (an index block and two compaction blocks for each of the three ledgers), `backend/idhazh/gardener/tasks/__init__.py`
   - `backend/idhazh/ledger.py`, `backend/idhazh/day_shards.py` (the read side for these three moves to `ledger/settle.py`)
-  - `frontend/src/lib/server/payload.ts`, `frontend/src/lib/server/host-fingerprint.ts`, `frontend/src/lib/server/machine-counters.ts`, `frontend/src/lib/server/model-work.ts` (**see the escalation below**)
+  - `frontend/src/lib/server/parquet.ts` (**new: the one build-time parquet reader**, see the settled escalation below), `frontend/src/lib/server/host-fingerprint.ts`, `frontend/src/lib/server/machine-counters.ts`, `frontend/src/lib/server/model-work.ts` (the three that move onto it)
   - `.github/workflows/digest.yml` (`plan`, `work` and `assemble` install `.[parquet]`)
   - `backend/tests/ledger/test_migrate_to_parquet.py`, `backend/tests/test_ledger.py`, `backend/tests/telemetry/`, `frontend/tests/`
-- **ESCALATE before the first commit.** Four build-time readers under `frontend/src/lib/server/` open these ledgers as CSV and serve every panel the console has. Moving the ledgers breaks all four, and the answer decides a plan rather than a row: a build-time parquet reader, a dual write for one release, or holding each reader until its route moves to the browser. **This is Level 5 and it is settled before any code is written.**
+- **The escalation, settled 2026-09-26. It is no longer a blocker.** Three build-time readers under `frontend/src/lib/server/` open these ledgers as CSV: `host-fingerprint.ts` reads `host-fingerprint`, `machine-counters.ts` reads both `host-fingerprint` and `item-health`, and `model-work.ts` reads `scores`. **Measured 2026-09-26 by the `state/` paths each module actually opens** - an earlier count said four and then seven, and both were wrong: `payload.ts` reads `day-metrics` and `feed-health` and touches none of these, `run-timeline.ts` opens no `state/` path at all, and `similarity-ledger.ts` matched only because it names `host-fingerprint.ts` in a comment.
+
+  **The answer is one build-time parquet reader, `frontend/src/lib/server/parquet.ts`, and the three readers change their source rather than their shape.** Its declaring line carries its removal condition: **delete when plan 52 removes the last projection**, because all three readers exist only to write projections that plan 52 deletes. The engine is the one plan 51 already installs, so this costs build time and no new dependency. It mirrors the backend's single-engine rule in the place that rule belongs - one module imports the reader, a test proves it is one, and the swap is a one-file change.
+
+  | # | Rejected | Why | What it would cost |
+  | --- | --- | --- | --- |
+  | 1 | Dual-write CSV for one release | Two writers of one fact, and **"one release" is a promise nothing enforces**. The same defect Fowler rejected in row 2's alternative 3, bounded only by an intention | Double the bytes for the three largest ledgers, for as long as somebody forgets |
+  | 2 | Hold each reader until its route moves to the browser | **It breaks plan 51 row 3**, which needs these ledgers published as parquet. It inverts the dependency and parks rows 9 and 10 behind seventeen pull requests | Zero code; costs the whole console workstream its ordering |
+  | 3 | Move `host-fingerprint` now and defer the other two | Plan 51 row 3 names all four ledgers | Splits this row for no gain |
 - **Acceptance gates:** local `ruff check .`, `mypy backend`, `pytest backend/tests/ledger backend/tests/telemetry backend/tests/workflows -q`, `npm --prefix frontend run test:changed -- --list` then the selected checks, and the browser smoke on every console route. CI runs the full suite.
 - **Oracle:** **migration parity, per ledger.** Every row in each committed CSV tree reads back from the parquet the migration wrote, field for field, no row lost and none invented, and **the column set is identical** - 122, 36 and 31, with `UNREAD_CELLS` still naming 39 of the first. It cannot settle whether the browser can query them; plan 51 does that.
 - **Decisions:**
@@ -1518,6 +1524,30 @@ It mints `unit_id` and then `file_id` through `naming` (section 5.7), builds the
 ---
 
 ### Row #10 - `span-rollup` becomes parquet
+
+> **HELD, 2026-09-26. Do not start this row.** Susan was asked which panels a per-item sub-step timing could feed, and the counts she took say this ledger should be **deleted rather than migrated**. Migrating it would move 54,577 bytes of which most is already held elsewhere. The owner's decision is recorded below; until it lands, this row is on hold and nothing here is authoritative.
+>
+> **What was measured over the whole committed ledger - 72 files, 700 rows, 54,577 bytes:**
+>
+> | Span | Rows | Spans opened | Mean per span | Already on item-health? |
+> | --- | --- | --- | --- | --- |
+> | `item` | 175 | 6,704 | 239,211 ms | **yes** - `item_total_ms`, `shard_item_count`, non-empty on 220 of 220 sampled |
+> | `render_prompt` | 175 | 6,390 | **7.25 ms** | no |
+> | `parse_reply` | 175 | 3,175 | **1.47 ms** | no |
+> | `tag` | 175 | 3,489 | **0.93 ms** | no |
+> | `robots` | **0** | **0** | - | **yes** - `robots_ms`, non-empty on 220 of 220. **This enum member has never written a row** |
+>
+> **The three genuinely unique spans are 0.0034 percent of a run's clock.** No chart type in plan 51 section 2.6 can draw a 0.93 ms mean: `partsOfOne` gives it a sub-pixel segment, which is the exact failure that demoted this panel from a chart on 2026-09-20.
+>
+> **`unattributed_ms` cannot be acted on.** Across all 175 committed rows its whole lifetime spread is **287 ms** - min 331, median 467, max 618 - which is 0.004 to 0.008 percent of a shard's wall clock. No threshold is nameable for a number that has never moved, and publishing one would be a guess dressed as an instrument.
+>
+> **Two corrections to statements this plan and the contract made.** First, the sentence "the one column that can catch a regression in a stage nobody named" belongs to **`stage_gap_ms`** on item-health, not to `unattributed_ms`. They are different residuals - inside an item against outside every item - and the project has a third, `shardResidualMs` in `frontend/src/lib/server/run-timeline.ts`. Second, **`run-timeline.ts` does not read this ledger**; it only cites it in a docstring. The one real reader is the printed four-figure strip in `RunTimelinePanel.svelte`.
+>
+> **The disjointness test is structurally blind and that is why none of this was caught.** `backend/tests/contracts/test_span_rollup.py` compares the strings `count`, `total_ms` and `unattributed_ms` against every ledger's column names. Because the rollup names its measurement generically it can never collide with anything, so the test is green while `robots` and `item` are duplicated. **A test that compares column names cannot see a semantic duplicate**, and this one needs rewriting whichever way the decision goes.
+>
+> **Susan's ruling, 2026-09-26.** Delete `robots` and `item` from `RollupSpan`; delete `unattributed_ms`; **refuse** `tag_ms`, `render_prompt_ms` and `parse_reply_ms` as item-health columns on gate 7 - every column names a reader or sits in `UNREAD_CELLS`, and no chart can draw a 0.93 ms mean, so they cannot honestly name one; then delete the ledger, because nothing is left in it. Replace the printed strip with the run-timeline residual figures already on the same page, which fail fewer sufficiency checks than the strip does - it fails three of four.
+>
+> **What the reader loses, named, because a veto owes that (CLAUDE.md section 14):** the only measurement of how long building the JSON schema from the Pydantic model takes. That is a real question - it is the one pipeline cost that scales with the contract rather than with the article, so it is the one number that would notice a schema that grew a hundred fields. **Susan's replacement is a ceiling assertion on `render_prompt` in a test**, which goes red the day schema-building grows, where a column nobody draws would notice it never. Also lost: the identity `item.total_ms + unattributed_ms = wall clock`. Measured, that reconciliation has never found anything in 175 shards.
 
 - **Scope:** `state/span-rollup/` moves through the door, producer and consumer. Eight columns, one writer, two build-time console readers and three backend readers.
 
@@ -1558,7 +1588,32 @@ It mints `unit_id` and then `file_id` through `naming` (section 5.7), builds the
 
 ## Open questions, handed to plan 52
 
-Both were found here, verified as out of scope for this plan, and moved whole into [`20260926-52-fifty-panels-move-and-six-projections-go-plan.md`](20260926-52-fifty-panels-move-and-six-projections-go-plan.md) so that plan starts with them asked rather than discovering them. They are listed here in one line each so a reader of this plan knows they exist and where they went.
+**Three of these are now measured rather than open, and one is new.** What is left is a ruling, not a survey.
 
-- **Is `scores` named for what it measures?** If it scores the feed rather than the item, a migration does not fix it.
-- **Does `span-rollup` belong inside `item-health`?** Measured 2026-09-25: merging any pair saves 24 bytes, so this is a modelling question and never a size one.
+### `scores` is named for nothing, and it duplicates nine facts item-health already holds
+
+**Measured 2026-09-26.** `EvalRow` is 35 data columns; `ItemHealthRow` is 122. Nine facts appear on both:
+
+| On `scores` | On `item-health` | Note |
+| --- | --- | --- |
+| `date`, `run_id`, `item_id`, `url_key`, `vertical`, `model_id` | same six | Identity. A join needs some of these, so not all six are waste |
+| `source_word_count` | `source_words` | **Two spellings of one fact** |
+| `summary_word_count` | `summary_words` | **Two spellings of one fact** |
+| `source_seen_word_count` | `source_words_before_cap` | **Two spellings of one fact**, and the names disagree about which end of the cap they name |
+
+**The name says nothing about what is scored.** Every column is about one summary of one item - `hhem`, `compression`, `extractiveness`, `verbatim_run`, `coherence`, `semantic_coverage`, `band`. There is no `feed_id` and no `endpoint_key`, so the earlier worry that it might be scoring the feed is answered: it is not. The name is not wrong, it is empty. **`summary-quality` says what it holds**, and it is also what a content-quality judge would ask for by name.
+
+**Merging the row into item-health is the part that does not follow.** They share a grain modulo `attempt`, but not a writer or a clock: `scores` is written by the faithfulness scorer, which runs after the census row is sealed and can re-run on its own with a new `scorer_version` and a new `attempt`. Merging means a re-score rewrites a census row, and a re-score would have to carry 122 columns to say one thing. **Fixing the three double-spellings and dropping what a join can reach costs nothing and gets most of the benefit.**
+
+**What is needed to decide the widening.** A content-quality judge does not exist yet, so nobody can say which columns it wants. The cheap move is to name the judge's inputs first and widen once, rather than widen twice.
+
+### `frontend/src/lib/server/similarity-ledger.ts` is a second name for a ledger that already has one
+
+**Measured 2026-09-26: it opens `state/content-similarity-judge/fitted-thresholds/` and `state/content-similarity-judge/score-distribution.json`, and nothing else.** So it is the content-similarity-judge reader, named for neither the judge nor the ledger. `similarity-ledger` is the kind of second name CLAUDE.md section 0b deletes rather than replaces, and a reader looking for the judge's build-time reader will not find it under this name.
+
+**Its location is correct and is not the defect.** `$lib/server/` is what stops SvelteKit bundling a build-time read into a browser payload, which is the same reason `host-fingerprint.ts` sits there. It moves to the browser when plan 52 moves `/console/judgement`, and not before. **The rename is a one-file change and belongs in plan 53 row 1**, beside the other name corrections. Its sibling `similarity-holdout.ts` reads `holdout-pairs` and `merge-line-holdout-scores` from the same tree and has the same problem.
+
+### The two that stay open
+
+- **Does `span-rollup` survive at all?** Row 10 carries the measurements and Susan's ruling. It is a deletion decision now, not a migration one.
+- **Does `scores` become `summary-quality`?** A directory rename is a data migration, so it is the owner's call rather than a tidy.
