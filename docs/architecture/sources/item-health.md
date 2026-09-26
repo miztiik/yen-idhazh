@@ -86,7 +86,7 @@ Three files carry one item-health row, and each owns one thing:
 | --- | --- |
 | `backend/idhazh/contracts/item_health.py` | the shape: field order, types, enums, the validator, and `csv_columns` |
 | `ItemHealthRow` | the contract. Every column is declared here first (Guardrail #3) |
-| `backend/idhazh/ledger.py` | the header guard, `write_segment`, and the writer file path |
+| `backend/idhazh/ledger/__init__.py` | the header guard, `write_segment`, and the writer file path |
 | `backend/idhazh/day_shards.py` | the walk over a day, and the settlement a reader gets |
 
 **One definition of the column list.** `ItemHealthRow.csv_columns` returns

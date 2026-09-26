@@ -289,7 +289,7 @@ and the capped fine-tuning window. Measured 2026-09-13 on an Intel Core i7-1265U
 `tests/fixtures/reference-dataset/`.
 
 **Six of these carry the word `Cover:` on the line that declares them** -
-`ledger.py` twice, `corpus.py` twice, `fingerprint.py` and `contracts/base.py`.
+`ledger/__init__.py` twice, `corpus.py` twice, `fingerprint.py` and `contracts/base.py`.
 The rest declare it in the sentence the docstring opens with, or in the signature
 itself, and either is enough. What is not enough is nothing.
 

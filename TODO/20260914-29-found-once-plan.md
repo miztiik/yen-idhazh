@@ -35,7 +35,7 @@ required reading until a row sends you to it.**
 | How a candidate is scored before the day is cut | `backend/idhazh/rank.py` - `recency_bonus`, `authority`, `plan_vertical` | `docs/architecture/sources/freshness.md` |
 | The order the published page draws | `backend/idhazh/assemble.py` - `_strength_order`, `leading_stories` | `docs/architecture/publishing/layout.md` |
 | Every knob | `backend/idhazh/contracts/knobs/` then `config/idhazh.json` | `docs/concepts/config.md` |
-| A feed's record, its rest and its retirement | `backend/idhazh/telemetry/source_health.py`, `backend/idhazh/ledger.py`, `backend/idhazh/contracts/feed_retirement.py` | `docs/architecture/sources/i-feed.md` |
+| A feed's record, its rest and its retirement | `backend/idhazh/telemetry/source_health.py`, `backend/idhazh/ledger/__init__.py`, `backend/idhazh/contracts/feed_retirement.py` | `docs/architecture/sources/i-feed.md` |
 | The operator console | `frontend/src/routes/console/` - `voices/` owns sources, `machine/` the runner, `judgement/` the evals | `docs/architecture/publishing/console.md`, `docs/concepts/console-design.md` |
 | The reader's card | `frontend/src/lib/components/DigestItem.svelte`, `ItemMeta.svelte` | `docs/architecture/publishing/layout.md` |
 
