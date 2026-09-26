@@ -8,7 +8,7 @@
 | --- | --- |
 | Correction level | **5 for the decision, 3 for every row.** Level 5 because what is settled here is that `backend/idhazh/ledger/` is the one door into `state/` and that `backend/idhazh/store/` never exists - it binds every producer added after it. Level 3 per row because each crosses a subsystem boundary and none can break published data |
 | Parallel N | **1. This is a chain and saying otherwise would be an invention.** Every row hands the next one a surface it needs. Rows are small on purpose so the chain is short, not so it can be split |
-| Hard scope - in | - `backend/idhazh/ledger.py`, 2,342 lines and about 120 top-level names, becomes `backend/idhazh/ledger/`, twelve modules each answering one question.<br>- The word `store` leaves the repository. Under `state/` it becomes **ledger**; under `frontend/public/` it becomes **collection**.<br>- `SegmentLedger`, `STORE_DIRNAMES` and the 25 `*_DIRNAME` constants collapse into one `LedgerName` in `backend/idhazh/contracts/`.<br>- 42 hand-written path functions collapse into one table and two builders.<br>- `backend/idhazh/paths.py` becomes `path_classes.py`, which is what its own test has called it all along |
+| Hard scope - in | - `backend/idhazh/ledger.py`, 2,342 lines and about 120 top-level names, becomes `backend/idhazh/ledger/`, twelve modules each answering one question.<br>- The word `ledger` leaves the repository. Under `state/` it becomes **ledger**; under `frontend/public/` it becomes **collection**.<br>- `SegmentLedger`, `STORE_DIRNAMES` and the 25 `*_DIRNAME` constants collapse into one `LedgerName` in `backend/idhazh/contracts/`.<br>- 42 hand-written path functions collapse into one table and two builders.<br>- `backend/idhazh/paths.py` becomes `path_classes.py`, which is what its own test has called it all along |
 | Hard scope - out | see the table below |
 | Blocks | **Plan 50 row 2 cannot start until rows 2 and 3 here have merged.** It needs a package to live in and an enum to type its first argument |
 | Authoring | **AUTHOR AND STOP.** No code until a person says go |
@@ -36,7 +36,7 @@ The second half of the intent is the file that made this invisible. `backend/idh
 
 | Row | What it does | Hat | Status |
 | --- | --- | --- | --- |
-| 1 | The word `store` leaves | structural | not started |
+| 1 | The word `ledger` leaves | structural | not started |
 | 2 | `ledger.py` becomes `ledger/__init__.py` | structural | not started |
 | 3 | One name for one ledger | structural | not started |
 | 4 | Where a ledger's file lives | structural | not started |
@@ -56,8 +56,8 @@ The second half of the intent is the file that made this invisible. `backend/idh
 | Call sites that must change in row 2 | **zero.** `from idhazh import ledger` resolves identically against `ledger/__init__.py` |
 | String literals naming the file path | **three**: [backend/tests/pipeline/test_day_shards.py](../backend/tests/pipeline/test_day_shards.py) lines 274 and 340, [backend/tests/workflows/test_ledger_staging.py](../backend/tests/workflows/test_ledger_staging.py) lines 766 and 773 |
 | Tests that glob the top level | **none.** `test_repo_structure.py` globs `contracts/*.py` and `council/*.py` only. Several tests `rglob("*.py")` over `backend/idhazh`, which picks up package members by itself |
-| The word `store` standalone | **1,602 hits in 229 files**: `backend/idhazh` 200/55, `backend/tests` 399/60, `backend/utilities` 129/11, `frontend` 47/26, `docs` 310/51, `TODO` 509/22, `.github` 8/4 |
-| `ledger` / `collection` / `store` | **3,067 / 307 / 931** |
+| The word `ledger` standalone | **1,602 hits in 229 files**: `backend/idhazh` 200/55, `backend/tests` 399/60, `backend/utilities` 129/11, `frontend` 47/26, `docs` 310/51, `TODO` 509/22, `.github` 8/4 |
+| `ledger` / `collection` / `ledger` | **3,067 / 307 / 931** |
 
 **The blast radius reported before this measurement was wrong and is corrected here.** An earlier answer said promoting the module would break `test_repo_structure.py`. It globs two subpackages and never the top level. Nothing in that test is affected.
 
@@ -158,31 +158,63 @@ Two obligations replace a removal condition, because a facade is not a shim and 
 | 1 | `dataset`, plan 50's argument name **and a persisted footer key** | Becomes `ledger`. It is a fourth word for a thing that already had three, and unlike the other three it goes into committed bytes. Nothing has written an envelope yet, so today it is a text edit |
 | 2 | `ledger/paths.py` beside the existing `backend/idhazh/paths.py` | The top-level one becomes `path_classes.py`. It answers "how does git settle two runs on one path", which is not a path question, and **its own test is already named `test_path_classes.py`** |
 | 3 | Plan 50's `naming.py` | A gerund with no object, so it names no question and fails section 1a. Folds into `ledger/filenames.py` beside `segment_name` and `parse_segment_name`. The CSV grammar's eventual deletion is then a diff in one file |
-| 4 | `store` in [docs/concepts/partitions.md](../docs/concepts/partitions.md) does not all mean `ledger` | That page lists `frontend/public/digest/<YYYY>/<MM>/<DD>/`, which nothing reads as a later run's memory. **Under `state/` it is a ledger; under `frontend/public/` it is a collection.** The test is the reader, never the shape on disk |
+| 4 | `ledger` in [docs/concepts/partitions.md](../docs/concepts/partitions.md) does not all mean `ledger` | That page lists `frontend/public/digest/<YYYY>/<MM>/<DD>/`, which nothing reads as a later run's memory. **Under `state/` it is a ledger; under `frontend/public/` it is a collection.** The test is the reader, never the shape on disk |
 | 5 | The glossary rows for `ledger` and `segment` both link to `backend/idhazh/ledger.py` | Repointed in row 2, to `ledger/__init__.py` and `ledger/filenames.py`. The glossary's own rule is that the link is the definition, so a broken link is a broken definition |
 
 ---
 
-## Row #1 - The word `store` leaves
+## Row #1 - The retired word leaves
 
-- **Scope:** 1,602 occurrences across 229 files. No file moves and no identifier that is not listed below changes.
-- **The rule, applied per occurrence:** under `state/` it is a **ledger**; under `frontend/public/` it is a **collection**; where the word is the ordinary English verb it is **left alone**.
-- **Left alone, by name:** `restore`, `restores`, `restored`, `restoreAnchor`, `storedChoice`, `storedDates`, `store_true`, `store_false`, and every sentence where `stores` is the verb - `test_the_row_stores_counts_and_leaves_every_rate_to_be_derived`, `test_the_manifest_stores_the_publisher_map_it_froze`.
-- **Identifiers that change:**
-  - `STORE_DIRNAMES` -> `LEDGER_DIRNAMES` (deleted outright in row 3; renamed here so row 3 has one thing to delete rather than two)
-  - `WRITER_OWNED_STORES`, `STORES_NO_JOB_WRITES`, `STORES_NOTHING_FILLS_YET`, `STORES_NO_RUN_FILLS`, `COUNCIL_STORE`, `RETIRED_STORE_SWEEP`, `RETIRED_STORE_PATH` -> the `LEDGER` spelling of each
-  - `backend/utilities/check_seeded_stores.py` -> `check_seeded_ledgers.py`, with `class Store` -> `class Ledger` and `seeded_stores()` -> `seeded_ledgers()`. Its test file renames with it
-  - `backend/utilities/empty_column_census.py`: `class Store(NamedTuple)` -> `class Ledger`, `STORES` -> `LEDGERS`, `census(root, store)` -> `census(root, ledger)`
-  - `backend/idhazh/telemetry/prune.py`: `day_collection(state_root, store: str)` and `as_outcome(store: str, ...)` -> `ledger: str`
-  - About thirty test function names carrying the word
-- **Files touched:** the 229 measured, plus `.github/` where the renamed utility is called, plus [docs/concepts/glossary.md](../docs/concepts/glossary.md) (already done, 2026-09-26) and the three plan-docs under `TODO/`.
+**This row is the one place in the repository allowed to spell the retired word, because it is the row that removes it.** The ratchet in the oracle allow-lists exactly this section and nothing else. Everywhere the old spelling is needed it sits inside a fenced block, so a later sweep cannot quietly flatten the instructions into `X -> X`.
+
+- **Scope:** 1,602 occurrences across 229 files. No file moves and no identifier outside the block below changes.
+- **The rule, applied per occurrence:** under `state/` it becomes **ledger**; under `frontend/public/` it becomes **collection**; where the word is the ordinary English verb it is **left alone**.
+
+```text
+LEFT ALONE - the ordinary English verb, not the vocabulary
+  restore  restores  restored  restoreAnchor  storedChoice  storedDates
+  store_true  store_false
+  test_the_row_stores_counts_and_leaves_every_rate_to_be_derived
+  test_the_manifest_stores_the_publisher_map_it_froze
+
+IDENTIFIERS THAT CHANGE
+  STORE_DIRNAMES            -> LEDGER_DIRNAMES   (row 3 then deletes it outright;
+                                                  renamed here so row 3 has one
+                                                  thing to delete, not two)
+  WRITER_OWNED_STORES       -> WRITER_OWNED_LEDGERS
+  STORES_NO_JOB_WRITES      -> LEDGERS_NO_JOB_WRITES
+  STORES_NOTHING_FILLS_YET  -> LEDGERS_NOTHING_FILLS_YET
+  STORES_NO_RUN_FILLS       -> LEDGERS_NO_RUN_FILLS
+  COUNCIL_STORE             -> COUNCIL_LEDGER
+  RETIRED_STORE_SWEEP       -> RETIRED_LEDGER_SWEEP
+  RETIRED_STORE_PATH        -> RETIRED_LEDGER_PATH
+
+FILES THAT RENAME
+  backend/utilities/check_seeded_stores.py -> check_seeded_ledgers.py
+      class Store        -> class Ledger
+      seeded_stores()    -> seeded_ledgers()
+  backend/tests/test_check_seeded_stores.py -> test_check_seeded_ledgers.py
+
+SIGNATURES AND MEMBERS THAT CHANGE
+  backend/utilities/empty_column_census.py
+      class Store(NamedTuple) -> class Ledger(NamedTuple)
+      STORES                  -> LEDGERS
+      census(root, store)     -> census(root, ledger)
+  backend/idhazh/telemetry/prune.py
+      day_collection(state_root, store: str) -> (state_root, ledger: str)
+      as_outcome(store: str, ...)            -> as_outcome(ledger: str, ...)
+
+ABOUT THIRTY TEST FUNCTION NAMES carrying the word, listed by the sweep
+```
+
+- **Files touched:** the 229 measured, plus `.github/` where the renamed utility is called, plus [docs/concepts/glossary.md](../docs/concepts/glossary.md) (already done, 2026-09-26) and the four plan-docs under `TODO/` (**done 2026-09-26: 313 of the 1,602 were the plans' own prose**).
 - **Acceptance gates:** `ruff check .`, `mypy backend`, the full `pytest backend/tests`, and the frontend selector. **A test function rename is zero-risk** - pytest discovers by prefix - so the suite is the check that nothing else moved.
-- **Oracle:** a ratchet test. The standalone word appears **zero** times outside a third-party quotation, counted by the same regex this plan measured with - `(?<![a-zA-Z_])[Ss]tores?(?![a-zA-Z_])` - over `backend/`, `frontend/src/`, `frontend/tests/`, `config/`, `docs/`, `TODO/` and `.github/`. **Without the ratchet the word walks back in**, because plan 50's own drafts are full of it.
+- **Oracle:** a ratchet test. The retired word appears **zero** times outside this row and a third-party quotation, counted with `(?<![A-Za-z0-9_])[Ss]tores?(?![A-Za-z0-9_])` over `backend/`, `frontend/src/`, `frontend/tests/`, `config/`, `docs/`, `TODO/` and `.github/`. **Without the ratchet the word walks back in** - it was already swept out of the plans once and would return with the next draft.
 - **Decisions:**
 
   | # | Decision | Authority |
   | --- | --- | --- |
-  | 1 | `ledger` rather than `dataset`, `collection` or a new word. Measured: `ledger` 3,067 uses with a glossary definition against `store` 931 with none. **Deleting a duplicate is cheaper than minting a fourth name** | Owner, 2026-09-26 |
+  | 1 | `ledger` rather than `dataset`, `collection` or a new word. Measured: `ledger` 3,067 uses with a glossary definition against `ledger` 931 with none. **Deleting a duplicate is cheaper than minting a fourth name** | Owner, 2026-09-26 |
   | 2 | The ratchet is a test and not a review habit. A review habit is what let three words coexist | Fowler |
   | 3 | This row ships before the package move, so row 2 is a pure `git mv` with nothing else in the diff | Fowler, Tidy First |
 
