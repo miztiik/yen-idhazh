@@ -4,7 +4,7 @@
  * left needs a rendered page, and it is the half that has historically gone
  * wrong on this console: a sentence built from a different slice than the chart
  * beside it, a panel that changes height when the data does, and a figure
- * labelled with the column name the pipeline happens to store it under.
+ * labelled with the column name the pipeline happens to write it under.
  *
  * Which state the canary build lands in is not pinned. The fixture is one
  * published day and nineteen quiet ones, and whether its eight articles group

@@ -412,7 +412,7 @@ function identitiesByDate(
  * carrying several is one boundary, because a day is one column and a change
  * inside it cannot be placed any finer.
  *
- * Two days recorded different ways are never a boundary: the store changed there
+ * Two days recorded different ways are never a boundary: the ledger changed there
  * and the pipeline need not have, and the two shapes compare unequal whatever
  * happened. That is found in the records rather than on a date, so it holds for
  * a replayed day and for a fixture as readily as for the one real changeover.

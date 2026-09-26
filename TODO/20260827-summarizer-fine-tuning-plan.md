@@ -910,7 +910,7 @@ Add one typed field, `decision`, to the `Route` contract. Every item carries exa
 
 **Typed, not free text.** `failure_detail` already exists and is an `UntrustedLine` of prose, which cannot be counted or compared between two days. A typed value is a column.
 
-Three places it shows up, and none of them is a new store:
+Three places it shows up, and none of them is a new ledger:
 
 1. **Per item** - in the `Route` payload already committed under `frontend/public/`. That is the file, and it is already the durable record of the run.
 2. **Per day** - counts per decision in the run manifest, beside `items_routed`, `items_prefiltered` and `charts_drafted`, which already exist.

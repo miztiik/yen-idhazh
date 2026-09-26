@@ -159,7 +159,7 @@ Two rows did not land what this plan asked for, and the reason is recorded rathe
 
 **Row 15's premise was false.** Measured 2026-09-07 on an Intel Core i7-1265U, a not-due maintenance pass opens 5 directories and 0 shard files, and that count does not move when the tree holds forty-six times more - a month partition is a file, not a directory, so there was no partition directory for a dated walk to skip. Guardrail #10 says the design changes, so no optimisation was written. The row shipped the deletion bug the measurement uncovered instead: three month-name recognisers disagreed, and `prune_scores` was deleting files the other two protected.
 
-**Inventory item 15 is wrong, and row 17 found it.** There is no windowed trace read in `stage_assemble`. `observability.trace_window_days` drives `retention.prune_traces`, which deletes whole files - so the bound sits on the store, not on a read, and a read of a store already pruned needs no cover of its own. [`docs/concepts/growing-reads.md`](../docs/concepts/growing-reads.md) teaches that as its own mechanism.
+**Inventory item 15 is wrong, and row 17 found it.** There is no windowed trace read in `stage_assemble`. `observability.trace_window_days` drives `retention.prune_traces`, which deletes whole files - so the bound sits on the ledger, not on a read, and a read of a ledger already pruned needs no cover of its own. [`docs/concepts/growing-reads.md`](../docs/concepts/growing-reads.md) teaches that as its own mechanism.
 
 Rows 1, 2, 3, 10 and 11 are disjoint and run together. Rows 4 to 7 are strictly serial - each is only safe because the one before it landed. Rows 8, 9, 12, 13, 14, 15 are independent of the published cutover and of each other. Row 17 is written last, because a rule with worked examples behind it says something a rule with none cannot.
 
@@ -353,7 +353,7 @@ Rows 1, 2, 3, 10 and 11 are disjoint and run together. Rows 4 to 7 are strictly 
 
 ## 16 - Row #15 - State cleanup asks the catalogue what is due
 
-- **Scope:** `retention.month_shards` and the prune inventories list and sort every partition directory across every store, on every maintenance pass, including passes where nothing is due.
+- **Scope:** `retention.month_shards` and the prune inventories list and sort every partition directory across every ledger, on every maintenance pass, including passes where nothing is due.
 - **Files:** `backend/idhazh/retention.py`, `backend/tests/retention/`
 - **Gates:** local - `ruff`, `mypy --strict`, the shared test selector. CI - full suite.
 - **Oracle:** a not-due pass opens no partition. A due pass touches exactly the partitions past their age and no others. Dry-run output is identical to today's.

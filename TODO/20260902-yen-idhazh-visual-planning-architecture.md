@@ -123,7 +123,7 @@ Sequenced so each step is verifiable before the next depends on it. Items marked
 | **Tier 1 / Tier 2** | Tier 1 fields are byte-exact to the article and never model-authored. Tier 2 fields are model-assigned semantic labels, span-anchored and validated. The distinction is load-bearing; never collapse them. |
 | **Visual Planning** | The semantic step in which the model decides *whether* a visual is warranted, *what* it should communicate, *which form* communicates it, and *which* elements support it. Under D1 it is the second of two calls to one model. |
 | **Visual Plan** | The constrained JSON contract that step emits. Expresses **meaning only** — never rendering geometry, never literal values, never authored text. |
-| **Visual Validator** | Deterministic code that accepts or rejects a Visual Plan against the Trusted Element store. |
+| **Visual Validator** | Deterministic code that accepts or rejects a Visual Plan against the Trusted Element ledger. |
 | **Visual Compiler** | Deterministic code that turns a validated Visual Plan into a renderable specification. The specification target is decided in §4; it is not fixed by this document. |
 | **Machine Loop** | The automated inner loop: plan → validation → metrics → failure diagnostics. Runs on every article, gates publication. |
 | **Human Loop** | The sampled outer loop: published visuals *and* a sample of rejected plans → reviewer judgement → quality baseline. Runs periodically, gates nothing. |
@@ -410,7 +410,7 @@ Use that formulation in any external description of the system.
 ## 2. Data model
 
 
-The Trusted Element store is the source of truth for everything a visual displays. If this layer is wrong, every metric downstream is measuring the wrong thing while looking healthy.
+The Trusted Element ledger is the source of truth for everything a visual displays. If this layer is wrong, every metric downstream is measuring the wrong thing while looking healthy.
 
 ---
 
@@ -945,7 +945,7 @@ Three drafts preceded this contract. Every field in all three is accounted for �
 
 ### 4.1 The Visual Validator
 
-Deterministic code. Accepts or rejects a Visual Plan against the Trusted Element store, and emits a **typed rejection reason** on failure. This replaces today's bar-specific checks such as `same_unit_bars()`.
+Deterministic code. Accepts or rejects a Visual Plan against the Trusted Element ledger, and emits a **typed rejection reason** on failure. This replaces today's bar-specific checks such as `same_unit_bars()`.
 
 #### 4.1.1 Universal rules — every family
 
@@ -1676,7 +1676,7 @@ none_arm_ratio
 | Tier 1 and Tier 2 counts are **never summed** into one "trusted" figure | A labelling error and a correctness bug are different incidents |
 | Timings must reconcile: `unattributed_ms` ≈ 0 | Unreconciled timings are how invisible costs survive |
 | A composite score is emitted **only** when `weight_version` is set | Before weights are fitted, there is no composite — only components |
-| Every published visual stores its **full input tuple** — plan, element ids, all versions | Without it, a compiler defect has an unknowable blast radius and nothing can be re-rendered (R12) |
+| Every published visual records its **full input tuple** — plan, element ids, all versions | Without it, a compiler defect has an unknowable blast radius and nothing can be re-rendered (R12) |
 
 ---
 
@@ -1719,7 +1719,7 @@ An unset alarm catches nothing for a month. Accepted: a wrong alarm trains peopl
 | **Review queue** | The build emits `review/queue.<date>.json` — a deterministic, seeded, stratified sample carrying the Visual Plan, the Trusted Elements, the machine components and a stable `visual_id`. Same seed → same queue for every reviewer, so independent answers are joinable |
 | **Review surface** | A static `review/` page shipped with the site. Loads the queue, renders each item beside its article, holds answers in `localStorage`, exports `labels.jsonl`. **No network calls, no server** |
 | **Isolation from readers** | `review/` is `noindex`, unlinked from any published page, and excluded from sitemaps and feeds. It ships with the site only because that is the cheapest distribution — it is not part of the product |
-| **Transport** | The reviewer commits `labels/<reviewer_id>.<date>.jsonl`. Version control provides the durable store, the audit trail and access control in one mechanism |
+| **Transport** | The reviewer commits `labels/<reviewer_id>.<date>.jsonl`. Version control provides the durable ledger, the audit trail and access control in one mechanism |
 | **Alternative transport** | A CLI (`review.py`) writing the identical schema, for terminal-preferring reviewers |
 | **Ingestion** | A scheduled job validates, de-duplicates and appends to the append-only **Feedback Ledger** |
 
@@ -1855,7 +1855,7 @@ Replacing the routing contract is a **breaking change to an already-published co
 
 #### 6.4.2 Migration path
 
-1. **Freeze a baseline.** Run the current pipeline over a fixed article set and store its outputs and metrics. This is the only "before" you will ever get.
+1. **Freeze a baseline.** Run the current pipeline over a fixed article set and record its outputs and metrics. This is the only "before" you will ever get.
 2. **Dual-run.** Old and new pipelines over the same set; compare per potential class, not in aggregate.
 3. **Cut over behind a flag**, with the old path retained for one release.
 4. **Re-render the published corpus** under the new compiler in one intentional pass, recording the new versions on every visual.
@@ -1863,7 +1863,7 @@ Replacing the routing contract is a **breaking change to an already-published co
 
 #### 6.4.3 Blast-radius query
 
-Every published visual stores its full input tuple. When a defect ships, the affected set must be **queryable** — "every visual rendered by `compiler_wave` 2 using `pie`" — not reconstructed by hand. Without it, L15's promised re-render path has no way to know what to re-render (R12).
+Every published visual records its full input tuple. When a defect ships, the affected set must be **queryable** — "every visual rendered by `compiler_wave` 2 using `pie`" — not reconstructed by hand. Without it, L15's promised re-render path has no way to know what to re-render (R12).
 
 
 ---

@@ -2,7 +2,7 @@
 
 **Last Updated**: 2026-09-23
 
-**Level**: 5. Row 4 mints a persisted contract and a new committed store, so it stops before its pull request opens. Rows 1, 2 and 3 are Level 2 or 3 and run AUTO once the user authorizes.
+**Level**: 5. Row 4 mints a persisted contract and a new committed ledger, so it stops before its pull request opens. Rows 1, 2 and 3 are Level 2 or 3 and run AUTO once the user authorizes.
 
 Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delegates a row where delegation pays; keep parallel N = 1 row in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0. AUTHOR-AND-STOP until the user authorizes.
 
@@ -15,7 +15,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | Field | Value |
 | --- | --- |
 | Why this plan exists | Nobody records what search returned on the day it returned it. Retention deletes the published day, so a reading not taken that day can never be recomputed, and no bar can ever be argued from evidence. |
-| Hard scope - in | The entity-query floor stops being a literal and becomes a knob. Precision at the filled slots becomes a gated number beside recall, on the frozen key where it has a baseline. The self-hydrating key gains a caller over the window a reader actually searches, reading the day payloads so the tags survive. The pipeline writes one reading per question per run into a new committed store after the index is built. |
+| Hard scope - in | The entity-query floor stops being a literal and becomes a knob. Precision at the filled slots becomes a gated number beside recall, on the frozen key where it has a baseline. The self-hydrating key gains a caller over the window a reader actually searches, reading the day payloads so the tags survive. The pipeline writes one reading per question per run into a new committed ledger after the index is built. |
 | Hard scope - out | Table A below. Six things, each with what leaving it out costs and what would bring it in. |
 | Runner budget | Section 0d. Measured 2026-09-23: the whole reading is 11.0 s to 29.1 s of compute on the authoring laptop, which is 0.05 to 0.14 percent of the 6 h job. The site moves by zero bytes, because `state/` is not published. |
 | ESCALATE triggers | Row 4 is Level 5 and stops before its pull request opens. Row 2 carries one question back to the owner (Table C). Any row that would set a bar on the self-hydrating number STOPS. Any row that would move `assist.similarity_floor` STOPS. |
@@ -69,7 +69,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 
 ### Section 0e - The one pause
 
-**Row 4 mints a persisted contract and a new committed store, so it stops before its pull request opens** (CLAUDE.md section 6, Level 5). It is cheap to write and expensive to reverse: a shape a run has already written is a shape every later correction has to migrate.
+**Row 4 mints a persisted contract and a new committed ledger, so it stops before its pull request opens** (CLAUDE.md section 6, Level 5). It is cheap to write and expensive to reverse: a shape a run has already written is a shape every later correction has to migrate.
 
 **A worker reaching it stops and reports**: the fields it wrote and what each one lets somebody decide, the bytes a day costs, what a later correction would cost, and the one design decision the research page left open (Section 5c, decision 3). It does not open the pull request. The owner rules, and the ruling lands as a dated `## Design rationale` line in the living doc the row edits.
 
@@ -327,7 +327,7 @@ And the window rule holds: the newest month alone answers 3 days, under the floo
 | --- | --- | --- |
 | 1 | The scope rule is extracted to one function, not copied. Two copies of `readScope` in Python plus the one in `search.ts` is three things to keep in step | Fowler |
 | 2 | The window reader opens the day payloads. The shard carries no tags, so a key scored through the reader's own loader is empty for ever and looks healthy doing it | Andre |
-| 3 | The reading stays in memory in this row. No schema, no store, no writer - the freezing happens where the writing happens | Fowler |
+| 3 | The reading stays in memory in this row. No schema, no ledger, no writer - the freezing happens where the writing happens | Fowler |
 | 4 | It gets its own module. `retrieval.py` answers whether search finds the right thing; what reading today's search deserves is a second question | Fowler |
 | 5 | Capped recall is carried per question and never gated. A question with 705 answers and ten slots cannot be lost (A3) | Andre |
 
@@ -346,11 +346,11 @@ And the window rule holds: the newest month alone answers 3 days, under the floo
 
 **Why.** Nothing records a reading. Retention deletes the published day, so a reading not taken that day can never be recomputed, and nothing can draw a trend without re-running the encoder over an archive that no longer holds the window.
 
-### Section 5a - The store, the filename, and the writer
+### Section 5a - The ledger, the filename, and the writer
 
 **Where.** `state/search-quality/<YYYY>/<MM>/<DD>/`, named for the ranker rather than for one of its two surfaces. The same code serves the front page search box and the archive search, so `archive-search-quality` would claim half of what it measures. Owner ruling, 2026-09-23.
 
-**The filename follows the one-writer-per-path rule.** `ledger.segment_name` spells `<run_id>-<attempt>-<job>-<shard>.csv` and `ledger.day_shard_path` builds the path. `idhazh.paths.is_written_once` reads it back, and it passes on `SEGMENT_NAME` alone with no list to join. **The mechanism may change later; this store follows whatever it becomes rather than inventing a second scheme.** Owner ruling, 2026-09-23.
+**The filename follows the one-writer-per-path rule.** `ledger.segment_name` spells `<run_id>-<attempt>-<job>-<shard>.csv` and `ledger.day_shard_path` builds the path. `idhazh.paths.is_written_once` reads it back, and it passes on `SEGMENT_NAME` alone with no list to join. **The mechanism may change later; this ledger follows whatever it becomes rather than inventing a second scheme.** Owner ruling, 2026-09-23.
 
 **Who writes it.** `ledger.write_segment` from `stage_assemble`, with `job=ServerJob.ASSEMBLE` and `shard=ASSEMBLE_SHARD`, which is 0 because assemble runs once for the whole day. The call sits immediately after `assemble.rebuild_search_index` returns and before the manifest is built, because the reading is about the index this run just rebuilt.
 
@@ -364,7 +364,7 @@ And the window rule holds: the newest month alone answers 3 days, under the floo
 
 **The research page lists `score_on_common` as a cell. It cannot be one.** A comparison between two readings cannot be stored by the earlier of them: the run writing today's row does not know which questions next month's run will carry. Storing the per-question reading makes that comparison computable between any two runs, at any distance, without re-running the encoder - and the run-level aggregate is then derived from the rows rather than stored a second time.
 
-**What the grain costs.** 30 rows a run instead of 1, five runs a day. Estimated 22.5 KB a day and about 8 MB a year of checkout, from a 150 B row. That is an estimate from the cell count, **labelled one, and settled by the size of the first committed file.** `state/item-health/` already writes 400 rows a day on the committed ceiling, so this is a quarter of a store that already exists.
+**What the grain costs.** 30 rows a run instead of 1, five runs a day. Estimated 22.5 KB a day and about 8 MB a year of checkout, from a 150 B row. That is an estimate from the cell count, **labelled one, and settled by the size of the first committed file.** `state/item-health/` already writes 400 rows a day on the committed ceiling, so this is a quarter of a ledger that already exists.
 
 **What the alternative costs.** A per-run row carrying `queries_added`, `queries_dropped` and a digest of the question ids says whether the set moved and by how much. It can never say what the number would have been over the questions both runs carried, which is the one comparison the owner named as having to survive a moving vocabulary.
 
@@ -404,15 +404,15 @@ H6 to H9 repeat on every row of one run. That is what `item-health` already does
 | I4 | The path-class census | `backend/tests/contracts/test_path_classes.py` iterates the enum |
 | I5 | Commit staging | `backend/tests/workflows/test_ledger_staging.py` requires every tree's folded day to be staged by some job, and **the assemble job stages `state` whole**. No workflow file moves |
 
-**No scheduled prune, and the reason.** The reading IS the series, and deleting it deletes the trend the bar will be argued from. I2 already reaches it when an operator asks. What that costs: the store grows by an estimated 22.5 KB a day for ever. The row that adds a window is the one that adds the console panel (A2), because that is when somebody knows how much history a chart needs.
+**No scheduled prune, and the reason.** The reading IS the series, and deleting it deletes the trend the bar will be argued from. I2 already reaches it when an operator asks. What that costs: the ledger grows by an estimated 22.5 KB a day for ever. The row that adds a window is the one that adds the console panel (A2), because that is when somebody knows how much history a chart needs.
 
 ### Section 5e - Files, measured 2026-09-23
 
 `backend/idhazh/contracts/search_quality.py` (new), `backend/idhazh/contracts/export.py`, `backend/idhazh/ledger.py`, `backend/idhazh/stages/assemble.py`, `backend/idhazh/evals/search_quality.py`, `schemas/search-quality-row.schema.json` (generated, new), the generated frontend contract if the exporter emits one for this model, `backend/tests/test_search_quality.py`, `docs/architecture/publishing/autotune-search-quality.md`.
 
-**One census decides the rest of the doc list.** `git grep -n 'day-validations' -- docs` names every page that lists the committed stores one at a time. This store joins each of them and no others.
+**One census decides the rest of the doc list.** `git grep -n 'day-validations' -- docs` names every page that lists the committed ledgers one at a time. This ledger joins each of them and no others.
 
-**The research page stops being research.** Its opening says nothing on it is built. Once this row lands, the reading, the store and the caller are built; the judge, the console panel and the bar are not. The page says which is which, and keeps the judge section as the research it is.
+**The research page stops being research.** Its opening says nothing on it is built. Once this row lands, the reading, the ledger and the caller are built; the judge, the console panel and the bar are not. The page says which is which, and keeps the judge section as the research it is.
 
 ### Section 5f - Acceptance gates
 
@@ -445,7 +445,7 @@ Run the assemble stage over a fixture tree - row 3's tree with this run's inputs
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | The store is `state/search-quality/`, named for the ranker rather than for one of its two surfaces | Owner, 2026-09-23 |
+| 1 | The ledger is `state/search-quality/`, named for the ranker rather than for one of its two surfaces | Owner, 2026-09-23 |
 | 2 | The filename follows `SEGMENT_NAME`, not a bare `<DD>.csv`, and follows that mechanism wherever it goes | Owner, 2026-09-23 |
 | 3 | One row per question per run, so the comparison over shared questions is computable between any two runs rather than stored by the earlier one. **This is the decision the pause exists for** | proposed by Fowler; the owner rules |
 | 4 | The contract, the enum member and the writer land in one commit. A shape with no writer makes every later correction a breaking change with a migration to write | Fowler |

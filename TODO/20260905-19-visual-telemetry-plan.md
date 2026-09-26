@@ -1,7 +1,7 @@
 # 19 - Every attempt is recorded
 
 **Last Updated**: 2026-09-05
-**Level**: 4 (a new committed ledger whose fold key is irreversible, plus the store a corpus re-render depends on)
+**Level**: 4 (a new committed ledger whose fold key is irreversible, plus the payload a corpus re-render depends on)
 
 **Chain**: previous [`20260905-18-diagram-vocabulary-plan.md`](20260905-18-diagram-vocabulary-plan.md) | next [`20260905-20-visual-console-plan.md`](20260905-20-visual-console-plan.md).
 **Reference**: [`20260902-visual-planner-pseudo-plan.md`](20260902-visual-planner-pseudo-plan.md) - rows 54, 55, sections 12.6 G1, 12.7 G7, G10, G11, 12.9 G12, 12.13 G37, 12.14 G40, G41, section 9.2, 9.3.
@@ -15,10 +15,10 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | Field | Value |
 | --- | --- |
 | Why this plan exists | Everything from plan 11 onward gates publication on machine judgement, and none of it is recorded. Today "no visual was possible" and "the visual stage broke" are the same row. **`none` is the majority outcome by design**, so a majority outcome with no cause breakdown means the largest number an operator sees explains nothing |
-| Hard scope - in | A visual pipeline stage; a ledger with **one row per attempt**; a typed reason for every refusal; the join key a human label needs; the fold key, settled before the first row is written; the store a whole-day re-render needs |
+| Hard scope - in | A visual pipeline stage; a ledger with **one row per attempt**; a typed reason for every refusal; the join key a human label needs; the fold key, settled before the first row is written; the payload a whole-day re-render needs |
 | Hard scope - out | The console panels (plan 20). Any human review surface (plan 21). Any change to what publishes |
 | ESCALATE triggers | 1. The ledger is proposed as one row per **published** visual - that leaves every refusal uncommitted and the machine loop stops being auditable while still being the gate. 2. A route to `none` exists that carries no reason. 3. The fold key is settled without the stratum terms - **the fold is irreversible and a key settled narrow cannot be widened later against data that no longer exists** |
-| Chosen strategy | Settle the fold key first, because it is the only decision here that cannot be revised. Then the stage, then the ledger, then the store |
+| Chosen strategy | Settle the fold key first, because it is the only decision here that cannot be revised. Then the stage, then the ledger, then the re-render payload |
 | Execution | `autonomous orchestrator per docs/how-to/execute-a-plan.md. Parallel N = 4.` |
 
 ---
@@ -48,8 +48,8 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | --- | --- | --- |
 | 1 | The key carries at minimum `(date, decision, none_reason, rejection_reason)` **plus** `potential_primary`, `family` and an element-count band. The first four keep the cause breakdown; the last three keep the stratum | 12.9 G12, 12.13 G37 |
 | 2 | The row carries a **distribution, not a mean** - at minimum a count, a median and the two outer quartiles. **A bimodal distribution is the interesting finding and a mean hides it** | 12.13 G37 |
-| 3 | `state/visuals/` declares its key **in the schema description**, the way the existing aggregate store already does | 12.9 G12 |
-| 4 | The window is one of the six named per-store windows. The old shared knob no longer exists | Section 9.2 correction |
+| 3 | `state/visuals/` declares its key **in the schema description**, the way the existing aggregate ledger already does | 12.9 G12 |
+| 4 | The window is one of the six named per-ledger windows. The old shared knob no longer exists | Section 9.2 correction |
 | 5 | This is row 1 because the fold deletes the full-grain shard. Every other decision in this plan can be revised; this one cannot | Fowler |
 
 ### Rejected alternatives
@@ -113,18 +113,18 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 ## 5. Row #4 - What a re-render needs, and where a rejected plan lives
 
 - **Scope:** The stored plan and element set a whole-day re-render reads, and a home for a rejected plan's body.
-- **Files touched:** `backend/idhazh/assemble.py`, `frontend/public/digest/**` or a `state/` store, `backend/idhazh/retention.py`, `config/idhazh.json`, `docs/concepts/adaptive-pruning.md` (the register), `backend/tests/**`, `docs/architecture/publishing/layout.md`
+- **Files touched:** `backend/idhazh/assemble.py`, `frontend/public/digest/**` or a `state/` ledger, `backend/idhazh/retention.py`, `config/idhazh.json`, `docs/concepts/adaptive-pruning.md` (the register), `backend/tests/**`, `docs/architecture/publishing/layout.md`
 - **Acceptance gates:** `ruff`; `mypy --strict`; export + drift; the full suite; `idhazh site-weight`; `idhazh validate-days`.
-- **Oracle:** A published day is re-rendered **from the committed store alone**, with no re-run of any model, and the output matches the committed visuals byte for byte. That is the only proof the store holds enough.
+- **Oracle:** A published day is re-rendered **from the committed ledger alone**, with no re-run of any model, and the output matches the committed visuals byte for byte. That is the only proof the ledger holds enough.
 
 ### Decisions
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | **A CSV cell cannot hold a plan.** Three things already depend on this store: a renderer bump re-renders whole days or none, the migration's corpus re-render pass, and the blast-radius query. All three had nothing to read | 12.14 G40, row 35 |
-| 2 | Re-rendering needs the **elements** as much as the plan, and the register names no element store today. Whether they live in the day payload - registered and never deleted - or in their own store is this row's call; what is not open is leaving it unregistered | 12.14 G40 |
+| 1 | **A CSV cell cannot hold a plan.** Three things already depend on this ledger: a renderer bump re-renders whole days or none, the migration's corpus re-render pass, and the blast-radius query. All three had nothing to read | 12.14 G40, row 35 |
+| 2 | Re-rendering needs the **elements** as much as the plan, and the register names no element ledger today. Whether they live in the day payload - registered and never deleted - or in their own ledger is this row's call; what is not open is leaving it unregistered | 12.14 G40 |
 | 3 | A **rejected** plan's body is a lookup: it answers no question outside its review window, so it deletes rather than folds, on a short window, with a register row and a sampling ratio in config | 12.7 G10, section 9.2 |
-| 4 | The register in `docs/concepts/adaptive-pruning.md` claims to name every artefact this project writes. Each new store here gets a row, or that claim is false | Section 9.3 |
+| 4 | The register in `docs/concepts/adaptive-pruning.md` claims to name every artefact this project writes. Each new ledger here gets a row, or that claim is false | Section 9.3 |
 
 ### Rejected alternatives
 

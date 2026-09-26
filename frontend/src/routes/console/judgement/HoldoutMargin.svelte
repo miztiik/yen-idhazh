@@ -98,8 +98,8 @@
 	let measured = $state<number | null>(null);
 
 	const outcome = $derived(holdoutMargin(applied, marks));
-	// Not `state`: Svelte reads `$state` as a store access on a local of that
-	// name, so the rune below stops compiling.
+	// Not `state`: Svelte reads `$state` as an auto-subscription to a local of
+	// that name, so the rune below stops compiling.
 	const reading = $derived(holdoutState(outcome, fitted));
 	const apart = $derived(markedApart(marks));
 	const reach = $derived(holdoutReach(applied, maxDownStep, marks));

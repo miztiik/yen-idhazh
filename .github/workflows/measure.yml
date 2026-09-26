@@ -665,7 +665,7 @@ jobs:
       # already paid for (Guardrail #6).
       #
       # `--config backend/var/candidate-config` is what keeps `plan` out of the
-      # production ledgers. `plan` appends to the seen store, feed health, feed
+      # production ledgers. `plan` appends to the seen ledger, feed health, feed
       # retirements and the counterfactual scores, and without this flag it
       # loads the committed config - which names no trial directory, so a bench
       # marked real URLs seen and the next production day skipped those stories.

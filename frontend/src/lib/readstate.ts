@@ -23,14 +23,14 @@
  * **A mark expires by the calendar, not by position.** `ui.read_mark_days`
  * counts back from today, so a date the window no longer reaches goes on the
  * next load. That needs the device clock, which the rule it replaced
- * deliberately did not: keeping the newest N dates the store happened to hold
- * bounded it by how often a reader came back rather than by how long ago they
- * read, so a reader who opened one day a month kept marks from seven different
- * months. The price is stated rather than hidden - a clock set wrong keeps a
- * mark too long or drops it early - and one more thing follows from it: a mark
- * made on an archive day the window no longer reaches does not survive the next
- * load. The window is the promise, and it is the same span the archive lists as
- * rows of its own.
+ * deliberately did not: keeping the newest N dates `localStorage` happened to
+ * hold bounded it by how often a reader came back rather than by how long ago
+ * they read, so a reader who opened one day a month kept marks from seven
+ * different months. The price is stated rather than hidden - a clock set wrong
+ * keeps a mark too long or drops it early - and one more thing follows from it:
+ * a mark made on an archive day the window no longer reaches does not survive
+ * the next load. The window is the promise, and it is the same span the archive
+ * lists as rows of its own.
  */
 
 /** One key a date: `idhazh:read:2026-08-23` -> `["ai-0417291083", ...]`. */
@@ -52,11 +52,11 @@ function dayKey(date: string): string {
 	return `${PREFIX}${date}`;
 }
 
-/** Every date the store holds marks for.
+/** Every date `localStorage` holds marks for.
  *
  * Key names only - no value is parsed - so this costs the number of days held
  * and not the number of marks. The window bounds that number: after one pass of
- * `prune` the store holds at most `keepDays` of them.
+ * `prune` it holds at most `keepDays` of them.
  */
 function storedDates(): string[] {
 	const dates: string[] = [];
@@ -107,7 +107,7 @@ function windowFloor(keepDays: number, now: Date): string {
 	return floor.toISOString().slice(0, 10);
 }
 
-/** Fold the single-key store into one key a date, then forget it.
+/** Fold `LEGACY_KEY` into one key a date, then forget it.
  *
  * The dated map is carried over, because it holds marks a reader really made.
  * The bare array that came before it is not: nothing in it says which day an id
@@ -161,7 +161,7 @@ function prune(keepDays: number, now: Date): void {
 	}
 }
 
-/** What this reader has read on this one day. Prunes the store as a side effect. */
+/** What this reader has read on this one day. Prunes `localStorage` as a side effect. */
 export function loadRead(date: string, keepDays: number): Set<string> {
 	if (!available()) return new Set();
 	migrate();

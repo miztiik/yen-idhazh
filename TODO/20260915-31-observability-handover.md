@@ -114,16 +114,16 @@ CLAUDE.md section 13 forbids a test that reads committed data to ask whether the
 | 4 | `backend/tests/test_publish_telemetry.py` | same, for `PublicTelemetryRow` | **deleted.** Two built shards already prove the prefix read and the refusal. Its one unique claim, LF, moved onto a shard the test publishes |
 | 5 | `backend/tests/test_measure_budgets.py` - five tests | does the sampler sample | a corpus the test writes from the committed `corpus-row` fixture, ten rows of different lengths |
 | 6 | `backend/tests/contracts/test_committed_days.py` - three callers | does the validator validate | the day the seed case already proves the gate accepts whole. The default is still followed: `common.PUBLIC_ROOT` is redirected to a built tree |
-| 7 | `backend/tests/workflows/test_staged_paths.py` | - | the `exists()` assertion is **deleted**. Staging `state` whole is correct whether or not the two late stores have appeared |
+| 7 | `backend/tests/workflows/test_staged_paths.py` | - | the `exists()` assertion is **deleted**. Staging `state` whole is correct whether or not the two late ledgers have appeared |
 | 8 | `backend/tests/contracts/test_run_plan.py` - `min_feeds` | - | **moved to the producer.** `stages/plan._plan_desks` warns by name when an active desk goes silent on its floor |
 | 9 | `backend/tests/test_search_index.py` - four tests | does the writer hold its bijection | a month built to carry a vector, a gap and a day with no embeddings block. The archive has never held all three at once |
-| 10 | `backend/tests/test_ledger.py` - seeded stores | - | **moved to `backend/utilities/check_seeded_stores.py`**, which pytest does not collect. The path and header assertions stayed, because a code change can break those |
+| 10 | `backend/tests/test_ledger.py` - seeded ledgers | - | **moved to `backend/utilities/check_seeded_ledgers.py`**, which pytest does not collect. The path and header assertions stayed, because a code change can break those |
 
 **Two of the same kind were left, and neither was on the audit's list.** `test_staged_paths.py::test_every_path_the_day_stages_exists_in_a_fresh_checkout` is a larger clone check that also shells out to `git ls-files`. `test_search_index.py::TestTheCommittedShard` is explicitly about the published shard agreeing with the published days, which is a reader-facing claim and wants a producer home rather than a fixture.
 
 ### The pattern still worth writing into the contract
 
-Three of these - rows 1, 7 and the one already fixed - asserted something **production owns**: a retention roll, a store being created, a day being long enough. **None can be fired by a code change, so none was catchable in review.** They went red on a pull request that did not touch them.
+Three of these - rows 1, 7 and the one already fixed - asserted something **production owns**: a retention roll, a ledger being created, a day being long enough. **None can be fired by a code change, so none was catchable in review.** They went red on a pull request that did not touch them.
 
 CLAUDE.md section 13 already names the migration case. It does not name this one. **Proposing that sentence is still open, and it is the owner's to approve.**
 

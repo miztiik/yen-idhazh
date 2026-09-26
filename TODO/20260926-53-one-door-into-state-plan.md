@@ -2,7 +2,7 @@
 
 **Last Updated**: 2026-09-26
 
-**Level**: 5 for the decision, 3 for every row (CLAUDE.md section 6). Level 5 because what is settled here binds every producer added after it: `backend/idhazh/ledger/` is the one door into `state/` and `backend/idhazh/store/` never exists. Level 3 per row because each crosses a subsystem boundary and none can break published data.
+**Level**: 5 for the decision, 3 for every row (CLAUDE.md section 6). Level 5 because what is settled here binds every producer added after it: `backend/idhazh/ledger/` is the one door into `state/`, and no second package under the retired name ever sits beside it. Level 3 per row because each crosses a subsystem boundary and none can break published data.
 
 Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delegates a row where delegation pays; keep parallel N = 2 rows in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0. AUTHOR-AND-STOP until the user authorizes.
 
@@ -12,7 +12,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 
 | Field | Value |
 | --- | --- |
-| Why this plan exists | A producer has four ways to write `state/` and four to read it, and plan 50 was about to add a fifth in a second vocabulary. This makes `backend/idhazh/ledger/` the one door, splits the oversized `ledger.py` into modules that each answer one question, and retires the word `store` so one thing has one name. |
+| Why this plan exists | A producer has four ways to write `state/` and four to read it, and plan 50 was about to add a fifth in a second vocabulary. This makes `backend/idhazh/ledger/` the one door, splits the oversized `ledger.py` into modules that each answer one question, and retires the duplicate word so one thing has one name. |
 | Hard scope - in | see the bullets below |
 | Hard scope - out | see the table below |
 | ESCALATE triggers | see the enumerated list below |
@@ -23,7 +23,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 ### Hard scope - in
 
 - `backend/idhazh/ledger.py`, one file answering many questions, becomes the package `backend/idhazh/ledger/`, each module answering one.
-- The word `store` leaves the repository. Under `state/` it becomes **ledger**; under `frontend/public/` it becomes **collection** (glossary decision, 2026-09-26).
+- The retired word leaves the repository. Under `state/` it becomes **ledger**; under `frontend/public/` it becomes **collection** (glossary decision, 2026-09-26).
 - `SegmentLedger` and the per-ledger `*_DIRNAME` constants collapse into one `LedgerName` `StrEnum` in `backend/idhazh/contracts/`, with a `DAY_TREES` subset for the day trees a writer files a segment into.
 - The path functions and the per-ledger `*_DIRNAME` constants become one config registry - `config/ledgers.json`, validated by a contract - so a ledger's location and lifecycle state is one fact in one place (section 4.2).
 - `backend/idhazh/paths.py` becomes `path_classes.py`, the name its own test already carries.
@@ -43,7 +43,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 1. **A row cannot finish without a behaviour change.** Every row here is structural - no signature, default, return type or on-disk byte moves. A row that finds it cannot preserve behaviour has found a defect: stop, and give the defect its own pull request (CLAUDE.md section 5; do not interleave structural and behavioural change).
 2. **`write_segment` or `extend_segment` cannot move with its body unchanged** (row 6). "Verbatim" means the body is byte-identical while its imports are rewired to the sibling modules (section 4.6); if the body itself must change to work, that is a behaviour change plan 50's frozen `persist` stands on - stop before the commit.
 3. **`LedgerName` is about to enter a persisted `contracts/` payload before row 3 lands.** That makes row 3 Level 5 - pause for sign-off (CLAUDE.md section 6).
-4. **The `store` ratchet would have to allow a word outside row 1's fenced block.** The sweep missed a real occurrence; surface it, do not widen the allow-list.
+4. **The retired-word ratchet would have to allow a spelling outside row 1's fenced block.** The sweep missed a real occurrence; surface it, do not widen the allow-list.
 
 ### The intent this plan serves
 
@@ -88,7 +88,7 @@ No counts here - functionality is what the contracts must preserve, not a measur
 - **Some ledgers are addressed by filename, not a directory constant** - `feed-retirements.csv`, `holdout-pairs.csv`, `score-distribution.json` and its stamped `.json` archive. Membership is keyed on path functions so none falls through (section 4.1).
 - **The eviction homes already exist**: `backend/idhazh/telemetry/source_health.py`, `backend/idhazh/month_partition.py`.
 
-**A correction to this document's own prose.** An earlier `store`->`ledger` sweep over-applied to the sentences that *name* the retired word. Those are corrected throughout. Row 1's oracle exists to stop exactly this: the retired word survives only inside a fenced instruction block.
+**A correction to this document's own prose.** An earlier sweep of the retired word over-applied to the sentences that *name* it. Those are corrected throughout. Row 1's oracle exists to stop exactly this: the retired word survives only inside a fenced instruction block.
 
 ## 3. The shape this plan builds
 
@@ -359,7 +359,7 @@ Two functions leave, every reader that reaches them is repointed to the new home
 
 ## Row #1 - The retired word `store` leaves
 
-**This row is the one place in the repository allowed to spell the retired word, because it is the row that removes it.** The ratchet in the oracle allow-lists exactly this section and nothing else. Everywhere the old spelling is needed it sits inside a fenced block, so a later sweep cannot quietly flatten the instructions into `X -> X`.
+**This row is the one place in the repository allowed to spell the retired word, because it is the row that removes it.** The ratchet in the oracle allow-lists exactly this section and nothing else. Everywhere the old spelling is needed inside the row it sits in a fenced block, so a later sweep cannot quietly flatten the instructions into `X -> X`. **Two spellings cannot be fenced and the ratchet has to name them**: this section's own heading, and the row's title cell in the Status Reckoner, which has to read the same (found while executing, 2026-09-26).
 
 - **Scope:** every occurrence across the repository. No file moves and no identifier outside the block below changes. **It lands as three file-disjoint pull requests that run in parallel** - `docs/`; `frontend/src/` + `frontend/tests/` + `.github/` + `TODO/`; and `backend/`. This is the only parallelism this plan has (section 0), and staging it per tree also keeps any one commit off the whole repository: this project force-pushes a squash of its own history every `prune_every_days`, so a single 1167-line rename would put itself on the blame tip of every touched line and then take the pre-rename reason with it inside one prune cycle (Carmack, 2026-09-26). The ratchet ships in the `backend/` pull request, which rebases on the other two before its final gate run.
 - **The rule, applied per occurrence.** A ladder; first match wins; the worker never chooses. Converged ruling of Fowler and Carmack in debate, 2026-09-26.
@@ -431,7 +431,8 @@ quoted here: an earlier draft said "about thirty" and the sweep found more.
 A count in prose that nothing reads is a number that goes wrong quietly.
 ```
 
-- **Files touched:** every file that spells the retired word, plus [docs/concepts/glossary.md](../docs/concepts/glossary.md) (already done, 2026-09-26) and the plan-docs under `TODO/` (their prose was swept 2026-09-26). **`.github/` is in scope for its own ten occurrences** - workflow comments naming a tree under `state/` ("the seen store", "a tenant's own store") - and **not** because anything there calls the renamed utility: nothing does, which an earlier draft assumed (verified 2026-09-26).
+- **Files touched:** every file that spells the retired word, plus [docs/concepts/glossary.md](../docs/concepts/glossary.md) (already done, 2026-09-26) and the plan-docs under `TODO/` (their prose was swept 2026-09-26). **`.github/` is in scope for its own ten occurrences** - workflow comments naming a tree under `state/` - and **not** because anything there calls the renamed utility: nothing does, which an earlier draft assumed (verified 2026-09-26).
+- **One file under `TODO/` holds web addresses rather than prose**, and the ratchet counts prose. `TODO/REFERENCE_SET_1_URLS.txt` line 155 is an article address whose last path element ends in the retired spelling. Editing it changes what an HTTP server outside this repository answers, which is rung 1 of the ladder, so the ratchet skips that file by name (found while executing, 2026-09-26).
 - **The trap the `docs/` pull request must clear before it edits anything:** `frontend/tests` contains a spec that reads a `docs/` page by exact string, and `run-checks.ts` classifies a documentation-only diff as "no code suite", so a prose sweep can go red in a suite the local selector never ran. Grep `frontend/tests` for tests that read `docs/` first, and run that spec explicitly.
 - **Acceptance gates:** `ruff check .`, `mypy backend`, the full `pytest backend/tests`, and the frontend selector. **A test function rename is zero-risk** - pytest discovers by prefix - so the suite is the check that nothing else moved.
 - **Oracle:** a ratchet test. The retired word appears **zero** times outside this row's fenced blocks, counted with `(?<![A-Za-z0-9_])[Ss]tores?(?![A-Za-z0-9_])` over `backend/`, `frontend/src/`, `frontend/tests/`, `config/`, `docs/`, `TODO/` and `.github/`, **after the byte-strings `no-store` and `ast.Store` are stripped from the text being counted**. Those two strips are the whole of the allow-list. **The strip is a defect fix, not a concession**: measured 2026-09-26, the regex as the plan first wrote it matches `cache: 'no-store'` - a Fetch API wire value, used in the published site's kill-switch fetch - so a worker obeying "zero occurrences" would have edited a request header and changed behaviour inside a row that forbids it. The list cannot grow, because an entry is not a file or a concept but a spelling that is **not the word**, and admitting a third one means naming the outside program that parses those bytes.
@@ -629,7 +630,7 @@ Plan 50 is frozen from a design point of view; this plan does not change it. Wha
 ## See also
 
 - [`20260924-50-idhazh-gardener-plan.md`](20260924-50-idhazh-gardener-plan.md) - the frozen plan this one unblocks.
-- [`../docs/concepts/glossary.md`](../docs/concepts/glossary.md) - where the `store` -> `ledger` / `collection` decision is written down.
+- [`../docs/concepts/glossary.md`](../docs/concepts/glossary.md) - where the retired word's two replacements - `ledger` and `collection` - are written down.
 - [`../docs/how-to/execute-a-plan.md`](../docs/how-to/execute-a-plan.md) - the orchestrator contract this plan's Status Reckoner stamps.
 - [`../docs/how-to/distill-a-plan.md`](../docs/how-to/distill-a-plan.md) - what row 7 runs before the plan-doc is deleted.
 - [`../docs/concepts/telemetry-intent.md`](../docs/concepts/telemetry-intent.md) - the north star `Grain` is transitional against.
