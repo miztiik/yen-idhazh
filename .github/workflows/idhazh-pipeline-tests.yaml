@@ -416,8 +416,8 @@ jobs:
       #
       # Gathered into one fixed directory rather than uploaded by a glob over
       # `state/`. An artifact's internal root is the common ancestor of what
-      # matched, so a glob would unpack one case's store at the depth three
-      # cases' stores sit at the moment two of them died.
+      # matched, so a glob would unpack one case's ledger at the depth three
+      # cases' ledgers sit at the moment two of them died.
       # No `tee` into the log. This program prints what a person reads on
       # stderr, which the log already shows, and keeps stdout for the one
       # `key=value` line the step output takes. A `tee` here would copy the

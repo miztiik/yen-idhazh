@@ -49,7 +49,7 @@ function days(dir: string): Record<string, string>[] {
 /** The item-health ledger, which files by day rather than by month.
  *
  * Through the production reader rather than a copy here, so a grain change in
- * the store cannot leave this comparing the page against an empty set.
+ * the ledger cannot leave this comparing the page against an empty set.
  */
 function healthRows(): Record<string, string>[] {
 	return readDayShards(join(STATE, 'item-health'), -1).rows;

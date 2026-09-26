@@ -166,7 +166,7 @@ export interface BoardRow {
 	/** What the shard paid opening the weights, before its first item. */
 	modelLoadMs: number | null;
 	/** Seconds of this shard's items that no named stage claimed, added over
-	 * them and drawn exactly as the ledger stores it.
+	 * them and drawn exactly as the ledger holds it.
 	 *
 	 * **Signed, and never recomputed here.** The column is the one thing that can
 	 * catch a regression in a stage nobody named, and a figure this page worked

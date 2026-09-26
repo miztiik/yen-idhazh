@@ -69,9 +69,9 @@ permissions:
 # applies both whole. A group on top of that bought no safety. It bought a
 # queue, and the queue cost two things. GitHub keeps ONE pending run per group
 # and cancels the older without an error anywhere, so a dispatch fired during a
-# run disappeared. And a run that did wait then read a store its own wait had
+# run disappeared. And a run that did wait then read a ledger its own wait had
 # made stale: run 35660521768 waited 46 minutes and folded a 46-minute-old
-# store, then lost the whole day at the push.
+# ledger, then lost the whole day at the push.
 #
 # Re-adding a group brings both back. What settles two writers here is the
 # filename and the read that settles it, not a queue.
@@ -1205,7 +1205,7 @@ jobs:
       # nothing either.
       #
       # It also covers the score archive, which joined this step on 2026-09-03
-      # and is the one store here whose deletion is preceded by a summary that is
+      # and is the one ledger here whose deletion is preceded by a summary that is
       # written, read back and reconciled against the day files it replaces. The
       # earliest it removes anything is the day files under `state/scores/2026/08/`
       # on 2027-10-01, and its dry run prints what the archive would weigh against

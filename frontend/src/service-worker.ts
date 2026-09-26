@@ -42,7 +42,7 @@
  * A day payload is kept only after that day has been fetched once. Never a day
  * nobody asked for: that spends a stranger's data on a guess and grows with the
  * archive. Never the encoder's model and runtime, 43.2 MB together, which keep
- * their own store. Never the switch itself.
+ * their own `Cache`. Never the switch itself.
  *
  * **The encoder's second origin never touches this file, and that is one line
  * of code rather than a promise.** Since 2026-09-10 a browser may fetch the
@@ -52,7 +52,7 @@
  * that is running while a reader takes that path sees the request, declines it,
  * and lets the network answer. Nothing off-origin is ever written into a cache
  * this file owns, so the only copy of a fetched-elsewhere encoder is the one
- * `assist/loader.ts` put in the library's own store AFTER hashing it against
+ * `assist/loader.ts` put in the library's own `Cache` AFTER hashing it against
  * the committed manifest. A worker that cached it would be a second copy nobody
  * verified, keyed by a URL nobody checked.
  *
@@ -63,7 +63,7 @@
  * of them is anything from 162 KB to 27 MB and a count promises the reader
  * nothing about their storage. The shell cache keeps what this build emitted
  * and the pages the reader opened; every other file this site publishes is
- * served and then forgotten, so a store named for one build's shell stops
+ * served and then forgotten, so a `Cache` named for one build's shell stops
  * taking a share of the archive.
  *
  * **The shell is network-first and a day is served from the device first.** The
@@ -235,7 +235,7 @@ sw.addEventListener('fetch', (event) => {
 	// touched, so no third party can be reached through this worker at all.
 	if (url.origin !== sw.location.origin) return;
 	// The way out is never served from a cache. A switch a worker reads out of
-	// its own store is a switch that says whatever it said last time.
+	// its own `Cache` is a switch that says whatever it said last time.
 	if (url.pathname === KILL_URL) return;
 	if (isEncoder(url.pathname)) return;
 
@@ -355,8 +355,8 @@ async function fromNetworkFirst(request: Request, url: URL): Promise<Response> {
 	try {
 		const answer = await fetch(request);
 		if (keep && answer.ok && answer.status === 200 && !answer.redirected) {
-			// Opened only when there is something to store. `caches.open` CREATES
-			// the store, so opening it to read would put an empty `idhazh-` cache
+			// Opened only when there is something to keep. `caches.open` CREATES
+			// the `Cache`, so opening it to read would put an empty `idhazh-` cache
 			// back on the device of a reader who has just retired the worker - the
 			// page clears the caches and cannot tell the worker it did.
 			await (await caches.open(SHELL_CACHE)).put(request, answer.clone());

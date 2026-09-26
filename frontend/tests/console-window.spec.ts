@@ -102,7 +102,7 @@ function chartRuleDays(): string[] {
 	return found.sort();
 }
 
-/** Every date a store that files `<YYYY>/<MM>/<DD>.csv` holds a kept row for. */
+/** Every date a ledger that files `<YYYY>/<MM>/<DD>.csv` holds a kept row for. */
 function dayDates(dir: string, keep: (row: Record<string, string>) => boolean): string[] {
 	return readDayShards(dir, -1)
 		.rows.filter(keep)

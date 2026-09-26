@@ -60,7 +60,7 @@ function canaryHosts(): Record<string, string>[] {
 /** The canary's item rows, over every day file.
  *
  * Through `readDayShards`, the reader the page's own server uses, so a grain
- * change in the store cannot leave this comparing the page against an empty set.
+ * change in the ledger cannot leave this comparing the page against an empty set.
  */
 function canaryHealth(): Record<string, string>[] {
 	return readDayShards(join(CANARY, 'item-health'), -1).rows;

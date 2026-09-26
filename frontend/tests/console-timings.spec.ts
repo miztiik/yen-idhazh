@@ -436,7 +436,7 @@ test.describe('the coverage sentence', () => {
 /** Every item-health row the canary wrote.
  *
  * Through `readDayShards`, the reader the page's own server uses, so a grain
- * change in the store cannot leave this comparing the page against an empty set.
+ * change in the ledger cannot leave this comparing the page against an empty set.
  */
 function ledger(): Record<string, string>[] {
 	return readDayShards(join(REPO, 'backend', 'var', 'canary', 'state', 'item-health'), -1).rows;

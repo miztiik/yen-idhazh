@@ -1,4 +1,4 @@
-/** Row #17's shard store, and handback #104's calendar walk.
+/** Row #17's shard hold, and handback #104's calendar walk.
  *
  * The console holds telemetry as revision-owned month shards. This proves the
  * three things the row settled and the one the handback did, at the tier they

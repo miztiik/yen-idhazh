@@ -39,7 +39,7 @@ function scoreRows(): Record<string, string>[] {
 /** The item-health ledger, which files by day, read the same way.
  *
  * Through the production readers rather than a copy here, so a grain change in
- * the store cannot leave this oracle comparing the page against an empty set -
+ * the ledger cannot leave this oracle comparing the page against an empty set -
  * which is exactly what a local `readdir` of `*.csv` did on 2026-09-13.
  */
 function healthRows(): Record<string, string>[] {

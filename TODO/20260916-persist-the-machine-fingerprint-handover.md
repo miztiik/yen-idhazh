@@ -17,7 +17,7 @@ Every job in `digest.yml` measured the machine it drew and wrote a row into
 `state/host-fingerprint/<YYYY>/<MM>/<DD>.csv`. No commit step named that path, so
 the row went to the bin with the runner: `git ls-files state/host-fingerprint*`
 returned nothing at all. The instrument reported success, the log line printed the
-machine, and the store stayed empty. `state/span-rollup` had failed the same way
+machine, and the ledger stayed empty. `state/span-rollup` had failed the same way
 for nine days, and the guard written after it could not see this one, because it
 was scoped to one source file.
 
@@ -28,7 +28,7 @@ was scoped to one source file.
 | R1a | The work job must stage the ledger it writes | Landed 2026-09-16. `state/host-fingerprint` is in the work job's `commit-and-push.sh` call, a header-only day file is committed so `git add` under `set -euo pipefail` cannot abort the step on a fresh clone, and assemble's refresh set names the path | [`docs/reference/host-metrics.md`](../docs/reference/host-metrics.md) |
 | R1b | `dedupe-ledgers` must settle it | Landed 2026-09-16. `state/host-fingerprint` and `state/span-rollup` both joined `ledger.keyed_paths`. A job runs on one machine, so two rows under one `(date, run_id, job, shard)` are one machine written down twice | [`docs/concepts/telemetry.md`](../docs/concepts/telemetry.md) |
 | R1c | Only the `work` job recorded anything | Landed 2026-09-17, and the answer was every job rather than the two that run a model: `plan`, `work` and `assemble` each probe, and each stages the row. A run is only as fast as its slowest job, and until that day the two jobs either side cost time nobody could attribute. `ServerJob` now holds `plan`, `work`, `assemble`, `visuals` and `runtime` | [`docs/reference/host-metrics.md`](../docs/reference/host-metrics.md) |
-| The parity test | A test that reads the ledger side and the staging side, derived rather than hand-written | Landed 2026-09-16 as [`backend/tests/workflows/test_ledger_staging.py`](../backend/tests/workflows/test_ledger_staging.py), and finished on 2026-09-17: the three hand-written lists that preceded it were deleted, and the trace sink they covered is derived too. A store is filled by an `append_*` call or by a file sink opened on its own path helper; both count, because both die with the runner | [`docs/reference/github-actions.md`](../docs/reference/github-actions.md) |
+| The parity test | A test that reads the ledger side and the staging side, derived rather than hand-written | Landed 2026-09-16 as [`backend/tests/workflows/test_ledger_staging.py`](../backend/tests/workflows/test_ledger_staging.py), and finished on 2026-09-17: the three hand-written lists that preceded it were deleted, and the trace sink they covered is derived too. A ledger is filled by an `append_*` call or by a file sink opened on its own path helper; both count, because both die with the runner | [`docs/reference/github-actions.md`](../docs/reference/github-actions.md) |
 | R2 | `measure.yml` must record its machine, under `state/pipeline-tests/` | Landed 2026-09-17. The `runtime` job probes, and `measure.yml` pushes for the first time - one row under `state/pipeline-tests/host-fingerprint/`, with the permission raised on that one job rather than at workflow level. The split was the owner's, 2026-09-16: bench rows beside production rows would mean every console panel filtering by job for ever | [`docs/reference/host-metrics.md`](../docs/reference/host-metrics.md), [`docs/reference/github-actions.md`](../docs/reference/github-actions.md) |
 | R4 | Read the three outstanding bench draws and record them | Landed 2026-09-16. All four dispatches of that day are on the lottery page with the processor beside each number | [`docs/reference/benchmarks/the-processor-lottery.md`](../docs/reference/benchmarks/the-processor-lottery.md) |
 | R5a | Which hardware console panels to build | Approved and landed 2026-09-17. Three panels shipped, and the pooled read rate was deleted rather than kept beside them: measured over the committed counters ledger, **86 of the 90 runs that name a processor drew more than one kind**, so the bold figure an operator was most likely to quote was a number about neither machine | [`docs/concepts/console-design.md`](../docs/concepts/console-design.md), [`docs/architecture/publishing/console.md`](../docs/architecture/publishing/console.md) |
@@ -85,8 +85,8 @@ file-scoped guard is the same defect a second time.** The rollup guard read
 `stages/work.py` and was blind to a probe that runs from `cli.py`. The fix written
 on 2026-09-16 was a second guard reading `telemetry/silicon.py`, and it was
 retired on 2026-09-17 with the three hand-written ledger lists both guards
-consumed. What replaced them names no file: it takes the stores from the path
-helpers the store modules export and charges each one to the job whose
+consumed. What replaced them names no file: it takes the ledgers from the path
+helpers the ledger modules export and charges each one to the job whose
 `python -m idhazh <verb>` step reaches its writer.
 
 ## See also

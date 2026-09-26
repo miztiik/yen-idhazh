@@ -86,7 +86,7 @@
 	);
 	const totals = $derived(mergeTotals(drawn));
 	// Not `state`: a const of that name turns every `$state(...)` in this file
-	// into a store subscription on it, and svelte-check says so three ways.
+	// into an auto-subscription to it, and svelte-check says so three ways.
 	const panelState = $derived(mergeState(totals));
 	const note = $derived(mergeNote(totals, windowDays));
 	const rate = $derived(mergeRate(totals, windowDays));

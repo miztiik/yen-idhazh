@@ -316,7 +316,7 @@ export function projectDay(text: string): string {
  * is inlined into every prerendered document that renders the day, and nothing
  * in a browser opens the block: its one production reader is the backend's
  * index rebuild, which reads `frontend/public/` from disk. The committed
- * payload keeps it - that tree is the only store the vectors have.
+ * payload keeps it - that tree is the only collection the vectors have.
  *
  * Measured 2026-08-27 on Intel Core i7-1265U / Windows 11 / node 24.12.0, six
  * committed days, 2,237 items, `gzip -9`, heaviest of five builds: the block

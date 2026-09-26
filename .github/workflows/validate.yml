@@ -190,7 +190,7 @@ jobs:
       #
       # `--config backend/var/candidate-config` is what keeps this step out of
       # the ledgers a published day is built from. `plan` appends to the seen
-      # store, feed health, feed retirements and the counterfactual scores, and
+      # ledger, feed health, feed retirements and the counterfactual scores, and
       # without the flag it loads the committed config - which names no trial
       # directory, so a qualification would mark real addresses seen. Nothing
       # in this job is committed today, so the rows die with the runner; the

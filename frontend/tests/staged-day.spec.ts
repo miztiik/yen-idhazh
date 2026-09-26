@@ -239,7 +239,7 @@ test('a staged visual carries the three fields the image needs', () => {
 /**
  * The block this projection exists to drop, and the day that must keep it.
  *
- * The vectors have one store - the day payload the producer writes - and one
+ * The vectors have one copy - the day payload the producer writes - and one
  * production reader, the backend's index rebuild. If a day loses them the
  * rebuild does not raise: it writes every entry and a zero-byte vector file,
  * and search answers nothing for every query with no log line saying why. So
