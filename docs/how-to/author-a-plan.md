@@ -1,6 +1,6 @@
 # How to author an execution-ready plan-doc
 
-**Last Updated**: 2026-09-24
+**Last Updated**: 2026-09-26
 
 The procedure for turning a rough idea or draft into a `TODO/<YYYYMMDD>-<slug>-plan.md` that an autonomous agent can run end-to-end with no further instruction. This is the canonical home for the authoring ritual; the [`prepare-plan`](../../.claude/skills/prepare-plan/SKILL.md) skill is a thin wrapper that points here, mirroring how [`bootstrap`](../../.claude/skills/bootstrap/SKILL.md) points at [../agents/bootstrap.md](../agents/bootstrap.md).
 
@@ -26,7 +26,19 @@ Where a request arrives without them, run that page first and come back with its
 2. **Size the rows around outcomes, not around deliveries.** A row is one outcome that can be verified and reverted, and several rows ship together when they share a surface, an owner and a risk profile. Split a row when a part carries different risk, or when two parts can genuinely be built at the same time by different agents - not to make each one small enough to review, because a reviewer reads the change, not the row. Phase the rows with hard dependency lines (A -> B ->...), reader-before-writer for any schema or contract change. Never bundle mixed risk profiles.
 3. **Resolve ambiguity by naming the deciding authority inline.** Use the authority assignment in `CLAUDE.md` section 14. Where a decision is contested, run the relevant personas in DEBATE - they converge to ONE written ruling baked into the row, not independent parallel reviews. Red-team passes are research-only and return exact old -> new text.
 4. **Set the Level + ESCALATE triggers.** Per CLAUDE.md section 6. Anything Level-5 (core design / a persisted contract / the runtime) PAUSES for user sign-off; write the trigger explicitly so the executing agent stops there and nowhere else. A trigger that fires mid-execution is handled by [handle-scope-change.md](handle-scope-change.md).
-5. **Write the plan-doc** using the structure below. Stamp the execution pointer (see [execute-a-plan.md](execute-a-plan.md)) near the top. STOP after writing. Do not implement.
+5. **Read the plan against itself, before you read it against the tree again.** Steps 1 to 4 check the plan against the code. This step finds the defects that exist only between the plan's own sections - the ones a per-row review cannot see, because every row reads correct and the document does not. Four checks, in the order that finds the most per minute.
+
+    - **Read every example against every refusal the same plan declares.** A plan that shows a sample payload, a sample config or a sample command, and separately declares what its loader refuses, has written two things that can disagree. Take each example and walk the refusal list. This is the cheapest check here and it catches the worst class: a plan whose own example cannot load. A worker meets that on its first run and reasonably assumes the mistake is its own.
+
+    - **Write one function from each row's contract. Where you stop, that is the defect.** Not the whole row - one function, from the declarations the plan gives you. Every place you reach for something the plan does not say, name it. **This is the only check that finds two sentences that are each true and jointly unsatisfiable**, because reading prose against prose cannot: both read as correct, and the contradiction exists only in the code that neither of them describes.
+
+    - **Delete every number nothing reads.** A figure stated in prose has no reader, so nothing goes red when it drifts - and it will drift, because the thing it counts keeps changing. Keep a number only where it is derived at the point it is used, and say what it means next to it (`CLAUDE.md` section 0b). Everywhere else, say how to obtain it instead of what it was. [execute-a-plan.md](execute-a-plan.md) carries the matching check at dispatch: a number a row does quote is re-derived before that row runs.
+
+    - **Count the mechanisms holding up one property.** Where a config key, a scheduling rule and a test all exist so that one thing cannot go wrong, the question is not whether they work. It is what change removes the need for all three. **Three mechanisms buying one property is the signal that the shape is wrong one level up**, and it is usually the largest simplification a plan has available.
+
+    A plan that passes these is not correct. It is free of the defects that cost the most to find later, because those are found by a worker mid-row, with every other row already sized against the broken part.
+
+6. **Write the plan-doc** using the structure below. Stamp the execution pointer (see [execute-a-plan.md](execute-a-plan.md)) near the top. STOP after writing. Do not implement.
 
 ## Plan-doc structure (what you emit)
 
