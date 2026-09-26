@@ -1,6 +1,6 @@
 # Glossary
 
-**Last Updated**: 2026-09-22
+**Last Updated**: 2026-09-26
 
 The words this project uses for its own machinery, and where each one is defined.
 
@@ -43,12 +43,12 @@ a doc is a fine change to make; moving it into *this* page is not.
 | **fold** | One of the four retention policies: keep the durable total, drop the per-item grain. Compaction uses the same word for what it does to a closed day | [adaptive-pruning.md](adaptive-pruning.md) |
 | **holdout** | Labelled pairs kept out of fitting, so a fitted threshold is scored against something it has never seen | [../how-to/label-the-similarity-holdout.md](../how-to/label-the-similarity-holdout.md) |
 | **item** | One source URL and everything derived from it. The atom of the whole system | [pipeline-loop.md](pipeline-loop.md) |
-| **ledger** | A committed file under `state/` that one run writes so a later run can read a fact it found. The pipeline has no memory of its own: every run starts on a fresh machine with a fresh checkout | `backend/idhazh/ledger.py` |
+| **ledger** | A committed file under `state/` that one run writes so a later run can read a fact it found. **The directory is a ledger too**: `state/seen/` is the seen ledger and `state/item-health/` is the item-health ledger. The pipeline has no memory of its own: every run starts on a fresh machine with a fresh checkout | `backend/idhazh/ledger.py` |
 | **partition** | One file holding one period of a collection that grows. The directory is the collection and the filename says the period | [partitions.md](partitions.md) |
 | **qualification** | The gates a candidate model must clear before it may be adopted, and what clearing them proves | [qualification.md](qualification.md) |
 | **run** | One turn of the pipeline. The schedule turns it five times a day | [pipeline-loop.md](pipeline-loop.md) |
 | **scratch config** | A copy of `config/` with the model pointer moved, so a candidate can be measured without editing the committed tree. Two keys may differ and no third | `backend/utilities/candidate_pointer.py` |
-| **seen store** | The ledger that answers "how old is this?" for an article whose feed carried no date | [pipeline-loop.md](pipeline-loop.md) |
+| **seen ledger** | The ledger that answers "how old is this?" for an article whose feed carried no date | [pipeline-loop.md](pipeline-loop.md) |
 | **segment** | The rows one writer commits, at `state/<ledger>/<YYYY>/<MM>/<DD>/<run_id>-<attempt>-<job>-<shard>.csv`. Two writers never share a filename there, so a lost push race cannot stack two copies of a row | `backend/idhazh/ledger.py`, `backend/idhazh/day_shards.py` |
 | **shard** | The batch of items handed to one worker, so a day's work runs in parallel. `run.shard_size` is URLs per worker | `backend/idhazh/contracts/knobs/run.py` |
 | **span** | One timed operation in the telemetry tree | [telemetry.md](telemetry.md) |
@@ -58,6 +58,24 @@ a doc is a fine change to make; moving it into *this* page is not.
 | **work order** | One URL that survived deduplication and was chosen for the day. It is `PlannedItem` in code, and nothing but this row calls it a work order | `backend/idhazh/contracts/run_plan.py` |
 
 ## Design rationale
+
+**The word `store` is retired, and this page is where that is written down.** It was
+a third name for a thing that already had two. Measured 2026-09-26: `ledger`
+appeared 3,067 times and carried the definition above; `collection` appeared 307
+times and carried its own in [partitions.md](partitions.md); `store` appeared 931
+times and was **defined nowhere**. CLAUDE.md section 0b settles that kind of tie
+without a vote - a second name for something that already has one is deleted
+rather than replaced.
+
+**Which of the two survivors applies is decided by where the directory sits.**
+Under `state/` it is a **ledger**, because something reads it as a later run's
+memory. Under `frontend/public/` it is a **collection**, because nothing does -
+`frontend/public/digest/<YYYY>/<MM>/<DD>/` is a published tree a reader opens,
+not a fact one run left for the next. The two words are not interchangeable and
+the test is the reader, never the shape on disk.
+
+Owner decision, 2026-09-26. `TODO/20260926-53-one-door-into-state-plan.md` is
+the work that removes the word.
 
 **A glossary looks like the register Guardrail #4 forbids, and is not one.**
 That guardrail bans a standalone record of a *decision*, because a decision
