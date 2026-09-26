@@ -42,6 +42,7 @@ import pytest
 
 from idhazh import cli, day_shards, ledger
 from idhazh.contracts.base import ServerJob
+from idhazh.contracts.ledger_name import DAY_TREES, LedgerName
 from idhazh.stages import compact as compact_stage
 from idhazh.telemetry import sinks, traces
 
@@ -210,7 +211,7 @@ def _helper_arguments(date: str) -> dict[str, object]:
         "run_id": f"{date}-1",
         "shard": 0,
         "stamp": date,
-        "ledger": ledger.SegmentLedger.HOST_FINGERPRINT,
+        "ledger": LedgerName.HOST_FINGERPRINT,
         "attempt": 1,
         "job": ServerJob.WORK,
     }
@@ -521,7 +522,7 @@ def _covers(staged: str, ledger: str) -> bool:
     return ledger == staged or ledger.startswith(f"{staged}/")
 
 
-def _folded_day(which: ledger.SegmentLedger, date: str) -> str:
+def _folded_day(which: LedgerName, date: str) -> str:
     """Where the fold of one tree's day lands, spelled by the producer.
 
     A settled file sits beside the writer files it replaced, so the day-shard helper
@@ -543,7 +544,7 @@ def _compacted_ledgers() -> dict[str, str]:
 
     The fold writes generically - one function over every declared tree, and no
     `append_*` name for `_writer_ledgers` to find - so it is read out of
-    `SegmentLedger` rather than named here. That is what keeps a ledger joining the
+    `DAY_TREES` rather than named here. That is what keeps a ledger joining the
     set from leaving its folded day charged to no job, which is the loss this whole
     file exists to catch.
 
@@ -553,7 +554,7 @@ def _compacted_ledgers() -> dict[str, str]:
     reader outside the fold asks for one day of it by date.
     """
     found: dict[str, str] = {}
-    for which in ledger.SegmentLedger:
+    for which in DAY_TREES:
         shared = _shared_prefix(
             _folded_day(which, SUBSTITUTED_DATE), _folded_day(which, OTHER_DATE)
         )

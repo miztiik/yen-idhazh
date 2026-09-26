@@ -13,6 +13,7 @@ from idhazh import (
     run_context,
 )
 from idhazh.contracts.base import ServerJob, fit_field
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.qualification import (
     GateStatus,
     QualificationReport,
@@ -115,7 +116,7 @@ def stage_qualify_decide(
     # is built from.
     ledger.write_segment(
         common.STATE_ROOT,
-        ledger.SegmentLedger.VALIDATION,
+        LedgerName.VALIDATION,
         [
             ValidationRow(
                 version=ValidationRow.schema_version(),

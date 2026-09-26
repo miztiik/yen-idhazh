@@ -53,6 +53,7 @@ from idhazh import day_shards, ledger
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.observation_index import ObservationIndexRow
 from idhazh.evals import archive
 from idhazh.ledger import read_header as _read_header
@@ -423,7 +424,7 @@ def append_segment(
     stamp = ObservationIndexRow.schema_version()
     written = ledger.write_segment(
         state_dir,
-        ledger.SegmentLedger.SCORES,
+        LedgerName.SCORES,
         [row for row, _ in fresh],
         run_id=run_id,
         attempt=attempt,
@@ -441,7 +442,7 @@ def append_segment(
     # rows beside it carry.
     ledger.write_segment(
         state_dir,
-        ledger.SegmentLedger.SCORE_INDEX,
+        LedgerName.SCORE_INDEX,
         [
             ObservationIndexRow.model_validate({"version": stamp, "observation_digest": digest})
             for _, digest in fresh

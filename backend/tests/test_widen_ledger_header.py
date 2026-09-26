@@ -28,6 +28,7 @@ from conftest import FIXTURES_DIR
 
 from idhazh import ledger
 from idhazh.contracts.item_health import ItemHealthRow
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.story_similarity_pair import DROPPED_CELLS, StorySimilarityPair
 from idhazh.telemetry import prune
 from utilities import widen_ledger_header
@@ -288,7 +289,7 @@ def test_a_store_no_registry_names_a_reader_for_is_refused_by_name(tmp_path: Pat
     **This target used to be `scores`, and that was the bug this commit fixes.**
     `scores` is a day tree, so the refusal it was asserting stopped being about a
     ledger with no reader the moment the lookup learnt to ask
-    `ledger.SegmentLedger`. A refusal is the right answer for exactly the ledgers
+    `DAY_TREES`. A refusal is the right answer for exactly the ledgers
     in `UNREGISTERED` below, and the census there is what keeps this one honest.
     """
     day = ledger.published_path(tmp_path, "2026-09-18")
@@ -389,7 +390,7 @@ def test_a_day_tree_carries_its_retired_headings_with_its_reader(tmp_path: Path)
 
     assert path.read_bytes() == before, "the refusal moves nothing"
     assert set(ledger.read_header(path)) - set(ItemHealthRow.csv_columns()) <= (
-        ledger.segment_carried(ledger.SegmentLedger.ITEM_HEALTH)
+        ledger.segment_carried(LedgerName.ITEM_HEALTH)
     ), "the entry that makes the re-file above succeed"
 
 

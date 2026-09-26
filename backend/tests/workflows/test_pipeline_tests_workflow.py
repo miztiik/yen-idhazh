@@ -17,6 +17,7 @@ from pydantic import ValidationError
 
 from idhazh import config, ledger
 from idhazh.contracts.base import ServerJob
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.pipeline_tests import (
     MINIMUM_CANDIDATES,
     TRIAL_STATE_PREFIX,
@@ -541,10 +542,10 @@ def _a_downloaded_tree(root: Path, *, case: str) -> Path:
     moves takes this fixture with it rather than leaving it green against a
     shape nothing writes.
     """
-    rows = ledger.segment_contract(ledger.SegmentLedger.SPAN_ROLLUP).csv_columns()
+    rows = ledger.segment_contract(LedgerName.SPAN_ROLLUP).csv_columns()
     segment = ledger.day_shard_path(
         root / case,
-        ledger.SegmentLedger.SPAN_ROLLUP,
+        LedgerName.SPAN_ROLLUP,
         date=CASE_DATE,
         run_id=CASE_RUN_ID,
         attempt=CASE_ATTEMPT,
@@ -692,7 +693,7 @@ def test_every_declared_case_is_placed_whether_or_not_it_wrote_anything(tmp_path
     for case in cases:
         assert (state / case.trial_state_dirname).is_dir()
     assert (
-        state / cases[0].trial_state_dirname / ledger.SegmentLedger.SPAN_ROLLUP.value
+        state / cases[0].trial_state_dirname / LedgerName.SPAN_ROLLUP.value
     ).is_dir()
 
 

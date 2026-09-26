@@ -16,6 +16,7 @@ from idhazh.contracts.knobs.collect import CollectConfig
 from idhazh.contracts.knobs.observability import ObservabilityConfig
 from idhazh.contracts.knobs.placement import LensWeightsConfig
 from idhazh.contracts.knobs.retention import RetentionConfig
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.seen import SeenRow
 from idhazh.retention import prune_counterfactual_scores, prune_seen
 from idhazh.stages.prune_state import stage_prune_state
@@ -168,7 +169,7 @@ def _counterfactual_day(state: Path, day: str, rows: int = 1) -> Path:
     """
     ledger.write_segment(
         state,
-        ledger.SegmentLedger.COUNTERFACTUAL_SCORES,
+        LedgerName.COUNTERFACTUAL_SCORES,
         [
             CounterfactualScoreRow(
                 version=CounterfactualScoreRow.schema_version(),
@@ -196,7 +197,7 @@ def _counterfactual_day(state: Path, day: str, rows: int = 1) -> Path:
 def _counterfactual_file(day: str) -> str:
     """What the writer above named its file, spelled by the producer's own helper."""
     return ledger.day_shard_relpath(
-        ledger.SegmentLedger.COUNTERFACTUAL_SCORES,
+        LedgerName.COUNTERFACTUAL_SCORES,
         date=day,
         run_id=f"{day}-1",
         attempt=1,

@@ -26,6 +26,7 @@ from idhazh import day_shards, ledger
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.knobs.run import RunConfig
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.span_rollup import RollupSpan, SpanRollupRow
 from idhazh.stages import compact
 
@@ -82,7 +83,7 @@ def a_span(date: str, *, shard: int, span: RollupSpan, total_ms: int) -> SpanRol
 
 def write(
     state: Path,
-    tree: ledger.SegmentLedger,
+    tree: LedgerName,
     rows: list[HostFingerprintRow] | list[SpanRollupRow],
     *,
     date: str,
@@ -120,7 +121,7 @@ def rows_in(path: Path) -> list[dict[str, str]]:
         return list(csv.DictReader(handle))
 
 
-def settled_in(state: Path, tree: ledger.SegmentLedger, date: str) -> list[dict[str, str]]:
+def settled_in(state: Path, tree: LedgerName, date: str) -> list[dict[str, str]]:
     """What a reader settles for one day, whichever files the day is holding."""
     return day_shards.settled_day(
         state / tree.value,
@@ -140,7 +141,7 @@ def a_full_run(state: Path, date: str) -> Path:
     for job, shard in WRITERS:
         write(
             state,
-            ledger.SegmentLedger.HOST_FINGERPRINT,
+            LedgerName.HOST_FINGERPRINT,
             [a_machine(date, job=job, shard=shard, cpu_model=f"{job.value}-{shard}")],
             date=date,
             job=job,
@@ -169,7 +170,7 @@ def test_a_day_older_than_the_cover_folds_into_one_file(tmp_path: Path) -> None:
     state = tmp_path / ledger.STATE_DIRNAME
     day = a_full_run(state, NEWEST_CLOSED)
     assert len(names_in(day)) == len(WRITERS)
-    before = settled_in(state, ledger.SegmentLedger.HOST_FINGERPRINT, NEWEST_CLOSED)
+    before = settled_in(state, LedgerName.HOST_FINGERPRINT, NEWEST_CLOSED)
 
     report = fold(state)
 
@@ -251,7 +252,7 @@ def test_two_trees_closed_on_one_day_are_both_named(tmp_path: Path) -> None:
     machines = a_full_run(state, NEWEST_CLOSED)
     spans = write(
         state,
-        ledger.SegmentLedger.SPAN_ROLLUP,
+        LedgerName.SPAN_ROLLUP,
         [a_span(NEWEST_CLOSED, shard=0, span=RollupSpan.ITEM, total_ms=900)],
         date=NEWEST_CLOSED,
         job=ServerJob.WORK,
@@ -302,7 +303,7 @@ def test_a_straggler_that_lands_after_a_fold_is_folded_into_the_file_beside_it(
     fold(state)
     write(
         state,
-        ledger.SegmentLedger.HOST_FINGERPRINT,
+        LedgerName.HOST_FINGERPRINT,
         [a_machine(NEWEST_CLOSED, job=ServerJob.WORK, shard=9, cpu_model="a late shard")],
         date=NEWEST_CLOSED,
         run=2,
@@ -333,26 +334,26 @@ def test_the_fold_changes_no_answer(tmp_path: Path) -> None:
     state = tmp_path / ledger.STATE_DIRNAME
     write(
         state,
-        ledger.SegmentLedger.HOST_FINGERPRINT,
+        LedgerName.HOST_FINGERPRINT,
         [a_machine(NEWEST_CLOSED, job=ServerJob.PLAN, shard=0, cpu_model="the first try")],
         date=NEWEST_CLOSED,
         attempt=1,
     )
     write(
         state,
-        ledger.SegmentLedger.HOST_FINGERPRINT,
+        LedgerName.HOST_FINGERPRINT,
         [a_machine(NEWEST_CLOSED, job=ServerJob.PLAN, shard=0, cpu_model="the second try")],
         date=NEWEST_CLOSED,
         attempt=2,
     )
-    before = settled_in(state, ledger.SegmentLedger.HOST_FINGERPRINT, NEWEST_CLOSED)
+    before = settled_in(state, LedgerName.HOST_FINGERPRINT, NEWEST_CLOSED)
     assert [row["cpu_model"] for row in before] == ["the second try"], (
         "the fixture has to carry a correction or this proves nothing"
     )
 
     fold(state)
 
-    assert settled_in(state, ledger.SegmentLedger.HOST_FINGERPRINT, NEWEST_CLOSED) == before
+    assert settled_in(state, LedgerName.HOST_FINGERPRINT, NEWEST_CLOSED) == before
 
 
 # --- Which days a tree says it has ---------------------------------------------

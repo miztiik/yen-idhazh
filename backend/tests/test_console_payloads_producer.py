@@ -33,6 +33,7 @@ from idhazh.contracts.knobs.collect import CollectConfig
 from idhazh.contracts.knobs.console import ConsoleConfig
 from idhazh.contracts.knobs.models import ModelRef
 from idhazh.contracts.knobs.run import RunConfig
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.run_manifest import (
     ModelRole,
     ModelUse,
@@ -294,7 +295,7 @@ def tree(tmp_path: Path) -> tuple[Path, Path]:
         for shard, seconds in ((0, 10.0), (1, 20.0)):
             ledger.write_segment(
                 state,
-                ledger.SegmentLedger.HOST_FINGERPRINT,
+                LedgerName.HOST_FINGERPRINT,
                 [_host_row(month, shard=shard, prompt=1000, seconds=seconds)],
                 run_id=run_id,
                 attempt=1,
@@ -916,7 +917,7 @@ def test_a_run_whose_shards_disagree_is_refused_whole(tree: tuple[Path, Path]) -
     )
     ledger.write_segment(
         state,
-        ledger.SegmentLedger.HOST_FINGERPRINT,
+        LedgerName.HOST_FINGERPRINT,
         [moved],
         run_id=f"{NEWEST_DAY}-1",
         attempt=2,
@@ -943,7 +944,7 @@ def test_more_hosts_than_the_plan_asked_for_refuses_the_run(tree: tuple[Path, Pa
     state, digest = tree
     ledger.write_segment(
         state,
-        ledger.SegmentLedger.HOST_FINGERPRINT,
+        LedgerName.HOST_FINGERPRINT,
         [_host_row(NEWEST, shard=2, prompt=1000, seconds=20.0)],
         run_id=f"{NEWEST_DAY}-1",
         attempt=1,
@@ -988,7 +989,7 @@ def test_a_shard_that_filed_no_host_row_is_counted_against_the_plan(
     state, digest = tree
     ledger.day_shard_path(
         state,
-        ledger.SegmentLedger.HOST_FINGERPRINT,
+        LedgerName.HOST_FINGERPRINT,
         date=NEWEST_DAY,
         run_id=f"{NEWEST_DAY}-1",
         attempt=1,
@@ -1126,7 +1127,7 @@ def _a_writers_day(state: Path, stamp: str, rows: int, *, shard: int) -> None:
     """One job's slice of `item-health`, filed under the day its rows name."""
     ledger.write_segment(
         state,
-        ledger.SegmentLedger.ITEM_HEALTH,
+        LedgerName.ITEM_HEALTH,
         [_health_row(stamp, index) for index in range(rows)],
         run_id=f"{stamp}-1",
         attempt=1,

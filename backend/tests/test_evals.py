@@ -31,6 +31,7 @@ from idhazh.contracts.eval_row import ConfidenceBand, EvalRow
 from idhazh.contracts.feed_health import FetchOutcome
 from idhazh.contracts.knobs.evaluation import EvaluationConfig
 from idhazh.contracts.knobs.extract import ExtractConfig
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.observation_index import ObservationIndexRow
 from idhazh.contracts.run_plan import PlannedItem, RunPlan
 from idhazh.contracts.score_archive import ScoreCohort
@@ -1200,7 +1201,7 @@ def _measurement(number: int) -> EvalRow:
 
 
 def _a_days_file(
-    state: Path, which: ledger.SegmentLedger, date: str, *, shard: int = 0
+    state: Path, which: LedgerName, date: str, *, shard: int = 0
 ) -> Path:
     """Where this section's one writer files a day of rows or of digests.
 
@@ -1234,7 +1235,7 @@ def _seeded(state: Path, rows: list[EvalRow], *, copies: int = 1) -> None:
     it folds. It is also the case that separates "the read grows with the rows"
     from "the read grows with the measurements".
     """
-    shard = _a_days_file(state, ledger.SegmentLedger.SCORES, rows[0].date)
+    shard = _a_days_file(state, LedgerName.SCORES, rows[0].date)
     shard.parent.mkdir(parents=True, exist_ok=True)
     _write_shard(shard, [row for row in rows for _ in range(copies)])
 
@@ -1419,7 +1420,7 @@ def test_an_index_left_behind_its_rows_is_put_right_by_dropping_it(tmp_path: Pat
     held = [_measurement(number) for number in range(4)]
     behind = [_measurement(70), _measurement(71)]
     date = held[0].date
-    a_scores_day = ledger.SegmentLedger.SCORES
+    a_scores_day = LedgerName.SCORES
 
     stale = tmp_path / "stale" / "state"
     assert put(stale, held) == 4
@@ -1509,7 +1510,7 @@ def _write_index(state: Path, date: str, rows: Sequence[dict[str, str]]) -> None
     """
     for path in day_shards.one_day(state / writer.INDEX_DIRNAME, date):
         path.unlink()
-    target = _a_days_file(state, ledger.SegmentLedger.SCORE_INDEX, date)
+    target = _a_days_file(state, LedgerName.SCORE_INDEX, date)
     target.parent.mkdir(parents=True, exist_ok=True)
     with target.open("w", encoding="utf-8", newline="") as handle:
         out = csv.DictWriter(handle, fieldnames=writer.index_columns(), lineterminator="\n")
