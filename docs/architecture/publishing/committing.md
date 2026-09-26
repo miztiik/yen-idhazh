@@ -157,7 +157,7 @@ producer would ever write.
 nothing under `state/`.** It carries the day's `digest.json` and `run.json`, the
 published projections under `frontend/public/`, `state/day-metrics` and the
 closed-day fold. The list lives in
-[`backend/idhazh/paths.py`](../../../backend/idhazh/paths.py) and the
+[`backend/idhazh/path_classes.py`](../../../backend/idhazh/path_classes.py) and the
 `Say which committed paths a rebuild owns` step prints it into `$GITHUB_OUTPUT`;
 it was a space-split string in the workflow, under a header warning that no path
 in it may carry a space, and the workflow tests held a second copy of the same

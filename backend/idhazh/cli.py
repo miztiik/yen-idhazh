@@ -19,7 +19,7 @@ keeps what it measured.
 
 Neither is a stage. Nothing schedules the first; the second answers one question
 for the commit step that runs seconds later, and its answer comes from
-`idhazh.paths`.
+`idhazh.path_classes`.
 
     idhazh telemetry <subcommand>   read or republish one day's instrument
 
@@ -50,7 +50,7 @@ from typing import Final
 from idhazh import (
     assemble,
     config,
-    paths,
+    path_classes,
 )
 from idhazh.contracts.base import WORK_JOB, ServerJob
 from idhazh.contracts.knobs.observability import ObservabilityConfig
@@ -560,7 +560,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "derived-paths needs --day-dir: two of the paths sit inside the day this "
                 "run published, and nothing else in this process says which day that is"
             )
-        print(f"refresh_paths={paths.refresh_paths(day_dir=args.day_dir)}")
+        print(f"refresh_paths={path_classes.refresh_paths(day_dir=args.day_dir)}")
         return 0
 
     if args.stage == "site-weight":

@@ -212,7 +212,7 @@ stopped publishing three months ago.
 
 `REFRESH_PATHS` on the `Commit the day` step names what a rebuild owns after a
 lost push race, and it is read from
-[`backend/idhazh/paths.py`](../../../backend/idhazh/paths.py) by the step that
+[`backend/idhazh/path_classes.py`](../../../backend/idhazh/path_classes.py) by the step that
 prints it and by the workflow tests. It was a space-split string in the workflow
 with a hand-written mirror in `backend/tests/workflows/`, asserted equal by exact
 list order; two lists that can drift is one list too many, and a payload absent

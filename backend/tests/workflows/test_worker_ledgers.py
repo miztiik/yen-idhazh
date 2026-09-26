@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 from conftest import REPO_ROOT
 
-from idhazh import ledger, paths, telemetry
+from idhazh import ledger, path_classes, telemetry
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.ledger_name import DAY_TREES, LedgerName
 from idhazh.evals import writer as score_writer
@@ -401,7 +401,7 @@ def test_a_file_one_writer_owns_takes_no_merge_driver_and_a_shared_one_takes_a_u
     shard has exactly one writer, so there is nothing for a driver to settle and
     git answers `unspecified` - its ordinary text merge, which stops the push if
     two sides ever did change one of them. A collection two jobs append
-    independent rows to takes `merge=union`, and `idhazh.paths.UNION_SAFE` is
+    independent rows to takes `merge=union`, and `idhazh.path_classes.UNION_SAFE` is
     this repository's own list of those. The list is read here rather than
     copied, so a collection that joins it without a line in `.gitattributes`
     fails in the same commit.
@@ -435,7 +435,7 @@ def test_a_file_one_writer_owns_takes_no_merge_driver_and_a_shared_one_takes_a_u
     )
     shared = [
         entry if entry.endswith(".csv") else f"{entry}/2026/01/01/a.csv"
-        for entry in paths.UNION_SAFE
+        for entry in path_classes.UNION_SAFE
     ]
 
     answered = subprocess.run(

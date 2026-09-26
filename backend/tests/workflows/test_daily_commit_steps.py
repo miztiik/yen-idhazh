@@ -13,7 +13,7 @@ from typing import Final
 import pytest
 from conftest import CONFIG_DIR, FIXTURES_DIR, REPO_ROOT, read_text
 
-from idhazh import ledger, paths
+from idhazh import ledger, path_classes
 from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.ledger_name import LedgerName
@@ -415,10 +415,10 @@ def test_only_assemble_rebuilds_and_it_rebuilds_with_its_own_publish_command() -
     # step's line continuations are folded first.
     published_argv = shlex.split(_substitute(publish).replace("\\\n", " "))
     assert published_argv == settings["REGENERATE_COMMAND"].split()
-    # The list itself lives in `idhazh.paths`, and the step reads it through a
+    # The list itself lives in `idhazh.path_classes`, and the step reads it through a
     # step output. The harness carried a second copy of it until 2026-09-22;
     # three lists that can drift was the defect, not two.
-    assert settings["REFRESH_PATHS"].split() == paths.refresh_paths(
+    assert settings["REFRESH_PATHS"].split() == path_classes.refresh_paths(
         day_dir=SUBSTITUTED_DAY_DIR
     ).split()
     # Never the day's directory itself. The visuals artifact unpacks this run's
@@ -455,7 +455,7 @@ def test_only_the_collections_this_repository_declares_union() -> None:
     is exactly how a second attempt arrives. Each writer owns the file its run,
     attempt, job and shard name now, so there is nothing for a merge to settle.
 
-    What is left is held against `idhazh.paths.UNION_SAFE`, which is this
+    What is left is held against `idhazh.path_classes.UNION_SAFE`, which is this
     repository's own list of the collections two writers may both append to. The
     list is one hand-written set rather than two: a line added to
     `.gitattributes` and not to the list fails here, and so does a list entry
@@ -476,7 +476,7 @@ def test_only_the_collections_this_repository_declares_union() -> None:
     }
 
     assert unioned == {
-        entry if entry.endswith(".csv") else f"{entry}/**/*.csv" for entry in paths.UNION_SAFE
+        entry if entry.endswith(".csv") else f"{entry}/**/*.csv" for entry in path_classes.UNION_SAFE
     }
 
 

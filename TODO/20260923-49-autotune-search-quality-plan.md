@@ -350,7 +350,7 @@ And the window rule holds: the newest month alone answers 3 days, under the floo
 
 **Where.** `state/search-quality/<YYYY>/<MM>/<DD>/`, named for the ranker rather than for one of its two surfaces. The same code serves the front page search box and the archive search, so `archive-search-quality` would claim half of what it measures. Owner ruling, 2026-09-23.
 
-**The filename follows the one-writer-per-path rule.** `ledger.segment_name` spells `<run_id>-<attempt>-<job>-<shard>.csv` and `ledger.day_shard_path` builds the path. `idhazh.paths.is_written_once` reads it back, and it passes on `SEGMENT_NAME` alone with no list to join. **The mechanism may change later; this ledger follows whatever it becomes rather than inventing a second scheme.** Owner ruling, 2026-09-23.
+**The filename follows the one-writer-per-path rule.** `ledger.segment_name` spells `<run_id>-<attempt>-<job>-<shard>.csv` and `ledger.day_shard_path` builds the path. `idhazh.path_classes.is_written_once` reads it back, and it passes on `SEGMENT_NAME` alone with no list to join. **The mechanism may change later; this ledger follows whatever it becomes rather than inventing a second scheme.** Owner ruling, 2026-09-23.
 
 **Who writes it.** `ledger.write_segment` from `stage_assemble`, with `job=ServerJob.ASSEMBLE` and `shard=ASSEMBLE_SHARD`, which is 0 because assemble runs once for the whole day. The call sits immediately after `assemble.rebuild_search_index` returns and before the manifest is built, because the reading is about the index this run just rebuilt.
 
@@ -432,7 +432,7 @@ Run the assemble stage over a fixture tree - row 3's tree with this run's inputs
 
 - the day directory holds exactly one file;
 - its name is what `ledger.segment_name` returns for this run, attempt, job and shard, **built by calling the producer and never spelled in the test**;
-- `idhazh.paths.is_written_once` returns True for its relative path;
+- `idhazh.path_classes.is_written_once` returns True for its relative path;
 - it holds one row per question the reading carried, and `from_csv_row` reads every one of them back unchanged.
 
 **Prove it can fail.** Name the file `<DD>.csv` instead: `is_written_once` returns False and the day-tree walk refuses the name rather than skipping it. Restore from the commit, never from the working tree.

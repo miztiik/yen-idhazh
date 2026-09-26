@@ -23,7 +23,7 @@ import pytest
 import yaml  # type: ignore[import-untyped]
 from conftest import CONFIG_DIR, REPO_ROOT, read_text
 
-from idhazh import ledger, paths
+from idhazh import ledger, path_classes
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.visual_decision import PAYLOAD_SUFFIX, VisualDecision, VisualKind, VisualState
 from idhazh.telemetry.publish import series
@@ -911,7 +911,7 @@ EXPRESSION_VALUES: Final = {
     # What the `derived` step prints into `$GITHUB_OUTPUT`, computed rather than
     # written out. A second copy of that list is the thing this expression
     # exists to remove.
-    "steps.derived.outputs.refresh_paths": paths.refresh_paths(day_dir=SUBSTITUTED_DAY_DIR),
+    "steps.derived.outputs.refresh_paths": path_classes.refresh_paths(day_dir=SUBSTITUTED_DAY_DIR),
     "github.sha": SUBSTITUTED_SHA,
     "matrix.shard": SUBSTITUTED_SHARD,
     "matrix.shards": SUBSTITUTED_SHARDS,
