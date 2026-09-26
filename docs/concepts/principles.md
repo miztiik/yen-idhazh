@@ -40,11 +40,11 @@ Source lists, caps, thresholds, model references and retry budgets live in `conf
 
 ## 9. Logging is local by construction
 
-There is no log sink, because there is nothing to send logs to. On a developer machine the backend writes structured records to stderr; in CI the same stream is what the Actions run retains, and that IS the log store; on the published page the browser console is the whole of it. A stage logs the same structured payload it emits, so a log line and a persisted file never disagree about what happened.
+There is no log sink, because there is nothing to send logs to. On a developer machine the backend writes structured records to stderr; in CI the same stream is what the Actions run retains, and that IS the log; on the published page the browser console is the whole of it. A stage logs the same structured payload it emits, so a log line and a persisted file never disagree about what happened.
 
 ## 10. Publish the link, not the article
 
-The pipeline stores and serves a URL and our own summary. The source text is fetched, used, and never committed. This is a copyright rule and a scope rule at once, and it is also why the link to the original is a first-class element of every item rather than a footnote.
+The pipeline keeps and serves a URL and our own summary. The source text is fetched, used, and never committed. This is a copyright rule and a scope rule at once, and it is also why the link to the original is a first-class element of every item rather than a footnote.
 
 ## 11. Delete before you build, and build before you settle
 

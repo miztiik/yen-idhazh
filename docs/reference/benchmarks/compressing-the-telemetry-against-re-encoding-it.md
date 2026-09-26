@@ -2,9 +2,9 @@
 
 **Last Updated**: 2026-09-18
 Two ways to make the committed telemetry smaller, raced against each other on
-the same store: gzip against ordinal encoding of its closed-vocabulary columns.
+the same ledger: gzip against ordinal encoding of its closed-vocabulary columns.
 
-**Compression takes 9.6 times what ordinal encoding takes, off the same store,
+**Compression takes 9.6 times what ordinal encoding takes, off the same ledger,
 and costs no readability.** Re-encoding every closed-vocabulary column as an
 integer saves 369,855 bytes of `state/item-health/`. Compressing the same files
 saves 3,551,430.

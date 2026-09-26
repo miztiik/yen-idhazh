@@ -325,7 +325,7 @@ flowchart TD
   classDef code fill:#eef2ff,stroke:#4c6ef5,stroke-width:2px,color:#0b1020;
   classDef model fill:#fff4e6,stroke:#f08c00,stroke-width:2px,color:#0b1020;
   classDef gate fill:#f3f0ff,stroke:#7048e8,stroke-width:2px,color:#0b1020;
-  classDef store fill:#e6fcf5,stroke:#0ca678,stroke-width:2px,color:#0b1020;
+  classDef ledger fill:#e6fcf5,stroke:#0ca678,stroke-width:2px,color:#0b1020;
   classDef none fill:#fff5f5,stroke:#e03131,stroke-width:1.5px,color:#0b1020;
   classDef plain fill:#f8f9fa,stroke:#adb5bd,stroke-width:1px,color:#0b1020;
 
@@ -333,7 +333,7 @@ flowchart TD
   class CP,ANC,VP,DL,VC,D3,K1 code;
   class C1,C2,K2 model;
   class VV,SC,K3 gate;
-  class TE,DJ,VJ,K4 store;
+  class TE,DJ,VJ,K4 ledger;
   class DEG,K5 none;
 ```
 

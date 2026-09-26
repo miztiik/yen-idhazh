@@ -27,9 +27,9 @@ set is still operator-only: the console reads it at build time under
 | --- | --- |
 | Contract | [`backend/idhazh/contracts/host_fingerprint.py`](../../backend/idhazh/contracts/host_fingerprint.py) |
 | Generated schema | [`HostFingerprintRow`](../../`HostFingerprintRow`) |
-| Store | `state/host-fingerprint/<YYYY>/<MM>/<DD>/` for the daily run; `state/pipeline-tests/host-fingerprint/<YYYY>/<MM>/<DD>/` for a bench dispatch |
+| Ledger | `state/host-fingerprint/<YYYY>/<MM>/<DD>/` for the daily run; `state/pipeline-tests/host-fingerprint/<YYYY>/<MM>/<DD>/` for a bench dispatch |
 | One file per writer | `<run_id>-<attempt>-<job>-<shard>.csv` inside the day directory - nothing else ever opens that path |
-| Producer | `idhazh fingerprint` and `idhazh job-clock`, through [`backend/idhazh/telemetry/silicon.py`](../../backend/idhazh/telemetry/silicon.py). Each job writes its own file through `ledger.write_segment` and `ledger.extend_segment`, and nothing else writes the store |
+| Producer | `idhazh fingerprint` and `idhazh job-clock`, through [`backend/idhazh/telemetry/silicon.py`](../../backend/idhazh/telemetry/silicon.py). Each job writes its own file through `ledger.write_segment` and `ledger.extend_segment`, and nothing else writes the ledger |
 | Read by | `/console/machine/`, at build time through `frontend/src/lib/server/host-fingerprint.ts` |
 | Key | `date`, `run_id`, `job`, `shard` - one row a job |
 | Switch | `observability.host_fingerprint` |
@@ -124,7 +124,7 @@ reader goes from a row to the steps that wrote it with nothing in between, and a
 display name would drift from the thing it identifies. `visuals` is the one value
 with no producer left: `digest.yml` ran that job until 2026-09-13, and the member
 stays so the rows it wrote still read back. `runtime` is `measure.yml`'s bench
-job, and its rows are in the other store.
+job, and its rows are in the other ledger.
 
 ## What the processor is
 
@@ -447,7 +447,7 @@ before that date.** The probe ran on every work shard, wrote its row into the
 runner's own checkout, and no commit step named the path - so the file went with
 the runner. `git ls-files state/host-fingerprint*` returned nothing at all, which
 is the proof and also why nobody noticed: the instrument reported success, the
-log line printed the machine, and the store stayed empty. Three things changed
+log line printed the machine, and the ledger stayed empty. Three things changed
 together: the work job's commit step stages `state/host-fingerprint`, a
 header-only day file is committed so `git add` under `set -euo pipefail` cannot
 abort that step on a fresh clone, and assemble's refresh set names the path so a
@@ -462,7 +462,7 @@ guard was correct and blind at the same time. A second guard reading
 `telemetry/silicon.py` shipped beside the fix and was retired on 2026-09-17: a
 second file-scoped guard is the same defect a second time. **Scoping a
 drift guard to a file rather than to a question is what let a second writer
-through**, and what replaced both names no file - it charges each store to the
+through**, and what replaced both names no file - it charges each ledger to the
 job whose `python -m idhazh <verb>` step reaches its writer, so a fourth job that
 records a machine and stages nothing fails without an edit
 ([../architecture/publishing/committing.md](../architecture/publishing/committing.md#the-commit-steps-push-through-a-rebase-and-the-one-that-can-rebuild-rebuilds)).

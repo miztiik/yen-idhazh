@@ -39,34 +39,34 @@ exercises them.
 ### 2. The browser asks for what it draws, never for what exists
 
 A panel names the columns it needs and the days it covers, and receives those. It
-does not fetch a store and throw most of it away.
+does not fetch a collection and throw most of it away.
 
-**This holds for every store, without exception and without a list.** Every tree
-under `state/`, every panel, every route, and every store added after this sentence
+**This holds for every collection, without exception and without a list.** Every tree
+under `state/`, every panel, every route, and every collection added after this sentence
 was written. It is a rule about how the reader is allowed to ask, not a rule about
-any one dataset, so it needs no per-store carve-out and gets none. A small store is
-not an excuse to fetch it whole: the store that is small today is the one that grew
+any one dataset, so it needs no per-collection carve-out and gets none. A small collection is
+not an excuse to fetch it whole: the collection that is small today is the one that grew
 while nobody was watching it, and a reader written to slice stays correct through
 that where a reader written to download does not.
 
 The reason is the shape of the ledgers rather than any reading taken off them. A
-store grows every day; a panel draws a fixed number of marks. Downloading the store
+collection grows every day; a panel draws a fixed number of marks. Downloading the collection
 to compute the panel means the download grows with the archive while the drawing
 does not, which is [`CLAUDE.md`](../../../CLAUDE.md) Guardrail #12 pointed at a
-reader instead of a runner. **That argument does not depend on which store it is** -
+reader instead of a runner. **That argument does not depend on which collection it is** -
 it is true of the largest and the smallest on the same grounds.
 
 ### 3. The engine ships once; the data ships on every view
 
-A query engine is one file, fetched once and held in the browser cache. A store is
+A query engine is one file, fetched once and held in the browser cache. A collection is
 fetched every time a panel draws it, by every reader, forever.
 
 **That asymmetry, not the size of either, is why a query engine earns its bytes.**
-An engine that turns any store into a few kilobytes of answer costs its own size
+An engine that turns any collection into a few kilobytes of answer costs its own size
 once and saves the difference on every view after the first, across every panel on
 every route. The saving is counted over the whole console rather than over the
-panel that happens to arrive first - a reader picked for the smallest store is a
-reader the first large store replaces, which is rule 1.
+panel that happens to arrive first - a reader picked for the smallest collection is a
+reader the first large collection replaces, which is rule 1.
 
 ### 4. One module owns the reader
 
@@ -75,15 +75,15 @@ opens a socket or builds a URL itself.
 
 The reason is the same one that gives the pipeline a single persistence door: an
 engine stops being replaceable the moment a second module imports it, and a reader
-that lives in fifteen panels is fifteen places to change when the store's layout
+that lives in fifteen panels is fifteen places to change when the collection's layout
 moves. It also makes the swap in rule 3 a decision somebody can take later rather
 than a rewrite they have to justify.
 
-### 5. A column store is read by column
+### 5. A columnar format is read by column
 
 Parquet exists so that a reader can take three columns out of seventy and never see
-the rest. A console query that selects everything has paid for a column store and
-then used it as a row store.
+the rest. A console query that selects everything has paid for a columnar format and
+then read every column anyway.
 
 So a panel's query names its columns and its date range explicitly. `SELECT *` is a
 defect on this surface, not a shortcut.
@@ -114,7 +114,7 @@ choice that has one correct side.
 
 **The engine question was settled twice, and the second answer is the one that
 holds.** The first pass picked the small plain parser on the grounds that one panel
-reading one small store does not need SQL, and it was right about that panel and
+reading one small collection does not need SQL, and it was right about that panel and
 wrong about the console. Rule 1 is why: designing the reader around the smallest
 panel guarantees a second reader arrives with the first large one. Owner ruling,
 2026-09-24.

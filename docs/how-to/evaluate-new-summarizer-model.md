@@ -124,7 +124,7 @@ flowchart TB
  classDef decision fill:#11141c,stroke:#5b6477,stroke-width:1.5px,color:#ffffff;
  classDef yes fill:#176032,stroke:#2ea04f,stroke-width:1.5px,color:#ffffff;
  classDef no fill:#a32020,stroke:#d23b3b,stroke-width:1.5px,color:#ffffff;
- classDef store fill:#1b3a5c,stroke:#2d6ca3,stroke-width:1.5px,color:#ffffff;
+ classDef ledger fill:#1b3a5c,stroke:#2d6ca3,stroke-width:1.5px,color:#ffffff;
  classDef ext fill:#2a2233,stroke:#6b5480,stroke-width:1px,stroke-dasharray:5 3,color:#e6e9f0;
  classDef sysEval fill:#1a1e27,stroke:#c79a2e,stroke-width:1.5px,color:#f0d79a;
  classDef sysOps fill:#1a1e27,stroke:#8b93a7,stroke-width:1.5px,color:#c8cdd8;
@@ -132,7 +132,7 @@ flowchart TB
  class RAW,SERVE,DOSSIER,BUDGETS,SCRATCH,REPLAY stage;
  class HUB,HDR,TMPL ext;
  class PROVE,GATES,DECIDE decision;
- class FILE store;
+ class FILE ledger;
  class ADOPT yes;
  class STOP,REJECT no;
  class FACTS,CALL sysOps;

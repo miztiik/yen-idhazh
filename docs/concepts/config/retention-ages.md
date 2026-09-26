@@ -94,12 +94,12 @@ The draw itself - a digest of the run id, recorded on the run manifest - is
 described once, in
 [../evaluation.md](../evaluation.md#the-scorer-is-sampled-by-run-and-nothing-else-is).
 
-## Every store names its own cleanup age
+## Every tree names its own cleanup age
 
 Until 2026-09-02 one knob decided when a month stopped being kept at full grain
 - and it decided it for `state/item-health/` and nothing else.
 `state/feed-health/`, `state/scores/` and `frontend/public/telemetry/` had no
-cleanup age at all, so three stores grew with nothing to stop them while the
+cleanup age at all, so three trees grew with nothing to stop them while the
 fourth was tuned by a number that said nothing about them.
 
 Fourteen names replace it, each a knob and not a constant (Guardrail #6). Ten are
@@ -110,7 +110,7 @@ behind; and one is `visuals_full_grain_months`, which is a full-grain window and
 is **not** in that mapping yet, because no console read opens one of its shards
 today ([../adaptive-pruning.md](../adaptive-pruning.md#the-visual-fold-key-is-eight-terms-and-it-could-not-wait)).
 
-| Store | Full grain | Summary after it |
+| Ledger | Full grain | Summary after it |
 | --- | --- | --- |
 | `state/item-health/` | `item_health_full_grain_months` (14) | `item_health_aggregate_keep_months` (null) |
 | `state/scores/` | `scores_full_grain_months` (14) | `score_archive_keep_months` (null) |
@@ -134,7 +134,7 @@ is not what bounds them:
 `state/feed-health/` that no console route ever fetched, so the trees went and
 the two knobs with them. A config file still spelling either is refused by name
 rather than ignored, and it is sent nowhere: the two ledgers above keep their
-own ages, which is a different number for a different store.
+own ages, which is a different number for a different ledger.
 
 **Two more ages sit outside this block**, because each is a read cover first and
 a cleanup age second: `observability.trace_window_days` bounds `state/traces/`,
@@ -158,9 +158,9 @@ folded away is a rate nobody can check, and a source month with no published cop
 is a window the console cannot draw. The other four have no state ledger behind
 them and are bounded by their own knob alone.
 
-**This block sets the ages. Which policy a store is under - fold, delete or keep
+**This block sets the ages. Which policy a tree is under - fold, delete or keep
 - is [../adaptive-pruning.md](../adaptive-pruning.md)**, which is also where an age is
-judged to be the wrong instrument for a store rather than merely the wrong
+judged to be the wrong instrument for a tree rather than merely the wrong
 number.
 
 ### Why 14 and not 13
@@ -191,7 +191,7 @@ them, and it is exactly tight on **3,636** of them, 2.5 percent. Those same
 `keep_months` and `hard_delete_after_months` were read and dropped for a day, so
 that the rows spending the new ages could land one at a time. Since 2026-09-03 a
 file spelling either is **refused**, and the message names the knob that governs
-the same store: `item_health_full_grain_months` and
+the same ledger: `item_health_full_grain_months` and
 `item_health_aggregate_keep_months`.
 
 **Refused rather than ignored.** Every config model forbids unknown keys, so
@@ -247,7 +247,7 @@ the same step also deletes `state/host-fingerprint/` past
 `host_fingerprint_keep_months`, which was the one committed day-filed ledger with
 no age at all.
 
-**A score month is summarised before it is deleted, and it is the only store here
+**A score month is summarised before it is deleted, and it is the only ledger here
 with a summary in front of the deletion.** The archive is
 `state/score-archive/<YYYY-MM>.json`: the shard's SHA-256 and row count, one
 digest per distinct measurement, and one cohort per (date, run, row version,
@@ -277,7 +277,7 @@ and removes none of them. `.github/workflows/prune.yml` squashes and force-pushe
 history once that prune passes over it (`CLAUDE.md` section 8) - which makes
 "read the list first" the only safe order. Turning the deletion on is a one-line
 commit of its own. Measured on this checkout on 2026-09-13: a live run today
-removes nothing, the first file any store loses is `state/seen/2026/08/23.csv` on
+removes nothing, the first file any tree loses is `state/seen/2026/08/23.csv` on
 **2026-11-22**, and the first files the fourteen-month rules take are the day
 files under `state/item-health/2026/08/`, `frontend/public/telemetry/2026-08.csv`,
 the day files under `state/feed-health/2026/08/` and the day files under
@@ -291,7 +291,7 @@ is zero.
 ## See also
 
 - [../config.md](../config.md) - what a knob is, and what is not one.
-- [../adaptive-pruning.md](../adaptive-pruning.md) - which policy each store is under, and the register of every artefact this project writes.
+- [../adaptive-pruning.md](../adaptive-pruning.md) - which policy each tree is under, and the register of every artefact this project writes.
 - [../telemetry.md](../telemetry.md) - the logging flags and what each instrument records.
 - [../../architecture/publishing/retention.md](../../architecture/publishing/retention.md) - what the fold and the deletion actually do to the tree.
 - [../../architecture/publishing/telemetry-series.md](../../architecture/publishing/telemetry-series.md) - the published series these ages bound.

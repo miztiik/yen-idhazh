@@ -114,7 +114,7 @@ earns those opportunities. A rising internal score is not the objective.
 | 10 | Separate temporary restraint from permanent removal. | Paywalls and repeated failures can stop normal work promptly. Recovery earns re-entry through fresh evidence; simply waiting does not prove recovery. |
 | 11 | Treat filters and URL identity as model inputs too. | Review freshness, duplicates, failed-address suppression, exclusions, quotas and source floors together. A cleaner that merges different articles can corrupt both selection and reputation. |
 | 12 | Tune against evidence outside the objective being optimized. | Compare policies on fixed, independently assessed outcomes and equal budgets. Include unselected sources so the model can discover its own blind spots. |
-| 13 | Keep every policy choice revisable. | Ranges, mappings, weights, priors, decay, evidence requirements, transition authority and formula versions can change. Store enough provenance to compare and roll back those changes. |
+| 13 | Keep every policy choice revisable. | Ranges, mappings, weights, priors, decay, evidence requirements, transition authority and formula versions can change. Keep enough provenance to compare and roll back those changes. |
 
 ## One feedback loop
 
@@ -596,7 +596,7 @@ splits, merges and removals can be proposed and adopted through a versioned
 revision. Human approval is a starting recommendation, not a limitation baked
 into the data model. Preserve the meaning of classifications already published.
 
-## What we store
+## What we keep
 
 Agree on what each record means before writing its reader or writer. These
 are five responsibilities, not a requirement for five new files or a framework.
@@ -697,7 +697,7 @@ $$
 The predicate `validGroups` checks the declared shared limits. It is not a
 second scoring formula.
 
-Store `value`, `unit`, `lower`, `upper`, `max_step`, update cadence and authority.
+Keep `value`, `unit`, `lower`, `upper`, `max_step`, update cadence and authority.
 Use $0\le w_k,a_{km}\le1$ with their sum constraints; positive finite half-life
 bounds; and integer bounds for sample, poll and trial counts. Group constraints
 such as a quality-weight floor prevent the tuner assigning nearly everything

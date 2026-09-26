@@ -617,7 +617,7 @@ window of the words around a number, about 50 characters back and 30 forward,
 snapped to word boundaries. This shape does not have it.
 
 A derived string is replaced by a pointer. `sentence_index` plus the span says
-where the words are, and `Article.text` still holds them, so nothing stores a
+where the words are, and `Article.text` still holds them, so nothing keeps a
 second copy of the reader's sentence. That derived string retired with its
 producer on 2026-09-13, and this contract never carried it.
 

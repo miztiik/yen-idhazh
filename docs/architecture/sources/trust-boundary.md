@@ -128,9 +128,9 @@ but length and shape do not decide newsworthiness by themselves.
 **The `boilerplate` signal has never answered anything.** It compares the page's
 lines against lines the same host printed on its other pages, and nothing
 supplies that second set - so it divides by an empty set and says no to every
-page. A store that supplied it shipped on 2026-09-17 and was reverted the same
+page. A ledger that supplied it shipped on 2026-09-17 and was reverted the same
 day, on the measurement rather than on the risk: over a full run it moved the
-signal zero times. Anything that revives it stores hashes rather than lines, so
+signal zero times. Anything that revives it records hashes rather than lines, so
 nothing in that file can carry an instruction a page tried to give us.
 
 `extract_text` removes embedded-player interface containers through
@@ -264,7 +264,7 @@ The adoption gate runs the same attacks a second time, on live calls against a c
 
 That gate used to collapse four conditions into one boolean and report only the canary's name. On 2026-08-26 a run failed it and left the sentence `4/5 passed, failing: exfiltration-via-url`. The shard that run uploaded records `markers_present: []` for that canary - nothing survived anything. The model had returned nothing publishable, the gate had no words for that, and the failure was written up as the attacker address crossing the sanitizer. Running the sanitizer over all five committed fixtures on 2026-08-27 says the opposite: every `must_not_survive` marker is absent from the cleaned text and every `must_survive` fact is kept, in all five.
 
-So the reason travels with the observation now. `CanaryObservation` carries the summarizer's own `failure_code` and `failure_detail`, and the gate spends them on three states it derives from the conditions rather than stores beside them:
+So the reason travels with the observation now. `CanaryObservation` carries the summarizer's own `failure_code` and `failure_detail`, and the gate spends them on three states it derives from the conditions rather than keeps beside them:
 
 | The gate says | What happened | The gate |
 | --- | --- | --- |

@@ -18,7 +18,7 @@ Two copies of every day used to carry the vector block, and no browser has ever 
 
 **Both narrowings are written once, in [../../../frontend/src/lib/payload/project.ts](../../../frontend/src/lib/payload/project.ts).** They used to be two rules in two files: the allow-list sat in the build script, where TypeScript could not read it and the page loader could not import it, and the vector drop was a separate two-line statement of the same idea. Since 2026-08-31 the list, the projector, the forbidden-name guard and the vector drop are one module that both callers import. The module imports nothing itself, because the staging step is run by plain `node` before Vite starts and reaches it through node's own type stripping. Nothing about the bytes moved: all ten published days stage byte-identical, and so does the built site.
 
-`frontend/public/` keeps the whole day, block and all. It is committed, it is in git, and it is the only store the vectors have.
+`frontend/public/` keeps the whole day, block and all. It is committed, it is in git, and it is the only collection the vectors have.
 
 Measured 2026-08-27 on a developer machine / / node 24.12.0, over the six committed days, 2,237 items and 2,235 vectors. Page weights are `gzip -9` of the prerendered HTML, taken by the bundle gate itself, heaviest page per route. Site totals are the sum of file sizes under `frontend/build/`, which agreed with CI's own `du -sb build` on the same tree to 0.0006 percent.
 

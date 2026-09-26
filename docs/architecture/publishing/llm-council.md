@@ -161,7 +161,7 @@ without any of them changing shape.
 
 **The council asks; it does not look.** It calls `nights_outstanding(window=...)`
 on every registered tenant and unions what comes back. It opens no tenant's
-store, so it needs to know nothing about how a tenant files anything - and
+ledger, so it needs to know nothing about how a tenant files anything - and
 **with nobody registered the union is empty and tonight is the whole plan**.
 Every step below still runs on that one date.
 
@@ -180,7 +180,7 @@ runner costs. The content-similarity judge answers from its own record, and what
 it counts as behind is in
 [autotune-content-similarity.md](autotune-content-similarity.md#the-nights-this-judge-says-it-is-behind-on).
 
-**The floor is why a first run does not backfill a month.** The council's store
+**The floor is why a first run does not backfill a month.** The council's ledger
 holds one day file against 30 published days, so an unfloored window names every
 one of those days as outstanding and nothing can tell "this night died" from
 "the council did not exist yet". The same sentence applies to a tenant that
@@ -195,7 +195,7 @@ stayed in range. A cap without the floor would only slow a 29-date backfill down
 to 29 nights.
 
 **The window is the whole of what a tenant is handed**, so the cost of asking
-does not rise as the store fills up (`CLAUDE.md` Guardrail #12). A tenant that
+does not rise as the ledger fills up (`CLAUDE.md` Guardrail #12). A tenant that
 answers with a date the council did not ask about is refused by name: the
 council prices the window, so a date from outside one is a job nobody budgeted
 for, and it would reach a runner as silently as a date that was asked for.
@@ -278,14 +278,14 @@ over every path the night's tenants named. Two processes never share a path.
 `fail-fast` is off. **A unit that dies costs its own work and nothing else** -
 the settle runs anyway and keeps everything the surviving units produced.
 
-**The venue spells no store path.** A list of one tenant's paths is a list that
+**The venue spells no ledger path.** A list of one tenant's paths is a list that
 never commits a second tenant's output, so the paths come back from
 `committed_paths` on the protocol and reach the commit step as one job output. A
 night with no tenant registered stages nothing, and the step is skipped: `git
 add` with no path is an error rather than a no-op.
 
 There is no regeneration command on that call. The council is the only writer of
-a tenant's own store and `concurrency` runs one council at a time, so a lost
+a tenant's own ledger and `concurrency` runs one council at a time, so a lost
 race is a race against a digest run - which writes none of these paths. Replaying
 what this run wrote onto the new base is the whole of what is needed.
 
@@ -398,7 +398,7 @@ it is five conditions and each one names what fails.
 | 2 | No judge module is reachable from a council verb, however many imports away | a council verb that imports a judge at module scope, or imports something that does. A check scoped to the directory cannot see this: the command router used to import four judge stages at module scope, so deleting the judge broke every council verb while the directory itself stayed clean |
 | 3 | Every council contract declares, builds and round-trips with no judge in the repository | a council contract that names a judge's type, or whose field description names a judge's unit of work. A description is published in the generated schema, so a judge's word in one is a judge's word in the venue's own public contract |
 | 4 | Every council test passes with no judge's test module present | a council test that imports a judge's fixture, and a council change that cannot be merged until a judge change is. Council tests live in `backend/tests/council/` |
-| 5 | A judge is reached only through the protocol the council declares, and only from config | the council opening a judge's store, reading a judge's stamp, or naming a judge's type. Registration points a judge at the council and never the other way: the config names slugs, and the resolver imports a judge only when it has been asked for one |
+| 5 | A judge is reached only through the protocol the council declares, and only from config | the council opening a judge's ledger, reading a judge's stamp, or naming a judge's type. Registration points a judge at the council and never the other way: the config names slugs, and the resolver imports a judge only when it has been asked for one |
 
 **What the rule costs, stated rather than implied.** The council's own row
 records the tenant's slug as plain text with no membership check, so a typo
@@ -416,7 +416,7 @@ executed it.
 | Layer | Owns | Stored |
 | --- | --- | --- |
 | Council pipeline observability | Did the pipeline work - which units started, which finished, which stopped on their own clock, what each cost | `state/llm-council/` |
-| The tenancy protocol | The shape a judge presents: its slug, how many ways its work splits, the store paths it commits, the nights it is behind on, and three units of work. Declared by the council, implemented by each judge, and it names no judge | code, not data |
+| The tenancy protocol | The shape a judge presents: its slug, how many ways its work splits, the ledger paths it commits, the nights it is behind on, and three units of work. Declared by the council, implemented by each judge, and it names no judge | code, not data |
 | The shipping capability | The plumbing only. Takes a validated row a judge hands it and gets it committed. Declares nothing about what is in it | code, not data |
 | Judge metrics | Entirely the judge's - its units, its funnel, its own contract | under that judge's own slug |
 
@@ -432,7 +432,7 @@ together. So a shared judge-metrics contract is refused rather than deferred:
 the column would not be wrong on the day it was added, it would go wrong on the
 day a second judge filled it.
 
-Which store each reading lands in, and the one reading that is filed under a
+Which ledger each reading lands in, and the one reading that is filed under a
 judge although the council is what runs it, is
 [../../concepts/telemetry.md](../../concepts/telemetry.md#where-a-judging-night-files-what-it-measured).
 
@@ -440,7 +440,7 @@ judge although the council is what runs it, is
 
 Each unit writes one file on its own runner, the workflow uploads that
 directory, and the collecting job downloads every one of them and appends each
-row to the store the tenant named.
+row to the ledger the tenant named.
 
 **An artifact rather than a commit, and the reason is that a commit would not
 reach the reader.** Every checkout in this workflow names no ref, so each job is
@@ -515,7 +515,7 @@ that action runs is a commit call all the same.
 
 **It is not about a merge conflict.** The council used to argue this as many
 writers racing into one union-merged day file. That premise died on 2026-09-19
-when `merge=union` left the judged-pairs store, and quoting it today invites a
+when `merge=union` left the judged-pairs ledger, and quoting it today invites a
 reader to retire the guard along with it. The conflict that segments exist to
 solve - more than one job committing into one ledger file - is priced in
 [its own rationale below](#design-rationale-the-councils-own-path-not-a-segment-per-writer),
@@ -547,7 +547,7 @@ and `-2`, carrying the run's real width - so a night whose count died leaves a
 row saying so instead of leaving the venue blind.
 
 **The cost cells come off what the tenant handed back, and out of nothing else.**
-The council opens no store of a tenant's and reads no field of a tenant's own
+The council opens no ledger of a tenant's and reads no field of a tenant's own
 contract. A tenant with no model hands back empty cells, and empty is not zero:
 zero would read as a model that answered nothing, which is a different fact and
 only one of the two is a defect.
@@ -561,7 +561,7 @@ with one unit missing, and an operator needs nothing else to see it. A unit that
 ran out of its own clock is the opposite case and does file a row, because it
 stopped itself and had something to report.
 
-**The store is seeded with a `.gitkeep` and never with a header-only day file.**
+**The ledger is seeded with a `.gitkeep` and never with a header-only day file.**
 A header with no rows under it is a real day to the partition walker, so one
 would put a permanent day in the prune target and the day inventory that no
 council run ever had. A night with nothing to record therefore writes no file at
@@ -601,7 +601,7 @@ has four to eight committing units on one day. The council has one
 committing writer, and its day file is already settled on every write by a key
 carrying the run id, which is the property a segment exists to provide.
 
-**The second reason went with the staging store on 2026-09-22.** A compaction
+**The second reason went with the staging ledger on 2026-09-22.** A compaction
 verb used to fold every waiting segment of every ledger and delete what it read,
 so a council run that compacted and then committed only its own folders would
 have deleted the digest pipeline's transit copies while leaving the files they
@@ -629,7 +629,7 @@ writes a row is handed it, the same way the shard bound and the model refs
 already cross.
 [../../../backend/idhazh/council/run_identity.py](../../../backend/idhazh/council/run_identity.py)
 holds the one function that makes it, and nothing in it names a judge, opens a
-store or resolves an ordinal.
+ledger or resolves an ordinal.
 
 Three things about the shape, each of which reads as the obvious answer and is
 not.
@@ -638,7 +638,7 @@ not.
   takes a run id's first ten characters as the day its run opened and measures
   the lag to publication from them, so a judged-date prefix would publish a
   standing lag of a day that nothing waited. The judged date is the `date`
-  column, which is what routes a row to its store.
+  column, which is what routes a row to its ledger.
 - **It is the platform's run id, never its run number.** The number starts again
   in each workflow, so a council name would eventually equal a digest run's id
   in a column that carries both meanings.
@@ -650,7 +650,7 @@ not.
 
 `run_id` on a row written before this change means **the run that published the
 day**. On a row written after it, it means **the run that judged it**. Two
-stores carry both across time: the judged pairs and the fitted lines. On
+ledgers carry both across time: the judged pairs and the fitted lines. On
 2026-09-21 that was 82 pair rows and 1 fitted row, all under
 `2026-09-18-35339202390`.
 
@@ -662,7 +662,7 @@ approximate. **A digest run's id is prefixed with the day it published, so on
 every row written the old way `run_id` starts with that row's own `date`.** A
 council name is prefixed with the day the council ran, which is the day after
 the one it judges. So `run_id[:10] == date` is the old meaning and
-`run_id[:10] > date` is the new one, on both stores, with nothing to look up.
+`run_id[:10] > date` is the new one, on both ledgers, with nothing to look up.
 
 **What this does not change.** The judged date is still the `date` column and
 still decides which file a row lands in. And the pair row's own contract already
@@ -689,6 +689,6 @@ today. Where one of them gains a fitted line, this is the room it is fitted in.
 - [autotune-desk-assignment.md](autotune-desk-assignment.md) - what decides an article's desk and lens, hand-set today.
 - [autotune-entity-linking.md](autotune-entity-linking.md) - what decides that a mention is an entity, hand-set today.
 - [../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md) - the two loops, and where this one sits against the digest.
-- [../../concepts/telemetry.md](../../concepts/telemetry.md#where-a-judging-night-files-what-it-measured) - which committed store each of a judging night's readings goes in.
+- [../../concepts/telemetry.md](../../concepts/telemetry.md#where-a-judging-night-files-what-it-measured) - which committed ledger each of a judging night's readings goes in.
 - [../../reference/github-actions.md](../../reference/github-actions.md) - every workflow, its trigger and its schedule.
 - [../../../CLAUDE.md](../../../CLAUDE.md) - Guardrail #2 (the 6 h job ceiling) and section 1a (what a model verdict may decide).

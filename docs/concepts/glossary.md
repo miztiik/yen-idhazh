@@ -60,13 +60,13 @@ a doc is a fine change to make; moving it into *this* page is not.
 
 ## Design rationale
 
-**The word `store` is retired, and this page is where that is written down.** It was
-a third name for a thing that already had two. Measured 2026-09-26: `ledger`
-appeared 3,067 times and carried the definition above; `collection` appeared 307
-times and carried its own in [partitions.md](partitions.md); `store` appeared 931
-times and was **defined nowhere**. CLAUDE.md section 0b settles that kind of tie
-without a vote - a second name for something that already has one is deleted
-rather than replaced.
+**A third word for these two was retired, and this page is where that is written
+down.** It named a thing that already had two names. Measured 2026-09-26:
+`ledger` appeared 3,067 times and carried the definition above; `collection`
+appeared 307 times and carried its own in [partitions.md](partitions.md); the
+retired word appeared 931 times and was **defined nowhere**. CLAUDE.md section
+0b settles that kind of tie without a vote - a second name for something that
+already has one is deleted rather than replaced.
 
 **Which of the two survivors applies is decided by where the directory sits.**
 Under `state/` it is a **ledger**, because something reads it as a later run's
@@ -76,7 +76,8 @@ not a fact one run left for the next. The two words are not interchangeable and
 the test is the reader, never the shape on disk.
 
 Owner decision, 2026-09-26. `TODO/20260926-53-one-door-into-state-plan.md` is
-the work that removes the word.
+the work that removes the word, and its row 1 is the one place the spelling
+survives.
 
 **A glossary looks like the register Guardrail #4 forbids, and is not one.**
 That guardrail bans a standalone record of a *decision*, because a decision

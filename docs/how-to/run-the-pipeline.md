@@ -104,7 +104,7 @@ Turning live deletion on is a separate one-line commit, and this is the order:
  nothing.
 2. Read that run's log: `gh run view <runId> --repo <owner/repo> --job <jobId>
  --log`, and grep it for `prune-state would remove`.
-3. Check the list against what you expect. On 2027-10-01 that is four stores -
+3. Check the list against what you expect. On 2027-10-01 that is four trees -
  the day files under `state/item-health/2026/08/`,
  `frontend/public/telemetry/2026-08.csv`, the day files under
  `state/feed-health/2026/08/` and the day files under `state/scores/2026/08/`.
@@ -133,7 +133,7 @@ two console readers walk the whole score ledger rather than the window, so their
 date lists shorten with no number moving
 ([../architecture/publishing/frontend.md](../architecture/publishing/frontend.md)).
 
-What each store keeps, and why, is on the doc that owns it:
+What each ledger keeps, and why, is on the doc that owns it:
 [../architecture/sources/health.md](../architecture/sources/health.md) for feed
 health, [../architecture/sources/item-health.md](../architecture/sources/item-health.md)
 for the item census, [../concepts/evaluation.md](../concepts/evaluation.md) for
@@ -192,18 +192,18 @@ own `digest.json` and `run.json` rather than the run payloads under
 never published, because there would be nothing to publish the instrument for.
 
 When a run wrote instrument rows nobody wants kept, delete them by naming the
-store and the two days. Both ends are named, so this is three days:
+ledger and the two days. Both ends are named, so this is three days:
 
 ```
 python -m idhazh telemetry prune --target item-health --since 2026-09-13 --until 2026-09-15
 ```
 
 It prints every file a live run would remove and removes nothing until you add
-`--no-dry-run`. `--target` takes the name of a store and never a path, and
+`--no-dry-run`. `--target` takes the name of a ledger and never a path, and
 `published` and `seen` are refused by name - forgetting is the one thing those
-two may not do. Which stores it accepts, why those two are refused, and what
+two may not do. Which ledgers it accepts, why those two are refused, and what
 makes it safe to stop half way is
-[../architecture/publishing/retention.md](../architecture/publishing/retention.md#a-named-prune-one-store-one-range-of-days-2026-09-16).
+[../architecture/publishing/retention.md](../architecture/publishing/retention.md#a-named-prune-one-ledger-one-range-of-days-2026-09-16).
 
 ## Three things that will bite
 
@@ -254,7 +254,7 @@ workflow names and triggers are pinned in
 - [set-up-local-inference.md](set-up-local-inference.md) - getting the runtime and the weights.
 - [../concepts/pipeline-loop.md](../concepts/pipeline-loop.md) - what each stage owns.
 - [../concepts/config.md](../concepts/config.md) - the knobs these stages read.
-- [../architecture/sources/freshness.md](../architecture/sources/freshness.md) - the cadence, the seen store, item ids, and why a day has no cap.
+- [../architecture/sources/freshness.md](../architecture/sources/freshness.md) - the cadence, the seen ledger, item ids, and why a day has no cap.
 - [../architecture/sources/health.md](../architecture/sources/health.md) - the feed ledger and the quarantine rule.
 - [../architecture/sources/item-health.md](../architecture/sources/item-health.md) - the item census used to read failed runs.
 - [../architecture/sources/trust-boundary.md](../architecture/sources/trust-boundary.md) - what fetch and extract refuse to do.

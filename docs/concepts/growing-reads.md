@@ -77,7 +77,7 @@ carries the reasoning and the day grain.
 
 **Equal is a hole, not a bound.** `CollectConfig` accepts `-1` or a value
 strictly greater than `collect.seen_window_days`, and refuses everything between
-including equal. At 90 and 90 both stores forget the same address on the same
+including equal. At 90 and 90 both ledgers forget the same address on the same
 day: an undated address whose first-sighting row has just expired reads as
 first-seen-today and republishes as new. The check is a cross-field validator,
 so raising the sight window past a finite cover fails the config rather than
@@ -137,7 +137,7 @@ spread is zero.
 rather than hidden.** `indexed_observations` opens one file a partition, and the
 index moved from month files to day files with the ledger it describes - so **2
 opens became 23, and it gains about 365 a year**. The bytes did not move: the same
-digests are spread over more files, 21 more header lines. The store bound is what
+digests are spread over more files, 21 more header lines. The ledger bound is what
 answers it - `observability.scores_full_grain_months` is 14, so once the prune is
 switched on the live index holds at most fourteen months of days and everything
 older is one `state/score-archive/<YYYY-MM>.json` a month. **`--dry-run` is on the
@@ -161,13 +161,13 @@ window. Measured 2026-09-08 on a developer machine over 18 committed days and
 current. **What is left is honest and small**: the pass still lists the days and
 stats each one, so it still costs one `stat` a day, for ever. It says so.
 
-**The saving is paid for by the length, so the store travels with the tree.**
+**The saving is paid for by the length, so the ledger travels with the tree.**
 Settling a day on the length a receipt recorded is what makes the skip free, and
 it is also the whole of the skip's evidence - so a receipt earned over one tree
 will settle a same-length day in another without opening it. Measured
 2026-09-13: a copy of the newest committed day with `"items"` overwritten by
-`"itemz"`, one byte for one byte, passed against the committed receipt store and
-reported `0 of them opened`; against an empty store the same file was refused.
+`"itemz"`, one byte for one byte, passed against the committed receipt ledger and
+reported `0 of them opened`; against an empty ledger the same file was refused.
 `validate-days` therefore refuses a `--digest-root` that is not the committed
 tree unless `--state-root` is named as well, rather than leaving the pairing to
 each caller to remember. One caller had already forgotten it
@@ -193,7 +193,7 @@ harvest, so the file this opens does not grow however long the project runs. A
 cover here would only hide a `roll` that stopped evicting. The same mechanism
 bounds `state/traces/`: `retention.prune_traces` deletes whole files past
 `observability.trace_window_days`, so there is at most a week of traces on disk
-and no read to cover. **A cover can be enforced on the store instead of on the
+and no read to cover. **A cover can be enforced on the ledger instead of on the
 read**, and where it is, the read needs nothing.
 
 **A validator cannot skip what it has not read.** `contracts.base.Contract.read`
@@ -297,12 +297,12 @@ itself, and either is enough. What is not enough is nothing.
 
 **Eight producers** write the console's own payloads at publication
 ([console-payloads.md](../architecture/publishing/console-payloads.md)). They
-are listed apart because their cover is a **store** bound rather than a read
+are listed apart because their cover is a **collection** bound rather than a read
 bound: each published directory is pruned to its own
 `observability.public_*_keep_months`, so it holds at most fourteen files however
 long the project runs, and every later listing of it is bounded by that. This is
-the shape the note above calls "a cover enforced on the store instead of on the
-read".
+the shape the note above describes: a cover enforced on what holds the data
+rather than on the read.
 
 **`frontend/public/telemetry/` is the one directory where that bound is declared
 and not yet enforced, and it says so here rather than in a sentence that would be
@@ -337,7 +337,7 @@ nothing at all for a tree whose last run was two months ago - the same reason
 **None is unbounded any more.** `machine.months_on_file` was the last, and it
 streamed `state/runtime-counters.csv` - one appended file with no shards and no
 prune, so a run that wanted September's rows walked every row ever appended to
-find them. That store was deleted on 2026-09-20 and the machine series is folded
+find them. That ledger was deleted on 2026-09-20 and the machine series is folded
 from two day trees instead, so the read is now the months `series.months_to_write`
 names and the day files inside them.
 
@@ -369,7 +369,7 @@ month's worth - at most 31 files rather than one - and the unbounded case opens
 every recorded day rather than every month: **2 opens became 20 on 2026-09-13,
 11,223 rows over 20 days, and about 365 a year.** It is declared here under
 Guardrail #12's escape hatch rather than bounded, because the bound belongs on
-the store: the same fourteen-month cap answers it, and a cover in months on the
+the collection: the same fourteen-month cap answers it, and a cover in months on the
 read would leave a fresh clone permanently short of a mirror it never published.
 The count is checked rather than asserted in prose -
 `backend/tests/test_publish_telemetry.py` counts the handles both cases open, over
@@ -465,7 +465,7 @@ writer - `<run_id>-<attempt>-<job>-<shard>.csv`, and no two writers can name one
 file ([partitions.md](partitions.md#what-counts-as-a-day-file)).
 `dayShardFiles` groups those files by their day before it takes the newest
 `days` of them, so `LEDGER_WINDOW_DAYS` keeps meaning 91 recorded days whatever
-the store holds. What moves is the file count inside the window, not the window.
+the ledger holds. What moves is the file count inside the window, not the window.
 
 **What that costs, said rather than implied.** A live day costs one open per
 writer. On the two five-run days measured on 2026-09-17 and 2026-09-20 that is
@@ -849,7 +849,7 @@ them apart.
 - [../architecture/contracts/schemas.md](../architecture/contracts/schemas.md#a-ledger-partitions-only-when-its-read-carries-a-window) - why a ledger partitions at all, and which reads carry a window.
 - [../architecture/sources/freshness.md](../architecture/sources/freshness.md#the-published-ledger-files-by-day-and-the-read-carries-a-cover) - the published cover, the day grain, and the argument it reversed.
 - [../architecture/publishing/retention.md](../architecture/publishing/retention.md#what-bounds-the-committed-state-tree) - what bounds each committed collection, and the state-prune measurement.
-- [telemetry.md](telemetry.md#the-committed-traces-briefly) - a store bounded by its prune rather than by a read.
+- [telemetry.md](telemetry.md#the-committed-traces-briefly) - a ledger bounded by its prune rather than by a read.
 - [../architecture/publishing/autotune-search-quality.md](../architecture/publishing/autotune-search-quality.md) - why the retrieval eval's whole-archive reading left this table on 2026-09-23, and what the project gave up with it.
 - [../reference/data-growth.md](../reference/data-growth.md) - where growing work is heading, what a replacement owes before the old path goes, and the shortcuts that are not answers.
 - [../../CLAUDE.md](../../CLAUDE.md) - Guardrail #12, which this page is the address of, and Guardrail #10 on what a measurement obliges.

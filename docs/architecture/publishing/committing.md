@@ -22,15 +22,15 @@ Two copies of the loop were a loop no test could execute.
 other job can stand in. Each one runs on its own runner with its own checkout, so
 the `state` assemble stages whole carries nothing a work shard wrote. A ledger
 written in Python and staged in YAML is a pair no single test used to read, so a
-store could be written for days and staged by nobody without a test going red.
+ledger could be written for days and staged by nobody without a test going red.
 [`backend/tests/workflows/test_ledger_staging.py`](../../../backend/tests/workflows/test_ledger_staging.py)
-reads both. It takes every store from the `*_relpath` helpers the store modules
+reads both. It takes every ledger from the `*_relpath` helpers the ledger modules
 already export, charges each one to the job whose `python -m idhazh <verb>` step
-reaches its writer, and fails naming the store, the job, the workflow file and
+reaches its writer, and fails naming the ledger, the job, the workflow file and
 the step to add the path to. A ledger is written by an `append_*` call, the trace
 tree by a file sink opened on its own path helper, and a head by the compaction
 reading its own declared table of them; all three count, because all three die
-with the runner. It names no store itself, so a thirteenth one is covered the
+with the runner. It names no ledger itself, so a thirteenth one is covered the
 day its writer lands rather than the day somebody remembers to add it to a list.
 
 The same file holds the second half of that. A ledger that declares a key must be
@@ -91,7 +91,7 @@ different paths, and the rebase applies both whole.
 
 **No path in the plan job is a derived `state/` ledger any more, and that closes
 the exception this section used to carry.** A day head was derived from the
-segment store by a catch-up fold, so two jobs that folded the same segments
+segment ledger by a catch-up fold, so two jobs that folded the same segments
 wrote the same head from different bases - two derived versions of one file,
 which is the shape no rebase can settle and no merge rule should. The gap that
 made it possible is not a race at all: `actions/checkout` restores the commit
@@ -334,7 +334,7 @@ wherever they went, and applies that guess to a file the other side added into
 the emptied directory. The closed-day fold drains a day directory every time it
 runs, so a sibling writing a brand-new file into that day is read as writing
 into a directory that no longer exists, and the rebase stops with
-`CONFLICT (file location)` over a tree that was correct. The segment store was
+`CONFLICT (file location)` over a tree that was correct. The segment ledger was
 the first place this bit; deleting it moved the drain rather than removing it.
 
 So every rebase in the program runs with `-c merge.directoryRenames=false`. Proved
@@ -433,9 +433,9 @@ resolved only by the job whose identity the name carries.
 **The group it replaced bought no safety, and it cost two things.** GitHub keeps
 one pending run per group and cancels the older, so a dispatch fired while a run
 was going disappeared with no error in the run list - the operator saw a
-cancelled run and no reason. And a run that did wait read a store its own wait
+cancelled run and no reason. And a run that did wait read a ledger its own wait
 had made stale: run `35660521768` waited 46 minutes, folded a 46-minute-old
-store and lost the whole day at the push, which is the incident this page is
+ledger and lost the whole day at the push, which is the incident this page is
 largely about. A queue that manufactures staleness is not a guard.
 
 **A narrower group per date was considered and rejected.** Two runs of one day

@@ -311,7 +311,7 @@ owns what each one means and why the second call is excluded.
 ## See also
 
 - [item-health.md](item-health.md) - the ledger itself: where a row lands, what
-  a column means, what counts against a source, and what it costs to store.
+  a column means, what counts against a source, and what it costs to keep.
 - The other half of this question is on the contract rather than on a page.
   `COLUMN_READERS` and `UNREAD_CELLS` in `backend/idhazh/contracts/item_health.py`
   name which surface READS each column, where this page names which module fills

@@ -20,7 +20,7 @@ None of the three cites another's figures and each backs a different set of
 config keys.
 
 **Several readings below name `state/runtime-counters.csv`, which no longer
-exists.** The store was deleted on 2026-09-20 and the four cells a reader still
+exists.** The ledger was deleted on 2026-09-20 and the four cells a reader still
 wanted moved onto `state/host-fingerprint/`; the rest are on `state/item-health/`
 ([telemetry.md](../concepts/telemetry.md#one-writer-one-grain-one-ladder)). The
 readings stand because they are readings about the runner rather than about the

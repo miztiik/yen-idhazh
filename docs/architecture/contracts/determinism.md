@@ -241,7 +241,7 @@ the record lie (Guardrail #10).
 | Fail the build on a violation | It fires across runner CPU classes for reasons unrelated to a regression, and a flaky gate gets switched off within a month. Record it, count it, do not smooth it. |
 | Include `host_cpu` in the identity | Every runner becomes a different record, which hides the cross-hardware divergence the record exists to expose. |
 | Hand-assemble the record from a list of names | A second enumeration to keep in step with the model, where forgetting an entry is silent by construction. |
-| Store the prompt text on the record | Puts text nothing downstream reads into a permanent committed payload; the digest answers the only question asked of it. |
+| Keep the prompt text on the record | Puts text nothing downstream reads into a permanent committed payload; the digest answers the only question asked of it. |
 | Write an eval row for an unchanged item | Makes every trend on the dashboard a function of how often the job ran rather than of how the summaries changed. |
 | Skip an item whose recorded inputs did not move | This record answers which pipeline configuration ran, so its value has to group many items. A safe skip needs a per-item work identity carrying the article bytes as well as the configuration, which is a different payload and a different design. |
 | Put the excluded knobs on the record the way `host_cpu` is | `host_cpu` earns its place because it explains a violation. A KV cache setting explains nothing on its own, and every extra column costs every future run. |

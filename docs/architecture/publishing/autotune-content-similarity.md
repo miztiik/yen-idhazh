@@ -206,14 +206,14 @@ flowchart TD
   classDef stage fill:#222834,stroke:#4b5468,stroke-width:1px,color:#e6e9f0;
   classDef decision fill:#11141c,stroke:#5b6477,stroke-width:1.5px,color:#ffffff;
   classDef warn fill:#7a5400,stroke:#c08a12,stroke-width:1.5px,color:#ffffff;
-  classDef store fill:#1b3a5c,stroke:#2d6ca3,stroke-width:1.5px,color:#ffffff;
+  classDef ledger fill:#1b3a5c,stroke:#2d6ca3,stroke-width:1.5px,color:#ffffff;
   classDef sysPublish fill:#1a1e27,stroke:#3f8fb8,stroke-width:1.5px,color:#a5d6ea;
   classDef sysModel fill:#1a1e27,stroke:#9b6bd6,stroke-width:1.5px,color:#cfb0f0;
   classDef sysEval fill:#1a1e27,stroke:#c79a2e,stroke-width:1.5px,color:#f0d79a;
   class draw,shards,archive,count,walk,damp,clamped,usefit,usefloor stage;
   class pick,agree,reported,inputs,sheet,steady,shape decision;
   class drop,hold warn;
-  class day,rows,record,fitrow store;
+  class day,rows,record,fitrow ledger;
   class pub sysPublish;
   class council sysModel;
   class foldjob sysEval;
@@ -287,9 +287,9 @@ every number above describes a mechanism rather than a history. The operator
 console is where the loop is watched once it starts
 ([console.md](console.md)).
 
-**What each committed store answers.**
+**What each committed ledger answers.**
 
-| Store | The one question it answers |
+| Ledger | The one question it answers |
 | --- | --- |
 | `state/content-similarity-judge/scored-pairs/` | What did the judge say about this pair, in both orders, and under which models? |
 | `state/content-similarity-judge/score-distribution.json` | Across everything judged so far, how many YES, NO and UNCLEAR readings sit in each slice of the band? |
@@ -298,7 +298,7 @@ console is where the loop is watched once it starts
 | `state/content-similarity-judge/metrics/` | Over one unit of one night, how did this judge's own instrument behave - what was it dealt, what did it read, and what did that cost? |
 
 The fields, the types and the bounds are in
-[../contracts/schemas.md](../contracts/schemas.md). How each store is partitioned,
+[../contracts/schemas.md](../contracts/schemas.md). How each ledger is partitioned,
 and why, is in [../../concepts/partitions.md](../../concepts/partitions.md).
 
 ### This judge is a tenant, and the venue knows nothing about it
@@ -325,7 +325,7 @@ measured nothing; a zero would say it measured everything and found nothing
 wrong.
 
 **A unit ships its row as it finishes and commits nothing.** The row goes out as
-an artifact, the collecting job appends it to the store above, and the trip
+an artifact, the collecting job appends it to the ledger above, and the trip
 belongs to the venue - so a unit the platform killed has still handed over every
 reading it took.
 
@@ -448,7 +448,7 @@ flowchart TD
 
 **The reading is refused below half the marked file.** Retention deletes published days the marked file still names, so a run can resolve almost nothing and still produce four cells that add up - and four small cells read as a line that got nearly everything right. `HOLDOUT_RESOLVED_SHARE_MIN` is a constant beside `HOLDOUT_TWO_STORY_MAX` in `backend/idhazh/contracts/knobs/placement.py` rather than a knob in `config/`, because it says what makes the reading mean anything and a share that can be tuned down is a share somebody tunes down on the morning the reading goes red (owner, 2026-09-21).
 
-**`HOLDOUT_TWO_STORY_MAX` has one declaration and one instrument.** The constant is what the config validator reads, because a validator cannot open a CSV; the verb retakes the reading on its way past and prints both numbers when they disagree. It stores nothing - a committed copy would be the second source the constant is not allowed to have (Guardrail #10).
+**`HOLDOUT_TWO_STORY_MAX` has one declaration and one instrument.** The constant is what the config validator reads, because a validator cannot open a CSV; the verb retakes the reading on its way past and prints both numbers when they disagree. It writes nothing - a committed copy would be the second source the constant is not allowed to have (Guardrail #10).
 
 **One term is reproduced and two overrides are not.** The panel and the verb both compute `cosine_weight * cosine`, which is exactly what the floor is applied to. Neither reproduces the two overrides in `_pair_terms`: a matching reduced headline joining at 1.0, and a clash of figures refusing outright. Neither is a function of the line - they fire or they do not whatever the floor is set to - so neither can move the margin the panel measures, and counting them would credit the line with a merge it did not make.
 
@@ -644,7 +644,7 @@ new rule has nothing to compare - measured, and the reading is in
 
 **A reply the grammar could not have written is recorded on the row rather than
 thrown - 2026-09-21.** It used to end the shard, and every pair behind it then
-went missing. Absence on this store already means the draw never took the pair,
+went missing. Absence on this ledger already means the draw never took the pair,
 so the two states an operator most needs to tell apart - a decoder that came
 loose, and a day nothing judged - wrote the same thing to disk. The pair is now
 read in both orders, written with `grammar_applied` false and no verdict at all,
