@@ -25,7 +25,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 - `backend/idhazh/ledger.py`, one file answering many questions, becomes the package `backend/idhazh/ledger/`, each module answering one.
 - The word `store` leaves the repository. Under `state/` it becomes **ledger**; under `frontend/public/` it becomes **collection** (glossary decision, 2026-09-26).
 - `SegmentLedger` and the per-ledger `*_DIRNAME` constants collapse into one `LedgerName` `StrEnum` in `backend/idhazh/contracts/`, with a `DAY_TREES` subset for the day trees a writer files a segment into.
-- 42 hand-written path functions collapse into one `LedgerPath` table and two builders in `ledger/paths.py`.
+- The path functions and the per-ledger `*_DIRNAME` constants become one config registry - `config/ledgers.json`, validated by a contract - so a ledger's location and lifecycle state is one fact in one place (section 4.2).
 - `backend/idhazh/paths.py` becomes `path_classes.py`, the name its own test already carries.
 
 ### Hard scope - out
@@ -65,7 +65,7 @@ One row is one pull request. **Six rows, not eight.** The extraction funnels thr
 | 2 | `ledger.py` becomes the package, and its docstring becomes a page | 1 | B | PENDING | - | - | - |
 | 3 | One `LedgerName` for one ledger | 2 | C | PENDING | - | - | - |
 | 4 | `paths.py` becomes `path_classes.py` | 2 | P | PENDING | - | - | - |
-| 5 | One `LedgerPath` table replaces the path functions | 3, 4 | D | PENDING | - | - | - |
+| 5 | The ledger registry moves to `config/ledgers.json` | 3, 4 | D | PENDING | - | - | - |
 | 6 | The rest of the module splits, and the facade becomes provably empty | 5 | E | PENDING | - | - | - |
 
 **Every row wears one hat and it is the structural one.** No signature, default or return-type changes, and no byte on disk moves. A row that finds itself wanting a behaviour change has found a defect, and the defect gets its own pull request (ESCALATE trigger 1).
@@ -97,9 +97,10 @@ No counts here - functionality is what the contracts must preserve, not a measur
 backend/idhazh/
     contracts/
         ledger_name.py        LedgerName + DAY_TREES live HERE, not in the package
+        ledgers.py            the registry schema: LedgerState, Grain, LedgerEntry
     ledger/
         __init__.py           imports and __all__, no definition of any kind
-        paths.py              where one ledger's file lives: the LedgerPath table
+        paths.py              loads config/ledgers.json; the path builders live here
         keys.py               what makes two rows one record, and the day-tree shapes
         filenames.py          what one writer's file is called
         csv_file.py           how rows are read out of and written into a CSV
@@ -115,7 +116,7 @@ backend/idhazh/
 
 **`LedgerName` is in `contracts/`, not in the package.** `FileEnvelope` (plan 50) is typed by it, and CLAUDE.md section 4 forbids `contracts/` from importing another `idhazh` subpackage. Contracts are the bottom of the graph, so the vocabulary lives there.
 
-**Two tables, not one.** Where a file lives - prefix, grain, stem, suffix - is a different question from what settles two of its rows - key, preference, contract. `paths.py` owns the first (row 5) and `keys.py` owns the second (row 6), each keyed on `LedgerName`. A single merged table would make row 6 edit the structure row 5 built, re-coupling the two concerns the split exists to separate, and would force `paths.py` to import `keys.py` for a type it does not otherwise need. Rejected: the merged `LedgerShape` an earlier draft drew (Fowler, section 4.2).
+**Where a ledger lives is config, how its rows settle is code.** `config/ledgers.json` carries each ledger's lifecycle state and path shape (section 4.2); `keys.py` carries the key and preference (section 4.3), keyed by `LedgerName`, because a preference is a callable and a callable is not config. Keeping them apart is why `paths.py` never imports `keys.py`. Rejected: a single merged table (the `LedgerShape` an earlier draft drew) that re-coupled the two.
 
 **The intra-package import graph is a DAG the worker follows exactly.** `contracts/` and the external sibling `day_partition` are the bottom and import nothing from the package. Then `csv_file`, `paths`, `keys` and `filenames` import only `contracts`; `headers` imports `csv_file`; `settle` imports `keys`, `csv_file`, `paths`, `contracts` and `day_partition`; `rows` imports `keys`, `filenames`, `csv_file`, `paths`, `contracts` and `day_partition`. Every external module-top import a moved body already had (`contracts`, `day_partition`) travels with it. `__init__` imports the submodules to build the facade, and **no submodule imports `__init__`** - importing the package runs `__init__`, so a submodule reaching back up would re-enter a half-built facade.
 
@@ -131,8 +132,8 @@ Everything a worker needs to build is declared here. Where a shape is derived fr
 
 One `StrEnum`, one member per ledger the module can address today, the value being the on-disk name exactly. It replaces three spellings of one vocabulary: `SegmentLedger`, `STORE_DIRNAMES` (renamed `LEDGER_DIRNAMES` in row 1), and the `*_DIRNAME` constants.
 
-- **Membership is the union of two sets, so nothing falls through.** One set is the `*_path` / `*_relpath` functions in `ledger.py` at the base commit (a `*_path` and its `*_relpath` twin count once); this catches the filename-addressed ledgers a `*_DIRNAME`-keyed rule would miss - `feed-retirements.csv`, `holdout-pairs.csv`, `score-distribution.json` and its stamped archive, each with a live caller and its value and `prefix` spelled out in `LEDGER_PATHS`. The other set is `DAY_TREES`: `day-validations` is a day tree with no path function of its own - it is written only through `day_shard_path` - so the function set alone would drop it. The union keeps it, and its `LEDGER_PATHS` row is hand-written (`prefix=("day-validations",)`, `grain=DAY_TREE`, `stem=None`, `suffix=None`). Nesting is carried by `LedgerPath.prefix`, not by the member value.
-- **Two oracles, keyed on that union.** Coverage asserts every `LedgerName` member has a `LEDGER_PATHS` row, and every path-function ledger and every `DAY_TREES` member is a member, computed from git; row 5's exact-parity test proves each row reproduces its function's output. `LEDGER_DIRNAMES` is **not** re-derived from the enum - it stays an explicit frozen set (renamed from `STORE_DIRNAMES` in row 1). It deliberately excludes the flat-file ledgers, the nested children and `day-validations`, and every enum-derived set would include `day-validations` and silently change which directory `prune-state` treats as a trial root - a behaviour change hiding in a structural row. `test_trial_state.py` keeps pinning it.
+- **Membership is the union of two sets, so nothing falls through.** One set is the `*_path` / `*_relpath` functions in `ledger.py` at the base commit (a `*_path` and its `*_relpath` twin count once); this catches the filename-addressed ledgers a `*_DIRNAME`-keyed rule would miss - `feed-retirements.csv`, `holdout-pairs.csv`, `score-distribution.json` and its stamped archive. The other set is `DAY_TREES`: `day-validations` is a day tree with no path function of its own - it is written only through `day_shard_path` - so the function set alone would drop it. Every member of the union gets an entry in `config/ledgers.json` (section 4.2); `day-validations`'s entry is hand-written because no old function derives it. The config is the registry, and `LedgerName` is the typed handle it is validated against.
+- **The oracle is the bijection, at load.** `LedgerName` and the `config/ledgers.json` entries are exactly each other (section 4.2), so a member with no entry, or an entry with no member, fails the build by name. That is the anti-footgun that replaces the old hand-coded `STORE_DIRNAMES`: a ledger left out is no longer a directory `prune-state` silently empties. `prune-state` derives its protected set from the config (row 5), so there is no `LEDGER_DIRNAMES` constant to keep in step.
 
 ```python
 DAY_TREES: Final[frozenset[LedgerName]] = frozenset({...})   # the nine, no more
@@ -144,13 +145,20 @@ DAY_TREES: Final[frozenset[LedgerName]] = frozenset({...})   # the nine, no more
 
 **Why one type and a subset, not two types.** `SegmentLedger` and `LedgerName` answered the same question and drew their strings from the same constants; the only difference was which members carried a settlement shape, and that is a subset, not a second type. Collapsing to one type widens the segment functions from a 9-member argument to a 21-member one, so they gain a **named runtime refusal**: `write_segment(state_dir, LedgerName.PUBLISHED, ...)` no longer fails to type-check, so it must raise at the call, quoting the ledger and its grain (section 4.3). A runtime refusal is the right trade for a build-time producer - a wrong call is a failed CI job, not a served error - but only paired with `DAY_TREES` and its coverage test (Fowler).
 
-### 4.2 `LedgerPath` and the path table - `backend/idhazh/ledger/paths.py`
+### 4.2 The ledger registry - `config/ledgers.json` and `backend/idhazh/ledger/paths.py`
 
-The path functions are pairs: `X_relpath(date)` and `X_path(state_dir, date)` differ only in return type and whether the caller holds the state directory. One table and two builders replace them. **The table carries where a file lives and nothing else** - no dedup key, no preference, no contract. Those live in `keys.py` (section 4.3).
+The set of ledgers, each one's lifecycle state, and where each one lives is one fact, and it lives in one config file - `config/ledgers.json`. It is not a hand-coded set in Python (which the plan's own investigation found is a data-loss footgun: `stages/prune_state.py` empties every `state/` child directory not in the hand-coded set, so a ledger left out is silently wiped), and it is not discovered by a glob (nothing walks `state/`, so the cost never grows with the data - Guardrail #12). A ledger is added by adding an entry; it is retired or paused by changing one field. `config/idhazh.json` is not touched.
+
+**The schema is a contract, validated at load.** `backend/idhazh/contracts/ledgers.py` declares it. `Grain` moves here from the package, because the config references it and `contracts/` cannot import the package (CLAUDE.md section 4):
 
 ```python
+class LedgerState(StrEnum):
+    LIVE = "live"        # the pipeline writes and reads it
+    PAUSED = "paused"    # not written now, will resume; its data is kept and protected
+    RETIRED = "retired"  # no longer written; its data is kept, never pruned as a stray
+
+
 class Grain(StrEnum):
-    """How much time one of this ledger's files covers, and therefore its name."""
     FLAT = "flat"        # feed-retirements.csv - one file, no date in the path
     DAY_FILE = "day"     # seen/<YYYY>/<MM>/<DD>.csv - one file per day
     DAY_TREE = "tree"    # item-health/<YYYY>/<MM>/<DD>/ - a day directory writers file into
@@ -158,37 +166,42 @@ class Grain(StrEnum):
     STAMPED = "stamp"    # content-similarity-judge/archive/<stamp>.json
 
 
-class LedgerPath(NamedTuple):
-    """Where one ledger's file for one period lives. Nothing about settling it."""
-    prefix: tuple[str, ...]   # the directory nest under state/, e.g. ("content-similarity-judge",)
+class LedgerEntry(BaseModel):
+    name: LedgerName          # the on-disk directory or file name
+    state: LedgerState
     grain: Grain
-    stem: str | None          # the literal name for a FLAT file (holdout-pairs, score-distribution); None for a dated grain
-    suffix: str | None        # the extension (".csv", ".json"); None for DAY_TREE, which names a directory
+    prefix: tuple[str, ...]   # the directory nest under state/
+    stem: str | None = None   # the literal name for a FLAT file; None for a dated grain
+    suffix: str | None = None # the extension (".csv", ".json"); None for DAY_TREE, a directory
 
 
-LEDGER_PATHS: Final[Mapping[LedgerName, LedgerPath]] = {...}   # every member, no gaps
+class LedgersConfig(BaseModel):
+    ledgers: list[LedgerEntry]
+    # A load-time validator makes the entry names a bijection with LedgerName:
+    # every member appears once, no extras, no duplicates. A ledger with no entry
+    # or an entry with no member fails the build BY NAME (Guardrail #3). That
+    # refusal is the anti-footgun - the old hand-coded set turned a missing name
+    # into a silently pruned directory; this turns it into a build that will not
+    # start.
 ```
 
-**`suffix` is a field, not a builder literal, and that is the whole point.** The STAMPED archive is a `.json` file, and a builder that hardcodes an extension cannot say so - it would synthesise `.csv` and ship a path that points at nothing. There is exactly one place a name is assembled - `prefix` + the date stem (or the FLAT `stem`) + `suffix` - so `score-distribution.json` and the JSON archive carry `.json` on their row and the builder is physically unable to emit `.csv`. `DAY_TREE` carries `suffix = None` because it names a day directory; the writer file inside it is composed by `day_shard_path` in `rows.py` (the day directory from here, the writer name from `filenames`).
+**`paths.py` reads and validates `config/ledgers.json` once into `dict[LedgerName, LedgerEntry]`** and the builders operate on it. Config-driven, one sane file, no source edit to change a state (Guardrail #6).
 
-Two builders replace the pairs:
+Three builders, driven by the entry's `grain`:
 
 ```python
 def path(state_dir: Path, ledger: LedgerName, covers: str | None = None) -> Path
 def relpath(ledger: LedgerName, covers: str | None = None) -> str
-```
-
-`covers` is the period the caller wants - a `YYYY-MM-DD` day for a `DAY_FILE` or `DAY_TREE`, a `YYYY-MM` month for `MONTH_FILE`, a stamp for `STAMPED`, and `None` for `FLAT`. A dated grain handed `None` raises, and a `FLAT` ledger handed a `covers` raises - `path` never guesses.
-
-**A day tree is read at two levels, so there is a third builder:**
-
-```python
 def tree_root(state_dir: Path, ledger: LedgerName) -> Path   # state_dir / Path(*prefix)
 ```
 
-`tree_root` returns the whole-tree directory a reader hands to `day_shards.settled_rows` / `day_partition.day_files` (which walk every day under it) - `state/item-health`, or the nested `state/content-similarity-judge/scored-pairs`. It is defined only for `DAY_FILE` and `DAY_TREE`; the other grains raise, because a flat or month file has no tree to walk. It is a separate builder rather than an overload of `path(covers=None)`, so `path` keeps its fail-fast: a caller who forgets the date on a `seen` read gets a loud error, not a plausible tree-root `Path`.
+`covers` is the period - a `YYYY-MM-DD` day for `DAY_FILE`/`DAY_TREE`, a `YYYY-MM` month for `MONTH_FILE`, a stamp for `STAMPED`, `None` for `FLAT`. A dated grain handed `None` raises; a `FLAT` handed a `covers` raises - `path` never guesses. `tree_root` returns the whole-tree directory a reader hands to `day_shards.settled_rows` / `day_partition.day_files` (which walk every day under it); it is defined only for `DAY_FILE`/`DAY_TREE` and raises otherwise, and it is a separate builder rather than `path(covers=None)` so `path` keeps its fail-fast. Because `suffix` is data on the entry, the STAMPED archive's `.json` sits on its row and the builder is physically unable to emit `.csv`.
 
-**Three oracles bind this module.** Coverage: iterating `LedgerName` refuses a member with no row, by name. Exact parity: for every member and a fixed date, `path` and `relpath` return exactly what the old function returned - both spellings, extension included. Tree-root parity: for every `DAY_FILE` and `DAY_TREE` member, `tree_root` equals the old inline `state_dir / X_DIRNAME` expression, the nested trees included - `day_partition.day_files` refuses a misplaced entry rather than skipping it, so a root built one segment short hard-fails a read, which makes this parity non-cosmetic (row 5).
+**Settlement stays in code, not in the config.** A dedup key is a tuple and a preference is a callable, and a callable is not JSON. So `keys.py` (section 4.3) holds the key, the preference and the tree-shape, keyed by `LedgerName`, for the `DAY_TREES` subset. The config carries where a ledger lives and its lifecycle; the code carries how its rows settle.
+
+**Onboarding and offboarding, in full.** Add a ledger: one entry in `config/ledgers.json` at `state: live` (plus a `LedgerName` member for typing, which the bijection test binds, plus a `keys.py` row if it is a settled day tree). Pause it or retire it: change `state`. Nothing is discovered and nothing is a hand-list to forget - a missing pairing fails the build by name.
+
+**Four oracles bind the registry.** Bijection: the config names are exactly the `LedgerName` members, at load and in a test. Path parity: for every entry and a fixed date, `path` and `relpath` equal the old function, extension included. Tree-root parity: for every `DAY_FILE`/`DAY_TREE` entry, `tree_root` equals the old inline `state_dir / X_DIRNAME`, the nested trees included. Known-set parity: the directories `prune-state` protects (the `prefix[0]` of every configured ledger, of any state, plus the four other-module trees) reproduce today's decision exactly - so replacing the hand-list changes no prune outcome, and any directory the config would newly protect (see row 5 on `day-validations`) is surfaced, never silently changed.
 
 ### 4.3 The settlement structures - `backend/idhazh/ledger/keys.py`
 
@@ -205,7 +218,7 @@ Each module takes the names below with bodies unchanged. **The oracle for every 
 
 | Module | Answers | Takes |
 | --- | --- | --- |
-| `ledger/paths.py` | where a ledger's file lives | the `LedgerPath` table and builders (section 4.2), plus `STATE_DIRNAME`, the state-root literal every full path is built from |
+| `ledger/paths.py` | where a ledger's file lives | loads and validates `config/ledgers.json` into `dict[LedgerName, LedgerEntry]`, the `path` / `relpath` / `tree_root` builders (section 4.2), plus `STATE_DIRNAME` |
 | `ledger/filenames.py` | what one writer's file is called | `SegmentName`, `SEGMENT_NAME`, `SEGMENT_SUFFIX`, `BEFORE_PARTITION_NAME`, `PRE_IDENTITY_TRACE`, `REPAIR_NAME`, `REPAIR_STAMP`, `repair_name`, `is_repair`, `segment_name`, `parse_segment_name`. It imports only `contracts`, so the day-directory-plus-writer-name join does **not** live here |
 | `ledger/csv_file.py` | how a CSV is read and written | `CsvRecord`, `CsvContract`, `read_header`, `require_matching_header`, `_csv_line`, `render_file`, `_read_rows`, `_stream_rows`, `extend_ledger_file` |
 | `ledger/headers.py` | how a file under an older header is read | `refiler`, `_headings`, `_unplaceable`, `_refile`, `migrate_header` |
@@ -260,9 +273,8 @@ LEFT ALONE - the ordinary English verb, not the vocabulary
   test_the_manifest_stores_the_publisher_map_it_froze
 
 IDENTIFIERS THAT CHANGE
-  STORE_DIRNAMES            -> LEDGER_DIRNAMES   (row 3 then deletes it outright;
-                                                  renamed here so row 3 has one
-                                                  thing to delete, not two)
+  STORE_DIRNAMES            -> LEDGER_DIRNAMES   (row 5 then deletes it, once the
+                                                  config registry replaces it)
   WRITER_OWNED_STORES       -> WRITER_OWNED_LEDGERS
   STORES_NO_JOB_WRITES      -> LEDGERS_NO_JOB_WRITES
   STORES_NOTHING_FILLS_YET  -> LEDGERS_NOTHING_FILLS_YET
@@ -338,7 +350,7 @@ ABOUT THIRTY TEST FUNCTION NAMES carrying the word, listed by the sweep
   | 1 | One type and a typed subset, not two types. `SegmentLedger` is deleted, not aliased; `DAY_TREES` is the nine it named | Fowler |
   | 2 | The widened segment functions gain a **named runtime refusal** for a non-day-tree member - the right trade for a build-time producer, paired with the `DAY_TREES` coverage test | Fowler |
   | 3 | `LedgerName` lives in `contracts/` because `FileEnvelope` (plan 50) is typed by it and CLAUDE.md section 4 forbids `contracts/` importing another subpackage | CLAUDE.md section 4 |
-  | 4 | The `*_DIRNAME` constants are NOT deleted here - their users, the path functions, are still in `__init__.py` until row 5. Row 5 deletes them once the path table replaces their users | Fowler, dependency order |
+  | 4 | The `*_DIRNAME` constants are NOT deleted here - their users, the path functions, are still in `__init__.py` until row 5. Row 5 deletes them once the config registry replaces their users | Fowler, dependency order |
   | 5 | Two utilities build the vocabulary from a path string (`pipeline_test_ledgers.py`, `widen_ledger_header.py`). After the collapse `LedgerName("published")` succeeds where `SegmentLedger("published")` raised, so the fail-fast on a non-day-tree directory moves from construction to the segment refusal. Both only ever feed day-tree directory names, so the shift is inert - named so it is not discovered | Fowler |
 
 - **Rejected alternatives:**
@@ -368,29 +380,35 @@ ABOUT THIRTY TEST FUNCTION NAMES carrying the word, listed by the sweep
 
 ---
 
-## Row #5 - One `LedgerPath` table replaces the path functions
+## Row #5 - The ledger registry moves to `config/ledgers.json`
 
-- **Scope:** build `ledger/paths.py` (section 4.2) with the `LedgerPath` table, the `path` / `relpath` builders and `tree_root`; migrate every path-function call site and every inline `state_dir / X_DIRNAME` tree-root read; delete the path wrappers and the per-ledger `*_DIRNAME` constants, keeping `LEDGER_DIRNAMES` as an explicit frozen set.
+- **Scope:** create the registry (`backend/idhazh/contracts/ledgers.py` and `config/ledgers.json`, section 4.2), make `paths.py` load and validate it and build `path` / `relpath` / `tree_root` from it, make `prune-state` derive its protected set from it, and delete the hand-coded path functions, the per-ledger `*_DIRNAME` constants and `STORE_DIRNAMES`. `Grain` moves to `contracts/`. `config/idhazh.json` is not touched.
 - **Files touched:**
-  - `backend/idhazh/ledger/paths.py` (new: the `LedgerPath` table, `path` / `relpath` / `tree_root`, `STATE_DIRNAME`, and the explicit `LEDGER_DIRNAMES` set)
-  - `backend/idhazh/ledger/__init__.py` - delete the path functions and the per-ledger `*_DIRNAME` constants, migrate the inline `state_dir / X_DIRNAME` tree-root reads (`load_item_health`, `load_health`, `load_published`, `keyed_paths`) onto `tree_root`, re-export from `paths.py`, cut `__all__`
+  - `backend/idhazh/contracts/ledgers.py` (new: `LedgerState`, `Grain`, `LedgerEntry`, `LedgersConfig` with the bijection validator)
+  - `config/ledgers.json` (new: one entry per ledger, its `state`, and its path shape - the states set to reproduce today's known-set exactly)
+  - `backend/idhazh/ledger/paths.py` (new: loads and validates the config, the `path` / `relpath` / `tree_root` builders, `STATE_DIRNAME`)
+  - `backend/idhazh/ledger/__init__.py` - delete the path functions, the per-ledger `*_DIRNAME` constants and `STORE_DIRNAMES`; migrate the inline `state_dir / X_DIRNAME` tree-root reads (`load_item_health`, `load_health`, `load_published`, `keyed_paths`) onto `tree_root`; re-export from `paths.py`; cut `__all__`
+  - `backend/idhazh/stages/prune_state.py` - `_trial_roots` reads the config's known-set instead of `ledger.STORE_DIRNAMES`
   - `backend/idhazh/stages/validate_days.py`, `backend/idhazh/retention.py`, and any test reading `state_dir / X_DIRNAME` - repointed onto `tree_root`
   - every other caller mypy names when the wrappers go
 - **Acceptance gates:** `ruff check .`, `mypy backend`, the changed-file selector locally; full `pytest backend/tests` on CI.
-- **Oracle:** three parities. **Path parity** - for every `LedgerName` member and a fixed date, `path` and `relpath` equal the old function, both spellings, extension included; a dated grain handed `None` raises. **Tree-root parity** - for every `DAY_FILE` and `DAY_TREE` member, `tree_root` equals the old inline `state_dir / X_DIRNAME`, the nested trees included. **Census** - every `state_dir / <literal>` composition site in `backend/` maps to a `LEDGER_PATHS` prefix, so no tree-root read is left behind and no ledger is unmapped. mypy then proves no caller was left on a deleted name.
+- **Oracle:** four checks. **Bijection** - the `config/ledgers.json` names are exactly the `LedgerName` members, at load and in a test. **Path parity** - for every entry and a fixed date, `path` and `relpath` equal the old function, extension included; a dated grain handed `None` raises. **Tree-root parity** - for every `DAY_FILE` / `DAY_TREE` entry, `tree_root` equals the old inline `state_dir / X_DIRNAME`, the nested trees included. **Known-set parity** - the directories `_trial_roots` now protects (the `prefix[0]` of every configured ledger, of any state, plus the four other-module trees) reproduce today's `STORE_DIRNAMES`-based decision exactly. A census that every `state_dir / <literal>` site maps to a config prefix backs it.
 - **Decisions:**
 
   | # | Decision | Authority |
   | --- | --- | --- |
-  | 1 | Build the table and delete the path wrappers in one pull request. Both are structural (one hat); Tidy First separates structural from behavioural, not structural from structural. Staging leaves two spellings live | Fowler |
-  | 2 | The table carries `prefix` as a tuple, because `content-similarity-judge/scored-pairs/` and `llm-council/shard-outcomes/` nest | Fowler |
-  | 3 | The per-ledger `*_DIRNAME` constants are deleted, their only users now gone. `LEDGER_DIRNAMES` is **not** re-derived from the enum - it stays an explicit frozen set, because it excludes `day-validations` and the flat and nested ledgers, and an enum-derived set would change which directory `prune-state` treats as a trial root | Fowler |
-
+  | 1 | The ledger set, each ledger's state, and its path shape live in `config/ledgers.json`, not a Python set and not a glob. A hand-coded set is the footgun this row removes; a glob grows with the data and makes a ledger that fails to write once vanish from discovery | Owner, 2026-09-26 |
+  | 2 | States are `live` / `paused` / `retired`; all three are known to `prune-state` (protected), so retiring or pausing never exposes a ledger to trial-pruning. The write-side and cleanup meaning of the states is the gardener's to act on, not this structural row | Owner, 2026-09-26 |
+  | 3 | Settlement (key, preference, tree-shape) stays in `keys.py` keyed by `LedgerName`, because a preference is a callable and a callable is not JSON. The config carries where a ledger lives and its lifecycle only | Owner, Fowler |
+  | 4 | `prune_state.py` is edited here to read the config. Plan 50 refactors `prune_state.py` into gardener tasks and rebases onto this; its frozen design is untouched, and the config becomes the registry both read | Owner |
+- **ESCALATE:** if the config's known-set does not reproduce today's `_trial_roots` decision - the live question is `day-validations`, a real `state/` child absent from today's `STORE_DIRNAMES` - stop. Protecting it is almost certainly a bug fix, but a change to what `prune-state` empties is a behaviour change and needs sign-off, not a silent flip inside a structural row.
 - **Rejected alternatives:**
 
   | # | Option | Why rejected | What it would cost to take | Authority |
   | --- | --- | --- | --- | --- |
-  | 1 | The merged `LedgerShape` table (path shape plus dedup key plus preference in one row) | Re-couples the two concerns rows 5 and 6 separately own, forces `paths.py` to import `keys.py`, and cannot carry `_TREE_SHAPES`'s `model`/`carried` | A god-table and a cross-module import for a type `paths.py` does not need | Fowler |
+  | 1 | A hand-coded `LEDGER_DIRNAMES` frozen set in Python | A ledger left out is silently emptied by `prune-state`; it fights natural growth and easy onboarding | Nothing saved; it is the defect this row removes | Owner |
+  | 2 | Discover ledgers by walking `state/` (a glob) | Cost grows with the data (Guardrail #12), and a ledger that produced no file yet - or failed to write once - is invisible to a walk, so discovery cannot tell `retired` from `never ran` | The registry would be unreadable at a glance and could not carry a state | Owner |
+  | 3 | The merged `LedgerShape` table (path plus settlement in one row) | Re-couples path and settlement, and settlement cannot be JSON | A god-table and a cross-module import | Fowler |
 
 ---
 
