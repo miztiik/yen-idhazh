@@ -743,7 +743,7 @@ def publish(shard: Shard, message: str, *, attempts: int) -> int:
 
 **North star, and it binds every ledger added after this plan. A filename carries identity, never meaning. Everything a reader needs to know about a file is inside the file.** A filename that is parsed is an undeclared, unversioned, unvalidated schema, and renaming a file becomes a breaking change. With the envelope inside, a file can be renamed, moved or re-partitioned and every reader still knows what it holds - which is the thing a filename cannot survive when one query opens a hundred files at once.
 
-This plan applies the rule to the ledgers it creates and to the two row 3 migrates. The trees section 5.8 leaves behind keep their parsed names until they migrate, because `ledger.SEGMENT_NAME` is a compiled pattern that `idhazh.paths` uses to answer whether a committed path has exactly one writer, and retiring that is the migration plan's work, not this one's.
+This plan applies the rule to the ledgers it creates and to the two row 3 migrates. The trees section 5.8 leaves behind keep their parsed names until they migrate, because `ledger.SEGMENT_NAME` is a compiled pattern that `idhazh.path_classes` uses to answer whether a committed path has exactly one writer, and retiring that is the migration plan's work, not this one's.
 
 #### The identifier, and why there are two
 
@@ -1452,7 +1452,7 @@ It mints `unit_id` and then `file_id` through `naming` (section 5.7), builds the
   - `backend/idhazh/contracts/feed_retirement.py`, `backend/idhazh/contracts/visual_prune.py` (**no `version` stamp**: no field moves, and a stamp would say a shape moved when only its address did)
   - `backend/idhazh/ledger/__init__.py` (**`append_retirements` and `append_visual_prunes` are deleted, not left forwarding** - per decision 5 - and their `extend_ledger_file` paths go with them)
   - `backend/idhazh/stages/prune_state.py` (writes through the door)
-  - `backend/idhazh/paths.py` (the `state/feed-retirements.csv` and `state/visual-prunes` union entries go), `.gitattributes` (the same two union lines go)
+  - `backend/idhazh/path_classes.py` (the `state/feed-retirements.csv` and `state/visual-prunes` union entries go), `.gitattributes` (the same two union lines go)
   - `backend/tests/ledger/test_migrate_csv.py`, `backend/tests/test_ledger.py`
   - `docs/architecture/contracts/persistence.md` (the migration section)
 - **Acceptance gates:** local `ruff check .`, `mypy backend`, `pytest backend/tests/ledger backend/tests/test_ledger.py backend/tests/test_source_health.py -q`. CI runs the full suite.

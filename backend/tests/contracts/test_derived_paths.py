@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from idhazh import paths
+from idhazh import path_classes
 
 pytestmark = pytest.mark.contract
 
@@ -25,24 +25,24 @@ def test_no_derived_entry_carries_a_second_placeholder_or_a_space() -> None:
     know, and the caller is a workflow step that knows which day it published
     and nothing else.
     """
-    assert paths.DERIVED, "the refresh set is what a rebuild owns; empty means it owns nothing"
+    assert path_classes.DERIVED, "the refresh set is what a rebuild owns; empty means it owns nothing"
 
-    for entry in paths.DERIVED:
+    for entry in path_classes.DERIVED:
         assert " " not in entry, f"{entry} carries a space and the commit step splits on spaces"
         assert entry.count("{") == entry.count("}"), f"{entry} has an unbalanced placeholder"
         assert entry.count("{") <= 1, f"{entry} carries more than one placeholder"
         if "{" in entry:
-            assert paths.DAY_DIR in entry, f"{entry} names a placeholder this module cannot fill"
+            assert path_classes.DAY_DIR in entry, f"{entry} names a placeholder this module cannot fill"
         assert not entry.startswith("/"), f"{entry} must be relative (CLAUDE.md section 2)"
         assert "\\" not in entry, f"{entry} must use POSIX separators (CLAUDE.md section 2)"
 
 
 def test_the_rendered_line_is_every_derived_path_in_one_order_with_single_spaces() -> None:
-    """The step output is one line, and the script splits it back into the paths."""
-    rendered = paths.refresh_paths(day_dir=A_DAY_DIR)
+    """The step output is one line, and the script splits it back into the path_classes."""
+    rendered = path_classes.refresh_paths(day_dir=A_DAY_DIR)
 
     assert rendered.split(" ") == [
-        entry.format(day_dir=A_DAY_DIR) for entry in paths.DERIVED if "/" in entry
+        entry.format(day_dir=A_DAY_DIR) for entry in path_classes.DERIVED if "/" in entry
     ]
     assert "  " not in rendered, "two spaces is an empty path the script would try to stage"
     assert f"{A_DAY_DIR}/digest.json" in rendered.split()
@@ -65,10 +65,10 @@ def test_a_derived_filename_is_never_handed_back_because_no_step_can_rebuild_it(
     mechanism working: the name carries no writer identity, so the resolver
     answers "not mine" and stops.
     """
-    names = [entry for entry in paths.DERIVED if "/" not in entry]
+    names = [entry for entry in path_classes.DERIVED if "/" not in entry]
 
     assert names, "the class holds a name, and dropping the last one would pass this by accident"
-    handed_back = paths.refresh_paths(day_dir=A_DAY_DIR).split(" ")
+    handed_back = path_classes.refresh_paths(day_dir=A_DAY_DIR).split(" ")
     for name in names:
         assert name not in handed_back
 
@@ -81,7 +81,7 @@ def test_a_path_that_carries_a_space_is_refused_where_it_is_written() -> None:
     could not find the file.
     """
     with pytest.raises(ValueError) as refused:
-        paths.refresh_paths(day_dir="frontend/public/digest/2026/08/25 copy")
+        path_classes.refresh_paths(day_dir="frontend/public/digest/2026/08/25 copy")
     assert "word-splits" in str(refused.value)
 
 
@@ -102,5 +102,5 @@ def test_the_days_metrics_record_is_rebuilt_and_never_merged() -> None:
     What this cannot settle is that the rebuild reproduces the file byte for byte
     from a different tip. That is the producer's own test.
     """
-    assert "state/day-metrics" in paths.DERIVED
-    assert "frontend/public/day-metrics" in paths.DERIVED
+    assert "state/day-metrics" in path_classes.DERIVED
+    assert "frontend/public/day-metrics" in path_classes.DERIVED

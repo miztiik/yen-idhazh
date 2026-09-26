@@ -7,7 +7,7 @@ path in none is a conflict nobody planned for.
 
 **The writers are enumerated from the modules that declare them, never from the
 tree.** `DAY_TREES` is the closed set of day trees a writer fills and
-`paths.DERIVED` and `paths.UNION_SAFE` are the other two lists, so nothing here
+`path_classes.DERIVED` and `path_classes.UNION_SAFE` are the other two lists, so nothing here
 walks `state/` and the answer does not change because a run committed a file
 (CLAUDE.md section 13, Guardrail #12). A tenth tree that arrives without a class
 fails here rather than in the rebase that could not merge it.
@@ -19,7 +19,7 @@ from pathlib import Path
 
 import pytest
 
-from idhazh import day_shards, ledger, paths
+from idhazh import day_shards, ledger, path_classes
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.ledger_name import DAY_TREES, LedgerName
 
@@ -54,11 +54,11 @@ def _under(relpath: str, entry: str) -> bool:
 def _classes(relpath: str) -> set[str]:
     """Which of the three classes claim this path. One is the only right answer."""
     found = set()
-    if paths.is_written_once(relpath):
+    if path_classes.is_written_once(relpath):
         found.add("written once")
-    if any(_under(relpath, entry) for entry in paths.DERIVED):
+    if any(_under(relpath, entry) for entry in path_classes.DERIVED):
         found.add("derived")
-    if any(_under(relpath, entry) for entry in paths.UNION_SAFE):
+    if any(_under(relpath, entry) for entry in path_classes.UNION_SAFE):
         found.add("union safe")
     return found
 
@@ -115,7 +115,7 @@ def test_a_derived_path_is_rebuilt_and_is_neither_written_once_nor_unioned() -> 
     git acts on the files under it. The fold is skipped here - it is a filename
     rather than a directory, and the test below is the one that places it.
     """
-    for entry in paths.DERIVED:
+    for entry in path_classes.DERIVED:
         if "/" not in entry:
             continue
         for relpath in (entry.format(day_dir=A_DAY_DIR), f"{entry.format(day_dir=A_DAY_DIR)}/2026/08/20.json"):
@@ -133,7 +133,7 @@ def test_a_union_safe_path_takes_a_union_and_is_neither_derived_nor_written_once
     was also derived would make it wrong - a rebuild would drop the other side's
     rows.
     """
-    for entry in paths.UNION_SAFE:
+    for entry in path_classes.UNION_SAFE:
         leaves = [entry] if entry.endswith(".csv") else [entry, f"{entry}/2026/08/20.csv"]
         for relpath in leaves:
             assert _classes(relpath) == {"union safe"}, (
@@ -160,9 +160,9 @@ def test_the_fold_is_derived_in_every_day_tree_and_is_never_handed_back() -> Non
             f"{fold} is classed {sorted(_classes(fold))}, and a fold is derived in "
             "every tree that has one"
         )
-        assert not paths.is_written_once(fold), "a fold is derived from writers, never one of them"
+        assert not path_classes.is_written_once(fold), "a fold is derived from writers, never one of them"
 
-    handed_back = paths.refresh_paths(day_dir=A_DAY_DIR).split(" ")
+    handed_back = path_classes.refresh_paths(day_dir=A_DAY_DIR).split(" ")
     assert day_shards.SETTLED_NAME not in handed_back
 
 

@@ -64,7 +64,7 @@ One row is one pull request. **Seven: six that change code, and one that distill
 | 1 | The retired word leaves | - | A | DONE | p53back + p53docs + p53front | - | three workers, one tree each |
 | 2 | `ledger.py` becomes the package, and its docstring becomes a page | 1 | B | DONE | p53r2 | - | one worker |
 | 3 | One `LedgerName` for one ledger | 2 | C | DONE | p53r3 | - | one worker |
-| 4 | `paths.py` becomes `path_classes.py` | 3 | P | PENDING | - | - | - |
+| 4 | `paths.py` becomes `path_classes.py` | 3 | P | DONE | p53r4 | - | owner |
 | 5 | The ledger registry moves to `config/ledgers.json` | 3, 4 | D | PENDING | - | - | - |
 | 6 | The rest of the module splits, and the facade becomes provably empty | 5 | E | PENDING | - | - | - |
 | 7 | The diagram and the vocabulary land in docs, and the plan-doc goes | 6 | F | PENDING | - | - | - |

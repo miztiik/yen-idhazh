@@ -1111,7 +1111,7 @@ jobs:
         working-directory: frontend
         run: python -m idhazh site-weight --site-tree build
 
-      # The paths the rebuild below owns, read from `backend/idhazh/paths.py`
+      # The paths the rebuild below owns, read from `backend/idhazh/path_classes.py`
       # rather than written out here. They were a space-split string in this
       # file, under a header warning that no path in it may carry a space - a
       # rule nothing could check - and the workflow tests carried a second copy

@@ -231,7 +231,7 @@ def rebuild_index(state_dir: Path, days: Iterable[str]) -> dict[str, IndexDrift]
 
     **One add, never a rewrite.** The repair goes into the day directory as
     `repair-<YYYYMMDDTHHMMSSZ>.csv`, which is a name no run can take
-    (`idhazh.paths.is_written_once`), so it collides with no writer's file and
+    (`idhazh.path_classes.is_written_once`), so it collides with no writer's file and
     needs no merge. Rewriting a committed day would lose the race it is in:
     rebased onto a tip that appended, a commit that removed rows is a rebase git
     cannot apply, so the removal stops the push rather than landing half-done.

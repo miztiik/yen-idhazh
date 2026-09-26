@@ -1755,8 +1755,8 @@ class SegmentName(NamedTuple):
 #: takes another script's numerals, and `int` takes them too - the name would
 #: then carry a digit no later glob matches.
 #:
-#: Public because `idhazh.paths` answers whether a committed path has exactly
-#: one writer, and it has to ask this pattern rather than carry a copy of it.
+#: Public because `idhazh.path_classes` answers whether a committed path has
+#: exactly one writer, and it has to ask this pattern rather than carry a copy.
 SEGMENT_NAME: Final = re.compile(
     rf"(?P<run_id>{RUN_ID_PATTERN[1:-1]})"
     r"-(?P<attempt>[0-9]+)"
