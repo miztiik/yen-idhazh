@@ -265,14 +265,14 @@ flowchart TB
  end
 
  classDef stage fill:#222834,stroke:#4b5468,stroke-width:1px,color:#e6e9f0;
- classDef store fill:#1b3a5c,stroke:#2d6ca3,stroke-width:1.5px,color:#ffffff;
+ classDef ledger fill:#1b3a5c,stroke:#2d6ca3,stroke-width:1.5px,color:#ffffff;
  classDef sysIngest fill:#1a1e27,stroke:#2e9c8a,stroke-width:1.5px,color:#7fe3d2;
  classDef sysExtract fill:#1a1e27,stroke:#4f7fd6,stroke-width:1.5px,color:#a8c4f5;
  classDef sysModel fill:#1a1e27,stroke:#9b6bd6,stroke-width:1.5px,color:#cfb0f0;
  classDef sysPublish fill:#1a1e27,stroke:#3f8fb8,stroke-width:1.5px,color:#a5d6ea;
 
  class SCHEDULE,MANUAL,PLAN,FETCH,CALLS,ASSEMBLE,PAGES stage;
- class SEEN,ROWS,DAY store;
+ class SEEN,ROWS,DAY ledger;
  class ING sysIngest;
  class EXT sysExtract;
  class MOD sysModel;
@@ -411,13 +411,13 @@ flowchart TB
  classDef yes fill:#176032,stroke:#2ea04f,stroke-width:1.5px,color:#ffffff;
  classDef no fill:#a32020,stroke:#d23b3b,stroke-width:1.5px,color:#ffffff;
  classDef warn fill:#7a5400,stroke:#c08a12,stroke-width:1.5px,color:#ffffff;
- classDef store fill:#1b3a5c,stroke:#2d6ca3,stroke-width:1.5px,color:#ffffff;
+ classDef ledger fill:#1b3a5c,stroke:#2d6ca3,stroke-width:1.5px,color:#ffffff;
  classDef sysEval fill:#1a1e27,stroke:#c79a2e,stroke-width:1.5px,color:#f0d79a;
  classDef sysOps fill:#1a1e27,stroke:#8b93a7,stroke-width:1.5px,color:#c8cdd8;
 
  class FORM,RAW,SERVER,DOSSIER,SCRATCH,FETCH,REPLAY,DAILY stage;
  class IDENT,PROVE,GATES decision;
- class FILE store;
+ class FILE ledger;
  class ADOPT yes;
  class STOP,REJECT no;
  class REVERT warn;
@@ -847,21 +847,21 @@ true when somebody adds the sixth workflow.
 
 Six things, and they are the whole list: the published site under
 `frontend/public/`, the committed `config/models/<name>.json` the incumbent
-points at, the production ledgers under `state/`, the seen store inside them,
+points at, the production ledgers under `state/`, the seen ledger inside them,
 the run id and the date a production day is keyed on, and article text, which
 never leaves the job that fetched it.
 
 **`run.trial_state_dirname` moves a run's whole state root, and every stage of
 both dispatches has to read the copy that declares it.** A step that runs without
 `--config` loads the committed config, which redirects nothing. `plan` is the one
-that bites: it appends to the seen store, feed health, feed retirements and the
+that bites: it appends to the seen ledger, feed health, feed retirements and the
 counterfactual scores, and a marked address makes the next production day skip
 that story with nothing in the log to say why. Both workflows build the scratch
 copy in the `plan` job and both pass `pipeline-tests`.
 `test_no_bench_stage_can_reach_the_production_state_root` asserts it for every
 stage any job in that file runs, present or future.
 
-**The cost is not the two lines.** `plan` reads the seen store as well as writing
+**The cost is not the two lines.** `plan` reads the seen ledger as well as writing
 it, so a redirected qualification plans from an empty one and draws articles a
 production day already covered. That is the trade: a qualification measures how
 well a model summarizes text, whether a reader has already seen the story is a

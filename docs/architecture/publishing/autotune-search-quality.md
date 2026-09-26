@@ -226,7 +226,7 @@ That mechanism is `SEGMENT_NAME` in `backend/idhazh/ledger.py`:
 pattern, the attempt is what keeps a GitHub re-run from writing the path its
 first try took, and the shard is two digits. `idhazh.paths` is what checks that
 a committed path has exactly one writer. The mechanism may itself change later;
-whatever it becomes, this store follows it rather than inventing a second
+whatever it becomes, this ledger follows it rather than inventing a second
 scheme.
 
 **Who writes it.** The daily pipeline, after the index is built. Not a person's

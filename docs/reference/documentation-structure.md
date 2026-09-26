@@ -110,7 +110,7 @@ survive (`CLAUDE.md` Guardrail #10). `measure_two_calls.py` and
 `measure_day_window.py` are protected by this, and so is every other utility
 named in a page under `docs/reference/benchmarks/`.
 
-**A migration is the opposite case.** It exists to move one store from one
+**A migration is the opposite case.** It exists to move one ledger from one
 shape to another, it says so in its own first sentence, and once the last row
 it was written for has gone - aged out of its retention window, or re-filed by
 an engine that absorbed the job - it is a file nobody can run against anything.
@@ -122,13 +122,13 @@ file to lint, for a pass that would do nothing.
 the producer existed, and every published day carries its record now.
 `migrate_item_health.py` re-filed `state/item-health/` day files under a changed
 header, which `ledger.migrate_header` does through
-[`widen_ledger_header.py`](../architecture/contracts/schemas.md) for every store
-rather than one file per store. `measure_definition_placement.py` priced where
+[`widen_ledger_header.py`](../architecture/contracts/schemas.md) for every ledger
+rather than one file per ledger. `measure_definition_placement.py` priced where
 the labelling vocabulary sits in a prompt, was cited by no page, and left no
 figure behind to reproduce.
 
 **The test is a citation, not an age.** An old instrument a page still cites
-stays; a migration written last week whose store has been re-filed goes.
+stays; a migration written last week whose ledger has been re-filed goes.
 
 ### A dossier is per subject; a record is per run
 
@@ -381,11 +381,11 @@ a rule whose input nobody sees is a rule nobody runs.
 ### `docs/` is the memory
 
 Everything a future contributor or agent needs is written here, in a file that
-is reviewed in a PR and versioned in git. An agent tool may keep a private note
-store; that store is a **cache of what `docs/` already says**, never the only
+is reviewed in a PR and versioned in git. An agent tool may keep private notes;
+those notes are a **cache of what `docs/` already says**, never the only
 copy of anything.
 
-The test is simple: if a fact would be lost when the note store is cleared, or
+The test is simple: if a fact would be lost when those notes are cleared, or
 invisible to a person reading the repository, it is in the wrong place. Move it
 to the living doc that owns it, or - when it is execution craft rather than
 project knowledge - to the agent-notes reference. `AGENTS.md` and any private
@@ -454,7 +454,7 @@ classDef decision fill:#11141c,stroke:#5b6477,stroke-width:1.5px,color:#ffffff;
 classDef yes fill:#176032,stroke:#2ea04f,stroke-width:1.5px,color:#ffffff;
 classDef no fill:#a32020,stroke:#d23b3b,stroke-width:1.5px,color:#ffffff;
 classDef warn fill:#7a5400,stroke:#c08a12,stroke-width:1.5px,color:#ffffff;
-classDef store fill:#1b3a5c,stroke:#2d6ca3,stroke-width:1.5px,color:#ffffff;
+classDef ledger fill:#1b3a5c,stroke:#2d6ca3,stroke-width:1.5px,color:#ffffff;
 classDef ext fill:#2a2233,stroke:#6b5480,stroke-width:1px,stroke-dasharray:5 3,color:#e6e9f0;
 ```
 
@@ -465,7 +465,7 @@ classDef ext fill:#2a2233,stroke:#6b5480,stroke-width:1px,stroke-dasharray:5 3,c
 | `yes` | rectangle | The branch that continues, passes, or publishes. |
 | `no` | rectangle | The branch that stops, refuses, or fails. |
 | `warn` | rectangle | The branch that neither passes nor fails - held, degraded, or waiting on a person. |
-| `store` | `[("...")]` cylinder | Something persisted: a committed file, a ledger, a cache. |
+| `ledger` | `[("...")]` cylinder | Something persisted: a committed file, a ledger under `state/`, a cache. |
 | `ext` | rectangle, dashed | Something outside this repository. The dashes say "not ours" without a second colour. |
 
 **Green and red are the outcome, never the subject.** A node is `yes` because that path passed, not because it is a nice thing. A stage that happens to be about validation is `stage`. Used this way the two colours are worth reading; used decoratively they are worth nothing, and a reader stops trusting them everywhere else on the page.

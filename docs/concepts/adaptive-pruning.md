@@ -7,8 +7,8 @@ One question, asked of every file this project writes:
 > **When this artefact is old, what does a reader lose if it goes?**
 
 The answer picks one of four policies. **Adaptive** is the load-bearing word:
-every store answers that question for itself and carries its own age, because an
-age that is right for one store is wrong for the next. This page says what the
+every artefact answers that question for itself and carries its own age, because an
+age that is right for one artefact is wrong for the next. This page says what the
 four policies are, which one governs a given artefact, and what the register does
 not name.
 
@@ -29,7 +29,7 @@ no address is advice.
 **1. Age decides, never size.** A size trigger deletes most on the day the reader
 has most to read. The byte instruments print and fail rather than delete:
 `retention.site_budget_mb` is the alarm, `retention.pages_hard_cap_mb` is the cap
-past which the step stops, and neither removes a file. The one store bounded by a
+past which the step stops, and neither removes a file. The one artefact bounded by a
 count instead of an age is `corpus/`, and it is the exception that shows the
 reason - nothing renders it, links to it or serves it, so there is no day on
 which evicting from it costs a reader anything.
@@ -89,7 +89,7 @@ goes because every reader downloads it and the item survives without it.
 
 ## Which policy governs a given artefact
 
-Three questions, in order. They answer for a store nobody has created yet, which
+Three questions, in order. They answer for an artefact nobody has created yet, which
 is the only kind of rule worth writing here.
 
 **1. Does a run append to it?** If a run rewrites the whole file instead, there is
@@ -135,7 +135,7 @@ wrong one, is
 ## The register, 2026-09-12
 
 **An artefact missing from this table has no policy rather than a default one.**
-Answer the three questions above where the store is created, and add its row in
+Answer the three questions above where the artefact is created, and add its row in
 the same commit.
 
 No test asserts this table, and that is a decision with a reason under
@@ -154,7 +154,7 @@ no file is not a mistake; a file with no row is.**
 **Every full-grain window in the `state/` table below is 14 months today, and
 every aggregate age is null, meaning never.** The knob is what governs rather
 than that sentence, and
-[config/retention-ages.md](config/retention-ages.md#every-store-names-its-own-cleanup-age) is where each number
+[config/retention-ages.md](config/retention-ages.md#every-tree-names-its-own-cleanup-age) is where each number
 is set and argued. It is stated once here so that reading a row does not cost a
 second page. **`retention.image_months` is 13 and is not one of them** - 14 there
 is the count of month shards a console read opens, and no read opens a visual
@@ -188,7 +188,7 @@ is the count of month shards a console read opens, and no read opens a visual
 
 | Artefact | Policy | Age | Why that policy |
 | --- | --- | --- | --- |
-| `corpus/corpus.jsonl` | Delete (eviction) | `finetune.corpus_rows`, a row count | the one store bounded by a count rather than an age, because no reader can reach it |
+| `corpus/corpus.jsonl` | Delete (eviction) | `finetune.corpus_rows`, a row count | the one artefact bounded by a count rather than an age, because no reader can reach it |
 | `corpus/corpus.meta.json` | Keep | none | the census of the window above |
 | `corpus/holdout.txt` | Keep | none | the ids held out of training |
 
@@ -246,7 +246,7 @@ Every other decision about `state/visuals/` can be revised. This one cannot: the
 fold deletes the full-grain shard, so a term left out of the key is a breakdown
 nobody can ever ask for again - not hidden behind a slower query, gone, because
 the rows it would have been computed from are unlinked. That is why the key was
-settled before the store had a writer rather than on the day the first fold came
+settled before the ledger had a writer rather than on the day the first fold came
 due, when the attempts outside the window would already have been deleted.
 
 **Four terms of cause and four of stratum.** `(date, decision, none_reason,
@@ -277,7 +277,7 @@ one and two folded months stop being comparable, with nothing left to re-fold
 either of them from, so it has to move the way a contract moves rather than the
 way a knob does.
 
-**The fold can only shrink the store**, and that is a property rather than a
+**The fold can only shrink the ledger**, and that is a property rather than a
 hope. Every group holds at least one attempt, so the row count never rises, and
 the folded row is narrower than the attempt row it replaces. The pathological
 month in which every attempt lands in its own group folds to the same number of
@@ -356,7 +356,7 @@ previous guard of that shape here enumerated twelve approved paths, covered two
 collections out of nineteen, and was deleted the day it shipped
 ([../reference/agent-notes/gates-and-builds.md](../reference/agent-notes/gates-and-builds.md),
 2026-09-06). Deriving the table from code moves the list rather than removing it,
-and several stores build their paths outside `ledger.py` - `evals/writer.py`,
+and several ledgers build their paths outside `ledger.py` - `evals/writer.py`,
 `telemetry/publish/day_metrics.py` and `telemetry/traces.py` each hold their own -
 so the generator is a subsystem rather than a row of one plan. What is left is a
 named rule with a printed command, which is section 13's third fate and is
@@ -376,11 +376,11 @@ measurement, and evidence does not expire.
 
 ## Rejected alternatives
 
-- **One global age for every store.** It governed `state/item-health/` and nothing
-  else, while three other stores had no age at all - so a number that said
+- **One global age for every ledger.** It governed `state/item-health/` and nothing
+  else, while three other trees had no age at all - so a number that said
   nothing about them was read as if it did. Replaced 2026-09-02 by one knob per
-  store, and a config still spelling the old name is refused by name rather than
-  ignored ([config/retention-ages.md](config/retention-ages.md#every-store-names-its-own-cleanup-age)).
+  tree, and a config still spelling the old name is refused by name rather than
+  ignored ([config/retention-ages.md](config/retention-ages.md#every-tree-names-its-own-cleanup-age)).
 - **Deleting a day payload to defend the Pages ceiling.** Rejected because the
   payload is the archive, not because it is small - and the measurement says it
   is not small. On this checkout, 2026-09-13: 24,543,254 bytes of day payload
@@ -396,7 +396,7 @@ measurement, and evidence does not expire.
 
 ## See also
 
-- [config/retention-ages.md](config/retention-ages.md#every-store-names-its-own-cleanup-age) - where every age
+- [config/retention-ages.md](config/retention-ages.md#every-tree-names-its-own-cleanup-age) - where every age
   in the register is set, and the argument for each number.
 - [growing-reads.md](growing-reads.md) - the companion question: what a read may
   open, where this page is what a write may keep.

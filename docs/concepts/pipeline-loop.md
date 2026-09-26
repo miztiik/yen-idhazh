@@ -205,7 +205,7 @@ Owner override O3.
 
 `boilerplate` is inert: it compares a page against lines the same host printed
 elsewhere, and nothing supplies that comparison, so it says no to every page the
-pipeline fetches. A store that supplied it shipped on 2026-09-17 and was reverted
+pipeline fetches. A ledger that supplied it shipped on 2026-09-17 and was reverted
 the same day - over a full run it moved the signal zero times, so it was cost
 with no reader on the other end.
 

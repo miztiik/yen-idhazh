@@ -27,7 +27,7 @@ collection's members one at a time, safely, resumably, under a ceiling. A
 collection reaches it as three callables - a listing that yields members, a
 describe that reads one into an id, a day and a size, and a delete that acts on
 exactly one. Nothing else about a collection is known to it, which is why the
-same code prunes a store's day files and GitHub's workflow artifacts.
+same code prunes a ledger's day files and GitHub's workflow artifacts.
 
 ## Why a range is not atomic, whatever it does internally
 
@@ -71,7 +71,7 @@ everything in one go, and that any existing utility not doing atomic deletes be
 converted. `idhazh telemetry prune` was the one that was not.
 
 **What it replaced.** That command collected a whole day range, renamed every
-selected file into a scratch directory beside the stores, removed the directory
+selected file into a scratch directory beside the ledgers, removed the directory
 once every rename had worked, and put every file back if a rename failed. It was
 correct and it was tested. What it could not do is stop and resume, and it could
 not be pointed at a collection with 612 members and no local file system.
@@ -91,7 +91,7 @@ it was.
 
 ## See also
 
-- [../architecture/publishing/retention.md](../architecture/publishing/retention.md) - what bounds each committed tree, and the named prune over a store's day files.
+- [../architecture/publishing/retention.md](../architecture/publishing/retention.md) - what bounds each committed tree, and the named prune over a ledger's day files.
 - [../how-to/prune-a-collection.md](../how-to/prune-a-collection.md) - the steps for running one.
 - [growing-reads.md](growing-reads.md) - why a read whose cost grows with the archive needs a window.
 - [config/retention-ages.md](config/retention-ages.md) - where the `prune` knobs live.

@@ -27,7 +27,7 @@ Read from the repository API on 2026-08-25.
 
 **`main` is not a protected branch, and protecting it would break
 publication.** `digest.yml` and `validate.yml` push their state commits straight
-to `main` - the eval ledger, the seen-URL store, feed health, the digest
+to `main` - the eval ledger, the seen-URL ledger, feed health, the digest
 payload. A branch-protection rule makes those pushes fail, and a scheduled run
 that cannot commit has done its work for nothing. Protecting `main` is possible,
 but only after the direct pushes in those two workflows are redesigned or
@@ -51,7 +51,7 @@ care about.
 requiring the `gates` and `site` checks, with `github-actions[bot]` on its
 bypass list. The bypass is load-bearing: `digest.yml` and `validate.yml` push
 state commits straight to `main` with the job's own token - the eval ledger, the
-seen-URL store, feed health, the digest payload - and a ruleset that forgets it
+seen-URL ledger, feed health, the digest payload - and a ruleset that forgets it
 stops the digest publishing that night. The setting stays on because it is free
 and is the half that cannot break anything; the ruleset is written here as the
 next step rather than taken quietly.

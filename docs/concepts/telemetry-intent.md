@@ -11,7 +11,7 @@ What must be true about telemetry once this workstream is done - how a measureme
 | # | Intent | What it replaces |
 | --- | --- | --- |
 | N1 | **Parquet is the telemetry format at rest. CSV is retired.** PyArrow writes it. | Every `.csv` under `state/`, and the `migrate_header` complex that exists only because a column moved |
-| N2 | **DuckDB-Wasm parses it in the browser**, and a panel queries the store for the columns and days it draws rather than downloading it. **Every store, at every size, with no carve-out.** The engine is fetched once and cached; a store would be fetched on every view by every reader. One module owns the reader. | Node reading CSV at build time |
+| N2 | **DuckDB-Wasm parses it in the browser**, and a panel queries the collection for the columns and days it draws rather than downloading it. **Every collection, at every size, with no carve-out.** The engine is fetched once and cached; a collection would be fetched on every view by every reader. One module owns the reader. | Node reading CSV at build time |
 | N3 | **The browser fetches its own data.** Every chart pulls the bytes it needs, at view time, over HTTP. | Data baked into HTML by the build |
 | N4 | **Prerendering is an anti-pattern here.** No new prerendered data page, and the existing ones come off it. | `export const prerender = true` on every console route |
 | N5 | **d3.js is the only charting library. ECharts is retired.** | `echarts`, `Chart.svelte`, `engine.ts`, `core.ts`, and the server-side SVG renderer that exists only to serve them |

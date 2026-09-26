@@ -13,7 +13,7 @@ pipeline keeps, and every other telemetry surface is derived from it - the
 browser's month mirror under `frontend/public/telemetry/`, the day aggregate in
 `state/day-metrics/`, and the operator console. Owner decision, 2026-09-14: new
 telemetry lands here first and is projected outward, rather than each surface
-growing its own store.
+growing its own ledger.
 
 ## Every item, every run, one row
 
@@ -74,7 +74,7 @@ The 30-day window on this page is a read-side parameter and is unrelated to that
 age. Day files follow `state/published/`, and `state/seen/` and
 `state/feed-health/` followed it too in the days after - owner instruction,
 2026-09-10, and the reason is in
-[../../concepts/partitions.md](../../concepts/partitions.md#a-store-and-its-mirror-may-file-at-different-grains).
+[../../concepts/partitions.md](../../concepts/partitions.md#a-ledger-and-its-mirror-may-file-at-different-grains).
 What the fold keeps, what it costs and why fourteen is
 [../publishing/retention.md](../publishing/retention.md#what-bounds-the-committed-state-tree).
 
@@ -591,10 +591,10 @@ this: walk `state/item-health/**` for `code == "too_short"` and group by
 `source_id`.
 
 `boilerplate` left that list on 2026-09-17 and came back the same day, and it is
-the only code that has ever moved. It went when a store started feeding the
-comparison it rests on. Over one full run that store changed the signal exactly
+the only code that has ever moved. It went when a ledger started feeding the
+comparison it rests on. Over one full run that ledger changed the signal exactly
 zero times - 12,917 committed rows, no `boilerplate` cell among them - so the
-store was reverted and the ratio is back to dividing by an empty set. A signal
+ledger was reverted and the ratio is back to dividing by an empty set. A signal
 that cannot fire must not count against a publisher, because the only thing it
 could do then is be wrong.
 
@@ -974,13 +974,13 @@ how much the JSON-LD and microdata witnesses contribute is unknown. That is why
 publishes the item, and the question of whether to act on it is one a full run's
 recorded ratios can answer and this one cannot. Authority: Fowler.
 
-The row stores both `url_key` and `item_id`. `item_id` is derived from the
+The row carries both `url_key` and `item_id`. `item_id` is derived from the
 address, so it survives a re-plan - but it was ten decimal digits until
 2026-09-12 and is sixteen base32 symbols after it, and rows either side of that
 date were not rewritten. `url_key` is one shape for every row ever written.
 Authority: Fowler.
 
-The row stores `canonical_url`. About 80 bytes buys back the URL that otherwise
+The row carries `canonical_url`. About 80 bytes buys back the URL that otherwise
 expires with a run artifact. Authority: Fowler.
 
 **How many phases a model call decodes in is a config value, so no column on
@@ -1017,14 +1017,14 @@ by the row identity above. Authority: Fowler, over Carmack's original ruling.
 | Option | Why rejected |
 | --- | --- |
 | Two files, one for failures and one for word counts | Two schemas and two parses for one row's facts. |
-| Store `compression` | It is derived from `summary_words / source_words`. The chart can divide. |
+| Keep `compression` on the row | It is derived from `summary_words / source_words`. The chart can divide. |
 | Reuse `state/scores.csv` | It holds items the scorer measured, not all planned items. |
 | Put stage timings on `EvalRow` | `EvalRow` is written only for the scored subset. Slow or failed items would disappear from the operator's timing view. |
 | Persist free-text failure detail as the signal | A chart cannot group free text. |
 | A `skipped` code | A skip is not one cause. The row records the typed cause instead. |
 | Add `attempt`, `recorded_at`, `title`, or `source_url` | No query needs them. `date` and `run_id` already address the row. |
 | Parse the throughput out of the runtime log | The log is a CI artifact kept for two days, and a rate nobody can recompute later is not a measurement. The reply already carries the numbers. |
-| Store the rates instead of the counts | A stored rate cannot be re-aggregated across a day, a week, or the four workers. Store what was measured; divide on read. |
+| Record the rates instead of the counts | A stored rate cannot be re-aggregated across a day, a week, or the four workers. Record what was measured; divide on read. |
 | Prune the ledger on a retention schedule | The rows worth keeping longest are the ones from the worst days, and those are the first a size-driven prune would take. Windows are a read-side parameter instead. |
 | Serve `state/item-health/` directly to the console | The row carries `canonical_url`, `url_key` and `detail`, none of which belongs in a browser. The narrow projection under `frontend/public/telemetry/` exists so the forbidden columns are absent by construction rather than filtered on read. |
 | One row per item, updated as the item progresses | An update is a read-modify-write over the whole history, and two runs racing on that lose rows. Append is what makes the file safe for five runs a day. |
