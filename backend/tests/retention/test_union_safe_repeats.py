@@ -21,7 +21,7 @@ from pathlib import Path
 
 import pytest
 
-from idhazh import ledger, paths
+from idhazh import ledger, path_classes
 from idhazh.contracts.council_shard_outcome import CouncilShardOutcome
 from idhazh.contracts.feed_retirement import FeedRetirementRow
 from idhazh.contracts.fitted_similarity_threshold import FittedSimilarityThreshold
@@ -43,7 +43,7 @@ AN_ADDRESS = "a" * 64
 ADDRESS_KEY = ("url_key",)
 
 #: Every union-safe tree, with the contract that spells its columns and what
-#: makes two of its rows one record. Checked against `paths.UNION_SAFE` below,
+#: makes two of its rows one record. Checked against `path_classes.UNION_SAFE` below,
 #: so a tree added to that list without a row here fails rather than merges
 #: untested.
 _TREES = (
@@ -100,7 +100,7 @@ def test_every_union_safe_tree_has_a_repeat_case_beside_it() -> None:
     below. It is named here so the gap is a known one rather than a silent one.
     """
     driven = {name for name, _, _, _ in _TREES}
-    absent = set(paths.UNION_SAFE) - driven
+    absent = set(path_classes.UNION_SAFE) - driven
 
     assert absent == {"state/content-similarity-judge/metrics"}, (
         f"these union-safe trees have no repeat case: {sorted(absent)}"

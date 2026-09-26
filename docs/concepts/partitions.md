@@ -109,7 +109,7 @@ rather than a replacement: both grains are live, so both modules are.
 A partition says which period a file holds. **A class says who may write it, and
 how two runs writing at once end.** Both are properties of the layout, so both
 are on this page, and the classes are declared in
-[`backend/idhazh/paths.py`](../../backend/idhazh/paths.py) rather than in a
+[`backend/idhazh/path_classes.py`](../../backend/idhazh/path_classes.py) rather than in a
 workflow string - a list a workflow carries is a list the tests keep a second
 copy of.
 
@@ -131,7 +131,7 @@ path that cannot name the sentence does not get the driver.
 repository growing.** A path that appears after this page was written gets a
 class, not a redesign: it either names its writer, or it is rebuilt from the tip,
 or its repeat changes no answer. There is no fourth thing a committed file can
-be, so a new path is one line in `idhazh.paths` and at most one migration.
+be, so a new path is one line in `idhazh.path_classes` and at most one migration.
 
 **A derived path may never be declared owned**, and that rule is what keeps the
 other two honest. Settling one in favour of a single writer deletes the other
@@ -142,7 +142,7 @@ What the push does with each class is
 
 `backend/tests/contracts/test_path_classes.py` holds the three sets pairwise
 disjoint and covering every path a production stage writes. It enumerates the
-writers from `idhazh.paths` itself and never from the tree, so its cost does not
+writers from `idhazh.path_classes` itself and never from the tree, so its cost does not
 rise with what the pipeline has piled up (`CLAUDE.md` Guardrail #12).
 
 Authority: Fowler and Carmack, converged, 2026-09-22.
