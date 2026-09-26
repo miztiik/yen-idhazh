@@ -23,6 +23,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 
 | What is out | What it costs to leave out | What would bring it in |
 | --- | --- | --- |
+| The word `store` in this plan's prose | **The identifiers are already renamed** - `LedgerName`, `LedgerConfig`, `frontend/src/lib/data/ledger.ts`. About 110 occurrences of the word in ordinary sentences here are not | [`20260926-53-one-door-into-state-plan.md`](20260926-53-one-door-into-state-plan.md) row 1, one sweep with a ratchet test behind it |
 | The other fifty panels, on all five console routes | Two grammars coexist: one panel queries parquet and draws in d3, fifty read CSV at build time and draw in ECharts. `echarts@^5.6.0` stays installed with sixteen importers | [`20260926-52-fifty-panels-move-and-six-projections-go-plan.md`](20260926-52-fifty-panels-move-and-six-projections-go-plan.md), which starts from the vocabulary, the strip and the gates in sections 2.6 to 2.9, and from the panel-by-panel contract in section 2.10. **Rows 4 to 7 exist to make that plan cheap, not to be it** |
 | Panel ids on `/console/model/`, `/console/voices/` and `/console/judgement/` | Those three routes import neither `Panel.svelte` nor `PanelGroup.svelte`, so they draw no `data-console-panel-id` and **no gate and no capture can reach them**. Row 6's judged set is 26 panels on two routes, and a panel on the other three ships unseen | A route-plan row that wraps those three routes' sections in `Panel.svelte` and adds their route keys to `console.panel_groups`. It is a prerequisite of a full capture, not a follow-up |
 | Three `/console/` panels nested inside another panel's body | "Reading the prompt", "Writing the summary" and "How much of each prompt was already in memory" are `<Panel>` elements inside another panel and carry no id, so the capture never sees them | A route-plan row that either gives each an id and its parent's group, or takes its `Panel.svelte` wrapper away. It is one or the other, not both |
@@ -102,13 +103,13 @@ export function mergedDayShards(
 
 ### 2.2 The query door
 
-`frontend/src/lib/data/store.ts` is **the only module in `frontend/` that imports the query engine**, mirroring the backend's single-engine rule. Every panel goes through it.
+`frontend/src/lib/data/ledger.ts` is **the only module in `frontend/` that imports the query engine**, mirroring the backend's single-engine rule. Every panel goes through it.
 
 ```ts
-/** Ask a committed store for the slice a panel draws. Columns and a date range
- *  are named by the caller; nothing fetches a whole store. */
+/** Ask a committed ledger for the slice a panel draws. Columns and a date range
+ *  are named by the caller; nothing fetches a whole ledger. */
 export async function slice(
-	store: StoreName,
+	ledger: LedgerName,
 	opts: { columns: readonly string[]; from: string; to: string; where?: string }
 ): Promise<Row[]>;
 
@@ -116,10 +117,10 @@ export async function slice(
 export type Row = Record<string, string | number | boolean | null>;
 
 /** The stores this console may query. A closed set: a panel cannot name a path. */
-export type StoreName = 'host-fingerprint';
+export type LedgerName = 'host-fingerprint';
 ```
 
-**`StoreName` maps to an address inside this module and nowhere else.** The door joins `visuals.asset_base_url` - or SvelteKit's own repository prefix when that knob is empty, which is the shipped default - onto the committed path unchanged: `state/compact/<store>/index/daily.json`, `state/compact/<store>/daily/<YYYY>/<MM>/<DD>.parquet`, `state/compact/<store>/monthly/<YYYY>/<MM>.parquet`. Getting the prefix wrong is the commonest failure on this host, so one module owns it. A panel that could name a path could name any path, and the published list would stop being the bound.
+**`LedgerName` maps to an address inside this module and nowhere else.** The door joins `visuals.asset_base_url` - or SvelteKit's own repository prefix when that knob is empty, which is the shipped default - onto the committed path unchanged: `state/compact/<store>/index/daily.json`, `state/compact/<store>/daily/<YYYY>/<MM>/<DD>.parquet`, `state/compact/<store>/monthly/<YYYY>/<MM>.parquet`. Getting the prefix wrong is the commonest failure on this host, so one module owns it. A panel that could name a path could name any path, and the published list would stop being the bound.
 
 **Whole files are fetched and handed to the engine as buffers**, the same way the month search index already is. No byte ranges. Column projection then saves parse time rather than bytes, and the plan says that rather than implying the fetch got smaller.
 
@@ -151,7 +152,7 @@ At the measured 89 ms edge the two index requests are one round-trip wave of abo
 
 #### What the build does, which is copy bytes and nothing else
 
-**The staged tree is a verbatim subtree copy, so the published path and the committed path are the same string.** The step copies, for every store whose `StoreConfig.published` names it: the two compact periods, their indexes and their watermarks. Nothing else, and nothing is renamed, merged, re-sorted or regenerated.
+**The staged tree is a verbatim subtree copy, so the published path and the committed path are the same string.** The step copies, for every store whose `LedgerConfig.published` names it: the two compact periods, their indexes and their watermarks. Nothing else, and nothing is renamed, merged, re-sorted or regenerated.
 
 | # | What reaches the site | Published address |
 | --- | --- | --- |
@@ -170,7 +171,7 @@ At the measured 89 ms edge the two index requests are one round-trip wave of abo
 
 **Two things get a panel to its data, and both are already in hand.** The base URL is `visuals.asset_base_url` in `config/idhazh.json`, read by [frontend/asset-base.js](../frontend/asset-base.js), which also computes the `connect-src` allow-list from the same value so the address and the browser policy cannot disagree. The store is named by the panel: a machine-mix panel draws machine fingerprints, and that cannot vary without it becoming a different panel.
 
-**So `StoreConfig.published` never reaches the browser**, and there is no second copy of it to keep in step. It decides what the build copies, which is a backend question. **One backend test holds the two sides together**: it reads the console panel sources, collects the store names they name, and asserts every one is published. Same home and same shape as `backend/tests/contracts/test_frontend_vocabularies.py`.
+**So `LedgerConfig.published` never reaches the browser**, and there is no second copy of it to keep in step. It decides what the build copies, which is a backend question. **One backend test holds the two sides together**: it reads the console panel sources, collects the store names they name, and asserts every one is published. Same home and same shape as `backend/tests/contracts/test_frontend_vocabularies.py`.
 
 #### What the door does with a date range
 
@@ -258,7 +259,7 @@ Three refusals, each enforced by a test rather than a review note.
 | # | Refusal | Enforced by |
 | --- | --- | --- |
 | 1 | A panel imports the query engine directly | `git grep -l duckdb -- frontend/src` returns exactly one path |
-| 2 | A panel builds a URL or a path | `slice()` takes a `StoreName`, never a path |
+| 2 | A panel builds a URL or a path | `slice()` takes a `LedgerName`, never a path |
 | 3 | A panel asks for every column | `columns` is required and non-empty, refused by name at the door |
 
 ### 2.6 The chart vocabulary - nine types, and a tenth is an escalation
@@ -476,7 +477,7 @@ Two facts are owed before row 7 starts and neither is a gate on a design choice.
 
 Against the site cap, 7.3 MB is 0.71 percent of 1 GB and 0.91 percent of the 800 MB alarm - about seven days of the site's runway, paid once. Carmack confirms it against the built tree in row 3.
 
-**Measured 2026-09-24 and not re-derived:** `state/host-fingerprint/` is 76,306 bytes in 58 files, which is 0.007 percent of the 98.7 MB published site. All of `state/` is about 52 MiB - which is why the staging allow-list is the bound and not a preference: a store joins it by setting `StoreConfig.published`, one store at a time, as its panel migrates.
+**Measured 2026-09-24 and not re-derived:** `state/host-fingerprint/` is 76,306 bytes in 58 files, which is 0.007 percent of the 98.7 MB published site. All of `state/` is about 52 MiB - which is why the staging allow-list is the bound and not a preference: a store joins it by setting `LedgerConfig.published`, one store at a time, as its panel migrates.
 
 **The threaded engine build is not available on this platform and nobody should spend a day finding out.** It needs cross-origin isolation, which needs response headers a static host cannot set. The single-threaded build is the pick and the engine's own bundle selector already chooses it when the page is not cross-origin isolated.
 
@@ -585,7 +586,7 @@ Ruled by Susan on 2026-09-24. The complaint: the Hardware route is fifteen panel
 
 ### Row #3 - The four stores the console reads are published
 
-- **Scope:** `item-health`, `scores`, `host-fingerprint` and `span-rollup` are named in `StoreConfig.published`; their daily compaction runs at the end of every content run; the build copies their compact periods into the site; the ceilings are measured and set. **No migration, no browser code, no d3, no panel change.**
+- **Scope:** `item-health`, `scores`, `host-fingerprint` and `span-rollup` are named in `LedgerConfig.published`; their daily compaction runs at the end of every content run; the build copies their compact periods into the site; the ceilings are measured and set. **No migration, no browser code, no d3, no panel change.**
 
 **Plan 50 moves the stores. This row publishes them.** One module writes three of the four, so two plans editing it would collide - the migration belongs where the door is.
 
@@ -601,7 +602,7 @@ Ruled by Susan on 2026-09-24. The complaint: the Hardware route is fifteen panel
   - `frontend/scripts/build-canary.mjs` (the copy step reads its `STATE_ROOT` switch and **fails loudly when the root is missing**, because an empty store and a working store both render)
   - `backend/tests/contracts/test_published_stores_cover_the_panels.py` (new), `backend/tests/workflows/test_digest_workflow.py`, `frontend/tests/page-weight.spec.ts`
 - **Acceptance gates:** local `ruff check .`, `mypy backend`, `pytest backend/tests/contracts backend/tests/workflows -q`, `npm --prefix frontend run test:changed -- --list` then the selected checks. `ci.yml`'s bundle gate and site-cap measurement both walk the built tree, so both are re-read after the copy step lands. CI runs the full suite.
-- **Oracle:** **every published address resolves, and nothing else is published.** Over a built tree: every entry in every published `index/<period>.json` names a file that exists under `build/`, every published store is in `StoreConfig.published`, every store a console panel names is in that list, and no path under `build/state/` belongs to the raw tier. It cannot settle whether a browser can query the files; row 4 does that.
+- **Oracle:** **every published address resolves, and nothing else is published.** Over a built tree: every entry in every published `index/<period>.json` names a file that exists under `build/`, every published store is in `LedgerConfig.published`, every store a console panel names is in that list, and no path under `build/state/` belongs to the raw tier. It cannot settle whether a browser can query the files; row 4 does that.
 - **Decisions:**
 
   | # | Decision | Authority |
@@ -611,7 +612,7 @@ Ruled by Susan on 2026-09-24. The complaint: the Hardware route is fifteen panel
   | 3 | **All four stores at once, not one to prove it.** They share one copy step, one allow-list and one ceiling shape, so doing one first buys a rehearsal and costs three more merge cycles | Owner, 2026-09-26 |
   | 4 | **Every column is published.** The 39 columns no page reads are the input to pending work, and the download is answered by consolidation rather than by a narrower copy | Owner, 2026-09-26 |
   | 5 | The ceiling is measured on each published `index/daily.json` and set in the same commit. A ceiling guessed ahead of the file is a number nothing checked | Guardrail #10 |
-  | 6 | One backend test binds the panels to `StoreConfig.published`. Without it a panel can name a store the gardener does not index and the page fetches an address that 404s | Fowler |
+  | 6 | One backend test binds the panels to `LedgerConfig.published`. Without it a panel can name a store the gardener does not index and the page fetches an address that 404s | Fowler |
 
 - **Rejected alternatives:**
 
@@ -779,7 +780,7 @@ given and predicts nothing about the next job. Darker bars are faster machines.
   - `frontend/tests/chart-vocabulary.spec.ts` (the single-engine walk now finds one importer rather than zero)
   - `frontend/scripts/bundle-gate.mjs`, `backend/tests/contracts/test_page_ceilings.py` (the new `state/` payload ceiling)
   - `frontend/package.json`, `frontend/package-lock.json`
-  - `frontend/src/lib/data/store.ts` (new, section 2.2 - **the only module that imports the engine**)
+  - `frontend/src/lib/data/ledger.ts` (new, section 2.2 - **the only module that imports the engine**)
   - `frontend/src/lib/charts/d3/scale.ts`, `axis.ts`, `ordered-colour.ts`, `motion.ts`, `empty.ts` (new directory, no other row in either plan touches it)
   - `frontend/src/lib/charts/fleet.ts` (the option builder becomes a d3 draw), `frontend/src/lib/console/machine/PlatformMixPanel.svelte`, `frontend/src/lib/server/host-fingerprint.ts`
   - `config/appearance.json`, `backend/idhazh/contracts/knobs/console.py` (section 2.4)
@@ -832,11 +833,11 @@ given and predicts nothing about the next job. Darker bars are faster machines.
   | 16 | Ask the host's own contents API for a directory listing | A service rather than a static asset, rate-limited per address, untestable offline, and it breaks if the repository is renamed. Guardrail #1 says a design must not need one | Zero; costs Guardrail #1 | Carmack |
   | 17 | Write an `index.html` into each month directory so the host lists it | One round trip per store-month instead of one in total, plus 234 extra files | Zero; costs a round trip per month | Carmack |
 
-- **What the build copies.** For every store whose `StoreConfig.published` names it, the step copies both compact periods, their indexes and their watermarks - **verbatim, into the same relative paths**. It renames nothing, merges nothing, narrows nothing and generates nothing. No raw file is copied. `state/` in the repository stays the only source (N7) and nothing production lands under `frontend/` in git (N8), because the staged tree is gitignored and rebuilt each build.
+- **What the build copies.** For every store whose `LedgerConfig.published` names it, the step copies both compact periods, their indexes and their watermarks - **verbatim, into the same relative paths**. It renames nothing, merges nothing, narrows nothing and generates nothing. No raw file is copied. `state/` in the repository stays the only source (N7) and nothing production lands under `frontend/` in git (N8), because the staged tree is gitignored and rebuilt each build.
 
 - **The published file is the store, which is why it cannot disagree with it.** An earlier draft defended this by calling it byte-identical, which set the bar in the wrong place: the property that matters is whether a published file can say something `state/` does not. A copy cannot. **`frontend/public/machine/<YYYY-MM>.csv` can**, because it joins `host-fingerprint` to aggregated `item-health` rows, and a join carries values neither store holds on its own. That file is not defended here - it is deleted by plan 52, in the pull request that moves its last reader.
 
-- **This plan declares no new contract.** The three shapes it reads - `CompactEntry`, `CompactIndex` and `Watermark` - are declared by plan 50's section titled "The shapes a worker must not invent", committed by the gardener and read here. **The frontend's copy is hand-written in `frontend/src/lib/data/store.ts` and bound by a backend test**: `backend/tests/contracts/test_frontend_index_shapes.py` reads that module, collects the interfaces, and asserts each names exactly the fields the Pydantic model declares, in order, with the same type - the shape `test_frontend_field_set.py` already uses. **`ConsoleBand` gains nothing and is not touched.**
+- **This plan declares no new contract.** The three shapes it reads - `CompactEntry`, `CompactIndex` and `Watermark` - are declared by plan 50's section titled "The shapes a worker must not invent", committed by the gardener and read here. **The frontend's copy is hand-written in `frontend/src/lib/data/ledger.ts` and bound by a backend test**: `backend/tests/contracts/test_frontend_index_shapes.py` reads that module, collects the interfaces, and asserts each names exactly the fields the Pydantic model declares, in order, with the same type - the shape `test_frontend_field_set.py` already uses. **`ConsoleBand` gains nothing and is not touched.**
 
 ## Dependent plans
 

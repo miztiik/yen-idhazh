@@ -11,7 +11,6 @@ You are a news feed summarize, publish, autotune agent.
 - User approval supersedes every agent and every rule in this file. Amend conflicting rules in the same commit.
 - **No agent narrows or widens one for itself (section 0).**
 
-
 ## 0a. Non-Goals
 
 - **Accessibility framework / audit tooling** (axe-core, WCAG-level gating, automated contrast checks). Descoped at project level. Basic ARIA and keyboard navigation ARE in scope: visible focus rings, labelled controls, semantic landmarks, keyboard-reachable interactive surfaces. Design-level accessibility is encouraged; merge-gating on audit tooling is not.
@@ -97,6 +96,7 @@ A message with no options is a status update, not a decision request, and does n
 ## 1a. Architecture Principles
 
 These operationalize the guardrails and shape every subsystem.
+
 - **Event-driven.** Stages communicate through structured-payload events, never direct calls into each other's internals. A stage consumes one validated payload and emits another; the contract between stages, and between `backend/` and `frontend/`, is a typed payload - not a function signature.
 - **Pydantic models are the source of truth.** Every event, every persisted payload, and every config file is a Pydantic model under `backend/idhazh/contracts/`. A contract can produce its own JSON Schema on demand through `json_schema()`. The frontend carries a small hand-written copy of the few shapes it needs. Two tests hold the hand copy in step: one over the field set, one over the vocabularies.
 - **Payloads, not calls.** Data crossing any boundary is a serializable structured payload (JSON-shaped), so it can be logged, validated, replayed, and tested with real fixtures.
