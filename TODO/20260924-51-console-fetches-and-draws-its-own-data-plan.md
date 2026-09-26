@@ -82,7 +82,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 
 ### 2.1 `HOST_FINGERPRINT_KEY`, the frontend copy
 
-`backend/idhazh/ledger.py` line 262 declares `HOST_FINGERPRINT_KEY: Final = ("date", "run_id", "job", "shard")`. The frontend carries a hand-written copy beside `ITEM_HEALTH_KEY` in `frontend/src/lib/server/payload.ts`:
+`backend/idhazh/ledger/__init__.py` declares `HOST_FINGERPRINT_KEY: Final = ("date", "run_id", "job", "shard")`. The frontend carries a hand-written copy beside `ITEM_HEALTH_KEY` in `frontend/src/lib/server/payload.ts`:
 
 ```ts
 /** What makes two machine rows the same record. The Pydantic original is

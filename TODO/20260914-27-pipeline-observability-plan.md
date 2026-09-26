@@ -91,7 +91,7 @@
 - **Files touched:**
   - `backend/idhazh/contracts/item_health.py`
   - `schemas/item-health-row.schema.json`
-  - `backend/idhazh/ledger.py`
+  - `backend/idhazh/ledger/__init__.py`
   - `backend/tests/fixtures/` - one fixture row in the committed shape, one in the new shape
 - **Acceptance gates:** local - the contract export, `ruff`, `mypy`, the ledger and telemetry test modules. CI - full suite and the drift gate.
 - **Oracle:** a fixture row in the committed 42-column shape reads back with every new column at its declared absent value and no exception, and a fully-populated new row round-trips byte-identical. It cannot settle whether these are the right columns to have chosen; only row 11 running against a real regression can.
@@ -103,7 +103,7 @@
 | 2 | Configuration provenance is denormalised onto every row - `model_id`, `n_ctx_configured`, `n_parallel`, `n_threads`, `n_batch`, `max_output_tokens`, `label_budget_tokens`, `summary_budget_tokens`, `run_visual_decision`, `model_calls`, `temperature`, `truncation_cap_tokens`. A row that cannot say what it was configured as is a row that gets read wrong, and that is precisely how a 5x move read as weather | owner, 2026-09-14 |
 | 3 | `stage_gap_ms` is carried: `item_total_ms` minus every named stage. Unattributed time is the only column that can catch a regression in a stage nobody has thought to name yet | Fowler |
 | 4 | `detail` carries the full exception message. `work.py` lines 674 and 834 log `type(error).__name__` and discard the Pydantic message, which is the only text that names the failing field | owner, 2026-09-14 |
-| 5 | The two existing writers stay. The second records items a shard never reached, which a writer inside the work loop cannot do because a killed shard writes nothing. Repeats stay settled by `ITEM_HEALTH_KEY` | `ledger.py` line 424 |
+| 5 | The two existing writers stay. The second records items a shard never reached, which a writer inside the work loop cannot do because a killed shard writes nothing. Repeats stay settled by `ITEM_HEALTH_KEY` | `append_item_health` in `ledger/__init__.py` |
 | 6 | Four decode-rate columns are stored rather than derived at read time - `label_prefill_tokens_per_s`, `label_decode_tokens_per_s`, `summary_prefill_tokens_per_s`, `summary_decode_tokens_per_s` | Carmack |
 
 - **Rejected alternatives:**

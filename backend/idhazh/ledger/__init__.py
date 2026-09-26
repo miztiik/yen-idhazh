@@ -1,89 +1,10 @@
 """Read and append the committed ledgers under `state/`.
 
-Every file here is written by CI and read by a later run. All but one are
-append-only; the exception is named below. They exist because the pipeline has
-no memory of its own: every run starts on a fresh machine with a fresh
-checkout, so anything one run needs to tell the next has to be committed
-(Guardrail #1).
+Every file here is written by CI and read by a later run, because the pipeline
+has no memory of its own. What each ledger answers and why it files at the grain
+it does is `docs/architecture/contracts/state-ledgers.md`.
 
-A ledger partitions only when the read that consumes it carries a time window.
-A window lets the reader name the files it wants and skip the rest; without one,
-every file is opened anyway and splitting the ledger buys nothing. The rule is
-in `docs/architecture/contracts/schemas.md`. `state/visual-prunes/` is the one
-exception here, and the paragraph that describes it says what it bought instead.
-
-`state/seen/<YYYY>/<MM>/<DD>.csv` answers "how old is this?" for an article
-whose feed carried no date. Read through `collect.seen_window_days`. It files by
-day, because a run writes one day and taking a day back is one `rm`. It has no
-published mirror at all, so unlike the two health ledgers there is no second
-grain anywhere near it.
-
-`state/published/YYYY/MM/DD.csv` answers "have we already run this?" It is the
-grain the published tree itself uses, and a run appends to the day its own rows
-name and to nothing else. Its read carries `collect.published_window_days`, and
-the committed config sets that to `-1` - so today every day file is opened and
-the answer is every address ever published. The day grain is what makes a finite
-cover possible at all: it names the days in range and opens those files and no
-others. Until one is set the grain buys a small merge surface and a removal that
-is one `rm`, and not a faster read. Size it from the ceiling, not from today: a
-run plans at most `run.safety_ceiling_per_run` items, which the committed config
-sets to 80, and the schedule fires five times a day - so a day writes at most 400
-rows and a year at most about 146,000. Measured 2026-09-08 on an Intel Core
-i7-1265U over the 7,600 committed rows, header included: 106.9 B a row, so a
-year of that ceiling is 15.6 MB on disk. The 16 committed days average 475 rows
-a day, which is above the ceiling arithmetic because they were written under
-three different ceilings - 200 until 2026-08-26, 160 until 2026-09-07, 80 since
-- and the newest full day wrote 357. Reading the whole file took a median
-32.7 ms over fifteen consecutive runs, best 30.1 and worst 37.5, a spread of
-7.4 ms - and as slow as 68.6 ms while other jobs shared the box, which is the
-number to remember before reading any wall clock here as a property of the file.
-See
-`docs/reference/pipeline-cost.md`.
-
-`state/feed-health/<YYYY>/<MM>/<DD>.csv` answers "is this source still
-working?" One row per feed per run, read through `HEALTH_WINDOW_DAYS`. It files
-by day, because a run writes one day and taking a day back is one `rm`. The
-console reads these day files directly at build time; there is no published
-mirror, and the one that existed until 2026-09-16 was never fetched.
-
-`state/item-health/<YYYY>/<MM>/<DD>.csv` answers "what did every planned item
-do?" One row per planned item per run - the fastest-growing of the four. It
-files by day, because a run writes one day and taking a day back is one `rm`.
-The console reads it a month at a time through the published projection, which
-stays monthly: `public_telemetry.publish` folds a month from that month's day
-files.
-
-`state/telemetry-aggregate/<YYYY-MM>.csv` is what is left of an item-health
-month once `observability.item_health_full_grain_months` has passed: one row per
-(date, stage), folded by `retention.compact_month`. It files by month because it
-summarises a month - a day file of a month's totals is a shape nothing consumes.
-It is the one file here that is rewritten rather than appended, because every row
-in it is derived from the days it summarises.
-
-`state/feed-retirements.csv` answers "is this address gone for good?" One row
-per retired feed endpoint, read whole because a retirement has no time bound -
-so it is one file. It is also the smallest: a row is written only when a server
-has reported one address permanently gone on five distinct runs.
-
-`state/visual-prunes/YYYY/MM/DD.csv` answers "is the picture backlog
-shrinking?" One row per cleanup run, read whole because the question carries no
-time bound - and it files by day even so. That is the exception named above: the
-read will never carry a window, so the layout buys this ledger no read time at
-all. What it buys is the two things it buys for `state/published/` - two runs
-collide on a file only when they are the same day, and taking a day back off the
-record is one `rm` rather than an edit inside a shared file, which an
-append-only ledger cannot express. Five rows a day for ever is a collection that grows, and a
-collection that grows here takes the layout every other growing one has. A row
-is written on every run, including the runs where the policy is switched off and
-there is nothing to clean, because a report of "nothing to do" is what makes the
-day the policy starts working visible.
-
-No reader fails on a missing file. A fresh clone has no history, and a run with
-no history is a run where nothing was seen, nothing was published and no feed
-has a record yet - which is exactly what an empty result says.
-
-Callers pass the state directory and never the file name. The layout is one
-fact, and it lives here.
+Callers pass the state directory and never the file name.
 """
 
 from __future__ import annotations
@@ -134,6 +55,180 @@ from idhazh.contracts.story_similarity_pair import (
 from idhazh.contracts.telemetry_aggregate import TelemetryAggregateRow
 from idhazh.contracts.validation_row import ValidationRow
 from idhazh.contracts.visual_prune import VisualPruneRow
+
+# Grouped by where each name is going, so this list reads as the index of a
+# package that is still one file. The groups are the modules of plan 53 section
+# 3; a name moves module without leaving this list, because callers reach the
+# ledger by attribute access and the facade is what keeps that true.
+#
+# RUF022 wants one sorted list. Sorting it would interleave the groups and lose
+# the only thing the list is here to say, so the grouping is kept and the rule
+# is refused on this line alone. Each group is sorted inside itself.
+__all__ = [  # noqa: RUF022
+    # -> contracts/ledger_name.py: one LedgerName replaces the enum, the
+    # dirname constants and the map over them.
+    "CONTENT_SIMILARITY_JUDGE_DIRNAME",
+    "COUNCIL_DIRNAME",
+    "COUNTERFACTUAL_SCORES_DIRNAME",
+    "DAY_VALIDATIONS_DIRNAME",
+    "FEED_RETIREMENTS_FILENAME",
+    "FITTED_THRESHOLDS_DIRNAME",
+    "HEALTH_DIRNAME",
+    "HOST_FINGERPRINT_DIRNAME",
+    "ITEM_HEALTH_DIRNAME",
+    "JUDGE_METRICS_DIRNAME",
+    "LEDGER_DIRNAMES",
+    "MERGE_LINE_HOLDOUT_SCORES_DIRNAME",
+    "PUBLISHED_DIRNAME",
+    "SCORED_PAIRS_DIRNAME",
+    "SCORES_DIRNAME",
+    "SCORE_ARCHIVE_DIRNAME",
+    "SCORE_DISTRIBUTION_FILENAME",
+    "SCORE_INDEX_DIRNAME",
+    "SEEN_DIRNAME",
+    "SHARD_OUTCOMES_DIRNAME",
+    "SIMILARITY_HOLDOUT_FILENAME",
+    "SPAN_ROLLUP_DIRNAME",
+    "TELEMETRY_AGGREGATE_DIRNAME",
+    "VALIDATION_DIRNAME",
+    "VISUAL_PRUNES_DIRNAME",
+    "SegmentLedger",
+    # -> paths.py: where a ledger's file lives.
+    "STATE_DIRNAME",
+    "content_similarity_judge_metrics_path",
+    "content_similarity_judge_metrics_relpath",
+    "council_shard_outcomes_path",
+    "council_shard_outcomes_relpath",
+    "counterfactual_scores_path",
+    "counterfactual_scores_relpath",
+    "feed_retirements_path",
+    "feed_retirements_relpath",
+    "fitted_thresholds_path",
+    "fitted_thresholds_relpath",
+    "health_path",
+    "health_relpath",
+    "host_fingerprint_path",
+    "host_fingerprint_relpath",
+    "item_health_path",
+    "item_health_relpath",
+    "merge_line_holdout_scores_path",
+    "merge_line_holdout_scores_relpath",
+    "published_path",
+    "published_relpath",
+    "score_distribution_archive_path",
+    "score_distribution_archive_relpath",
+    "score_distribution_path",
+    "score_index_path",
+    "score_index_relpath",
+    "scored_pairs_path",
+    "scored_pairs_relpath",
+    "scores_path",
+    "scores_relpath",
+    "seen_path",
+    "seen_relpath",
+    "similarity_holdout_path",
+    "similarity_holdout_relpath",
+    "span_rollup_path",
+    "span_rollup_relpath",
+    "telemetry_aggregate_path",
+    "telemetry_aggregate_relpath",
+    "validation_path",
+    "validation_relpath",
+    "visual_prunes_path",
+    "visual_prunes_relpath",
+    # -> keys.py: what makes two rows one record, and the day-tree shapes.
+    "COUNCIL_SHARD_OUTCOME_KEY",
+    "COUNTERFACTUAL_SCORE_KEY",
+    "DATE_CELL",
+    "DAY_VALIDATION_KEY",
+    "DAY_VALIDATION_RULE",
+    "FEED_HEALTH_KEY",
+    "FEED_HEALTH_RULE",
+    "FEED_RETIREMENT_KEY",
+    "FITTED_SIMILARITY_THRESHOLD_CARRIED",
+    "HOST_FINGERPRINT_KEY",
+    "ITEM_HEALTH_CARRIED",
+    "ITEM_HEALTH_KEY",
+    "ITEM_HEALTH_RULE",
+    "MERGE_LINE_HOLDOUT_SCORE_KEY",
+    "OBSERVATION_INDEX_KEY",
+    "OBSERVATION_KEY",
+    "SCORES_CARRIED",
+    "SPAN_ROLLUP_KEY",
+    "STORY_SIMILARITY_PAIR_CARRIED",
+    "STORY_SIMILARITY_PAIR_KEY",
+    "STORY_SIMILARITY_THRESHOLD_KEY",
+    "VALIDATION_KEY",
+    "VISUAL_PRUNE_KEY",
+    "Preference",
+    "preference_for",
+    "segment_carried",
+    "segment_contract",
+    "segment_key",
+    # -> filenames.py: what one writer's file is called.
+    "BEFORE_PARTITION_NAME",
+    "PRE_IDENTITY_TRACE",
+    "REPAIR_NAME",
+    "REPAIR_STAMP",
+    "SEGMENT_NAME",
+    "SEGMENT_SUFFIX",
+    "SegmentName",
+    "is_repair",
+    "parse_segment_name",
+    "repair_name",
+    "segment_name",
+    # -> csv_file.py: how rows are read out of and written into a CSV.
+    "CsvContract",
+    "CsvRecord",
+    "extend_ledger_file",
+    "read_header",
+    "render_file",
+    "require_matching_header",
+    # -> headers.py: how a file under an older header is read.
+    "migrate_header",
+    "refiler",
+    # -> rows.py: how a caller puts rows in and gets them back.
+    "HEALTH_WINDOW_DAYS",
+    "append_council_shard_outcomes",
+    "append_fitted_thresholds",
+    "append_published",
+    "append_retirements",
+    "append_seen",
+    "append_story_similarity_pairs",
+    "append_visual_prunes",
+    "day_shard_path",
+    "day_shard_relpath",
+    "extend_segment",
+    "load_fitted_thresholds",
+    "load_health",
+    "load_host_fingerprint_shard",
+    "load_item_health",
+    "load_item_health_shard",
+    "load_published",
+    "load_retirements",
+    "load_seen",
+    "load_settled_failures",
+    "load_source_counts",
+    "load_span_rollup_shard",
+    "load_story_similarity_pairs",
+    "load_telemetry_aggregate",
+    "load_visual_prunes",
+    "recorded_item_health",
+    "recorded_span_rollup",
+    "write_segment",
+    "write_telemetry_aggregate",
+    # -> settle.py: which rows repeat a key, and what dropping them costs.
+    "KeyedLedger",
+    "drop_repeated_rows",
+    "keyed_paths",
+    "repeated_keys",
+    # Leaving the package: these three answer a question the ledger does not.
+    # feed_reliability and reliability -> telemetry/source_health.py;
+    # shards_in_window -> month_partition.py.
+    "feed_reliability",
+    "reliability",
+    "shards_in_window",
+]
 
 STATE_DIRNAME: Final = "state"
 SEEN_DIRNAME: Final = "seen"

@@ -224,7 +224,7 @@ first; the link-only references in this section are historical.)
 | --- | --- | --- | --- | --- |
 | fit-core | 1 | 1 | pure refactor; plan-34 tests are the oracle | 34 fit on main |
 | eval-columns | 1 | 3 | expand-only EvalRow width; `merge=union` carve-out (lands on main before any writer, never branch-stacked) | 35 EvalRow on main |
-| metric-fold-fit | 2 | 2, 4, 5 | all edit `ledger.py` + share the two new contracts; fold-before-fit; inert until Row 8 | fit-core, eval-columns |
+| metric-fold-fit | 2 | 2, 4, 5 | all edit `ledger/__init__.py` + share the two new contracts; fold-before-fit; inert until Row 8 | fit-core, eval-columns |
 | geval-leg | 2 | 6 | disjoint island (`quality/geval.py` + the council workflow) | eval-columns |
 | publish-gate | 3 | 7 | backend veto chain, record-only, stamps `EvalRow` | metric-fold-fit |
 | geval-measure | 3 | 10 | MEASURES -> runs alone (`measure.yml` on a clean runner) | geval-leg |
@@ -243,7 +243,7 @@ Provision 2 workers; `Parallel N = 4` never binds.
 | Edge class | Dispatch base | Why |
 | --- | --- | --- |
 | Disjoint (1 vs 3; 4 vs 6; 5 vs 10; 11 vs 8) | `origin/main`, at once | no shared file (Row 11 is a backend measure utility, Row 8 is `assemble.py`) |
-| Shared-file, shape settled + mechanical (1->2 once `ClampOutcome`/`FitEnd` settle; 4->5 once the `ledger.py` helper settles) | predecessor's BRANCH tip, pre-merge | shape cannot move; pool never idles on CI |
+| Shared-file, shape settled + mechanical (1->2 once `ClampOutcome`/`FitEnd` settle; 4->5 once the `ledger/__init__.py` helper settles) | predecessor's BRANCH tip, pre-merge | shape cannot move; pool never idles on CI |
 | New persisted contract (2->4/5/7) | wait on `main` | the contract shape is exactly what review moves; fold/fit WRITE it |
 | Measuring (6->10) | wait on `main` | Row 10 must call the merged `geval.py`; runs alone anyway |
 | ESCALATE / Level-5 (7->8) | wait on `main` + owner sign-off | first change to a published day; lands alone |
@@ -348,7 +348,7 @@ disjointness check, never the letter (execute-a-plan.md).
 - **Files touched:** `backend/idhazh/contracts/metric_score_distribution.py`,
   `backend/idhazh/contracts/fitted_metric_band.py` (declares `MetricId`, `ClampKind`, `HeldReason`,
   `MetricAction`), `backend/idhazh/contracts/knobs/evaluation.py` (the `MetricBandConfig` block),
-  `backend/idhazh/contracts/export.py` + regenerated schemas, `backend/idhazh/ledger.py` (paths),
+  `backend/idhazh/contracts/export.py` + regenerated schemas, `backend/idhazh/ledger/__init__.py` (paths),
   committed seed distributions, `config/idhazh.json`, `config/appearance.json` if a console knob lands.
 - **Acceptance gates:** contract drift gate; contract tests over the validators (band divides into
   slots, slot count matches, a date folds once - the plan 34 shapes); a fresh clone runs on the
@@ -397,7 +397,7 @@ disjointness check, never the letter (execute-a-plan.md).
   fixed-size distribution, one slot each, dropping nothing. Archive and restart a distribution when its
   scorer version, band edges or slot width moved (plan 34's `inputs_changed`).
 - **Files touched:** new `backend/idhazh/quality/fold.py`, `backend/idhazh/stages/quality_fold.py`,
-  `backend/idhazh/ledger.py` (append/load for the distribution).
+  `backend/idhazh/ledger/__init__.py` (append/load for the distribution).
 - **Acceptance gates:** unit tests over a built day of `EvalRow`s and a built distribution; a fold of a
   date already folded raises; a moved `scorer_version` archives and restarts.
 - **Oracle:** a score lands in the slot whose edge it clears, and a re-fold of one date is refused; it
@@ -416,7 +416,7 @@ disjointness check, never the letter (execute-a-plan.md).
   and the held reason on a day nothing moved. Seed faithfulness from committed HHEM history so its
   gates clear on day one.
 - **Files touched:** new `backend/idhazh/quality/fit.py` (the second `edge.py` adapter),
-  `backend/idhazh/stages/quality_fit.py`, `backend/idhazh/ledger.py`, a seeding step that reads the
+  `backend/idhazh/stages/quality_fit.py`, `backend/idhazh/ledger/__init__.py`, a seeding step that reads the
   committed HHEM readings once, and **`docs/architecture/publishing/autotune-summary-quality.md`** (G14) - strike the
   four stale phrases: faithfulness-downgrades-below-an-adaptive-floor (E1), `block p01` (E1), the
   asymmetric "damp the raise" (E3), and any "coherence runs same-day in the work shard" wording

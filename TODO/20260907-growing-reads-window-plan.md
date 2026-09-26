@@ -167,12 +167,12 @@ Rows 1, 2, 3, 10 and 11 are disjoint and run together. Rows 4 to 7 are strictly 
 
 | Defect | Closes in |
 | --- | --- |
-| [ledger.py](../backend/idhazh/ledger.py) sizes the ledger at 214.9 B a row and 1,000 rows a day. The row has been 106.9 B since 2026-08-26 and the measured rate is 483; `run.safety_ceiling_per_run` is 80, not 200 | Row 1 |
+| [ledger/__init__.py](../backend/idhazh/ledger/__init__.py) sizes the ledger at 214.9 B a row and 1,000 rows a day. The row has been 106.9 B since 2026-08-26 and the measured rate is 483; `run.safety_ceiling_per_run` is 80, not 200 | Row 1 |
 
 ## 2 - Row #1 - Stale numbers, and record what the guard drops
 
 - **Scope:** Correct the ledger's own arithmetic, and make visible the one number this design turns on. Today [cli.py](../backend/idhazh/cli.py) logs `addresses this run will not plan published=%s` to stderr and nothing commits it, so nobody can say how often the guard fires or how old the addresses it refuses are.
-- **Files:** `backend/idhazh/ledger.py` (docstring), `backend/idhazh/cli.py`, `backend/idhazh/contracts/run_plan.py`, `schemas/run-plan.schema.json`, `backend/tests/test_plan.py`, `backend/tests/contracts/`
+- **Files:** `backend/idhazh/ledger/__init__.py` (docstring), `backend/idhazh/cli.py`, `backend/idhazh/contracts/run_plan.py`, `schemas/run-plan.schema.json`, `backend/tests/test_plan.py`, `backend/tests/contracts/`
 - **Gates:** local - `ruff`, `mypy --strict`, the shared test selector, the contract drift gate. CI - full suite.
 - **Oracle:** a plan built over a fixture ledger holding one address published 200 days ago and one yesterday records `dropped_published = 2` and an age histogram naming both buckets. Assert on the built fixture, never on the committed ledger.
 
@@ -185,7 +185,7 @@ Rows 1, 2, 3, 10 and 11 are disjoint and run together. Rows 4 to 7 are strictly 
 ## 3 - Row #2 - The read stops materialising the file
 
 - **Scope:** `ledger._read_rows` builds a list of the whole file before `load_published` reduces it - 500.9 B of peak per row, 3.63 MB today, 265 MB projected at year three. Stream instead and keep only the mapping.
-- **Files:** `backend/idhazh/ledger.py`, `backend/tests/test_ledger.py`
+- **Files:** `backend/idhazh/ledger/__init__.py`, `backend/tests/test_ledger.py`
 - **Gates:** local - `ruff`, `mypy --strict`, the shared test selector. CI - full suite.
 - **Oracle:** hold the answer still and double the file. Two built fixtures over the same 20,000 addresses, one with 40,000 rows and one with 80,000; peak must not follow the rows.
 
@@ -211,20 +211,20 @@ Rows 1, 2, 3, 10 and 11 are disjoint and run together. Rows 4 to 7 are strictly 
 ## 5 - Row #4 - The reader tolerates both shapes
 
 - **Scope:** `load_published` reads the flat `state/published.csv` **and** any `state/published/YYYY/MM/DD.csv`, returning the union with the earliest date per address. No writer changes, no behaviour changes. This row exists so rows 5 and 6 cannot lose a row.
-- **Files:** `backend/idhazh/ledger.py`, `backend/tests/test_ledger.py`
+- **Files:** `backend/idhazh/ledger/__init__.py`, `backend/tests/test_ledger.py`
 - **Gates:** local - `ruff`, `mypy --strict`, the shared test selector. CI - full suite.
 - **Oracle:** five arms over built fixtures - flat only, days only, both with disjoint addresses, both holding the same address on different dates (the earlier wins), and a stem that is not a date (raises).
 
 | # | Decision | Authority |
 | --- | --- | --- |
 | 1 | **No glob.** The enumerator walks `state/published/YYYY/MM/` and accepts a stem only if it matches `\d{2}` under `\d{4}/\d{2}`. Anything else raises rather than being skipped - a file nobody can explain in a state directory is a fault, and silently ignoring it is how a reader starts missing rows | Owner, 2026-09-07 |
-| 2 | `state/published/` beside the flat file rather than replacing it in place. A reader that enumerates a directory reads every file it finds as that directory's shape | [ledger.py](../backend/idhazh/ledger.py) |
-| 3 | A missing directory and a missing flat file both mean "no history", which is what a fresh clone has. Neither is an error | [ledger.py](../backend/idhazh/ledger.py) |
+| 2 | `state/published/` beside the flat file rather than replacing it in place. A reader that enumerates a directory reads every file it finds as that directory's shape | [ledger/__init__.py](../backend/idhazh/ledger/__init__.py) |
+| 3 | A missing directory and a missing flat file both mean "no history", which is what a fresh clone has. Neither is an error | [ledger/__init__.py](../backend/idhazh/ledger/__init__.py) |
 
 ## 6 - Row #5 - The writer routes by day
 
 - **Scope:** `append_published` takes a date and appends to `state/published/YYYY/MM/DD.csv`, mirroring `frontend/public/digest/YYYY/MM/DD/`. The flat file is no longer written and is still read. `published_path` gains a date parameter; `published_relpath` is added to match every other partitioned collection.
-- **Files:** `backend/idhazh/ledger.py`, `backend/idhazh/cli.py`, `.gitattributes`, `.github/workflows/digest.yml`, `backend/tests/test_ledger.py`, `backend/tests/workflows/`, `backend/tests/rebuild_day.py`
+- **Files:** `backend/idhazh/ledger/__init__.py`, `backend/idhazh/cli.py`, `.gitattributes`, `.github/workflows/digest.yml`, `backend/tests/test_ledger.py`, `backend/tests/workflows/`, `backend/tests/rebuild_day.py`
 - **Gates:** local - `ruff`, `mypy --strict`, the shared test selector, plus `backend/tests/workflows/` run directly. CI - full suite.
 - **Oracle:** a run on `2026-09-07` writes `state/published/2026/09/07.csv` and touches no other file; a run on `2026-10-01` leaves September byte-identical. `REFRESH_PATHS` and its mirror in `backend/tests/workflows/` both name `state/published` and are asserted equal.
 
@@ -252,7 +252,7 @@ Rows 1, 2, 3, 10 and 11 are disjoint and run together. Rows 4 to 7 are strictly 
 ## 8 - Row #7 - The cover, the fallback deleted, and the docs
 
 - **Scope:** `load_published` gains `today` and `within_days`, drops the flat-file fallback, and reads the day files its cover names. Every doc that describes the old shape moves in the same commit.
-- **Files:** `backend/idhazh/ledger.py`, `backend/idhazh/cli.py`, `backend/idhazh/contracts/seen.py`, `backend/idhazh/contracts/digest_day.py`, `schemas/published-row.schema.json`, `schemas/digest-day.schema.json`, `backend/tests/test_ledger.py`, `backend/tests/test_plan.py`, `backend/tests/test_discover.py`, `backend/tests/pipeline/`, and 13 docs: `docs/architecture/contracts/schemas.md`, `docs/architecture/sources/freshness.md`, `docs/architecture/publishing/layout.md`, `docs/architecture/sources/discovery.md`, `docs/concepts/partitions.md`, `docs/concepts/pipeline-loop.md`, `docs/concepts/evaluation.md`, `docs/how-to/run-the-pipeline.md`, `docs/reference/pipeline-cost.md`, `docs/reference/data-growth.md`, `docs/reference/repository-layout.md`, `docs/architecture/sources/item-health.md`, `AGENTS.md`
+- **Files:** `backend/idhazh/ledger/__init__.py`, `backend/idhazh/cli.py`, `backend/idhazh/contracts/seen.py`, `backend/idhazh/contracts/digest_day.py`, `schemas/published-row.schema.json`, `schemas/digest-day.schema.json`, `backend/tests/test_ledger.py`, `backend/tests/test_plan.py`, `backend/tests/test_discover.py`, `backend/tests/pipeline/`, and 13 docs: `docs/architecture/contracts/schemas.md`, `docs/architecture/sources/freshness.md`, `docs/architecture/publishing/layout.md`, `docs/architecture/sources/discovery.md`, `docs/concepts/partitions.md`, `docs/concepts/pipeline-loop.md`, `docs/concepts/evaluation.md`, `docs/how-to/run-the-pipeline.md`, `docs/reference/pipeline-cost.md`, `docs/reference/data-growth.md`, `docs/reference/repository-layout.md`, `docs/architecture/sources/item-health.md`, `AGENTS.md`
 - **Gates:** local - `ruff`, `mypy --strict`, the shared test selector, the contract drift gate. CI - full suite.
 - **Oracle:** with the committed config the mapping is **equal cell-for-cell to what it returned before this plan started** - the guarantee is untouched, which is the whole point of shipping `-1`. A second arm sets 120 over a built fixture spanning six months and proves the older day files are not opened, by counting file reads rather than by timing them.
 
@@ -281,7 +281,7 @@ Rows 1, 2, 3, 10 and 11 are disjoint and run together. Rows 4 to 7 are strictly 
 ## 10 - Row #9 - Settlement touches the files the run staged
 
 - **Scope:** after a push race, git's union merge concatenates both sides of a state CSV and a keyed row appears twice. `stage_dedupe_ledgers` runs after the rebase and rewrites each keyed file without repeats. It currently globs every feed-health shard, every item-health shard and every score shard - 9,715 KB today, and the shard count rises every month.
-- **Files:** `backend/idhazh/cli.py`, `backend/idhazh/ledger.py`, `backend/idhazh/evals/writer.py`, `backend/tests/test_ledger.py`, `backend/tests/workflows/`
+- **Files:** `backend/idhazh/cli.py`, `backend/idhazh/ledger/__init__.py`, `backend/idhazh/evals/writer.py`, `backend/tests/test_ledger.py`, `backend/tests/workflows/`
 - **Gates:** local - `ruff`, `mypy --strict`, the shared test selector, plus `backend/tests/workflows/` run directly. CI - full suite.
 - **Oracle:** the real-Git race tests still settle a duplicated row correctly, and a settlement after a run on `2026-09-07` opens no file from an earlier month.
 
@@ -294,7 +294,7 @@ Rows 1, 2, 3, 10 and 11 are disjoint and run together. Rows 4 to 7 are strictly 
 ## 11 - Row #10 - Runtime counters answer about one run
 
 - **Scope:** `load_runtime_counters(state_dir, *, run_id)` already asks about one run, then reads the whole lifetime file to find it - 189 rows and 32 KB today, growing by about 40 rows a day.
-- **Files:** `backend/idhazh/ledger.py`, `backend/tests/test_ledger.py`
+- **Files:** `backend/idhazh/ledger/__init__.py`, `backend/tests/test_ledger.py`
 - **Gates:** local - `ruff`, `mypy --strict`, the shared test selector. CI - full suite.
 - **Oracle:** the rows returned for a run are identical before and after, and peak follows the run's own rows rather than the file, proved the way row 2 proves it.
 
@@ -306,7 +306,7 @@ Rows 1, 2, 3, 10 and 11 are disjoint and run together. Rows 4 to 7 are strictly 
 ## 12 - Row #11 - Fingerprints, and the four bounds declared
 
 - **Scope:** `fingerprint.append_new` rebuilds every recorded identity before adding a few - 3 rows and 2.4 KB today. Stream it. The second half is the more valuable one: write down, next to each read that is deliberately unbounded, what bounds it and why.
-- **Files:** `backend/idhazh/fingerprint.py`, `backend/idhazh/ledger.py` (comment at `load_retirements`), `backend/idhazh/corpus.py`, `backend/idhazh/contracts/base.py`, `backend/tests/test_fingerprint.py`
+- **Files:** `backend/idhazh/fingerprint.py`, `backend/idhazh/ledger/__init__.py` (comment at `load_retirements`), `backend/idhazh/corpus.py`, `backend/idhazh/contracts/base.py`, `backend/tests/test_fingerprint.py`
 - **Gates:** local - `ruff`, `mypy --strict`, the shared test selector. CI - full suite.
 - **Oracle:** a repeated identity is still refused, and each of the four deliberately-unbounded reads carries one line naming what it reads and why a cover is not the answer.
 
@@ -360,13 +360,13 @@ Rows 1, 2, 3, 10 and 11 are disjoint and run together. Rows 4 to 7 are strictly 
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | The keep-set is still derived from `shards_in_window`, which is what makes it impossible to delete a shard a later read would have opened | [ledger.py](../backend/idhazh/ledger.py) |
+| 1 | The keep-set is still derived from `shards_in_window`, which is what makes it impossible to delete a shard a later read would have opened | [ledger/__init__.py](../backend/idhazh/ledger/__init__.py) |
 | 2 | Backdated-run safety and the deletion fuses are unchanged | [audit finding 19](../docs/reference/data-growth.md) |
 
 ## 17 - Row #16 - Visual prunes get the day layout
 
 - **Scope:** `state/visual-prunes.csv` is one row per run - 4 rows now, about 1,825 a year. It does grow with runs. Give it the day layout row 5 built.
-- **Files:** `backend/idhazh/ledger.py`, `backend/idhazh/cli.py`, `.gitattributes`, `.github/workflows/digest.yml`, `backend/utilities/split_visual_prunes.py` (new), `backend/tests/test_ledger.py`
+- **Files:** `backend/idhazh/ledger/__init__.py`, `backend/idhazh/cli.py`, `.gitattributes`, `.github/workflows/digest.yml`, `backend/utilities/split_visual_prunes.py` (new), `backend/tests/test_ledger.py`
 - **Gates:** local - `ruff`, `mypy --strict`, the shared test selector. CI - full suite.
 - **Oracle:** the report over the whole series is identical before and after the split, and a run writes only its own day's file.
 

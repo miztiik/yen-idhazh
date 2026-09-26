@@ -67,11 +67,11 @@ One PR-group is one pull request. **Four: two backend, one frontend, one close.*
 
 Verified against `origin/main` at the current checkout (`07a18385d`) and the live PR list:
 
-- **`STORE_DIRNAMES` no longer exists.** Plan 53's row "The retired word `store` leaves" has landed on `main` (PRs #1107, #1108, #1109); the frozenset is `ledger.LEDGER_DIRNAMES` now. Plan 54 uses `LEDGER_DIRNAMES` throughout, never `STORE_DIRNAMES`.
+- **`STORE_DIRNAMES` no longer exists.** Plan 53 row 1, "The retired word leaves", has landed on `main` (PRs #1107, #1108, #1109); the frozenset is `ledger.LEDGER_DIRNAMES` now. Plan 54 uses `LEDGER_DIRNAMES` throughout, never `STORE_DIRNAMES`.
 - **`class SegmentLedger` still exists**; plan 53's "One `LedgerName` for one ledger" row has not started. So D2, which types the hook, waits for it (section 4.8).
 - **The day-validation double-prune-claim is live, and D1's removal is the whole fix - delete-only.** `state/day-validations/` is claimed by `_prune_day_validation_shards` (its proper 14-month pass) and by `_prune_trial_shards` (the strays sweep), because `DAY_VALIDATIONS_DIRNAME` is not in `LEDGER_DIRNAMES` and not one of the four extra names `_trial_roots` subtracts (`traces`, `day-metrics`, `digest-fragments`, the score archive), so `_trial_roots` returns it and the 90-day trial sweep empties it before its 14-month window. Deleting the tree and its writer means `state.iterdir()` never yields it, so `_trial_roots` never returns it - the strays sweep loses its object with no edit to `_trial_roots`, `_prune_trial_shards` or `LEDGER_DIRNAMES`.
 - **On plan 50:** the double-claim lives in `_trial_roots`, which plan 50's row "The payload ledger, the two roots, and the arrow mapping" edits to register `state/raw` and `state/compact`. D1 does not unblock that row - plan 50 could ship with day-validations present - but it keeps the row **purely additive**, and plan 50's own section 5.8 line "`day-validations` - No task. Plan 54 deletes this ledger" stands. What blocks plan 50's critical path is plan 54 feeding plan 53's `LedgerName`, not this prune bug.
-- **`day_metrics` already carries the chart's data.** `items_planned`, `items_published`, `items_failed` are required fields on every committed `state/day-metrics/<Y>/<M>/<D>.json`, published to `frontend/public/day-metrics/`, but not yet exposed by the frontend `dayMetrics()` reader. D3 widens that reader by three cells already in the JSON; no new store, no backend contract change.
+- **`day_metrics` already carries the chart's data.** `items_planned`, `items_published`, `items_failed` are required fields on every committed `state/day-metrics/<Y>/<M>/<D>.json`, published to `frontend/public/day-metrics/`, but not yet exposed by the frontend `dayMetrics()` reader. D3 widens that reader by three cells already in the JSON; no new ledger, no backend contract change.
 - **planned, published and failed are not a clean partition** - `items_planned` and `items_failed` are per-run sums, `items_published` is the deduped day set, and skipped items belong to neither. So the chart uses grouped bars, never a stack, and its yield axis is not guaranteed <=100% (section 4.6).
 - **There are two writers of a committed `digest.json`** - `assemble.py` (validated) and `backfill_vectors.py` (`model_copy(update=...)`, not validated at the write) - so the runner's parse is the day-shape guarantee, not a trust in the writers.
 
@@ -207,7 +207,7 @@ The hook is real code - the runner branch in 4.2 - and is exercised by exactly o
 Remove, in one PR, using whatever spelling exists at merge time (rule B2 - deletion needs no plan-53 dependency):
 
 - `backend/idhazh/contracts/day_validation.py` (`DayValidationReceipt`); its import + `CONTRACTS` + `__all__` entries in `contracts/__init__.py`; the fixture dir `tests/fixtures/contracts/day-validation-receipt/`.
-- In `backend/idhazh/ledger.py`: `DAY_VALIDATIONS_DIRNAME`, `DAY_VALIDATION_KEY`, `_day_validation_rule`/`DAY_VALIDATION_RULE`, the `_PREFERENCES` entry, `SegmentLedger.DAY_VALIDATIONS` (or `LedgerName.DAY_VALIDATIONS` if the `LedgerName` row has landed by merge time), the `_TREE_SHAPES` entry. **`LEDGER_DIRNAMES` needs no edit** - day-validations was never a member.
+- In `backend/idhazh/ledger/__init__.py`: `DAY_VALIDATIONS_DIRNAME`, `DAY_VALIDATION_KEY`, `_day_validation_rule`/`DAY_VALIDATION_RULE`, the `_PREFERENCES` entry, `SegmentLedger.DAY_VALIDATIONS` (or `LedgerName.DAY_VALIDATIONS` if the `LedgerName` row has landed by merge time), the `_TREE_SHAPES` entry. **`LEDGER_DIRNAMES` needs no edit** - day-validations was never a member.
 - `retention.prune_day_validations`; the `day_validation_keep_months` knob on `RetentionConfig`; swap the committed key out of `config/idhazh.json` and out of `tests/fixtures/contracts/app-config/every-knob-differs-from-the-committed-config.json`.
 - `stages/prune_state.py`: `_prune_day_validation_shards` and its call. No edit to `_prune_trial_shards`/`_trial_roots`.
 - The receipt-write in the stage (D2 deletes the stage entirely; D1 removes the ledger member so the stage stops writing - sequence the stage's write removal into D1 so nothing writes the tree after D1).
@@ -303,7 +303,7 @@ Three rules; first match wins; the worker never chooses. The test behind them: *
   | --- | --- | --- |
   | 1 | One chart only (B1); grouped bars; fixed yield axis; readout not tooltip; built to the FailurePanels template | Susan |
   | 2 | Full-width panel below the KPI cards, replacing the donut | Susan |
-  | 3 | Reads `day_metrics` via a 3-cell reader widening; no new store | Fowler |
+  | 3 | Reads `day_metrics` via a 3-cell reader widening; no new ledger | Fowler |
 
 - **Rejected alternatives:**
 
