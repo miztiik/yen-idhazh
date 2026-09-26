@@ -16,6 +16,7 @@ from conftest import CONFIG_DIR, FIXTURES_DIR, REPO_ROOT, read_text
 from idhazh import ledger, paths
 from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.base import ServerJob
+from idhazh.contracts.ledger_name import LedgerName
 
 from ._harness import (
     COMMIT_JOBS,
@@ -117,7 +118,7 @@ def _writer_file(run_id: str) -> str:
     writer produces.
     """
     return ledger.day_shard_relpath(
-        ledger.SegmentLedger.ITEM_HEALTH,
+        LedgerName.ITEM_HEALTH,
         date=THE_DAY,
         run_id=run_id,
         attempt=THIS_ATTEMPT,

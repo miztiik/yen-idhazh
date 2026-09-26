@@ -11,6 +11,7 @@ from conftest import REPO_ROOT
 
 from idhazh import ledger, paths, telemetry
 from idhazh.contracts.base import ServerJob
+from idhazh.contracts.ledger_name import DAY_TREES, LedgerName
 from idhazh.evals import writer as score_writer
 from idhazh.telemetry.publish import day_metrics
 
@@ -425,7 +426,7 @@ def test_a_file_one_writer_owns_takes_no_merge_driver_and_a_shared_one_takes_a_u
             job=ServerJob.WORK,
             shard=1,
         )
-        for which in ledger.SegmentLedger
+        for which in DAY_TREES
     ]
     one_writer.append(
         telemetry.committed_trace_relpath(
@@ -478,7 +479,7 @@ def test_every_shard_of_a_full_fan_out_lands_its_rows(tmp_path: Path) -> None:
     shards = range(8)
     written = {
         shard: ledger.day_shard_relpath(
-            ledger.SegmentLedger.ITEM_HEALTH,
+            LedgerName.ITEM_HEALTH,
             date=SUBSTITUTED_DATE,
             run_id=f"{SUBSTITUTED_DATE}-1",
             attempt=1,
@@ -521,7 +522,7 @@ def test_assemble_hands_back_no_tree_a_worker_wrote_into() -> None:
     """
     refreshed = _commit_call("assemble")[1]["REFRESH_PATHS"].split()
 
-    for which in ledger.SegmentLedger:
+    for which in DAY_TREES:
         tree = f"{ledger.STATE_DIRNAME}/{which.value}"
         covered = [path for path in refreshed if tree == path or tree.startswith(f"{path}/")]
         assert not covered, (

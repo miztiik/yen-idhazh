@@ -392,14 +392,14 @@ H6 to H9 repeat on every row of one run. That is what `item-health` already does
 
 ### Section 5d - Three declarations join a closed set, in one commit
 
-`SEARCH_QUALITY_DIRNAME = "search-quality"` beside its siblings in `backend/idhazh/ledger/__init__.py`; `SegmentLedger.SEARCH_QUALITY`; and a `_TREE_SHAPES` entry pairing the key with the contract. The enum's own docstring says a ledger joins the set in the row that moves its writer and never before it. **This is that row.**
+`SEARCH_QUALITY_DIRNAME = "search-quality"` beside its siblings in `backend/idhazh/ledger/__init__.py`; `LedgerName.SEARCH_QUALITY` in `backend/idhazh/contracts/ledger_name.py`, added to `DAY_TREES`; and a `_TREE_SHAPES` entry pairing the key with the contract. The enum's own docstring says a ledger joins the set in the change that gives it a writer and never before it. **This is that row.**
 
 **What joining the set brings with no file to edit.** Worth naming, because a worker that does not know this goes looking for five more edits.
 
 | id | What | Why it is free |
 | --- | --- | --- |
-| I1 | The closed day fold | `stages/compact.py` walks `SegmentLedger` |
-| I2 | An operator's range prune | `telemetry/prune.py` derives `WRITER_OWNED_STORES` from `SegmentLedger` |
+| I1 | The closed day fold | `stages/compact.py` walks `DAY_TREES` |
+| I2 | An operator's range prune | `telemetry/prune.py` derives `WRITER_OWNED_LEDGERS` from `DAY_TREES` |
 | I3 | No merge driver, which is correct | One writer per path leaves nothing to settle. `backend/tests/workflows/test_worker_ledgers.py` asserts `git check-attr merge` answers `unspecified` for every member |
 | I4 | The path-class census | `backend/tests/contracts/test_path_classes.py` iterates the enum |
 | I5 | Commit staging | `backend/tests/workflows/test_ledger_staging.py` requires every tree's folded day to be staged by some job, and **the assemble job stages `state` whole**. No workflow file moves |

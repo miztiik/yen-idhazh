@@ -19,6 +19,7 @@ from idhazh.contracts.digest_run_fragment import DigestRunFragment
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.fingerprint import PipelineInputs
 from idhazh.contracts.item_health import ItemOutcome
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.run_manifest import ModelRole, ModelUse, RunManifest
 from idhazh.contracts.run_plan import RunPlan
 from idhazh.contracts.seen import PublishedRow
@@ -395,7 +396,7 @@ def stage_assemble(
     attempt = run_context.run_attempt()
     item_health = ledger.write_segment(
         common.STATE_ROOT,
-        ledger.SegmentLedger.ITEM_HEALTH,
+        LedgerName.ITEM_HEALTH,
         item_health_rows,
         run_id=run_id,
         attempt=attempt,

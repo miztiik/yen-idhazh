@@ -16,7 +16,6 @@ import re
 from collections.abc import Callable, Collection, Iterable, Iterator, Mapping, Sequence
 from datetime import date as date_type
 from datetime import datetime, timedelta
-from enum import StrEnum
 from pathlib import Path
 from typing import Final, NamedTuple, Protocol
 
@@ -43,6 +42,7 @@ from idhazh.contracts.item_health import (
     ItemOutcome,
 )
 from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
+from idhazh.contracts.ledger_name import DAY_TREES, LedgerName
 from idhazh.contracts.observation_index import ObservationIndexRow
 from idhazh.contracts.seen import PublishedRow, SeenRow
 from idhazh.contracts.span_rollup import SpanRollupRow
@@ -92,7 +92,6 @@ __all__ = [  # noqa: RUF022
     "TELEMETRY_AGGREGATE_DIRNAME",
     "VALIDATION_DIRNAME",
     "VISUAL_PRUNES_DIRNAME",
-    "SegmentLedger",
     # -> paths.py: where a ledger's file lives.
     "STATE_DIRNAME",
     "content_similarity_judge_metrics_path",
@@ -1736,28 +1735,6 @@ def load_visual_prunes(state_dir: Path) -> list[VisualPruneRow]:
     return rows
 
 
-class SegmentLedger(StrEnum):
-    """Which day tree a writer's file belongs to. A closed set, and that is the point.
-
-    A directory under `state/` naming something outside this set is a writer that
-    arrived without anyone choosing it. Every value is the tree's own `*_DIRNAME`
-    constant rather than a string repeated here, so the directory a writer fills
-    and the directory a reader walks cannot be spelled two different ways.
-
-    A ledger joins this set in the row that moves its writer, never before it.
-    """
-
-    ITEM_HEALTH = ITEM_HEALTH_DIRNAME
-    HOST_FINGERPRINT = HOST_FINGERPRINT_DIRNAME
-    SPAN_ROLLUP = SPAN_ROLLUP_DIRNAME
-    SCORES = SCORES_DIRNAME
-    SCORE_INDEX = SCORE_INDEX_DIRNAME
-    VALIDATION = VALIDATION_DIRNAME
-    HEALTH = HEALTH_DIRNAME
-    COUNTERFACTUAL_SCORES = COUNTERFACTUAL_SCORES_DIRNAME
-    DAY_VALIDATIONS = DAY_VALIDATIONS_DIRNAME
-
-
 class SegmentName(NamedTuple):
     """A writer's filename read back: who wrote it, and on which try.
 
@@ -1849,22 +1826,35 @@ class _TreeShape(NamedTuple):
 #: What settles two rows of one day tree, and the contract that reads one. A
 #: declared table rather than a rule a reader re-derives: the key is a fact about
 #: the ledger and a second copy of it is how two readers start disagreeing.
-_TREE_SHAPES: Final[dict[SegmentLedger, _TreeShape]] = {
-    SegmentLedger.ITEM_HEALTH: _TreeShape(ITEM_HEALTH_KEY, ItemHealthRow, ITEM_HEALTH_CARRIED),
-    SegmentLedger.HOST_FINGERPRINT: _TreeShape(HOST_FINGERPRINT_KEY, HostFingerprintRow),
-    SegmentLedger.SPAN_ROLLUP: _TreeShape(SPAN_ROLLUP_KEY, SpanRollupRow),
-    SegmentLedger.SCORES: _TreeShape(OBSERVATION_KEY, EvalRow, SCORES_CARRIED),
-    SegmentLedger.SCORE_INDEX: _TreeShape(OBSERVATION_INDEX_KEY, ObservationIndexRow),
-    SegmentLedger.VALIDATION: _TreeShape(VALIDATION_KEY, ValidationRow),
-    SegmentLedger.HEALTH: _TreeShape(FEED_HEALTH_KEY, FeedHealthRow),
-    SegmentLedger.COUNTERFACTUAL_SCORES: _TreeShape(
+_TREE_SHAPES: Final[dict[LedgerName, _TreeShape]] = {
+    LedgerName.ITEM_HEALTH: _TreeShape(ITEM_HEALTH_KEY, ItemHealthRow, ITEM_HEALTH_CARRIED),
+    LedgerName.HOST_FINGERPRINT: _TreeShape(HOST_FINGERPRINT_KEY, HostFingerprintRow),
+    LedgerName.SPAN_ROLLUP: _TreeShape(SPAN_ROLLUP_KEY, SpanRollupRow),
+    LedgerName.SCORES: _TreeShape(OBSERVATION_KEY, EvalRow, SCORES_CARRIED),
+    LedgerName.SCORE_INDEX: _TreeShape(OBSERVATION_INDEX_KEY, ObservationIndexRow),
+    LedgerName.VALIDATION: _TreeShape(VALIDATION_KEY, ValidationRow),
+    LedgerName.HEALTH: _TreeShape(FEED_HEALTH_KEY, FeedHealthRow),
+    LedgerName.COUNTERFACTUAL_SCORES: _TreeShape(
         COUNTERFACTUAL_SCORE_KEY, CounterfactualScoreRow
     ),
-    SegmentLedger.DAY_VALIDATIONS: _TreeShape(DAY_VALIDATION_KEY, DayValidationReceipt),
+    LedgerName.DAY_VALIDATIONS: _TreeShape(DAY_VALIDATION_KEY, DayValidationReceipt),
 }
 
 
-def segment_contract(ledger: SegmentLedger) -> type[CsvContract]:
+def _refuse_outside_day_trees(ledger: LedgerName) -> None:
+    """Refuse a ledger no writer files a segment into, naming it.
+
+    `LedgerName` spans every ledger under `state/`, and only a day tree holds one
+    file per writer under a day directory. So a caller can now name a ledger that
+    is the wrong shape for a segment - `seen` is a file where this would mint a
+    directory - and a wrong call has to be answered at the call rather than by
+    writing a path no reader walks.
+    """
+    if ledger not in DAY_TREES:
+        raise ValueError(f"{ledger.value} is not a day tree, so it holds no writer's segment")
+
+
+def segment_contract(ledger: LedgerName) -> type[CsvContract]:
     """The model that reads one of this ledger's rows.
 
     Asked before a file is named, because a file is named for the writer and a
@@ -1872,16 +1862,19 @@ def segment_contract(ledger: SegmentLedger) -> type[CsvContract]:
     contract has read it. Naming a file from an unread cell is how a path is
     built out of something nobody validated.
     """
+    _refuse_outside_day_trees(ledger)
     return _TREE_SHAPES[ledger].model
 
 
-def segment_key(ledger: SegmentLedger) -> tuple[str, ...]:
+def segment_key(ledger: LedgerName) -> tuple[str, ...]:
     """What makes two of this ledger's rows the same record."""
+    _refuse_outside_day_trees(ledger)
     return _TREE_SHAPES[ledger].key
 
 
-def segment_carried(ledger: SegmentLedger) -> frozenset[str]:
+def segment_carried(ledger: LedgerName) -> frozenset[str]:
     """The retired headings this ledger's reader can still place."""
+    _refuse_outside_day_trees(ledger)
     return _TREE_SHAPES[ledger].carried
 
 
@@ -1901,7 +1894,7 @@ def segment_name(
 
 def day_shard_path(
     state_dir: Path,
-    ledger: SegmentLedger,
+    ledger: LedgerName,
     *,
     date: str,
     run_id: str,
@@ -1921,12 +1914,13 @@ def day_shard_path(
     The day comes off the row rather than off the clock, so rows a run left
     behind three days ago land under that day rather than under today.
     """
+    _refuse_outside_day_trees(ledger)
     name = segment_name(run_id=run_id, attempt=attempt, job=job, shard=shard)
     return state_dir / ledger.value / date[:4] / date[5:7] / date[8:10] / name
 
 
 def day_shard_relpath(
-    ledger: SegmentLedger,
+    ledger: LedgerName,
     *,
     date: str,
     run_id: str,
@@ -1935,12 +1929,13 @@ def day_shard_relpath(
     shard: int,
 ) -> str:
     """The POSIX form of `day_shard_path`, for a log line (CLAUDE.md section 2)."""
+    _refuse_outside_day_trees(ledger)
     name = segment_name(run_id=run_id, attempt=attempt, job=job, shard=shard)
     return f"{STATE_DIRNAME}/{ledger.value}/{date[:4]}/{date[5:7]}/{date[8:10]}/{name}"
 
 
 def _dated_rows(
-    ledger: SegmentLedger, rows: Sequence[CsvRecord], date: str | None
+    ledger: LedgerName, rows: Sequence[CsvRecord], date: str | None
 ) -> dict[str, list[dict[str, str]]]:
     """This writer's rows, grouped by the day each one belongs under.
 
@@ -1962,7 +1957,7 @@ def _dated_rows(
 
 def write_segment(
     state_dir: Path,
-    ledger: SegmentLedger,
+    ledger: LedgerName,
     rows: Sequence[CsvRecord],
     *,
     run_id: str,
@@ -1989,6 +1984,7 @@ def write_segment(
 
     Returns how many rows it wrote, so a caller can log the count.
     """
+    _refuse_outside_day_trees(ledger)
     if not rows:
         return 0
     columns = _TREE_SHAPES[ledger].model.csv_columns()
@@ -2007,7 +2003,7 @@ def write_segment(
 
 def extend_segment(
     state_dir: Path,
-    ledger: SegmentLedger,
+    ledger: LedgerName,
     rows: Sequence[CsvRecord],
     *,
     run_id: str,
@@ -2032,6 +2028,7 @@ def extend_segment(
 
     Returns how many rows it added, so a caller can log the count.
     """
+    _refuse_outside_day_trees(ledger)
     if not rows:
         return 0
     columns = _TREE_SHAPES[ledger].model.csv_columns()

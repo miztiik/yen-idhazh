@@ -60,6 +60,7 @@ from types import MappingProxyType
 from typing import Final
 
 from idhazh import config, ledger
+from idhazh.contracts.ledger_name import DAY_TREES, LedgerName
 from idhazh.ledger import CsvContract
 from idhazh.telemetry import prune
 
@@ -185,18 +186,19 @@ def _reader_for(root: Path, state_dir: Path) -> tuple[type[CsvContract], frozens
     and only the parents of that path are read here.
     """
     try:
-        tree = ledger.SegmentLedger(root.relative_to(state_dir).as_posix())
+        tree = LedgerName(root.relative_to(state_dir).as_posix())
     except ValueError:
         pass
     else:
-        return ledger.segment_contract(tree), ledger.segment_carried(tree)
+        if tree in DAY_TREES:
+            return ledger.segment_contract(tree), ledger.segment_carried(tree)
 
     today = datetime.now(UTC).date().isoformat()
     for entry in ledger.keyed_paths(state_dir, date=today):
         if root == entry.path.parent or root in entry.path.parents:
             return entry.model, entry.carried
     raise ValueError(
-        f"{root.name} holds files that neither `ledger.SegmentLedger` nor "
+        f"{root.name} holds files that neither `DAY_TREES` nor "
         "`ledger.keyed_paths` names a reader for, so nothing here knows which "
         "contract writes its header. Register the shape in one of them, or re-file "
         "the ledger from the code that owns it."

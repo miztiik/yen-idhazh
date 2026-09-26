@@ -6,7 +6,7 @@ or it takes a union. A path in two classes is two answers to one question, and a
 path in none is a conflict nobody planned for.
 
 **The writers are enumerated from the modules that declare them, never from the
-tree.** `ledger.SegmentLedger` is the closed set of day trees a writer fills and
+tree.** `DAY_TREES` is the closed set of day trees a writer fills and
 `paths.DERIVED` and `paths.UNION_SAFE` are the other two lists, so nothing here
 walks `state/` and the answer does not change because a run committed a file
 (CLAUDE.md section 13, Guardrail #12). A tenth tree that arrives without a class
@@ -21,6 +21,7 @@ import pytest
 
 from idhazh import day_shards, ledger, paths
 from idhazh.contracts.base import ServerJob
+from idhazh.contracts.ledger_name import DAY_TREES, LedgerName
 
 pytestmark = pytest.mark.contract
 
@@ -62,7 +63,7 @@ def _classes(relpath: str) -> set[str]:
     return found
 
 
-def _a_writer_file(tree: ledger.SegmentLedger) -> str:
+def _a_writer_file(tree: LedgerName) -> str:
     """One day-shard path of one tree, spelled by the producer that writes them."""
     return ledger.day_shard_relpath(
         tree,
@@ -82,9 +83,9 @@ def test_every_day_tree_writer_names_a_file_only_it_can_have_written() -> None:
     tree that also appeared in the derived or the union-safe list would be two
     answers to that question.
     """
-    assert list(ledger.SegmentLedger), "a closed set with no members declares no writer"
+    assert DAY_TREES, "a closed set with no members declares no writer"
 
-    for tree in ledger.SegmentLedger:
+    for tree in DAY_TREES:
         relpath = _a_writer_file(tree)
         assert _classes(relpath) == {"written once"}, (
             f"{relpath} is classed {sorted(_classes(relpath))}, and a committed path "
@@ -98,7 +99,7 @@ def test_a_writers_file_carries_the_run_the_attempt_the_job_and_the_shard() -> N
     Read back through the producer's own parser rather than by eye, because a
     name this test spelled itself would prove only that this test can spell.
     """
-    for tree in ledger.SegmentLedger:
+    for tree in DAY_TREES:
         relpath = _a_writer_file(tree)
         read = ledger.parse_segment_name(Path(relpath))
         assert read.run_id == A_RUN_ID
@@ -153,7 +154,7 @@ def test_the_fold_is_derived_in_every_day_tree_and_is_never_handed_back() -> Non
     conflicted fold refuses the push instead - it carries no writer identity, so
     the resolver answers "not mine" and stops.
     """
-    for tree in ledger.SegmentLedger:
+    for tree in DAY_TREES:
         fold = (Path(_a_writer_file(tree)).parent / day_shards.SETTLED_NAME).as_posix()
         assert _classes(fold) == {"derived"}, (
             f"{fold} is classed {sorted(_classes(fold))}, and a fold is derived in "

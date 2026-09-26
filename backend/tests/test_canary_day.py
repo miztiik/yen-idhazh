@@ -21,6 +21,7 @@ from conftest import FIXTURES_DIR
 
 from idhazh import config, ledger
 from idhazh.contracts.eval_row import ConfidenceBand, EvalRow
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.sources import SourceForm
 from idhazh.evals import writer
 from utilities import build_canary_day
@@ -182,7 +183,7 @@ def scored_day(state: Path) -> Path:
     """The file the builder's own scoring run leaves in the day directory."""
     return ledger.day_shard_path(
         state,
-        ledger.SegmentLedger.SCORES,
+        LedgerName.SCORES,
         date=build_canary_day.DATE,
         run_id=build_canary_day.SCORE_RUN_ID,
         attempt=build_canary_day.SCORE_ATTEMPT,

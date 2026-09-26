@@ -15,6 +15,7 @@ from idhazh import (
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.item_health import ItemHealthRow
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.run_plan import RunPlan
 from idhazh.evals import writer
 from idhazh.stages import common
@@ -93,7 +94,7 @@ def stage_record(
     attempt = run_context.run_attempt()
     recorded = ledger.write_segment(
         common.STATE_ROOT,
-        ledger.SegmentLedger.ITEM_HEALTH,
+        LedgerName.ITEM_HEALTH,
         health,
         run_id=plan.run_id,
         attempt=attempt,

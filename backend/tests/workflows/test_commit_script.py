@@ -14,6 +14,7 @@ from conftest import read_text
 
 from idhazh import ledger
 from idhazh.contracts.base import ServerJob
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.evals import writer as score_writer
 from utilities import commit_and_push
 
@@ -62,7 +63,7 @@ def _a_writers_file(*, attempt: int) -> str:
     hand here would be a name no writer ever takes.
     """
     return ledger.day_shard_relpath(
-        ledger.SegmentLedger.ITEM_HEALTH,
+        LedgerName.ITEM_HEALTH,
         date=SUBSTITUTED_DATE,
         run_id=f"{SUBSTITUTED_DATE}-40000000001",
         attempt=attempt,

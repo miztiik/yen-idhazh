@@ -31,6 +31,7 @@ from idhazh.contracts.base import ServerJob, derive_text_digest
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.evidence import EvidenceItem
 from idhazh.contracts.knobs.evaluation import EvaluationConfig
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.evals import evidence as evidence_writer
 from utilities import grader_length_bias as bias
 
@@ -86,7 +87,7 @@ def a_ledger(state: Path, rows: list[dict[str, object]]) -> Path:
     for day, kept in sorted(by_day.items()):
         path = ledger.day_shard_path(
             state,
-            ledger.SegmentLedger.SCORES,
+            LedgerName.SCORES,
             date=day,
             run_id=f"{day}-1",
             attempt=1,

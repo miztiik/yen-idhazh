@@ -36,6 +36,7 @@ from idhazh.contracts.base import ServerJob
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.item_health import ItemStage
 from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.evals import writer as score_writer
 from idhazh.telemetry import prune
 
@@ -125,7 +126,7 @@ def _write_host_day(state_root: Path, day: str) -> None:
     """One day of machine rows, through the producer that writes them."""
     ledger.write_segment(
         state_root,
-        ledger.SegmentLedger.HOST_FINGERPRINT,
+        LedgerName.HOST_FINGERPRINT,
         [
             HostFingerprintRow(
                 version=HostFingerprintRow.schema_version(),

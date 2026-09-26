@@ -32,6 +32,7 @@ from pathlib import Path
 
 from idhazh import day_partition, day_shards, ledger
 from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
+from idhazh.contracts.ledger_name import DAY_TREES
 
 LOG = logging.getLogger(__name__)
 
@@ -118,7 +119,7 @@ def stage_compact(state_dir: Path, *, date: str, after_days: int) -> CompactionR
     replaced = 0
     kept = 0
     open_from = _open_from(date, after_days)
-    for tree in ledger.SegmentLedger:
+    for tree in DAY_TREES:
         root = state_dir / tree.value
         key = ledger.segment_key(tree)
         model = ledger.segment_contract(tree)

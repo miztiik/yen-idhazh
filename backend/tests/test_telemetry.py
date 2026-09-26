@@ -42,6 +42,7 @@ from idhazh.contracts.item_health import (
     ItemOutcome,
     ItemStage,
 )
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.run_plan import PlannedItem, RunPlan
 from idhazh.contracts.span_rollup import RollupSpan, SpanRollupRow
 from idhazh.contracts.summary import Summary
@@ -1482,7 +1483,7 @@ def test_the_fold_writes_one_month_shard_and_a_re_run_adds_nothing(tmp_path: Pat
         assert (
             ledger.write_segment(
                 state,
-                ledger.SegmentLedger.SPAN_ROLLUP,
+                LedgerName.SPAN_ROLLUP,
                 rows,
                 run_id="2026-08-21-1",
                 attempt=attempt,

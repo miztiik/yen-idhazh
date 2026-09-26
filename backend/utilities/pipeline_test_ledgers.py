@@ -11,7 +11,7 @@ and nothing else: `<root>/<ledger>/<YYYY>/<MM>/<DD>/<name>.csv`, read row by row
 through the contract `ledger.segment_contract` names, and
 `<root>/traces/<YYYY>/<MM>/<DD>/<name>.jsonl`, one JSON object a line. `<root>`
 has to be the trial root of a case `config/pipeline-tests.json` declares and
-`<ledger>` a `SegmentLedger` member, so every directory name comes from committed
+`<ledger>` a day tree, so every directory name comes from committed
 config rather than from the artifact.
 
 **Gather and place are here rather than in the workflow** because both need the
@@ -38,6 +38,7 @@ import sys
 from pathlib import Path
 
 from idhazh import day_shards, ledger
+from idhazh.contracts.ledger_name import DAY_TREES, LedgerName
 from idhazh.contracts.pipeline_tests import PipelineTestsConfig
 
 #: How deep a writer's file sits below a trial root: the ledger, a year, a month,
@@ -60,7 +61,22 @@ def _roots(config_root: Path) -> list[str]:
     return [case.trial_state_dirname for case in settings.cases]
 
 
-def _refuse_segment(path: Path, relative: str, which: ledger.SegmentLedger) -> list[str]:
+def _a_day_tree(name: str) -> LedgerName | None:
+    """The day tree this directory name is, or `None` for anything else.
+
+    `LedgerName` covers every ledger under `state/`, so reading a name back is no
+    longer the same question as "does a writer file a segment here". A case run
+    writes day trees and traces, so anything else under a trial root is reported
+    rather than read.
+    """
+    try:
+        which = LedgerName(name)
+    except ValueError:
+        return None
+    return which if which in DAY_TREES else None
+
+
+def _refuse_segment(path: Path, relative: str, which: LedgerName) -> list[str]:
     """Every row of one day shard, read through the contract its ledger declares."""
     parts = relative.split("/")
     if len(parts) != DAY_SHARD_PARTS or path.suffix != ".csv":
@@ -107,9 +123,8 @@ def refusals(tree: Path, *, roots: frozenset[str]) -> list[str]:
         elif parts[1] == TRACES:
             found += _refuse_trace(path, "/".join(parts[1:]))
         else:
-            try:
-                which = ledger.SegmentLedger(parts[1])
-            except ValueError:
+            which = _a_day_tree(parts[1])
+            if which is None:
                 found.append(f"{relative} names {parts[1]}, which a case run does not write")
             else:
                 found += _refuse_segment(path, "/".join(parts[1:]), which)

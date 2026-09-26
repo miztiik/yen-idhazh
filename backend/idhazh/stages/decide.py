@@ -12,6 +12,7 @@ from idhazh import (
     run_context,
 )
 from idhazh.contracts.base import ServerJob
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.validation_row import (
     ValidationVerdict,
 )
@@ -65,7 +66,7 @@ def stage_decide(
     # trial run leaves nothing in the tree a published day is built from.
     ledger.write_segment(
         common.STATE_ROOT,
-        ledger.SegmentLedger.VALIDATION,
+        LedgerName.VALIDATION,
         rows,
         run_id=run_id,
         attempt=run_context.run_attempt(),

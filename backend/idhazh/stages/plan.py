@@ -21,6 +21,7 @@ from idhazh.contracts.feed_health import (
     derive_endpoint_key,
 )
 from idhazh.contracts.knobs.collect import CollectConfig
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.run_plan import PlannedItem, PublishedAgeBand, RunPlan, VerticalPlan
 from idhazh.contracts.seen import SeenRow
 from idhazh.contracts.sources import FeedDef
@@ -186,7 +187,7 @@ def stage_plan(
     # day, so it is shard 0 of one.
     ledger.write_segment(
         state,
-        ledger.SegmentLedger.HEALTH,
+        LedgerName.HEALTH,
         health,
         run_id=run_id,
         attempt=run_context.run_attempt(),
@@ -390,7 +391,7 @@ def stage_plan(
     # made them conflict.
     recorded = ledger.write_segment(
         state,
-        ledger.SegmentLedger.COUNTERFACTUAL_SCORES,
+        LedgerName.COUNTERFACTUAL_SCORES,
         _counterfactual_rows(
             pools,
             items,

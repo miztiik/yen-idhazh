@@ -68,6 +68,7 @@ from idhazh.contracts.item_health import ItemHealthRow, ItemOutcome, ItemStage, 
 from idhazh.contracts.knobs.evaluation import EvaluationConfig
 from idhazh.contracts.knobs.models import ModelRef
 from idhazh.contracts.knobs.visuals import VisualsConfig
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.run_manifest import ModelRole, ModelUse, RunManifest, RunRecord, RunStatus
 from idhazh.contracts.similarity_holdout_pair import SimilarityHoldoutPair
 from idhazh.contracts.source_health_view import SourceHealthView
@@ -1073,7 +1074,7 @@ def health(state: Path) -> int:
     for date in (YESTERDAY, DATE):
         ledger.write_segment(
             state,
-            ledger.SegmentLedger.HEALTH,
+            LedgerName.HEALTH,
             [row for row in rows if row.date == date],
             run_id=f"{date}-1",
             attempt=1,
@@ -1593,7 +1594,7 @@ def main() -> int:
         f"{census} sources"
     )
     score_file = ledger.day_shard_relpath(
-        ledger.SegmentLedger.SCORES,
+        LedgerName.SCORES,
         date=DATE,
         run_id=SCORE_RUN_ID,
         attempt=SCORE_ATTEMPT,

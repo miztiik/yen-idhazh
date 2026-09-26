@@ -35,6 +35,7 @@ from conftest import FIXTURES_DIR
 from idhazh import day_shards, ledger
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.stages import compact
 
 from ._harness import COMMIT_PROGRAM, _git, _isolated_env
@@ -43,7 +44,7 @@ pytestmark = [pytest.mark.workflow, pytest.mark.slow]
 
 #: The tree the fixture was written with, and the day the two jobs fight over.
 FIXTURE: Final = FIXTURES_DIR / "day-shards" / "closed-day"
-TREE: Final = ledger.SegmentLedger.HOST_FINGERPRINT
+TREE: Final = LedgerName.HOST_FINGERPRINT
 CONTESTED_DAY: Final = "2026-09-07"
 
 #: A date far enough past the fixture that every day in it is closed, and the

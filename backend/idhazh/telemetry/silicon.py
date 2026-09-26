@@ -33,6 +33,7 @@ from typing import TYPE_CHECKING, Final
 from idhazh import ledger, run_context
 from idhazh.contracts.base import WORK_JOB, ServerJob
 from idhazh.contracts.host_fingerprint import WATCHED_FLAGS, HostFingerprintRow
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.run_plan import RunPlan
 from idhazh.telemetry.host import runner_name
 
@@ -384,7 +385,7 @@ def stage_fingerprint(
     attempt = run_context.run_attempt()
     landed = ledger.write_segment(
         state_root,
-        ledger.SegmentLedger.HOST_FINGERPRINT,
+        LedgerName.HOST_FINGERPRINT,
         [row],
         run_id=plan.run_id,
         attempt=attempt,
@@ -413,7 +414,7 @@ def stage_fingerprint(
         row.mhz_at_probe,
         landed,
         ledger.day_shard_relpath(
-            ledger.SegmentLedger.HOST_FINGERPRINT,
+            LedgerName.HOST_FINGERPRINT,
             date=plan.date,
             run_id=plan.run_id,
             attempt=attempt,
@@ -479,7 +480,7 @@ def stage_job_clock(
     attempt = run_context.run_attempt()
     landed = ledger.extend_segment(
         state_root,
-        ledger.SegmentLedger.HOST_FINGERPRINT,
+        LedgerName.HOST_FINGERPRINT,
         [row],
         run_id=plan.run_id,
         attempt=attempt,
@@ -498,7 +499,7 @@ def stage_job_clock(
         row.server_prompt_seconds,
         landed,
         ledger.day_shard_relpath(
-            ledger.SegmentLedger.HOST_FINGERPRINT,
+            LedgerName.HOST_FINGERPRINT,
             date=plan.date,
             run_id=plan.run_id,
             attempt=attempt,

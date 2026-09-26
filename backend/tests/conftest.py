@@ -28,6 +28,7 @@ from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.knobs.extract import ElementsConfig
 from idhazh.contracts.knobs.models import ModelsConfig
 from idhazh.contracts.knobs.run import RunConfig
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.run_plan import PlannedItem
 from idhazh.contracts.sources import SourceForm
 from idhazh.contracts.span_rollup import SpanRollupRow
@@ -163,7 +164,7 @@ def seed_feed_health(
     """
     return ledger.write_segment(
         state_dir,
-        ledger.SegmentLedger.HEALTH,
+        LedgerName.HEALTH,
         list(rows),
         run_id=run_id if run_id is not None else f"{date}-1",
         attempt=attempt,

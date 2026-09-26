@@ -22,6 +22,7 @@ from idhazh.contracts.day_validation import DayValidationReceipt
 from idhazh.contracts.digest_day import DigestDay
 from idhazh.contracts.digest_view import DigestView
 from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.render.write import assets_in_day
 from idhazh.stages.common import LOG, published_days
 from idhazh.telemetry.publish import (
@@ -268,7 +269,7 @@ def _record_receipts(state_dir: Path, earned: list[DayValidationReceipt], *, run
     """
     return ledger.write_segment(
         state_dir,
-        ledger.SegmentLedger.DAY_VALIDATIONS,
+        LedgerName.DAY_VALIDATIONS,
         earned,
         run_id=run_id,
         attempt=run_context.run_attempt(),
