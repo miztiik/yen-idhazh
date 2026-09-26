@@ -474,7 +474,7 @@ def test_the_retired_word_has_not_come_back() -> None:
     assert not offenders, "the retired word is back:\n" + "\n".join(offenders)
 
 
-#: The store path the same-story judge's output sat under until it moved beneath
+#: The ledger path the same-story judge's output sat under until it moved beneath
 #: that judge's own slug, and the constant that used to spell it. Written as a
 #: pattern with the first letter in a character class so this file does not
 #: itself carry the string it refuses - the sweep below covers `backend/tests/`,
@@ -485,16 +485,16 @@ def test_the_retired_word_has_not_come_back() -> None:
 #: modules that declare them are published keys and keep their spelling, so this
 #: pattern is anchored on `state/` and on the constant's full name rather than on
 #: the loose word.
-RETIRED_STORE_PATH = re.compile(r"state/[s]tory-similarity|STORY[_]SIMILARITY_DIRNAME")
+RETIRED_LEDGER_PATH = re.compile(r"state/[s]tory-similarity|STORY[_]SIMILARITY_DIRNAME")
 
 #: The five trees a person edits, swept through `git ls-files` rather than a
 #: directory walk: an untracked scratch file cannot turn this red, and a tracked
 #: one cannot escape it.
-RETIRED_STORE_SWEEP = ("backend", "frontend/src", ".github", "docs", "config")
+RETIRED_LEDGER_SWEEP = ("backend", "frontend/src", ".github", "docs", "config")
 
 
 def test_no_reader_resolves_a_path_under_the_retired_store_name() -> None:
-    """A store that moved leaves a reader behind, and only a run would find it.
+    """A ledger that moved leaves a reader behind, and only a run would find it.
 
     Five path helpers, two frontend readers, two prune words and a dozen doc
     sentences all named the old tree. A missed one resolves to a directory that
@@ -513,7 +513,7 @@ def test_no_reader_resolves_a_path_under_the_retired_store_name() -> None:
     blob across the move.
     """
     listed = subprocess.run(
-        ["git", "ls-files", "--", *RETIRED_STORE_SWEEP],
+        ["git", "ls-files", "--", *RETIRED_LEDGER_SWEEP],
         cwd=REPO_ROOT,
         capture_output=True,
         text=True,
@@ -525,14 +525,119 @@ def test_no_reader_resolves_a_path_under_the_retired_store_name() -> None:
     for relative in listed:
         text = (REPO_ROOT / relative).read_bytes().decode("utf-8", "replace")
         for number, line in enumerate(text.split("\n"), start=1):
-            if RETIRED_STORE_PATH.search(line):
+            if RETIRED_LEDGER_PATH.search(line):
                 offenders.append(f"{relative}:{number}: {line.strip()}")
 
     assert not offenders, (
-        "a reader still resolves a path under the retired store name. The store "
+        "a reader still resolves a path under the retired ledger name. The ledger "
         "moved under the slug of the judge that fills it; point it at "
         "ledger.CONTENT_SIMILARITY_JUDGE_DIRNAME, or at "
         "state/content-similarity-judge/ in prose:\n" + "\n".join(offenders)
+    )
+
+
+#: The retired word, standing alone. The boundary is letters, digits and the
+#: underscore, so `restore`, `stored`, `store_true`, `storedChoice` and
+#: `test_the_row_stores_counts` are not hits and need no allow-list. Written with
+#: a character class so this file does not match its own definition.
+RETIRED_LEDGER_WORD = re.compile(r"(?<![A-Za-z0-9_])[Ss]tores?(?![A-Za-z0-9_])")
+
+#: The whole of the allow-list, and it cannot grow by drift: an entry is not a
+#: file or a concept but a spelling that is NOT the word. `no-store` is a Fetch
+#: API cache mode and `ast.Store` is a CPython class, so editing either changes
+#: what a program outside this repository does. Admitting a third means naming
+#: the outside program that parses those bytes. Stripping them also keeps this
+#: line's own two literals out of the count.
+NOT_THE_LEDGER_WORD = ("no-store", "ast.Store")
+
+#: The six trees a person edits plus the plan-docs, swept through `git ls-files`
+#: so an untracked scratch file cannot turn this red and a tracked one cannot
+#: escape it. `backend/var` is excluded by name: a run writes it, and what a test
+#: reads may not grow with what a run has piled up (Guardrail #12).
+RETIRED_LEDGER_WORD_SWEEP = (
+    "backend",
+    "frontend/src",
+    "frontend/tests",
+    "config",
+    "docs",
+    "TODO",
+    ".github",
+    ":(exclude)backend/var",
+)
+
+#: The one section allowed to spell the word, because it is the change that
+#: removes it. The exemption is that row's own section, found by its heading
+#: rather than by a line range, and it deletes itself: the row that closes plan
+#: 53 deletes the plan-doc, and a plan-doc that is not there excuses nothing and
+#: fails nothing.
+RETIRING_ROW_DOC = "TODO/20260926-53-one-door-into-state-plan.md"
+RETIRING_ROW_HEADING = re.compile(r"^## Row #1\b")
+MARKDOWN_SECTION = re.compile(r"^## ")
+
+
+def _lines_the_retiring_row_owns(relative: str, text: str) -> set[int]:
+    """The plan row that retires the word, from its heading to the next one."""
+    if relative != RETIRING_ROW_DOC:
+        return set()
+    lines = text.split("\n")
+    opened = [n for n, line in enumerate(lines, start=1) if RETIRING_ROW_HEADING.match(line)]
+    if not opened:
+        return set()
+    start = opened[0]
+    after = [
+        n for n, line in enumerate(lines, start=1) if n > start and MARKDOWN_SECTION.match(line)
+    ]
+    return set(range(start, (after[0] if after else len(lines) + 1)))
+
+
+def test_the_retired_ledger_word_has_not_come_back() -> None:
+    """One thing under `state/` has one name, and `ledger` is it.
+
+    Two words named the same directory and only one of them was ever defined:
+    the glossary defines `ledger`, and nothing anywhere defined the word this
+    refuses. Under `frontend/public/` that same word named something else again,
+    a published tree a reader opens, which is a collection. Without this gate it
+    walks back in - it was swept out of the plan-docs once already and returned
+    with the next draft.
+
+    **What it reads, and why it is bounded** (Guardrail #12): the tracked files
+    of the trees above - code, tests, docs, schemas, config and the plan-docs,
+    all of which grow with what somebody wrote. It opens nothing a run appends
+    to: not `state/`, `corpus/`, `backend/var/`, `frontend/public/` or
+    `frontend/build/`, and not `node_modules/`, `.svelte-kit/` or
+    `test-results/`, none of which `git ls-files` lists. So it costs the same on
+    the thousandth published day as on the third.
+
+    What this cannot settle: whether the replacement reads naturally. A person
+    reads the sentence; this only refuses the word.
+    """
+    listed = subprocess.run(
+        ["git", "ls-files", "--", *RETIRED_LEDGER_WORD_SWEEP],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.splitlines()
+    assert len(listed) > 900, "the sweep found almost nothing, so it would pass on nothing"
+
+    offenders: list[str] = []
+    for relative in listed:
+        text = (REPO_ROOT / relative).read_bytes().decode("utf-8", "replace")
+        excused = _lines_the_retiring_row_owns(relative, text)
+        for number, line in enumerate(text.split("\n"), start=1):
+            if number in excused:
+                continue
+            counted = line
+            for spelling in NOT_THE_LEDGER_WORD:
+                counted = counted.replace(spelling, "")
+            if RETIRED_LEDGER_WORD.search(counted):
+                offenders.append(f"{relative}:{number}: {line.strip()}")
+
+    assert not offenders, (
+        "the retired word is back. Naming a tree under state/ it is a ledger; "
+        "naming a tree under frontend/public/ it is a collection; naming anything "
+        "else this repository declares it is that thing's own name; and as an "
+        "English verb it is holds, keeps, records or writes:\n" + "\n".join(offenders)
     )
 
 
@@ -614,7 +719,7 @@ def test_the_judging_council_spells_its_shard_and_its_count_plainly() -> None:
     boundary and would walk straight through the council's own files.
     """
     listed = subprocess.run(
-        ["git", "ls-files", "--", *RETIRED_STORE_SWEEP],
+        ["git", "ls-files", "--", *RETIRED_LEDGER_SWEEP],
         cwd=REPO_ROOT,
         capture_output=True,
         text=True,
