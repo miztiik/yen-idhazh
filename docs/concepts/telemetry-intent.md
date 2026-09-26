@@ -1,6 +1,6 @@
 # Telemetry Intent
 
-**Last Updated**: 2026-09-24
+**Last Updated**: 2026-09-26
 
 What must be true about telemetry once this workstream is done - how a measurement is written, where it sits, how it reaches a browser, and how it is drawn. A thing that contradicts one of the eleven below is not a trade-off, it is a defect.
 
@@ -18,9 +18,9 @@ What must be true about telemetry once this workstream is done - how a measureme
 | N6 | **Single-Writer & Immutable Paths.** One writer per path; bytes never change after that writer closes the file. | Shared day files, in-place rewrites, `merge=union` |
 | N7 | **`state/` is the console's only source. No telemetry projection survives in `frontend/`.** The console reads the ledgers, not nine pre-shaped views of them. | The nine projections under `frontend/public/` |
 | N8 | **`frontend/` holds UI code, not production artefacts.** Telemetry does not live there in git. | `frontend/public/telemetry/`, `machine/`, `span-rollup/`, `run-timeline/`, `run-days/`, `day-metrics/`, `console/band.json` |
-| N9 | **A file is named `<uuid8>.parquet`.** One token: a millisecond clock in the high bits, a hash of the unit of work in the rest. Sorts by arrival, carries identity, and nothing reads it. | `<date>-<run>-<attempt>-<job>-<shard>.csv` |
+| N9 | **A raw file is named `<file_id>.parquet`** - a `uuid8` carrying a millisecond clock in its high bits, minted fresh on every write, so no two writers can take one path. The name carries no identity a reader needs: what survives a re-run is the `unit_id` column beside it, and deduplication groups on that column rather than on a filename. **A compact file is named for the period it covers** - `daily/2026/09/23.parquet`, `monthly/2026/08.parquet` - because that tier has one writer, so a minted name buys no collision safety there and costs a browser a computable address. | `<date>-<run>-<attempt>-<job>-<shard>.csv` |
 | N10 | **`state/` splits into `state/raw/` and `state/compact/`.** Writers only ever append to `raw`; `compact` is derived and may be rebuilt from it. | One `state/` tree where a writer's file and a folded file sit together |
-| N11 | **Every tree under `state/` is sharded to one pattern, with no exceptions:** `state/raw/<dataset>/<YYYY>/<MM>/<DD>/<uuid8>.parquet`, where the date is `covers_date` - the day the rows describe - and `<uuid8>` is N9. One file per writer per unit of work. A tree where two writers still share a path is a tree not yet migrated. | `merge=union` on nine trees, the flat `feed-retirements.csv`, and every remaining shared-path append |
+| N11 | **Every tree under `state/` is sharded to one pattern, with no exceptions:** `state/raw/<ledger>/<YYYY>/<MM>/<DD>/<file_id>.parquet`, where the date is `covers` - the day the rows describe, never the day the job woke - and `<file_id>` is N9. One file per writer per unit of work. A tree where two writers still share a path is a tree not yet migrated. | `merge=union` on nine trees, the flat `feed-retirements.csv`, and every remaining shared-path append |
 
 ## When one of these meets a limitation
 
