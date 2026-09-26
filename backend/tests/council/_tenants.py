@@ -149,7 +149,7 @@ TENANT = ScriptedTenant()
 #: `TENANT_SOURCE` answers the whole window, which says nothing about a union of
 #: two different answers. This one intersects the window it is handed with what
 #: the test wrote, which is what a real tenant does: it answers about its own
-#: store and stays inside the window it was asked about. A tenant that moved in
+#: ledger and stays inside the window it was asked about. A tenant that moved in
 #: later is the same object with a shorter list.
 BEHIND_SOURCE: Final = '''
 """One tenant that is behind on the nights a test says it is behind on."""
@@ -215,7 +215,7 @@ def a_venue(
 ) -> None:
     """Write a package of tenants under `root`, one subpackage a slug.
 
-    `slugs` maps a slug to its shard width and the store paths it commits.
+    `slugs` maps a slug to its shard width and the ledger paths it commits.
     `quiet_neighbour`, when named, is a subpackage that declares no tenant and
     raises if anything imports it.
     """

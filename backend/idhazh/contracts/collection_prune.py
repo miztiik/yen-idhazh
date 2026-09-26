@@ -2,7 +2,7 @@
 
 One row per invocation of `idhazh.prune.one_at_a_time.take`, whatever the
 collection was - GitHub's workflow artifacts, GitHub's workflow runs, or a
-store's day files under `state/`. It is written where the caller asks for it
+ledger's day files under `state/`. It is written where the caller asks for it
 and nowhere by default, so this shape adds no ledger and no growing read
 (Guardrail #12).
 
@@ -42,7 +42,7 @@ from idhazh.contracts.base import (
 )
 
 #: A member's id, as its own collection spells it. A GitHub artifact is a
-#: decimal number and a day file is `state/<store>/<YYYY>/<MM>/<DD>.csv`, so the
+#: decimal number and a day file is `state/<ledger>/<YYYY>/<MM>/<DD>.csv`, so the
 #: class admits both and nothing that could be read as an instruction. It is
 #: declared here rather than in `base.py` because no other shape holds one: a
 #: pattern in `base.py` is a spelling several shapes share, and this is one
@@ -79,7 +79,7 @@ class CollectionPruneRow(Contract):
     collection: Slug = Field(
         description=(
             "Which collection this pass walked. A word from a closed vocabulary - "
-            "`prune.PrunableCollection` for what GitHub holds, a store name for what "
+            "`prune.PrunableCollection` for what GitHub holds, a ledger name for what "
             "`state/` holds - and never a path."
         )
     )

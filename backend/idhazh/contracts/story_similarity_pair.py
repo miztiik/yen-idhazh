@@ -325,7 +325,7 @@ class StorySimilarityPair(Contract):
         default="content-similarity-judge",
         description=(
             "Which instrument produced the verdict on this row. One member, because one "
-            "judge writes this store and no other - so the column is narrowed here, where "
+            "judge writes this ledger and no other - so the column is narrowed here, where "
             "a closed set can be closed honestly."
         ),
     )

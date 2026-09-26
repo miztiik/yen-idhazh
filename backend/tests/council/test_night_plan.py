@@ -4,7 +4,7 @@ The plan is the council's, so every tenant here is written by the test that uses
 it and nothing in this file imports `idhazh.similarity` or any judge contract.
 
 Every arm runs on a config the test wrote. The committed one registers a judge,
-and a judge answers out of a store the pipeline appends to every night, so a
+and a judge answers out of a ledger the pipeline appends to every night, so a
 plan run against `config/` would be asserting what the archive holds rather than
 what the planner does (CLAUDE.md section 13).
 """
@@ -138,7 +138,7 @@ def test_the_window_is_the_only_thing_a_tenant_is_handed() -> None:
     """The read is bounded by the window the council asked about (Guardrail #12).
 
     Its length is a knob and its far end is the night before tonight, so the
-    cost of asking does not rise as the store fills up. Tonight is not in it: a
+    cost of asking does not rise as the ledger fills up. Tonight is not in it: a
     tenant is not behind on a night nothing has judged yet, and one that named
     it would spend a repair slot on the date the night is already for.
     """
@@ -170,7 +170,7 @@ def test_a_tenant_that_names_a_night_nobody_asked_about_is_refused_by_name(
     """The council prices the window, so a date from outside one is unbudgeted work.
 
     Refused rather than dropped: a date this planner accepts becomes a job, an
-    artifact name and a store address, and the run finds out about two hours of
+    artifact name and a ledger address, and the run finds out about two hours of
     model time later.
     """
     a_belated_venue(

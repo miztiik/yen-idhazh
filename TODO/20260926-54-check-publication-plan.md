@@ -42,7 +42,7 @@ Execute per docs/how-to/execute-a-plan.md as a **workpool**: a group is ready wh
 
 ### ESCALATE triggers
 
-1. **Section 0a is unresolved when PR-2 is ready to open.** The owner has not chosen between shipping the reconciliation ledger (option A, baked) and proving the hook with a live integration write and no production store (option B, recommended). PR-2's shape depends on it - pause.
+1. **Section 0a is unresolved when PR-2 is ready to open.** The owner has not chosen between shipping the reconciliation ledger (option A, baked) and proving the hook with a live integration write and no production ledger (option B, recommended). PR-2's shape depends on it - pause.
 2. **PR-2 begins** - a persisted contract is removed and a committed tree is deleted. Pause for owner sign-off before the first deletion (Level 5).
 3. **A committed-day writer is found that does not go through a validated `DigestDay`.** The runner parse still catches it at publication, but a validated-write row is then owed at that writer - surface it.
 4. **Plan 53's row "One `LedgerName` for one ledger" is about to land before plan 54 PR-1 and PR-2.** The ordering constraint is violated - stop and resequence.
@@ -52,16 +52,16 @@ Execute per docs/how-to/execute-a-plan.md as a **workpool**: a group is ready wh
 
 **Situation.** The owner ruled the `Check.ledger` hook ships live, real, no mock, today (B2), and the earlier draft chose the reconciliation check as its consumer, persisting one row a published day and reading it back through an operator report.
 
-**Problem.** `DayMetrics` already persists `items_published`, `items_planned` and `items_failed` per published day - one committed JSON file per day, windowed and console-read ([backend/idhazh/contracts/day_metrics.py](../backend/idhazh/contracts/day_metrics.py)). The reconciliation row's persisted columns reduce to `(version, date, planned, published, failed)` - those three numbers plus a stamp, and nothing novel (`balances` is derived, section 4.4). So the store is a second writer of three numbers already committed, and the reader is a second reader of a fact `DayMetrics` already serves. The census **fault** is genuinely needed and is not in question; only the persisted **row** and its reader are.
+**Problem.** `DayMetrics` already persists `items_published`, `items_planned` and `items_failed` per published day - one committed JSON file per day, windowed and console-read ([backend/idhazh/contracts/day_metrics.py](../backend/idhazh/contracts/day_metrics.py)). The reconciliation row's persisted columns reduce to `(version, date, planned, published, failed)` - those three numbers plus a stamp, and nothing novel (`balances` is derived, section 4.4). So the ledger is a second writer of three numbers already committed, and the reader is a second reader of a fact `DayMetrics` already serves. The census **fault** is genuinely needed and is not in question; only the persisted **row** and its reader are.
 
-**Impact.** Option A ships a contract, a store, a `STORE_DIRNAMES` entry, a preference rule, a retention knob, a prune path and an operator reader to persist data that already exists. Option B ships the hook's persist path as real, exercised, un-mocked code proven by one integration test, and defers the first production consumer until a check needs a fact `DayMetrics` lacks.
+**Impact.** Option A ships a contract, a ledger, a `LEDGER_DIRNAMES` entry, a preference rule, a retention knob, a prune path and an operator reader to persist data that already exists. Option B ships the hook's persist path as real, exercised, un-mocked code proven by one integration test, and defers the first production consumer until a check needs a fact `DayMetrics` lacks.
 
 | Table A - the hook's live consumer | id | What ships | Honours "live, real, no mock, today" | Cost |
 | --- | --- | --- | --- | --- |
-| baked default | A1 | reconciliation writes one row a published day + the operator reader (PR-2 + PR-3) | Fully - a production row on every daily run | A store that is a strict subset of `DayMetrics`; two writers of three numbers that can drift; a nullable-CSV `failed`; ~14 months of redundant rows. The reader is mandatory - dropping it while keeping the write is the write-only day-validations mistake (ESCALATE #1 of the receipt era) |
-| **recommended** | A2 | the runner persist path (real) + one integration test writing a real row through `write_segment` and reading it back; reconciliation stays `ledger=None` (fault only); first production consumer deferred | Yes - the persist path is real, exercised, proven today; no stub | No production row yet. Narrows "reconciliation writes daily" to "an integration test writes." Removes the duplicate store, its reader and the drift surface. **The narrowing is the owner's to make** (section 0d) |
+| baked default | A1 | reconciliation writes one row a published day + the operator reader (PR-2 + PR-3) | Fully - a production row on every daily run | A ledger that is a strict subset of `DayMetrics`; two writers of three numbers that can drift; a nullable-CSV `failed`; ~14 months of redundant rows. The reader is mandatory - dropping it while keeping the write is the write-only day-validations mistake (ESCALATE #1 of the receipt era) |
+| **recommended** | A2 | the runner persist path (real) + one integration test writing a real row through `write_segment` and reading it back; reconciliation stays `ledger=None` (fault only); first production consumer deferred | Yes - the persist path is real, exercised, proven today; no stub | No production row yet. Narrows "reconciliation writes daily" to "an integration test writes." Removes the duplicate ledger, its reader and the drift surface. **The narrowing is the owner's to make** (section 0d) |
 
-**Recommendation: A2** (Fowler, Carmack converged). The cheapest consumer is the one not built; a capability earns a production consumer when a check needs to persist a fact `DayMetrics` lacks. **Baked in this plan: A1**, the owner's standing ruling, so the plan is executable as written. **If the owner takes A2:** delete `contracts/reconciliation.py`, the `PLANNED_ITEMS_RECONCILIATION_*` ledger constants/member/shape/rule/`STORE_DIRNAMES` entry, the retention knob and prune, and PR-3 entirely; keep section 4.1-4.2 and add the one integration test from section 4.7. PR count drops 4 -> 3.
+**Recommendation: A2** (Fowler, Carmack converged). The cheapest consumer is the one not built; a capability earns a production consumer when a check needs to persist a fact `DayMetrics` lacks. **Baked in this plan: A1**, the owner's standing ruling, so the plan is executable as written. **If the owner takes A2:** delete `contracts/reconciliation.py`, the `PLANNED_ITEMS_RECONCILIATION_*` ledger constants/member/shape/rule/`LEDGER_DIRNAMES` entry, the retention knob and prune, and PR-3 entirely; keep section 4.1-4.2 and add the one integration test from section 4.7. PR count drops 4 -> 3.
 
 ## 1. Status Reckoner
 
@@ -87,7 +87,7 @@ Verified against the tree at the current checkout:
 - **There are exactly two writers of a committed `digest.json`:** `assemble.py` (the normal path and the `previous_day` passthrough, both validated) and `backfill_vectors.py` (`model_copy(update=...)`, which does not run validators). So "all writers validate" is false; the runner's parse is the guarantee (section 4.2).
 - **`DayMetrics` already carries `items_published`/`items_planned`/`items_failed` per published day**, committed, windowed, console-read - which is what makes section 0a a real decision.
 - **`DigestDay.items_failed` is `int | None`** (`None` = the pre-2026-08-21 shape). The reconciliation row mirrors that nullability and round-trips an empty CSV cell (section 4.4).
-- **`SegmentLedger` values are `*_DIRNAME` constants, not string literals**, and a store must be in `STORE_DIRNAMES` or the trial-root pruner empties it at 90 days. `day-validations` is itself absent from `STORE_DIRNAMES` today - a latent bug PR-2 erases by removing the store (section 4.5).
+- **`SegmentLedger` values are `*_DIRNAME` constants, not string literals**, and a ledger must be in `LEDGER_DIRNAMES` or the trial-root pruner empties it at 90 days. `day-validations` is itself absent from `LEDGER_DIRNAMES` today - a latent bug PR-2 erases by removing the ledger (section 4.5).
 - **`BY_STEM` is auto-derived** from `CONTRACTS`; adding or removing a contract needs a committed byte-identical fixture directory, no manual `BY_STEM` edit (section 4.7).
 - **Three workflows call `validate-days`** (`ci.yml`, `digest.yml`, `backfill.yml`); `pages.yml` only names it in a comment. The frontend never reads `day-validations`.
 
@@ -380,9 +380,9 @@ PLANNED_ITEMS_RECONCILIATION_RULE: Final[Preference] = _planned_items_reconcilia
 - `SegmentLedger`: add `PLANNED_ITEMS_RECONCILIATION = PLANNED_ITEMS_RECONCILIATION_DIRNAME` (value is the `*_DIRNAME` constant, per the enum's own rule).
 - `_TREE_SHAPES`: add `SegmentLedger.PLANNED_ITEMS_RECONCILIATION: _TreeShape(PLANNED_ITEMS_RECONCILIATION_KEY, PlannedItemsReconciliationRow)`.
 - `_PREFERENCES`: add `PLANNED_ITEMS_RECONCILIATION_KEY: PLANNED_ITEMS_RECONCILIATION_RULE`.
-- `STORE_DIRNAMES`: **add** `PLANNED_ITEMS_RECONCILIATION_DIRNAME`, or the trial-root pruner empties `state/planned-items-reconciliation/` at 90 days.
+- `LEDGER_DIRNAMES`: **add** `PLANNED_ITEMS_RECONCILIATION_DIRNAME`, or the trial-root pruner empties `state/planned-items-reconciliation/` at 90 days.
 
-PR-2 removes, in the same commit: the `DayValidationReceipt` import, `DAY_VALIDATIONS_DIRNAME`, `DAY_VALIDATION_KEY`, `_day_validation_rule`/`DAY_VALIDATION_RULE`, the `_PREFERENCES` entry, `SegmentLedger.DAY_VALIDATIONS`, and the `_TREE_SHAPES` entry. `day-validations` is not in `STORE_DIRNAMES`, so nothing is removed there.
+PR-2 removes, in the same commit: the `DayValidationReceipt` import, `DAY_VALIDATIONS_DIRNAME`, `DAY_VALIDATION_KEY`, `_day_validation_rule`/`DAY_VALIDATION_RULE`, the `_PREFERENCES` entry, `SegmentLedger.DAY_VALIDATIONS`, and the `_TREE_SHAPES` entry. `day-validations` is not in `LEDGER_DIRNAMES`, so nothing is removed there.
 
 **The `("date",)` collision:** `DAY_VALIDATION_KEY` and reconciliation's key are both `("date",)`, and `_PREFERENCES` is keyed by the tuple. Folding the add and the remove into PR-2 means `_PREFERENCES` never carries `("date",)` twice - the decisive reason PR-2 is one PR.
 
@@ -444,8 +444,8 @@ if args.stage == "check-publication":
 
 ### PR-2 - The day-keyed ledger swap (reconciliation in, receipt out) [Level 5]
 
-- **Scope (option A1):** add `PlannedItemsReconciliationRow` and its ledger member/shape/rule/`STORE_DIRNAMES` entry/retention/prune; wire `reconciliation.py` to emit its row and the runner to persist it on a day-scoped run; **remove the day-validation receipt end to end** and delete `state/day-validations/`. One atomic swap of the day-keyed ledger surface. **(Option A2: drop the reconciliation contract/store/knob/prune/reader; keep only the runner persist path + the live integration test; still remove the receipt.)**
-- **Files touched:** `backend/idhazh/contracts/reconciliation.py` (new, A1); `backend/idhazh/contracts/day_validation.py` (deleted); `backend/idhazh/contracts/__init__.py`; `backend/idhazh/ledger.py`; `backend/idhazh/contracts/knobs/retention.py`; `backend/idhazh/retention.py`; `backend/idhazh/stages/prune_state.py`; `backend/idhazh/publication_checks/runner.py` and `checks/reconciliation.py`; `backend/idhazh/cli.py` (add the reconciliation import); `config/idhazh.json`; `tests/fixtures/contracts/planned-items-reconciliation-row/one.json` (new), `tests/fixtures/contracts/day-validation-receipt/` (deleted), `tests/fixtures/contracts/app-config/every-knob-differs-from-the-committed-config.json`; `backend/tests/contracts/test_committed_days.py` (remove receipt assertions), `test_migrate_to_day_shards.py` (re-point the sample store name), the ledger closed-world and retention/prune tests; `state/day-validations/` (deleted); `docs/architecture/contracts/schemas.md`, `docs/concepts/partitions.md`, `docs/concepts/growing-reads.md`, `docs/concepts/telemetry.md`, `docs/concepts/adaptive-pruning.md`, `docs/reference/agent-notes/gates-and-builds.md`; comment refs in `contracts/visual_data.py`, `render/write.py`.
+- **Scope (option A1):** add `PlannedItemsReconciliationRow` and its ledger member/shape/rule/`LEDGER_DIRNAMES` entry/retention/prune; wire `reconciliation.py` to emit its row and the runner to persist it on a day-scoped run; **remove the day-validation receipt end to end** and delete `state/day-validations/`. One atomic swap of the day-keyed ledger surface. **(Option A2: drop the reconciliation contract/ledger/knob/prune/reader; keep only the runner persist path + the live integration test; still remove the receipt.)**
+- **Files touched:** `backend/idhazh/contracts/reconciliation.py` (new, A1); `backend/idhazh/contracts/day_validation.py` (deleted); `backend/idhazh/contracts/__init__.py`; `backend/idhazh/ledger.py`; `backend/idhazh/contracts/knobs/retention.py`; `backend/idhazh/retention.py`; `backend/idhazh/stages/prune_state.py`; `backend/idhazh/publication_checks/runner.py` and `checks/reconciliation.py`; `backend/idhazh/cli.py` (add the reconciliation import); `config/idhazh.json`; `tests/fixtures/contracts/planned-items-reconciliation-row/one.json` (new), `tests/fixtures/contracts/day-validation-receipt/` (deleted), `tests/fixtures/contracts/app-config/every-knob-differs-from-the-committed-config.json`; `backend/tests/contracts/test_committed_days.py` (remove receipt assertions), `test_migrate_to_day_shards.py` (re-point the sample ledger name), the ledger closed-world and retention/prune tests; `state/day-validations/` (deleted); `docs/architecture/contracts/schemas.md`, `docs/concepts/partitions.md`, `docs/concepts/growing-reads.md`, `docs/concepts/telemetry.md`, `docs/concepts/adaptive-pruning.md`, `docs/reference/agent-notes/gates-and-builds.md`; comment refs in `contracts/visual_data.py`, `render/write.py`.
 - **Acceptance gates:** local - the selector over `backend/tests/contracts`, the ledger, retention and prune tests, plus the schema-drift gate and `doc_load.py`; CI - full suite. **Level 5: pause for owner sign-off (ESCALATE #1, #2) before the first deletion.**
 - **Oracle:** the live-hook integration test - a real row written through `write_segment` reads back byte-equal through `day_shards.settled_rows`, and a re-encoded day supersedes it (newest wins); plus a repository search finding zero `DayValidationReceipt`/`DAY_VALIDATION*`/`day-validations` references in `backend/`, `config/`, `docs/`. Cannot settle the CI full-sweep cost (priced in 4.9).
 - **Decisions:**
@@ -463,7 +463,7 @@ if args.stage == "check-publication":
   | # | Option | Why rejected | Cost to take | Authority |
   | --- | --- | --- | --- | --- |
   | 1 | Persist `balances` as a column | A derived value is a drift surface | A stored bool to keep in step with three fields | Fowler |
-  | 2 | Keep the receipt as a skip cache | Owner ruled it wasteful; committed growth for a ~0s CI saving | The write-only store this plan removes | owner 2026-09-26 |
+  | 2 | Keep the receipt as a skip cache | Owner ruled it wasteful; committed growth for a ~0s CI saving | The write-only ledger this plan removes | owner 2026-09-26 |
   | 3 | Let plan 53 remove day-validations | It cannot leave the registry while its writer exists | A circular cross-plan dependency | Fowler; owner |
 
 ### PR-3 - The reconciliation reader (A1 only; removed under A2)
@@ -482,8 +482,8 @@ if args.stage == "check-publication":
 
   | # | Option | Why rejected | Cost to take | Authority |
   | --- | --- | --- | --- | --- |
-  | 1 | Ship the ledger with no reader | The write-only day-validations mistake renamed | Zero code now, a store nothing reads | Fowler; owner |
-  | 2 | Read `day_metrics` instead of a new store | Under A1 the store exists; under A2 this is the point (section 0a) | Reopens section 0a | Carmack |
+  | 1 | Ship the ledger with no reader | The write-only day-validations mistake renamed | Zero code now, a ledger nothing reads | Fowler; owner |
+  | 2 | Read `day_metrics` instead of a new ledger | Under A1 the ledger exists; under A2 this is the point (section 0a) | Reopens section 0a | Carmack |
 
 ### PR-4 - Closure and distillation
 

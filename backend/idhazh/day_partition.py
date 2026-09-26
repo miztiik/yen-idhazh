@@ -11,7 +11,7 @@ Two collections read a day tree today - `state/published/` and
 here before it is imported from seven places. That is the shape
 `month_partition` was created on 2026-09-08 to end: three directories each
 carrying their own answer to "is this name a month", and one file left alone in
-one store and deleted in another.
+one ledger and deleted in another.
 
 **Nothing inside a day tree is skipped.** A name this cannot place stops the
 read. A glob answers "what matched" and says nothing about what did not, so a
@@ -19,7 +19,7 @@ file the reader cannot place would sit in a state directory unread and
 unmentioned - which is how a reader starts missing rows with nobody noticing.
 
 That is stricter than `month_partition`, and deliberately. A month directory is
-the top of its own store and is allowed to hold something that is not the
+the top of its own ledger and is allowed to hold something that is not the
 collection at all. Below a year directory here, every name is written by one
 `append_*` and by nothing else, so a name this walk cannot read means something
 else is writing there.
@@ -139,10 +139,10 @@ def drop_empty_day_dirs(day: Path) -> None:
     It climbs while the directory's own name is a date segment, which is what
     makes one helper answer for both shapes. A `<DD>.csv` day file leaves a month
     and a year; a writer's file inside a `<DD>/` day directory leaves a day, a
-    month and a year, one level deeper. A store root is never a date segment, so
+    month and a year, one level deeper. A ledger root is never a date segment, so
     the climb stops there without being told where there is.
 
-    Here rather than beside any one caller, because every store that deletes a
+    Here rather than beside any one caller, because every ledger that deletes a
     day file owes the same thing to the same walk. It was spelled twice until
     2026-09-16 - once in `retention` and once in `evals.writer`, whose copy said
     in its own docstring that it existed because `retention` imports that module
@@ -165,13 +165,13 @@ def drop_empty_day_dirs(day: Path) -> None:
 def days_by_month(root: Path) -> dict[str, list[Path]]:
     """Every day file under `root`, grouped by its month, oldest month first.
 
-    What a monthly consumer of a day-filed store needs: a published mirror and a
+    What a monthly consumer of a day-filed ledger needs: a published mirror and a
     fold both keep a month boundary while the ledger below them files by day
     (`docs/concepts/partitions.md`). The grouping is the whole of the bridge, so
     it is written once here rather than once per consumer.
 
-    `day_files` refuses a name it cannot place, so a store this returns a month
-    for is a store that walked clean.
+    `day_files` refuses a name it cannot place, so a ledger this returns a month
+    for is a ledger that walked clean.
     """
     months: dict[str, list[Path]] = {}
     for day in day_files(root):

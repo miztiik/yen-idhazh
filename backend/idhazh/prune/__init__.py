@@ -8,6 +8,6 @@ collection is made of.
 runs GitHub holds on our behalf.
 
 A second driver lives in `idhazh.telemetry.prune`, because that one's question
-is an operator's ("which store, and which days?") rather than a transport's, and
+is an operator's ("which ledger, and which days?") rather than a transport's, and
 it belongs beside the command an operator types.
 """

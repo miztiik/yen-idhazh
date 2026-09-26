@@ -1,4 +1,4 @@
-"""Does this checkout carry the state stores a run stages before it has written one?
+"""Does this checkout carry the state ledgers a run stages before it has written one?
 
 Three ledgers ship with the contract rather than appearing on the first run that
 has something to put in them. `backend/utilities/commit_and_push.py` stages
@@ -20,9 +20,9 @@ path helpers return is a code question and stays under test.
 
 Usage, from the root of a checkout:
 
-    python backend/utilities/check_seeded_stores.py
+    python backend/utilities/check_seeded_ledgers.py
 
-Exit code 1 when a store is missing or carries a header this checkout would not
+Exit code 1 when a ledger is missing or carries a header this checkout would not
 write, so a shell can gate on it.
 """
 
@@ -42,7 +42,7 @@ REPO_ROOT: Final = Path(__file__).resolve().parents[2]
 
 
 @dataclass(frozen=True, slots=True)
-class Store:
+class Ledger:
     """One seeded path, and the header a run of this checkout would append under."""
 
     name: str
@@ -52,9 +52,9 @@ class Store:
 
 @dataclass(frozen=True, slots=True)
 class Finding:
-    """What one store looked like, in words a person can act on."""
+    """What one ledger looked like, in words a person can act on."""
 
-    store: Store
+    ledger: Ledger
     fault: str | None
 
     @property
@@ -62,15 +62,15 @@ class Finding:
         return self.fault is None
 
 
-def seeded_stores() -> tuple[Store, ...]:
-    """The stores whose header ships with the contract, read off the contract."""
+def seeded_ledgers() -> tuple[Ledger, ...]:
+    """The ledgers whose header ships with the contract, read off the contract."""
     return (
-        Store(
+        Ledger(
             name="feed retirements",
             relpath=ledger.feed_retirements_relpath(),
             columns=FeedRetirementRow.csv_columns(),
         ),
-        Store(
+        Ledger(
             name="similarity holdout pairs",
             relpath=ledger.similarity_holdout_relpath(),
             columns=SimilarityHoldoutPair.csv_columns(),
@@ -79,37 +79,37 @@ def seeded_stores() -> tuple[Store, ...]:
 
 
 def audit(repo_root: Path) -> list[Finding]:
-    """Each seeded store against the checkout, in declaration order."""
+    """Each seeded ledger against the checkout, in declaration order."""
     findings: list[Finding] = []
-    for store in seeded_stores():
-        path = repo_root / store.relpath
+    for seeded in seeded_ledgers():
+        path = repo_root / seeded.relpath
         if not path.is_file():
-            findings.append(Finding(store, "missing - git add would abort the commit step"))
+            findings.append(Finding(seeded, "missing - git add would abort the commit step"))
             continue
         header = ledger.read_header(path)
-        if header != store.columns:
+        if header != seeded.columns:
             findings.append(
                 Finding(
-                    store,
+                    seeded,
                     f"header names {len(header)} columns where this checkout writes "
-                    f"{len(store.columns)}",
+                    f"{len(seeded.columns)}",
                 )
             )
             continue
-        findings.append(Finding(store, None))
+        findings.append(Finding(seeded, None))
     return findings
 
 
 def report(findings: list[Finding]) -> str:
-    """One line per store, longest name padded so the verdicts line up."""
-    width = max((len(finding.store.relpath) for finding in findings), default=0)
+    """One line per ledger, longest name padded so the verdicts line up."""
+    width = max((len(finding.ledger.relpath) for finding in findings), default=0)
     lines = [
-        f"{finding.store.relpath:<{width}}  {'ok' if finding.ok else finding.fault}"
+        f"{finding.ledger.relpath:<{width}}  {'ok' if finding.ok else finding.fault}"
         for finding in findings
     ]
     broken = [finding for finding in findings if not finding.ok]
     lines.append(
-        f"{len(findings) - len(broken)} of {len(findings)} seeded stores are in this checkout"
+        f"{len(findings) - len(broken)} of {len(findings)} seeded ledgers are in this checkout"
     )
     return "\n".join(lines)
 

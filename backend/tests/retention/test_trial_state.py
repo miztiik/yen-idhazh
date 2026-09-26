@@ -26,8 +26,8 @@ def a_tree(root: Path, *, days: dict[str, list[str]]) -> Path:
     return root
 
 
-def a_store_day(root: Path, *, written: str) -> Path:
-    """One declared store's day file, beside the trial roots and not one of them."""
+def a_ledger_day(root: Path, *, written: str) -> Path:
+    """One declared ledger's day file, beside the trial roots and not one of them."""
     day = root / ledger.ITEM_HEALTH_DIRNAME / written[:4] / written[5:7] / f"{written[8:10]}.csv"
     day.parent.mkdir(parents=True, exist_ok=True)
     day.write_text("version,date\n2026-09-15," + written + "\n", encoding="utf-8")
@@ -189,7 +189,7 @@ def test_the_production_config_prunes_a_trial_root_it_was_never_told_about(
     Nothing here names the trial. The roots come off the tree.
     """
     state = a_tree(tmp_path / "state", days={"seen": ["2026-01-01"]})
-    store_day = a_store_day(state, written="2026-01-01")
+    ledger_day = a_ledger_day(state, written="2026-01-01")
     before = len(list(state.iterdir()))
 
     removed = _prune_trial_shards(state, RetentionConfig(), date(2026, 9, 15), dry_run=False)
@@ -197,17 +197,17 @@ def test_the_production_config_prunes_a_trial_root_it_was_never_told_about(
     assert removed == ["state/trial-runs/seen/2026/01/01.csv"]
     assert not (state / TRIAL).exists()
     assert len(list(state.iterdir())) == before - 1
-    assert store_day.is_file(), "a declared store is not a trial root, however old its rows"
+    assert ledger_day.is_file(), "a declared ledger is not a trial root, however old its rows"
 
 
 def test_every_declared_store_is_subtracted_from_the_trial_roots(tmp_path: Path) -> None:
-    """What holds `STORE_DIRNAMES` honest.
+    """What holds `LEDGER_DIRNAMES` honest.
 
-    A store missing from the set reads as a trial root, and its files would then
+    A ledger missing from the set reads as a trial root, and its files would then
     be aged out against a window that is not its own.
     """
     state = tmp_path / "state"
-    for name in sorted(ledger.STORE_DIRNAMES):
+    for name in sorted(ledger.LEDGER_DIRNAMES):
         (state / name).mkdir(parents=True)
     (state / TRIAL).mkdir()
 

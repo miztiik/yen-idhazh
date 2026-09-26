@@ -55,7 +55,7 @@ neither half loads alone.
 planner's `NumericFact` carried a whitespace-cleaned window of the words
 around a number. This shape replaces that derived string with a pointer:
 `sentence_index` plus the span says where the words are, and `Article.text`
-still holds them, so nothing stores a second copy of the reader's sentence.
+still holds them, so nothing keeps a second copy of the reader's sentence.
 That derived string retired with its producer.
 
 Six kinds land here and two of them have a producer. A kind with no producer is

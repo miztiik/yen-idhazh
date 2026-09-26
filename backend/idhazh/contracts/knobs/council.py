@@ -84,7 +84,7 @@ class CouncilConfig(Model):
             "The first night this council existed, and the floor under every window it "
             "asks about. Before it a date carries no verdict because nothing was judging, "
             "which is not the same thing as a night that died - and the plan has no way to "
-            "tell the two apart without this. The council's store holds one day file "
+            "tell the two apart without this. The council's ledger holds one day file "
             "against 30 published days, so an unfloored window names every one of those "
             "days on its first run and buys a backfill nobody asked for. A tenant that "
             "moved in later raises the floor for itself, by naming no night from before it "

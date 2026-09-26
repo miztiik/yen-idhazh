@@ -2,7 +2,7 @@
 
 Two questions and they are separate. The row has to survive the trip to a CSV
 day file and back with every cell intact, and the day file has to sit where the
-instrument's own reader looks - a store one directory too deep is invisible to
+instrument's own reader looks - a ledger one directory too deep is invisible to
 that reader and the miss is silent.
 
 What it cannot settle is whether the figures are true. Nothing writes this row
@@ -133,10 +133,10 @@ def test_the_day_file_a_date_resolves_to_is_two_levels_under_state() -> None:
 
 
 def test_the_instrument_reader_finds_the_day_this_store_wrote(tmp_path: Path) -> None:
-    """The oracle: a store this row creates is visible rather than silently absent.
+    """The oracle: a ledger this row creates is visible rather than silently absent.
 
-    The inventory globs one directory level and two, so a nested store is found
-    and a store nested deeper would not be. Asked through the public report,
+    The inventory globs one directory level and two, so a nested ledger is found
+    and a ledger nested deeper would not be. Asked through the public report,
     because that is what an operator reads.
     """
     state_root = tmp_path / ledger.STATE_DIRNAME

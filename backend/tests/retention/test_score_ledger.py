@@ -245,10 +245,10 @@ def test_a_second_score_run_over_a_settled_tree_moves_no_byte(tmp_path: Path) ->
 def test_a_score_file_the_reader_cannot_place_stops_the_prune(tmp_path: Path) -> None:
     """A stray is refused now, where the month reader used to walk past it.
 
-    `day_partition.day_files` refuses a name it cannot place, so a store holding
+    `day_partition.day_files` refuses a name it cannot place, so a ledger holding
     one is unreadable rather than partly readable - and the prune it stops is the
     one that deletes. It is the stronger of the two behaviours and it is why this
-    store went to the day tree's rule rather than keeping its own: a file the
+    ledger went to the day tree's rule rather than keeping its own: a file the
     reader skips is a month it might summarise without.
     """
     state = tmp_path / "state"
@@ -274,7 +274,7 @@ def test_a_score_file_the_reader_cannot_place_stops_the_prune(tmp_path: Path) ->
 def test_a_month_shaped_name_beside_the_day_tree_is_refused_rather_than_archived(
     tmp_path: Path,
 ) -> None:
-    """The defect this row exists for, on the one store where it deleted a file.
+    """The defect this row exists for, on the one ledger where it deleted a file.
 
     `prune_scores` summarises a month past the window and then unlinks its day
     files. Its reader used to accept any seven characters of the right shape, so
@@ -288,7 +288,7 @@ def test_a_month_shaped_name_beside_the_day_tree_is_refused_rather_than_archived
     `day_partition.day_files` cannot place, so the whole read is refused and this
     prune archives nothing at all - where the strict rule merely walked past the
     file. The name survives either way; what is stronger here is that a half-read
-    store can no longer produce a summary.
+    ledger can no longer produce a summary.
     """
     state = tmp_path / "state"
     score_history(state, months_back(TODAY, HISTORY_MONTHS))
@@ -304,7 +304,7 @@ def test_a_month_shaped_name_beside_the_day_tree_is_refused_rather_than_archived
 
     assert {path: path.read_text(encoding="utf-8") for path in strays} == strays
     assert not (state / score_archive.ARCHIVE_DIRNAME).exists(), (
-        "a store the reader cannot walk produced a summary anyway"
+        "a ledger the reader cannot walk produced a summary anyway"
     )
 
 

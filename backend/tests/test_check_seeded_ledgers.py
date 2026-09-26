@@ -1,8 +1,8 @@
-"""Does the seeded-store audit see a store that is missing, narrow, or fine?
+"""Does the seeded-ledger audit see a ledger that is missing, narrow, or fine?
 
 The audit itself is an operator surface because the question it asks is about a
 working copy rather than about code (`CLAUDE.md` section 13). These are the code
-questions that remain: that it declares the stores a commit step stages, that it
+questions that remain: that it declares the ledgers a commit step stages, that it
 reads the header off the contract rather than off a copy, and that each of the
 three verdicts is reachable. Every one of them is driven from a tree built here,
 so nothing on this page can be changed by a run appending to the real one.
@@ -18,7 +18,7 @@ import pytest
 from idhazh import ledger
 from idhazh.contracts.feed_retirement import FeedRetirementRow
 from idhazh.contracts.similarity_holdout_pair import SimilarityHoldoutPair
-from utilities.check_seeded_stores import audit, main, report, seeded_stores
+from utilities.check_seeded_ledgers import audit, main, report, seeded_ledgers
 
 pytestmark = pytest.mark.contract
 
@@ -30,20 +30,20 @@ def write_header(path: Path, columns: tuple[str, ...]) -> None:
 
 
 def a_seeded_checkout(root: Path) -> Path:
-    """Every store present under the header this checkout would append with."""
-    for store in seeded_stores():
-        write_header(root / store.relpath, store.columns)
+    """Every ledger present under the header this checkout would append with."""
+    for seeded in seeded_ledgers():
+        write_header(root / seeded.relpath, seeded.columns)
     return root
 
 
 def test_the_audit_names_every_store_whose_header_ships_with_the_contract() -> None:
     """The declaration, held against the contract rather than against a copy.
 
-    A store added to `state/` with a seeded header and not added here would be
+    A ledger added to `state/` with a seeded header and not added here would be
     audited by nothing, and the first time `git add` met it the commit step
     would abort with every sibling ledger staged in the same call.
     """
-    declared = {store.relpath: store.columns for store in seeded_stores()}
+    declared = {seeded.relpath: seeded.columns for seeded in seeded_ledgers()}
 
     assert declared == {
         ledger.feed_retirements_relpath(): FeedRetirementRow.csv_columns(),
@@ -54,11 +54,11 @@ def test_the_audit_names_every_store_whose_header_ships_with_the_contract() -> N
 def test_a_checkout_carrying_every_store_passes(tmp_path: Path) -> None:
     findings = audit(a_seeded_checkout(tmp_path))
 
-    assert [finding.store.relpath for finding in findings] == [
-        store.relpath for store in seeded_stores()
+    assert [finding.ledger.relpath for finding in findings] == [
+        seeded.relpath for seeded in seeded_ledgers()
     ]
     assert all(finding.ok for finding in findings)
-    assert "2 of 2 seeded stores" in report(findings)
+    assert "2 of 2 seeded ledgers" in report(findings)
 
 
 def test_a_missing_store_is_named_rather_than_counted(tmp_path: Path) -> None:
@@ -73,7 +73,7 @@ def test_a_missing_store_is_named_rather_than_counted(tmp_path: Path) -> None:
     findings = audit(tmp_path)
 
     broken = [finding for finding in findings if not finding.ok]
-    assert [finding.store.relpath for finding in broken] == [ledger.feed_retirements_relpath()]
+    assert [finding.ledger.relpath for finding in broken] == [ledger.feed_retirements_relpath()]
     assert broken[0].fault is not None
     assert "git add" in broken[0].fault
 
@@ -92,7 +92,7 @@ def test_a_store_under_an_older_header_is_a_fault_and_not_a_pass(tmp_path: Path)
     findings = audit(tmp_path)
 
     broken = [finding for finding in findings if not finding.ok]
-    assert [finding.store.relpath for finding in broken] == [ledger.similarity_holdout_relpath()]
+    assert [finding.ledger.relpath for finding in broken] == [ledger.similarity_holdout_relpath()]
     assert broken[0].fault is not None
     assert str(len(narrow)) in broken[0].fault
 

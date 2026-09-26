@@ -1,8 +1,8 @@
-"""Which store does an operator delete from, and over which days?
+"""Which ledger does an operator delete from, and over which days?
 
 The other half of `docs/architecture/publishing/retention.md`. The scheduled
 prune deletes what a window has aged out; this deletes what a person names -
-one store, one range of days, because that day was published in error, or a
+one ledger, one range of days, because that day was published in error, or a
 source asked to be removed, or a run wrote rows nobody wants kept.
 
     idhazh telemetry prune --target item-health --since 2026-08-24 --until 2026-08-26
@@ -16,7 +16,7 @@ recovery path for a file older than `finetune.prune_keep_days`. The precedent is
 the fold step in `.github/workflows/digest.yml`, which ships `idhazh
 prune-state --dry-run` for exactly that reason and has never removed a file.
 
-**`--target` names a store, never a path.** The vocabulary below is closed, and
+**`--target` names a ledger, never a path.** The vocabulary below is closed, and
 a word outside it is refused with the whole list rather than resolved against
 the file system. A path argument would be a deletion primitive pointed at the
 repository, and fetched text may never become a file path (Guardrail #11) - so
@@ -34,7 +34,7 @@ leaves three files gone and the rest exactly as they were. Nothing is half-done,
 because one `unlink` is the unit and a file is either there or it is not.
 
 Until 2026-09-17 this collected the whole range, renamed every file into a
-scratch directory beside the stores, and removed that directory once every
+scratch directory beside the ledgers, and removed that directory once every
 rename had worked - all of them or none of them, with a rollback if a rename
 failed. The scratch directory is gone with it. What that shape bought was "the
 tree is exactly as you found it" after a failure; what it cost was a second
@@ -44,7 +44,7 @@ pass reads which files went from the record, which is a cheaper answer than a
 rollback nobody could test in production.
 
 **Bounded by the range it is handed, and by a ceiling inside it** (Guardrail
-#12). The walk is one store's day tree, and a pass deletes at most the days the
+#12). The walk is one ledger's day tree, and a pass deletes at most the days the
 range names, or the `--max-deletes` an operator asked for. When a ceiling stops
 a pass, the report says which day the next pass resumes at.
 """
@@ -69,19 +69,19 @@ from idhazh.prune import one_at_a_time
 #: which day files had already gone.
 PruneInterruptedError = one_at_a_time.PruneInterruptedError
 
-#: Every store this command may delete from, and where each one lives under
+#: Every ledger this command may delete from, and where each one lives under
 #: `state/`, alphabetically.
 #:
 #: The word an operator types is built from the directory names the module that
-#: owns the store declares, never spelled again here - so a store that is renamed
+#: owns the ledger declares, never spelled again here - so a ledger that is renamed
 #: renames its target with it, and neither can drift from the other (Guardrail
-#: #6). A flat store's word IS its directory. A NESTED store's word joins its two
+#: #6). A flat ledger's word IS its directory. A NESTED ledger's word joins its two
 #: segments with a hyphen, because a slash in a word turns a closed vocabulary
 #: into something that looks like a path - and a deletion primitive that resolved
 #: its argument against the file system is the one accident nobody can undo.
 #:
-#: The rule that decides membership is one line: a store files
-#: `<YYYY>/<MM>/<DD>.csv` day files, and is not one of the two stores below.
+#: The rule that decides membership is one line: a ledger files
+#: `<YYYY>/<MM>/<DD>.csv` day files, and is not one of the two ledgers below.
 #: `state/day-metrics/` and `state/traces/` are day-shaped and are deliberately
 #: absent - they file `.json` and `.jsonl`, which
 #: `day_shards.shard_files` refuses, and a second walker here would be a second
@@ -112,9 +112,9 @@ PruneInterruptedError = one_at_a_time.PruneInterruptedError
 #:
 #: **`llm-council-shard-outcomes` is here before anything writes it.** The shape
 #: and the path land ahead of the step that appends to them (Guardrail #3), and a
-#: store an operator cannot name is a store a day cannot be taken out of. A range
-#: over a store with no file selects nothing and says so. The four
-#: `content-similarity-judge` stores are here for the same reason, and they are
+#: ledger an operator cannot name is a ledger a day cannot be taken out of. A range
+#: over a ledger with no file selects nothing and says so. The four
+#: `content-similarity-judge` ledgers are here for the same reason, and they are
 #: the judge's rather than the council's: what a reading is about decides where
 #: it is filed, never what executed it.
 TARGETS: Final[Mapping[str, str]] = MappingProxyType(
@@ -161,17 +161,17 @@ TARGETS: Final[Mapping[str, str]] = MappingProxyType(
 )
 
 
-#: The two stores this refuses by name, each with the reason it is refused.
+#: The two ledgers this refuses by name, each with the reason it is refused.
 #:
-#: Named rather than left out of the list above, because a store missing from a
-#: vocabulary reads as an oversight and a store refused with a sentence reads as
+#: Named rather than left out of the list above, because a ledger missing from a
+#: vocabulary reads as an oversight and a ledger refused with a sentence reads as
 #: a decision. Somebody who types one of these is holding a real question, and
 #: the answer they need is why the answer is no.
 REFUSED: Final[Mapping[str, str]] = {
     ledger.PUBLISHED_DIRNAME: (
         "it is the guard against publishing one story twice and it has no window "
         "at all - collect.published_window_days is -1, so every row in it is a row "
-        "that must never be deleted. A store that forgets cannot be that guard"
+        "that must never be deleted. A ledger that forgets cannot be that guard"
     ),
     ledger.SEEN_DIRNAME: (
         "it is what the planner remembers having already seen, so removing a day "
@@ -185,7 +185,7 @@ REFUSED: Final[Mapping[str, str]] = {
 class Outcome:
     """What one prune selected, what it weighed, and whether it happened.
 
-    `removed` is the POSIX `state/<store>/<YYYY>/<MM>/<DD>.csv` form, oldest
+    `removed` is the POSIX `state/<ledger>/<YYYY>/<MM>/<DD>.csv` form, oldest
     first, and it is the same list on both sides of `dry_run` - named before
     anything is moved, so the list a dry run prints is the list a live run
     removes, file for file. That list is the deliverable of a dry run, which is
@@ -226,9 +226,9 @@ def add_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--target",
         required=True,
-        metavar="STORE",
+        metavar="LEDGER",
         help=(
-            "Which store to delete from. One of "
+            "Which ledger to delete from. One of "
             + ", ".join(TARGETS)
             + ". Never a path: "
             + " and ".join(REFUSED)
@@ -269,20 +269,20 @@ def add_arguments(parser: argparse.ArgumentParser) -> None:
 
 
 def resolve(target: str) -> str:
-    """The store this target names, as a path under `state/`, or a refusal that says why.
+    """The ledger this target names, as a path under `state/`, or a refusal that says why.
 
     One place the vocabulary is checked, so the parser, the body and any later
-    caller cannot disagree about which words are stores. The distinction between
+    caller cannot disagree about which words are ledgers. The distinction between
     an unknown word and a refused one is drawn by `one_at_a_time.refuse_by_name`,
     which the GitHub collections use as well - two vocabularies, one rule about
     what a refusal owes the person reading it.
 
-    What comes back is the path rather than the word, because a nested store's
+    What comes back is the path rather than the word, because a nested ledger's
     two are not the same string. Every caller wants the path.
     """
     return TARGETS[
         one_at_a_time.refuse_by_name(
-            target, allowed=tuple(TARGETS), refused=REFUSED, noun="store"
+            target, allowed=tuple(TARGETS), refused=REFUSED, noun="ledger"
         )
     ]
 
@@ -317,7 +317,7 @@ def _delete(day: Path) -> None:
 
 
 def _relpath(state_root: Path, day: Path) -> str:
-    """`state/<store>/<YYYY>/<MM>/<DD>.csv`, read off the path the walk found.
+    """`state/<ledger>/<YYYY>/<MM>/<DD>.csv`, read off the path the walk found.
 
     Derived rather than spelled, so this does not become a second description of
     where a day file lives. The prefix is the committed tree's own name whatever
@@ -328,30 +328,30 @@ def _relpath(state_root: Path, day: Path) -> str:
     return f"{ledger.STATE_DIRNAME}/{day.relative_to(state_root).as_posix()}"
 
 
-#: The stores here whose day is a directory of writer-owned files. Read off
+#: The ledgers here whose day is a directory of writer-owned files. Read off
 #: `ledger.SegmentLedger` rather than listed again, so a tree that moves its
 #: writer joins this set in the row that moves it and nothing here is a second
 #: list to keep in step.
-WRITER_OWNED_STORES: Final = frozenset(tree.value for tree in ledger.SegmentLedger)
+WRITER_OWNED_LEDGERS: Final = frozenset(tree.value for tree in ledger.SegmentLedger)
 
 
-def day_collection(state_root: Path, store: str) -> one_at_a_time.Collection[Path]:
-    """One store's day tree, as the three callables the core deletes through.
+def day_collection(state_root: Path, ledger: str) -> one_at_a_time.Collection[Path]:
+    """One ledger's day tree, as the three callables the core deletes through.
 
-    **The walk follows the store's own shape, and the store says which.**
+    **The walk follows the ledger's own shape, and the ledger says which.**
     `ledger.SegmentLedger` is the closed set of trees a writer files its own file
     in, so a day there is a `<DD>/` directory read by `day_shards.shard_files`.
-    Every other store here still files one `<DD>.csv` a day and is read by
-    `day_partition.day_files`. Both are generators, so a store of any size is
+    Every other ledger here still files one `<DD>.csv` a day and is read by
+    `day_partition.day_files`. Both are generators, so a ledger of any size is
     walked one path at a time and never held, and both refuse a name they cannot
-    place - which means a store holding something the walk cannot read stops the
+    place - which means a ledger holding something the walk cannot read stops the
     pass at that file rather than deleting round it.
 
     Unbounded because the range an operator typed is the cover: the walk finds
     what the range names, and a window over it would hide the older half of the
     range the operator asked for (Guardrail #12).
     """
-    writer_owned = store in WRITER_OWNED_STORES
+    writer_owned = ledger in WRITER_OWNED_LEDGERS
 
     def describe(day: Path) -> one_at_a_time.Member:
         return one_at_a_time.Member(
@@ -362,13 +362,13 @@ def day_collection(state_root: Path, store: str) -> one_at_a_time.Collection[Pat
         )
 
     def listing() -> Iterator[Path]:
-        root = state_root / store
+        root = state_root / ledger
         if writer_owned:
             return day_shards.shard_files(root, days=UNBOUNDED_WINDOW)
         return day_partition.day_files(root)
 
     return one_at_a_time.Collection(
-        name=store,
+        name=ledger,
         listing=listing,
         describe=describe,
         delete=_delete,
@@ -384,7 +384,7 @@ def prune_range(
     dry_run: bool = True,
     max_deletes: int | None = None,
 ) -> Outcome:
-    """Remove one store's day files between two days, both ends named, one at a time.
+    """Remove one ledger's day files between two days, both ends named, one at a time.
 
     `max_deletes` defaults to every day the range names, so an operator who
     typed a range gets that range and a caller who wants a smaller bite asks for
@@ -392,7 +392,7 @@ def prune_range(
     range of `n` days cannot delete more than `n` files, so the ceiling is the
     operator's own arithmetic.
     """
-    store = resolve(target)
+    ledger = resolve(target)
     first = _day(since, "--since")
     last = _day(until, "--until")
     if first > last:
@@ -403,24 +403,24 @@ def prune_range(
 
     days_named = (date_type.fromisoformat(last) - date_type.fromisoformat(first)).days + 1
     outcome = one_at_a_time.take(
-        day_collection(state_root, store),
+        day_collection(state_root, ledger),
         window=one_at_a_time.Window(since=first, until=last),
         ceiling=days_named if max_deletes is None else max_deletes,
         dry_run=dry_run,
     )
-    return as_outcome(store, first, last, outcome)
+    return as_outcome(ledger, first, last, outcome)
 
 
-def as_outcome(store: str, first: str, last: str, taken: one_at_a_time.Pass) -> Outcome:
+def as_outcome(ledger: str, first: str, last: str, taken: one_at_a_time.Pass) -> Outcome:
     """The core's record in the words this command has always used.
 
     `kept` is the day files the walk saw and the range did not hold. A pass that
     stopped on its ceiling stopped walking too, so the number is what this pass
-    read rather than what the store holds - which is the honest reading, and the
+    read rather than what the ledger holds - which is the honest reading, and the
     reason the resume point is printed beside it.
     """
     return Outcome(
-        target=store,
+        target=ledger,
         since=first,
         until=last,
         removed=taken.taken,

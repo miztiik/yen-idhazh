@@ -50,7 +50,7 @@ class ShardReport:
     """What one shard did, what its instrument read, and what its calls cost.
 
     One payload with three readers - the log line below, this judge's own metrics
-    store, and the venue's record of the unit that ran. They are gathered here
+    ledger, and the venue's record of the unit that ran. They are gathered here
     because here is where the readings are: a pair's tokens and its call count
     are never written to the verdict file, so a later reader of that file could
     not recover them.
@@ -263,7 +263,7 @@ def _instrument_reading(
     unreadable: int,
     stamp: stamps.JudgeStamp,
 ) -> ContentSimilarityJudgeMetrics:
-    """How this shard's own instrument behaved, as the row its store holds.
+    """How this shard's own instrument behaved, as the row its ledger holds.
 
     **`pairs_abandoned` is the remainder and never a counter.** A shard that
     stopped on its deadline never reached those pairs, so no line on the way past

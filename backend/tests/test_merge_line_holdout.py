@@ -316,7 +316,7 @@ def test_the_four_cells_and_the_unresolved_count_add_up_to_the_marked_file(
 
 
 def test_the_row_is_written_where_the_ledger_says_and_reads_back(tmp_path: Path) -> None:
-    """The store the path helper already declared, filled by the verb that names it."""
+    """The ledger the path helper already declared, filled by the verb that names it."""
     state, digest = a_marked_tree(tmp_path)
 
     row = stage_score_merge_line_holdout(

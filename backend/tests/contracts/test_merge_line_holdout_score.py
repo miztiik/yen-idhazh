@@ -103,7 +103,7 @@ def test_the_row_stores_counts_and_leaves_every_rate_to_be_derived() -> None:
     named = sorted(
         column for column in columns if any(word in column.lower() for word in RATE_WORDS)
     )
-    assert not named, f"{named} would store a rate away from the counts it came from"
+    assert not named, f"{named} would keep a rate away from the counts it came from"
     assert "labelled_two_story_pairs" in columns, (
         "the population the false-merge cell is drawn from left the row, so every rate a "
         "reader derives is derived without its denominator in view"
@@ -156,7 +156,7 @@ def test_the_day_file_a_date_resolves_to_is_two_levels_under_state() -> None:
 
 
 def test_the_instrument_reader_finds_the_day_this_store_wrote(tmp_path: Path) -> None:
-    """A store this row creates is visible rather than silently absent."""
+    """A ledger this row creates is visible rather than silently absent."""
     state_root = tmp_path / ledger.STATE_DIRNAME
     for day in (A_DAY, ANOTHER_DAY):
         path = ledger.merge_line_holdout_scores_path(state_root, day)

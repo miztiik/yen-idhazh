@@ -50,7 +50,7 @@ _WEIGHTS_TOLERANCE: Final = 1e-9
 #: **One declaration, and one instrument that retakes it** (Guardrail #10).
 #: `idhazh score-merge-line-holdout` scores every marked pair on its way to the
 #: four cells, so it already holds this reading and prints it beside this line
-#: whenever the two disagree. It prints rather than stores: a second copy on a
+#: whenever the two disagree. It prints rather than keeps: a second copy on a
 #: committed row is the second source this constant is not allowed to have.
 HOLDOUT_TWO_STORY_MAX: Final = 0.9407
 

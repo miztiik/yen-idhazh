@@ -1098,7 +1098,7 @@ def test_the_published_month_file_is_a_list_of_rows_each_carrying_its_stamp(
 
 # --- what the band says about the record's reach -----------------------------
 
-#: Rows the fixture builds rather than ones the committed store happens to hold,
+#: Rows the fixture builds rather than ones the committed ledger happens to hold,
 #: so the count cannot drift when a run appends.
 WAITING_ROWS: Final = 303
 STALE_DAYS: Final = 2
@@ -1140,7 +1140,7 @@ def _band_after_folding(state: Path, digest: Path) -> Any:
 
     Zero, zero and this run's own day. Nothing waits for a fold any more: each
     writer files its own path under the day its rows name, so a run that died
-    three days ago left those rows in that day rather than in a store somebody
+    three days ago left those rows in that day rather than in a ledger somebody
     has to drain. The fields stay on the payload because a reader holding an
     older day still finds them there.
     """
@@ -1168,7 +1168,7 @@ def test_the_band_carries_the_day_the_record_reaches_and_no_backlog(
 
     The backlog these three fields were added for cannot happen now. A writer
     files its own path under the day its rows name, so a run that died two days
-    ago left its rows in that day rather than in a store a later run has to
+    ago left its rows in that day rather than in a ledger a later run has to
     drain, and the fold that follows is a tidy-up rather than a catch-up.
 
     Zero is what the console has to render as silence. A band printing

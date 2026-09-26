@@ -516,7 +516,7 @@ def test_no_shard_commits() -> None:
 
 
 def test_the_night_makes_one_commit_call_over_the_paths_its_tenants_named() -> None:
-    """The venue spells no store path, because a spelled list is one tenant's list.
+    """The venue spells no ledger path, because a spelled list is one tenant's list.
 
     It stages what `committed_paths` came back with, so a second tenant's output
     is committed the day that tenant registers and not the day somebody
@@ -535,7 +535,7 @@ def test_the_night_makes_one_commit_call_over_the_paths_its_tenants_named() -> N
     assert isinstance(environment, dict)
     assert environment["COMMITTED_PATHS"] == "${{ needs.draw.outputs.committed_paths }}"
     assert not re.search(r"\bstate/\S+", calls[0]), (
-        "a store path spelled here is a path a second tenant's output never reaches"
+        "a ledger path spelled here is a path a second tenant's output never reaches"
     )
     assert _normalize_condition(step["if"], "the commit step") == (
         "needs.draw.outputs.committed_paths != ''"
@@ -545,7 +545,7 @@ def test_the_night_makes_one_commit_call_over_the_paths_its_tenants_named() -> N
 def test_every_path_a_registered_tenant_names_exists_in_a_fresh_checkout() -> None:
     """`git add` runs under `set -euo pipefail`, so a missing path aborts the step.
 
-    A path named without a committed file behind it costs every store staged
+    A path named without a committed file behind it costs every ledger staged
     beside it, on the runner, hours in. It fails here instead - and it is asked
     of the tenants, so a tenant registering a path nothing has created fails on
     the day it registers rather than on the night it runs.

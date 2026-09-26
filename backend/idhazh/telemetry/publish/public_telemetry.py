@@ -180,7 +180,7 @@ def publish(
     appended to, so an ordinary run reads one month's days whatever the ledger
     holds. `None` is unbounded on purpose - a fresh clone has to rebuild a mirror
     it never published, and a cover in months would leave it permanently short of
-    one. What bounds the ledger is the store rather than this read:
+    one. What bounds the ledger is retention rather than this read:
     `observability.item_health_full_grain_months` caps it at fourteen months.
     That cap has never had a candidate to take - the oldest partition on disk is
     2026-08 and `retention.prune_telemetry` first reaches it on 2027-10-01 - so

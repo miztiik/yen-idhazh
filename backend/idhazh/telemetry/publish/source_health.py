@@ -1,6 +1,6 @@
 """Write the browser-safe source-health view once per run.
 
-Four private stores answer four different questions about one address, and
+Four private ledgers answer four different questions about one address, and
 until this module existed the console could re-derive two of them in TypeScript
 and simply could not see the other two. This folds all four into
 `SourceHealthView` and writes it to `frontend/public/source-health.json`.

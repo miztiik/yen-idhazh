@@ -242,8 +242,8 @@ def test_the_prune_takes_the_expired_day_and_keeps_the_day_beside_it(tmp_path: P
     outside it, `dry_run=False` passed as the argument every prune function
     already takes. The assertion is two-sided on purpose: "nothing failed", or
     "`folded` is a tuple", passes on an EMPTY tree - and an empty tree is exactly
-    what `retention.month_shards` returns over a day store, because it matches a
-    seven-character `YYYY-MM` stem and a day tree has none. The store would
+    what `retention.month_shards` returns over a day ledger, because it matches a
+    seven-character `YYYY-MM` stem and a day tree has none. The ledger would
     silently stop being pruned and nothing would fail.
 
     The fold is the other half: the aggregate is written and read back before a

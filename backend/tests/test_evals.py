@@ -1634,7 +1634,7 @@ def test_rebuilding_one_day_opens_and_rewrites_only_that_day(
 def test_a_day_with_no_committed_rows_is_refused_by_name(tmp_path: Path) -> None:
     """A typo must not read as a clean pass over nothing.
 
-    The rule `validate-days` and `site-weight` already hold, on the store where
+    The rule `validate-days` and `site-weight` already hold, on the ledger where
     getting it wrong is quietest: a rebuild that skipped an unknown day would
     print the same line as one that rewrote every day asked for. The refusal
     comes before any file is touched, so the days named beside the typo keep

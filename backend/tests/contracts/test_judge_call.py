@@ -106,7 +106,7 @@ def test_the_stamp_columns_sit_between_the_base_and_the_row() -> None:
     """Base fields are collected first, which is why a committed row may not inherit.
 
     A row with committed rows behind it that inherited this would gain six
-    columns in the middle of its header, and a store whose header moved in the
+    columns in the middle of its header, and a ledger whose header moved in the
     middle cannot be appended to. Asserting the order makes that a checked fact
     rather than a claim in a docstring.
     """

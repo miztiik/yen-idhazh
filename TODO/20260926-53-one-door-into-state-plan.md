@@ -61,7 +61,7 @@ One row is one pull request. **Seven: six that change code, and one that distill
 
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | The retired word leaves | - | A | PENDING | - | - | - |
+| 1 | The retired word leaves | - | A | DONE | p53back + p53docs + p53front | - | three workers, one tree each |
 | 2 | `ledger.py` becomes the package, and its docstring becomes a page | 1 | B | PENDING | - | - | - |
 | 3 | One `LedgerName` for one ledger | 2 | C | PENDING | - | - | - |
 | 4 | `paths.py` becomes `path_classes.py` | 3 | P | PENDING | - | - | - |

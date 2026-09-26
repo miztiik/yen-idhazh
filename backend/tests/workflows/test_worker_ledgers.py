@@ -292,7 +292,7 @@ def test_every_job_that_records_a_machine_says_which_job_it_is() -> None:
     Closed-world, because a fourth job that draws a runner and records it would
     otherwise file a `--job` value nothing here ever reads. Where its row LANDS is
     somebody else's question: `test_ledger_staging.py` charges every job with the
-    stores the verbs in its own `run:` bodies write, so a new probing job is held
+    ledgers the verbs in its own `run:` bodies write, so a new probing job is held
     to staging `state/host-fingerprint` without an edit anywhere.
     """
     workflow = _load_workflows()["digest.yml"]

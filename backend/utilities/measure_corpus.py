@@ -5,7 +5,7 @@ an article length, and until this runs those lengths are a guess. The tool
 fetches real links, extracts them the way the pipeline will, counts words, and
 reports the distribution against the bucket edges the cost model assumes.
 
-It stores counts and links only - never article text. Robots are honoured, one
+It records counts and links only - never article text. Robots are honoured, one
 request at a time with a delay, because a measurement is not a licence to
 hammer somebody's server.
 """

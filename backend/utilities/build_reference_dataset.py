@@ -800,7 +800,7 @@ def build_manifest(
     sources_path: Path,
     root: Path = REPO_ROOT,
 ) -> int:
-    """Read the snapshotted URL list, write the manifest, and store what it holds.
+    """Read the snapshotted URL list, write the manifest, and record what it holds.
 
     Paths in the config are relative to `root`, which is the repository unless a
     test hands it somewhere else. Nothing is resolved against the current shell

@@ -149,7 +149,7 @@ def shard_files(root: Path, *, days: int) -> Iterator[Path]:
 
     `days` has no default, so every caller states its own cover where a reader
     can see it (Guardrail #12, `docs/concepts/growing-reads.md`). Pass
-    `UNBOUNDED_WINDOW` for a pass that has to read the whole store, and say
+    `UNBOUNDED_WINDOW` for a pass that has to read the whole ledger, and say
     beside the call why.
 
     The newest `days` RECORDED days, not the newest `days` calendar days. A day
@@ -185,7 +185,7 @@ def shards_by_month(root: Path, *, days: int) -> dict[str, list[Path]]:
 
     The peer of `day_partition.days_by_month` for a day tree of writer-owned
     files, and it exists for that helper's reason: a knob counted in months over
-    a store filed by day is a bridge four prunes and one repair all need, and a
+    a ledger filed by day is a bridge four prunes and one repair all need, and a
     bridge written once cannot be written two ways.
 
     A month here holds every writer's file for every day in it, so a caller that

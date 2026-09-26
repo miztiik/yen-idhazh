@@ -1,9 +1,9 @@
-"""How does a row a judge wrote reach the store that judge names?
+"""How does a row a judge wrote reach the ledger that judge names?
 
 The council's own path, end to end: one unit of work writes one file on its own
 runner, the workflow uploads that directory, and the collecting job appends what
-it downloaded to the store the tenant named. Deliberately not the digest
-pipeline's segment store - that machinery exists to stop many committing writers
+it downloaded to the ledger the tenant named. Deliberately not the digest
+pipeline's segment ledger - that machinery exists to stop many committing writers
 conflicting on one file, and the council has one committing writer whose day file
 is already settled by a key carrying the run id.
 
@@ -65,7 +65,7 @@ def ship_judge_metrics(row: JudgeRow, *, judge_id: str, shard: int, out_dir: Pat
     collecting job no half-written row to parse. Rendering is the validation: the
     row is written under the columns its own class names, so a cell the contract
     declares and the row does not carry fails here rather than arriving in a
-    committed store as an empty string.
+    committed ledger as an empty string.
 
     `shard` is a parameter rather than a cell read off the row, because reading a
     tenant's field by name is the coupling this whole path exists to remove.
@@ -86,12 +86,12 @@ def shipped_rows[Row: JudgeRow](
     """Every row one tenant's units shipped, through the contract that wrote them.
 
     Split out from the append below because the council's own record goes to a
-    store this module must not name: it is appended by the ledger writer that
-    owns that store's settlement key, and this is the half of the trip the two
+    ledger this module must not name: it is appended by the ledger writer that
+    owns that ledger's settlement key, and this is the half of the trip the two
     payloads share.
 
     A file an upload truncated fails here rather than reaching a committed
-    store. What it reads is bounded by how many units the run split into, not by
+    ledger. What it reads is bounded by how many units the run split into, not by
     anything the archive has accumulated (Guardrail #12).
     """
     # `CsvContract` declares its reader as returning the row protocol rather than
@@ -109,9 +109,9 @@ def shipped_rows[Row: JudgeRow](
 def collect_judge_metrics(
     shipped_root: Path, *, judge_id: str, contract: type[JudgeRow], into: Path
 ) -> int:
-    """Append every shipped row to the store the tenant named. Returns how many landed.
+    """Append every shipped row to the ledger the tenant named. Returns how many landed.
 
-    `into` is handed in by the tenant, so the council spells no judge's store
+    `into` is handed in by the tenant, so the council spells no judge's ledger
     path and a second tenant needs no change here.
     """
     rows = shipped_rows(shipped_root, judge_id=judge_id, contract=contract)

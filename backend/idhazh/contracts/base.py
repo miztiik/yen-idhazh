@@ -602,7 +602,7 @@ def derive_output_digest(summary: str | None, *, title: str | None = None) -> st
     recomputation against committed data is the corpus join
     (`corpus.published_is_the_scored_one`), which stops matching a pre-change
     eval row rather than failing. That was accepted rather than migrated: every
-    other carrier stores the digest and never recomputes it, and a re-harvest
+    other carrier holds the digest and never recomputes it, and a re-harvest
     resets to days written after the change.
     """
     payload: dict[str, Any] = {"summary": summary}

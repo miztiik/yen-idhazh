@@ -71,14 +71,14 @@ def stage_plan(
 ) -> RunPlan:
     """Read every live feed, rank the pool, and write down what it saw. No model.
 
-    Four committed ledgers bound the day. The seen store gives an article whose
+    Four committed ledgers bound the day. The seen ledger gives an article whose
     feed carried no date a real age - first sight is the only honest one there
-    is. The published store is what stops a repeat, which a freshness rule
+    is. The published ledger is what stops a repeat, which a freshness rule
     cannot do on its own: an article published at 23:00 is seven hours old at
-    06:00 the next morning. The item-health store stops the *other* repeat: an
+    06:00 the next morning. The item-health ledger stops the *other* repeat: an
     address that failed today behind a paywall or a 404 is not planned again
     today, because that answer will not change before tomorrow. The feed-health
-    store records what every feed did, so a source that has gone quiet can be
+    ledger records what every feed did, so a source that has gone quiet can be
     quarantined from evidence instead of from somebody's memory. Quarantine only
     ever holds a feed back for a few runs; it never edits `config/sources.json`,
     because retiring a source is a person's decision.
@@ -86,7 +86,7 @@ def stage_plan(
     Nothing is dropped for being old. `run.safety_ceiling_per_run` is a crash
     guard against a mis-parsed feed, not a reading budget.
 
-    The item-health store answers a second question as well: how much of today
+    The item-health ledger answers a second question as well: how much of today
     each feed has already put in front of a reader. `collect.max_per_source`
     bounds a feed inside one desk in one run, and a feed sits on one desk, so
     its ceiling for a whole day is that count times the runs the day had - a

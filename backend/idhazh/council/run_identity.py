@@ -5,7 +5,7 @@ one. It mints a name of its own from the day it opened and the identity the
 platform gave the run - once, in the planning job, published as a job output
 that every later verb reads.
 
-Nothing here opens a store, resolves an ordinal or names a judge. The digest
+Nothing here opens a ledger, resolves an ordinal or names a judge. The digest
 pipeline's run id counts executions of a date by reading that run's own state;
 this one is only a name, so it needs no state at all.
 """
@@ -38,7 +38,7 @@ def council_run_id(*, opened_on: str, platform_run_id: str) -> str:
     reader takes a run id's first ten characters as the day the run opened and
     measures the lag to publication from them, so a judged-date prefix would
     publish a standing two-day lag that nothing waited. The judged date is the
-    `date` column, which is what routes a row to its store.
+    `date` column, which is what routes a row to its ledger.
 
     `platform_run_id` is the platform's run id, which is unique across every
     workflow in the repository - never its run number, which starts again in

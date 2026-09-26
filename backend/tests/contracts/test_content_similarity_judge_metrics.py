@@ -3,7 +3,7 @@
 Three questions, and they are separate. The row has to make the trip to a CSV day
 file and back with every cell intact; the four endings a pair can have must add
 up to what the shard was dealt; and the day file has to sit where the
-instrument's own reader looks - a store one directory too deep is invisible to
+instrument's own reader looks - a ledger one directory too deep is invisible to
 that reader and the miss is silent.
 
 What none of this can settle is whether the figures are true. Nothing writes this
@@ -113,7 +113,7 @@ def test_the_shared_stamp_is_carried_and_narrowed_to_this_judge() -> None:
 
     A closed set is honest on this row in the way it cannot be on the shared
     stamp: that stamp is inherited by judges nobody has written yet, and this
-    store holds the readings of one judge and no other.
+    ledger holds the readings of one judge and no other.
     """
     columns = ContentSimilarityJudgeMetrics.csv_columns()
     assert set(JudgeConfigStamp.model_fields) <= set(columns), (
@@ -151,10 +151,10 @@ def test_the_day_file_a_date_resolves_to_is_two_levels_under_state() -> None:
 
 
 def test_the_instrument_reader_finds_the_day_this_store_wrote(tmp_path: Path) -> None:
-    """A store this row creates is visible rather than silently absent.
+    """A ledger this row creates is visible rather than silently absent.
 
-    The inventory globs one directory level and two, so a nested store is found
-    and a store nested deeper would not be. Asked through the public report,
+    The inventory globs one directory level and two, so a nested ledger is found
+    and a ledger nested deeper would not be. Asked through the public report,
     because that is what an operator reads.
     """
     state_root = tmp_path / ledger.STATE_DIRNAME

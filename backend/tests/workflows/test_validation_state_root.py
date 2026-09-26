@@ -42,7 +42,7 @@ VALIDATION_WORKFLOW = "validate.yml"
 #: off the repository root.
 VALIDATION_CONFIG_JOBS = ("plan", "qualify", "decide")
 
-#: The step the redirect exists for. `plan` appends to the seen store, feed
+#: The step the redirect exists for. `plan` appends to the seen ledger, feed
 #: health, feed retirements and the counterfactual scores; without the flag it
 #: loads the committed config, which names no trial directory, and a
 #: qualification marks real addresses seen.

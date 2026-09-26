@@ -3,7 +3,7 @@
 Routing only. Every subcommand's body is in the module that owns its question
 (CLAUDE.md section 1a): `inventory.py` reads what one day recorded,
 `republish.py` writes one day's projections again, and `prune.py` deletes one
-store's days. Nothing in this file opens a payload, derives a store path or
+ledger's days. Nothing in this file opens a payload, derives a ledger path or
 counts a row.
 
     idhazh telemetry show    --date <d>   which instrument files that day has
@@ -11,7 +11,7 @@ counts a row.
     idhazh telemetry rollup  --date <d>   how long that day's spans took
     idhazh telemetry publish --date <d>   write that day's projections again
     idhazh telemetry prune   --target <s> --since <d> --until <d>
-                                          delete one store's days in a range
+                                          delete one ledger's days in a range
 
 Every subcommand is bounded by what it is handed - four of them by one date and
 `prune` by the range it names - so none of them costs more as the archive grows
@@ -19,7 +19,7 @@ Every subcommand is bounded by what it is handed - four of them by one date and
 
 **A subcommand's own flags are declared by the module that owns it.** Four of
 them take the same four arguments and nothing else, which is why those are
-spelled once below; `prune` takes a store and a range as well, and those belong
+spelled once below; `prune` takes a ledger and a range as well, and those belong
 beside the body that reads them rather than in the router that hands them over.
 
 The roots arrive from the caller rather than being derived here. `idhazh/cli.py`
@@ -73,7 +73,7 @@ SUBCOMMANDS: Final[tuple[Subcommand, ...]] = (
     Subcommand("publish", "Write one day's projections again from the day already on disk."),
     Subcommand(
         "prune",
-        "Delete one store's day files over a range of days. Reports and removes "
+        "Delete one ledger's day files over a range of days. Reports and removes "
         "nothing without --no-dry-run.",
         prune.add_arguments,
     ),
