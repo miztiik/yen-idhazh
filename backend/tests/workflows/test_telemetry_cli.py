@@ -204,11 +204,11 @@ def test_a_prune_the_router_refuses_names_the_store_and_changes_nothing(
 def test_show_names_the_day_shard_and_the_month_shard(tmp_path: Path) -> None:
     """The instrument shards at two grains, and a listing that sees one is half blind.
 
-    A day shard is `<store>/<YYYY>/<MM>/<DD>` and a month fold is
-    `<store>/<YYYY-MM>` - a different depth, not a different suffix. A single
+    A day shard is `<ledger>/<YYYY>/<MM>/<DD>` and a month fold is
+    `<ledger>/<YYYY-MM>` - a different depth, not a different suffix. A single
     glob finds one of them, and the one it misses is silently absent rather than
     reported empty. Both paths are asked of the ledger rather than spelled here,
-    so a store that moves takes this with it.
+    so a ledger that moves takes this with it.
     """
     state_root, _digest_root, date = _a_published_day(tmp_path)
 
@@ -225,12 +225,12 @@ def test_show_names_the_day_shard_and_the_month_shard(tmp_path: Path) -> None:
 
 
 def test_a_store_that_nests_is_listed_rather_than_silently_missed(tmp_path: Path) -> None:
-    """A one-segment glob omits a nested store and reports success either way.
+    """A one-segment glob omits a nested ledger and reports success either way.
 
-    `state/` root already holds 13 directories, so a store that groups its files
+    `state/` root already holds 13 directories, so a ledger that groups its files
     under a parent is the ordinary next shape rather than an exotic one. The
     listing globbed `*/<Y>/<M>/<D>*`, which is one segment, so
-    `<group>/<store>/<Y>/<M>/<D>` was absent from a report that said nothing
+    `<group>/<ledger>/<Y>/<M>/<D>` was absent from a report that said nothing
     about the absence - the failure mode this test exists to hold shut.
 
     Built here rather than read from the archive, so it holds on a tree the
@@ -238,13 +238,13 @@ def test_a_store_that_nests_is_listed_rather_than_silently_missed(tmp_path: Path
     """
     state_root, _digest_root, date = _a_published_day(tmp_path)
     year, month, day = date.split("-")
-    nested = state_root / "a-group" / "a-store" / year / month
+    nested = state_root / "a-group" / "a-ledger" / year / month
     nested.mkdir(parents=True)
     (nested / f"{day}.csv").write_text("version\n", encoding="utf-8", newline="\n")
-    month_fold = state_root / "a-group" / "a-store" / f"{year}-{month}.csv"
+    month_fold = state_root / "a-group" / "a-ledger" / f"{year}-{month}.csv"
     month_fold.write_text("version\n", encoding="utf-8", newline="\n")
 
     report = "\n".join(inventory.files(state_root, date=date))
 
-    assert "a-group/a-store" in report, f"the nested day shard is missing: {report}"
+    assert "a-group/a-ledger" in report, f"the nested day shard is missing: {report}"
     assert month_fold.relative_to(state_root).as_posix() in report

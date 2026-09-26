@@ -58,7 +58,7 @@ from idhazh.evals import archive
 from idhazh.ledger import read_header as _read_header
 from idhazh.ledger import require_matching_header
 
-#: The store, its POSIX prefix, and where one date's rows go. All four are
+#: The ledger, its POSIX prefix, and where one date's rows go. All four are
 #: `idhazh.ledger`'s, spelled once there: the compaction's head table has to name
 #: the file a segment drains into, and that table cannot import this module
 #: without a cycle. The names below are this module's own vocabulary for them.
@@ -81,13 +81,13 @@ OBSERVATION_KEY: Final = ledger.OBSERVATION_KEY
 def ledger_days(state_dir: Path) -> list[Path]:
     """Every committed shard of the ledger, oldest day first.
 
-    Anything that is not a day of this store is left alone:
+    Anything that is not a day of this ledger is left alone:
     `retention.prune_scores` archives and then deletes out of this directory, so
     it names what it recognises rather than acting on what it does not. What
     counts as a day is `day_shards.shard_files` and nothing local - this
     directory is the one where getting that wrong deletes a file. That walk
     reads a `<DD>.csv` day file and a `<DD>/` day directory of writer-owned
-    files alike, so nothing here moves when the store changes shape.
+    files alike, so nothing here moves when the ledger changes shape.
 
     The daily settlement was the caller that made this a cost, and it is gone. A
     run appends to the one day file `ledger_path` names, so that file is the only
@@ -150,7 +150,7 @@ def recorded_observations(state_dir: Path) -> set[str]:
     than the full-grain window has no rows left to read, so a dedupe over the
     rows alone would call every measurement in it new the day it was deleted.
     `state/score-archive/<YYYY-MM>.json` carries those digests for exactly this
-    union, and it is why the archive stores them sorted (`docs/concepts/
+    union, and it is why the archive keeps them sorted (`docs/concepts/
     evaluation.md`).
 
     **Neither half reads a score row.** Both are fixed-width digest records, so
@@ -184,7 +184,7 @@ def indexed_observations(state_dir: Path) -> set[str]:
     **This opens one file a recorded day and it is declared rather than hidden**
     (Guardrail #12, `docs/concepts/growing-reads.md`). It was one file a month
     until 2026-09-13, when the grain change turned 2 opens into 23, and it gains
-    about 365 a year. The store bound is what answers it: a day past
+    about 365 a year. The ledger bound is what answers it: a day past
     `observability.scores_full_grain_months` is folded into one
     `state/score-archive/<YYYY-MM>.json` and its index day is dropped, so the
     live index holds at most fourteen months of days. **`--dry-run` is on the
@@ -299,7 +299,7 @@ def _by_day(shards: Iterable[Path]) -> dict[str, list[Path]]:
     """The shards of each recorded day, keyed by the day they are filed under.
 
     A day is one file today and a directory of writer-owned files after the
-    store changes shape, so a caller that asks about a date gets every file that
+    ledger changes shape, so a caller that asks about a date gets every file that
     date holds rather than whichever one the walk named last.
     """
     by_day: dict[str, list[Path]] = {}

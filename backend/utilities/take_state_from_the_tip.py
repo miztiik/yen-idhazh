@@ -9,7 +9,7 @@ five commits behind, and every one of those commits wrote `state/`.
 For most of the pipeline a stale base costs nothing: a work shard writes a
 segment named for one shard of one run, so a rebase applies both sides whole.
 The catch-up fold is the exception, because it DERIVES a committed file from
-other committed files. Against a stale store it folds segments the run ahead
+other committed files. Against a stale ledger it folds segments the run ahead
 already folded and deleted, and writes a day head that run has already written -
 two derived versions of one file, which no rebase can settle and no merge driver
 should. That is what cost run 35660521768 a whole day's digest.

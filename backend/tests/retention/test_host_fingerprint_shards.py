@@ -63,7 +63,7 @@ def test_the_host_fingerprint_prune_takes_the_expired_day_and_keeps_the_day_besi
 
     The assertion is two-sided on purpose. "Nothing failed", or "`deleted` is a
     tuple", passes on an EMPTY result, and an empty result is what a prune that
-    never fires returns - so the store would silently stop being pruned and
+    never fires returns - so the ledger would silently stop being pruned and
     nothing would go red.
     """
     state = tmp_path / "state"

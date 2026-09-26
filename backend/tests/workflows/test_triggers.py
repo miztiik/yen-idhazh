@@ -274,8 +274,8 @@ def test_nothing_holds_one_content_refresh_run_behind_another() -> None:
     applies both whole. A group on top of that bought no safety. It bought a
     queue, and the queue cost two things: GitHub keeps one pending run per group
     and cancels the older with no error anywhere, and a run that did wait then
-    read a store its own wait had made stale. Run 35660521768 waited 46 minutes,
-    folded a 46-minute-old store, and lost the day at the push.
+    read a ledger its own wait had made stale. Run 35660521768 waited 46 minutes,
+    folded a 46-minute-old ledger, and lost the day at the push.
 
     Both levels are read. A group on a job holds that job behind the same job of
     another run, which is the same queue one step down.

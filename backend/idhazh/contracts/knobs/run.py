@@ -159,7 +159,7 @@ class RunConfig(Model):
             "Where a trial run's ledgers go, under `state/`. Null is production and is "
             "the default, so a run that says nothing writes where it always did. Set it "
             "and every day shard this run appends lands under `state/<name>/` instead - "
-            "the seen store, feed health, item health, the published ledger, the traces "
+            "the seen ledger, feed health, item health, the published ledger, the traces "
             "and the rollups, all of them, because a run that split them would put half "
             "a trial in the published series. Owner decision, 2026-09-15: a run that "
             "exists to exercise production's code path must not be readable as a "

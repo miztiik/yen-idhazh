@@ -7,8 +7,8 @@ the utility cannot place stops the run with both layouts intact and nothing
 unlinked.
 
 `tests/fixtures/day-shard-migration/` is committed rather than built, and it is
-three copies of one two-month store because one store cannot carry all the
-cases: the read stops on the first row it cannot place, so a store holding a bad
+three copies of one two-month ledger because one ledger cannot carry all the
+cases: the read stops on the first row it cannot place, so a ledger holding a bad
 row can never demonstrate a good migration. `clean` is the good path. The other
 two each add one bad row, and they add it at opposite ends of the read on
 purpose - `not-a-date` in the first shard, so the run stops before the second
@@ -55,11 +55,11 @@ DATE_COLUMN: Final = "date"
 CLEAN_DAYS: Final = ["2026/08/01.csv", "2026/08/31.csv", "2026/09/07.csv", "2026/09/10.csv"]
 
 
-def _store(tmp_path: Path, name: str) -> Path:
+def _ledger(tmp_path: Path, name: str) -> Path:
     """The committed fixture, copied, because a test may not write into a fixture."""
-    store = tmp_path / "state" / "item-health"
-    shutil.copytree(FIXTURE / name, store)
-    return store
+    ledger = tmp_path / "state" / "item-health"
+    shutil.copytree(FIXTURE / name, ledger)
+    return ledger
 
 
 def _bytes(root: Path) -> dict[str, bytes]:
@@ -96,20 +96,20 @@ def test_every_row_that_went_in_comes_out_once_in_the_day_its_own_date_names(
 ) -> None:
     """The Oracle. A multiset, so a row duplicated into two days fails it.
 
-    A set would pass on a store whose two rows for one day became one, and two
+    A set would pass on a ledger whose two rows for one day became one, and two
     of these six rows share a day precisely so that a set cannot pass here.
     """
-    store = _store(tmp_path, "clean")
-    before = _rows_in_months(store)
+    ledger = _ledger(tmp_path, "clean")
+    before = _rows_in_months(ledger)
     assert sum(before.values()) == 6
 
-    report = migrate.run(store, DATE_COLUMN)
+    report = migrate.run(ledger, DATE_COLUMN)
 
-    assert _rows_in_days(store) == before
+    assert _rows_in_days(ledger) == before
     assert report.rows_in == report.rows_out == 6
     assert report.paths == CLEAN_DAYS
     assert report.shards == ["2026-08.csv", "2026-09.csv"]
-    assert not list(store.glob("*.csv"))
+    assert not list(ledger.glob("*.csv"))
 
 
 def test_a_row_on_the_first_and_the_last_day_of_a_month_gets_its_own_file(
@@ -121,13 +121,13 @@ def test_a_row_on_the_first_and_the_last_day_of_a_month_gets_its_own_file(
     row's cell would put all three August rows in one file and still report six
     rows out.
     """
-    store = _store(tmp_path, "clean")
-    august = read_text(store / "2026-08.csv").split("\n")
+    ledger = _ledger(tmp_path, "clean")
+    august = read_text(ledger / "2026-08.csv").split("\n")
 
-    migrate.run(store, DATE_COLUMN)
+    migrate.run(ledger, DATE_COLUMN)
 
-    first = read_text(store / "2026" / "08" / "01.csv").split("\n")
-    last = read_text(store / "2026" / "08" / "31.csv").split("\n")
+    first = read_text(ledger / "2026" / "08" / "01.csv").split("\n")
+    last = read_text(ledger / "2026" / "08" / "31.csv").split("\n")
     assert first == [august[0], august[1], ""]
     assert last == [august[0], august[2], august[3], ""]
 
@@ -141,37 +141,37 @@ def test_a_row_it_cannot_place_stops_the_run_with_both_trees_intact(
 ) -> None:
     """The refusal, which is the load-bearing half.
 
-    Not "it raised" - every byte of the store is compared, so a run that wrote
+    Not "it raised" - every byte of the ledger is compared, so a run that wrote
     part of a day tree before it stopped fails this even though it unlinked
     nothing. The two trees put the bad row at opposite ends of the read, so this
     holds whether or not a shard had already been read and grouped.
     """
-    store = _store(tmp_path, tree)
-    before = _bytes(store)
+    ledger = _ledger(tmp_path, tree)
+    before = _bytes(ledger)
 
     with pytest.raises(ValueError, match=re.escape(where)):
-        migrate.run(store, DATE_COLUMN)
+        migrate.run(ledger, DATE_COLUMN)
 
-    assert _bytes(store) == before
+    assert _bytes(ledger) == before
     assert sorted(before) == ["2026-08.csv", "2026-09.csv"]
 
 
 def test_a_second_run_over_the_migrated_tree_changes_no_byte(tmp_path: Path) -> None:
-    """Idempotence, and it is the store's own shape that gives it.
+    """Idempotence, and it is the ledger's own shape that gives it.
 
-    A migrated store holds no month shard, so there is nothing to move and the
+    A migrated ledger holds no month shard, so there is nothing to move and the
     utility says so. It is not a flag and not a marker file - which matters,
     because a marker is a thing a restore from the trunk would bring back.
     """
-    store = _store(tmp_path, "clean")
-    migrate.run(store, DATE_COLUMN)
-    once = _bytes(store)
+    ledger = _ledger(tmp_path, "clean")
+    migrate.run(ledger, DATE_COLUMN)
+    once = _bytes(ledger)
 
-    report = migrate.run(store, DATE_COLUMN)
+    report = migrate.run(ledger, DATE_COLUMN)
 
     assert report.shards == []
     assert report.rows_in == 0
-    assert _bytes(store) == once
+    assert _bytes(ledger) == once
 
 
 def test_a_month_shard_beside_anything_else_is_refused_before_a_byte_moves(
@@ -180,44 +180,44 @@ def test_a_month_shard_beside_anything_else_is_refused_before_a_byte_moves(
     """Refused because no reader can walk the result, not because it is untidy.
 
     The first assertion is this refusal's whole premise: `day_files` stops on a
-    month shard at the root of a day tree, so a half-migrated store is already
+    month shard at the root of a day tree, so a half-migrated ledger is already
     unreadable by the pipeline. The repair is a restore from the trunk, because
     a second pass cannot know which rows the first one had already moved.
     """
-    store = _store(tmp_path, "clean")
-    (store / "notes.txt").write_bytes(b"a stray\n")
-    before = _bytes(store)
+    ledger = _ledger(tmp_path, "clean")
+    (ledger / "notes.txt").write_bytes(b"a stray\n")
+    before = _bytes(ledger)
 
     with pytest.raises(ValueError, match=re.escape("notes.txt")):
-        migrate.run(store, DATE_COLUMN)
+        migrate.run(ledger, DATE_COLUMN)
 
-    assert _bytes(store) == before
+    assert _bytes(ledger) == before
     with pytest.raises(ValueError, match="not a YYYY/MM/DD day file"):
-        list(day_files(store))
+        list(day_files(ledger))
 
 
 def test_a_column_the_header_does_not_carry_stops_the_run(tmp_path: Path) -> None:
     """The mis-drive guard: five ledgers move, and they do not share one column name."""
-    store = _store(tmp_path, "clean")
-    before = _bytes(store)
+    ledger = _ledger(tmp_path, "clean")
+    before = _bytes(ledger)
 
     with pytest.raises(ValueError, match="carries no 'first_seen_run' column"):
-        migrate.run(store, "first_seen_run")
+        migrate.run(ledger, "first_seen_run")
 
-    assert _bytes(store) == before
+    assert _bytes(ledger) == before
 
 
 def test_two_shards_that_disagree_on_the_header_stop_the_run(tmp_path: Path) -> None:
     """A header migration half applied. No one header fits both, so neither is picked."""
-    store = _store(tmp_path, "clean")
-    september = read_text(store / "2026-09.csv")
-    (store / "2026-09.csv").write_bytes(("extra," + september).encode("ascii"))
-    before = _bytes(store)
+    ledger = _ledger(tmp_path, "clean")
+    september = read_text(ledger / "2026-09.csv")
+    (ledger / "2026-09.csv").write_bytes(("extra," + september).encode("ascii"))
+    before = _bytes(ledger)
 
     with pytest.raises(ValueError, match="different header"):
-        migrate.run(store, DATE_COLUMN)
+        migrate.run(ledger, DATE_COLUMN)
 
-    assert _bytes(store) == before
+    assert _bytes(ledger) == before
 
 
 @pytest.mark.parametrize(
@@ -247,9 +247,9 @@ def test_a_cell_that_names_no_day_file_is_refused(cell: str) -> None:
 
 def test_every_path_it_reports_is_a_posix_relative_path(tmp_path: Path) -> None:
     """`CLAUDE.md` section 2. A report is a thing that leaves the process."""
-    store = _store(tmp_path, "clean")
+    ledger = _ledger(tmp_path, "clean")
 
-    report = migrate.run(store, DATE_COLUMN)
+    report = migrate.run(ledger, DATE_COLUMN)
 
     for name in [*report.shards, *report.paths]:
         assert "\\" not in name
@@ -288,9 +288,9 @@ def _day_shard_rows(root: Path) -> Counter[tuple[str, str]]:
 
 def _partitioned(tmp_path: Path) -> Path:
     """The `clean` fixture taken all the way to day files, by the real producer."""
-    store = _store(tmp_path, "clean")
-    migrate.run(store, DATE_COLUMN)
-    return store
+    ledger = _ledger(tmp_path, "clean")
+    migrate.run(ledger, DATE_COLUMN)
+    return ledger
 
 
 def test_every_row_of_a_day_file_comes_out_in_the_day_directory_its_path_named(
@@ -302,13 +302,13 @@ def test_every_row_of_a_day_file_comes_out_in_the_day_directory_its_path_named(
     day fails it where a check over the lines alone would pass. The two sides
     are read by two different readers, which is what makes it a read-back.
     """
-    store = _partitioned(tmp_path)
-    before = _day_file_rows(store)
+    ledger = _partitioned(tmp_path)
+    before = _day_file_rows(ledger)
     assert sum(before.values()) == 6
 
-    report = migrate.partition(store)
+    report = migrate.partition(ledger)
 
-    assert _day_shard_rows(store) == before
+    assert _day_shard_rows(ledger) == before
     assert report.rows_in == report.rows_out == 6
     assert report.shards == CLEAN_DAYS
     assert report.paths == [f"{name[:-4]}/{BEFORE_PARTITION_NAME}" for name in CLEAN_DAYS]
@@ -316,15 +316,15 @@ def test_every_row_of_a_day_file_comes_out_in_the_day_directory_its_path_named(
 
 def test_a_partitioned_day_keeps_the_bytes_the_day_file_held(tmp_path: Path) -> None:
     """Only the path moves, so the `version` cell still travels with its own row."""
-    store = _partitioned(tmp_path)
+    ledger = _partitioned(tmp_path)
     held = {
-        day_partition.date_of(path): path.read_bytes() for path in sorted(day_files(store))
+        day_partition.date_of(path): path.read_bytes() for path in sorted(day_files(ledger))
     }
 
-    migrate.partition(store)
+    migrate.partition(ledger)
 
     for recorded, expected in held.items():
-        day = store / recorded[:4] / recorded[5:7] / recorded[8:10]
+        day = ledger / recorded[:4] / recorded[5:7] / recorded[8:10]
         assert sorted(entry.name for entry in day.iterdir()) == [BEFORE_PARTITION_NAME]
         assert (day / BEFORE_PARTITION_NAME).read_bytes() == expected
 
@@ -332,15 +332,15 @@ def test_a_partitioned_day_keeps_the_bytes_the_day_file_held(tmp_path: Path) -> 
 def test_a_second_partition_over_the_day_directories_changes_no_byte(
     tmp_path: Path,
 ) -> None:
-    """Idempotence, and it is the store's own shape that gives it, not a marker."""
-    store = _partitioned(tmp_path)
-    migrate.partition(store)
-    once = _bytes(store)
+    """Idempotence, and it is the ledger's own shape that gives it, not a marker."""
+    ledger = _partitioned(tmp_path)
+    migrate.partition(ledger)
+    once = _bytes(ledger)
 
-    report = migrate.partition(store)
+    report = migrate.partition(ledger)
 
     assert report.shards == []
-    assert _bytes(store) == once
+    assert _bytes(ledger) == once
 
 
 def test_a_partition_that_loses_a_row_leaves_every_day_file_where_it_was(
@@ -348,12 +348,12 @@ def test_a_partition_that_loses_a_row_leaves_every_day_file_where_it_was(
 ) -> None:
     """The refusal, which is the load-bearing half of this shape too.
 
-    The staged tree is neutered rather than the store, so this proves the check
-    fires before the first rename: every byte of the day-file store is still
+    The staged tree is neutered rather than the ledger, so this proves the check
+    fires before the first rename: every byte of the day-file ledger is still
     there afterwards and nothing has been opened into a directory.
     """
-    store = _partitioned(tmp_path)
-    before = _bytes(store)
+    ledger = _partitioned(tmp_path)
+    before = _bytes(ledger)
     real = migrate._open_the_day_files
 
     def drop_a_row(staged: Path) -> list[str]:
@@ -365,9 +365,9 @@ def test_a_partition_that_loses_a_row_leaves_every_day_file_where_it_was(
 
     monkeypatch.setattr(migrate, "_open_the_day_files", drop_a_row)
     with pytest.raises(ValueError, match="the staged day tree"):
-        migrate.partition(store)
+        migrate.partition(ledger)
 
-    assert _bytes(store) == before
+    assert _bytes(ledger) == before
 
 
 # --- one flat ledger becomes a day directory a day ---------------------------
@@ -379,14 +379,14 @@ def _flat(tmp_path: Path) -> Path:
     Built from the committed shards rather than committed again, so the six rows
     and the two month boundaries are the same ones every other test here drives.
     """
-    store = tmp_path / "state" / "day-validations"
-    store.parent.mkdir(parents=True, exist_ok=True)
+    ledger = tmp_path / "state" / "day-validations"
+    ledger.parent.mkdir(parents=True, exist_ok=True)
     shards = sorted((FIXTURE / "clean").glob("*.csv"))
     header = read_text(shards[0]).split("\n")[0]
     rows = [line for shard in shards for line in read_text(shard).split("\n")[1:-1]]
-    flat = store.with_name(f"{store.name}.csv")
+    flat = ledger.with_name(f"{ledger.name}.csv")
     flat.write_text("\n".join([header, *rows]) + "\n", encoding="utf-8", newline="")
-    return store
+    return ledger
 
 
 def _rows_the_file_holds(flat: Path) -> Counter[tuple[str, str]]:
@@ -403,14 +403,14 @@ def test_every_row_of_a_flat_ledger_lands_in_the_day_its_own_cell_names(
     tmp_path: Path,
 ) -> None:
     """The Oracle for the flat shape. A row it filed by the file's name fails it."""
-    store = _flat(tmp_path)
-    flat = store.with_name(f"{store.name}.csv")
+    ledger = _flat(tmp_path)
+    flat = ledger.with_name(f"{ledger.name}.csv")
     before = _rows_the_file_holds(flat)
     assert sum(before.values()) == 6
 
-    report = migrate.split_flat(store, DATE_COLUMN)
+    report = migrate.split_flat(ledger, DATE_COLUMN)
 
-    assert _day_shard_rows(store) == before
+    assert _day_shard_rows(ledger) == before
     assert report.rows_in == report.rows_out == 6
     assert report.shards == ["day-validations.csv"]
     assert report.paths == [f"{name[:-4]}/{BEFORE_PARTITION_NAME}" for name in CLEAN_DAYS]
@@ -420,9 +420,9 @@ def test_every_row_of_a_flat_ledger_lands_in_the_day_its_own_cell_names(
 def test_a_flat_row_it_cannot_place_stops_the_run_with_the_file_intact(
     tmp_path: Path,
 ) -> None:
-    """The same refusal as the month shards, over a store that was one file."""
-    store = _flat(tmp_path)
-    flat = store.with_name(f"{store.name}.csv")
+    """The same refusal as the month shards, over a ledger that was one file."""
+    ledger = _flat(tmp_path)
+    flat = ledger.with_name(f"{ledger.name}.csv")
     rows = read_text(flat).split("\n")
     cells = rows[1].split(",")
     cells[rows[0].split(",").index(DATE_COLUMN)] = "pending"
@@ -432,23 +432,23 @@ def test_a_flat_row_it_cannot_place_stops_the_run_with_the_file_intact(
     before = flat.read_bytes()
 
     with pytest.raises(ValueError, match=re.escape("day-validations.csv line 8")):
-        migrate.split_flat(store, DATE_COLUMN)
+        migrate.split_flat(ledger, DATE_COLUMN)
 
     assert flat.read_bytes() == before
-    assert not store.exists()
+    assert not ledger.exists()
 
 
 def test_a_flat_ledger_beside_its_own_directory_is_refused(tmp_path: Path) -> None:
     """Both shapes at once is a half-applied migration, and a second pass cannot fix it."""
-    store = _flat(tmp_path)
-    flat = store.with_name(f"{store.name}.csv")
-    (store / "2026" / "08").mkdir(parents=True)
-    before = _bytes(store.parent)
+    ledger = _flat(tmp_path)
+    flat = ledger.with_name(f"{ledger.name}.csv")
+    (ledger / "2026" / "08").mkdir(parents=True)
+    before = _bytes(ledger.parent)
 
     with pytest.raises(ValueError, match="half applied"):
-        migrate.split_flat(store, DATE_COLUMN)
+        migrate.split_flat(ledger, DATE_COLUMN)
 
-    assert _bytes(store.parent) == before
+    assert _bytes(ledger.parent) == before
     assert flat.is_file()
 
 
@@ -465,7 +465,7 @@ LEGACY_TRACES: Final = {
 
 
 def _traces(tmp_path: Path) -> Path:
-    """A trace tree in the shape the archive holds, plus the store's placeholder."""
+    """A trace tree in the shape the archive holds, plus the ledger's placeholder."""
     root = tmp_path / "state" / "traces"
     root.mkdir(parents=True)
     (root / ".gitkeep").write_bytes(b"")
@@ -503,7 +503,7 @@ def test_a_trace_keeps_its_name_under_the_day_its_old_path_named(tmp_path: Path)
 
 
 def test_a_trace_tree_keeps_the_placeholder_at_its_root(tmp_path: Path) -> None:
-    """The store's `.gitkeep` is not a trace and is neither staged nor parked."""
+    """The ledger's `.gitkeep` is not a trace and is neither staged nor parked."""
     root = _traces(tmp_path)
 
     migrate.split_traces(root)

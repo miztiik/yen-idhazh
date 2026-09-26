@@ -1490,7 +1490,7 @@ def test_the_retirement_ledger_is_named_where_the_commit_step_stages_it() -> Non
     Whether this checkout carries the file is a question about a working copy,
     not about code: no commit can make it false, and a short or sparse clone
     makes it false without anybody changing a line (`CLAUDE.md` section 13). It
-    is asked by `backend/utilities/check_seeded_stores.py`, which pytest does not
+    is asked by `backend/utilities/check_seeded_ledgers.py`, which pytest does not
     collect. What stays here is the half a code change can break - the path the
     commit step has to be handed.
     """
@@ -1504,7 +1504,7 @@ def test_the_hand_marked_holdout_is_named_where_the_commit_step_stages_it() -> N
     A person types this file, so on a fresh clone it holds nothing but its
     header - and `git add` on a path that is not there aborts the commit step and
     takes every ledger staged in the same call with it. Whether the checkout
-    carries the file is `backend/utilities/check_seeded_stores.py`'s question
+    carries the file is `backend/utilities/check_seeded_ledgers.py`'s question
     (`CLAUDE.md` section 13); what stays here is the path the commit step is
     handed.
     """
@@ -1521,7 +1521,7 @@ def test_the_judged_pairs_are_filed_under_the_day_they_were_drawn_from() -> None
     """One nested segment more than every other day tree, and the relpath says so.
 
     Everything this judge produces hangs off `state/content-similarity-judge/`,
-    so the commit step can stage one prefix. That makes this the first store
+    so the commit step can stage one prefix. That makes this the first ledger
     whose day file sits two
     directories below `state/` rather than one, and a helper that quietly dropped
     the nest would write a tree nothing else in this file can find.
@@ -1581,7 +1581,7 @@ def test_the_cleanup_record_is_a_day_tree_and_needs_no_seeded_header() -> None:
 
     What is asserted is the layout the writer uses, which is the part a code
     change can break. Whether this checkout holds the tree is a clone question
-    and is asked by `backend/utilities/check_seeded_stores.py`.
+    and is asked by `backend/utilities/check_seeded_ledgers.py`.
     """
     assert ledger.visual_prunes_relpath("2026-09-06") == "state/visual-prunes/2026/09/06.csv"
     assert ledger.visual_prunes_relpath("2026-09-06").split("/")[0] == ledger.STATE_DIRNAME

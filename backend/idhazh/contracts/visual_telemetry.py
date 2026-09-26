@@ -225,7 +225,7 @@ class VisualAttemptRow(Contract):
         ChangelogEntry(
             version="2026-09-13T23:50",
             change="Initial shape: one row per attempt at a visual, carrying the eight terms.",
-            why="The fold this store takes at the window edge deletes the full-grain shard.",
+            why="The fold this ledger takes at the window edge deletes the full-grain shard.",
         ),
     )
 
@@ -381,7 +381,7 @@ class VisualAggregateRow(Contract):
     Ordered by the key, so a folded month reads down the days and then down the
     causes rather than down the alphabet.
 
-    **The fold can never grow the store.** A group holds at least one attempt, so
+    **The fold can never grow the ledger.** A group holds at least one attempt, so
     the row count never rises, and this row is narrower than the attempt row it
     replaces. The pathological case is real and is bounded rather than argued
     away: a month in which every attempt lands in its own group folds to exactly
@@ -393,7 +393,7 @@ class VisualAggregateRow(Contract):
         ChangelogEntry(
             version="2026-09-13T23:50",
             change="Initial shape: one row per eight-term group, folded from a month of attempts.",
-            why="The visual store folds at the window edge and needed a shape to fold into.",
+            why="The visual ledger folds at the window edge and needed a shape to fold into.",
         ),
     )
 

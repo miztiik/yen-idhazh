@@ -292,7 +292,7 @@ class ScoreArchive(Contract):
         ChangelogEntry(
             version="2026-09-03",
             change="Initial shape: one archived month, its source hash, row count and sorted keys.",
-            why="The score ledger is the largest store under state/ and nothing folded it.",
+            why="The score ledger is the largest one under state/ and nothing folded it.",
         ),
     )
 

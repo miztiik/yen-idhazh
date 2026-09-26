@@ -685,7 +685,7 @@ def test_a_reply_the_grammar_could_not_have_written_is_written_down(
     already gone wrong with the decoder. So the reply becomes no verdict at all.
 
     It is recorded rather than thrown, because the shard's only other move was to
-    die - and every pair after it then went missing, which on this store already
+    die - and every pair after it then went missing, which on this ledger already
     means nothing drew them. The reading keeps the call it paid for, and the
     reason reaches the run's log, which is the only place that still holds it.
     """
@@ -1132,7 +1132,7 @@ def test_a_pair_the_grammar_did_not_hold_is_written_down_and_the_shard_reads_on(
 ) -> None:
     """The refusal reaches the row, the pair after it is still judged, and nothing counts it.
 
-    Absence on this store already means nothing drew the pair. A shard that died
+    Absence on this ledger already means nothing drew the pair. A shard that died
     on a loose decoder wrote that same absence over every pair behind it, so an
     operator could not tell a decoder that came apart from a day nobody judged.
 

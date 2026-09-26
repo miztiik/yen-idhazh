@@ -1,7 +1,7 @@
 """Keep the published site inside the ceiling that arrives first.
 
 **The concept is adaptive pruning, and `docs/concepts/adaptive-pruning.md` is
-where it is decided.** Adaptive because every store answers one question for
+where it is decided.** Adaptive because every ledger answers one question for
 itself - what a reader loses when its oldest entry goes - and the answer picks
 one of four policies: a ledger folds, a lookup deletes, an asset deletes, a
 record is kept. That page carries the deciding rule, the five properties every
@@ -114,7 +114,7 @@ whatever date the prune is handed. It is the one prune here whose boundary is a
 day rather than a month, because it is the one whose knob is counted in days.
 
 **The score archive is the sixth thing, and it is the only one that has to prove
-itself twice.** `state/scores/` is the largest store here - 5,335 rows in
+itself twice.** `state/scores/` is the largest ledger here - 5,335 rows in
 4,266,655 bytes on 2026-09-03 - and it is neither a lookup nor a set of timings:
 it is the evidence behind every published quality claim, and it is what stops an
 old measurement being scored again as if it were new. So a month past
@@ -133,7 +133,7 @@ row per `(date, decision, none_reason, rejection_reason, potential_primary,
 family, element_band, downgrade_depth)` group, carrying the counts a keep rate
 needs and the spread of the two measured columns. What is deliberately absent is
 a `prune_visuals` beside the six passes above, and the reason is that nothing
-writes the store yet: a pass over a directory no run creates would walk an empty
+writes the ledger yet: a pass over a directory no run creates would walk an empty
 tree on every run and report a policy working, which is a green light on the
 wrong tree - the failure this module already learned once from the alarm. The
 key is settled now because the fold deletes the shard and cannot be revised; the
@@ -750,7 +750,7 @@ def oldest_month_kept(today: date, months: int) -> str:
     """The oldest `YYYY-MM` stem that still stays at full grain.
 
     `month_partition` owns the arithmetic, because the published tree ages by
-    the same boundary now and two copies of it is how one store deletes a month
+    the same boundary now and two copies of it is how one ledger deletes a month
     the other still serves. This name stays because every prune below reads by
     it and a rename would be a second change in the same commit.
     """
@@ -874,7 +874,7 @@ def prune_telemetry(
     The ledger files by day and the aggregate that replaces it files by month, so
     this is where the two grains meet: `day_shards.shards_by_month` groups the
     files a month holds, and a month is folded whole or not at all. A month's
-    input is at most 31 days, so the fold stays a store-bounded read.
+    input is at most 31 days, so the fold stays a ledger-bounded read.
 
     Each day is settled before it is folded, and the files it settled are what
     get deleted. A day is a directory of writer-owned files and a re-run leaves a
@@ -1053,7 +1053,7 @@ def fold_visual_month(rows: Sequence[VisualAttemptRow]) -> list[VisualAggregateR
     follows the month being folded and never the months behind it
     (Guardrail #12), so a fold in year three costs what a fold in year one did.
 
-    **It can only shrink the store.** Every group holds at least one attempt, so
+    **It can only shrink the ledger.** Every group holds at least one attempt, so
     the row count never rises, and the folded row is narrower than the attempt
     row it replaces - it drops the run, the item and the join key and adds
     nothing per attempt. The pathological month in which every attempt lands in
@@ -1112,7 +1112,7 @@ def fold_visual_month(rows: Sequence[VisualAttemptRow]) -> list[VisualAggregateR
 class FeedHealthPruneResult:
     """Which months of a day-filed ledger went, and what they weighed.
 
-    Named for the first store that needed it, and shared by every prune whose
+    Named for the first ledger that needed it, and shared by every prune whose
     knob is months and whose files are days - `prune_host_fingerprint` is the
     other one today.
     """
@@ -1318,7 +1318,7 @@ def prune_seen(
     and the day they drift this one deletes a file the next plan wanted.
 
     **The boundary is a day, and this is the one prune here where it is.** Every
-    other store in this module is bounded by a knob counted in months, so its
+    other ledger in this module is bounded by a knob counted in months, so its
     prune groups day files with `day_partition.days_by_month` and takes a month
     whole. `collect.seen_window_days` is counted in days, so there is no month to
     group by and the file the reader named is the file this keeps. The retained

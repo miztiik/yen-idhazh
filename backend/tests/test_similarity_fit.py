@@ -653,7 +653,7 @@ def test_the_row_is_written_from_a_date_and_a_run_id_the_council_minted(
     disk to borrow a name from and nothing to read an ordinal out of. The row
     still lands, and it lands under the council's own name - which the contract
     validated on the way into the file, so a name `RunId` refuses never reaches
-    the store.
+    the ledger.
 
     Before the council minted its own, this stage read the manifest for the one
     string it wanted and returned `None` without it, so this day fitted nothing.

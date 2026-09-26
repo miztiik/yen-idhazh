@@ -571,7 +571,7 @@ def visual_for(
     visual whose every bar can be re-derived from the figures the article states
     - which is what the browser suite reads back.
     """
-    # The payload stores `digest/<Y>/<M>/<D>/...`, so the root here is the parent
+    # The payload holds `digest/<Y>/<M>/<D>/...`, so the root here is the parent
     # of the digest directory - exactly as the real pipeline does it.
     public_root = target.parent
     relpath = asset_relpath(DATE, item_id)

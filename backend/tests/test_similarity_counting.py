@@ -399,7 +399,7 @@ def test_the_row_the_collecting_job_lands_is_the_row_the_unit_shipped(tmp_path: 
     assert landed[0] == ",".join(ContentSimilarityJudgeMetrics.csv_columns())
     assert landed[1:] == [unit[1] for unit in out_of_the_units]
     assert all(unit[0] == landed[0] for unit in out_of_the_units), (
-        "the units and the store name their columns differently, so a row moved "
+        "the units and the ledger name their columns differently, so a row moved "
         "between them would be read one cell out of place"
     )
 
@@ -409,7 +409,7 @@ def test_the_readings_land_on_a_night_the_record_refused_to_count(tmp_path: Path
 
     Holding the readings back until the record accepts the day would delete the
     evidence of the first to record the second - and the night a unit dies is
-    exactly the night an operator opens this store to find out why.
+    exactly the night an operator opens this ledger to find out why.
     """
     settings = config.load(CONFIG_DIR)
     state = tmp_path / "state"
@@ -494,7 +494,7 @@ def test_the_night_that_lost_a_unit_is_the_night_this_judge_asks_for_again(
     repair job is for, and the counted one is not - naming it would spend a
     runner on a night that can never be counted twice.
 
-    Driven against a store this test built, never the committed one, so it costs
+    Driven against a ledger this test built, never the committed one, so it costs
     the same when the archive is a year deep (CLAUDE.md section 13).
     """
     settings = config.load(CONFIG_DIR)

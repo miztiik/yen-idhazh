@@ -331,8 +331,8 @@ class CollectConfig(Model):
         default=90,
         ge=1,
         description=(
-            "How far back the first-sight store is consulted. It is counted in days "
-            "and the store files by day, so the window names the files it opens and "
+            "How far back the first-sight ledger is consulted. It is counted in days "
+            "and the ledger files by day, so the window names the files it opens and "
             "the prune keeps exactly those. Older day files stay committed and "
             "readable until that prune reaches them; they are just not evidence "
             "about today."
@@ -346,9 +346,9 @@ class CollectConfig(Model):
             "sentinel for unbounded - not 0, not null, and not a very large number, "
             "because a large number is a cover that silently becomes finite the day "
             "the archive outgrows it. A finite value must be strictly longer than "
-            "seen_window_days: the two stores answer the same question from opposite "
+            "seen_window_days: the two ledgers answer the same question from opposite "
             "ends, and a cover that expires first hands an address to a first-sight "
-            "store that has already forgotten it. load_published reads it once a run, "
+            "ledger that has already forgotten it. load_published reads it once a run, "
             "through stage_plan."
         ),
     )
@@ -406,8 +406,8 @@ class CollectConfig(Model):
         expires in the same week, reads as first-seen-today. It clears the
         freshness gate and goes out as new, and nothing anywhere holds the
         evidence that it ran before. So EQUAL IS A HOLE, NOT A BOUND: at 90 and
-        90 both stores forget the same address on the same day. Only two answers
-        are safe - never forget, or forget later than the first-sight store does.
+        90 both ledgers forget the same address on the same day. Only two answers
+        are safe - never forget, or forget later than the first-sight ledger does.
 
         Checked after the model rather than on the field, so it re-runs whenever
         either number moves. Raising `seen_window_days` past a finite cover fails
@@ -421,7 +421,7 @@ class CollectConfig(Model):
                 f"not longer than collect.seen_window_days, which is {self.seen_window_days}. "
                 f"Use {UNBOUNDED_WINDOW} to never forget, or a value above "
                 f"{self.seen_window_days}. A cover that expires no later than the "
-                "first-sight store hands it an address neither one remembers, and an "
+                "first-sight ledger hands it an address neither one remembers, and an "
                 "undated re-listing then republishes as new."
             )
         return self

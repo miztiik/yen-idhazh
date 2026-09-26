@@ -241,7 +241,7 @@ def two_story_max(reading: Reading) -> float | None:
     """The highest-scoring pair marked as two different stories, or nothing.
 
     The retaken reading behind `HOLDOUT_TWO_STORY_MAX`, which is declared once in
-    the knobs module and checked here (Guardrail #10). Nothing stores it: a
+    the knobs module and checked here (Guardrail #10). Nothing keeps it: a
     committed copy would be the second source that constant is not allowed to
     have.
     """

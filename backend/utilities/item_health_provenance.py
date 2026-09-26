@@ -422,7 +422,7 @@ def bound_names(node: ast.AST, filler: str, columns: frozenset[str]) -> set[str]
     """Every column name this subtree puts a value under, on its way into the row.
 
     Four shapes carry a cell here: a keyword of one of the two sinks, a dict
-    whose every key is a column, a store into such a dict by name, and a class
+    whose every key is a column, a write into such a dict by name, and a class
     whose every field is a column. Reading a column binds nothing, and neither
     does using its word for something else.
     """

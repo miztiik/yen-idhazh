@@ -288,7 +288,7 @@ MOVED: Final = (
     ("backend/idhazh/retention.py", "day_files(ledger_root)", "shard_files("),
     ("backend/idhazh/evals/writer.py", "day_files(state_dir / LEDGER_DIRNAME)", "shard_files("),
     ("backend/idhazh/evals/writer.py", "day_files(state_dir / INDEX_DIRNAME)", "shard_files("),
-    ("backend/idhazh/telemetry/prune.py", "day_files(state_root / store)", "shard_files("),
+    ("backend/idhazh/telemetry/prune.py", "day_files(state_root / ledger)", "shard_files("),
     ("backend/utilities/measure_ledgers.py", "day_files(directory)", "shard_files("),
     (
         "backend/utilities/item_health_provenance.py",
@@ -296,10 +296,10 @@ MOVED: Final = (
         "shard_files(",
     ),
     ("backend/utilities/server_memory_mark.py", "day_files(root / LEDGER_ROOT)", "shard_files("),
-    ("backend/utilities/empty_column_census.py", "day_files(root / store.root)", "shard_files("),
+    ("backend/utilities/empty_column_census.py", "day_files(root / ledger.root)", "shard_files("),
 )
 
-#: The two stores that keep the day-file walk. `state/published/` and
+#: The two ledgers that keep the day-file walk. `state/published/` and
 #: `state/visual-prunes/` are not moving, and `day_partition.day_files` refusing
 #: a directory is the tripwire that catches a twelfth tree arriving without a
 #: plan.
@@ -330,7 +330,7 @@ def test_every_named_reader_walks_the_shards_and_not_the_day_files(
     source = _squeezed(relpath)
     assert reaches in source, f"{relpath} does not reach day_shards.{reaches[:-1]} at all"
     assert was not in source, (
-        f"{relpath} still walks day files at `{was}`. A store sharded by run identity "
+        f"{relpath} still walks day files at `{was}`. A ledger sharded by run identity "
         f"is read through day_shards.{reaches[:-1]}, which reads a day directory too."
     )
 
@@ -340,6 +340,6 @@ def test_the_two_stores_that_keep_the_day_file_walk_still_have_it() -> None:
     source = _squeezed("backend/idhazh/ledger.py")
     for kept in KEPT:
         assert kept in source, (
-            f"`{kept}` is gone, so nothing refuses a day directory under a store that never "
+            f"`{kept}` is gone, so nothing refuses a day directory under a ledger that never "
             "planned to hold one."
         )

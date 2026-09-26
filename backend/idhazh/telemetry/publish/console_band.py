@@ -12,7 +12,7 @@ Until it does, the two exist side by side and the sentences here are ported from
 there deliberately word for word - a band that said something different after the
 cutover would look like a pipeline change rather than a plumbing one.
 
-**Where each fact comes from, and why.** A number is taken from the store that
+**Where each fact comes from, and why.** A number is taken from the ledger that
 owns it, never re-derived from a wider one:
 
 - the runs, the site size and the day's article count come from the run-day

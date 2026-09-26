@@ -28,7 +28,7 @@ nothing wrong. Those are opposite facts.
 on the day-grain rates, and a second threshold here would be an answer nobody
 could reconcile with the first.
 
-The store is `state/content-similarity-judge/metrics/<YYYY>/<MM>/<DD>.csv`. The
+The ledger is `state/content-similarity-judge/metrics/<YYYY>/<MM>/<DD>.csv`. The
 directory name is spelled in `idhazh.ledger`, which is where a path belongs and
 which this module may not import (CLAUDE.md section 4).
 """
@@ -74,7 +74,7 @@ class ContentSimilarityJudgeMetrics(JudgeConfigStamp, Contract):
     judge_id: ContentSimilarityJudgeId = Field(
         default="content-similarity-judge",
         description=(
-            "Which instrument wrote this reading. One member, because this store holds "
+            "Which instrument wrote this reading. One member, because this ledger holds "
             "the readings of one judge and no other - so the column is narrowed here, "
             "where a closed set can be closed honestly."
         ),

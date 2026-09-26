@@ -39,7 +39,7 @@ class LengthAction(StrEnum):
     """What the length verdict did with this reply.
 
     Recorded because a trimmed summary and a compliant one are indistinguishable
-    afterwards - the ledger stores the length after the trim - so without this
+    afterwards - the ledger records the length after the trim - so without this
     field the pipeline cannot say how often the tolerance is doing work.
     """
 

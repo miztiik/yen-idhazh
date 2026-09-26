@@ -9,7 +9,7 @@ of the separation between the venue and its tenants: this row reads the same
 whether the judge it hosted made four hundred model calls or none, so a second
 tenant moving its own columns moves nothing here. A tenant's own funnel, its own
 instrument readings and its own verdicts are the tenant's, in the tenant's own
-store.
+ledger.
 
 The outcome vocabulary is three members, because a free-text cell would split
 silently on a typo - `completed` and `Completed` are two outcomes to a group-by

@@ -3,7 +3,7 @@
 Nothing here knows what a member is. A caller hands in three callables - list,
 describe, delete - a window and a ceiling, and gets back a record of what the
 pass took and where the next pass starts. That is the whole surface, and it is
-what lets one piece of code prune a store's day files, GitHub's workflow
+what lets one piece of code prune a ledger's day files, GitHub's workflow
 artifacts and anything added later.
 
 **Atomic means per member, and it is not the same word `idhazh.telemetry.prune`
@@ -212,7 +212,7 @@ def refuse_by_name(
     where the distinction is drawn - collapsing both into "invalid choice" loses
     the reason, which is the only useful half of a refusal.
 
-    `noun` is what the caller's vocabulary is made of. A store and a GitHub
+    `noun` is what the caller's vocabulary is made of. A ledger and a GitHub
     collection are the same shape and not the same word, and an operator reading
     a refusal should see the word they typed a name of.
     """

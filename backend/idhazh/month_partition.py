@@ -9,7 +9,7 @@ refused `2025-13`, `2025-00`, `0000-01` and a stem written in Arabic-Indic
 digits, while `evals.writer` and `evals.archive` accepted all four. So
 `2025-13.csv` was left alone in `state/feed-health/` and was archived and then
 DELETED in `state/scores/` - one name, two dispositions, and the destructive one
-landing on the store that holds the evidence behind every published quality
+landing on the ledger that holds the evidence behind every published quality
 claim.
 
 **`state/item-health/`, `state/feed-health/` and `state/seen/` file by day
@@ -30,7 +30,7 @@ the parser compiles its digit class rather than through anything this module
 asked for, and a detail is not a rule.
 
 **A name this does not recognise is left alone.** It is not deleted and it is
-not a fault. These directories are the top of their own store, and the stricter
+not a fault. These directories are the top of their own ledger, and the stricter
 rule the published day tree uses - below a dated level an unreadable name raises
 (`retention._dated_days`) - stops at a root by design, because a root is allowed
 to hold things that are not the partitioned tree at all.
@@ -68,7 +68,7 @@ def month_files(directory: Path, suffix: str) -> list[Path]:
     """Every `<YYYY-MM><suffix>` in one directory, oldest first, and nothing else.
 
     One listing of the directory, then a sort of the names it returned - so the
-    cost is the store's own contents and never what sits beside it. An absent
+    cost is the ledger's own contents and never what sits beside it. An absent
     directory is not an error: a fresh clone has no history, and no history is
     not a fault.
     """
@@ -89,7 +89,7 @@ def oldest_month_kept(today: date, months: int) -> str:
 
     It lives here rather than inside one prune because the state ledgers and the
     published tree now age by the same arithmetic, and a boundary computed twice
-    is how one store deletes a month the other still serves.
+    is how one ledger deletes a month the other still serves.
     """
     if months < 1:
         raise ValueError("keeping fewer than one month would delete the month being written")

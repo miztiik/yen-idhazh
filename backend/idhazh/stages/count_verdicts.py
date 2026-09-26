@@ -37,7 +37,7 @@ class CountReport:
     rows_appended: int
 
     #: How many instrument rows the units shipped landed in this judge's own
-    #: store. Counted apart from the verdicts because a night whose units all
+    #: ledger. Counted apart from the verdicts because a night whose units all
     #: judged nothing still files one row each, and a zero here on a night that
     #: appended verdicts is an upload that went missing.
     metrics_appended: int
@@ -173,10 +173,10 @@ def stage_count_verdicts(
 
 
 def _collect_metrics(date: str, *, state: Path, shipped_root: Path, judge_id: str) -> int:
-    """Append what the units shipped to this judge's own metrics store.
+    """Append what the units shipped to this judge's own metrics ledger.
 
     Through the council's shipping capability, which renders and reads a row by
-    the contract it is handed - so the venue names no column of this store and
+    the contract it is handed - so the venue names no column of this ledger and
     this module opens no shipped file itself.
 
     What it reads is one file per unit of tonight's split, so it costs what the
