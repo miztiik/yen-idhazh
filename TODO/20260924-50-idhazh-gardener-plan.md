@@ -143,7 +143,7 @@ state/compact/gardener/index/daily.json
 
 `<ledger>` is `gardener`, `visual-prune`, `feed-retirements`, `item-health`, `scores`, `host-fingerprint` or `span-rollup`. Rows 3, 9 and 10 add the last five, and `LedgerName` (plan 53 row 3) is the closed set that refuses a typo.
 
-**A data file is written once and never rewritten. Four small JSON files are rewritten in place, and each one has exactly one writer.** The raw day index, and the index and watermark of each compact period. A path with one writer cannot lose a push race, needs no merge driver, and makes "same path, different identity" a detectable defect - so single writership is the property that matters here, not immutability, and section 5.4's `paths.py` is what makes it structural rather than hoped for.
+**A data file is written once and never rewritten. Five small JSON files are rewritten in place, and each one has exactly one writer.** The raw day index of an open day, and the index and watermark of each compact period - `index/daily.json`, `index/monthly.json`, `daily/watermark.json`, `monthly/watermark.json`. **A raw day index stops being rewritten the moment its day is compacted** (section 5.9.13), which is what lets `raw_index_keep_days` hold a real listing rather than ninety days of empty ones. A path with one writer cannot lose a push race, needs no merge driver, and makes "same path, different identity" a detectable defect - so single writership is the property that matters here, not immutability, and section 5.4's `paths.py` is what makes it structural rather than hoped for.
 
 **Why a watermark file exists when the newest file already names a date.** A listing cannot tell you about a gap. If 23 September produced nothing, no daily file is written, the newest file still says the 22nd, and the task retries the 23rd every day forever. The watermark records "I looked at the 23rd and there was nothing", which is the one fact no walk of the tree recovers. There is one per period because there are two roll-ups - raw to daily, daily to monthly - and each is its own task; one shared file would have two writers, which is the race this whole design removes.
 
@@ -494,7 +494,9 @@ Steps 3 to 5 are one commit, so there is no instant at which a date sits in two 
 
 **A month is absorbed whole or not at all.** Absorbing it in pieces would make a date reachable through two periods, and the browser's coarsest-period rule would then read a month file that does not yet hold the day it asked for - a silent undercount with no 404 and no error, which is the defect class this design exists to remove. The price is that the daily period holds between `daily_keep_days` and `daily_keep_days + 31` days rather than exactly 45.
 
-**What a watermark means, per period.** `daily/watermark.json.through` is the newest **day** whose raw files have been absorbed. `monthly/watermark.json.through` is the newest **month** fully absorbed, stamped `YYYY-MM`. A date after the daily watermark is open and read from raw; a date at or before it and inside a month named in `monthly.json` is read from that month file; everything between is read from the daily period.
+**What a watermark means, per period.** `daily/watermark.json.through` is the newest **day** whose raw files have been absorbed. `monthly/watermark.json.through` is the newest **month** fully absorbed, stamped `YYYY-MM`. Each answers exactly one question for its own compaction: where does the next run resume.
+
+**A watermark is a producer file, and nothing in a browser opens one.** An earlier draft gave the reader a three-branch rule whose first branch read raw files for any date after the daily watermark - and section 5.9.4 says no raw file is ever published, so that branch was unreachable from a browser. The two indexes already state exactly what exists, so the rule is two lines: **is the date named in `monthly.json`? read that month file. Else is it named in `daily.json`? read that day file. Else it is not available**, which the console renders as `unreachable` rather than as a low number. That is **two fetches a panel instead of four, on every page load**. Owner ruling, 2026-09-26.
 
 **Every task in the matrix runs at every wake, both monthly compactions included.** A compaction runs at the gardener's own wake, published or not - **no workflow step outside `idhazh-gardener.yml` triggers one** - and its own watermark decides whether a period is there to take. A monthly compaction therefore wakes daily and writes a record saying nothing was eligible about 29 days in 30. That costs one task slot inside a shard that runs anyway, and it buys the `plan` job a checkout of `config/` and `backend/utilities/` that no later ledger widens. It is also what a published ledger needs: the reader's open period is every day past the daily watermark and no raw file is published, so a day that has not been compacted is a day the console cannot draw.
 
@@ -927,7 +929,7 @@ The browser never reads this list; one backend test asserts that every ledger a 
 | Knob | Type | Whose | What it acts on |
 | --- | --- | --- | --- |
 | `compact_after_hours` | `int`, `ge=1`, default `24` | index and daily compaction | How long after a day ends before that day may be read, measured against the day's own end instant in UTC. **The default is the rule: a whole day must have ended**, which at the `40 0 * * *` wake makes the newest eligible day two days back. The knob is a plain duration - 30 gives thirty hours - and section 5.3 proves no wake time in the day changes the answer |
-| `raw_index_keep_days` | `int`, `ge=1`, default `90` | index | How long `state/raw/<ledger>/index/<YYYY-MM-DD>.json` survives. **Without it the raw index tree grows by 365 files a ledger a year forever**: it is written by the index task, read by the daily compaction once, and after that day is in the daily period nothing reads it again. It outlives the daily period deliberately, so a compaction that was reverted still has its input |
+| `raw_index_keep_days` | `int`, `ge=1`, default `90` | index | How long `state/raw/<ledger>/index/<YYYY-MM-DD>.json` survives. **Without it the raw index tree grows by 365 files a ledger a year forever**: it is written by the index task, read by the daily compaction once, and after that day is in the daily period nothing reads it again. It outlives the daily period deliberately, so a compaction that was reverted still has its input - and **the index task stops rewriting a day once that day is compacted** (section 5.9.13), so what the window holds is that day's real listing rather than an emptied directory's `files: []` |
 | `daily_keep_days` | `int`, `ge=1`, default `45` | monthly compaction | **How old every day of a month must be before that month is absorbed.** It is not a per-file age test. A daily file is never deleted before its month's file exists, so the daily period holds between `daily_keep_days` and `daily_keep_days + 31` days |
 | `monthly_keep_months` | `int`, `ge=1`, default `13` | monthly compaction | How long a month file survives. With `daily_keep_days` this is the ledger's real retention floor once it goes through the door: about 14 months at the defaults |
 | `max_periods_per_run` | `int`, `ge=1`, default `8` | compaction | How many eligible periods one wake may consume. **This is what keeps a first run's cost off the size of the archive** (Guardrail #12) and what makes "starts at the watermark plus one" and "one period at a time" the same program |
@@ -1037,51 +1039,193 @@ All three are read by a later run, so all three are contracts with a `__schema_s
 One alias joins `backend/idhazh/contracts/base.py`, because a filename reaches a fetch URL and Guardrail #11 names the schema as the control:
 
 ```python
-#: `<file_id>.parquet`. A name this project minted, never a name it was given.
-FILE_ID_NAME_PATTERN: Final = r"^[0-9a-f]{8}-[0-9a-f]{4}-8[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.parquet$"
+#: `<file_id>.parquet` or `<file_id>.json`. A name this project minted, never a name it was given.
+FILE_ID_NAME_PATTERN: Final = (
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-8[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.(parquet|json)$"
+)
 FileIdName = Annotated[str, StringConstraints(pattern=FILE_ID_NAME_PATTERN)]
 
 #: What one compact file covers: `2026-09-23` or `2026-08`.
 PeriodStamp = DateStamp | MonthStamp
 ```
 
+**The suffix group holds both formats, because the door writes both.** `Format` carries `JSON`, `persist()` takes `fmt`, and row 2 decision 7 keeps JSON first-class - "a payload a person reads in a pull request should not be binary". A pattern ending `\.parquet$` would leave a JSON-format ledger with raw days that cannot be indexed at all, failing at validation rather than at the door. Widening it costs the control nothing: the alias still refuses a `.csv` name, still refuses a name this project did not mint, and still refuses anything a fetched page could have supplied.
+
 **`PeriodStamp` is a union of two aliases that already exist**, not a third pattern: `base.py` declares `MONTH_PATTERN` and `MonthStamp` today. `DateStamp` alone cannot hold `2026-08`, so it is not the type for anything a monthly period writes.
 
 ```python
 class RawDayIndex(Contract):
-    """Which raw files exist for one day of one ledger, and what the tree held
-    when this index was last written."""
-    ledger: LedgerName
-    date: DateStamp
-    files: list[FileIdName]     # ascending, unique; empty is legal and meaningful
-    file_count: int             # ge=0
-    content_sha256: str         # over "\n".join(files)
-    sealed_at: Timestamp        # UTC, ISO-8601 with Z
+    """Which raw files exist for one day of one ledger.
 
-class CompactEntry(Model):     # one row inside CompactIndex, never a file
-    covers: PeriodStamp
-    rows: int                  # ge=0
-    bytes: int                 # ge=0
+    Rewritten at every wake until that day is compacted, and never again after.
+    """
+    ledger: LedgerName
+    date: DateStamp             # the UTC day these files hold, not the day this was written
+    files: list[FileIdName]     # ascending, unique; empty is legal and means the day made nothing
+    content_sha256: Sha256      # over "\n".join(files)
+    listed_at: Timestamp        # when the index task last agreed with the tree
+
+class CompactEntry(Model):      # one row inside CompactIndex, never a file
+    covers: PeriodStamp         # the day or the month this one file holds
+    rows: int                   # ge=0, after deduplication: one row per unit_id, highest attempt
+    bytes: int                  # ge=0, so a reader checks Content-Length before it parses anything
 
 class CompactIndex(Contract):
-    """Which compact files exist in one period of one ledger."""
+    """Which compact files exist in one period of one ledger.
+
+    Sufficient on its own: a date is in monthly, or in daily, or it is not
+    available. Nothing in a browser opens a watermark.
+    """
     ledger: LedgerName
     period: Period
     entries: list[CompactEntry]
 
 class Watermark(Contract):
-    """How far one period of one ledger has been compacted."""
+    """How far one period of one ledger has been compacted.
+
+    A producer file. It says where the next run resumes and nothing else.
+    """
     ledger: LedgerName
     period: Period
-    through: PeriodStamp       # the newest period this one has finished
-    advanced_at: Timestamp     # UTC, ISO-8601 with Z
+    through: PeriodStamp        # the newest period fully absorbed
+    advanced_at: Timestamp
+    run_id: RunId               # which run left it here, after the record naming it is pruned
 ```
 
-A `model_validator(mode="after")` on `RawDayIndex` asserts `files == sorted(files)`, `len(set(files)) == len(files)` and `file_count == len(files)`. One on `CompactIndex` asserts every `entries[].covers` matches the granularity its `period` declares.
+**Three validators, one per shape, each raising with the ledger and the period or date in the message.** `RawDayIndex`: `files` ascends and holds no duplicate. `CompactIndex`: `entries` ascends by `covers`, no `covers` appears twice, and every one matches the granularity `period` declares. `Watermark`: `through` matches the granularity `period` declares - `PeriodStamp` is a union of two aliases, so without that line a daily watermark legally holds `2026-08`, and this is the file that decides where a compaction resumes.
 
-**`sealed_at` says when the index task last agreed with the tree.**
+**`file_count` is not a field, and `extra="forbid"` is what makes the removal stick.** `len(files)` is free to anything that has already parsed the JSON, so a count beside the list is two answers to one question - the same reason `row_count` is not in the envelope (Guardrail #4). `Model` sets `extra="forbid"`, so a writer that still emits `file_count` fails at validation rather than being quietly tolerated: the deletion is enforced, not merely documented, and it cannot half-land.
 
-**The index task** runs at every wake and writes an index for every raw day directory of its ledger that is eligible under `compact_after_hours`. It lists the directory, computes `file_count` and `content_sha256` over the sorted filename list, and writes the index whole.
+**`content_sha256` is `Sha256`, not `str`.** `base.py` already declares that alias at `^[0-9a-f]{64}$`. A bare `str` accepts an empty string or a URL, and this value travels into a record row.
+
+**`CompactEntry` carries no hash, and `bytes` is why.** `bytes` lets a reader check `Content-Length` before it parses anything, which is the cheap integrity check the index is for; the file's own envelope carries the hash for the case that needs certainty. A second hash in the index would be a second thing to keep in step with the file it describes.
+
+**`Watermark.run_id` answers the question `advanced_at` cannot.** When an operator asks why a watermark stopped on the 12th, `advanced_at` says when and the job log says why - but the record row holding `run_id` is itself pruned on a window, and the watermark is not.
+
+##### The payloads themselves, so a worker matches bytes rather than a description
+
+**Every hash below is real and a worker may assert against it.** Each is `sha256` over `"\n".join(files)` of the list in that same payload, UTF-8, no trailing newline. `version` is the shape's own stamp and sits next to `date`, which is the data's day; they are different questions and the pairing invites a misread, which is why each carries its own description in the model.
+
+`state/raw/item-health/index/2026-09-24.json` - a populated day:
+
+```json
+{
+  "version": "2026-09-26",
+  "ledger": "item-health",
+  "date": "2026-09-24",
+  "files": [
+    "01a0d140-9ba7-8ea9-bdd5-7b9344b4ce8c.parquet",
+    "01a0d140-9ca8-8733-ad3a-ed18a16e34e6.parquet",
+    "01a0d140-9de4-83e8-8c70-7a05105620c9.parquet",
+    "01a0d14c-afba-80a3-8ee1-e2b9b8c6d823.parquet",
+    "01a0d14c-b02e-81ab-953d-a30e9d7b505e.parquet",
+    "01a0d2ab-d8c0-829b-ac38-cea80ffde2ed.parquet"
+  ],
+  "content_sha256": "9b5c285871509ca89bca27690aabddc4ea455d549ecbb387e48ba1dc9b33cede",
+  "listed_at": "2026-09-25T00:40:12Z"
+}
+```
+
+An eligible day that produced nothing. The hash is `sha256("")`, because joining an empty list gives the empty string:
+
+```json
+{
+  "version": "2026-09-26",
+  "ledger": "item-health",
+  "date": "2026-09-21",
+  "files": [],
+  "content_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "listed_at": "2026-09-25T00:40:12Z"
+}
+```
+
+The same shape for a ledger whose `ledger.format` is `json` - this is what the widened suffix group unblocks:
+
+```json
+{
+  "version": "2026-09-26",
+  "ledger": "<a json-format ledger>",
+  "date": "2026-09-24",
+  "files": [
+    "01a0d14c-afba-80a3-8ee1-e2b9b8c6d823.json",
+    "01a0d14c-b02e-81ab-953d-a30e9d7b505e.json"
+  ],
+  "content_sha256": "4646d2b78b213d57e160cb585fd45c3f794fd17bda7edf36163a48c6fc2c7fd5",
+  "listed_at": "2026-09-25T00:40:12Z"
+}
+```
+
+`state/compact/item-health/index/daily.json`:
+
+```json
+{
+  "version": "2026-09-26",
+  "ledger": "item-health",
+  "period": "daily",
+  "entries": [
+    { "covers": "2026-09-22", "rows": 214, "bytes": 86104 },
+    { "covers": "2026-09-23", "rows": 220, "bytes": 87714 }
+  ]
+}
+```
+
+`state/compact/item-health/index/monthly.json`:
+
+```json
+{
+  "version": "2026-09-26",
+  "ledger": "item-health",
+  "period": "monthly",
+  "entries": [
+    { "covers": "2026-07", "rows": 6412, "bytes": 1174208 },
+    { "covers": "2026-08", "rows": 6789, "bytes": 1231872 }
+  ]
+}
+```
+
+**87,714 is section 4's measured figure for 220 item-health rows at 122 columns. The monthly sizes are illustrative and a worker must not assert on them.**
+
+`state/compact/item-health/daily/watermark.json` and `state/compact/item-health/monthly/watermark.json`:
+
+```json
+{
+  "version": "2026-09-26",
+  "ledger": "item-health",
+  "period": "daily",
+  "through": "2026-09-23",
+  "advanced_at": "2026-09-25T00:41:03Z",
+  "run_id": "2026-09-25-17491882043"
+}
+```
+
+```json
+{
+  "version": "2026-09-26",
+  "ledger": "item-health",
+  "period": "monthly",
+  "through": "2026-08",
+  "advanced_at": "2026-09-25T00:41:07Z",
+  "run_id": "2026-09-25-17491882043"
+}
+```
+
+##### What each shape must accept and what it must refuse
+
+Row 7's `backend/tests/contracts/test_ledger_index.py` drives every cell, each case built in the test rather than read at module scope (CLAUDE.md section 13).
+
+| Shape | Accepts | Refuses |
+| --- | --- | --- |
+| `RawDayIndex` | a populated day, an empty day, a `.json`-format day | out-of-order `files`, a duplicate file, a `.csv` name, a fractional-second `listed_at`, and a leftover `file_count` |
+| `CompactIndex` | an ordered daily index, an ordered monthly index | a daily index holding `2026-08`, unordered `entries`, a repeated `covers` |
+| `Watermark` | daily with a date, monthly with a month | a daily watermark holding `2026-08`, a bare run number in `run_id` |
+
+**Two of those refusals come free and neither is obvious.** `listed_at` is `Timestamp`, whose pattern is whole seconds ending `Z`, so a fractional-second stamp is refused without a line being written for it. And `file_count` is refused by `extra="forbid"` on the `Model` base, which is what turns deleting a field into something a writer cannot quietly undo.
+
+**The index task** runs at every wake and writes an index for every raw day directory of its ledger that is eligible under `compact_after_hours`, **skipping any day at or below `daily/watermark.json.through` whose raw directory is empty or absent**. It lists the directory, computes `content_sha256` over the sorted filename list, and writes the index whole.
+
+**Without that skip, `raw_index_keep_days` buys nothing.** The daily compaction deletes a day's raw files. An index task that re-lists the emptied directory rewrites the index to `files: []`, so the ninety days the window holds are ninety days of empty lists and the revert case it was bought for is gone one day after compaction.
+
+**The skip is conditioned on the directory being empty, and that clause is load-bearing.** A bare "at or below the watermark" test would also skip the one day that must not be skipped: a re-run of a failed job writes into its original day, which is below the watermark, and row 7 decision 4 absorbs that rather than guarding against it. Conditioning on emptiness keeps both - a compacted day is never re-listed, and a day that has raw files again is indexed again so the compaction can take it. The emptiness is free: the task lists the directory anyway. It is also why the field is `listed_at` rather than `sealed_at` - "sealed" claims a finality a re-run can legitimately break, where `listed_at` says what it means, the moment the task last agreed with the tree.
 
 **The daily compaction** reads the index for the day it is about to take. It re-lists that one directory first and, on a mismatch, rewrites the index before compacting - one listing, for one day, at the moment it matters. It never skips.
 
@@ -1091,7 +1235,7 @@ A `model_validator(mode="after")` on `RawDayIndex` asserts `files == sorted(file
 
 **What a reader does with a stamp it does not know.** On the Python side `Contract.read()` already refuses a stale payload by name. In the browser the rule is: the query door compares an index's `version` against the one the bundle was built with, and on any mismatch it renders the `unreachable` state with both stamps in the console and fetches nothing. A build and the tree it reads ship from one checkout in one artefact, so a mismatch is a deployment fault rather than a data fault, and reading past it would draw a chart from a shape nobody checked.
 
-**The read-side migration when an index changes shape.** These files are derived and rebuildable: the compaction that owns a period rewrites its whole index on its next wake. So a breaking change to `CompactIndex` or `Watermark` ships a one-line reset of that period's watermark to its first period, which makes the next run rewrite every file and every index in it. `RawDayIndex` cannot take that route, because a sealed day's raw files are not rewritten, so it ships a read-side branch on `version` in `ledger/settle.py`, kept for one release.
+**The read-side migration when an index changes shape.** These files are derived and rebuildable: the compaction that owns a period rewrites its whole index on its next wake. So a breaking change to `CompactIndex` or `Watermark` ships a one-line reset of that period's watermark to its first period, which makes the next run rewrite every file and every index in it. `RawDayIndex` cannot take that route, because a compacted day's raw files are not rewritten, so it ships a read-side branch on `version` in `ledger/settle.py`, kept for one release.
 
 ---
 
@@ -1176,7 +1320,7 @@ It mints `unit_id` and then `file_id` through `naming` (section 5.7), builds the
   | 9 | `day_shards.py` stays CSV-only. Teaching one reader two formats is how a tree ends up with two grammars; `ledger/` exists to avoid that | Fowler |
   | 10 | **The door ships before any byte moves.** Row 3 is the only one-way change in this plan; keeping it out of this pull request is what lets either be reverted alone | Fowler |
   | 11 | **A file carries two identifiers, `unit_id` and `file_id`, and neither can do the other's job** (section 5.7). `unit_id` is a clock-free `uuid5` that is identical across attempts, so `GROUP BY unit_id` collapses a re-run onto its original; `file_id` is a clock-first `uuid8` that differs on every write, so no two writers take one path. **`attempt` goes only in `file_id`, and `producer` goes only in `unit_id`** | Owner, 2026-09-26, overturning the single-identifier design of 2026-09-24, which put a clock and `attempt` inside the value it then deduplicated on |
-  | 12 | **Every instant this door reads, writes or compares is UTC** - `written_at_ms` is UTC epoch milliseconds, `covers` is a UTC day or month, and `sealed_at` is ISO-8601 with `Z` | CLAUDE.md section 2 |
+  | 12 | **Every instant this door reads, writes or compares is UTC** - `written_at_ms` is UTC epoch milliseconds, `covers` is a UTC day or month, and `listed_at` is ISO-8601 with `Z` | CLAUDE.md section 2 |
 
 - **Rejected alternatives:**
 
@@ -1419,7 +1563,7 @@ It mints `unit_id` and then `file_id` through `naming` (section 5.7), builds the
   - `docs/architecture/publishing/idhazh-gardener.md` (takes both diagrams and the compaction), `docs/reference/github-actions.md`, `docs/concepts/adaptive-pruning.md`, `docs/architecture/publishing/retention.md`, `docs/concepts/glossary.md`
   - `backend/tests/gardener/tasks/test_index_day.py`, `backend/tests/gardener/tasks/test_compaction.py`, `backend/tests/gardener/test_shard_pairing.py`, `backend/tests/ledger/test_settle.py`, `backend/tests/contracts/test_ledger_index.py`, `backend/tests/workflows/test_digest_workflow.py`
 - **Acceptance gates:** local `ruff check .`, `mypy backend`, `pytest backend/tests/gardener backend/tests/ledger backend/tests/contracts backend/tests/workflows -q`, and `python backend/utilities/doc_load.py` before and after. The six diagram checks in [docs/reference/documentation-structure.md](../docs/reference/documentation-structure.md) are run by eye on a light page and a dark one, for both diagrams. CI runs the full suite. **No browser smoke**: nothing published changes in this row, because `LedgerConfig.published` is still empty.
-- **Oracle:** **compaction changes no answer, and no date is ever readable twice.** `settle()` over a raw tree and `settle()` over the compact file built from it return equal rows in equal order - that is what makes compaction safe to skip, safe to repeat and safe to run on only some periods. The second half is the one that catches the defect that matters: over a fixture ledger carrying both periods plus open raw days, **every date in the window is reachable through exactly one file, and a date the daily watermark has passed that is named in neither index is reported as a hole rather than skipped.** A date in two periods doubles every number a panel draws, which is the defect class filed as 33. Paired with both diagrams passing all six merge checks. It cannot settle whether the size win holds at real volumes; the `bytes_freed` column the task writes is the reading, and section 4's figures are the prediction it tests.
+- **Oracle:** **compaction changes no answer, and no date is ever readable twice.** `settle()` over a raw tree and `settle()` over the compact file built from it return equal rows in equal order - that is what makes compaction safe to skip, safe to repeat and safe to run on only some periods. The second half is the one that catches the defect that matters: over a fixture ledger carrying both periods plus open raw days, **every date in the window is reachable through exactly one file, and a date the daily watermark has passed that is named in neither index is reported as a hole rather than skipped.** A date in two periods doubles every number a panel draws, which is the defect class filed as 33. Paired with both diagrams passing all six merge checks, and with every cell of section 5.9.13's accept-and-refuse table driven by `test_ledger_index.py` against the reference payloads printed there. It cannot settle whether the size win holds at real volumes; the `bytes_freed` column the task writes is the reading, and section 4's figures are the prediction it tests.
 - **Decisions:**
 
   | # | Decision | Authority |
@@ -1455,6 +1599,8 @@ It mints `unit_id` and then `file_id` through `naming` (section 5.7), builds the
   | 11 | Write partial month files and rewrite them as days age in | The monthly period would be current within a day, at 1,649 bytes a rewrite - and a date would sit in two periods for up to 30 days a month | Zero; costs the one-file-per-date invariant | Carmack, 2026-09-25 |
   | 12 | Add the gardener page as a section of `retention.md` | That page answers what is deleted and for how long; the job graph, the commit loop and the record layout are a second question | Zero; costs the page its single question | `docs/reference/documentation-structure.md` |
   | 13 | Have the `plan` job read each period's `watermark.json` and put only the compactions it finds eligible in the matrix | The file is outside that job's checkout, so the read finds nothing and answers "never compacted" at every wake forever. It also answers nothing worth having: at `compact_after_hours: 24` a daily compaction is eligible at every wake in steady state, and a monthly saves one no-op task inside a shard that runs anyway | Zero; costs the plan job a cone that grows with every ledger, and buys one no-op task a day | Owner, 2026-09-26, overturning the 2026-09-24 design. Consistent with rejected alternative 8 above, which this clause had been contradicting |
+  | 14 | Fold `through` into `CompactIndex`, since one writer writes both | It would be legal - same writer, same commit - but decision 5 makes "data first, watermark last" an invariant, and one file cannot hold two states. The reason anybody wanted the fold was to save a browser a fetch, and no browser reads a watermark at all now (section 5.3) | Zero; costs the resumable ordering that makes a half-finished period cost one repeat | Fowler, 2026-09-26 |
+  | 15 | Give `CompactEntry` a `content_sha256` | `bytes` already lets a reader check `Content-Length` before it parses anything, and the file's own envelope carries the hash for the case that needs certainty. A second hash is a second thing to keep in step with the file it describes | Zero; costs `bytes` the reason it is in the index | Fowler, 2026-09-26 |
 
 ---
 
