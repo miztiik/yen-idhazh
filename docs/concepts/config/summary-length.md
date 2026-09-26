@@ -18,7 +18,7 @@ Extraction has three shape and access control groups:
  text carries `not_prose`.
 - `extract.boilerplate_ratio_max` decides when sibling-shared lines carry
   `boilerplate`. Nothing supplies the sibling lines, so the ratio divides by an
-  empty set and this knob has never changed an outcome. A store that fed it
+  empty set and this knob has never changed an outcome. A ledger that fed it
   shipped on 2026-09-17 and was reverted the same day: over a full run it moved
   the signal zero times.
 - `extract.paywall_markers` is the fallback when JSON-LD does not declare a

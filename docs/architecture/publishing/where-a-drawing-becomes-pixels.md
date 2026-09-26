@@ -146,7 +146,7 @@ frontend/public/digest/<YYYY>/<MM>/<DD>/<item_id>.json
 That is the path the drawing occupied with a `.svg` extension until 2026-09-13, so the shape did not
 move -
 only what is inside it. **The shard is the day directory**, which is what every other published
-store uses, and the day is also what a reader fetches.
+collection uses, and the day is also what a reader fetches.
 
 **The chart data is kept out of `digest.json`, and the prune is the reason rather than the size.**
 The day payload is never deleted - it is the record that a day happened. Chart data inside it would

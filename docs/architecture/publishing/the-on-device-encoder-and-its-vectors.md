@@ -50,7 +50,7 @@ Four things make it check rather than look like it checks.
 
 **What it costs a reader, said before they press the button.** The search panel's sentence names this site as the source, and adds one conditional clause: if this site cannot serve the files, the browser asks Hugging Face instead - about 50 MB rather than 43, because the hub does not compress the weights - and they would see the request. The unconditional half stays first and stays true either way: nothing a reader types leaves their browser. Almost nobody pays the conditional half, so it does not open the sentence; a reader deciding whether to start is still told before they start.
 
-The service worker never touches any of it. It refuses an off-origin request before it looks at anything else, so the only copy of a fetched-elsewhere encoder is the one the loader put in the library's own store **after** hashing it. A worker that cached it would be a second copy nobody verified, keyed by a URL nobody checked.
+The service worker never touches any of it. It refuses an off-origin request before it looks at anything else, so the only copy of a fetched-elsewhere encoder is the one the loader put in the library's own `Cache` **after** hashing it. A worker that cached it would be a second copy nobody verified, keyed by a URL nobody checked.
 
 ## A vector is a function of its own text, and of nothing it travelled with
 

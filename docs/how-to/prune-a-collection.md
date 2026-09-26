@@ -5,7 +5,7 @@
 How do I delete the old members of a collection, safely, without taking the
 whole backlog in one go?
 
-Two commands, one core. `idhazh telemetry prune` takes day files out of a store
+Two commands, one core. `idhazh telemetry prune` takes day files out of a ledger
 under `state/`. `backend/utilities/prune_artifacts.py` takes members out of a
 collection GitHub holds for us. Both delete one member at a time, both stop at a
 ceiling, and both say where the next pass resumes. What "atomic" means here and
@@ -72,7 +72,7 @@ there for a workflow that wants to upload or commit what a pass did.
 | 1 | a delete failed. The members before it are gone and the report names the one to retry |
 | 2 | an argument was refused - an unknown collection, a bad day, a repository that is not `owner/name` |
 
-## Prune day files out of a store
+## Prune day files out of a ledger
 
 ```
 idhazh telemetry prune --target item-health --since 2026-08-24 --until 2026-08-26
@@ -89,9 +89,9 @@ idhazh telemetry prune --target scores --since 2025-01-01 --until 2025-12-31 \
   --no-dry-run --max-deletes 30
 ```
 
-Which stores this may be pointed at, which two are refused by name, and why
+Which ledgers this may be pointed at, which two are refused by name, and why
 `scores` and `score-index` are pruned as a pair are in
-[../architecture/publishing/retention.md](../architecture/publishing/retention.md#a-named-prune-one-store-one-range-of-days-2026-09-16).
+[../architecture/publishing/retention.md](../architecture/publishing/retention.md#a-named-prune-one-ledger-one-range-of-days-2026-09-16).
 
 ## Failure modes
 
@@ -99,14 +99,14 @@ Which stores this may be pointed at, which two are refused by name, and why
 | --- | --- | --- |
 | `GITHUB_TOKEN is not set` | the token is not exported | export one with `actions:write` for this repository. Never put it in a file |
 | `--repo takes owner/name` | the slug is wrong or `GITHUB_REPOSITORY` is unset | pass `--repo miztiik/yen-idhazh` |
-| `a prune takes the name of a store, not ...` | a path was passed where a name belongs | pass a name. There is no argument on either command a path can travel through |
-| `published is refused: ...` | you named a store that must not forget | read the reason in the message. It is a decision, not an oversight |
+| `a prune takes the name of a ledger, not ...` | a path was passed where a name belongs | pass a name. There is no argument on either command a path can travel through |
+| `published is refused: ...` | you named a ledger that must not forget | read the reason in the message. It is a decision, not an oversight |
 | `since is after until` | the two ends are swapped | the oldest day comes first |
 | the same members print on every run | the pass is a dry run | add `--no-dry-run` |
 
 ## See also
 
 - [../concepts/atomic-deletes.md](../concepts/atomic-deletes.md) - what atomic means here, and why a range is not one.
-- [../architecture/publishing/retention.md](../architecture/publishing/retention.md) - what bounds each tree, and which store carries which window.
+- [../architecture/publishing/retention.md](../architecture/publishing/retention.md) - what bounds each tree, and which ledger carries which window.
 - [../concepts/config/retention-ages.md](../concepts/config/retention-ages.md) - the ages the `prune` block spends.
 - [run-the-gates.md](run-the-gates.md) - the checks to run after a change to either command.

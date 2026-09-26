@@ -167,7 +167,7 @@ early is one file with no caller for as long as it takes the writers to arrive.
 | Option | Why rejected | What it would cost to take |
 | --- | --- | --- |
 | Build the chart first and infer the shape from what it needs | the chart would ship against empty columns and apologise, which is what the console already does on three panels | one rebuild of the projection after the columns fill |
-| Draw from `span-rollup` alone | the rollup is folded per shard and per span name, so it knows how long fetching took and never which article was being fetched. It cannot place one item on a clock | a second per-item store |
+| Draw from `span-rollup` alone | the rollup is folded per shard and per span name, so it knows how long fetching took and never which article was being fetched. It cannot place one item on a clock | a second per-item ledger |
 | Fold the residual into the step beside it | that step then reads as slower than it was, and no reader can tell the overhead from the work | nothing - it is cheaper to leave it out, which is what makes it a trap |
 | Clamp a negative residual to zero so every bar draws | the only signal that two steps overlapped disappears, and the known overlap is real rather than hypothetical | the same column, minus the one thing it catches |
 

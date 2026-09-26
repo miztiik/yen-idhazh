@@ -479,7 +479,7 @@ input manifest are read from `run.json`. `identitiesByDate` in
 `frontend/src/lib/server/model-work.ts` tags each day with which record it
 carries. A split on the records rather than "prefer whichever is present": the
 two shapes always compare unequal, so an overlap would invent a boundary.
-**Two days recorded different ways are never a boundary**, because the store
+**Two days recorded different ways are never a boundary**, because the ledger
 changed there and the pipeline need not have. A day carrying both is a day
 something replayed, and the manifest wins - a record that can name a field beats
 one that can only say a field moved. The digest fallback retires once no score row

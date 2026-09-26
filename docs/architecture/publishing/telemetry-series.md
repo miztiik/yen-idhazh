@@ -15,7 +15,7 @@ shards on demand as the operator pans the viewport.
 **The source files by day and the projection files by month, since 2026-09-13.**
 They take their grain from different things - the ledger from what a run writes
 and what a removal takes away, the mirror from what a browser fetches - and
-[../../concepts/partitions.md](../../concepts/partitions.md#a-store-and-its-mirror-may-file-at-different-grains)
+[../../concepts/partitions.md](../../concepts/partitions.md#a-ledger-and-its-mirror-may-file-at-different-grains)
 owns both rules. This module is the bridge: `day_partition.days_by_month` groups
 the day files, and a month is projected whole from at most 31 of them. What it
 cost, stated rather than implied: the unbounded case opens about thirty times as
@@ -337,7 +337,7 @@ been folded away is a rate nobody can check, and a source month with no publishe
 copy is a window the console cannot draw. Since 2026-09-03 the two files go
 together: `retention.prune_telemetry` folds the ledger month, unlinks the shard,
 and unlinks this copy of it in the same step
-([../../concepts/config/retention-ages.md](../../concepts/config/retention-ages.md#every-store-names-its-own-cleanup-age)).
+([../../concepts/config/retention-ages.md](../../concepts/config/retention-ages.md#every-tree-names-its-own-cleanup-age)).
 
 Three things about that deletion are worth stating on this page rather than only
 on the pruner's:
@@ -649,7 +649,7 @@ by grouping on shard index and refusing any run whose two rows for one shard
 disagreed.
 
 **Every one of those defects is closed on the writer's side now, and the reader
-that worked around them is gone with the store.** A run id carries the identity
+that worked around them is gone with the ledger.** A run id carries the identity
 of the execution that made it, so two workflow runs can no longer compute one.
 From 2026-09-18 each model-server job writes its readings into its own file
 under the day it recorded, so no two writers open one file. `day_shards.settled_rows` settles

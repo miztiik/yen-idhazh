@@ -863,7 +863,7 @@ Coherence runs in the `work` shard, inside `to_eval_row`, because that is where 
 | Let lead coverage or a dropped hedge force `low` | It overcorrects. A good summary of a badly-extracted or narrow source can miss the lead and still be faithful to what it says. | owner |
 | Re-cut the faithfulness band thresholds to reduce the `high` share | A band share is not an error rate. Choosing 0.90 over 0.80 would choose how much of the digest is called `high` and only then discover what `high` means. The decision needs human labels, not more unlabelled rows. It also changes nothing the reader sees: `high` prints no item-level copy. | Andre, Reader |
 | Delete the four duplicate rows the old writer left in the ledger | They are an honest record of a run that really did re-summarize those items. The ledger is append-only, and rewriting history to make a denominator tidier is the band-aid, not the fix. | Fowler |
-| Store `band_reason` on the eval row as well | It is derivable from four columns already on the row, and adding a column to a committed append-only CSV is a migration bought for nothing. | Fowler |
+| Keep `band_reason` on the eval row as well | It is derivable from four columns already on the row, and adding a column to a committed append-only CSV is a migration bought for nothing. | Fowler |
 | Print both reasons when both counterweights fail | Two sentences on one item in a meta row is a paragraph. A reader gets one thing to check. | Reader |
 
 ## Why this is a census and not a sample
@@ -1066,7 +1066,7 @@ from, which is precisely why the archive keeps those digests itself.
 
 ### A month past fourteen becomes a summary, and the dedupe survives it
 
-`state/scores/` is the largest store under `state/` - measured 2026-09-03, 5,335
+`state/scores/` is the largest ledger under `state/` - measured 2026-09-03, 5,335
 rows in 4,266,655 bytes over two monthly shards - and nothing bounded it. Sharding
 by month bounds one file, not the tree.
 

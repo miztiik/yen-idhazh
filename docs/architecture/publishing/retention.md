@@ -198,7 +198,7 @@ Total 7,815,628 bytes over 8 files. **All three of the ledgers this table exists
 
 **The step ships in dry run, and that is what makes it safe to have written at all.** `idhazh prune-state` logs every file a live run would remove and removes none of them. The reason is `.github/workflows/prune.yml`: it squashes and force-pushes `main` on a schedule, so a state file deleted here stops being recoverable from history once that prune passes over it (`CLAUDE.md` section 8) - `git revert` is not a recovery path for a file older than `finetune.prune_keep_days`. Turning the deletion on is a one-line commit somebody takes after a scheduled run has printed the list.
 
-**Measured on this checkout on 2026-09-13, that list is empty and stays empty for a year.** Every committed file is inside its own window, so a live run today would remove nothing at all. The first file any store loses is `state/seen/2026/08/23.csv` on **2026-11-22**, through the 90-day sight window; the first files the fourteen-month rules take are on **2027-10-01**, when `2026-08` falls below fourteen months and four stores go together - the day files under `state/item-health/2026/08/`, `frontend/public/telemetry/2026-08.csv`, the day files under `state/feed-health/2026/08/` and the day files under `state/scores/2026/08/`. The sight date was 2026-11-30 while that ledger filed by month, because a whole month shard survived if any of its days was in range; at day grain the file the window stops naming is the file that goes, which is 8 days earlier. Reading committed files against a fixed calendar is deterministic, so the spread is zero.
+**Measured on this checkout on 2026-09-13, that list is empty and stays empty for a year.** Every committed file is inside its own window, so a live run today would remove nothing at all. The first file to go is `state/seen/2026/08/23.csv` on **2026-11-22**, through the 90-day sight window; the first files the fourteen-month rules take are on **2027-10-01**, when `2026-08` falls below fourteen months and four go together - the day files under `state/item-health/2026/08/`, `frontend/public/telemetry/2026-08.csv`, the day files under `state/feed-health/2026/08/` and the day files under `state/scores/2026/08/`. The sight date was 2026-11-30 while that ledger filed by month, because a whole month shard survived if any of its days was in range; at day grain the file the window stops naming is the file that goes, which is 8 days earlier. Reading committed files against a fixed calendar is deterministic, so the spread is zero.
 
 **A score month is summarised before it is deleted, and that is the one deletion here with a summary in front of it.** `state/scores/` is the evidence behind every published quality claim, and until 2026-09-07 `evals.writer` refused a repeat measurement by reading those rows - so deleting a month outright would erase the evidence AND make every measurement in that month scoreable again as if it were new. A month past `observability.scores_full_grain_months` therefore becomes `state/score-archive/<YYYY-MM>.json` first: the SHA-256 of that month's day files in day order, the month's row count, one digest per distinct measurement it held, and one cohort per (date, run, row version, model, scorer) carrying counts, ten faithfulness deciles, three bands, the boolean signal counts, the cut counts, the premise-digest counts and `{n, sum, sum_squares, min, max}` for every numeric column. **The ledger files by day and this boundary is a month**, so the prune groups with `day_partition.days_by_month` and folds a month whole or not at all - at most 31 files in, one out. The file is written temp-then-rename, read back through its contract, and reconciled field by field against a second reading of those day files; only then are they unlinked, with the month and year directories they empty.
 
@@ -216,7 +216,7 @@ Total 7,815,628 bytes over 8 files. **All three of the ledgers this table exists
 
 Three reads of each shard gave byte-identical archives, so the spread is zero - reading a committed file is deterministic. **What the 13.1 percent means: 87 percent of the bytes go, and a row shrinks from 782 to 858 bytes of CSV to 104 bytes of archive.** Two thirds of what is left is the digest index - 68.8 and 69.3 percent of the two archives - which is the price of keeping the dedupe exact and is what Decision 2 of the plan bought deliberately.
 
-**In years.** The ledger grew 4,266,655 bytes over the 12 published days from 2026-08-22 to 2026-09-02, which is 355,555 bytes a published day and 130 MB a year, with nothing bounding it (444.6 rows a day on average, 10 on the thinnest day and 731 on the fullest, so read the rate as the mean of a wide spread rather than as a constant). With this rule the item-level part stops growing at fourteen months - about 151 MB - and only the archive keeps going, at 46,441 bytes a published day and **17.0 MB a year**. The archive needs 8.9 years to reach the size those fourteen months of shards already are; the raw ledger reached it in fourteen months. That is **7.7 years of headroom for every one the store used to spend**, and the fourteen-month part stops growing at all.
+**In years.** The ledger grew 4,266,655 bytes over the 12 published days from 2026-08-22 to 2026-09-02, which is 355,555 bytes a published day and 130 MB a year, with nothing bounding it (444.6 rows a day on average, 10 on the thinnest day and 731 on the fullest, so read the rate as the mean of a wide spread rather than as a constant). With this rule the item-level part stops growing at fourteen months - about 151 MB - and only the archive keeps going, at 46,441 bytes a published day and **17.0 MB a year**. The archive needs 8.9 years to reach the size those fourteen months of shards already are; the raw ledger reached it in fourteen months. That is **7.7 years of headroom for every one the ledger used to spend**, and the fourteen-month part stops growing at all.
 
 **A thin month summarises LARGER than it held, and that is not a defect.** The digest index scales with rows and the block of moments is a fixed cost per cohort, so a twelve-row month pays the second and barely earns the first. Fourteen-month-old months are the full ones, which is why the direction that matters is the one measured above. `backend/tests/retention/` pins it at a run's worth of rows rather than at a figure, because a figure taken here would go stale the next time a column is added.
 
@@ -248,11 +248,11 @@ The aggregate is kept forever by default. `observability.item_health_aggregate_k
 
 Authority: Andre, under Guardrail #10 - a claim about an archived month has to be one the archive can still support.
 
-## A named prune: one store, one range of days (2026-09-16)
+## A named prune: one ledger, one range of days (2026-09-16)
 
 Everything above is the scheduled half - a window in `config/` decides, and a
 day goes when it ages out of it. `idhazh telemetry prune` is the other half. A
-person names the store and the two days, and nothing else decides anything:
+person names the ledger and the two days, and nothing else decides anything:
 
 ```
 idhazh telemetry prune --target item-health --since 2026-08-24 --until 2026-08-26
@@ -274,7 +274,7 @@ every path, one a line, rather than a count - the list is the thing a person
 reads before typing the second word, and a count says a deletion happened and
 nothing about what it took.
 
-**`--target` names a store and is never a path.** The vocabulary is closed, and
+**`--target` names a ledger and is never a path.** The vocabulary is closed, and
 a word outside it is refused with the whole list rather than resolved against
 the file system, so there is no argument on this command a path could travel
 through. That is Guardrail #11 applied at the sharpest point it has: a deletion
@@ -295,11 +295,11 @@ primitive pointed at the repository is the one accident nobody can undo.
 | `scores` | `observability.scores_full_grain_months` |
 | `visual-prunes` | nothing today - it is bounded by arithmetic, above |
 
-The rule that decides membership is one line: a store files
+The rule that decides membership is one line: a ledger files
 `<YYYY>/<MM>/<DD>.csv` day files, and is not one of the two below. A flat
-store's word **is** its directory name under `state/`, and a nested store's word
+ledger's word **is** its directory name under `state/`, and a nested ledger's word
 joins its two directory names with a hyphen. Both halves come from the module
-that owns the store rather than being spelled again, so a store that is renamed
+that owns the ledger rather than being spelled again, so a ledger that is renamed
 renames its target with it (Guardrail #6). The hyphen is what keeps the
 vocabulary closed: a slash in the word would make the argument look like a path,
 and a deletion primitive that resolved its argument against the file system is
@@ -314,13 +314,13 @@ guard's median and out of what step 4 compares this week against.
 
 **`llm-council-shard-outcomes` is in the vocabulary before anything writes it.**
 The shape and the path land ahead of the step that appends to them (Guardrail
-#3), and the content-similarity judge's four stores are the precedent: a store
+#3), and the content-similarity judge's four ledgers are the precedent: a ledger
 an operator
-cannot name is a store a day cannot be taken out of, and a range over a store
+cannot name is a ledger a day cannot be taken out of, and a range over a ledger
 with no file selects nothing and says so. What it holds is the council's own
 pipeline record - which units of work started, which finished, which stopped on
 their own clock - so a day removed from it takes away how one night went and
-nothing a tenant measured. A tenant's own readings are in a tenant's own store
+nothing a tenant measured. A tenant's own readings are in a tenant's own ledger
 under that tenant's slug.
 
 **The two `content-similarity-judge` words are that last sentence made real, and
@@ -349,12 +349,12 @@ standing. The table above is where that day's obligation is written down.
 **`published` and `seen` are refused by name, with the reason attached.** Not
 forgetting is their whole job. `state/published/` is the guard against
 publishing one story twice and has no window at all - `collect.published_window_days`
-is `-1`, so every row in it is a row that must never be deleted, and a store
+is `-1`, so every row in it is a row that must never be deleted, and a ledger
 that forgets cannot be that guard. `state/seen/` is what the planner remembers
 having already seen, so removing a day from it lets the next run rediscover
 every address it holds, which turns one operator command into a loop - the same
-argument the unpublish design above already makes for the same store. They are
-refused rather than left off the list because a store missing from a vocabulary
+argument the unpublish design above already makes for the same ledger. They are
+refused rather than left off the list because a ledger missing from a vocabulary
 reads as an oversight, and somebody who typed one of them is holding a real
 question whose answer is why the answer is no.
 
@@ -382,7 +382,7 @@ month and year directories a deleted day empties go with it, through the same
 use.
 
 Until 2026-09-17 this moved the whole range into a scratch directory beside the
-stores and rolled every move back if one failed, so a failed pass removed
+ledgers and rolled every move back if one failed, so a failed pass removed
 nothing at all. The scratch directory is gone with that shape; what replaced it,
 and what the change cost, is on the concept page.
 
@@ -489,7 +489,7 @@ every shard - one directory entry a month - because the newest stem cannot be
 derived from today's date for a ledger whose last run was two months ago.
 
 It also shrinks what one commit touches. Every run appended to a single file, so
-git stored a new blob of the whole ledger several times a day; it now stores a
+git wrote a new blob of the whole ledger several times a day; it now writes a
 new blob of the current month.
 
 **The cost was named in advance and it was accurate.** The change touched

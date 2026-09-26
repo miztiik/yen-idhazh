@@ -191,7 +191,7 @@ TypeScript one. Two things about where it reads from:
 - **`compaction_lag_days` and `rows_uncompacted` are handed in at 0 and have
  been since 2026-09-23.** Every writer files its own rows under the day those
  rows name, so a run that died three days ago left them in that day rather than
- in a store a later run had to drain. There is no backlog for either reading to
+ in a ledger a later run had to drain. There is no backlog for either reading to
  count. They stay on the payload because a reader of an older day still finds
  them there, and a field removed is a contract break for a page nobody
  re-publishes.
