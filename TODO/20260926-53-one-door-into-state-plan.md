@@ -12,7 +12,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 
 | Field | Value |
 | --- | --- |
-| Why this plan exists | A producer has four ways to write `state/` and four to read it, and plan 50 was about to add a fifth in a second vocabulary. This makes `backend/idhazh/ledger/` the one door, splits the 2,342-line `ledger.py` into modules that each answer one question, and retires the word `store` so one thing has one name. |
+| Why this plan exists | A producer has four ways to write `state/` and four to read it, and plan 50 was about to add a fifth in a second vocabulary. This makes `backend/idhazh/ledger/` the one door, splits the oversized `ledger.py` into modules that each answer one question, and retires the word `store` so one thing has one name. |
 | Hard scope - in | see the bullets below |
 | Hard scope - out | see the table below |
 | ESCALATE triggers | see the enumerated list below |
@@ -22,9 +22,9 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 
 ### Hard scope - in
 
-- `backend/idhazh/ledger.py`, 2,342 lines and about 120 top-level names, becomes the package `backend/idhazh/ledger/`, each module answering one question.
+- `backend/idhazh/ledger.py`, one file answering many questions, becomes the package `backend/idhazh/ledger/`, each module answering one.
 - The word `store` leaves the repository. Under `state/` it becomes **ledger**; under `frontend/public/` it becomes **collection** (glossary decision, 2026-09-26).
-- `SegmentLedger` (a 9-member enum) and the 25 `*_DIRNAME` constants collapse into one `LedgerName` `StrEnum` in `backend/idhazh/contracts/`, with a `DAY_TREES` subset for the nine a writer files a segment into.
+- `SegmentLedger` and the per-ledger `*_DIRNAME` constants collapse into one `LedgerName` `StrEnum` in `backend/idhazh/contracts/`, with a `DAY_TREES` subset for the day trees a writer files a segment into.
 - 42 hand-written path functions collapse into one `LedgerPath` table and two builders in `ledger/paths.py`.
 - `backend/idhazh/paths.py` becomes `path_classes.py`, the name its own test already carries.
 
@@ -65,7 +65,7 @@ One row is one pull request. **Six rows, not eight.** The extraction funnels thr
 | 2 | `ledger.py` becomes the package, and its docstring becomes a page | 1 | B | PENDING | - | - | - |
 | 3 | One `LedgerName` for one ledger | 2 | C | PENDING | - | - | - |
 | 4 | `paths.py` becomes `path_classes.py` | 2 | P | PENDING | - | - | - |
-| 5 | One `LedgerPath` table replaces 42 path functions | 3, 4 | D | PENDING | - | - | - |
+| 5 | One `LedgerPath` table replaces the path functions | 3, 4 | D | PENDING | - | - | - |
 | 6 | The rest of the module splits, and the facade becomes provably empty | 5 | E | PENDING | - | - | - |
 
 **Every row wears one hat and it is the structural one.** No signature, default or return-type changes, and no byte on disk moves. A row that finds itself wanting a behaviour change has found a defect, and the defect gets its own pull request (ESCALATE trigger 1).
@@ -117,7 +117,7 @@ backend/idhazh/
 
 **Two tables, not one.** Where a file lives - prefix, grain, stem, suffix - is a different question from what settles two of its rows - key, preference, contract. `paths.py` owns the first (row 5) and `keys.py` owns the second (row 6), each keyed on `LedgerName`. A single merged table would make row 6 edit the structure row 5 built, re-coupling the two concerns the split exists to separate, and would force `paths.py` to import `keys.py` for a type it does not otherwise need. Rejected: the merged `LedgerShape` an earlier draft drew (Fowler, section 4.2).
 
-**The intra-package import graph is a DAG the worker follows exactly.** `contracts/` is the bottom and imports nothing from the package. Then `csv_file`, `paths`, `keys` and `filenames` import only `contracts`; `headers` imports `csv_file`; `settle` imports `keys`, `csv_file`, `paths`; `rows` imports `keys`, `filenames`, `csv_file`, `paths`. `__init__` imports the submodules to build the facade, and **no submodule imports `__init__`** - importing the package runs `__init__`, so a submodule reaching back up would re-enter a half-built facade.
+**The intra-package import graph is a DAG the worker follows exactly.** `contracts/` and the external sibling `day_partition` are the bottom and import nothing from the package. Then `csv_file`, `paths`, `keys` and `filenames` import only `contracts`; `headers` imports `csv_file`; `settle` imports `keys`, `csv_file`, `paths`, `contracts` and `day_partition`; `rows` imports `keys`, `filenames`, `csv_file`, `paths`, `contracts` and `day_partition`. Every external module-top import a moved body already had (`contracts`, `day_partition`) travels with it. `__init__` imports the submodules to build the facade, and **no submodule imports `__init__`** - importing the package runs `__init__`, so a submodule reaching back up would re-enter a half-built facade.
 
 **One import stays inside a function body: `rows.py`'s `from idhazh import day_shards`.** `day_shards` imports names back out of the ledger package at its own module top, so a module-scope import in `rows.py` would close a load-time cycle: importing the package runs `__init__`, which imports `rows`, which re-enters the half-built package through `day_shards`. Keeping that import function-local, exactly as `ledger.py` has it today, is what breaks the cycle. Promoting it to module scope reads as harmless cleanup and is the single most likely way to break the package - so it is a named rule, and row 6 arms the oracle that proves it.
 
@@ -131,8 +131,8 @@ Everything a worker needs to build is declared here. Where a shape is derived fr
 
 One `StrEnum`, one member per ledger the module can address today, the value being the on-disk name exactly. It replaces three spellings of one vocabulary: `SegmentLedger`, `STORE_DIRNAMES` (renamed `LEDGER_DIRNAMES` in row 1), and the `*_DIRNAME` constants.
 
-- **Membership is one member per path function, not one per directory constant.** The set of ledgers is the set of `*_path` / `*_relpath` functions in `ledger.py` at the base commit, read from git; a `*_path` and its `*_relpath` twin count as one ledger. This is the correction that makes the vocabulary complete: some ledgers are addressed by a filename and have no `*_DIRNAME` constant - `feed-retirements.csv`, `holdout-pairs.csv`, `score-distribution.json` and its stamped archive - so a rule keyed on `*_DIRNAME` would never mint them, yet each has a live caller. Each such ledger gets a named member with its value and its `prefix` spelled out in `LEDGER_PATHS` (section 4.2). Nesting is carried by `LedgerPath.prefix`, not by the member value.
-- **The coverage oracle is keyed on that same set.** It asserts every path-function ledger has exactly one `LedgerName` member, computed from git, and row 5's exact-parity test proves that member's `LedgerPath` reproduces the function's output. `LEDGER_DIRNAMES` is still recomputed from the enum for `prune-state`, but it is no longer the completeness check - the path-function set is. The set is not a clean pairing: `score_distribution_path` has no `*_relpath` twin, so the oracle reads the real function names from git rather than assuming every ledger owns both spellings.
+- **Membership is the union of two sets, so nothing falls through.** One set is the `*_path` / `*_relpath` functions in `ledger.py` at the base commit (a `*_path` and its `*_relpath` twin count once); this catches the filename-addressed ledgers a `*_DIRNAME`-keyed rule would miss - `feed-retirements.csv`, `holdout-pairs.csv`, `score-distribution.json` and its stamped archive, each with a live caller and its value and `prefix` spelled out in `LEDGER_PATHS`. The other set is `DAY_TREES`: `day-validations` is a day tree with no path function of its own - it is written only through `day_shard_path` - so the function set alone would drop it. The union keeps it, and its `LEDGER_PATHS` row is hand-written (`prefix=("day-validations",)`, `grain=DAY_TREE`, `stem=None`, `suffix=None`). Nesting is carried by `LedgerPath.prefix`, not by the member value.
+- **Two oracles, keyed on that union.** Coverage asserts every `LedgerName` member has a `LEDGER_PATHS` row, and every path-function ledger and every `DAY_TREES` member is a member, computed from git; row 5's exact-parity test proves each row reproduces its function's output. `LEDGER_DIRNAMES` is **not** re-derived from the enum - it stays an explicit frozen set (renamed from `STORE_DIRNAMES` in row 1). It deliberately excludes the flat-file ledgers, the nested children and `day-validations`, and every enum-derived set would include `day-validations` and silently change which directory `prune-state` treats as a trial root - a behaviour change hiding in a structural row. `test_trial_state.py` keeps pinning it.
 
 ```python
 DAY_TREES: Final[frozenset[LedgerName]] = frozenset({...})   # the nine, no more
@@ -178,9 +178,17 @@ def path(state_dir: Path, ledger: LedgerName, covers: str | None = None) -> Path
 def relpath(ledger: LedgerName, covers: str | None = None) -> str
 ```
 
-`covers` is the period the caller wants - a `YYYY-MM-DD` day for a `DAY_FILE` or `DAY_TREE`, a `YYYY-MM` month for `MONTH_FILE`, a stamp for `STAMPED`, and `None` for `FLAT`. A grain that needs a `covers` and is handed `None` raises, naming the ledger and the grain; a `FLAT` ledger handed a `covers` raises the same way.
+`covers` is the period the caller wants - a `YYYY-MM-DD` day for a `DAY_FILE` or `DAY_TREE`, a `YYYY-MM` month for `MONTH_FILE`, a stamp for `STAMPED`, and `None` for `FLAT`. A dated grain handed `None` raises, and a `FLAT` ledger handed a `covers` raises - `path` never guesses.
 
-**Two oracles bind this table.** Coverage: iterating `LedgerName` refuses a member with no row, by name. Exact parity: for every member and a fixed date, `path` and `relpath` return exactly what the old function returned - both spellings, extension included - so a wrong suffix or a transcription error fails rather than ships (row 5).
+**A day tree is read at two levels, so there is a third builder:**
+
+```python
+def tree_root(state_dir: Path, ledger: LedgerName) -> Path   # state_dir / Path(*prefix)
+```
+
+`tree_root` returns the whole-tree directory a reader hands to `day_shards.settled_rows` / `day_partition.day_files` (which walk every day under it) - `state/item-health`, or the nested `state/content-similarity-judge/scored-pairs`. It is defined only for `DAY_FILE` and `DAY_TREE`; the other grains raise, because a flat or month file has no tree to walk. It is a separate builder rather than an overload of `path(covers=None)`, so `path` keeps its fail-fast: a caller who forgets the date on a `seen` read gets a loud error, not a plausible tree-root `Path`.
+
+**Three oracles bind this module.** Coverage: iterating `LedgerName` refuses a member with no row, by name. Exact parity: for every member and a fixed date, `path` and `relpath` return exactly what the old function returned - both spellings, extension included. Tree-root parity: for every `DAY_FILE` and `DAY_TREE` member, `tree_root` equals the old inline `state_dir / X_DIRNAME` expression, the nested trees included - `day_partition.day_files` refuses a misplaced entry rather than skipping it, so a root built one segment short hard-fails a read, which makes this parity non-cosmetic (row 5).
 
 ### 4.3 The settlement structures - `backend/idhazh/ledger/keys.py`
 
@@ -210,22 +218,22 @@ Each module takes the names below with bodies unchanged. **The oracle for every 
 
 Callers reach the ledger by attribute access - `from idhazh import ledger` then `ledger.X` - so the facade's one job is to bind every name the module exposes today. The split is for the maintainer, not the caller.
 
-- **The facade re-exports every public name the old module had, and the completeness check is a git superset, not `__all__`.** The non-underscore top-level names of `ledger.py` at the base commit must all be bound in `__init__.py` after the split (each an import line, `from idhazh.ledger.X import name`). `mypy` under `no_implicit_reexport` catches a dropped name a caller *statically* references, but attribute-access callers need the name bound, which `__all__` does not guarantee - so the git-superset assertion is the real oracle, and it is computed from the caller-demand walk (`ledger\.<name>` and `from idhazh.ledger import <name>`) plus the old public surface.
+- **The facade re-exports every name a caller reaches, and the completeness check is the caller-demand walk alone.** Scan `backend/` for `ledger.<name>` attribute access and `from idhazh.ledger import <name>`, taken *after* row 5's deletions and row 6's repoints; every demanded name must be a bound attribute on the imported package. That is necessary and sufficient: a name with no remaining caller need not be bound, and a missed repoint or a surviving reader of a deleted or evicted name shows up as a demanded name that is not bound. There is no "old public surface is a subset" clause - it would fail by design, because row 5 deletes the path functions and row 6 evicts three functions, all once public. One caveat for when plan 50 lands: a demanded name that is itself a `.py` module under `ledger/` (like `parquet`) resolves by import, so the walk treats a submodule name as resolvable rather than a required facade attribute.
 - **A private name reached from outside is repointed, not re-exported.** `ledger._stream_rows` (a test) and `ledger._TREE_SHAPES` (a utility) are the two; they move to `csv_file` and `keys`, and those two call sites are repointed to the owning module in row 6. Re-exporting a private through the facade makes a second binding a test monkeypatching the facade could not reach - it would pass while testing nothing.
-- `__init__.py` holds imports and `__all__` and **no definition of any kind**. An AST walk asserts zero top-level `FunctionDef` and zero top-level `ClassDef` (row 6). A re-export is an import line, not a definition, so a facade of pure re-exports still passes.
+- `__init__.py` holds imports, a single `__all__`, and a leading module docstring, and **nothing else** - no definition and no bound value. Row 6's AST walk asserts every top-level node is an `Import`/`ImportFrom`, the one `__all__` assignment, or the leading docstring; a stray top-level constant `Assign` - a second source of truth for a moved constant - fails it. A re-export is an import line, so a facade of pure re-exports passes.
 - **The facade never binds the pyarrow module** (section 3). When plan 50 lands `parquet.py`, `__init__` does not import it - not at module scope, not to re-export it; a parquet caller does `from idhazh.ledger import parquet`. Row 6 arms a fresh-interpreter subprocess oracle: `from idhazh import ledger`, then assert neither `pyarrow` nor `idhazh.ledger.parquet` is loaded. Green now, load-bearing the moment plan 50 adds the submodule.
 
 ### 4.6 What leaves the package, and what must NOT
 
-Two functions leave, their readers are repointed to the new home, and the facade stops binding them. **`_run_n` and `load_health` stay** - `load_health` has many `ledger.load_health` callers and is not leaving, and `_run_n` is its private helper, so moving `_run_n` would break `load_health`.
+Two functions leave, every reader that reaches them is repointed to the new home, and the facade stops binding them. **`_run_n` and `load_health` stay** - `load_health` has many `ledger.load_health` callers and is not leaving, and `_run_n` is its private helper, so moving `_run_n` would break `load_health`.
 
-| What | Where it goes | Its readers, repointed in row 6 |
-| --- | --- | --- |
-| `feed_reliability`, `reliability` | `backend/idhazh/telemetry/source_health.py` | `stages/plan.py` (`ledger.reliability`), the source-health publisher (`ledger.feed_reliability`) |
-| `shards_in_window` | `backend/idhazh/month_partition.py` | `retention.py`, `backend/utilities/measure_day_window.py` |
-| `HEALTH_WINDOW_DAYS` | Stays. Out of scope, its own pull request (Guardrail #6) | - |
+| What | Where it goes |
+| --- | --- |
+| `feed_reliability`, `reliability` | `backend/idhazh/telemetry/source_health.py` |
+| `shards_in_window` | `backend/idhazh/month_partition.py` |
+| `HEALTH_WINDOW_DAYS` | Stays. Out of scope, its own pull request (Guardrail #6) |
 
-**Repoint, do not re-export.** Re-exporting `reliability` from the facade would make its new home import `ledger.load_health` and the facade import that home back - a load-time cycle. Repointing each reader to the new module leaves nothing reaching the evicted names through the facade, and mypy plus the facade-surface oracle catch a missed reader as an `AttributeError` twice over. Compute the caller-demand set (section 4.5) *after* these repoints land, or the deliberately-moved names read as drops.
+**The repoint is a rule, not a hand-list.** Every `ledger.<name>` and `from idhazh.ledger import <name>` of an evicted name, across all of `backend/` - production, utilities and tests alike - is repointed to the new home, and a moved function's tests move with it. The evicted names have live callers in the test tree as well as in `stages/plan.py`, the source-health publisher, `retention.py` and `measure_day_window.py`, so a production-only list would leave the facade-surface walk unable to pass. Compute that walk *after* the repoints: a name with no caller left is a clean removal, not a drop. Re-exporting instead of repointing is rejected - `reliability`'s new home imports `ledger.load_health`, so a facade re-export would arm a facade-to-home-to-facade load cycle.
 
 ## 5. The naming collisions this plan settles
 
@@ -241,7 +249,7 @@ Two functions leave, their readers are repointed to the new home, and the facade
 
 **This row is the one place in the repository allowed to spell the retired word, because it is the row that removes it.** The ratchet in the oracle allow-lists exactly this section and nothing else. Everywhere the old spelling is needed it sits inside a fenced block, so a later sweep cannot quietly flatten the instructions into `X -> X`.
 
-- **Scope:** 1,602 occurrences across 229 files. No file moves and no identifier outside the block below changes.
+- **Scope:** every occurrence across the repository. No file moves and no identifier outside the block below changes.
 - **The rule, applied per occurrence:** under `state/` it becomes **ledger**; under `frontend/public/` it becomes **collection**; where the word is the ordinary English verb it is **left alone**.
 
 ```text
@@ -281,14 +289,14 @@ SIGNATURES AND MEMBERS THAT CHANGE
 ABOUT THIRTY TEST FUNCTION NAMES carrying the word, listed by the sweep
 ```
 
-- **Files touched:** the 229 measured, plus `.github/` where the renamed utility is called, plus [docs/concepts/glossary.md](../docs/concepts/glossary.md) (already done, 2026-09-26) and the four plan-docs under `TODO/` (**done 2026-09-26: 313 of the 1,602 were the plans' own prose**).
+- **Files touched:** every file that spells the retired word, plus `.github/` where the renamed utility is called, plus [docs/concepts/glossary.md](../docs/concepts/glossary.md) (already done, 2026-09-26) and the plan-docs under `TODO/` (their prose was swept 2026-09-26).
 - **Acceptance gates:** `ruff check .`, `mypy backend`, the full `pytest backend/tests`, and the frontend selector. **A test function rename is zero-risk** - pytest discovers by prefix - so the suite is the check that nothing else moved.
 - **Oracle:** a ratchet test. The retired word appears **zero** times outside this row and a third-party quotation, counted with `(?<![A-Za-z0-9_])[Ss]tores?(?![A-Za-z0-9_])` over `backend/`, `frontend/src/`, `frontend/tests/`, `config/`, `docs/`, `TODO/` and `.github/`. **Without the ratchet the word walks back in** - it was already swept out of the plans once and would return with the next draft.
 - **Decisions:**
 
   | # | Decision | Authority |
   | --- | --- | --- |
-  | 1 | `ledger` rather than `dataset`, `collection` or a new word. Measured: `ledger` 3,067 uses with a glossary definition against `store` 931 with none. **Deleting a duplicate is cheaper than minting a fourth name** | Owner, 2026-09-26 |
+  | 1 | `ledger` rather than `dataset`, `collection` or a new word. `ledger` already carries the glossary definition; `store` is defined nowhere. **Deleting a duplicate is cheaper than minting a fourth name** | Owner, 2026-09-26 |
   | 2 | The ratchet is a test and not a review habit. A review habit is what let three words coexist | Fowler |
   | 3 | This row ships before the package move, so row 2's rename carries no identifier changes - only the file move and its docstring | Fowler, Tidy First |
 
@@ -319,7 +327,7 @@ ABOUT THIRTY TEST FUNCTION NAMES carrying the word, listed by the sweep
 - **Scope:** mint `LedgerName` and `DAY_TREES` in `contracts/`, collapse `SegmentLedger` into them across its readers, and re-type the segment functions on `LedgerName` with the named refusal. The `*_DIRNAME` constants stay - their users are the path functions, which do not move until row 5. **This row unblocks plan 50.**
 - **Files touched:**
   - `backend/idhazh/contracts/ledger_name.py` (new), `backend/idhazh/contracts/__init__.py`
-  - `backend/idhazh/ledger/__init__.py` - re-type `write_segment`, `extend_segment`, `segment_contract`, `segment_key`, `segment_carried`, `segment_name`, `day_shard_path`, `_dated_rows` on `LedgerName`; re-key `_TREE_SHAPES`; add the `DAY_TREES` refusal; delete `SegmentLedger`
+  - `backend/idhazh/ledger/__init__.py` - re-type `write_segment`, `extend_segment`, `segment_contract`, `segment_key`, `segment_carried`, `day_shard_path`, `day_shard_relpath`, `_dated_rows` on `LedgerName`; re-key `_TREE_SHAPES`; add the `DAY_TREES` refusal; delete `SegmentLedger`
   - the production readers (`evals/writer.py`, `stages/{assemble,compact,decide,plan,qualify_decide,record,validate_days,work}.py`, `telemetry/{prune,silicon}.py`), the utilities (`build_canary_day.py`, `pipeline_test_ledgers.py`, `widen_ledger_header.py`), and every test that names `SegmentLedger` - each `ledger.SegmentLedger.X` becomes `LedgerName.X`, each `for x in SegmentLedger` becomes `for x in DAY_TREES`, and `WRITER_OWNED_LEDGERS` reads `DAY_TREES`
 - **Acceptance gates:** `ruff check .`, `mypy backend`, the changed-file selector locally; full `pytest backend/tests` on CI.
 - **Oracle:** `{m.value for m in DAY_TREES}` equals the old `SegmentLedger` value set, computed from git; `_TREE_SHAPES.keys()` equals `DAY_TREES` (coverage); `write_segment` with a `LedgerName` not in `DAY_TREES` raises, naming the ledger and the grain. **mypy is the completeness oracle for the rewire** - a deleted `SegmentLedger` with a live reader is a type error, not a silent default. Each reader is one mechanical substitution.
@@ -360,22 +368,23 @@ ABOUT THIRTY TEST FUNCTION NAMES carrying the word, listed by the sweep
 
 ---
 
-## Row #5 - One `LedgerPath` table replaces 42 path functions
+## Row #5 - One `LedgerPath` table replaces the path functions
 
-- **Scope:** build `ledger/paths.py` (section 4.2) with the `LedgerPath` table keyed on the path-function set (section 4.1), migrate every call site to `paths.path()` / `paths.relpath()`, delete the path wrappers, and delete the now-unused `*_DIRNAME` constants.
+- **Scope:** build `ledger/paths.py` (section 4.2) with the `LedgerPath` table, the `path` / `relpath` builders and `tree_root`; migrate every path-function call site and every inline `state_dir / X_DIRNAME` tree-root read; delete the path wrappers and the per-ledger `*_DIRNAME` constants, keeping `LEDGER_DIRNAMES` as an explicit frozen set.
 - **Files touched:**
-  - `backend/idhazh/ledger/paths.py` (new: the `LedgerPath` table, the two builders, and `STATE_DIRNAME`)
-  - `backend/idhazh/ledger/__init__.py` - delete the path functions and the `*_DIRNAME` constants, re-export from `paths.py`, cut `__all__`
-  - every caller mypy names when the wrappers go
+  - `backend/idhazh/ledger/paths.py` (new: the `LedgerPath` table, `path` / `relpath` / `tree_root`, `STATE_DIRNAME`, and the explicit `LEDGER_DIRNAMES` set)
+  - `backend/idhazh/ledger/__init__.py` - delete the path functions and the per-ledger `*_DIRNAME` constants, migrate the inline `state_dir / X_DIRNAME` tree-root reads (`load_item_health`, `load_health`, `load_published`, `keyed_paths`) onto `tree_root`, re-export from `paths.py`, cut `__all__`
+  - `backend/idhazh/stages/validate_days.py`, `backend/idhazh/retention.py`, and any test reading `state_dir / X_DIRNAME` - repointed onto `tree_root`
+  - every other caller mypy names when the wrappers go
 - **Acceptance gates:** `ruff check .`, `mypy backend`, the changed-file selector locally; full `pytest backend/tests` on CI.
-- **Oracle:** **exact parity** - for every `LedgerName` member and a fixed date, the old function and the new builder return equal values, both the `Path` and the `relpath` spelling; a grain that needs a `covers` and gets `None` raises. This is the property this move can break, and the one oracle in the plan that catches it. mypy then proves no caller was left on a deleted name.
+- **Oracle:** three parities. **Path parity** - for every `LedgerName` member and a fixed date, `path` and `relpath` equal the old function, both spellings, extension included; a dated grain handed `None` raises. **Tree-root parity** - for every `DAY_FILE` and `DAY_TREE` member, `tree_root` equals the old inline `state_dir / X_DIRNAME`, the nested trees included. **Census** - every `state_dir / <literal>` composition site in `backend/` maps to a `LEDGER_PATHS` prefix, so no tree-root read is left behind and no ledger is unmapped. mypy then proves no caller was left on a deleted name.
 - **Decisions:**
 
   | # | Decision | Authority |
   | --- | --- | --- |
   | 1 | Build the table and delete the path wrappers in one pull request. Both are structural (one hat); Tidy First separates structural from behavioural, not structural from structural. Staging leaves two spellings live | Fowler |
   | 2 | The table carries `prefix` as a tuple, because `content-similarity-judge/scored-pairs/` and `llm-council/shard-outcomes/` nest | Fowler |
-  | 3 | The `*_DIRNAME` constants are deleted here, their only users now gone. `LEDGER_DIRNAMES` is re-derived from `LedgerName`, so `prune-state` keeps working | Fowler |
+  | 3 | The per-ledger `*_DIRNAME` constants are deleted, their only users now gone. `LEDGER_DIRNAMES` is **not** re-derived from the enum - it stays an explicit frozen set, because it excludes `day-validations` and the flat and nested ledgers, and an enum-derived set would change which directory `prune-state` treats as a trial root | Fowler |
 
 - **Rejected alternatives:**
 
@@ -396,12 +405,13 @@ ABOUT THIRTY TEST FUNCTION NAMES carrying the word, listed by the sweep
   - `backend/tests/test_ledger.py`, `backend/utilities/widen_ledger_header.py` and `backend/tests/test_widen_ledger_header.py` - the two private-name accesses (`ledger._stream_rows`, `ledger._TREE_SHAPES`), repointed to `csv_file` / `keys`
   - `docs/concepts/glossary.md` - the `segment` row's link, if row 2 left it on `__init__.py`
 - **Acceptance gates:** `ruff check .`, `mypy backend`, the changed-file selector locally; full `pytest backend/tests` on CI. May land as two commits in one pull request - the settlement/naming half, then the read/write half.
-- **Oracle:** five checks, each catching a failure the others cannot.
-  1. `pytest --collect-only -q` byte-identical; the moved-name set recomputed from source and destination files; every moved module-level constant asserted value-identical (a moved regex or key tuple that changed is what collect-only cannot see).
-  2. **Facade shape**: an AST walk asserts `__init__.py` has zero top-level `FunctionDef` and zero top-level `ClassDef`.
-  3. **Facade surface preserved**: every name the caller-demand walk finds (`ledger.<name>` and `from idhazh.ledger import <name>` across `backend/`, taken after the repoints) is bound in `__init__.py`, and the old module's public top-level names are a subset of what the package now exposes.
-  4. **No load-time cycle**: an AST assertion that no `ledger/*` submodule imports `day_shards` at module scope, PLUS a fresh-interpreter subprocess that imports `idhazh.ledger` first and, separately, `idhazh.day_shards` first - both must succeed. A same-process test is worthless here, because the suite has already imported both.
-  5. **Facade does not load pyarrow**: a fresh-interpreter subprocess does `from idhazh import ledger` and asserts neither `pyarrow` nor `idhazh.ledger.parquet` is in the loaded modules - green now, load-bearing the day plan 50 adds an eager parquet import.
+- **Oracle:** six checks, each catching a failure the others cannot.
+  1. `pytest --collect-only -q` byte-identical; the moved-name set recomputed from source and destination files; every moved module-level constant asserted value-identical against its base-commit value read from git (a moved regex or key tuple that changed is what collect-only cannot see).
+  2. **Facade shape**: an AST walk asserts every top-level node in `__init__.py` is an `Import`/`ImportFrom`, the single `__all__` assignment, or the leading docstring - a stray top-level `Assign` or definition fails it.
+  3. **Facade surface preserved**: the caller-demand walk (`ledger.<name>` and `from idhazh.ledger import <name>` across `backend/`, taken after the repoints) finds every demanded name bound on the package. There is no old-surface-subset clause - rows 5 and 6 delete and evict public names by design.
+  4. **`day_shard_path` / `day_shard_relpath` parity**: for every `DAY_TREES` member at a fixed `(date, run_id, attempt, job, shard)`, the new composition `paths.path(...) / segment_name(...)` equals the old inline output. This is the one write-path body rewritten rather than moved, so no other oracle covers it.
+  5. **No load-time cycle**: an AST assertion that no `ledger/*` submodule imports `day_shards` at module scope, PLUS two separate fresh interpreters - `subprocess.run([sys.executable, "-c", "import idhazh.ledger"])` and `subprocess.run([sys.executable, "-c", "import idhazh.day_shards"])`, each with `PYTHONPATH=backend` and each asserting return code zero (capture stderr so a failure is readable). The `day_shards`-first process is the load-bearing probe: it forces `day_shards`'s module-top import against a cold package. A same-process test is worthless - the suite has already imported both.
+  6. **Facade does not load pyarrow**: a fresh interpreter with `PYTHONPATH=backend` runs `from idhazh import ledger` and, inside the `-c` string, `sys.exit(1)` if `pyarrow` or `idhazh.ledger.parquet` is in `sys.modules` - the parent cannot see the child's modules. Green now, load-bearing the day plan 50 adds an eager parquet import.
 - **Decisions:**
 
   | # | Decision | Authority |
