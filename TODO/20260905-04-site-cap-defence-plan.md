@@ -141,7 +141,7 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 | 1 | `skipped_by_fuse` is the field that matters and it is the one nobody would have added, because `deleted` looks like the answer | Row 62 |
 | 2 | Stage `state` whole in the commit script, never a new subdirectory - `git add` under `set -euo pipefail` aborts the whole step in a fresh checkout when a named directory does not exist yet | Recorded trap |
 | 3 | Ship the new ledger with its header committed, for the same reason | Recorded trap |
-| 4 | `observability.keep_months` and `hard_delete_after_months` **no longer exist**; six named per-store windows replaced them. Any row naming the old knobs is naming nothing | Section 9.2 correction, verified 2026-09-05 |
+| 4 | `observability.keep_months` and `hard_delete_after_months` **no longer exist**; six named per-ledger windows replaced them. Any row naming the old knobs is naming nothing | Section 9.2 correction, verified 2026-09-05 |
 
 ### Rejected alternatives
 

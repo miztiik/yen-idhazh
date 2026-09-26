@@ -174,7 +174,7 @@ export function lastRefusal(): WeightsRefusal | null {
  * library is already looking. `true` only when every file verified.
  *
  * The cache keys are the same-origin URLs `localModelPath` resolves to, which
- * is the same store and the same keys transformers.js writes itself and
+ * is the same `Cache` and the same keys transformers.js writes itself and
  * `cachedEncoder()` reads. A reader who takes this path is indistinguishable
  * afterwards from one who never needed it - including on their next visit.
  *

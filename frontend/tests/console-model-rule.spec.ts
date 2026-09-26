@@ -34,8 +34,8 @@ const STATE = resolve(process.cwd(), '..', 'backend', 'var', 'canary', 'state');
 
 /** The canary's score rows, read as the page's server reads them.
  *
- * Through the production reader rather than a directory listing here: the store
- * files `<YYYY>/<MM>/<DD>.csv` since 2026-09-13, and a local `readdir` of
+ * Through the production reader rather than a directory listing here: the
+ * ledger files `<YYYY>/<MM>/<DD>.csv` since 2026-09-13, and a local `readdir` of
  * `*.csv` over the root reads nothing at all - which leaves this oracle
  * comparing the page against an empty set.
  */

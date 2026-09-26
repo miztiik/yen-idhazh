@@ -142,7 +142,7 @@ async function controlled(page: Page): Promise<void> {
 	});
 }
 
-/** Only the caches this project owns. The encoder's own store is not ours and
+/** Only the caches this project owns. The encoder's own `Cache` is not ours and
  * must survive everything below. */
 async function ourCaches(page: Page): Promise<string[]> {
 	return page.evaluate(

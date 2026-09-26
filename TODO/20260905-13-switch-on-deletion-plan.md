@@ -51,7 +51,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | --- | --- | --- |
 | 1 | The module keeps the name `retention.py`. The **design concept** is documented as adaptive pruning. "Intelligent" claims a property the code does not have when it merely reads a date, and "compaction" is borrowed from log-structured storage where it means something else | O9, section 0b |
 | 2 | One rule decides everything: **a ledger folds, an asset deletes, a lookup deletes** | Section 9.2, Q9 |
-| 3 | **`observability.keep_months` and `hard_delete_after_months` no longer exist.** Six named per-store windows replaced them, and a config still spelling either old name fails validation. Any sentence naming them is naming nothing | Section 9.2 correction, verified 2026-09-05 |
+| 3 | **`observability.keep_months` and `hard_delete_after_months` no longer exist.** Six named per-ledger windows replaced them, and a config still spelling either old name fails validation. Any sentence naming them is naming nothing | Section 9.2 correction, verified 2026-09-05 |
 | 4 | The definition of a ledger narrows to what the folds actually do: **append-only within its window, folding to a durable aggregate, never edited in place at full grain.** The glossary's "never edited in place" was false as written | Section 9.2, 15.4a |
 | 5 | `state/labels.csv` is the only ground truth and is **never deleted**. The day payload records that a day happened and is never deleted | Section 9.3 |
 | 6 | Sharding is what makes a fold a single-file atomic operation, and an atomic fold is what makes deletion safe enough to enable at all. That relationship is the reason this row precedes row 3 | Section 9.4 |

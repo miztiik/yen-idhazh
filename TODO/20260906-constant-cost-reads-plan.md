@@ -14,7 +14,7 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 | Hard scope - in | Audit findings 11, 12, 61-75, 84-89, 93-113 as listed in section 1. Config knobs those rows need. The month-partition pattern and its doc. The day-facts contract. The archive window control. |
 | Hard scope - out | Any other audit finding. Model or summary quality. Retrieval accuracy. Deleting telemetry shards. Changing the article ID format. Virtualizing the story list. |
 | ESCALATE triggers | (a) Row 21 before the day-facts schema is written. (b) Row 17 before any all-history chart is narrowed to a window. (c) Row 26 - the day payload contract - authored only, never implemented. (d) Any row that would delete a committed state or telemetry file. (e) Any row that cannot hold its Oracle without weakening an existing trust or sanitization control. |
-| Chosen strategy | Bound the input first, then delete the repeated reduction. Store facts at publication; read them at build. Ruled by Fowler (contracts before logic) and Carmack (measure the visit count, not the clock). |
+| Chosen strategy | Bound the input first, then delete the repeated reduction. Write facts at publication; read them at build. Ruled by Fowler (contracts before logic) and Carmack (measure the visit count, not the clock). |
 | Execution | `autonomous orchestrator per docs/how-to/execute-a-plan.md. Parallel N = 4.` |
 
 Growth claims cited per row come from [the research handover](20260906-data-growth-research.md), which pins them to `76c2d27cbfb7ba9d868e0747dea366b2223e408f`. A worker re-reads the current file before editing; the audit is evidence, not a description of today's `main`.
@@ -492,7 +492,7 @@ Every entry is scope a worker or the orchestrator added mid-flight because it ad
 
 ## 25 - Row #24 - Band facts
 
-- **Scope:** Store the three standing-band facts at publication and have the shared console layout read them. Finding 72.
+- **Scope:** Write the three standing-band facts at publication and have the shared console layout read them. Finding 72.
 - **Files touched:**
   - `frontend/src/lib/server/console-shell.ts`
   - `frontend/src/routes/console/+layout.server.ts`

@@ -15,10 +15,10 @@ import type { DigestItem } from '../src/lib/payload/types';
  *
  * Two claims arrived on 2026-09-06 and both are here:
  *
- * 1. **The window is the calendar, not the store's own order.** Keeping the
- *    newest N dates the store happened to hold bounded it by how often a reader
- *    came back. A reader who opened one day a month kept marks from N different
- *    months.
+ * 1. **The window is the calendar, not the order `localStorage` holds.** Keeping
+ *    the newest N dates `localStorage` happened to hold bounded it by how often
+ *    a reader came back. A reader who opened one day a month kept marks from N
+ *    different months.
  * 2. **A click writes the day in hand and nothing else.** Every mark used to
  *    re-serialise the whole reading history under one key, so the cost of one
  *    click grew with everything the reader had ever read.
@@ -39,7 +39,7 @@ const CANARY = resolve(process.cwd(), '..', 'backend', 'var', 'canary', 'digest'
  *
  * A literal here would stop asserting anything the day the knob moved: seed
  * eight older days against a fourteen-day window and nothing is over the bound,
- * so the pruning never runs and the test passes on a store that was never cut.
+ * so the pruning never runs and the test passes on marks that were never cut.
  */
 function readMarkDays(): number {
 	const parsed = JSON.parse(
@@ -101,7 +101,7 @@ async function freezeAt(page: Page, date: string): Promise<void> {
 	await page.clock.setFixedTime(new Date(`${date}T12:00:00Z`));
 }
 
-/** The store, one entry a date. */
+/** The marks on the device, one entry a date. */
 async function stored(page: Page): Promise<Record<string, string[]>> {
 	return page.evaluate((prefix) => {
 		const marks: Record<string, string[]> = {};
@@ -114,7 +114,7 @@ async function stored(page: Page): Promise<Record<string, string[]>> {
 	}, PREFIX);
 }
 
-/** Fill the store before any script on the page runs. */
+/** Fill `localStorage` before any script on the page runs. */
 async function seed(page: Page, marks: Record<string, string[]>): Promise<void> {
 	await page.addInitScript(
 		(given: { prefix: string; marks: Record<string, string[]> }) => {
@@ -192,7 +192,7 @@ test('the old flat list of ids is dropped rather than guessed at', async ({ page
 	expect(await page.evaluate((key) => localStorage.getItem(key), LEGACY_KEY)).toBeNull();
 });
 
-test('a store written under the one old key keeps the days the window still reaches', async ({
+test('marks written under the one old key keep the days the window still reaches', async ({
 	page
 }) => {
 	// The dated map is the shape marks were really made in, so it is carried
@@ -246,7 +246,7 @@ test('a clock behind the day being read drops nothing', async ({ page }) => {
 	expect(await stored(page)).toEqual({ [DAY]: [FIRST] });
 });
 
-test('a click writes the day in hand, whatever else the store holds', async ({
+test('a click writes the day in hand, whatever else is on the device', async ({
 	page,
 	context,
 	baseURL
@@ -323,7 +323,7 @@ test('forgetting a day forgets that day only', async ({ page }) => {
 	expect(await stored(page)).toEqual({ [yesterday]: ['kept'] });
 });
 
-test('a store the browser refuses does not stop the page rendering', async ({ page }) => {
+test('a browser that refuses `localStorage` does not stop the page rendering', async ({ page }) => {
 	await freezeAt(page, DAY);
 	await page.addInitScript(() => {
 		// Private mode and a full quota both surface as a throw from setItem.

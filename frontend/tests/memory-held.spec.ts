@@ -21,7 +21,7 @@ import { memoryHeld, memoryHeldWithin } from '../src/lib/console/machine/memory-
  */
 
 /** The two readings the four-segment shape needs, and the four the machine's
- * own partition needs. Bytes, as the ledger stores them. */
+ * own partition needs. Bytes, as the ledger holds them. */
 function row(cells: Record<string, string | number>): Record<string, string> {
 	const built: Record<string, string> = {};
 	for (const [name, value] of Object.entries(cells)) built[name] = String(value);

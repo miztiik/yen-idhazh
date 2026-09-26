@@ -37,8 +37,8 @@ const ROLLUP = join(CANARY, 'span-rollup');
 
 /** The canary rollup, read the way the page reads it.
  *
- * The store is `state/span-rollup/<YYYY>/<MM>/<DD>/<writer>.csv`, so a reader
- * names the store and lets the walk find the files. Naming a file inside it
+ * The ledger is `state/span-rollup/<YYYY>/<MM>/<DD>/<writer>.csv`, so a reader
+ * names the ledger and lets the walk find the files. Naming a file inside it
  * pins a date and a grain, and both have already moved once.
  *
  * Called inside each test and never at module scope: a fixture opened while the

@@ -13,7 +13,7 @@ name: LLM-COUNCIL
 # one job being done in it this month.
 #
 # **The venue names no tenant.** Every verb below is the council's own and every
-# store it commits is named by the tenants themselves, so a repository with no
+# ledger it commits is named by the tenants themselves, so a repository with no
 # judge in it runs this file end to end and judges nothing.
 #
 # It is not part of `digest.yml`, and the reason is the budget the design
@@ -110,7 +110,7 @@ jobs:
 
       # Which dates tonight covers: tonight, plus the older nights the tenants
       # say they are behind on, inside a window the council owns. The council
-      # ASKS - it opens no tenant's store - so a night with nobody registered
+      # ASKS - it opens no tenant's ledger - so a night with nobody registered
       # plans tonight and nothing else, and every step below still runs.
       #
       # This is how a dead night is repaired, and it needs nobody to notice: the
@@ -389,7 +389,7 @@ jobs:
       # never commits a second tenant's output.
       #
       # No `REGENERATE_COMMAND`, because the council is the only writer of a
-      # tenant's own store and `concurrency` runs one council at a time - so a
+      # tenant's own ledger and `concurrency` runs one council at a time - so a
       # lost race is a race against a digest run, which writes none of these
       # paths, and replaying what this run wrote onto the new base is the whole
       # of what is needed.

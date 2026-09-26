@@ -691,7 +691,7 @@ day because the measurement that sold it had been falsified - see
 neither to drop it nor to build it as it stood. It was to close the loop:
 **measure, show the measurement, and let a source that stays bad retire
 itself.** The chrome ledger becomes one measurement inside that loop rather than
-the whole row. Read `The loop` first; the table after it is the store the loop
+the whole row. Read `The loop` first; the table after it is the ledger the loop
 reads.
 
 **Intent.** A publisher that serves one template for every article is caught the
@@ -711,7 +711,7 @@ ships three parts and no part is optional.
 
 | Part | What it does | Where it lives |
 | --- | --- | --- |
-| **Measure** | The chrome ledger below, plus the yield and body-length evidence `state/item-health/**` already carries. Deterministic, no model | `backend/idhazh/` - the store table below |
+| **Measure** | The chrome ledger below, plus the yield and body-length evidence `state/item-health/**` already carries. Deterministic, no model | `backend/idhazh/` - the ledger table below |
 | **Show** | One panel on `/console/voices/`, which already owns `Sources we may ask, and what they yield`, retirement, rest and the yield alarm. **Susan owns this panel** - see `What Susan owns` | `frontend/src/routes/console/voices/` |
 | **Retire** | A source whose measurement stays under its alarm point for a declared dwell files its own retirement row, through the machinery that already exists | `backend/idhazh/telemetry/source_health.py` |
 
@@ -794,14 +794,14 @@ that is merely correct has not either (`CLAUDE.md` section 14).
 - The sufficiency checks in [`../docs/concepts/design-system.md`](../docs/concepts/design-system.md)
   apply, and a surface can fail by being too little.
 
-### The store the loop reads
+### The ledger the loop reads
 
 **REVERTED, 2026-09-17, the day it shipped.** Everything below was built and
 merged, then taken back out. The half of row #13 that survives is the retirement
-loop and the reliability strip; this store is gone. Three findings killed it, and
+loop and the reliability strip; this ledger is gone. Three findings killed it, and
 they are kept here because they are the price of reviving it.
 
-**It changed nothing.** A full run with the store live produced **zero
+**It changed nothing.** A full run with the ledger live produced **zero
 `boilerplate` cells in 12,917 committed item-health rows** - the same zero the
 defect statement below quotes as the reason to build it. Only 31 lines across 14
 hosts cleared the three-page floor; the busiest host had 8, and a page would have
@@ -813,27 +813,27 @@ doc pages - for a signal that fired zero times.
 
 **It made a word mean three things.** This repository already used "chrome" for
 the console's own furniture and for the browser we smoke-test in, across 31
-files. The store added a third sense in the same tree.
+files. The ledger added a third sense in the same tree.
 
 **The order was wrong, and that is the lesson.** Guardrail #10 says measure when
 a number would change the decision. The number here was cheap - count committed
 extractions carrying a line the same host printed on three other pages - and it
 was taken after the instrument was built rather than before. Anything reviving
-this store takes that count first.
+this ledger takes that count first.
 
 **The defect it was built to close.** `boilerplate_ratio(lines, seen_elsewhere)`
 in `backend/idhazh/extract.py` has existed, with an enum value, two config knobs,
 tests and documentation on three pages, and **has never fired**: nothing in
 production passes `seen_elsewhere`, so it divides by an empty set and returns
 0.0. That is still true, and after this revert it is the signal's resting state
-rather than a gap waiting on a store.
+rather than a gap waiting on a ledger.
 
 **Contract.**
 
 | What | Ruling |
 | --- | --- |
 | Grain | **One row per (host, line hash)**, keyed on the registrable host of `canonical_url` - **not `source_id`**. Chrome belongs to the server template, and keying on the feed both fragments the evidence and re-makes the mistake row #2 repaired |
-| Store | **`state/chrome.csv`, one file, unsharded.** The read carries no time window - chrome learned in August is chrome in September - so a partition would open every file anyway |
+| Ledger | **`state/chrome.csv`, one file, unsharded.** The read carries no time window - chrome learned in August is chrome in September - so a partition would open every file anyway |
 | Contract file | `backend/idhazh/contracts/chrome_line.py`, plus the import and tuple entry in `contracts/export.py` |
 | Schema stem | `chrome-line-row` |
 | Fields | `version, host, line_rule, line_hash, pages_seen, first_seen, last_seen`. `line_hash` uses the existing `Sha256` type |
@@ -842,8 +842,8 @@ rather than a gap waiting on a store.
 | Reader | `stages/common._fetch_one`, passing the host's line set into the `seen_elsewhere` parameter that already exists. **`extract.py` does not change at all** |
 | Bound | Two config caps **and an eviction order**, and the order is load-bearing: evict by `pages_seen` **ascending**, then `last_seen` ascending. Recency eviction would evict the chrome using the very articles you compare against |
 | Knobs | `extract.chrome_lines_per_host_max`, `extract.chrome_forget_days`, `extract.chrome_pages_min` (default 3), on `ExtractConfig` |
-| Guardrail #12 | **A declaration is required**, and the shape is a cover enforced on the store rather than on the read - `state/traces/` is the precedent. It says: the read is one streaming scan filtered to the hosts this shard's plan names; the file is bounded by hosts times `chrome_lines_per_host_max`, so it grows with the source registry and stops, never with the archive |
-| The pruner | **Ships in the same commit as the writer**, in `stages/prune_state.py` beside `prune_seen`. A store bound with no pruner is prose |
+| Guardrail #12 | **A declaration is required**, and the shape is a cover enforced on the ledger rather than on the read - `state/traces/` is the precedent. It says: the read is one streaming scan filtered to the hosts this shard's plan names; the file is bounded by hosts times `chrome_lines_per_host_max`, so it grows with the source registry and stops, never with the archive |
+| The pruner | **Ships in the same commit as the writer**, in `stages/prune_state.py` beside `prune_seen`. A ledger bound with no pruner is prose |
 | Read-side migration | **None.** The ledger is new, so no earlier run wrote a shape to migrate. `line_rule` is a forward provision, not a migration |
 | `reject_boilerplate` | **Stays false in this commit.** The signal has never fired once, so flipping the refusal in the commit that first makes it fire means nobody can tell a correct refusal from 12,000 wrong ones. That is row #16 |
 
@@ -894,12 +894,12 @@ failure is.
 so a signal with an enum value, two config knobs, tests and documentation on
 three pages is dead code either way. That is a real defect. What the row lost was
 a measured host it would have caught - so the size of the prize was unknown, and
-the row was asking for a new contract file, a new store, a new pruner, three
+the row was asking for a new contract file, a new ledger, a new pruner, three
 knobs and a Guardrail #12 declaration to chase it.
 
 **The owner's answer, 2026-09-16, was to stop asking what one measurement is
 worth and close the loop instead.** Read `The loop` at the top of this row. The
-store below is still built exactly as Fowler ruled it; what changed is that its
+ledger below is still built exactly as Fowler ruled it; what changed is that its
 output now reaches a console panel and, after a declared dwell, a retirement -
 so the row stops being a measurement nobody acts on. The prize is no longer "how
 many hosts would this have caught in the past". It is "no host of this shape ever
@@ -986,23 +986,23 @@ missing. **Today a false merge is cheap and it will never be this cheap again.**
 
 ## Row #16 - refuse boilerplate, on a week of evidence
 
-**DESCOPED, 2026-09-17.** There is nothing left to read. The store this row was
+**DESCOPED, 2026-09-17.** There is nothing left to read. The ledger this row was
 waiting a week on was reverted the day it shipped, so `boilerplate` is back to
 dividing by an empty set and no run will ever write a cell for this row to
-inspect. Reviving the row means reviving the store first.
+inspect. Reviving the row means reviving the ledger first.
 
 **Intent, as written.** Turn the boilerplate signal from a recording into a
 refusal, once there are real rows to read.
 
-**Why the evidence never arrived.** A full run with the store live produced
+**Why the evidence never arrived.** A full run with the ledger live produced
 **zero `boilerplate` cells in 12,917 committed item-health rows**. Only 31 lines
 across 14 hosts ever cleared the three-page floor, and the busiest host had 8 -
 which would have to be 40 percent of an article's lines to trip the ratio.
 
-**What would restart it.** A measurement first, then the store: count how many
+**What would restart it.** A measurement first, then the ledger: count how many
 committed extractions contain a line the same host printed on three or more other
 pages, off the corpus we already hold. If that number is zero again, the signal
-itself is the thing to delete rather than the store.
+itself is the thing to delete rather than the ledger.
 
 ## Row #17 - does a short extraction publish at all
 

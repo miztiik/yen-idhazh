@@ -62,7 +62,7 @@ gated on an external merge:
   Then, as each predecessor lands: metric-fold-fit (Rows 2,4,5) after fit-core + eval-columns;
   geval-leg (Row 6) after eval-columns; publish-gate (Row 7) after metric-fold-fit;
   geval-measure (Row 10 - MEASURES, runs ALONE) after geval-leg; console-panels (Row 9) after
-  metric-fold-fit + publish-gate; rejects-store (Row 12) after publish-gate; plan34-gaps
+  metric-fold-fit + publish-gate; rejects-ledger (Row 12) after publish-gate; plan34-gaps
   (Row 13) after plan 34 landed + geval-leg; apply-gate (Row 8) after publish-gate - PAUSE
   (STEP 5). Readiness is computed, not read off the wave letter.
 
@@ -184,7 +184,7 @@ decisions (E4, E6) and gate their rows.
 | E7 | **Where the block lands: BEFORE `collapse_same_story`.** Withdrawing a same-story group's representative after the fold silently deletes every duplicate folded into it and trips `DigestDay`/placement count invariants. Drop/relegate before the fold so the next-best duplicate is promoted, and recompute run/vertical/desk counts. `DigestDay`'s `planned = published + failed` gains a `link_only` term (`planned = published + failed + link_only`), counted on `RunManifest`, with a test that the arithmetic closes. **(The `link_only` DigestDay term is SUPERSEDED by 0e H3: it is dropped - a withheld item counts in `failed`, so `published + failed <= planned` already holds and `digest_day.py` is untouched. The `collapse_same_story` placement above still applies.)** | Row 8 | Fowler (A1, B5) |
 | E8 | **The daily judge workflow may be renamed `LLM-JUDGES` -> `LLM-COUNCIL`.** The plan declares ONE dependency line and uses name-agnostic prose ("the daily judge council workflow") everywhere; the runtime (cache key, server start, matrix) is name-independent, so a rename touches only `name:`, `concurrency.group`, and the `_harness.py` expectation in one commit. | 0a, Row 6 | Fowler (B2), Carmack (A6) |
 | E9 | **Row 6 (G-Eval leg) depends on Row 10 (measure the call)**, or the leg timeout is a labelled estimate x generous margin - do not repeat plan 34 row 17's sequencing gap. G-Eval is a STEP inside the existing judge legs (reuse the hot server), not a new job. It is monitor-only and feeds no gate (delete-first justification: an operator drift alarm). | Row 6, Row 10 | Carmack (A3, A5), Fowler (C1) |
-| E10 | **Two guards to add.** (a) REVISED by 0e J6/J7 (2026-09-19): the corpus is NO LONGER byte-identical gate-off vs gate-on - Row 12 fences withheld items out of the corpus on purpose. The anti-Goodhart guard is instead that the fence reads the stamped `publish_decision` (not `hhem`) and `keeps_its_counterweights` stays faithfulness-free; the rejects store makes the fence auditable. (b) The G-Eval canary asserts CONTAINMENT (`geval` never reaches `publish_decision`) and that thinking is off, not just that the grammar parsed. | Row 8, Row 12, Row 6/10 | Andre (B3, B4); owner (J6/J7) |
+| E10 | **Two guards to add.** (a) REVISED by 0e J6/J7 (2026-09-19): the corpus is NO LONGER byte-identical gate-off vs gate-on - Row 12 fences withheld items out of the corpus on purpose. The anti-Goodhart guard is instead that the fence reads the stamped `publish_decision` (not `hhem`) and `keeps_its_counterweights` stays faithfulness-free; the rejects ledger makes the fence auditable. (b) The G-Eval canary asserts CONTAINMENT (`geval` never reaches `publish_decision`) and that thinking is off, not just that the grammar parsed. | Row 8, Row 12, Row 6/10 | Andre (B3, B4); owner (J6/J7) |
 
 Also corrected: the committed HHEM count is 11,140 (8,461 at the current instrument identity), not ~6,966
 (E2); the design-of-record doc's remaining "block p01" phrasing is reconciled to the absolute-0.50 block
@@ -231,7 +231,7 @@ first; the link-only references in this section are historical.)
 | coherence-place | 1 | 11 | confirm coherence runs in `assemble` (MiniLM already loaded there); one cheap RSS reading; no peak, no eviction, no timeout bump (0e H5-H7) | 35 coherence scorer |
 | console-panels | 3 | 9 | frontend island on `/console/judgement/`; + the not-published/withhold panel from item-health (0e H4) | metric-fold-fit, publish-gate |
 | apply-gate | 4 | 8 | ESCALATE, owner sign-off, first published-day change; withhold = absent + item-health (0e H1-H3, E7 placement) | publish-gate |
-| rejects-store | 3 | 12 | the `state/rejects/` store + its prune verb + the corpus fence; reads the stamped `publish_decision` (0e Table C) | publish-gate |
+| rejects-ledger | 3 | 12 | the `state/rejects/` ledger + its prune verb + the corpus fence; reads the stamped `publish_decision` (0e Table C) | publish-gate |
 | plan34-gaps | 4 | 13 | retro plan-34 latent gaps (space-trap re-arm, thinking-variant, injection live-test note); the space-trap guard is shared with Row 6's G-Eval | 34 landed, geval-leg |
 
 **Peak pool width 2** (Carmack): Rows 1 and 3 are TWO co-roots from t0, not one width-1 head. The serial
@@ -271,26 +271,26 @@ the Editor's link-only recommendation and every advisor (CLAUDE.md section 0).
 | H6 | **Row 11 collapses to a confirmation.** It confirms coherence is wired into `assemble` (not the `work` shard, plan 35 Row 8) and takes one cheap RSS reading in `assemble` (MiniLM + the ROUGE work) to show it fits with headroom. No server-stop step, no two-phase `work` shard, no eviction. |
 | H7 | **The 200 -> 220 shard-timeout bump is RETIRED** - it existed only for the two-pass `work` shard, which is gone. `assemble` absorbs coherence's ~0.16 s/item (a few tens of seconds over a day). Keep a timeout bump only if a separate measurement asks for it; it is not part of this plan. |
 
-**Table C - the rejects store (owner, 2026-09-19; adds Row 12)**
+**Table C - the rejects ledger (owner, 2026-09-19; adds Row 12)**
 
 | id | Ruling |
 | --- | --- |
-| J1 | **Persist every withheld summary for troubleshooting.** Today a withheld summary's TEXT survives nowhere committed (only the discarded run intermediate); the `EvalRow` keeps the scores + a one-way hash, not the prose - so the gate deletes ~11% of items daily and erases its own evidence. Row 12 adds a committed, fully-sharded store: `state/rejects/<YYYY>/<MM>/<DD>/<item_id>.json`, one `RejectRow` per withheld item. |
+| J1 | **Persist every withheld summary for troubleshooting.** Today a withheld summary's TEXT survives nowhere committed (only the discarded run intermediate); the `EvalRow` keeps the scores + a one-way hash, not the prose - so the gate deletes ~11% of items daily and erases its own evidence. Row 12 adds a committed, fully-sharded ledger: `state/rejects/<YYYY>/<MM>/<DD>/<item_id>.json`, one `RejectRow` per withheld item. |
 | J2 | **What the `RejectRow` carries** (for a person or a bigger model to judge later, never a reader): `title`, `summary` (the failing prose), `source_text` (the sanitised extract the model read), `prompt` (the rendered system + user turns), the failure (`hhem`, `withheld_reason`, `band`, `scorer_version`), the summariser fingerprint (model + decode), identity (`item_id`, `url_key`, `canonical_url`, `source_id`), provenance (`version`, `generated_at`, `run_id`). |
 | J3 | **Source text is committed here - a second carve-out beyond `corpus/` (CLAUDE.md 0a).** The owner authorised it (2026-09-19); the executing PR amends 0a to write BOTH carve-outs - the `corpus/` one (today only cross-referenced from section 8) and `state/rejects/` - so 0a becomes the canonical list (S5 A1). It is sanitised extract (crossed the trust boundary once at extraction, Guardrail #11), stored as data a person or an offline judge reads - never re-fed to a model as instruction. Bounded by J4. |
 | J4 | **Prune prose and source together, tightly: 30 days, config-driven.** A new knob (`finetune.reject_window_days`, default 30 - tighter than the corpus's 60) + its own verb (`retention.prune_rejects`) wired into the retention prune, deleting whole day directories past the window; the history bytes ride `prune.yml`'s force-push on the same schedule. |
 | J5 | **Never served.** `state/rejects/` stays unwired from `payload.ts`, the telemetry projection, the embed/index input, and the `DigestViewItem`/`ITEM_FIELDS` allow-list. The console (Row 9) plots only the aggregate - the rate, the reasons, the withheld-tail score distribution - never the prose or the source. |
 | J6 | **Fence the corpus: never train on a withheld summary.** The harvest reads `items/` directly ([corpus.py:217](../backend/idhazh/corpus.py)), so a withheld summary IS harvested today. Row 12 skips any `Scored` whose `EvalRow.publish_decision == withheld`, placed BEFORE `keeps_its_counterweights` - reading the stamped DECISION, not the raw `hhem`, so `keeps_its_counterweights` stays faithfulness-free (Andre's anti-monitor-selector rule holds). |
-| J7 | **This inverts E10(a) on purpose, and the store is the safety net.** E10(a) pinned "corpus byte-identical gate-off vs gate-on"; the fence deliberately breaks that (do not train on what we blocked). The Goodhart risk - training only on high-HHEM prose teaches the model to game HHEM - is mitigated because the store makes the fence AUDITABLE: a bigger model or a human reads the withheld tail offline and confirms the floor catches real failures rather than deleting good summaries. E10(a) + G5 + Row 8's gate are revised to match. |
-| J8 | **Replaces the "extend the human label draw" idea.** That would feed withheld items back into the live label queue and muddy the distribution-based autotune (owner). Instead the store is the substrate for offline judging (bigger model or human), never reader-facing; the label queue is untouched. |
+| J7 | **This inverts E10(a) on purpose, and the ledger is the safety net.** E10(a) pinned "corpus byte-identical gate-off vs gate-on"; the fence deliberately breaks that (do not train on what we blocked). The Goodhart risk - training only on high-HHEM prose teaches the model to game HHEM - is mitigated because the ledger makes the fence AUDITABLE: a bigger model or a human reads the withheld tail offline and confirms the floor catches real failures rather than deleting good summaries. E10(a) + G5 + Row 8's gate are revised to match. |
+| J8 | **Replaces the "extend the human label draw" idea.** That would feed withheld items back into the live label queue and muddy the distribution-based autotune (owner). Instead the ledger is the substrate for offline judging (bigger model or human), never reader-facing; the label queue is untouched. |
 
 Note: `state/rejects/` is committed, so the withheld prose lives in the repository (not the digest, not
 the Pages site). If the repository is public it is browsable there for the 30-day window; the prune +
-`prune.yml` force-push bound it. The owner accepts this to have a committed, queryable store rather than
+`prune.yml` force-push bound it. The owner accepts this to have a committed, queryable ledger rather than
 an expiring CI artifact - revisit if the repository's visibility changes.
 
 TODO (a note, not a plan row; distils to `docs/` per distill-a-plan.md): the OFFLINE JUDGE that reads
-the rejects store - a bigger model or a person auditing the withheld tail (J7/J8) - is a deferred
+the rejects ledger - a bigger model or a person auditing the withheld tail (J7/J8) - is a deferred
 follow-up with no row in this plan. When this plan distils it moves to
 `docs/architecture/publishing/autotune-summary-quality.md` as the named future consumer that makes the corpus-fence
 auditable.
@@ -314,7 +314,7 @@ disjointness check, never the letter (execute-a-plan.md).
 | 11 | Confirm coherence runs in `assemble` (MiniLM loaded there); no peak, no eviction | 35 coherence | W1 / coherence-place (alone) | PENDING | - | - | - |
 | 9 | Console: the quality bands + the not-published/withhold panel | 5, 7 | W3 / console-panels | PENDING | - | - | - |
 | 8 | Flip the flag: withhold = absent + item-health telemetry (E7 placement) | 7 | W4 / apply-gate (alone) | PENDING (ESCALATE) | - | - | - |
-| 12 | The rejects store + corpus fence (`state/rejects/`, 30-day prune) | 3, 7 | W3 / rejects-store | PENDING | - | - | - |
+| 12 | The rejects ledger + corpus fence (`state/rejects/`, 30-day prune) | 3, 7 | W3 / rejects-ledger | PENDING | - | - | - |
 | 13 | Retro: plan-34 latent gaps + the shared space-trap guard | 34 landed, 6 | W4 / plan34-gaps | PENDING | - | - | - |
 
 ## Section 2 - Row detail
@@ -568,7 +568,7 @@ disjointness check, never the letter (execute-a-plan.md).
   | 1 | Coherence runs in `assemble`, reusing the MiniLM already loaded for the search index; no 3-model peak (0e H5, corrected 2026-09-19) | owner, Carmack |
   | 2 | The sequential server-eviction + two-phase `work` shard + the 200->220 timeout are RETIRED - they solved a peak that does not occur | owner |
 
-### Row #12 - the rejects store + the corpus fence (`state/rejects/`, 30-day prune)
+### Row #12 - the rejects ledger + the corpus fence (`state/rejects/`, 30-day prune)
 
 - **Intent:** capture every withheld summary with enough context to investigate WHY it failed - offline,
   by a person or a bigger model, NEVER shown to a reader - and stop training the model on summaries we
@@ -594,25 +594,25 @@ disjointness check, never the letter (execute-a-plan.md).
   - **The 0a amendment + docs:** amend `CLAUDE.md` section 0a to write BOTH committed-article-text
     carve-outs (S5 A1, owner 2026-09-19): the `corpus/` one FIRST (today it is only cross-referenced
     from section 8, never stated in 0a) and `state/rejects/` SECOND, bounded by the 30-day prune (0e J3),
-    so section 0a becomes the canonical list. Document the store + the fence in
+    so section 0a becomes the canonical list. Document the ledger + the fence in
     `docs/how-to/fine-tune-a-model.md` and the design-of-record.
 - **Acceptance gates:** contract drift gate (the new schema regenerates byte-identical); a unit test
   that a withheld item writes exactly one `RejectRow` carrying the prose + source + rendered prompt
   (driven from a bounded fixture, never the archive); a `harvest_rows` test that an item stamped
   `withheld` is excluded from the corpus while a published sibling stays, and `keeps_its_counterweights`
   still reads no `hhem`; a prune test on a bounded fixture that a day past the window is deleted. No
-  test walks the committed store (section 13, Guardrail #12).
+  test walks the committed ledger (section 13, Guardrail #12).
 - **Oracle:** for a built withheld item, a `RejectRow` round-trips with the failing prose, the source
   extract and the exact rendered prompt, and the corpus harvest drops it. It cannot settle whether the
-  0.50 floor is well-calibrated - that is the offline judge the store exists to feed (J8), out of scope.
+  0.50 floor is well-calibrated - that is the offline judge the ledger exists to feed (J8), out of scope.
 - **Decisions:**
 
   | # | Decision | Authority |
   | --- | --- | --- |
-  | 1 | A committed JSON payload store (not a CSV ledger - prose has newlines), one file per item, day-sharded, on the `state/traces/` pattern | Fowler |
+  | 1 | A committed ledger of JSON payloads rather than CSV rows - prose has newlines - one file per item, day-sharded, on the `state/traces/` pattern | Fowler |
   | 2 | Source text committed here, a second 0a carve-out, bounded by a 30-day config-driven prune | owner (J3/J4) |
   | 3 | The corpus fence reads the stamped `publish_decision`, never `hhem`; `keeps_its_counterweights` stays faithfulness-free | Andre, owner (J6) |
-  | 4 | The store is the auditable safety net that makes fencing the corpus sound despite the Goodhart risk; offline judging (bigger model or human) reads it, never a reader (J7/J8) | Andre, owner |
+  | 4 | The ledger is the auditable safety net that makes fencing the corpus sound despite the Goodhart risk; offline judging (bigger model or human) reads it, never a reader (J7/J8) | Andre, owner |
 
 ### Row #13 - retro: plan-34 latent gaps + the shared space-trap guard
 

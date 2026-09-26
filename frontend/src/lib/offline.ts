@@ -16,7 +16,7 @@
  * has added nothing to wait for.
  */
 
-/** Every cache this project owns starts with this. The encoder's own store is
+/** Every cache this project owns starts with this. The encoder's own `Cache` is
  * `transformers-cache` and is not ours - a retirement that deleted it would
  * cost a reader a 43.2 MB download they never asked to repeat. */
 export const CACHE_PREFIX = 'idhazh-';
@@ -110,7 +110,7 @@ export function evictions(held: readonly HeldDay[], bounds: OfflineBounds): stri
  * **An allow-list, and that is the point of it.** The shell cache used to take
  * any successful same-origin GET, so every file the pipeline publishes - a
  * drawing, a telemetry shard, a month index - landed in it the moment a page
- * asked for one. That is a store that grows with the archive rather than with
+ * asked for one. That is a `Cache` that grows with the archive rather than with
  * the shell, in a cache with no byte bound of its own.
  *
  * What is on the list is what this build emitted, plus the pages the reader

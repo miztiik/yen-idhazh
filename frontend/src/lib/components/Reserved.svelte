@@ -30,7 +30,8 @@
 	}: {
 		/** Named `panelState` rather than `state` because a prop called `state`
 		 * shadows the `$state` rune inside the component that takes it, and the
-		 * error that produces names a store rather than the shadowing. */
+		 * error that produces names an auto-subscription rather than the
+		 * shadowing. */
 		panelState: PanelState;
 		/** The drawn height of the panel's chart - `console.chart_height`. The
 		 * reserved box is exactly this, in every state it is in. */

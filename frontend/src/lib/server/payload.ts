@@ -625,7 +625,7 @@ export interface DayShard {
  *
  * **The cover counts days, not files.** A day directory holding five writer
  * files is one day, so `days` keeps meaning the newest `days` recorded days
- * whatever the store holds.
+ * whatever the ledger holds.
  *
  * Bounded exactly as `readDayShards` is, and by the same call, so a caller
  * asking which days exist and a caller asking what they hold cannot answer over

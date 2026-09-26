@@ -32,7 +32,7 @@ const PLOT = '[data-source-cuts="range"]';
 /** Every item-health row the canary wrote.
  *
  * Through `readDayShards`, the reader the page's own server uses, so a grain
- * change in the store cannot leave this oracle comparing the page against an
+ * change in the ledger cannot leave this oracle comparing the page against an
  * empty set. The ledger files `<YYYY>/<MM>/<DD>.csv`.
  */
 function ledger(): Record<string, string>[] {

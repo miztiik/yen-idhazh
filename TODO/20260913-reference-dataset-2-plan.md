@@ -189,7 +189,7 @@ Table F - Status Reckoner
 - **Decisions:** Array schemas are generated from declared native list models. Reuse existing scalar and failure types. The metadata model distinguishes phases and refuses inconsistent phase-specific counts. The checkpoint uses the same extraction-row shape, not a private unvalidated dictionary. Config paths are relative to the repository root rather than to the config file, because the project's shared relative-path type forbids a `..` segment and a stored `..` stops meaning the same thing when a file moves (`CLAUDE.md` section 2).
 - **Rejected alternatives:** Inheriting the whole `Article` or `ReferenceDatasetRow` would require invented ranks, feeds, publication dates or labels. Declaring only the needed shape avoids those false facts.
 
-## 5. Step 4 - Build the manifest and store totals
+## 5. Step 4 - Build the manifest and record totals
 
 - **Scope:** Add an explicit URL-input mode to the existing reference-dataset utility and write the complete manifest with its publisher keys and count metadata.
 - **Files touched:** `backend/utilities/build_reference_dataset.py`, `backend/tests/test_reference_dataset.py`, `tests/fixtures/reference-dataset/url-inputs.txt`, `tests/fixtures/reference-dataset/url-source-config.json`, `corpus/reference-dataset-2/manifest.json`, `corpus/reference-dataset-2/manifest.meta.json`, `docs/how-to/measure-a-classifier.md`, this plan's own status row.

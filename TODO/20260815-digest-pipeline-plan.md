@@ -308,7 +308,7 @@ than not having the feature. On-device **search** ships and stays; on-device
 | # | Option | Why rejected | Authority |
 | --- | --- | --- | --- |
 | 1 | Integer schema versions | Not self-documenting; date-stamp is ASCII-sortable and says when the shape moved. | Fowler |
-| 2 | SQLite as the run store | One file per URL is what makes worker jobs independent and re-runnable. | Carmack |
+| 2 | SQLite as the run ledger | One file per URL is what makes worker jobs independent and re-runnable. | Carmack |
 
 ---
 
@@ -441,7 +441,7 @@ Derived per-article seconds (best / typical / worst):
 | 6 | A single `model-release` tag | Too coarse for what a reader actually tracks. Replaced by a closed nine-value event enum so "who signed what with whom" is first-class. | Reader |
 | 7 | Deleting a retired vertical from config | Deleting an id breaks every payload written under it and forces a read-side migration. A tombstone costs one JSON object. | Fowler |
 | 8 | Readability-style custom extractor | Mature OSS exists; a custom extractor is a maintenance surface with no beneficiary feature. | Fowler |
-| 9 | Store full article bodies in the repo | Copyright; store the link and our own summary. | Fowler |
+| 9 | Keep full article bodies in the repo | Copyright; keep the link and our own summary. | Fowler |
 
 ### 3.1 Ratified taxonomy (2026-08-20)
 

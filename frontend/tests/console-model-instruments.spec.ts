@@ -46,7 +46,7 @@ const CONFIG = JSON.parse(readFileSync(resolve(REPO, 'config', 'idhazh.json'), '
 
 /** The canary ledger, as rows of strings, exactly as the page's reader sees it.
  *
- * Through `readDayShards` rather than a directory listing here: the store files
+ * Through `readDayShards` rather than a directory listing here: the ledger files
  * `<YYYY>/<MM>/<DD>.csv` since 2026-09-13, so a `readdir` of `*.csv` over the
  * root finds nothing and leaves every assertion below passing on an empty set.
  */
