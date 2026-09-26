@@ -550,6 +550,14 @@ RETIRED_LEDGER_WORD = re.compile(r"(?<![A-Za-z0-9_])[Ss]tores?(?![A-Za-z0-9_])")
 #: line's own two literals out of the count.
 NOT_THE_LEDGER_WORD = ("no-store", "ast.Store")
 
+#: A web address passes the same test and is stripped for the same reason: this
+#: repository cannot change where somebody else's page lives, so an address that
+#: happens to carry the word is a quotation rather than a vocabulary. The
+#: reference set holds one. Bounded by the scheme, not by a path, so it stays a
+#: spelling rule rather than becoming a file allow-list. Only the address is
+#: removed, so the visible text of a Markdown link is still counted.
+SOMEBODY_ELSES_ADDRESS = re.compile(r"https?://\S+")
+
 #: The six trees a person edits plus the plan-docs, swept through `git ls-files`
 #: so an untracked scratch file cannot turn this red and a tracked one cannot
 #: escape it. `backend/var` is excluded by name: a run writes it, and what a test
@@ -627,7 +635,7 @@ def test_the_retired_ledger_word_has_not_come_back() -> None:
         for number, line in enumerate(text.split("\n"), start=1):
             if number in excused:
                 continue
-            counted = line
+            counted = SOMEBODY_ELSES_ADDRESS.sub("", line)
             for spelling in NOT_THE_LEDGER_WORD:
                 counted = counted.replace(spelling, "")
             if RETIRED_LEDGER_WORD.search(counted):
