@@ -1,6 +1,6 @@
 # AGENTS.md
 
-**Last Updated**: 2026-09-21
+**Last Updated**: 2026-09-26
 
 Derived pointer for coding agents. Not authoritative - if this disagrees with `docs/`, docs win (CLAUDE.md section 5).
 
@@ -35,6 +35,14 @@ Three moves are legitimate when intent meets a limitation. Do it, and say what i
 **A measurement that cannot see the difference has not answered the question.** "The gain is smaller than the noise" is a fact about the instrument; name the instrument that could see it and what it costs. Noise between runs does not hide a difference measured inside one run, and a change that cannot make the output worse is priced on cost and revert rather than on a measurement at all ([`CLAUDE.md`](CLAUDE.md) Guardrail #10).
 
 This does not license routing around a person's ruling, the two runner numbers that fail a run - the 6 h job and the 1 GB site - or the trust boundary; those are surfaced, not overruled. It does not license a larger change than the intent needs either. [`CLAUDE.md`](CLAUDE.md) section 0d is canonical.
+
+## Every clock is UTC (CLAUDE.md section 2)
+
+Every instant this project reads, writes, compares, schedules or prints is UTC. There is no second timezone: not in a workflow schedule, a retention window, a prune or delete decision, a commit timestamp, a feed entry's age, a published payload, or a date on a page a reader sees.
+
+Read the clock with `datetime.now(timezone.utc)` in Python and the `*UTC*` accessors in TypeScript. `datetime.now()`, `datetime.utcnow()` and `date.today()` are defects - the first and third are right on a UTC runner and wrong on a developer machine, so the bug ships green. Persist an instant as ISO-8601 with `Z` or as epoch milliseconds, and a date as `YYYY-MM-DD` meaning the UTC day.
+
+**A day boundary is 00:00 UTC, and no boundary is derived from when a job woke.** A schedule is a wake, never a measurement: whether a period is old enough to act on is computed from that period's own end instant, so moving a cron cannot change which periods qualify. [`CLAUDE.md`](CLAUDE.md) section 2 is canonical.
 
 Before any non-trivial work:
 

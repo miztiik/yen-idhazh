@@ -1,6 +1,6 @@
 # Vision
 
-**Last Updated**: 2026-09-17
+**Last Updated**: 2026-09-26
 
 What yen-idhazh is, what it is not, and the one-sentence product idea every other concept doc serves. This is the top of the concept tier; if a later doc contradicts this page, this page is wrong and gets fixed.
 
@@ -27,6 +27,14 @@ Nothing computes at read time, so there is no server to run, nothing to scale,
 and nothing that can be down. See
 [../reference/github-actions.md](../reference/github-actions.md) for the exact
 trigger contract.
+
+**Every clock in this project is UTC, and a day is the UTC day.** The schedule
+above, the date a digest is filed under, the age a retention window measures,
+the instant a prune decides against, the commit timestamp, a feed entry's age
+and every date a reader sees are all one timezone. A digest dated `2026-09-24`
+holds what was published between 00:00 and 24:00 UTC on that date, wherever the
+reader is. The rule and what it forbids are
+[CLAUDE.md](../../CLAUDE.md) section 2.
 
 Two artifacts come out of a run, and they are equally the product:
 

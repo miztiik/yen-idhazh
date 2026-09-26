@@ -1,6 +1,6 @@
 # CLAUDE.md - Yen Idhazh: Engineering Contract
 
-**Last Updated**: 2026-09-22
+**Last Updated**: 2026-09-26
 
 Non-negotiable contract for any human or AI agent working in this repo.
 
@@ -118,7 +118,9 @@ Logging is local by construction. There is no log sink, no log service, and no r
 - **Secrets never reach a log record.** Not a token, not a signed URL, not a request header.
 - **Observability telemetry** Backend telemetry collated and persisted through commits under `/state`, sharded by time granularity - preferably daily, or falling back to month or year. A single central module manages all telemetry operations through explicit verbs, including a prune verb to clean up records for a target time period.
 
-## 2. Path Conventions
+## 2. Path and Time Conventions
+
+### Paths
 
 For anything leaving the process (JSON, logs, manifests, agent memory, error messages, doc cross-links):
 
@@ -127,6 +129,18 @@ For anything leaving the process (JSON, logs, manifests, agent memory, error mes
 - Minimal reconstructable form.
 
 In-memory `Path` objects for local I/O may stay platform-native. This applies at the moment a path leaves the process.
+
+### Time
+
+**Every instant this project reads, writes, compares, schedules or prints is UTC.** There is no second timezone anywhere in the system, and no local-time value is ever persisted, compared or shown. This covers every clock the project touches: the workflow schedules, the date a digest is filed under, the age a retention window measures, the instant a prune or a delete decides against, the commit timestamp, the age of a fetched feed entry, the stamp inside a published payload, and every date a reader or an operator sees on a page.
+
+Three rules make it checkable.
+
+- **Read the clock one way.** `datetime.now(timezone.utc)` in Python; `Date.now()` and the `*UTC*` accessors in TypeScript. A bare `datetime.now()`, a `datetime.utcnow()`, a `date.today()` or a local-time `Date` getter is a defect. The first and third are wrong on any machine that is not on UTC - which is every developer machine and no CI runner, so the bug ships green. `utcnow()` returns a naive value that compares wrongly against an aware one.
+- **Persist one way.** An instant is ISO-8601 carrying `Z`, or epoch milliseconds. A date is `YYYY-MM-DD` and means the UTC day. A persisted value with no offset in it cannot be read twice with the same answer.
+- **Say so once, where it is read.** A field holding an instant says UTC in its description, and a surface printing one says UTC beside it. A reader left to guess the timezone has been handed a number with no meaning (section 0b).
+
+**A day boundary is 00:00 UTC, and no boundary is ever derived from when a job happened to wake.** A schedule is a wake, never a measurement: whether a period is old enough to act on is computed from that period's own end instant against the clock, so moving a cron cannot change which periods qualify.
 
 These are conventions rather than guardrails because a serialization invariant has one correct answer, so there is nothing here to adapt.
 
