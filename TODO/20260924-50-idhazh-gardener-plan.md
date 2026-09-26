@@ -160,7 +160,7 @@ flowchart TB
 
   subgraph OPS["Idhazh Gardener - idhazh-gardener.yml"]
     PLAN["plan<br/>standard library only, before any install<br/>reads the config and nothing else"]
-    ANY{"any task due?"}
+    ANY{"any active task?"}
     IDLE["no run-tasks job runs"]
     TEND["run-tasks<br/>5 shards, 3-4 due tasks each<br/>fail-fast false, max-parallel 5"]
     RUN["for each task in the shard:<br/>select, report, delete"]
@@ -364,12 +364,16 @@ Cross-field validators, existing ones kept and one amended: `selected <= candida
   "shards": 5,
   "tasks": {
     "seen": {
+      "state": "active",
+      "kind": "retention",
       "window":  { "unit": "days", "value": 90 },
       "dry_run": false,
       "max_deletes_per_run": null,
       "owns": ["state/seen"]
     },
     "trials": {
+      "state": "active",
+      "kind": "retention",
       "window":  { "unit": "days", "value": 90 },
       "dry_run": false,
       "max_deletes_per_run": null,
@@ -953,7 +957,7 @@ A standard-library script writes it and a YAML matrix expression reads it, so it
 
 ```json
 {
-  "due": true,
+  "any_active_task": true,
   "shard_count": 5,
   "shards": [
     { "index": 0, "task_names": ["seen", "traces"], "cone": "state/seen\nstate/traces" }
@@ -962,7 +966,7 @@ A standard-library script writes it and a YAML matrix expression reads it, so it
 }
 ```
 
-**Three fields the workflow reads and each is read differently.** `due` gates the `run-tasks` job and means "this config holds at least one active task" - every task in the matrix runs at every wake (section 5.3), so there is no per-task dueness left for this payload to carry. `shard_count` is a **number**, because `max-parallel` given a JSON array is invalid and GitHub fails the workflow at parse. `matrix` carries `include`, because `cone` must be a matrix member rather than a sibling field - an expression naming a missing context property evaluates to the empty string with no error, so a missed `cone` checks out nothing and every deletion silently finds nothing.
+**Three fields the workflow reads and each is read differently.** `any_active_task` gates the `run-tasks` job and is named for what it checks: the config holds at least one task in `state: active`. **It is not called `due`.** Every task in the matrix runs at every wake (section 5.3), so there is no per-task dueness left for this payload to carry, and a field named for a question nothing asks sends the next reader looking for the answer - the same move that took `find-due` to `plan-shards` (CLAUDE.md section 0b). `shard_count` is a **number**, because `max-parallel` given a JSON array is invalid and GitHub fails the workflow at parse. `matrix` carries `include`, because `cone` must be a matrix member rather than a sibling field - an expression naming a missing context property evaluates to the empty string with no error, so a missed `cone` checks out nothing and every deletion silently finds nothing.
 
 **`history_due` is not a field.** The `history` job reads `corpus/corpus.meta.json` out of its own checkout (section 5.3). Owner ruling, 2026-09-26, overturning the 2026-09-24 design: a flag the `plan` job could not compute is a flag that force-pushes `main` every day.
 
@@ -970,7 +974,7 @@ A standard-library script writes it and a YAML matrix expression reads it, so it
 
 **A task using `owns_everything_else_under` emits an empty `cone`.** Cone-mode sparse checkout matches directories and has no depth-one form, so a cone of `state` would materialise every file under `state/` - 909 files and 59,319,788 bytes, every day, to read the eighteen entries at depth one. The `trials` task asks `git ls-tree HEAD state/` with no `-r`, which reads tree objects a `blob:none` clone already holds and needs no working tree at all; **the listing yields blobs as well as trees and the task ignores a blob by name.** An empty cone emits the three code prefixes alone - `config`, `backend`, `.github`. **A cone of a bare ledger root is Guardrail #12 broken rather than answered**, and one harness test asserts no shard's cone contains one.
 
-`"due": false` ships `"shards": []`, `"shard_count": 0` and `"matrix": {"include": []}` - the empty case is a shape, not an absence, because a matrix expression reading a missing key fails differently on every runner.
+`"any_active_task": false` ships `"shards": []`, `"shard_count": 0` and `"matrix": {"include": []}` - the empty case is a shape, not an absence, because a matrix expression reading a missing key fails differently on every runner.
 
 #### 5.9.8 The exit codes, ordered
 
@@ -1006,7 +1010,7 @@ A shard runs several tasks and exits with the **worst** code, and worst is not n
 | pip cache | `cache: pip`, `cache-dependency-path: pyproject.toml`, **`cache-suffix: parquet`** | `setup-python` keys on the OS, the interpreter and the dependency file - **never on the extras** - so without a suffix this workflow and `digest.yml` share one entry whose contents depend on which ran first. A cache key that does not name the resolved set it holds reports a hit and delivers a miss |
 | `max-parallel` | `${{ fromJSON(needs.plan.outputs.shard_count) }}` | A **number**, not the shard array: `max-parallel` given a JSON array is invalid and GitHub fails the workflow at parse. **The workflow test asserting `max-parallel` is not below the shard count is deleted**: it cannot fail |
 | the matrix | `include: ${{ fromJSON(needs.plan.outputs.matrix).include }}` | `cone` must be a matrix member, not a sibling field. An expression naming a missing context property evaluates to the **empty string with no error**, so a missed `cone` checks out nothing and every deletion silently finds nothing |
-| zero-due day | `run-tasks`: `if: needs.plan.outputs.due == 'true'`. `history`: `needs: [plan, run-tasks]`, `if: always() && (needs.run-tasks.result == 'success' \|\| needs.run-tasks.result == 'skipped')` | **A skipped `needs` skips the dependant**, so the force-push job would never run on an idle day. **The `history_due` clause is gone**: the squash fires about twelve times a year and the windowed tasks fire daily, and the job that can see `corpus/corpus.meta.json` is the one that decides. It starts every day and exits in an estimated 20-30 s on the 29 wakes out of 30 that do nothing. Owner ruling, 2026-09-26, overturning the 2026-09-24 decision that put the flag in the plan payload |
+| no active task | `run-tasks`: `if: needs.plan.outputs.any_active_task == 'true'`. `history`: `needs: [plan, run-tasks]`, `if: always() && (needs.run-tasks.result == 'success' \|\| needs.run-tasks.result == 'skipped')` | **A skipped `needs` skips the dependant**, so the force-push job would never run on a day when every task is paused. **The `history_due` clause is gone**: the squash fires about twelve times a year and the windowed tasks fire daily, and the job that can see `corpus/corpus.meta.json` is the one that decides. It starts every day and exits in an estimated 20-30 s on the 29 wakes out of 30 that do nothing. Owner ruling, 2026-09-26, overturning the 2026-09-24 decision that put the flag in the plan payload |
 | commit message | run-tasks: `gardener: <task names> on <date>`. history: `corpus: squash history older than <keep_days> days`, **byte-identical to today's** | The history line is the one string a person greps the rewritten history for |
 
 **The plan payload is emitted on one line** - `json.dumps(payload, separators=(",", ":"))` - because a value carrying a literal newline needs the heredoc form in `$GITHUB_OUTPUT` and the obvious pretty-printed version breaks it silently.
@@ -1464,7 +1468,7 @@ It mints `unit_id` and then `file_id` through `naming` (section 5.7), builds the
 
 **No ESCALATE trigger fires in this row, and trigger 2 is the one somebody will stop on.** That trigger guards the tip-moved refusal in `backend/utilities/push_rewritten_history.py` - its behaviour and its exit code - and this row changes neither. What changes is **which job decides whether the squash runs at all**, which is a dueness gate and not a refusal. Trigger 4 is the one to watch instead: the chain in front of the force push grows by the history job's own dueness read, an estimated 20-30 s, and section 5.9.11 restates the whole chain with that term in it.
 - **The shape:**
-  - `plan` - depth-1 sparse checkout of `config/` and `backend/utilities/`, runs `python backend/utilities/gardener_shards.py --json` **before any install**, emits `due`, `shard_count`, `shards` and `matrix` (section 5.9.7). **That cone is the whole of what the reader opens**, and the oracle below is what keeps it true as ledgers are added.
+  - `plan` - depth-1 sparse checkout of `config/` and `backend/utilities/`, runs `python backend/utilities/gardener_shards.py --json` **before any install**, emits `any_active_task`, `shard_count`, `shards` and `matrix` (section 5.9.7). **That cone is the whole of what the reader opens**, and the oracle below is what keeps it true as ledgers are added.
   - `run-tasks` - `needs: plan`, `strategy: {matrix: {include: ...}, fail-fast: false, max-parallel: ${{ fromJSON(needs.plan.outputs.shard_count) }}}`, which is `config/idhazh_gardener.json`'s `shards`, today 5. Each runner sparse-checks out the union of its shard's tasks' cones, installs `.[parquet]`, loops its tasks, and publishes once with row 4's commit loop.
   - `history` - `needs: [plan, run-tasks]`, and **it gates itself**: `fetch-depth: 1`, `python3 backend/utilities/corpus_squash_due.py`, then only on a due day a second `actions/checkout@v6` at `fetch-depth: 0`, `idhazh gardener corpus-squash`, and the force push with the tip-moved refusal. The two-stage shape and its comment carry over from `prune.yml` unchanged, because it is the same job doing the same thing (section 5.3).
 - **Files touched:**
