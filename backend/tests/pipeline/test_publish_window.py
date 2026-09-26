@@ -18,6 +18,7 @@ from idhazh.contracts.digest_day import DigestDay
 from idhazh.contracts.feed_health import FetchOutcome
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.item_health import FailureCode, ItemHealthRow, ItemOutcome, TimeSource
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.run_manifest import RunManifest
 from idhazh.contracts.run_plan import RunPlan, VerticalPlan
 from idhazh.contracts.sources import FeedDef, SourceForm
@@ -86,7 +87,7 @@ def test_a_crash_before_the_published_ledger_costs_the_replay_nothing(
     published = DigestDay.from_json(read_text(day_path))
     assert published.items, "run 1 published nothing, so there is no window to test"
 
-    ledger.published_path(state, run_plan.date).unlink()
+    ledger.path(state, LedgerName.PUBLISHED, run_plan.date).unlink()
     window = settings.app.collect.published_window_days
     assert not ledger.load_published(state, today=run_plan.date, within_days=window), (
         "the guard still holds these addresses, so this is not the crash the window leaves"
@@ -401,7 +402,7 @@ def test_assemble_writes_one_item_health_row_per_planned_item(
     )
 
     for shard in day_shards.one_day(
-        tmp_path / "state" / ledger.ITEM_HEALTH_DIRNAME, run_plan.date
+        ledger.tree_root(tmp_path / "state", LedgerName.ITEM_HEALTH), run_plan.date
     ):
         with shard.open(encoding="utf-8", newline="") as handle:
             assert tuple(csv.DictReader(handle).fieldnames or ()) == ItemHealthRow.csv_columns()
@@ -422,7 +423,7 @@ def test_assemble_writes_one_item_health_row_per_planned_item(
 def health_rows(state_dir: Path, date: str) -> list[ItemHealthRow]:
     """Every item-health row the committed day holds, settled across its files."""
     settled = day_shards.settled_day(
-        state_dir / ledger.ITEM_HEALTH_DIRNAME, date, ledger.ITEM_HEALTH_KEY, ItemHealthRow
+        ledger.tree_root(state_dir, LedgerName.ITEM_HEALTH), date, ledger.ITEM_HEALTH_KEY, ItemHealthRow
     )
     return [ItemHealthRow.from_csv_row(record) for record in settled]
 
@@ -456,7 +457,7 @@ def test_a_run_that_dies_before_assemble_keeps_what_its_workers_measured(
         )
     recorded, _ = stage_record(run_plan, settings=settings)
 
-    assert day_shards.one_day(state / ledger.ITEM_HEALTH_DIRNAME, run_plan.date), (
+    assert day_shards.one_day(ledger.tree_root(state, LedgerName.ITEM_HEALTH), run_plan.date), (
         "the shard committed nothing, so the catch-up fold would have nothing to read"
     )
     fold(state, run_plan.date)
@@ -466,7 +467,7 @@ def test_a_run_that_dies_before_assemble_keeps_what_its_workers_measured(
     assert {row.run_id for row in rows} == {run_plan.run_id}
     assert [row.item_id for row in rows] == [item.item_id for item in run_plan.items]
     assert ledger.read_header(
-        ledger.item_health_path(state, run_plan.date) / day_shards.SETTLED_NAME
+        ledger.path(state, LedgerName.ITEM_HEALTH, run_plan.date) / day_shards.SETTLED_NAME
     ) == (ItemHealthRow.csv_columns())
 
 
@@ -518,7 +519,7 @@ def test_replaying_a_day_the_worker_already_recorded_appends_no_duplicate(
     run_plan = plan()
     settings = config.load(CONFIG_DIR)
     isolate_ledgers(tmp_path, monkeypatch)
-    committed = ledger.item_health_path(tmp_path / "state", run_plan.date) / day_shards.SETTLED_NAME
+    committed = ledger.path(tmp_path / "state", LedgerName.ITEM_HEALTH, run_plan.date) / day_shards.SETTLED_NAME
     with a_server_that_refuses_every_completion() as server:
         stage_work(
             run_plan,
@@ -698,7 +699,7 @@ def test_the_two_ledgers_agree_about_which_shards_ran(
     counted = [
         HostFingerprintRow.from_csv_row(record)
         for record in day_shards.settled_day(
-            state / ledger.HOST_FINGERPRINT_DIRNAME,
+            ledger.tree_root(state, LedgerName.HOST_FINGERPRINT),
             run_plan.date,
             ledger.HOST_FINGERPRINT_KEY,
             HostFingerprintRow,

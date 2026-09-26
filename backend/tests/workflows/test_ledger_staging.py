@@ -12,15 +12,22 @@ shipped and staged by nothing, so every row went to the bin with the runner.
 staged but missing from the settlement registry.
 
 Nothing here names a ledger. Both sides are derived - the ledger side from the
-`*_relpath` helpers the ledger modules already export, the job side from the CLI's
-own dispatch and the workflow's own `run:` bodies - because a hand-written list of
-ledger names is the thing that went missing in the first place.
+registry every ledger is declared in, the job side from the CLI's own dispatch and
+the workflow's own `run:` bodies - because a hand-written list of ledger names is
+the thing that went missing in the first place. A ledger that sits outside the
+registry declares itself the way every ledger once did, by exporting a `*_relpath`
+helper of its own, and `state/traces` is the one that does.
 
 A ledger is filled two ways and both count here. A ledger takes an `append_*` or a
 `write_*` call; the trace tree takes a file sink opened on its own path helper, and
 a sink is still something a run writes and a job must stage. The three hand-written
 lists this replaced were each scoped to one source file, so a second writer in a
 second file bought a third list rather than failing anything.
+
+A writer says which ledger it fills by naming it. Most name one `LedgerName` in
+their own body. One is generic over the vocabulary and takes the name from its
+caller, so its ledgers are read from the calls the package makes to it. One is
+handed a path rather than a name, and has only its own name left to go on.
 
 Nothing here opens a file under `state/`. Every path is computed from a fixed date,
 so what these tests cost does not move when the archive grows (CLAUDE.md
@@ -43,6 +50,8 @@ import pytest
 from idhazh import cli, day_shards, ledger
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.ledger_name import DAY_TREES, LedgerName
+from idhazh.contracts.ledgers import Grain
+from idhazh.ledger import paths
 from idhazh.stages import compact as compact_stage
 from idhazh.telemetry import sinks, traces
 
@@ -73,17 +82,24 @@ TRIAL_WORKFLOW: Final = "measure.yml"
 # a year or a month.
 OTHER_DATE: Final = "2027-01-02"
 
-# Every module that declares a committed ledger, each by exporting a `*_relpath`
-# helper for one. `idhazh.ledger` holds the CSV ledgers; `idhazh.telemetry.traces`
-# holds the trace tree beside them, which a sink writes rather than a writer
-# function - which is why every guard that looked for a writer missed it.
+# Every module that declares a ledger the registry does not, each by exporting a
+# `*_relpath` helper for one. `idhazh.telemetry.traces` holds the trace tree beside
+# the registered ledgers, which a sink writes rather than a writer function - which
+# is why every guard that looked for a writer missed it. `idhazh.ledger` is here for
+# its writers rather than for a helper of its own: every address it builds now comes
+# from the registry.
 LEDGER_MODULES: Final = (ledger, traces)
 
-# A ledger whose path helper ships ahead of the thing that fills it, and what will
-# fill it. Guardrail #3 puts the shape and the path in first, and
+# A ledger whose entry ships ahead of the thing that fills it, and what will fill
+# it. Guardrail #3 puts the shape and the address in first, and
 # `state/feed-retirements.csv` is the precedent: it was registered for settlement
 # one commit before the plan stage wrote a row into it, so that two stale
 # checkouts could not leave one address retired twice from the very first row.
+#
+# Each of these waits on the council, whose tenant module is resolved from config
+# at call time - so with no slug registered nothing runs it, and the module behind
+# it writes its record straight to the address rather than through a ledger writer
+# this derivation could follow.
 #
 # It is a list rather than a rule, so a NEW unfilled ledger fails this file instead
 # of joining it unnoticed. An entry goes when its filler lands, and a name here
@@ -94,6 +110,11 @@ LEDGERS_NOTHING_FILLS_YET: Final[Mapping[str, str]] = MappingProxyType(
         "state/content-similarity-judge/metrics": (
             "the council's shipping capability, which this derivation cannot see: it "
             "renders a tenant's row rather than calling a ledger writer"
+        ),
+        "state/content-similarity-judge/score-distribution.json": (
+            "the same capability, through idhazh.similarity.tenant and "
+            "idhazh.stages.count_verdicts: both write the record straight to its "
+            "address rather than calling a ledger writer"
         ),
         "state/content-similarity-judge/archive": (
             "the fold, on the day a stamp under the record moves"
@@ -197,13 +218,12 @@ def _helper_arguments(date: str) -> dict[str, object]:
     """What to pass a path helper, named by the parameter that asks for it.
 
     A ledger filed by something other than a date says so in its own signature - the
-    trace tree files by run and by shard, a segment by run, attempt, job and shard,
-    and an archived record files by the stamp its counts were taken under - so the
-    value follows the parameter's name rather than the helper's.
+    trace tree files by run and by shard - so the value follows the parameter's name
+    rather than the helper's.
 
-    `ledger` picks one member of the declared set and any member would do: what the
-    staging check asks is whether the job that writes a day shard stages the ledger,
-    and every member reduces to its own tree directory under `state/`.
+    Only a helper that names its own ledger is called this way. A builder generic
+    over the vocabulary is addressed through the registry instead, which knows what
+    period each ledger's address asks for.
     """
     return {
         "date": date,
@@ -211,7 +231,6 @@ def _helper_arguments(date: str) -> dict[str, object]:
         "run_id": f"{date}-1",
         "shard": 0,
         "stamp": date,
-        "ledger": LedgerName.HOST_FINGERPRINT,
         "attempt": 1,
         "job": ServerJob.WORK,
     }
@@ -246,14 +265,57 @@ def _shared_prefix(first: str, second: str) -> str:
     return "/".join(shared)
 
 
+def _names_a_ledger(helper: Callable[..., Any]) -> bool:
+    """Does this helper carry one ledger of its own, rather than take the name?
+
+    A builder handed a `LedgerName` addresses whichever ledger it was given, so it
+    declares none and the registry above already covers every one it can reach.
+    """
+    return not any(
+        LedgerName.__name__ in str(parameter.annotation)
+        for parameter in inspect.signature(helper).parameters.values()
+    )
+
+
+def _period(grain: Grain, date: str) -> str | None:
+    """The cover one ledger's address asks for, spelled the way its grain asks.
+
+    A flat ledger names no period and is handed none. The rest take the day, the
+    month it falls in, or a stamp taken during it - and two dates have to give two
+    addresses, or the prefix they share would be the whole path.
+    """
+    if grain is Grain.FLAT:
+        return None
+    if grain is Grain.MONTH_FILE:
+        return date[: len("YYYY-MM")]
+    if grain is Grain.STAMPED:
+        return f"{date.replace('-', '')}T120000Z"
+    return date
+
+
 def _ledgers() -> dict[str, str]:
-    """Every ledger the ledger modules declare: helper name -> the path a job stages.
+    """Every ledger the pipeline declares: its own name -> the path a job stages.
+
+    The registry is the declaration, so a ledger joins this derivation on the day
+    its entry lands rather than on the day somebody remembers to write a helper for
+    it. A ledger outside the registry keeps declaring itself by exporting a
+    `*_relpath` helper, and is keyed by that helper's name.
 
     The staged path is the longest prefix two dates share, so a dated ledger reduces
     to its own directory and an undated one stays the file it is.
     """
     found: dict[str, str] = {}
+    for member in LedgerName:
+        grain = paths.entry(member).grain
+        shared = _shared_prefix(
+            paths.relpath(member, _period(grain, SUBSTITUTED_DATE)),
+            paths.relpath(member, _period(grain, OTHER_DATE)),
+        )
+        assert shared, f"{member.value} addresses two dates with nothing in common"
+        found[member.value] = shared
     for name, helper in _ledger_publics(suffix="_relpath").items():
+        if not _names_a_ledger(helper):
+            continue
         shared = _shared_prefix(
             _relpath_for(name, helper, SUBSTITUTED_DATE),
             _relpath_for(name, helper, OTHER_DATE),
@@ -263,28 +325,72 @@ def _ledgers() -> dict[str, str]:
     return found
 
 
-def _writer_ledgers() -> dict[str, str]:
-    """Every public ledger writer, and the ledger it writes.
+def _ledgers_named_in(tree: ast.AST) -> set[LedgerName]:
+    """Every `LedgerName` member this syntax names.
 
-    Resolved from the path helper the writer's own body calls, so a writer named for
-    one thing and writing another follows the code rather than the name.
+    Read from the syntax tree rather than the text, so a member mentioned in a
+    docstring is not mistaken for a ledger the code addresses.
+    """
+    return {
+        LedgerName[node.attr]
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Attribute)
+        and isinstance(node.value, ast.Name)
+        and node.value.id == LedgerName.__name__
+        and node.attr in LedgerName.__members__
+    }
+
+
+def _ledgers_handed_to() -> dict[str, frozenset[LedgerName]]:
+    """Called function -> the ledgers the package's own calls name in its arguments.
+
+    A writer generic over the vocabulary fills whichever ledger its caller names, so
+    the call site is the only place that says which - the same reason a file sink is
+    read from its call site rather than from a name.
+
+    Read from the package's own files, so what this costs grows with the code rather
+    than with the archive (CLAUDE.md Guardrail #12).
+    """
+    handed: dict[str, set[LedgerName]] = {}
+    for source in _package_sources().values():
+        for call in ast.walk(ast.parse(source)):
+            if not isinstance(call, ast.Call) or not isinstance(call.func, ast.Attribute):
+                continue
+            arguments = [*call.args, *(keyword.value for keyword in call.keywords)]
+            named = {member for argument in arguments for member in _ledgers_named_in(argument)}
+            if named:
+                handed.setdefault(call.func.attr, set()).update(named)
+    return {name: frozenset(members) for name, members in handed.items()}
+
+
+def _writer_ledgers() -> dict[str, frozenset[str]]:
+    """Every public ledger writer, and the ledgers it fills.
+
+    Resolved from the `LedgerName` the writer's own body names, so a writer named
+    for one thing and filling another follows the code rather than the name.
+
+    Two writers name none, and each is asked the next question down. A writer that
+    takes a `LedgerName` is generic over the vocabulary, so it is charged with every
+    ledger the package hands it. A writer that takes a path has neither, and only
+    its own name is left to read - which is why that name has to be the ledger's.
     """
     ledgers = _ledgers()
-    resolved: dict[str, str] = {}
+    handed = _ledgers_handed_to()
+    resolved: dict[str, frozenset[str]] = {}
     for name, writer in _ledger_publics(prefixes=("append_", "write_")).items():
-        source = inspect.getsource(writer)
-        stems = [
-            call.removesuffix("_path").removesuffix("_relpath")
-            for call in re.findall(r"\b([a-z_]+_(?:rel)?path)\(", source)
-        ]
-        stems.append(name.split("_", 1)[1])
-        helper = next((f"{stem}_relpath" for stem in stems if f"{stem}_relpath" in ledgers), None)
-        assert helper is not None, (
-            f"{writer.__module__}.{name} writes a ledger this test cannot name: it calls "
-            "no path helper it shares a name with. Add a `<ledger>_relpath()` helper "
-            f"beside the others and call it from {name}."
+        filled = _ledgers_named_in(ast.parse(inspect.getsource(writer).lstrip()))
+        if not filled and not _names_a_ledger(writer):
+            filled = set(handed.get(name, frozenset()))
+        if not filled:
+            spelled = name.split("_", 1)[1].replace("_", "-")
+            filled = {member for member in LedgerName if member.value == spelled}
+        assert filled, (
+            f"{writer.__module__}.{name} fills a ledger this test cannot name: it names no "
+            "LedgerName, it is handed none by any caller, and no ledger is called "
+            f"{name.split('_', 1)[1].replace('_', '-')!r}. Name the ledger in the writer, "
+            "or take a LedgerName argument and let the caller name it."
         )
-        resolved[name] = ledgers[helper]
+        resolved[name] = frozenset(ledgers[member.value] for member in filled)
     return resolved
 
 
@@ -354,7 +460,8 @@ def _declared_keys() -> dict[str, tuple[str, ...]]:
         assert isinstance(key, tuple), (
             f"{writer.__module__}.{used[0]} must be a tuple of columns"
         )
-        declared[ledgers[name]] = key
+        for ledger_path in sorted(ledgers[name]):
+            declared[ledger_path] = key
     return declared
 
 
@@ -482,10 +589,11 @@ def _verb_ledgers() -> dict[str, dict[str, str]]:
                     "not export. Rename the call, or export the writer so this test can "
                     "find the ledger it fills."
                 )
-                charged.setdefault(verb, {})[ledgers[writer]] = (
-                    f"`python -m idhazh {verb}` reaches {module.__name__}, "
-                    f"which calls ledger.{writer}"
-                )
+                for ledger_path in sorted(ledgers[writer]):
+                    charged.setdefault(verb, {})[ledger_path] = (
+                        f"`python -m idhazh {verb}` reaches {module.__name__}, "
+                        f"which calls ledger.{writer}"
+                    )
             for opener in sorted(_sinks_opened_by(module)):
                 charged.setdefault(verb, {})[sunk[opener]] = (
                     f"`python -m idhazh {verb}` reaches {module.__name__}, "
@@ -572,19 +680,20 @@ def test_every_store_is_filled_by_a_writer_this_test_can_follow() -> None:
     ledger that went missing.
     """
     ledgers = _ledgers()
-    written = set(_writer_ledgers().values()) | set(_sink_ledgers().values())
+    written = {ledger_path for filled in _writer_ledgers().values() for ledger_path in filled}
+    written |= set(_sink_ledgers().values())
     written |= set(_compacted_ledgers())
 
-    assert ledgers, "the ledger modules export no *_relpath helper, so nothing here is checked"
+    assert ledgers, "no ledger is declared anywhere, so nothing here is checked"
     assert SINK_CLASSES, (
         f"{sinks.__name__} declares no sink class that takes a path, so the sink half of "
         "the derivation matches nothing and a ledger written by one is checked by nobody."
     )
     unknown = sorted(LEDGERS_NO_JOB_WRITES - set(ledgers.values()))
     assert not unknown, (
-        f"{', '.join(unknown)} is excused from needing a writer and no ledger module "
-        "declares a path helper for it, so the excuse covers nothing. Delete the entry "
-        "from LEDGERS_NOTHING_FILLS_YET or LEDGERS_NO_RUN_FILLS."
+        f"{', '.join(unknown)} is excused from needing a writer and nothing declares it, "
+        "so the excuse covers nothing. Delete the entry from LEDGERS_NOTHING_FILLS_YET "
+        "or LEDGERS_NO_RUN_FILLS."
     )
     landed = sorted(LEDGERS_NO_JOB_WRITES & written)
     assert not landed, (
@@ -594,9 +703,9 @@ def test_every_store_is_filled_by_a_writer_this_test_can_follow() -> None:
     )
     unwritten = sorted(set(ledgers.values()) - written - LEDGERS_NO_JOB_WRITES)
     assert not unwritten, (
-        f"{', '.join(unwritten)} has a path helper and nothing public fills it. Either the "
+        f"{', '.join(unwritten)} is declared and nothing public fills it. Either the "
         "writer is private - make it public, so the staging test can see it - or the "
-        "helper is dead and a commit step is staging a directory nothing fills. A helper "
+        "ledger is dead and a commit step is staging a directory nothing fills. A ledger "
         "that is deliberately ahead of its writer (Guardrail #3) goes in "
         "LEDGERS_NOTHING_FILLS_YET, named with what will fill it; a ledger only a person "
         "ever fills goes in LEDGERS_NO_RUN_FILLS, named with who fills it."
@@ -726,9 +835,19 @@ def _rewritten_ledgers() -> set[str]:
     declared head table. `state/host-fingerprint` is the case.
     """
     ledgers = _writer_ledgers()
-    replaced = {ledger for name, ledger in ledgers.items() if name.startswith("write_")}
+    replaced = {
+        ledger_path
+        for name, filled in ledgers.items()
+        if name.startswith("write_")
+        for ledger_path in filled
+    }
     replaced |= set(_compacted_ledgers())
-    appended = {ledger for name, ledger in ledgers.items() if name.startswith("append_")}
+    appended = {
+        ledger_path
+        for name, filled in ledgers.items()
+        if name.startswith("append_")
+        for ledger_path in filled
+    }
     return replaced - appended
 
 
@@ -760,8 +879,8 @@ def test_every_ledger_that_declares_a_key_is_registered_for_settlement() -> None
         path = entry.path.as_posix()
         ledger_path = next((name for name in ledgers if _covers(name, path)), None)
         assert ledger_path is not None, (
-            f"{path} is registered for settlement and matches no ledger idhazh.ledger "
-            "declares a path helper for, so nothing can say which writer fills it."
+            f"{path} is registered for settlement and matches no ledger the registry "
+            "declares, so nothing can say which writer fills it."
         )
         registered[ledger_path] = entry.key
 

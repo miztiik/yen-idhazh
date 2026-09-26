@@ -24,6 +24,7 @@ from idhazh.contracts.feed_health import (
     derive_endpoint_key,
 )
 from idhazh.contracts.feed_retirement import FeedRetirementRow, RetirementCause
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.sources import FeedDef
 from idhazh.contracts.taxonomy import LifecycleStatus, SourceTier
 from idhazh.telemetry import source_health
@@ -387,7 +388,7 @@ def test_two_stale_checkouts_filing_one_address_settle_to_one_row(tmp_path: Path
     first row wins because there is nothing to choose between: a retirement is
     permanent, and a second row for one address says nothing the first did not.
     """
-    path = ledger.feed_retirements_path(tmp_path)
+    path = ledger.path(tmp_path, LedgerName.FEED_RETIREMENTS)
     assert ledger.append_retirements(tmp_path, [retirement()]) == 1
 
     # The stacked copy, spelled the way a line-wise concatenation makes it: the
@@ -417,7 +418,7 @@ def test_a_retirement_row_that_no_longer_parses_is_skipped(tmp_path: Path) -> No
     would cost the reader the day.
     """
     ledger.append_retirements(tmp_path, [retirement()])
-    path = ledger.feed_retirements_path(tmp_path)
+    path = ledger.path(tmp_path, LedgerName.FEED_RETIREMENTS)
     with path.open("a", encoding="utf-8", newline="") as handle:
         handle.write(f"{FeedRetirementRow.schema_version()},trade,not-a-key,1999,x,http_410,r\n")
     assert len(ledger.load_retirements(tmp_path)) == 1

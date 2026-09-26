@@ -55,6 +55,8 @@ from idhazh.contracts.story_similarity_pair import (
 from idhazh.contracts.telemetry_aggregate import TelemetryAggregateRow
 from idhazh.contracts.validation_row import ValidationRow
 from idhazh.contracts.visual_prune import VisualPruneRow
+from idhazh.ledger import paths
+from idhazh.ledger.paths import STATE_DIRNAME, claimed_roots, entry, path, relpath, tree_root
 
 # Grouped by where each name is going, so this list reads as the index of a
 # package that is still one file. The groups are the modules of plan 53 section
@@ -65,76 +67,14 @@ from idhazh.contracts.visual_prune import VisualPruneRow
 # the only thing the list is here to say, so the grouping is kept and the rule
 # is refused on this line alone. Each group is sorted inside itself.
 __all__ = [  # noqa: RUF022
-    # -> contracts/ledger_name.py: one LedgerName replaces the enum, the
-    # dirname constants and the map over them.
-    "CONTENT_SIMILARITY_JUDGE_DIRNAME",
-    "COUNCIL_DIRNAME",
-    "COUNTERFACTUAL_SCORES_DIRNAME",
-    "DAY_VALIDATIONS_DIRNAME",
-    "FEED_RETIREMENTS_FILENAME",
-    "FITTED_THRESHOLDS_DIRNAME",
-    "HEALTH_DIRNAME",
-    "HOST_FINGERPRINT_DIRNAME",
-    "ITEM_HEALTH_DIRNAME",
-    "JUDGE_METRICS_DIRNAME",
-    "LEDGER_DIRNAMES",
-    "MERGE_LINE_HOLDOUT_SCORES_DIRNAME",
-    "PUBLISHED_DIRNAME",
-    "SCORED_PAIRS_DIRNAME",
-    "SCORES_DIRNAME",
-    "SCORE_ARCHIVE_DIRNAME",
-    "SCORE_DISTRIBUTION_FILENAME",
-    "SCORE_INDEX_DIRNAME",
-    "SEEN_DIRNAME",
-    "SHARD_OUTCOMES_DIRNAME",
-    "SIMILARITY_HOLDOUT_FILENAME",
-    "SPAN_ROLLUP_DIRNAME",
-    "TELEMETRY_AGGREGATE_DIRNAME",
-    "VALIDATION_DIRNAME",
-    "VISUAL_PRUNES_DIRNAME",
-    # -> paths.py: where a ledger's file lives.
+    # -> paths.py: where a ledger's file lives, read from config/ledgers.json.
     "STATE_DIRNAME",
-    "content_similarity_judge_metrics_path",
-    "content_similarity_judge_metrics_relpath",
-    "council_shard_outcomes_path",
-    "council_shard_outcomes_relpath",
-    "counterfactual_scores_path",
-    "counterfactual_scores_relpath",
-    "feed_retirements_path",
-    "feed_retirements_relpath",
-    "fitted_thresholds_path",
-    "fitted_thresholds_relpath",
-    "health_path",
-    "health_relpath",
-    "host_fingerprint_path",
-    "host_fingerprint_relpath",
-    "item_health_path",
-    "item_health_relpath",
-    "merge_line_holdout_scores_path",
-    "merge_line_holdout_scores_relpath",
-    "published_path",
-    "published_relpath",
-    "score_distribution_archive_path",
-    "score_distribution_archive_relpath",
-    "score_distribution_path",
-    "score_index_path",
-    "score_index_relpath",
-    "scored_pairs_path",
-    "scored_pairs_relpath",
-    "scores_path",
-    "scores_relpath",
-    "seen_path",
-    "seen_relpath",
-    "similarity_holdout_path",
-    "similarity_holdout_relpath",
-    "span_rollup_path",
-    "span_rollup_relpath",
-    "telemetry_aggregate_path",
-    "telemetry_aggregate_relpath",
-    "validation_path",
-    "validation_relpath",
-    "visual_prunes_path",
-    "visual_prunes_relpath",
+    "claimed_roots",
+    "entry",
+    "path",
+    "paths",
+    "relpath",
+    "tree_root",
     # -> keys.py: what makes two rows one record, and the day-tree shapes.
     "COUNCIL_SHARD_OUTCOME_KEY",
     "COUNTERFACTUAL_SCORE_KEY",
@@ -229,110 +169,10 @@ __all__ = [  # noqa: RUF022
     "shards_in_window",
 ]
 
-STATE_DIRNAME: Final = "state"
-SEEN_DIRNAME: Final = "seen"
-HEALTH_DIRNAME: Final = "feed-health"
-ITEM_HEALTH_DIRNAME: Final = "item-health"
-HOST_FINGERPRINT_DIRNAME: Final = "host-fingerprint"
-TELEMETRY_AGGREGATE_DIRNAME: Final = "telemetry-aggregate"
-SPAN_ROLLUP_DIRNAME: Final = "span-rollup"
-PUBLISHED_DIRNAME: Final = "published"
-VISUAL_PRUNES_DIRNAME: Final = "visual-prunes"
-COUNTERFACTUAL_SCORES_DIRNAME: Final = "counterfactual-scores"
-
-#: What a qualification dispatch leaves behind. It sat at the top of `state/` as
-#: `validation-<date>.csv` until 2026-09-18, built off the repository root, so no
-#: config could move it and a trial run wrote production state.
-VALIDATION_DIRNAME: Final = "validation"
-
-#: The eval ledger and the record of what is in it. Both are spelled here rather
-#: than in `evals.writer`, which is where they were until 2026-09-18: the head
-#: table below has to name the file a segment drains into, and `evals.writer`
-#: imports this module. One definition, and the direction of the import decides
-#: which end it lives at. `evals.writer` still exports its own names for them.
-SCORES_DIRNAME: Final = "scores"
-SCORE_INDEX_DIRNAME: Final = "score-index"
-
-#: The council's own prefix, and the one ledger under it that records how a night
-#: went. Nested for the reason the judge's prefix below is: everything the venue
-#: writes about itself hangs off one word, so a commit step stages one prefix and
-#: a reader sees the whole footprint in one place.
-#:
-#: Two directory levels under `state/` and no more. The day inventory globs one
-#: level and two, so a third would be invisible to it and the miss would be
-#: silent.
-COUNCIL_DIRNAME: Final = "llm-council"
-SHARD_OUTCOMES_DIRNAME: Final = "shard-outcomes"
-
-#: The content-similarity judge's own prefix, and every ledger under it. The judge
-#: slug is the group, so everything that judge produces hangs off one word: the
-#: pairs it scored, the line fitted from them, the record those pairs are folded
-#: into, the hand-marked holdout the line is measured against, how its instrument
-#: behaved over a unit of work, and how the line stands against that holdout.
-#: They are the judge's rather than the council's, because what a reading is
-#: ABOUT decides where it is filed and never what executed it - and a reader of
-#: the commit step sees the whole footprint in one prefix.
-#:
-#: Two directory levels and no more, for the reason the council's prefix carries:
-#: the day inventory globs one level and two, so a third would be invisible to it
-#: and the miss would be silent.
-CONTENT_SIMILARITY_JUDGE_DIRNAME: Final = "content-similarity-judge"
-JUDGE_METRICS_DIRNAME: Final = "metrics"
-MERGE_LINE_HOLDOUT_SCORES_DIRNAME: Final = "merge-line-holdout-scores"
-SCORED_PAIRS_DIRNAME: Final = "scored-pairs"
-FITTED_THRESHOLDS_DIRNAME: Final = "fitted-thresholds"
-SIMILARITY_HOLDOUT_FILENAME: Final = "holdout-pairs.csv"
-SCORE_DISTRIBUTION_FILENAME: Final = "score-distribution.json"
-
-#: Where a record goes when the inputs under it moved. It ships with a
-#: `.gitkeep`, because the commit step stages this directory on every run and an
-#: archive is written only on the rare day a stamp changed - `git add` on a path
-#: the checkout does not hold aborts the whole step.
-SCORE_ARCHIVE_DIRNAME: Final = "archive"
-
-FEED_RETIREMENTS_FILENAME: Final = "feed-retirements.csv"
-
-#: Which frozen days have passed a validation, and against what. A day tree
-#: rather than the one flat `day-validations.csv` it was until 2026-09-22: four
-#: validators can judge one day at once, a flat file gave them all one path, and
-#: a receipt lost to a merge reads exactly like a day nobody has validated.
-DAY_VALIDATIONS_DIRNAME: Final = "day-validations"
-
 #: The column every day tree except the score index routes a row by. Named once
 #: here because the router reads it out of a contract's own cells, and a second
 #: spelling of it would file a row under a day nobody can find it in.
 DATE_CELL: Final = "date"
-
-#: Every directory under `state/` this module owns a ledger in. `prune-state`
-#: subtracts it, and the few ledgers other modules own, from the children of
-#: `state/`; what is left is a trial run's tree, and that is how the prune finds
-#: a tree to empty without being told its name.
-#:
-#: Built from the constants above rather than from their text, so a ledger added
-#: through its own constant joins this set in the same commit. A name missing
-#: here reads as a trial root, which is why the subtraction is spelled out
-#: rather than guessed at.
-#:
-#: The nested names are deliberately absent: `shard-outcomes` and the judge's
-#: five are one level further down, inside a prefix already named here.
-LEDGER_DIRNAMES: Final[frozenset[str]] = frozenset(
-    {
-        SEEN_DIRNAME,
-        HEALTH_DIRNAME,
-        ITEM_HEALTH_DIRNAME,
-        HOST_FINGERPRINT_DIRNAME,
-        TELEMETRY_AGGREGATE_DIRNAME,
-        SPAN_ROLLUP_DIRNAME,
-        PUBLISHED_DIRNAME,
-        VISUAL_PRUNES_DIRNAME,
-        COUNTERFACTUAL_SCORES_DIRNAME,
-        VALIDATION_DIRNAME,
-        SCORES_DIRNAME,
-        SCORE_INDEX_DIRNAME,
-        COUNCIL_DIRNAME,
-        CONTENT_SIMILARITY_JUDGE_DIRNAME,
-    }
-)
 
 #: What makes two feed-health rows the same record. One feed, read once, in one
 #: run. The ledger always meant that - `docs/architecture/sources/health.md`
@@ -591,388 +431,6 @@ def preference_for(key: tuple[str, ...]) -> Preference | None:
     gives the same answer whichever pass reaches it first.
     """
     return _PREFERENCES.get(key)
-
-
-def seen_relpath(date: str) -> str:
-    """`state/seen/<YYYY>/<MM>/<DD>.csv` - the POSIX form, for a log line or a manifest."""
-    return f"{STATE_DIRNAME}/{SEEN_DIRNAME}/{date[:4]}/{date[5:7]}/{date[8:10]}.csv"
-
-
-def seen_path(state_dir: Path, date: str) -> Path:
-    """The day file a run on this date appends to.
-
-    A day rather than a month, for the reason `published_path` gives: a run
-    writes one day, two runs collide on a file only when they are the same day,
-    and taking a day back is one `rm` rather than an edit inside a shared shard,
-    which an append-only ledger cannot express. The caller hands the run's own digest
-    date, so `first_seen_run[:10]` names this file for every row inside it - see
-    `docs/concepts/partitions.md`.
-    """
-    return state_dir / SEEN_DIRNAME / date[:4] / date[5:7] / f"{date[8:10]}.csv"
-
-
-def health_relpath(date: str) -> str:
-    """`state/feed-health/<YYYY>/<MM>/<DD>` - the day directory, POSIX form."""
-    return f"{STATE_DIRNAME}/{HEALTH_DIRNAME}/{date[:4]}/{date[5:7]}/{date[8:10]}"
-
-
-def health_path(state_dir: Path, date: str) -> Path:
-    """The day directory a run on this date files its verdicts in.
-
-    A day rather than a month, for the reason `item_health_path` gives: taking a
-    day back is one `rm` rather than an edit inside a shared shard, which an
-    append-only ledger cannot express. Nothing mirrors this ledger into
-    `frontend/public/`.
-
-    A directory rather than a file, because two `plan` jobs of one night both
-    have a verdict on every feed and a shared file gave them one path. They
-    conflicted, the conflict killed the job, and `assemble` never ran.
-    """
-    return state_dir / HEALTH_DIRNAME / date[:4] / date[5:7] / date[8:10]
-
-
-def item_health_relpath(date: str) -> str:
-    """`state/item-health/<YYYY>/<MM>/<DD>` - the day directory, POSIX form."""
-    return f"{STATE_DIRNAME}/{ITEM_HEALTH_DIRNAME}/{date[:4]}/{date[5:7]}/{date[8:10]}"
-
-
-def item_health_path(state_dir: Path, date: str) -> Path:
-    """The day directory a run on this date files its item outcomes in.
-
-    A day rather than a month, for the reason `published_path` gives: taking a
-    day back is one `rm` rather than an edit inside a shared shard, which an
-    append-only ledger cannot express. The mirror under
-    `frontend/public/telemetry/` stays monthly, because its grain follows what a
-    browser fetches - see `docs/concepts/partitions.md`.
-
-    A directory rather than a file, because twenty work shards write this day
-    and each one gets its own file inside it. Nothing here is shared, so nothing
-    here can conflict.
-    """
-    return state_dir / ITEM_HEALTH_DIRNAME / date[:4] / date[5:7] / date[8:10]
-
-
-def host_fingerprint_relpath(date: str) -> str:
-    """`state/host-fingerprint/<YYYY>/<MM>/<DD>` - the day directory, POSIX form."""
-    return f"{STATE_DIRNAME}/{HOST_FINGERPRINT_DIRNAME}/{date[:4]}/{date[5:7]}/{date[8:10]}"
-
-
-def host_fingerprint_path(state_dir: Path, date: str) -> Path:
-    """The day directory this date's machines land in, one file per job.
-
-    A day rather than a flat file, for the reason `item_health_path` gives, and
-    with a second reason of its own: this collection only earns its keep when
-    somebody counts across it, and a day tree is the shape a bounded window can
-    read (Guardrail #12).
-
-    Twenty-five jobs of one run each record the machine they drew, and each one
-    writes its own file here. None of them opens a file another job holds, which
-    is what stops a lost push race emptying the day - `2026-09-16` is
-    header-only because that is what happened under the old shared shard.
-    """
-    return state_dir / HOST_FINGERPRINT_DIRNAME / date[:4] / date[5:7] / date[8:10]
-
-
-def scores_relpath(date: str) -> str:
-    """`state/scores/<YYYY>/<MM>/<DD>` - the day directory, POSIX form."""
-    return f"{STATE_DIRNAME}/{SCORES_DIRNAME}/{date[:4]}/{date[5:7]}/{date[8:10]}"
-
-
-def scores_path(state_dir: Path, date: str) -> Path:
-    """The day directory one date's measurements land in, one file per writer.
-
-    A day rather than a month, for the reason `published_path` gives: taking a
-    day back is one `rm` rather than an edit inside a shared shard, which an
-    append-only ledger cannot express. Nothing mirrors this ledger into
-    `frontend/public/`.
-
-    Two jobs of one run measure items - a work shard as each item settles, and
-    assemble over the whole day afterwards - and each writes its own file here,
-    which is what stops a lost push race costing the rows rather than a merge.
-    """
-    return state_dir / SCORES_DIRNAME / date[:4] / date[5:7] / date[8:10]
-
-
-def score_index_relpath(date: str) -> str:
-    """`state/score-index/<YYYY>/<MM>/<DD>` - the day directory, POSIX form."""
-    return f"{STATE_DIRNAME}/{SCORE_INDEX_DIRNAME}/{date[:4]}/{date[5:7]}/{date[8:10]}"
-
-
-def score_index_path(state_dir: Path, date: str) -> Path:
-    """The record of what one day's measurements are, beside the rows themselves.
-
-    The same grain as `scores_path` and filed by the same date. An index row
-    carries no date column of its own, so its writer names the day: the first
-    ten characters of the run id, which is the date the eval rows beside it
-    carry.
-    """
-    return state_dir / SCORE_INDEX_DIRNAME / date[:4] / date[5:7] / date[8:10]
-
-
-def validation_relpath(date: str) -> str:
-    """`state/validation/<YYYY>/<MM>/<DD>` - the day directory, POSIX form."""
-    return f"{STATE_DIRNAME}/{VALIDATION_DIRNAME}/{date[:4]}/{date[5:7]}/{date[8:10]}"
-
-
-def validation_path(state_dir: Path, date: str) -> Path:
-    """The day directory this date's verdicts land in, one file per dispatch.
-
-    A day tree rather than `validation-<date>.csv` at the top of `state/`, for
-    the reason `item_health_path` gives and with one of its own: the old name was
-    built from the repository root, so no config could move it and a candidate
-    qualified on a trial state root still wrote the production tree. The state
-    root a dispatch is handed is what decides where this lands, which is how a
-    pipeline-tests run writes under `state/pipeline-tests/` instead.
-
-    Two candidates can be dispatched at once and both judge the same day, so
-    each writes its own file here - the filename is what keeps the pair apart.
-    """
-    return state_dir / VALIDATION_DIRNAME / date[:4] / date[5:7] / date[8:10]
-
-
-def telemetry_aggregate_relpath(month: str) -> str:
-    """`state/telemetry-aggregate/<YYYY-MM>.csv` - the POSIX form, for a log line."""
-    return f"{STATE_DIRNAME}/{TELEMETRY_AGGREGATE_DIRNAME}/{month}.csv"
-
-def telemetry_aggregate_path(state_dir: Path, month: str) -> Path:
-    """Where the folded summary of one item-health month lives.
-
-    Its own directory rather than a second name inside `item-health/`, because
-    `day_partition.day_files` refuses anything that is not a `<YYYY>/<MM>/<DD>.csv`
-    - a month file beside the day tree would stop every read of the ledger rather
-    than be skipped. The shape differs too: the aggregate is a fold, not a census
-    row.
-    """
-    return state_dir / TELEMETRY_AGGREGATE_DIRNAME / f"{month}.csv"
-
-
-def span_rollup_relpath(date: str) -> str:
-    """`state/span-rollup/<YYYY>/<MM>/<DD>` - the day directory, POSIX form."""
-    return f"{STATE_DIRNAME}/{SPAN_ROLLUP_DIRNAME}/{date[:4]}/{date[5:7]}/{date[8:10]}"
-
-
-def span_rollup_path(state_dir: Path, date: str) -> Path:
-    """The day directory this date's folded spans land in, one file per writer.
-
-    A day rather than the month this was until 2026-09-22. The month grain was
-    the last thing in `state/` asking a reader to hold two grains at once, and it
-    bought nothing a day does not: twenty writers a day each file their own
-    rows, so the question a month answered - how do twenty writers share one
-    file - stopped being a question.
-    """
-    return state_dir / SPAN_ROLLUP_DIRNAME / date[:4] / date[5:7] / date[8:10]
-
-
-def published_relpath(date: str) -> str:
-    """`state/published/<YYYY>/<MM>/<DD>.csv` - the POSIX form, for a log line."""
-    return f"{STATE_DIRNAME}/{PUBLISHED_DIRNAME}/{date[:4]}/{date[5:7]}/{date[8:10]}.csv"
-
-
-def published_path(state_dir: Path, date: str) -> Path:
-    """The day file a run on this date appends to.
-
-    A day rather than a month, because this ledger mirrors
-    `frontend/public/digest/YYYY/MM/DD/` and every row in it is derived from one
-    of those days. Two runs collide on a file only when they are the same day,
-    and taking a day back off the site is one `rm` rather than an edit inside a
-    shared shard - which an append-only ledger cannot express.
-    """
-    return state_dir / PUBLISHED_DIRNAME / date[:4] / date[5:7] / f"{date[8:10]}.csv"
-
-
-def feed_retirements_relpath() -> str:
-    """`state/feed-retirements.csv` - the POSIX form, for a log line."""
-    return f"{STATE_DIRNAME}/{FEED_RETIREMENTS_FILENAME}"
-
-
-def feed_retirements_path(state_dir: Path) -> Path:
-    return state_dir / FEED_RETIREMENTS_FILENAME
-
-
-def visual_prunes_relpath(date: str) -> str:
-    """`state/visual-prunes/<YYYY>/<MM>/<DD>.csv` - the POSIX form, for a log line."""
-    return f"{STATE_DIRNAME}/{VISUAL_PRUNES_DIRNAME}/{date[:4]}/{date[5:7]}/{date[8:10]}.csv"
-
-
-def visual_prunes_path(state_dir: Path, date: str) -> Path:
-    """The day file a cleanup pass on this date appends its row to.
-
-    A day rather than a month, and not because the read asked for it - the read
-    is the whole series and always will be. The grain is here because two runs
-    then collide on a file only when they are the same day, and because a day
-    taken back off the record is one `rm`. The module docstring states the
-    exception this makes to the partition rule.
-    """
-    return state_dir / VISUAL_PRUNES_DIRNAME / date[:4] / date[5:7] / f"{date[8:10]}.csv"
-
-
-def counterfactual_scores_relpath(date: str) -> str:
-    """`state/counterfactual-scores/<YYYY>/<MM>/<DD>` - the day directory, POSIX form."""
-    stem = f"{date[:4]}/{date[5:7]}/{date[8:10]}"
-    return f"{STATE_DIRNAME}/{COUNTERFACTUAL_SCORES_DIRNAME}/{stem}"
-
-
-def counterfactual_scores_path(state_dir: Path, date: str) -> Path:
-    """The day file this date's runs write their two scores per candidate into.
-
-    A day, and here the read asked for it as well as the writer: the only reader
-    of this ledger opens a trailing window of days (`lens_weights.window_days`),
-    and the retention pass deletes by day. A month file would make both of those
-    read or delete weeks nobody asked for.
-    """
-    return state_dir / COUNTERFACTUAL_SCORES_DIRNAME / date[:4] / date[5:7] / date[8:10]
-
-
-def scored_pairs_relpath(date: str) -> str:
-    """`state/content-similarity-judge/scored-pairs/<YYYY>/<MM>/<DD>.csv`.
-
-    POSIX, for a log line.
-    """
-    stem = f"{date[:4]}/{date[5:7]}/{date[8:10]}.csv"
-    return f"{STATE_DIRNAME}/{CONTENT_SIMILARITY_JUDGE_DIRNAME}/{SCORED_PAIRS_DIRNAME}/{stem}"
-
-
-def scored_pairs_path(state_dir: Path, date: str) -> Path:
-    """The day file this date's judged pairs are appended to.
-
-    A day, and the read asks for it as well as the writer: a fold reads one
-    date's pairs and then never opens that file again, and the retention pass
-    deletes by day. A month file would make the fold read weeks it has already
-    counted.
-    """
-    root = state_dir / CONTENT_SIMILARITY_JUDGE_DIRNAME / SCORED_PAIRS_DIRNAME
-    return root / date[:4] / date[5:7] / f"{date[8:10]}.csv"
-
-
-def fitted_thresholds_relpath(date: str) -> str:
-    """`state/content-similarity-judge/fitted-thresholds/<YYYY>/<MM>/<DD>.csv`.
-
-    POSIX, for a log line.
-    """
-    stem = f"{date[:4]}/{date[5:7]}/{date[8:10]}.csv"
-    return f"{STATE_DIRNAME}/{CONTENT_SIMILARITY_JUDGE_DIRNAME}/{FITTED_THRESHOLDS_DIRNAME}/{stem}"
-
-
-def fitted_thresholds_path(state_dir: Path, date: str) -> Path:
-    """The day file this date's runs write their fitted line into.
-
-    A day rather than a month for the reason the cleanup record files by day:
-    two runs collide on a file only when they are the same day, and a day taken
-    back off the record is one `rm`. The guard's own read is the last fourteen
-    rows, which `day_partition` answers by walking days backwards.
-    """
-    root = state_dir / CONTENT_SIMILARITY_JUDGE_DIRNAME / FITTED_THRESHOLDS_DIRNAME
-    return root / date[:4] / date[5:7] / f"{date[8:10]}.csv"
-
-
-def similarity_holdout_relpath() -> str:
-    """`state/content-similarity-judge/holdout-pairs.csv` - the POSIX form, for a log line."""
-    return f"{STATE_DIRNAME}/{CONTENT_SIMILARITY_JUDGE_DIRNAME}/{SIMILARITY_HOLDOUT_FILENAME}"
-
-
-def similarity_holdout_path(state_dir: Path) -> Path:
-    """One flat file, and the read over it carries no clock.
-
-    A person types this file and nothing else writes it, so there is no run to
-    partition by and no date a reader would ask for. It grows with how many
-    pairs somebody has sat down and marked, never with the archive (Guardrail
-    #12).
-    """
-    return state_dir / CONTENT_SIMILARITY_JUDGE_DIRNAME / SIMILARITY_HOLDOUT_FILENAME
-
-
-def score_distribution_path(state_dir: Path) -> Path:
-    """The one score record every fit reads, whole.
-
-    Not a ledger: it is rewritten rather than appended to, and its size is fixed
-    by the band and the slot width rather than by how many days have been folded
-    into it. That is the whole point - the fit reads a file of a size that never
-    changes instead of sorting every pair ever judged (Guardrail #12).
-    """
-    return state_dir / CONTENT_SIMILARITY_JUDGE_DIRNAME / SCORE_DISTRIBUTION_FILENAME
-
-
-def score_distribution_archive_relpath(stamp: str) -> str:
-    """`state/content-similarity-judge/archive/<stamp>.json` - POSIX, for a log line."""
-    return (
-        f"{STATE_DIRNAME}/{CONTENT_SIMILARITY_JUDGE_DIRNAME}/"
-        f"{SCORE_ARCHIVE_DIRNAME}/{stamp}.json"
-    )
-
-
-def score_distribution_archive_path(state_dir: Path, stamp: str) -> Path:
-    """Where the record is put down when its own stamp no longer describes the run.
-
-    Named by the stamp rather than by a date, because the stamp is what the
-    counts inside it were taken under. Two archives from one day are two
-    different questions and get two files; one input moved back to what it was
-    and the archive it produces is the file already there.
-    """
-    root = state_dir / CONTENT_SIMILARITY_JUDGE_DIRNAME / SCORE_ARCHIVE_DIRNAME
-    return root / f"{stamp}.json"
-
-
-def council_shard_outcomes_relpath(date: str) -> str:
-    """`state/llm-council/shard-outcomes/<YYYY>/<MM>/<DD>.csv` - POSIX, for a log line."""
-    stem = f"{date[:4]}/{date[5:7]}/{date[8:10]}.csv"
-    return f"{STATE_DIRNAME}/{COUNCIL_DIRNAME}/{SHARD_OUTCOMES_DIRNAME}/{stem}"
-
-
-def council_shard_outcomes_path(state_dir: Path, date: str) -> Path:
-    """The day file this date's council run records its own units of work in.
-
-    A day rather than a month, for the two things the grain buys every ledger
-    beside it: two runs collide on a file only when they are the same day, and a
-    night taken back off the record is one `rm`. The council runs once a night,
-    so a day file holds one night of units and nothing else.
-
-    The date is the digest date the run judged, which is what a reader asking
-    "how did the night of the 20th go" means by the question.
-    """
-    root = state_dir / COUNCIL_DIRNAME / SHARD_OUTCOMES_DIRNAME
-    return root / date[:4] / date[5:7] / f"{date[8:10]}.csv"
-
-
-def content_similarity_judge_metrics_relpath(date: str) -> str:
-    """`state/content-similarity-judge/metrics/<YYYY>/<MM>/<DD>.csv` - POSIX, for a log line."""
-    stem = f"{date[:4]}/{date[5:7]}/{date[8:10]}.csv"
-    return f"{STATE_DIRNAME}/{CONTENT_SIMILARITY_JUDGE_DIRNAME}/{JUDGE_METRICS_DIRNAME}/{stem}"
-
-
-def content_similarity_judge_metrics_path(state_dir: Path, date: str) -> Path:
-    """The day file this date's shards record their own instrument in.
-
-    A day rather than a month, for what the grain buys every ledger beside it:
-    two runs collide on a file only when they are the same day, and a night taken
-    back off the record is one `rm`.
-
-    The date is the digest date the shard judged, which is the date the council's
-    own record files by - so a reader holding one night's units against one
-    night's readings opens one day file in each ledger.
-    """
-    root = state_dir / CONTENT_SIMILARITY_JUDGE_DIRNAME / JUDGE_METRICS_DIRNAME
-    return root / date[:4] / date[5:7] / f"{date[8:10]}.csv"
-
-
-def merge_line_holdout_scores_relpath(date: str) -> str:
-    """`state/content-similarity-judge/merge-line-holdout-scores/<YYYY>/<MM>/<DD>.csv`."""
-    stem = f"{date[:4]}/{date[5:7]}/{date[8:10]}.csv"
-    root = f"{CONTENT_SIMILARITY_JUDGE_DIRNAME}/{MERGE_LINE_HOLDOUT_SCORES_DIRNAME}"
-    return f"{STATE_DIRNAME}/{root}/{stem}"
-
-
-def merge_line_holdout_scores_path(state_dir: Path, date: str) -> Path:
-    """The day file this date's reading of the line against the holdout goes in.
-
-    A day for the reason the fitted line beside it files by day: a row a day, a
-    read that carries a window over the newest of them, and one `rm` to take a
-    day's reading back off the record.
-
-    The date is the day the line was scored, not a day either labelled item was
-    published on - the holdout row names those two dates itself.
-    """
-    root = state_dir / CONTENT_SIMILARITY_JUDGE_DIRNAME / MERGE_LINE_HOLDOUT_SCORES_DIRNAME
-    return root / date[:4] / date[5:7] / f"{date[8:10]}.csv"
 
 
 def shards_in_window(today: str, within_days: int) -> list[str]:
@@ -1300,7 +758,9 @@ def _stream_rows(path: Path) -> Iterator[dict[str, str]]:
 
 def append_seen(state_dir: Path, date: str, rows: Iterable[SeenRow]) -> int:
     """Append first sights. Returns how many landed, so a caller can log the count."""
-    return extend_ledger_file(seen_path(state_dir, date), SeenRow.csv_columns(), list(rows))
+    return extend_ledger_file(
+        paths.path(state_dir, LedgerName.SEEN, date), SeenRow.csv_columns(), list(rows)
+    )
 
 
 def append_published(state_dir: Path, date: str, rows: Iterable[PublishedRow]) -> int:
@@ -1312,7 +772,7 @@ def append_published(state_dir: Path, date: str, rows: Iterable[PublishedRow]) -
     caller. See `docs/concepts/partitions.md`.
     """
     return extend_ledger_file(
-        published_path(state_dir, date), PublishedRow.csv_columns(), list(rows)
+        paths.path(state_dir, LedgerName.PUBLISHED, date), PublishedRow.csv_columns(), list(rows)
     )
 
 
@@ -1331,7 +791,7 @@ def load_seen(state_dir: Path, *, today: str, within_days: int) -> dict[str, str
     """
     first_seen: dict[str, str] = {}
     for day in day_partition.days_in_window(today, within_days):
-        for row in _read_rows(seen_path(state_dir, day)):
+        for row in _read_rows(paths.path(state_dir, LedgerName.SEEN, day)):
             url_key, at = row["url_key"], row["first_seen_at"]
             if url_key not in first_seen or at < first_seen[url_key]:
                 first_seen[url_key] = at
@@ -1366,21 +826,23 @@ def load_published(state_dir: Path, *, today: str | None, within_days: int) -> d
     rather than a row.
     """
     if within_days == UNBOUNDED_WINDOW:
-        paths: Iterable[Path] = day_partition.day_files(state_dir / PUBLISHED_DIRNAME)
+        files: Iterable[Path] = day_partition.day_files(
+            paths.tree_root(state_dir, LedgerName.PUBLISHED)
+        )
     elif today is None:
         raise ValueError(
             f"a published cover of {within_days} days needs the day it is anchored on. "
             f"Pass today, or {UNBOUNDED_WINDOW} to read every day file."
         )
     else:
-        paths = (
-            published_path(state_dir, on)
+        files = (
+            paths.path(state_dir, LedgerName.PUBLISHED, on)
             for on in day_partition.days_in_window(today, within_days)
         )
 
     published: dict[str, str] = {}
-    for path in paths:
-        for row in _stream_rows(path):
+    for file in files:
+        for row in _stream_rows(file):
             url_key, on = row["url_key"], row["published_on"]
             if url_key not in published or on < published[url_key]:
                 published[url_key] = on
@@ -1410,7 +872,7 @@ def load_settled_failures(state_dir: Path, date: str, *, codes: Collection[str])
     return {
         row["url_key"]
         for row in day_shards.settled_day(
-            state_dir / ITEM_HEALTH_DIRNAME, date, ITEM_HEALTH_KEY, ItemHealthRow
+            paths.tree_root(state_dir, LedgerName.ITEM_HEALTH), date, ITEM_HEALTH_KEY, ItemHealthRow
         )
         if row["date"] == date and row["outcome"] != ItemOutcome.OK and row["code"] in wanted
     }
@@ -1432,7 +894,7 @@ def load_source_counts(state_dir: Path, date: str) -> dict[str, int]:
 
     carried: dict[str, str] = {}
     for row in day_shards.settled_day(
-        state_dir / ITEM_HEALTH_DIRNAME, date, ITEM_HEALTH_KEY, ItemHealthRow
+        paths.tree_root(state_dir, LedgerName.ITEM_HEALTH), date, ITEM_HEALTH_KEY, ItemHealthRow
     ):
         if row["date"] != date or row["outcome"] != ItemOutcome.OK:
             continue
@@ -1520,9 +982,9 @@ def append_retirements(state_dir: Path, rows: Iterable[FeedRetirementRow]) -> in
     Returns how many rows the file gained, so a caller can log the count. A row
     that only repeated one already on record is not a gain.
     """
-    path = feed_retirements_path(state_dir)
-    landed = extend_ledger_file(path, FeedRetirementRow.csv_columns(), list(rows))
-    return landed - drop_repeated_rows(path, FEED_RETIREMENT_KEY)
+    file = paths.path(state_dir, LedgerName.FEED_RETIREMENTS)
+    landed = extend_ledger_file(file, FeedRetirementRow.csv_columns(), list(rows))
+    return landed - drop_repeated_rows(file, FEED_RETIREMENT_KEY)
 
 
 def load_retirements(state_dir: Path) -> list[FeedRetirementRow]:
@@ -1537,7 +999,7 @@ def load_retirements(state_dir: Path) -> list[FeedRetirementRow]:
     days would forget the oldest ones and the run would ask a dead server again.
     """
     rows: list[FeedRetirementRow] = []
-    for raw in _read_rows(feed_retirements_path(state_dir)):
+    for raw in _read_rows(paths.path(state_dir, LedgerName.FEED_RETIREMENTS)):
         try:
             rows.append(FeedRetirementRow.from_csv_row(raw))
         except (KeyError, ValueError):
@@ -1572,9 +1034,9 @@ def append_visual_prunes(state_dir: Path, date: str, rows: Iterable[VisualPruneR
 
     Returns how many rows the file gained, so a caller can log the count.
     """
-    path = visual_prunes_path(state_dir, date)
-    landed = extend_ledger_file(path, VisualPruneRow.csv_columns(), list(rows))
-    return landed - drop_repeated_rows(path, VISUAL_PRUNE_KEY)
+    file = paths.path(state_dir, LedgerName.VISUAL_PRUNES, date)
+    landed = extend_ledger_file(file, VisualPruneRow.csv_columns(), list(rows))
+    return landed - drop_repeated_rows(file, VISUAL_PRUNE_KEY)
 
 
 def append_story_similarity_pairs(
@@ -1597,13 +1059,13 @@ def append_story_similarity_pairs(
 
     Returns how many rows the file gained, so a caller can log the count.
     """
-    path = scored_pairs_path(state_dir, date)
+    file = paths.path(state_dir, LedgerName.SCORED_PAIRS, date)
     columns = StorySimilarityPair.csv_columns()
-    if not path.exists():
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(",".join(columns) + "\n", encoding="utf-8", newline="")
-    landed = extend_ledger_file(path, columns, list(rows))
-    return landed - drop_repeated_rows(path, STORY_SIMILARITY_PAIR_KEY)
+    if not file.exists():
+        file.parent.mkdir(parents=True, exist_ok=True)
+        file.write_text(",".join(columns) + "\n", encoding="utf-8", newline="")
+    landed = extend_ledger_file(file, columns, list(rows))
+    return landed - drop_repeated_rows(file, STORY_SIMILARITY_PAIR_KEY)
 
 
 def load_story_similarity_pairs(state_dir: Path, date: str) -> list[StorySimilarityPair]:
@@ -1622,7 +1084,7 @@ def load_story_similarity_pairs(state_dir: Path, date: str) -> list[StorySimilar
     """
     return [
         StorySimilarityPair.from_csv_row(raw)
-        for raw in _read_rows(scored_pairs_path(state_dir, date))
+        for raw in _read_rows(paths.path(state_dir, LedgerName.SCORED_PAIRS, date))
     ]
 
 
@@ -1645,13 +1107,13 @@ def append_fitted_thresholds(
 
     Returns how many rows the file gained, so a caller can log the count.
     """
-    path = fitted_thresholds_path(state_dir, date)
+    file = paths.path(state_dir, LedgerName.FITTED_THRESHOLDS, date)
     columns = FittedSimilarityThreshold.csv_columns()
-    if not path.exists():
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(",".join(columns) + "\n", encoding="utf-8", newline="")
-    landed = extend_ledger_file(path, columns, list(rows))
-    return landed - drop_repeated_rows(path, STORY_SIMILARITY_THRESHOLD_KEY)
+    if not file.exists():
+        file.parent.mkdir(parents=True, exist_ok=True)
+        file.write_text(",".join(columns) + "\n", encoding="utf-8", newline="")
+    landed = extend_ledger_file(file, columns, list(rows))
+    return landed - drop_repeated_rows(file, STORY_SIMILARITY_THRESHOLD_KEY)
 
 
 def append_council_shard_outcomes(
@@ -1676,9 +1138,9 @@ def append_council_shard_outcomes(
     recorded = list(rows)
     if not recorded:
         return 0
-    path = council_shard_outcomes_path(state_dir, date)
-    landed = extend_ledger_file(path, CouncilShardOutcome.csv_columns(), recorded)
-    return landed - drop_repeated_rows(path, COUNCIL_SHARD_OUTCOME_KEY)
+    file = paths.path(state_dir, LedgerName.SHARD_OUTCOMES, date)
+    landed = extend_ledger_file(file, CouncilShardOutcome.csv_columns(), recorded)
+    return landed - drop_repeated_rows(file, COUNCIL_SHARD_OUTCOME_KEY)
 
 
 def load_fitted_thresholds(
@@ -1707,7 +1169,7 @@ def load_fitted_thresholds(
     for day in reversed(day_partition.days_in_window(today, within_days)):
         rows.extend(
             FittedSimilarityThreshold.from_csv_row(raw)
-            for raw in _read_rows(fitted_thresholds_path(state_dir, day))
+            for raw in _read_rows(paths.path(state_dir, LedgerName.FITTED_THRESHOLDS, day))
         )
     return rows
 
@@ -1717,7 +1179,8 @@ def load_visual_prunes(state_dir: Path) -> list[VisualPruneRow]:
 
     The question is whether the backlog is shrinking, which is about the whole
     series - so this opens every day file the tree holds and the layout saves it
-    nothing. That is the trade `visual_prunes_path` states.
+    nothing. That is the trade `docs/architecture/contracts/state-ledgers.md`
+    states for this ledger.
 
     A row that no longer parses is skipped rather than fatal, for the reason
     `load_retirements` gives: this ledger is a report, and refusing to start
@@ -1726,8 +1189,8 @@ def load_visual_prunes(state_dir: Path) -> list[VisualPruneRow]:
     that quietly drops a day is a report of the wrong series.
     """
     rows: list[VisualPruneRow] = []
-    for path in day_partition.day_files(state_dir / VISUAL_PRUNES_DIRNAME):
-        for raw in _read_rows(path):
+    for file in day_partition.day_files(paths.tree_root(state_dir, LedgerName.VISUAL_PRUNES)):
+        for raw in _read_rows(file):
             try:
                 rows.append(VisualPruneRow.from_csv_row(raw))
             except (KeyError, ValueError):
@@ -1916,7 +1379,7 @@ def day_shard_path(
     """
     _refuse_outside_day_trees(ledger)
     name = segment_name(run_id=run_id, attempt=attempt, job=job, shard=shard)
-    return state_dir / ledger.value / date[:4] / date[5:7] / date[8:10] / name
+    return paths.path(state_dir, ledger, date) / name
 
 
 def day_shard_relpath(
@@ -1931,7 +1394,7 @@ def day_shard_relpath(
     """The POSIX form of `day_shard_path`, for a log line (CLAUDE.md section 2)."""
     _refuse_outside_day_trees(ledger)
     name = segment_name(run_id=run_id, attempt=attempt, job=job, shard=shard)
-    return f"{STATE_DIRNAME}/{ledger.value}/{date[:4]}/{date[5:7]}/{date[8:10]}/{name}"
+    return f"{paths.relpath(ledger, date)}/{name}"
 
 
 def _dated_rows(
@@ -1994,7 +1457,7 @@ def write_segment(
             state_dir, ledger, date=day, run_id=run_id, attempt=attempt, job=job, shard=shard
         )
         path.parent.mkdir(parents=True, exist_ok=True)
-        scratch = state_dir / ledger.value / f"{path.stem}.{day}.{os.getpid()}.tmp"
+        scratch = paths.tree_root(state_dir, ledger) / f"{path.stem}.{day}.{os.getpid()}.tmp"
         scratch.write_text(render_file(columns, cells), encoding="utf-8", newline="")
         scratch.replace(path)
         written += len(cells)
@@ -2039,7 +1502,7 @@ def extend_segment(
         )
         path.parent.mkdir(parents=True, exist_ok=True)
         held = [{name: row.get(name, "") for name in columns} for row in _read_rows(path)]
-        scratch = state_dir / ledger.value / f"{path.stem}.{day}.{os.getpid()}.tmp"
+        scratch = paths.tree_root(state_dir, ledger) / f"{path.stem}.{day}.{os.getpid()}.tmp"
         scratch.write_text(render_file(columns, held + cells), encoding="utf-8", newline="")
         scratch.replace(path)
         added += len(cells)
@@ -2136,26 +1599,34 @@ def keyed_paths(state_dir: Path, *, date: str | None) -> list[KeyedLedger]:
     tenants' unit 0 under the same three cells.
     """
     flat: list[KeyedLedger] = [
-        KeyedLedger(feed_retirements_path(state_dir), FEED_RETIREMENT_KEY, FeedRetirementRow),
+        KeyedLedger(
+            paths.path(state_dir, LedgerName.FEED_RETIREMENTS),
+            FEED_RETIREMENT_KEY,
+            FeedRetirementRow,
+        ),
     ]
     if date is not None:
         return [
             *flat,
-            KeyedLedger(visual_prunes_path(state_dir, date), VISUAL_PRUNE_KEY, VisualPruneRow),
             KeyedLedger(
-                fitted_thresholds_path(state_dir, date),
+                paths.path(state_dir, LedgerName.VISUAL_PRUNES, date),
+                VISUAL_PRUNE_KEY,
+                VisualPruneRow,
+            ),
+            KeyedLedger(
+                paths.path(state_dir, LedgerName.FITTED_THRESHOLDS, date),
                 STORY_SIMILARITY_THRESHOLD_KEY,
                 FittedSimilarityThreshold,
                 FITTED_SIMILARITY_THRESHOLD_CARRIED,
             ),
             KeyedLedger(
-                scored_pairs_path(state_dir, date),
+                paths.path(state_dir, LedgerName.SCORED_PAIRS, date),
                 STORY_SIMILARITY_PAIR_KEY,
                 StorySimilarityPair,
                 STORY_SIMILARITY_PAIR_CARRIED,
             ),
             KeyedLedger(
-                council_shard_outcomes_path(state_dir, date),
+                paths.path(state_dir, LedgerName.SHARD_OUTCOMES, date),
                 COUNCIL_SHARD_OUTCOME_KEY,
                 CouncilShardOutcome,
             ),
@@ -2163,35 +1634,37 @@ def keyed_paths(state_dir: Path, *, date: str | None) -> list[KeyedLedger]:
     return [
         *flat,
         *(
-            KeyedLedger(path, VISUAL_PRUNE_KEY, VisualPruneRow)
-            for path in day_partition.day_files(state_dir / VISUAL_PRUNES_DIRNAME)
+            KeyedLedger(file, VISUAL_PRUNE_KEY, VisualPruneRow)
+            for file in day_partition.day_files(
+                paths.tree_root(state_dir, LedgerName.VISUAL_PRUNES)
+            )
         ),
         *(
             KeyedLedger(
-                path,
+                file,
                 STORY_SIMILARITY_THRESHOLD_KEY,
                 FittedSimilarityThreshold,
                 FITTED_SIMILARITY_THRESHOLD_CARRIED,
             )
-            for path in day_partition.day_files(
-                state_dir / CONTENT_SIMILARITY_JUDGE_DIRNAME / FITTED_THRESHOLDS_DIRNAME
+            for file in day_partition.day_files(
+                paths.tree_root(state_dir, LedgerName.FITTED_THRESHOLDS)
             )
         ),
         *(
             KeyedLedger(
-                path,
+                file,
                 STORY_SIMILARITY_PAIR_KEY,
                 StorySimilarityPair,
                 STORY_SIMILARITY_PAIR_CARRIED,
             )
-            for path in day_partition.day_files(
-                state_dir / CONTENT_SIMILARITY_JUDGE_DIRNAME / SCORED_PAIRS_DIRNAME
+            for file in day_partition.day_files(
+                paths.tree_root(state_dir, LedgerName.SCORED_PAIRS)
             )
         ),
         *(
-            KeyedLedger(path, COUNCIL_SHARD_OUTCOME_KEY, CouncilShardOutcome)
-            for path in day_partition.day_files(
-                state_dir / COUNCIL_DIRNAME / SHARD_OUTCOMES_DIRNAME
+            KeyedLedger(file, COUNCIL_SHARD_OUTCOME_KEY, CouncilShardOutcome)
+            for file in day_partition.day_files(
+                paths.tree_root(state_dir, LedgerName.SHARD_OUTCOMES)
             )
         ),
     ]
@@ -2329,7 +1802,10 @@ def load_item_health(state_dir: Path, *, today: str, within_days: int) -> list[I
     return [
         ItemHealthRow.from_csv_row(row)
         for row in day_shards.settled_rows(
-            state_dir / ITEM_HEALTH_DIRNAME, ITEM_HEALTH_KEY, ItemHealthRow, days=within_days
+            paths.tree_root(state_dir, LedgerName.ITEM_HEALTH),
+            ITEM_HEALTH_KEY,
+            ItemHealthRow,
+            days=within_days,
         )
     ]
 
@@ -2382,7 +1858,10 @@ def load_health(state_dir: Path, *, today: str, within_days: int) -> list[FeedHe
     rows = [
         FeedHealthRow.from_csv_row(raw)
         for raw in day_shards.settled_rows(
-            state_dir / HEALTH_DIRNAME, FEED_HEALTH_KEY, FeedHealthRow, days=within_days
+            paths.tree_root(state_dir, LedgerName.HEALTH),
+            FEED_HEALTH_KEY,
+            FeedHealthRow,
+            days=within_days,
         )
     ]
     rows.sort(key=lambda row: (row.date, _run_n(row.run_id)))

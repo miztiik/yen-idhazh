@@ -58,6 +58,7 @@ from typing import Final
 
 from idhazh import day_partition, ledger
 from idhazh.contracts.base import derive_url_key
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.seen import SeenRow
 
 #: Days the fixture holds. Wider than the window, so the month case's oldest
@@ -127,7 +128,7 @@ def _write_month_tree(state: Path, days: Iterable[str], rows_a_day: int) -> None
     columns = SeenRow.csv_columns()
     written: set[Path] = set()
     for date in days:
-        path = state / ledger.SEEN_DIRNAME / f"{date[:7]}.csv"
+        path = ledger.tree_root(state, LedgerName.SEEN) / f"{date[:7]}.csv"
         path.parent.mkdir(parents=True, exist_ok=True)
         first = path not in written
         with path.open("a", encoding="utf-8", newline="") as handle:
@@ -153,7 +154,7 @@ def _read_by_month(state: Path, *, today: str, within_days: int) -> dict[str, st
     only difference between the cases is which files it opens.
     """
     first_seen: dict[str, str] = {}
-    root = state / ledger.SEEN_DIRNAME
+    root = ledger.tree_root(state, LedgerName.SEEN)
     for stem in ledger.shards_in_window(today, within_days):
         path = root / f"{stem}.csv"
         if not path.exists():
@@ -167,13 +168,13 @@ def _read_by_month(state: Path, *, today: str, within_days: int) -> dict[str, st
 
 
 def _month_paths(state: Path, today: str, within_days: int) -> list[Path]:
-    root = state / ledger.SEEN_DIRNAME
+    root = ledger.tree_root(state, LedgerName.SEEN)
     named = (root / f"{stem}.csv" for stem in ledger.shards_in_window(today, within_days))
     return [path for path in named if path.exists()]
 
 
 def _day_paths(state: Path, today: str, within_days: int) -> list[Path]:
-    root = state / ledger.SEEN_DIRNAME
+    root = ledger.tree_root(state, LedgerName.SEEN)
     named = (
         root / date[:4] / date[5:7] / f"{date[8:10]}.csv"
         for date in day_partition.days_in_window(today, within_days)

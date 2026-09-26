@@ -54,6 +54,7 @@ from idhazh.contracts.day_metrics import (
 from idhazh.contracts.digest_day import DigestDay
 from idhazh.contracts.eval_row import BandReason, ConfidenceBand, EvalRow
 from idhazh.contracts.item_health import ElementClass, ItemHealthRow, ItemStage
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.run_manifest import ModelRole, RunManifest
 from idhazh.contracts.visual_decision import VisualKind, VisualState
 from idhazh.evals import writer as eval_writer
@@ -132,7 +133,10 @@ def read_health_rows(state_root: Path, date: str) -> list[dict[str, str]]:
     Settled for the reason `read_score_rows` gives, and against the same day.
     """
     return day_shards.settled_day(
-        state_root / ledger.ITEM_HEALTH_DIRNAME, date, ledger.ITEM_HEALTH_KEY, ItemHealthRow
+        ledger.tree_root(state_root, LedgerName.ITEM_HEALTH),
+        date,
+        ledger.ITEM_HEALTH_KEY,
+        ItemHealthRow,
     )
 
 

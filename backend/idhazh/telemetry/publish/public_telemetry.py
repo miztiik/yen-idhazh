@@ -33,6 +33,7 @@ from typing import Final
 from idhazh import config, day_shards, ledger
 from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.public_telemetry import FORBIDDEN_COLUMNS, PublicTelemetryRow
 
 PUBLIC_COLUMNS: Final[tuple[str, ...]] = PublicTelemetryRow.csv_columns()
@@ -189,7 +190,7 @@ def publish(
     wider**, and the listing behind it grows by one directory entry a day rather
     than one a month.
     """
-    source_dir = state_root / ledger.ITEM_HEALTH_DIRNAME
+    source_dir = ledger.tree_root(state_root, LedgerName.ITEM_HEALTH)
     public_root.mkdir(parents=True, exist_ok=True)
     written: list[Path] = []
     by_month = day_shards.dates_by_month(source_dir, days=UNBOUNDED_WINDOW)

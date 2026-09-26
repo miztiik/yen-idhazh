@@ -192,7 +192,7 @@ def item_health_days(state_dir: Path) -> list[Path]:
     what the prune left and a window would hide the months it took.
     """
     return list(
-        day_shards.shard_files(state_dir / ledger.ITEM_HEALTH_DIRNAME, days=UNBOUNDED_WINDOW)
+        day_shards.shard_files(ledger.tree_root(state_dir, LedgerName.ITEM_HEALTH), days=UNBOUNDED_WINDOW)
     )
 
 
@@ -203,7 +203,7 @@ def item_health_months(state_dir: Path) -> list[str]:
     days, so a test about what the prune kept asks in months.
     """
     return sorted(
-        day_shards.shards_by_month(state_dir / ledger.ITEM_HEALTH_DIRNAME, days=UNBOUNDED_WINDOW)
+        day_shards.shards_by_month(ledger.tree_root(state_dir, LedgerName.ITEM_HEALTH), days=UNBOUNDED_WINDOW)
     )
 
 
@@ -227,7 +227,7 @@ def census_of(state_dir: Path, date: str) -> list[ItemHealthRow]:
     return [
         ItemHealthRow.from_csv_row(cells)
         for cells in day_shards.settled_day(
-            state_dir / ledger.ITEM_HEALTH_DIRNAME,
+            ledger.tree_root(state_dir, LedgerName.ITEM_HEALTH),
             date,
             ledger.ITEM_HEALTH_KEY,
             ItemHealthRow,
@@ -294,7 +294,7 @@ def feed_health_months(state_dir: Path) -> list[str]:
     days, so a test about what the prune kept asks in months.
     """
     return sorted(
-        day_shards.shards_by_month(state_dir / ledger.HEALTH_DIRNAME, days=UNBOUNDED_WINDOW)
+        day_shards.shards_by_month(ledger.tree_root(state_dir, LedgerName.HEALTH), days=UNBOUNDED_WINDOW)
     )
 
 
@@ -332,6 +332,6 @@ def host_fingerprint_months(state_dir: Path) -> list[str]:
     """Which months the host-fingerprint day tree still holds, oldest first."""
     return sorted(
         day_shards.shards_by_month(
-            state_dir / ledger.HOST_FINGERPRINT_DIRNAME, days=UNBOUNDED_WINDOW
+            ledger.tree_root(state_dir, LedgerName.HOST_FINGERPRINT), days=UNBOUNDED_WINDOW
         )
     )

@@ -27,6 +27,7 @@ from pydantic import ValidationError
 from idhazh import day_partition, ledger
 from idhazh.contracts import council_shard_outcome
 from idhazh.contracts.council_shard_outcome import CouncilShardOutcome, ShardOutcome
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.telemetry import inventory
 
 pytestmark = pytest.mark.contract
@@ -122,13 +123,13 @@ def test_the_slug_is_recorded_rather_than_checked_against_a_roster() -> None:
 
 def test_the_day_file_a_date_resolves_to_is_two_levels_under_state() -> None:
     """A third level is invisible to the day inventory and the miss is silent."""
-    relpath = ledger.council_shard_outcomes_relpath(A_NIGHT)
+    relpath = ledger.relpath(LedgerName.SHARD_OUTCOMES, A_NIGHT)
 
     assert relpath == "state/llm-council/shard-outcomes/2026/09/20.csv"
-    assert ledger.council_shard_outcomes_path(Path("state"), A_NIGHT).as_posix() == relpath
+    assert ledger.path(Path("state"), LedgerName.SHARD_OUTCOMES, A_NIGHT).as_posix() == relpath
 
     segments = relpath.removeprefix(f"{ledger.STATE_DIRNAME}/").split("/")
-    assert segments[:2] == [ledger.COUNCIL_DIRNAME, ledger.SHARD_OUTCOMES_DIRNAME]
+    assert segments[:2] == list(ledger.entry(LedgerName.SHARD_OUTCOMES).prefix)
     assert segments[2:] == ["2026", "09", "20.csv"], "the day tree gained a directory level"
 
 
@@ -141,7 +142,7 @@ def test_the_instrument_reader_finds_the_day_this_store_wrote(tmp_path: Path) ->
     """
     state_root = tmp_path / ledger.STATE_DIRNAME
     for night in (A_NIGHT, ANOTHER_NIGHT):
-        path = ledger.council_shard_outcomes_path(state_root, night)
+        path = ledger.path(state_root, LedgerName.SHARD_OUTCOMES, night)
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(
             ledger.render_file(
@@ -159,7 +160,7 @@ def test_the_instrument_reader_finds_the_day_this_store_wrote(tmp_path: Path) ->
         "the inventory reported a day it was not asked about"
     )
     assert [day_partition.date_of(found) for found in day_partition.day_files(
-        state_root / ledger.COUNCIL_DIRNAME / ledger.SHARD_OUTCOMES_DIRNAME
+        ledger.tree_root(state_root, LedgerName.SHARD_OUTCOMES)
     )] == [A_NIGHT, ANOTHER_NIGHT]
 
 

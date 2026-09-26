@@ -18,6 +18,7 @@ from conftest import CONFIG_DIR
 
 from idhazh import config, ledger
 from idhazh.contracts.content_similarity_judge_metrics import ContentSimilarityJudgeMetrics
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.council import registry
 from idhazh.council.tenancy import Tenant
 from idhazh.similarity import tenant
@@ -100,7 +101,7 @@ def test_the_slug_is_the_word_this_judges_stores_are_addressed_by() -> None:
     """
     on_the_row = ContentSimilarityJudgeMetrics.model_fields["judge_id"].default
 
-    assert tenant.JUDGE_ID == ledger.CONTENT_SIMILARITY_JUDGE_DIRNAME
+    assert tenant.JUDGE_ID == ledger.entry(LedgerName.JUDGE_METRICS).prefix[0]
     assert tenant.JUDGE_ID == on_the_row
     assert tenant.TENANT.judge_id == tenant.JUDGE_ID
 
@@ -121,10 +122,10 @@ def test_the_prefix_this_judge_stages_covers_the_store_every_unit_writes() -> No
     A list of the ledgers as they stand would commit the day a new one is added
     and drop it on every night until somebody noticed.
     """
-    under_the_prefix = ledger.content_similarity_judge_metrics_relpath(A_NIGHT)
+    under_the_prefix = ledger.relpath(LedgerName.JUDGE_METRICS, A_NIGHT)
 
     assert tenant.TENANT.committed_paths == (
-        f"{ledger.STATE_DIRNAME}/{ledger.CONTENT_SIMILARITY_JUDGE_DIRNAME}",
+        f"{ledger.STATE_DIRNAME}/{ledger.entry(LedgerName.JUDGE_METRICS).prefix[0]}",
     )
     assert under_the_prefix.startswith(tenant.TENANT.committed_paths[0] + "/")
 

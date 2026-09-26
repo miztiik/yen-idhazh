@@ -147,7 +147,7 @@ def a_full_run(state: Path, date: str) -> Path:
             job=job,
             shard=shard,
         )
-    return state / ledger.HOST_FINGERPRINT_DIRNAME / date[:4] / date[5:7] / date[8:10]
+    return ledger.tree_root(state, LedgerName.HOST_FINGERPRINT) / date[:4] / date[5:7] / date[8:10]
 
 
 # --- Which days the fold takes -------------------------------------------------
@@ -178,7 +178,7 @@ def test_a_day_older_than_the_cover_folds_into_one_file(tmp_path: Path) -> None:
     assert report.days_folded == 1
     assert report.files_replaced == len(WRITERS)
     assert report.rows_kept == len(WRITERS)
-    assert report.trees_touched == (ledger.HOST_FINGERPRINT_DIRNAME,)
+    assert report.trees_touched == (LedgerName.HOST_FINGERPRINT,)
     assert rows_in(day / day_shards.SETTLED_NAME) == before
 
 
@@ -263,7 +263,7 @@ def test_two_trees_closed_on_one_day_are_both_named(tmp_path: Path) -> None:
     assert names_in(machines) == [day_shards.SETTLED_NAME]
     assert names_in(spans) == [day_shards.SETTLED_NAME]
     assert report.trees_touched == tuple(
-        sorted((ledger.HOST_FINGERPRINT_DIRNAME, ledger.SPAN_ROLLUP_DIRNAME))
+        sorted((LedgerName.HOST_FINGERPRINT, LedgerName.SPAN_ROLLUP))
     )
     assert report.days_folded == 1, "one date, whichever trees recorded it"
 
@@ -365,7 +365,7 @@ def test_every_day_a_tree_recorded_is_listed_once_and_oldest_first(tmp_path: Pat
     a_full_run(state, NEWEST_CLOSED)
     a_full_run(state, OLDER_CLOSED)
 
-    assert compact.recorded_days(state / ledger.HOST_FINGERPRINT_DIRNAME) == [
+    assert compact.recorded_days(ledger.tree_root(state, LedgerName.HOST_FINGERPRINT)) == [
         OLDER_CLOSED,
         NEWEST_CLOSED,
     ]
@@ -373,7 +373,7 @@ def test_every_day_a_tree_recorded_is_listed_once_and_oldest_first(tmp_path: Pat
 
 def test_a_tree_that_was_never_written_lists_no_days(tmp_path: Path) -> None:
     """A ledger a clone has never run is not a fault."""
-    assert compact.recorded_days(tmp_path / ledger.HOST_FINGERPRINT_DIRNAME) == []
+    assert compact.recorded_days(ledger.tree_root(tmp_path, LedgerName.HOST_FINGERPRINT)) == []
 
 
 def test_a_day_a_fold_already_settled_is_still_a_day_the_tree_recorded(
@@ -388,7 +388,7 @@ def test_a_day_a_fold_already_settled_is_still_a_day_the_tree_recorded(
     a_full_run(state, NEWEST_CLOSED)
     fold(state)
 
-    assert compact.recorded_days(state / ledger.HOST_FINGERPRINT_DIRNAME) == [NEWEST_CLOSED]
+    assert compact.recorded_days(ledger.tree_root(state, LedgerName.HOST_FINGERPRINT)) == [NEWEST_CLOSED]
 
 
 # --- The knob ------------------------------------------------------------------

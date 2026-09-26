@@ -17,6 +17,7 @@ import pytest
 
 from idhazh import ledger
 from idhazh.contracts.feed_retirement import FeedRetirementRow
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.similarity_holdout_pair import SimilarityHoldoutPair
 from utilities.check_seeded_ledgers import audit, main, report, seeded_ledgers
 
@@ -46,8 +47,8 @@ def test_the_audit_names_every_store_whose_header_ships_with_the_contract() -> N
     declared = {seeded.relpath: seeded.columns for seeded in seeded_ledgers()}
 
     assert declared == {
-        ledger.feed_retirements_relpath(): FeedRetirementRow.csv_columns(),
-        ledger.similarity_holdout_relpath(): SimilarityHoldoutPair.csv_columns(),
+        ledger.relpath(LedgerName.FEED_RETIREMENTS): FeedRetirementRow.csv_columns(),
+        ledger.relpath(LedgerName.SIMILARITY_HOLDOUT): SimilarityHoldoutPair.csv_columns(),
     }
 
 
@@ -68,12 +69,12 @@ def test_a_missing_store_is_named_rather_than_counted(tmp_path: Path) -> None:
     in the same `git add` call - which is the sentence an operator needs.
     """
     a_seeded_checkout(tmp_path)
-    (tmp_path / ledger.feed_retirements_relpath()).unlink()
+    (tmp_path / ledger.relpath(LedgerName.FEED_RETIREMENTS)).unlink()
 
     findings = audit(tmp_path)
 
     broken = [finding for finding in findings if not finding.ok]
-    assert [finding.ledger.relpath for finding in broken] == [ledger.feed_retirements_relpath()]
+    assert [finding.ledger.relpath for finding in broken] == [ledger.relpath(LedgerName.FEED_RETIREMENTS)]
     assert broken[0].fault is not None
     assert "git add" in broken[0].fault
 
@@ -87,12 +88,12 @@ def test_a_store_under_an_older_header_is_a_fault_and_not_a_pass(tmp_path: Path)
     """
     a_seeded_checkout(tmp_path)
     narrow = SimilarityHoldoutPair.csv_columns()[:-1]
-    write_header(tmp_path / ledger.similarity_holdout_relpath(), narrow)
+    write_header(tmp_path / ledger.relpath(LedgerName.SIMILARITY_HOLDOUT), narrow)
 
     findings = audit(tmp_path)
 
     broken = [finding for finding in findings if not finding.ok]
-    assert [finding.ledger.relpath for finding in broken] == [ledger.similarity_holdout_relpath()]
+    assert [finding.ledger.relpath for finding in broken] == [ledger.relpath(LedgerName.SIMILARITY_HOLDOUT)]
     assert broken[0].fault is not None
     assert str(len(narrow)) in broken[0].fault
 
@@ -101,6 +102,6 @@ def test_the_exit_code_is_what_a_shell_gates_on(tmp_path: Path) -> None:
     """Zero on a whole checkout, one on a broken one."""
     assert main(["--repo-root", str(a_seeded_checkout(tmp_path))]) == 0
 
-    (tmp_path / ledger.similarity_holdout_relpath()).unlink()
+    (tmp_path / ledger.relpath(LedgerName.SIMILARITY_HOLDOUT)).unlink()
 
     assert main(["--repo-root", str(tmp_path)]) == 1

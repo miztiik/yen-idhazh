@@ -11,6 +11,7 @@ from idhazh import day_shards, ledger
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
 from idhazh.contracts.knobs.observability import ObservabilityConfig
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.retention import oldest_month_kept, prune_feed_health
 
 from ._trees import (
@@ -24,7 +25,7 @@ from ._trees import (
 
 def feed_health_days(state_dir: Path) -> list[Path]:
     """Every feed-health file, oldest first, through the pipeline's own walk."""
-    return list(day_shards.shard_files(state_dir / ledger.HEALTH_DIRNAME, days=UNBOUNDED_WINDOW))
+    return list(day_shards.shard_files(ledger.tree_root(state_dir, LedgerName.HEALTH), days=UNBOUNDED_WINDOW))
 
 
 def the_file_the_fixture_wrote(date: str) -> str:
@@ -35,7 +36,7 @@ def the_file_the_fixture_wrote(date: str) -> str:
     string this test froze.
     """
     name = ledger.segment_name(run_id=f"{date}-1", attempt=1, job=ServerJob.PLAN, shard=0)
-    return f"{ledger.health_relpath(date)}/{name}"
+    return f"{ledger.relpath(LedgerName.HEALTH, date)}/{name}"
 
 
 def test_the_feed_health_prune_takes_the_expired_day_and_keeps_the_day_beside_it(
@@ -61,8 +62,8 @@ def test_the_feed_health_prune_takes_the_expired_day_and_keeps_the_day_beside_it
     kept_day = f"{boundary}-09"
     assert expired_day[:7] < boundary <= kept_day[:7], "the fixture must straddle the boundary"
     feed_health_history(state, [expired_day[:7], kept_day[:7]], day_of_month=9)
-    expired_path = ledger.health_path(state, expired_day)
-    kept_path = ledger.health_path(state, kept_day)
+    expired_path = ledger.path(state, LedgerName.HEALTH, expired_day)
+    kept_path = ledger.path(state, LedgerName.HEALTH, kept_day)
     assert expired_path.exists() and kept_path.exists()
 
     result = prune_feed_health(state, config, TODAY, dry_run=False)
@@ -99,7 +100,7 @@ def test_a_feed_health_month_past_its_own_age_is_deleted_rather_than_folded(
     assert list(result.kept) == [stem for stem in months if stem >= boundary]
     assert result.bytes_freed > 0
     assert feed_health_months(state) == list(result.kept)
-    assert not (state / ledger.TELEMETRY_AGGREGATE_DIRNAME).exists(), (
+    assert not (state / LedgerName.TELEMETRY_AGGREGATE).exists(), (
         "feed health is deleted rather than folded; an aggregate here has no reader"
     )
 
@@ -114,7 +115,7 @@ def test_the_retirement_ledger_is_never_a_candidate(tmp_path: Path) -> None:
     """
     state = tmp_path / "state"
     feed_health_history(state, months_back(TODAY, HISTORY_MONTHS))
-    retirements = ledger.feed_retirements_path(state)
+    retirements = ledger.path(state, LedgerName.FEED_RETIREMENTS)
     retirements.write_text("header\n", encoding="utf-8")
 
     result = prune_feed_health(state, ObservabilityConfig(), TODAY)
@@ -135,12 +136,12 @@ def test_a_feed_health_name_the_walk_cannot_place_stops_the_prune(tmp_path: Path
     """
     state = tmp_path / "state"
     feed_health_history(state, ["2024-01"])
-    (state / ledger.HEALTH_DIRNAME / "2024-01.csv").write_text("header\n", encoding="utf-8")
+    (ledger.tree_root(state, LedgerName.HEALTH) / "2024-01.csv").write_text("header\n", encoding="utf-8")
 
     with pytest.raises(ValueError, match="not a file inside a YYYY/MM/DD day directory"):
         prune_feed_health(state, ObservabilityConfig(), TODAY)
 
-    assert ledger.health_path(state, "2024-01-11").exists(), "a refused read deleted a day"
+    assert ledger.path(state, LedgerName.HEALTH, "2024-01-11").exists(), "a refused read deleted a day"
 
 
 def test_a_feed_health_dry_run_names_the_day_and_leaves_it(tmp_path: Path) -> None:
@@ -155,7 +156,7 @@ def test_a_feed_health_dry_run_names_the_day_and_leaves_it(tmp_path: Path) -> No
     # removes, file for file.
     assert result.days_removed == (the_file_the_fixture_wrote("2024-01-11"),)
     assert result.dry_run
-    assert ledger.health_path(state, "2024-01-11").exists()
+    assert ledger.path(state, LedgerName.HEALTH, "2024-01-11").exists()
 
 
 def test_a_feed_health_run_handed_an_older_date_keeps_the_live_shard(tmp_path: Path) -> None:
@@ -174,10 +175,10 @@ def test_a_feed_health_run_handed_an_older_date_keeps_the_live_shard(tmp_path: P
 
     assert result.deleted == ("2024-01",)
     assert result.kept == ("2026-08",)
-    assert ledger.health_path(state, "2026-08-11").exists(), (
+    assert ledger.path(state, LedgerName.HEALTH, "2026-08-11").exists(), (
         "the live shard was deleted by a run given an older date"
     )
-    assert not ledger.health_path(state, "2024-01-11").exists()
+    assert not ledger.path(state, LedgerName.HEALTH, "2024-01-11").exists()
 
 
 def test_an_empty_state_tree_deletes_no_feed_health_and_says_so(tmp_path: Path) -> None:

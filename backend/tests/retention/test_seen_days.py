@@ -42,7 +42,7 @@ def _seen_day(state: Path, day: str, rows: int = 1) -> Path:
             for n in range(rows)
         ],
     )
-    return ledger.seen_path(state, day)
+    return ledger.path(state, LedgerName.SEEN, day)
 
 
 def test_a_seen_day_the_planner_still_reads_is_never_deleted(tmp_path: Path) -> None:
@@ -61,8 +61,8 @@ def test_a_seen_day_the_planner_still_reads_is_never_deleted(tmp_path: Path) -> 
     result = prune_seen(state, today=today, within_days=window)
 
     assert result.deleted == ()
-    assert sorted(result.kept) == sorted(ledger.seen_relpath(day) for day in inside)
-    assert all(ledger.seen_path(state, day).exists() for day in inside)
+    assert sorted(result.kept) == sorted(ledger.relpath(LedgerName.SEEN, day) for day in inside)
+    assert all(ledger.path(state, LedgerName.SEEN, day).exists() for day in inside)
 
 
 def test_what_the_pruner_keeps_covers_what_the_reader_opens_at_a_past_anchor(
@@ -101,16 +101,16 @@ def test_what_the_pruner_keeps_covers_what_the_reader_opens_at_a_past_anchor(
     after = ledger.load_seen(state, today=anchor, within_days=window)
 
     # Every file the reader opens at that anchor is still there.
-    assert all(ledger.seen_path(state, day).exists() for day in read_at_anchor)
+    assert all(ledger.path(state, LedgerName.SEEN, day).exists() for day in read_at_anchor)
     # And so is every file NEWER than the anchor, which the window never names.
-    assert all(ledger.seen_path(state, day).exists() for day in built if day > anchor)
+    assert all(ledger.path(state, LedgerName.SEEN, day).exists() for day in built if day > anchor)
     # Exactly the days below the window went, and nothing else did.
     below = [day for day in built if day < floor]
-    assert sorted(result.deleted) == [ledger.seen_relpath(day) for day in below]
+    assert sorted(result.deleted) == [ledger.relpath(LedgerName.SEEN, day) for day in below]
     assert sorted(result.kept) == [
-        ledger.seen_relpath(day) for day in built if day >= floor
+        ledger.relpath(LedgerName.SEEN, day) for day in built if day >= floor
     ]
-    assert not any(ledger.seen_path(state, day).exists() for day in below)
+    assert not any(ledger.path(state, LedgerName.SEEN, day).exists() for day in below)
     # The reader's answer is the same before and after, which is the claim as data.
     assert after == before
     assert before, "an empty answer would pass the line above on any tree"
@@ -142,7 +142,7 @@ def test_a_seen_day_outside_the_window_goes_and_says_what_it_weighed(
     assert kept.exists()
     # The year and month directories go with the last day inside them, or the
     # walk would cost more every year while deleting the rows it exists to read.
-    assert not (state / ledger.SEEN_DIRNAME / "2024").exists()
+    assert not (ledger.tree_root(state, LedgerName.SEEN) / "2024").exists()
     # What the prune removed was already invisible: the reader's answer is
     # unchanged, which is the whole safety claim stated as data.
     assert after == before
@@ -191,7 +191,7 @@ def _counterfactual_day(state: Path, day: str, rows: int = 1) -> Path:
         job=ServerJob.PLAN,
         shard=0,
     )
-    return ledger.counterfactual_scores_path(state, day)
+    return ledger.path(state, LedgerName.COUNTERFACTUAL_SCORES, day)
 
 
 def _counterfactual_file(day: str) -> str:
@@ -230,7 +230,7 @@ def test_a_counterfactual_day_outside_the_window_goes_and_says_what_it_weighed(
     assert result.bytes_freed == weight
     assert not stale.exists()
     assert kept.exists()
-    assert not (state / ledger.COUNTERFACTUAL_SCORES_DIRNAME / "2024").exists()
+    assert not (ledger.tree_root(state, LedgerName.COUNTERFACTUAL_SCORES) / "2024").exists()
 
 
 def test_a_counterfactual_dry_run_names_the_day_file_and_leaves_it(tmp_path: Path) -> None:
@@ -352,7 +352,7 @@ def test_the_stage_names_every_seen_day_it_removed_and_counts_what_it_kept(
         )
 
     assert "seen prune (dry run): deleted 1 day files" in caplog.text
-    assert f"kept 1 back to {ledger.seen_relpath(TODAY.isoformat())}" in caplog.text
+    assert f"kept 1 back to {ledger.relpath(LedgerName.SEEN, TODAY.isoformat())}" in caplog.text
     assert "would remove state/seen/2024/01/15.csv" in caplog.text
 
 

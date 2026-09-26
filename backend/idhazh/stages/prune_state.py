@@ -15,6 +15,7 @@ from idhazh.contracts.knobs.extract import ExtractConfig
 from idhazh.contracts.knobs.observability import ObservabilityConfig
 from idhazh.contracts.knobs.placement import LensWeightsConfig
 from idhazh.contracts.knobs.retention import RetentionConfig
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.evals import archive as score_archive
 from idhazh.stages import common
 from idhazh.stages.common import LOG
@@ -131,7 +132,9 @@ def stage_prune_state(
         )
         removed += list(result.days_removed)
         removed += [public_telemetry.shard_relpath(stem) for stem in result.public_deleted]
-        removed += [ledger.telemetry_aggregate_relpath(stem) for stem in result.hard_deleted]
+        removed += [
+            ledger.relpath(LedgerName.TELEMETRY_AGGREGATE, stem) for stem in result.hard_deleted
+        ]
 
     if digest is not None:
         _clean_the_visuals(
@@ -437,16 +440,17 @@ def _trial_roots(state: Path) -> list[str]:
     into the trial root. Nothing had ever pruned `state/pipeline-tests/`
     because of it.
 
-    A ledger is created through its directory constant, so the names subtracted
-    here gain a member in the same commit that adds a ledger and discovery
-    cannot fall out of step. The four below are the ledgers `ledger` does not
-    own; each is read from its owning module rather than retyped, and they are
-    imported here rather than into `ledger` because two of those modules import
-    `ledger` themselves.
+    A ledger is claimed because `config/ledgers.json` has an entry for it, and
+    every state is claimed - live, paused and retired alike. So a ledger joins
+    this set in the change that registers it, and a ledger with no entry stops
+    the build rather than becoming a directory this pass empties. The four below
+    are the ledgers `ledger` does not own; each is read from its owning module
+    rather than retyped, and they are imported here rather than into `ledger`
+    because two of those modules import `ledger` themselves.
     """
     if not state.is_dir():
         return []
-    ledgers = ledger.LEDGER_DIRNAMES | {
+    ledgers = ledger.claimed_roots() | {
         telemetry.TRACES_DIRNAME,
         day_metrics.DIRNAME,
         assemble.FRAGMENTS_DIRNAME,

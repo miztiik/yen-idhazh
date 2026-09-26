@@ -33,6 +33,7 @@ from idhazh.contracts.base import WORK_JOB
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.machine_shard import MachineShardRow
 from idhazh.ledger import CsvContract
 from idhazh.telemetry.publish import series
@@ -295,8 +296,8 @@ def publish(
 ) -> list[Path]:
     """Write a published machine shard for each month that changed."""
     oldest = series.oldest_month_kept(today, keep_months)
-    health_root = state_root / ledger.ITEM_HEALTH_DIRNAME
-    host_root = state_root / ledger.HOST_FINGERPRINT_DIRNAME
+    health_root = ledger.tree_root(state_root, LedgerName.ITEM_HEALTH)
+    host_root = ledger.tree_root(state_root, LedgerName.HOST_FINGERPRINT)
     health_days = month_days(health_root, oldest_month=oldest)
     host_days = month_days(host_root, oldest_month=oldest)
     available = sorted({*health_days, *host_days})

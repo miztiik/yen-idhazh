@@ -1181,7 +1181,7 @@ def test_a_day_file_from_before_the_cap_counter_still_takes_todays_row(tmp_path:
     """
     date_ = plan().date
     state = tmp_path / "state"
-    target = ledger.item_health_path(state, date_) / day_shards.SETTLED_NAME
+    target = ledger.path(state, LedgerName.ITEM_HEALTH, date_) / day_shards.SETTLED_NAME
     earlier = telemetry.classify_item(
         planned=item(),
         article=article(),
@@ -1493,9 +1493,9 @@ def test_the_fold_writes_one_month_shard_and_a_re_run_adds_nothing(tmp_path: Pat
             == 3
         )
     report = fold(state, "2026-08-21")
-    assert report.trees_touched == (ledger.SPAN_ROLLUP_DIRNAME,)
+    assert report.trees_touched == (LedgerName.SPAN_ROLLUP,)
 
-    shard = ledger.span_rollup_path(state, "2026-08-21") / day_shards.SETTLED_NAME
+    shard = ledger.path(state, LedgerName.SPAN_ROLLUP, "2026-08-21") / day_shards.SETTLED_NAME
     written = [
         SpanRollupRow.from_csv_row(raw) for raw in csv.DictReader(shard.read_text().splitlines())
     ]

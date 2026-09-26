@@ -39,7 +39,7 @@ TARGET = "content-similarity-judge-scored-pairs"
 #: The day tree this drives end to end. It is the one with a retired-heading set,
 #: so it exercises the half of the lookup a model alone cannot: the reader and
 #: the headings it still places have to arrive from the same registry entry.
-TREE_TARGET = ledger.ITEM_HEALTH_DIRNAME
+TREE_TARGET = LedgerName.ITEM_HEALTH
 TREE_DATE = "2026-09-16"
 
 #: The header this ledger carried before the judge-call stamp was appended.
@@ -63,17 +63,17 @@ STALE_TREE_DAY = FIXTURES_DIR / "state" / "item-health-before-the-machine-probe-
 #: them.
 UNREGISTERED: Final = frozenset(
     {
-        ledger.PUBLISHED_DIRNAME,
-        ledger.SEEN_DIRNAME,
-        f"{ledger.CONTENT_SIMILARITY_JUDGE_DIRNAME}-{ledger.JUDGE_METRICS_DIRNAME}",
-        f"{ledger.CONTENT_SIMILARITY_JUDGE_DIRNAME}-{ledger.MERGE_LINE_HOLDOUT_SCORES_DIRNAME}",
+        LedgerName.PUBLISHED,
+        LedgerName.SEEN,
+        "-".join(ledger.entry(LedgerName.JUDGE_METRICS).prefix),
+        "-".join(ledger.entry(LedgerName.MERGE_LINE_HOLDOUT_SCORES).prefix),
     }
 )
 
 
 def a_narrow_day(state_dir: Path) -> Path:
     """One day file at the pre-widening header, where the ledger's own path helper puts it."""
-    path = ledger.scored_pairs_path(state_dir, DATE)
+    path = ledger.path(state_dir, LedgerName.SCORED_PAIRS, DATE)
     path.parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(NARROW, path)
     return path
@@ -81,7 +81,7 @@ def a_narrow_day(state_dir: Path) -> Path:
 
 def a_wide_day(state_dir: Path) -> Path:
     """One day file still carrying the column this contract stopped naming."""
-    path = ledger.scored_pairs_path(state_dir, DATE)
+    path = ledger.path(state_dir, LedgerName.SCORED_PAIRS, DATE)
     path.parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(WIDE, path)
     return path
@@ -108,7 +108,7 @@ def a_stale_tree_day(state_dir: Path) -> Path:
     dated file, which is the move that took these five ledgers out of
     `ledger.keyed_paths` in the first place.
     """
-    path = ledger.item_health_path(state_dir, TREE_DATE) / ledger.BEFORE_PARTITION_NAME
+    path = ledger.path(state_dir, LedgerName.ITEM_HEALTH, TREE_DATE) / ledger.BEFORE_PARTITION_NAME
     path.parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(STALE_TREE_DAY, path)
     return path
@@ -292,12 +292,12 @@ def test_a_store_no_registry_names_a_reader_for_is_refused_by_name(tmp_path: Pat
     `DAY_TREES`. A refusal is the right answer for exactly the ledgers
     in `UNREGISTERED` below, and the census there is what keeps this one honest.
     """
-    day = ledger.published_path(tmp_path, "2026-09-18")
+    day = ledger.path(tmp_path, LedgerName.PUBLISHED, "2026-09-18")
     day.parent.mkdir(parents=True)
     day.write_text("version\n", encoding="utf-8", newline="")
 
     with pytest.raises(ValueError, match="names a reader for"):
-        widen_ledger_header.widen(ledger.PUBLISHED_DIRNAME, state_dir=tmp_path)
+        widen_ledger_header.widen(LedgerName.PUBLISHED, state_dir=tmp_path)
 
 
 def test_the_utility_refuses_a_word_that_is_not_a_store(tmp_path: Path) -> None:

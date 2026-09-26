@@ -18,6 +18,7 @@ from pathlib import Path
 
 from idhazh import assemble, config, ledger
 from idhazh.contracts.content_similarity_judge_metrics import ContentSimilarityJudgeMetrics
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.story_similarity_distribution import StorySimilarityDistribution
 from idhazh.contracts.story_similarity_pair import StorySimilarityPair
 from idhazh.council import metrics_sink
@@ -112,7 +113,7 @@ def stage_count_verdicts(
     metrics = _collect_metrics(date, state=state, shipped_root=shipped_root, judge_id=judge_id)
 
     scorer, judge = scorer_inputs(settings), judge_inputs(settings)
-    record_path = ledger.score_distribution_path(state)
+    record_path = ledger.path(state, LedgerName.SCORE_DISTRIBUTION)
     record = (
         StorySimilarityDistribution.from_json(record_path.read_text(encoding="utf-8"))
         if record_path.exists()
@@ -124,7 +125,7 @@ def stage_count_verdicts(
     if moved is not None:
         stem = counting.archive_stem(record)
         assemble.write_atomic(
-            ledger.score_distribution_archive_path(state, stem), record.to_json()
+            ledger.path(state, LedgerName.SCORE_ARCHIVE, stem), record.to_json()
         )
         archived = stem
         record = counting.empty_record(
@@ -189,5 +190,5 @@ def _collect_metrics(date: str, *, state: Path, shipped_root: Path, judge_id: st
         shipped_root,
         judge_id=judge_id,
         contract=ContentSimilarityJudgeMetrics,
-        into=ledger.content_similarity_judge_metrics_path(state, date),
+        into=ledger.path(state, LedgerName.JUDGE_METRICS, date),
     )

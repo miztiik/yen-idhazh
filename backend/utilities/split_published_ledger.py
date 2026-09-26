@@ -45,6 +45,7 @@ from typing import Final
 from idhazh import ledger
 from idhazh.assemble import write_atomic
 from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.seen import PublishedRow
 
 #: The file this cutover empties and removes. Spelled here rather than asked of
@@ -223,7 +224,7 @@ def run(state_dir: Path) -> Report:
     before = _earliest_of(_tree_mapping(state_dir), _flat_mapping(report))
 
     for date in sorted(report.lines):
-        _write_day(ledger.published_path(state_dir, date), report.lines[date])
+        _write_day(ledger.path(state_dir, LedgerName.PUBLISHED, date), report.lines[date])
 
     both = _tree_mapping(state_dir)
     if both != before:
@@ -247,7 +248,7 @@ def run(state_dir: Path) -> Report:
         days=report.days,
         addresses=len(after),
         digest=digest(after),
-        paths=[ledger.published_relpath(date) for date in sorted(report.lines)],
+        paths=[ledger.relpath(LedgerName.PUBLISHED, date) for date in sorted(report.lines)],
     )
 
 

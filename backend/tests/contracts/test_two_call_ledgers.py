@@ -15,6 +15,7 @@ from idhazh.contracts.call_cost import CallCost, CallKind
 from idhazh.contracts.feed_health import FeedHealthRow
 from idhazh.contracts.item_health import CALL_SLOTS, RETIRED_CELLS, ItemHealthRow
 from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.public_telemetry import PublicTelemetryRow
 from idhazh.contracts.summary import Summary
 from utilities import build_canary_day
@@ -245,7 +246,7 @@ def test_the_canary_writes_every_column_the_feed_health_ledger_defines(tmp_path:
     """
     build_canary_day.health(tmp_path)
     days = list(
-        day_shards.shard_files(tmp_path / ledger.HEALTH_DIRNAME, days=UNBOUNDED_WINDOW)
+        day_shards.shard_files(ledger.tree_root(tmp_path, LedgerName.HEALTH), days=UNBOUNDED_WINDOW)
     )
     assert days, "the canary wrote no feed-health day file"
     rows: list[dict[str, str]] = []

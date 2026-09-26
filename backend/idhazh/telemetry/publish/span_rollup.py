@@ -24,6 +24,7 @@ from typing import Final
 
 from idhazh import day_shards, ledger
 from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.span_rollup import SpanRollupRow
 from idhazh.telemetry.publish import series
 
@@ -95,7 +96,7 @@ def publish(
     their own file, and a reader that took whichever the walk named last would
     publish one shard's spans as the day's.
     """
-    source_dir = state_root / ledger.SPAN_ROLLUP_DIRNAME
+    source_dir = ledger.tree_root(state_root, LedgerName.SPAN_ROLLUP)
     days_of: dict[str, list[str]] = {}
     for shard in day_shards.shard_files(source_dir, days=UNBOUNDED_WINDOW):
         recorded = day_shards.date_of(shard)

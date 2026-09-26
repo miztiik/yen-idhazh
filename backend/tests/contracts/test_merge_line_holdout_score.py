@@ -25,6 +25,7 @@ from pydantic import ValidationError
 
 from idhazh import day_partition, ledger
 from idhazh.contracts.judge_call import JudgeConfigStamp
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.merge_line_holdout_score import MergeLineHoldoutScore
 from idhazh.telemetry import inventory
 
@@ -142,16 +143,16 @@ def test_the_labeller_is_recorded_rather_than_checked_against_a_roster() -> None
 
 def test_the_day_file_a_date_resolves_to_is_two_levels_under_state() -> None:
     """A third level is invisible to the day inventory and the miss is silent."""
-    relpath = ledger.merge_line_holdout_scores_relpath(A_DAY)
+    relpath = ledger.relpath(LedgerName.MERGE_LINE_HOLDOUT_SCORES, A_DAY)
 
     assert relpath == "state/content-similarity-judge/merge-line-holdout-scores/2026/09/20.csv"
-    assert ledger.merge_line_holdout_scores_path(Path("state"), A_DAY).as_posix() == relpath
+    assert (
+        ledger.path(Path("state"), LedgerName.MERGE_LINE_HOLDOUT_SCORES, A_DAY).as_posix()
+        == relpath
+    )
 
     segments = relpath.removeprefix(f"{ledger.STATE_DIRNAME}/").split("/")
-    assert segments[:2] == [
-        ledger.CONTENT_SIMILARITY_JUDGE_DIRNAME,
-        ledger.MERGE_LINE_HOLDOUT_SCORES_DIRNAME,
-    ]
+    assert segments[:2] == list(ledger.entry(LedgerName.MERGE_LINE_HOLDOUT_SCORES).prefix)
     assert segments[2:] == ["2026", "09", "20.csv"], "the day tree gained a directory level"
 
 
@@ -159,7 +160,7 @@ def test_the_instrument_reader_finds_the_day_this_store_wrote(tmp_path: Path) ->
     """A ledger this row creates is visible rather than silently absent."""
     state_root = tmp_path / ledger.STATE_DIRNAME
     for day in (A_DAY, ANOTHER_DAY):
-        path = ledger.merge_line_holdout_scores_path(state_root, day)
+        path = ledger.path(state_root, LedgerName.MERGE_LINE_HOLDOUT_SCORES, day)
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(
             ledger.render_file(
@@ -177,11 +178,7 @@ def test_the_instrument_reader_finds_the_day_this_store_wrote(tmp_path: Path) ->
         for line in report
     ), report
 
-    root = (
-        state_root
-        / ledger.CONTENT_SIMILARITY_JUDGE_DIRNAME
-        / ledger.MERGE_LINE_HOLDOUT_SCORES_DIRNAME
-    )
+    root = ledger.tree_root(state_root, LedgerName.MERGE_LINE_HOLDOUT_SCORES)
     assert [day_partition.date_of(found) for found in day_partition.day_files(root)] == [
         A_DAY,
         ANOTHER_DAY,

@@ -35,6 +35,7 @@ from idhazh import config, day_partition, day_shards, ledger
 from idhazh.contracts.feed_health import FeedHealthRow, RobotsOutcome, derive_endpoint_key
 from idhazh.contracts.item_health import ItemHealthRow, ItemOutcome
 from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW, CollectConfig
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.source_health_view import (
     DayYield,
     SourceAvailability,
@@ -500,7 +501,7 @@ def _recent_item_health(state_root: Path, *, today: str, keep: int) -> list[Item
     """
     if keep <= 0:
         return []
-    directory = state_root / ledger.ITEM_HEALTH_DIRNAME
+    directory = ledger.tree_root(state_root, LedgerName.ITEM_HEALTH)
     recorded = [
         date
         for dates in day_shards.dates_by_month(directory, days=UNBOUNDED_WINDOW).values()
