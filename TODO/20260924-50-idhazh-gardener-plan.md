@@ -981,7 +981,7 @@ A shard runs several tasks and exits with the **worst** code, and worst is not n
 
 #### 5.9.10 The true task count
 
-**Counted 2026-09-26, and counted rather than fixed.** Twenty registry entries, nineteen in the matrix and seventeen due on an ordinary day, until row 9. Eleven retention tasks, two GitHub collection tasks, two index tasks, four compactions - a daily and a monthly for each of two ledgers - and `corpus-squash-history`, which has its own job and so is not in the matrix. The two monthlies are not due on an ordinary day. **Seventeen over five shards is 3.4 tasks a shard.**
+**Counted 2026-09-26, and counted rather than fixed.** Twenty registry entries, nineteen in the matrix and seventeen due on an ordinary day, until row 9. Eleven retention tasks, two GitHub collection tasks, two index tasks, four compactions - a daily and a monthly for each of two ledgers - and `corpus-squash`, which has its own job and so is not in the matrix. The two monthlies are not due on an ordinary day. **Seventeen over five shards is 3.4 tasks a shard.**
 
 **Rows 9 and 10 take these to 32, 31 and 25**, which is **5.0 tasks a shard**, because each of the four ledgers they migrate gains an index task and two compactions. **Row 8's timeout derivation is stated against 5.0, not 3.4**, and section 3's diagram says 3-4 for the state of the tree at row 8.
 
