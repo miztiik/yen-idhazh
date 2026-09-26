@@ -292,8 +292,13 @@ def _package_sources() -> dict[str, str]:
 
     The package's own files and nothing else, so what this reads grows with the code
     rather than with the archive (CLAUDE.md Guardrail #12).
+
+    Located from the pipeline package itself, never from a module inside it. Taking
+    the parent of `ledger`'s own file read the whole package while the ledger was one
+    file and only the ledger package once it became a directory, which silently
+    dropped every sink call outside it.
     """
-    package_dir = Path(inspect.getfile(ledger)).parent
+    package_dir = Path(inspect.getfile(importlib.import_module(PACKAGE))).parent
     return {
         path.relative_to(package_dir.parent).with_suffix("").as_posix().replace("/", "."): (
             path.read_text(encoding="utf-8")
@@ -763,14 +768,14 @@ def test_every_ledger_that_declares_a_key_is_registered_for_settlement() -> None
     assert not unregistered, (
         f"{', '.join(unregistered)} declares a key in idhazh.ledger and keyed_paths() "
         "does not yield it, so a retried job's repeat of a row is kept instead of "
-        "dropped. Add it to keyed_paths() in backend/idhazh/ledger.py."
+        "dropped. Add it to keyed_paths() in backend/idhazh/ledger/__init__.py."
     )
 
     keyless = sorted(set(registered) - set(declared) - _rewritten_ledgers() - LEDGERS_NO_JOB_WRITES)
     assert not keyless, (
         f"{', '.join(keyless)} is registered for settlement, its writer appends rows, and "
         "that writer names no key - so the settler has a key the writer does not use. Name "
-        "the key in the writer in backend/idhazh/ledger.py, or take the ledger out of "
+        "the key in the writer in backend/idhazh/ledger/__init__.py, or take the ledger out of "
         "keyed_paths()."
     )
 

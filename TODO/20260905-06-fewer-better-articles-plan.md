@@ -61,7 +61,7 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 ## 3. Row #2 - A feed that publishes badly stops scoring as though it did not
 
 - **Scope:** A reliability factor derived from a trailing window of committed outcomes, applied **multiplicatively** inside `authority()`.
-- **Files touched:** `backend/idhazh/rank.py`, `backend/idhazh/ledger.py`, `backend/idhazh/contracts/app_config.py`, `config/idhazh.json`, `schemas/app-config.schema.json`, `tests/fixtures/contracts/app-config/tuned.json`, `backend/tests/test_rank.py`, `docs/concepts/freshness.md` or the ranking doc
+- **Files touched:** `backend/idhazh/rank.py`, `backend/idhazh/ledger/__init__.py`, `backend/idhazh/contracts/app_config.py`, `config/idhazh.json`, `schemas/app-config.schema.json`, `tests/fixtures/contracts/app-config/tuned.json`, `backend/tests/test_rank.py`, `docs/concepts/freshness.md` or the ranking doc
 - **Acceptance gates:** `ruff`; `mypy --strict`; export + drift; the full suite.
 - **Oracle:** Replayed over the committed window, no vertical falls under its `min_feeds` floor and no feed's factor leaves the declared clamp. Both bounds asserted - a multiplier tested only in the middle of its range is untested.
 

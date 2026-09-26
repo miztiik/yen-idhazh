@@ -95,8 +95,8 @@ a reason.** It decides which addresses a run may ask, and it decides that from
 committed events and nothing else - so the instrument feeds the pipeline, but
 only through what is already on disk, never through live state.
 
-**`ledger.py` and `retention.py` are not on this picture, and that is the
-ruling.** They are storage and ageing, 3,341 lines between them. Folding storage
+**The ledger package and `retention.py` are not on this picture, and that is the
+ruling.** They are storage and ageing, 3,600 lines between them. Folding storage
 under a package named for observation would make it the file every change
 touches; the split is what keeps each module answering one question.
 
@@ -485,7 +485,7 @@ row. Why the two are held apart, and the five conditions a change is failed on,
 are on the council's own page linked above.
 
 These three paths are spelled in
-[../../backend/idhazh/ledger.py](../../backend/idhazh/ledger.py) and hold no rows
+[../../backend/idhazh/ledger/__init__.py](../../backend/idhazh/ledger/__init__.py) and hold no rows
 yet, because each writer lands with the work that fills it. An empty tree here
 is the state of the build and not a lost reading.
 

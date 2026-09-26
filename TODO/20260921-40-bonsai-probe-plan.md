@@ -224,7 +224,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 - **Files touched:**
   - `.github/workflows/idhazh-pipeline-tests.yaml`
   - `.github/actions/candidate-config/action.yml` (if the trial name is not already reachable from the dispatch)
-  - `backend/idhazh/ledger.py` (the path function for the new collection)
+  - `backend/idhazh/ledger/__init__.py` (the path function for the new collection)
   - `backend/idhazh/stages/record.py` (the write)
   - `backend/idhazh/contracts/knobs/retention.py` (its window)
   - `.github/scripts/commit-and-push.sh` call site in the workflow

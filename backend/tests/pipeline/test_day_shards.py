@@ -263,15 +263,15 @@ def test_a_row_the_contract_cannot_read_stops_the_read(tmp_path: Path) -> None:
 #: `settled_day` and `one_day` settle a day's shards into one answer first,
 #: which is what a published number needs.
 #:
-#: `ledger.py` keeps the item-health reader and lost the host-fingerprint one:
-#: `load_item_health` settles the window itself, while the host records are read
-#: by the two panels that show them.
+#: The ledger package keeps the item-health reader and lost the
+#: host-fingerprint one: `load_item_health` settles the window itself, while the
+#: host records are read by the two panels that show them.
 #:
 #: Written out rather than discovered. A discovered list passes on a module
 #: nobody checked, and it would grow with the repository (Guardrail #12).
 MOVED: Final = (
     (
-        "backend/idhazh/ledger.py",
+        "backend/idhazh/ledger/__init__.py",
         "day_files(state_dir / ITEM_HEALTH_DIRNAME)",
         "settled_rows(",
     ),
@@ -337,7 +337,7 @@ def test_every_named_reader_walks_the_shards_and_not_the_day_files(
 
 def test_the_two_stores_that_keep_the_day_file_walk_still_have_it() -> None:
     """The tripwire is only a tripwire while something still trips it."""
-    source = _squeezed("backend/idhazh/ledger.py")
+    source = _squeezed("backend/idhazh/ledger/__init__.py")
     for kept in KEPT:
         assert kept in source, (
             f"`{kept}` is gone, so nothing refuses a day directory under a ledger that never "

@@ -392,7 +392,7 @@ H6 to H9 repeat on every row of one run. That is what `item-health` already does
 
 ### Section 5d - Three declarations join a closed set, in one commit
 
-`SEARCH_QUALITY_DIRNAME = "search-quality"` beside its siblings in `backend/idhazh/ledger.py`; `SegmentLedger.SEARCH_QUALITY`; and a `_TREE_SHAPES` entry pairing the key with the contract. The enum's own docstring says a ledger joins the set in the row that moves its writer and never before it. **This is that row.**
+`SEARCH_QUALITY_DIRNAME = "search-quality"` beside its siblings in `backend/idhazh/ledger/__init__.py`; `SegmentLedger.SEARCH_QUALITY`; and a `_TREE_SHAPES` entry pairing the key with the contract. The enum's own docstring says a ledger joins the set in the row that moves its writer and never before it. **This is that row.**
 
 **What joining the set brings with no file to edit.** Worth naming, because a worker that does not know this goes looking for five more edits.
 
@@ -408,7 +408,7 @@ H6 to H9 repeat on every row of one run. That is what `item-health` already does
 
 ### Section 5e - Files, measured 2026-09-23
 
-`backend/idhazh/contracts/search_quality.py` (new), `backend/idhazh/contracts/export.py`, `backend/idhazh/ledger.py`, `backend/idhazh/stages/assemble.py`, `backend/idhazh/evals/search_quality.py`, `schemas/search-quality-row.schema.json` (generated, new), the generated frontend contract if the exporter emits one for this model, `backend/tests/test_search_quality.py`, `docs/architecture/publishing/autotune-search-quality.md`.
+`backend/idhazh/contracts/search_quality.py` (new), `backend/idhazh/contracts/export.py`, `backend/idhazh/ledger/__init__.py`, `backend/idhazh/stages/assemble.py`, `backend/idhazh/evals/search_quality.py`, `schemas/search-quality-row.schema.json` (generated, new), the generated frontend contract if the exporter emits one for this model, `backend/tests/test_search_quality.py`, `docs/architecture/publishing/autotune-search-quality.md`.
 
 **One census decides the rest of the doc list.** `git grep -n 'day-validations' -- docs` names every page that lists the committed ledgers one at a time. This ledger joins each of them and no others.
 

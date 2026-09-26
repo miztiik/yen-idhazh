@@ -1390,7 +1390,7 @@ It mints `unit_id` and then `file_id` through `naming` (section 5.7), builds the
   - `backend/idhazh/contracts/__init__.py` (`FileEnvelope` joins `CONTRACTS` and `__all__`. **Nothing is generated** - `schemas/` and `idhazh.contracts.export` were deleted on 2026-09-23 and `backend/tests/contracts/test_no_generated_layer.py` refuses their return)
   - `backend/idhazh/contracts/base.py` (`FileIdName` and `PeriodStamp`, per section 5.9.13)
   - `backend/idhazh/contracts/knobs/ledger.py` (`LedgerConfig`: `format`, `compression_raw`, `compression_compact`, `published` - **four fields**, per section 5.9.4), `backend/idhazh/contracts/app_config.py` (`AppConfig` gains the `ledger` block - without this line nothing can reach the knob), `config/idhazh.json` (the `ledger` block literal), `tests/fixtures/contracts/app-config/every-knob-differs-from-the-committed-config.json`
-  - `backend/idhazh/ledger.py` and `backend/idhazh/stages/prune_state.py` (register `state/raw` and `state/compact` in `_trial_roots`, which lives in the second file and not in `retention.py`. **`DAY_VALIDATIONS_DIRNAME` is not registered**: plan 54 deletes that tree before this plan starts), `backend/tests/retention/test_trial_state.py`
+  - `backend/idhazh/ledger/__init__.py` and `backend/idhazh/stages/prune_state.py` (register `state/raw` and `state/compact` in `_trial_roots`, which lives in the second file and not in `retention.py`. **`DAY_VALIDATIONS_DIRNAME` is not registered**: plan 54 deletes that tree before this plan starts), `backend/tests/retention/test_trial_state.py`
   - `backend/idhazh/day_shards.py` (one docstring line: this reader is CSV-only and parquet goes through `ledger/`)
   - `pyproject.toml` (`[project.optional-dependencies] parquet = ["pyarrow>=21"]`, and `dev` depends on it)
   - `.gitattributes` (the five lines in section 5.4)
@@ -1449,7 +1449,7 @@ It mints `unit_id` and then `file_id` through `naming` (section 5.7), builds the
   - `backend/utilities/migrate_csv.py` (new, one-shot, deleted by row 8)
   - `backend/idhazh/telemetry/source_health.py` (grows `file_retirements`), `backend/idhazh/stages/plan.py`, `backend/idhazh/stages/assemble.py` (the two `ledger.append_retirements` call sites), `backend/tests/test_source_health.py`
   - `backend/idhazh/contracts/feed_retirement.py`, `backend/idhazh/contracts/visual_prune.py` (**no `version` stamp**: no field moves, and a stamp would say a shape moved when only its address did)
-  - `backend/idhazh/ledger.py` (**`append_retirements` and `append_visual_prunes` are deleted, not left forwarding** - per decision 5 - and their `extend_ledger_file` paths go with them)
+  - `backend/idhazh/ledger/__init__.py` (**`append_retirements` and `append_visual_prunes` are deleted, not left forwarding** - per decision 5 - and their `extend_ledger_file` paths go with them)
   - `backend/idhazh/stages/prune_state.py` (writes through the door)
   - `backend/idhazh/paths.py` (the `state/feed-retirements.csv` and `state/visual-prunes` union entries go), `.gitattributes` (the same two union lines go)
   - `backend/tests/ledger/test_migrate_csv.py`, `backend/tests/test_ledger.py`
@@ -1785,7 +1785,7 @@ It mints `unit_id` and then `file_id` through `naming` (section 5.7), builds the
 **These three renames DO stamp `version` and DO need a read-side alias**, unlike the address change above: a field that changed name is a breaking change (CLAUDE.md section 11), and the alias is a `model_validator(mode="before")` in the same commit, on the pattern `corpus.py` already uses for `pruned_date`.
   - `backend/idhazh/contracts/ledger_name.py` (`LedgerName` gains nothing - plan 53 row 3 already minted every member. **This row's contract change is the arrow mapping and the envelope, not the vocabulary**)
   - `config/idhazh_gardener.json` (an index block and two compaction blocks for each of the three ledgers), `backend/idhazh/gardener/tasks/__init__.py`
-  - `backend/idhazh/ledger.py`, `backend/idhazh/day_shards.py` (the read side for these three moves to `ledger/settle.py`)
+  - `backend/idhazh/ledger/__init__.py`, `backend/idhazh/day_shards.py` (the read side for these three moves to `ledger/settle.py`)
   - `frontend/src/lib/data/ledger.ts` (**one added export that takes a local path instead of a URL** - see the settled escalation below; no new module and no second engine importer), `frontend/src/lib/server/host-fingerprint.ts`, `frontend/src/lib/server/machine-counters.ts`, `frontend/src/lib/server/model-work.ts` (the three readers that move onto it)
   - `.github/workflows/digest.yml` (`plan`, `work` and `assemble` install `.[parquet]`)
   - `backend/tests/ledger/test_migrate_to_parquet.py`, `backend/tests/test_ledger.py`, `backend/tests/telemetry/`, `frontend/tests/`
@@ -1861,7 +1861,7 @@ It mints `unit_id` and then `file_id` through `naming` (section 5.7), builds the
   - `backend/idhazh/stages/validate_days.py`, `backend/idhazh/telemetry/inventory.py` (two more backend readers)
   - `frontend/src/lib/server/span-rollup.ts`, `frontend/src/lib/server/run-timeline.ts`
   - `backend/utilities/migrate_span_rollup.py` (new, one-shot; **its declaring line reads "delete when every `state/span-rollup` CSV is gone from `main`"**, and plan 52's first row names it in its scope line)
-  - `backend/idhazh/contracts/ledger_name.py` (`LedgerName` gains nothing - plan 53 row 3 already holds `SPAN_ROLLUP`), `backend/idhazh/contracts/__init__.py`, `backend/idhazh/ledger.py` and `backend/idhazh/day_shards.py` (the write and read sides it leaves)
+  - `backend/idhazh/contracts/ledger_name.py` (`LedgerName` gains nothing - plan 53 row 3 already holds `SPAN_ROLLUP`), `backend/idhazh/contracts/__init__.py`, `backend/idhazh/ledger/__init__.py` and `backend/idhazh/day_shards.py` (the write and read sides it leaves)
   - `config/idhazh_gardener.json` (an index block and two compaction blocks), `backend/idhazh/gardener/tasks/__init__.py`
   - `frontend/src/lib/server/span-rollup.ts`
   - `backend/tests/ledger/test_migrate_span_rollup.py`, `backend/tests/telemetry/test_span_rollup.py`
@@ -1871,7 +1871,7 @@ It mints `unit_id` and then `file_id` through `naming` (section 5.7), builds the
 
   | # | Decision | Authority |
   | --- | --- | --- |
-  | 1 | Its own row, not folded into row 9. A different call site writes it, so the revert surface is separate - but the two share `config/idhazh_gardener.json`, `gardener/tasks/__init__.py`, `contracts/file_envelope.py`, `contracts/__init__.py`, `ledger.py` and `day_shards.py`, so they run in sequence | Fowler |
+  | 1 | Its own row, not folded into row 9. A different call site writes it, so the revert surface is separate - but the two share `config/idhazh_gardener.json`, `gardener/tasks/__init__.py`, `contracts/file_envelope.py`, `contracts/__init__.py`, `ledger/__init__.py` and `day_shards.py`, so they run in sequence | Fowler |
   | 2 | Eight columns means the fixed cost dominates at any row count, so this ledger gains most from the monthly period and least from the daily one. Its config block says so | Carmack |
 
 - **Rejected alternatives:**

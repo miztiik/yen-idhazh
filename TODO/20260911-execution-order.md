@@ -127,7 +127,7 @@ Derived 2026-09-11 in a worktree at `origin/main`, by parsing each row's own `Fi
 | 7 rows | 23, 24 | `docs/architecture/contracts/schemas.md` | - |
 | 7 rows | 23, 24, 25 | `docs/architecture/publishing/layout.md` | - |
 | 7 rows | 23, 25 | `backend/idhazh/rank.py` and `config/taxonomy.json` | - |
-| 7 rows | 23, 24, 25 | `backend/idhazh/ledger.py` and `backend/tests/test_ledger.py` | - |
+| 7 rows | 23, 24, 25 | `backend/idhazh/ledger/__init__.py` and `backend/tests/test_ledger.py` | - |
 
 **`schemas/app-config.schema.json` is the one to watch.** A schema is generated, the drift gate compares bytes, and thirteen rows across three plans regenerate this one. Two such rows in one wave do not merge - they produce two diffs of one file and the second rebases onto a schema that moved.
 
