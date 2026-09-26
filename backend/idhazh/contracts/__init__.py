@@ -57,6 +57,7 @@ from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.icon_manifest import IconManifest
 from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.label_row import LabelRow
+from idhazh.contracts.ledger_name import DAY_TREES, LedgerName
 from idhazh.contracts.machine_panels import MachinePanels
 from idhazh.contracts.machine_shard import MachineShardRow
 from idhazh.contracts.merge_line_holdout_score import MergeLineHoldoutScore
@@ -195,6 +196,7 @@ CONTRACTS: Final[tuple[type[Contract], ...]] = (
 
 __all__ = [
     "CONTRACTS",
+    "DAY_TREES",
     "AppConfig",
     "Article",
     "ArticleStatus",
@@ -217,6 +219,7 @@ __all__ = [
     "EvalRow",
     "EventDef",
     "FeedDef",
+    "LedgerName",
     "LensDef",
     "LifecycleStatus",
     "Lifecycled",

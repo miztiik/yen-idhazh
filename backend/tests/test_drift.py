@@ -32,6 +32,7 @@ from idhazh import ledger as segment_ledger
 from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.knobs.evaluation import DriftConfig
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.drift import (
     Alert,
     Observation,
@@ -522,7 +523,7 @@ def a_days_file(directory: Path, date: str) -> Path:
     """
     return segment_ledger.day_shard_path(
         directory / "state",
-        segment_ledger.SegmentLedger.SCORES,
+        LedgerName.SCORES,
         date=date,
         run_id=f"{date}-1",
         attempt=1,

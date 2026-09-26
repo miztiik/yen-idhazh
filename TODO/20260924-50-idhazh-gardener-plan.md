@@ -852,7 +852,7 @@ Read back without touching a row: `pq.read_metadata(path).metadata[b"unit_id"]`,
 
 | Side | The chokepoint | What goes through it |
 | --- | --- | --- |
-| Write | `ledger.write_segment` and `extend_segment`, keyed by the `SegmentLedger` enum | Nine day-sharded ledgers: `item-health`, `host-fingerprint`, `span-rollup`, `scores`, `score-index`, `validation`, `feed-health`, `counterfactual-scores`, `day-validations` |
+| Write | `ledger.write_segment` and `extend_segment`, keyed by `LedgerName` and refused outside `DAY_TREES` | Nine day-sharded ledgers: `item-health`, `host-fingerprint`, `span-rollup`, `scores`, `score-index`, `validation`, `feed-health`, `counterfactual-scores`, `day-validations` |
 | Write | `ledger.extend_ledger_file` | Seven append-and-union ledgers: `feed-retirements.csv`, `visual-prunes`, `scored-pairs`, `fitted-thresholds`, `llm-council/shard-outcomes`, judge `metrics`, `merge-line-holdout-scores` |
 | Write | `ledger.write_telemetry_aggregate` | One month-partitioned ledger, `telemetry-aggregate`, **written whole rather than appended to** - see row 5 decision 11 |
 | Read, backend | `backend/idhazh/day_shards.py` | Every day-sharded ledger the backend compacts or settles |

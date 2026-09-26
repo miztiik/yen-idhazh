@@ -61,6 +61,7 @@ from typing import Final
 
 from idhazh import day_partition, day_shards, ledger
 from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
+from idhazh.contracts.ledger_name import DAY_TREES
 from idhazh.evals import writer as score_writer
 from idhazh.prune import one_at_a_time
 
@@ -329,17 +330,17 @@ def _relpath(state_root: Path, day: Path) -> str:
 
 
 #: The ledgers here whose day is a directory of writer-owned files. Read off
-#: `ledger.SegmentLedger` rather than listed again, so a tree that moves its
+#: `DAY_TREES` rather than listed again, so a tree that moves its
 #: writer joins this set in the row that moves it and nothing here is a second
 #: list to keep in step.
-WRITER_OWNED_LEDGERS: Final = frozenset(tree.value for tree in ledger.SegmentLedger)
+WRITER_OWNED_LEDGERS: Final = frozenset(tree.value for tree in DAY_TREES)
 
 
 def day_collection(state_root: Path, ledger: str) -> one_at_a_time.Collection[Path]:
     """One ledger's day tree, as the three callables the core deletes through.
 
     **The walk follows the ledger's own shape, and the ledger says which.**
-    `ledger.SegmentLedger` is the closed set of trees a writer files its own file
+    `DAY_TREES` is the closed set of trees a writer files its own file
     in, so a day there is a `<DD>/` directory read by `day_shards.shard_files`.
     Every other ledger here still files one `<DD>.csv` a day and is read by
     `day_partition.day_files`. Both are generators, so a ledger of any size is

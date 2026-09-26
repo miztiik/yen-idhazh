@@ -40,6 +40,7 @@ from idhazh.contracts.item_health import (
     ItemStage,
 )
 from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
+from idhazh.contracts.ledger_name import DAY_TREES, LedgerName
 from idhazh.contracts.seen import PublishedRow, SeenRow
 from idhazh.contracts.span_rollup import RollupSpan, SpanRollupRow
 from idhazh.contracts.story_similarity_pair import StorySimilarityPair
@@ -185,7 +186,7 @@ def a_fingerprint_day(
     for row in rows:
         ledger.write_segment(
             state_dir,
-            ledger.SegmentLedger.HOST_FINGERPRINT,
+            LedgerName.HOST_FINGERPRINT,
             [row],
             run_id=row.run_id,
             attempt=attempt,
@@ -193,6 +194,33 @@ def a_fingerprint_day(
             shard=row.shard,
         )
     compact_stage.stage_compact(state_dir, date=AFTER_THE_FOLD, after_days=7)
+
+
+def test_a_ledger_that_is_not_a_day_tree_is_refused_by_name(tmp_path: Path) -> None:
+    """A wrong ledger is answered at the call, not by writing a path no reader walks.
+
+    One typed name covers every ledger under `state/`, so a caller can now hand a
+    segment writer a ledger that files no segments. `published` is a day FILE, so
+    this call would have minted a directory where that ledger keeps a file. The
+    message carries the ledger because the caller passed a name, and a refusal
+    that does not repeat it leaves them reading the traceback for it.
+    """
+    row = fingerprint_row()
+
+    assert LedgerName.PUBLISHED not in DAY_TREES, "the refused ledger has to be a real one"
+
+    with pytest.raises(ValueError, match="published is not a day tree"):
+        ledger.write_segment(
+            tmp_path,
+            LedgerName.PUBLISHED,
+            [row],
+            run_id=row.run_id,
+            attempt=1,
+            job=row.job,
+            shard=row.shard,
+        )
+
+    assert not list(tmp_path.rglob("*")), "the refusal wrote nothing"
 
 
 def span_fold_row(*, on: str = DATE, shard: int = 0, total_ms: int = 16) -> SpanRollupRow:
@@ -1907,7 +1935,7 @@ def test_the_keyed_set_names_every_ledger_that_declares_one(tmp_path: Path) -> N
     ] == named
     assert not any(
         tree.value in target.path.relative_to(tmp_path).as_posix()
-        for tree in ledger.SegmentLedger
+        for tree in DAY_TREES
         for target in every
     ), "a day tree of writer-owned files has nothing for this pass to settle"
 
@@ -1954,7 +1982,7 @@ def test_a_repeated_fingerprint_and_span_fold_are_settled_when_a_reader_asks(
     for attempt, cpu in enumerate(("first", "second"), start=1):
         ledger.write_segment(
             state,
-            ledger.SegmentLedger.HOST_FINGERPRINT,
+            LedgerName.HOST_FINGERPRINT,
             [fingerprint_row(cpu=cpu)],
             run_id=RUN_ID,
             attempt=attempt,
@@ -1963,7 +1991,7 @@ def test_a_repeated_fingerprint_and_span_fold_are_settled_when_a_reader_asks(
         )
         ledger.write_segment(
             state,
-            ledger.SegmentLedger.SPAN_ROLLUP,
+            LedgerName.SPAN_ROLLUP,
             [span_fold_row(total_ms=16 * attempt)],
             run_id=RUN_ID,
             attempt=attempt,

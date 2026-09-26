@@ -26,6 +26,7 @@ from idhazh.contracts.base import ServerJob, canonical_json
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.fingerprint import PipelineInputs
 from idhazh.contracts.item_health import FailureCode, ItemHealthRow, ItemOutcome, ItemStage
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.run_plan import PlannedItem, RunPlan
 from idhazh.contracts.summary import Summary, SummaryStatus
 from idhazh.contracts.visual_decision import PAYLOAD_SUFFIX
@@ -698,7 +699,7 @@ def stage_work(
         # same spans. `stage_compact` merges them into the month the rows name.
         landed = ledger.write_segment(
             common.STATE_ROOT,
-            ledger.SegmentLedger.SPAN_ROLLUP,
+            LedgerName.SPAN_ROLLUP,
             rows,
             run_id=plan.run_id,
             attempt=run_context.run_attempt(),

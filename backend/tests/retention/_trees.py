@@ -26,6 +26,7 @@ from idhazh.contracts.item_health import (
 from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
 from idhazh.contracts.knobs.console import ConsoleConfig
 from idhazh.contracts.knobs.retention import PAGES_HARD_CAP_MB
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.telemetry_aggregate import TelemetryAggregateRow
 from idhazh.measured import SITE_GROWTH_KB_A_DAY
 from idhazh.measured import WARNING_DAYS_REQUIRED as WARNING_DAYS
@@ -265,7 +266,7 @@ def feed_health_history(state_dir: Path, months: list[str], *, day_of_month: int
         day = f"{month}-{day_of_month:02d}"
         ledger.write_segment(
             state_dir,
-            ledger.SegmentLedger.HEALTH,
+            LedgerName.HEALTH,
             [
                 FeedHealthRow(
                     version=FeedHealthRow.schema_version(),
@@ -310,7 +311,7 @@ def host_fingerprint_history(
         day = f"{month}-{day_of_month:02d}"
         ledger.write_segment(
             state_dir,
-            ledger.SegmentLedger.HOST_FINGERPRINT,
+            LedgerName.HOST_FINGERPRINT,
             [
                 HostFingerprintRow(
                     version=HostFingerprintRow.schema_version(),

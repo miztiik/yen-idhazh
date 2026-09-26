@@ -11,6 +11,7 @@ from pytest import MonkeyPatch
 
 from idhazh import config, ledger, run_context, telemetry
 from idhazh.contracts.base import ServerJob
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.run_manifest import RunManifest
 from idhazh.contracts.span_rollup import RollupSpan, SpanRollupRow
 from idhazh.fingerprint import UNRECORDED_BUILD, prose_changed_alone, runtime_build, text_digest
@@ -201,7 +202,7 @@ def test_a_traced_work_shard_writes_a_reconciling_span_rollup(
 
     shard = ledger.day_shard_path(
         common.STATE_ROOT,
-        ledger.SegmentLedger.SPAN_ROLLUP,
+        LedgerName.SPAN_ROLLUP,
         date=run_plan.date,
         run_id=run_plan.run_id,
         # Asked for rather than assumed: the stage names its file from
