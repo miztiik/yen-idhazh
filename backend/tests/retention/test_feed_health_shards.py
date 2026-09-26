@@ -47,8 +47,8 @@ def test_the_feed_health_prune_takes_the_expired_day_and_keeps_the_day_beside_it
     it, `dry_run=False` passed as the argument every prune function already
     takes. The assertion is two-sided on purpose: "nothing failed", or "`deleted`
     is a tuple", passes on an EMPTY result - and an empty result is exactly what
-    `retention.month_shards` returns over a day store, because it matches a
-    seven-character `YYYY-MM` stem and a day tree has none. The store would
+    `retention.month_shards` returns over a day ledger, because it matches a
+    seven-character `YYYY-MM` stem and a day tree has none. The ledger would
     silently stop being pruned and nothing would fail.
 
     `retention.dry_run` in `config/idhazh.json` never enters this - it is read by
@@ -84,7 +84,7 @@ def test_a_feed_health_month_past_its_own_age_is_deleted_rather_than_folded(
 
     The quarantine reads 31 days and the console reaches at most
     `console.max_window_days`, so a summary of an older month would be a shape
-    with no consumer, written for ever. The knob is the store's own, and what
+    with no consumer, written for ever. The knob is the ledger's own, and what
     survives is asserted against it rather than against a stem this test picked.
     """
     state = tmp_path / "state"
@@ -127,7 +127,7 @@ def test_a_feed_health_name_the_walk_cannot_place_stops_the_prune(tmp_path: Path
     """Inside a day tree nothing is skipped, so a stray refuses the read.
 
     This is where the two grains differ and the difference is deliberate. A month
-    directory is the top of its own store and may hold something that is not the
+    directory is the top of its own ledger and may hold something that is not the
     collection, so `month_shards` left a stray alone. Below a year directory every
     name is written by `append_health` and by nothing else, so a name this walk
     cannot read means something else is writing there - and a prune that skipped

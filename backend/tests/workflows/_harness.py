@@ -453,7 +453,7 @@ BENCH_LEDGER_ROOT: Final = f"state/{BENCH_TRIAL_STATE}"
 #: corpus. `cli` moves the state root from `run.trial_state_dirname`, which only
 #: the scratch copy carries - so a stage invoked without this flag loads the
 #: committed config and writes where the console reads. The bench's own `plan`
-#: did exactly that until 2026-09-17: it appended to the production seen store,
+#: did exactly that until 2026-09-17: it appended to the production seen ledger,
 #: so a dispatch marked real addresses seen and the next production day skipped
 #: those stories without saying so.
 BENCH_CONFIG_FLAG: Final = "--config"

@@ -1,13 +1,13 @@
 """Move one committed ledger to a finer grain, and refuse a tree it cannot read back.
 
 One utility for every ledger that changes grain, driven by the row that moves
-it: `--directory` names the store, `--shape` names the move and `--date-column`
+it: `--directory` names the ledger, `--shape` names the move and `--date-column`
 names the cell that says which day a row belongs to. Four copies of a split
 would be four places for the read-back to stop being exact, and the read-back is
 the only thing standing between a grain change and a silent delete (CLAUDE.md
 Guardrail #5).
 
-Four shapes, because a store arrives at the day directory from four places.
+Four shapes, because a ledger arrives at the day directory from four places.
 `month-to-day` splits `<YYYY-MM>.csv` into `<YYYY>/<MM>/<DD>.csv`.
 `day-to-directory` turns each of those day files into a `<DD>/` directory
 holding one `before-partition.csv`, which is the name a committed head takes
@@ -18,7 +18,7 @@ directory and leaves the rest of the name alone, because a trace line carries no
 job and no attempt and those two elements cannot be invented.
 
 **It refuses to write a tree it cannot read back.** The whole day tree is built
-in a temporary directory beside the store, walked by `day_partition.day_files` -
+in a temporary directory beside the ledger, walked by `day_partition.day_files` -
 the pipeline's own reader, not a second opinion - and compared row for row
 against what came out of the month shards. Only then are the year directories
 renamed into place and the month shards unlinked. A migration that writes an
@@ -37,9 +37,9 @@ could normalise a difference away.
 
 **A directory holding a month shard and anything else is refused.** Not
 tidiness: `day_files` refuses a name it cannot place, so a month shard sitting
-beside a year directory stops every read of that store. A half-migrated
+beside a year directory stops every read of that ledger. A half-migrated
 directory is therefore already unreadable by the pipeline, and the repair is
-`git checkout` on the store rather than a second pass over it - a second pass
+`git checkout` on the ledger rather than a second pass over it - a second pass
 cannot know which rows the first one had already moved.
 
 **Which cell names a day, and why `state/seen/` files by `first_seen_run`.** The
@@ -57,8 +57,8 @@ about one appended line. Restore from the trunk and run this again.
 
 This reads one whole ledger, which is the growing cost Guardrail #12 is about.
 It is allowed here on the narrow ground the other one-shot utilities stand on:
-an operator runs it once per store, it is never a step of any run, and every row
-of the store is what it has to move.
+an operator runs it once per ledger, it is never a step of any run, and every row
+of the ledger is what it has to move.
 
 Usage, from the root of a checkout:
 
@@ -72,8 +72,8 @@ Usage, from the root of a checkout:
     python backend/utilities/migrate_to_day_shards.py \
         --shape traces --directory state/traces
 
-A flat ledger is named by the store it becomes: `--directory state/x` reads
-`state/x.csv`, so every path this prints is still relative to one store.
+A flat ledger is named by the directory it becomes: `--directory state/x` reads
+`state/x.csv`, so every path this prints is still relative to one ledger.
 """
 
 from __future__ import annotations
@@ -136,7 +136,7 @@ def day_relpath(day: str) -> str:
 
 
 def day_dir_relpath(day: str) -> str:
-    """`<YYYY>/<MM>/<DD>` - the day directory a partitioned store files under."""
+    """`<YYYY>/<MM>/<DD>` - the day directory a partitioned ledger files under."""
     return f"{day[:4]}/{day[5:7]}/{day[8:10]}"
 
 
@@ -180,7 +180,7 @@ class Shards:
 
 
 def _refuse_mixed(directory: Path, shards: list[Path]) -> None:
-    """A store holding a month shard may hold nothing else.
+    """A ledger holding a month shard may hold nothing else.
 
     `day_files` refuses a month shard at the root of a day tree, so a directory
     holding both grains is already unreadable. Refusing here rather than on the
@@ -285,7 +285,7 @@ def _refuse_unequal[T](found: Counter[T], expected: Counter[T], where: str) -> N
 
 
 def _install(staged: Path, directory: Path) -> list[str]:
-    """Rename each staged year directory into the store, and say which moved."""
+    """Rename each staged year directory into the ledger, and say which moved."""
     installed: list[str] = []
     for year in sorted(staged.iterdir()):
         year.replace(directory / year.name)
@@ -294,7 +294,7 @@ def _install(staged: Path, directory: Path) -> list[str]:
 
 
 def _restore(directory: Path, shards: Shards, installed: list[str]) -> None:
-    """Put the store back exactly as it was read."""
+    """Put the ledger back exactly as it was read."""
     for name in installed:
         shutil.rmtree(directory / name, ignore_errors=True)
     for name, text in shards.texts.items():
@@ -305,7 +305,7 @@ def _restore(directory: Path, shards: Shards, installed: list[str]) -> None:
 class Report:
     """What the migration did, for the person who has to believe it.
 
-    Every path here is POSIX and relative to the store (CLAUDE.md section 2).
+    Every path here is POSIX and relative to the ledger (CLAUDE.md section 2).
     """
 
     rows_in: int
@@ -325,7 +325,7 @@ class Report:
 def run(directory: Path, date_column: str) -> Report:
     """Move the rows, read the tree back, and only then unlink a month shard.
 
-    A store with no month shard has nothing to move and is told so, which is
+    A ledger with no month shard has nothing to move and is told so, which is
     what makes a second run over a migrated tree change no byte.
     """
     shards = read_shards(directory, date_column)
@@ -360,19 +360,19 @@ def run(directory: Path, date_column: str) -> Report:
 
 
 def _nothing_moved() -> Report:
-    """What a store already in the new shape reports, and it names no path."""
+    """What a ledger already in the new shape reports, and it names no path."""
     return Report(rows_in=0, rows_out=0, shards=[], paths=[])
 
 
 def _scratch(directory: Path, what: str) -> Path:
-    """A working directory beside the store, so every rename stays on one volume."""
+    """A working directory beside the ledger, so every rename stays on one volume."""
     return Path(tempfile.mkdtemp(prefix=f".{directory.name}-{what}-", dir=directory.parent))
 
 
 def _years(directory: Path) -> list[Path]:
-    """The `<YYYY>` directories of a store, oldest first.
+    """The `<YYYY>` directories of a ledger, oldest first.
 
-    Only the year directories, so a store's own root-level file - `state/traces`
+    Only the year directories, so a ledger's own root-level file - `state/traces`
     keeps a `.gitkeep` - is neither staged nor parked and cannot be lost.
     """
     return [entry for entry in sorted(directory.iterdir()) if entry.is_dir()]
@@ -394,7 +394,7 @@ def _is_day_segment(year: str, month: str, day: str) -> bool:
 
 
 def _swap(directory: Path, staged: Path, parked: Path, check: Callable[[], None]) -> None:
-    """Park the store's years, install the staged ones, and put them back on any fault.
+    """Park the ledger's years, install the staged ones, and put them back on any fault.
 
     A rename rather than a copy, so the original tree is intact until the last
     moment and a rollback is the same operation backwards. `check` is called
@@ -424,7 +424,7 @@ def _recorded_shards(root: Path) -> list[Path]:
     This is the one module that has to see both, because it is what turns one
     into the other: the count before the move is taken over `<DD>.csv` day files
     and the count after it over `<DD>/` day directories. Every pipeline reader
-    dropped the day-file branch once the last committed store had moved, so the
+    dropped the day-file branch once the last committed ledger had moved, so the
     walk cannot be borrowed from `day_shards` any more.
 
     A day directory is read through `day_shards.one_day`, so a stray inside one
@@ -461,7 +461,7 @@ def _recorded_date(root: Path, shard: Path) -> str:
 
 
 def _rows_by_day(root: Path) -> Counter[tuple[str, str]]:
-    """Every data line of the store, keyed by the day it is filed under.
+    """Every data line of the ledger, keyed by the day it is filed under.
 
     Keyed rather than pooled, because a partition that filed every row under one
     day would pass a check over the lines alone.
@@ -478,7 +478,7 @@ def _rows_by_day(root: Path) -> Counter[tuple[str, str]]:
 
 
 def _day_file_paths(root: Path) -> list[Path]:
-    """The `<YYYY>/<MM>/<DD>.csv` day files of a store, oldest first.
+    """The `<YYYY>/<MM>/<DD>.csv` day files of a ledger, oldest first.
 
     Three path segments is a day file and four is a writer's file inside a day
     directory, which is the rule `telemetry.trace_date` reads a trace by. Taken
@@ -507,7 +507,7 @@ def partition(directory: Path) -> Report:
     """Every `<DD>.csv` day file becomes `<DD>/before-partition.csv`.
 
     The bytes go across unchanged and only the path moves, so the `version` cell
-    still travels with the row it was written for. A store already holding day
+    still travels with the row it was written for. A ledger already holding day
     directories has nothing to move and is told so, which is what makes a second
     run change no byte.
     """
@@ -546,7 +546,7 @@ def partition(directory: Path) -> Report:
 def _read_flat(path: Path, date_column: str) -> Shards:
     """One flat ledger, grouped by the day each row's own cell names.
 
-    The same read `read_shards` makes of a month shard, over a store that was
+    The same read `read_shards` makes of a month shard, over a ledger that was
     one file for the whole archive. A row nobody can place stops it here, before
     a byte is written.
     """
@@ -579,10 +579,10 @@ def _read_flat(path: Path, date_column: str) -> Shards:
 
 
 def split_flat(directory: Path, date_column: str) -> Report:
-    """`<store>.csv` becomes `<store>/<YYYY>/<MM>/<DD>/before-partition.csv`.
+    """`<ledger>.csv` becomes `<ledger>/<YYYY>/<MM>/<DD>/before-partition.csv`.
 
-    The flat file is named by the store it becomes, so one `--directory` still
-    says where every printed path is relative to. A store that holds both is
+    The flat file is named by the ledger it becomes, so one `--directory` still
+    says where every printed path is relative to. A ledger that holds both is
     half migrated and is refused: a second pass cannot know which rows the first
     one had already moved, and the repair is a restore from the trunk.
     """
@@ -754,7 +754,7 @@ NEEDS_A_DATE_COLUMN: Final = ("month-to-day", "flat-to-day-directory")
 
 
 def migrate(shape: str, directory: Path, date_column: str) -> Report:
-    """Run one shape over one store."""
+    """Run one shape over one ledger."""
     if shape == "month-to-day":
         return run(directory, date_column)
     if shape == "day-to-directory":

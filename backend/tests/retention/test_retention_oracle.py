@@ -40,7 +40,7 @@ from ._trees import (
 def test_the_oracle_fifteen_months_leave_fourteen_of_each_and_one_verified_summary(
     tmp_path: Path,
 ) -> None:
-    """One month expires and the three stores that hold it agree about it.
+    """One month expires and the three ledgers that hold it agree about it.
 
     Fifteen months against a fourteen-month age is the tightest fixture that can
     fail either way: one month expires, so an off-by-one shows up as an empty
@@ -175,7 +175,7 @@ def test_the_stage_names_every_file_a_live_run_would_remove(
     # a list that named `<month>-01` would print a path the ledger never held and
     # miss the one it did - and the dry run's whole deliverable is that its list
     # equals what a live run removes, file for file. Feed health is the same
-    # shape one store over: it files by day too, and the fixture writes the 11th.
+    # shape one ledger over: it files by day too, and the fixture writes the 11th.
     expired_days = [
         day.relative_to(state.parent).as_posix()
         for day in item_health_days(state)

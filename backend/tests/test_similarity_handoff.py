@@ -6,7 +6,7 @@ away with the runner that wrote it, and every later job fails on a file nobody
 uploaded.
 
 Driven against two empty directories standing in for two runners. No published
-day and no committed store is opened: what is asked is where a path lands, and a
+day and no committed ledger is opened: what is asked is where a path lands, and a
 day with pairs in it would answer that at the cost of a fixture (CLAUDE.md
 section 13).
 """

@@ -594,7 +594,7 @@ def test_the_check_passes_the_two_shapes_a_case_really_writes(tmp_path: Path) ->
     ("relative", "because"),
     [
         (f"a-tenant/span-rollup/{CASE_DAY_PATH}/{CASE_WRITER}", "no declared case"),
-        ("{case}/items/ai-0000000001.summary.json", "a store a case run does not write"),
+        ("{case}/items/ai-0000000001.summary.json", "a ledger a case run does not write"),
         (f"{{case}}/summaries/{CASE_DAY_PATH}/{CASE_WRITER}", "no such ledger"),
         (f"{{case}}/traces/{CASE_DAY_PATH}/{CASE_TRACE}", "a line that is not a span"),
     ],
@@ -605,7 +605,7 @@ def test_the_check_refuses_what_no_case_producer_wrote(
     """The oracle for the control. A check nothing can fail is not a control.
 
     Every row here is a path an artifact could carry and a case producer could
-    not: a directory no config declares, a store no case run writes, a ledger
+    not: a directory no config declares, a ledger no case run writes, a ledger
     outside the closed set, and a payload that does not read back. The last one
     is why the check opens the files rather than matching their names.
     """

@@ -191,13 +191,13 @@ def test_the_fold_stages_state_whole_because_two_of_its_stores_appear_late() -> 
     committing a header-only file; there is no header-only form of a directory,
     so the answer here is to stage `state`, which is always there.
 
-    `state/visual-prunes/` is the third store this call covers and it needs no
+    `state/visual-prunes/` is the third ledger this call covers and it needs no
     change here either. It moved from a flat file to a day tree on 2026-09-08,
     so a run now writes a path its own checkout did not carry - and staging
     `state` whole already reaches it, which is why that move needed nothing in
     this step.
 
-    What this no longer asserts is that the two late stores are absent from the
+    What this no longer asserts is that the two late ledgers are absent from the
     checkout. Staging `state` whole is correct whether or not they have appeared
     yet, so their absence was never the reason the step is written this way -
     and asserting it put a fuse on a date nobody chose: the first run to fold a

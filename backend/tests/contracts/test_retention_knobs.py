@@ -143,9 +143,9 @@ def test_the_published_window_is_unbounded_or_outlives_the_first_sight_store() -
     The mistake this makes impossible is a republication. An address the archive
     has forgotten, whose first-sighting row expires in the same week, reads as
     first-seen-today: it clears the freshness gate and goes out as new. So EQUAL
-    IS A HOLE, NOT A BOUND - at 90 and 90 the two stores forget the same address
+    IS A HOLE, NOT A BOUND - at 90 and 90 the two ledgers forget the same address
     on the same day and neither one is left holding the evidence. Only two
-    answers are safe: never forget, or forget later than the first-sight store
+    answers are safe: never forget, or forget later than the first-sight ledger
     does.
 
     `-1` is the only sentinel for unbounded. Not `0`, not `null`, and not a very
@@ -176,7 +176,7 @@ def test_the_published_window_is_unbounded_or_outlives_the_first_sight_store() -
         CollectConfig(published_window_days=120, seen_window_days=119).published_window_days == 120
     )
 
-    # A finite cover under an unbounded first-sight store is not expressible -
+    # A finite cover under an unbounded first-sight ledger is not expressible -
     # `seen_window_days` is `ge=1` - so the only pairing left to check is the
     # committed one, and it must ship unbounded.
     raw = json.loads(read_text(CONFIG_DIR / "idhazh.json"))

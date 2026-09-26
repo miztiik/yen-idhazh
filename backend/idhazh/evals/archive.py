@@ -23,7 +23,7 @@ recoverable once the prune passes over it.
 measurement again as if it were new, and it works by reading the rows. Delete a
 day with no index and every measurement in it becomes fresh again, which turns
 a count over the ledger from a count of items into a count of times the pipeline
-looked. So the archive stores one digest per distinct observation, sorted, and
+looked. So the archive keeps one digest per distinct observation, sorted, and
 the writer unions them with the live rows.
 
 **The measurements are named here rather than discovered.** A column added to

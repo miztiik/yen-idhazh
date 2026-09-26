@@ -29,19 +29,19 @@ from idhazh.contracts.span_rollup import SpanRollupRow
 def _day_files(state_root: Path, date: str) -> list[Path]:
     """Every file under `state_root` that belongs to this one date.
 
-    A glob keyed on the date rather than a list of stores, so a store added
+    A glob keyed on the date rather than a list of ledgers, so a ledger added
     tomorrow is reported without an edit here (Guardrail #6). Every day-sharded
-    ledger writes `<store>/<YYYY>/<MM>/<DD>` with its own suffix, so the stem is
+    ledger writes `<ledger>/<YYYY>/<MM>/<DD>` with its own suffix, so the stem is
     the whole of what they share.
 
-    **A day is a file in some stores and a directory of writer-owned files in
+    **A day is a file in some ledgers and a directory of writer-owned files in
     others**, and the directory is opened rather than weighed. A directory's own
     `st_size` is the size of the entry, not of what is in it, so reporting one
     would print a number that looks like bytes and is not.
 
-    **Two depths, because a store may nest.** A one-segment glob misses
-    `<group>/<store>/<YYYY>/<MM>/<DD>` and says nothing about the miss, so a
-    nested store would be absent from an inventory that reported success.
+    **Two depths, because a ledger may nest.** A one-segment glob misses
+    `<group>/<ledger>/<YYYY>/<MM>/<DD>` and says nothing about the miss, so a
+    nested ledger would be absent from an inventory that reported success.
     """
     year, month, day = date.split("-")
     stem = f"{year}/{month}/{day}*"
@@ -58,8 +58,8 @@ def _day_files(state_root: Path, date: str) -> list[Path]:
 def _month_files(state_root: Path, date: str) -> list[Path]:
     """Every month shard the date falls inside. Read as a month, not as the day.
 
-    A month shard is `<store>/<YYYY-MM>` with its own suffix, one level up from
-    the day tree and deliberately so: a store keeps its month fold in its own
+    A month shard is `<ledger>/<YYYY-MM>` with its own suffix, one level up from
+    the day tree and deliberately so: a ledger keeps its month fold in its own
     directory rather than beside day shards a walker would read as the same
     shape.
 

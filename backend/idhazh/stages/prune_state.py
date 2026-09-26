@@ -235,7 +235,7 @@ def _prune_day_validation_shards(
 
     Returns the files it removed, taken from the result rather than spelled from
     the month stems: a day is a directory of writer-owned files, so a
-    synthesised name would name a file the store never held.
+    synthesised name would name a file the ledger never held.
     """
     receipts = retention.prune_day_validations(state, retention_config, today, dry_run=dry_run)
     if not receipts.changed:
@@ -428,7 +428,7 @@ def _prune_digest_fragments(
 
 
 def _trial_roots(state: Path) -> list[str]:
-    """Every child of `state/` that is a trial run's tree rather than a store.
+    """Every child of `state/` that is a trial run's tree rather than a ledger.
 
     Read off the tree, not off `run.trial_state_dirname`. That knob is null in
     production and cannot be set there: `idhazh.cli` redirects
@@ -437,23 +437,23 @@ def _trial_roots(state: Path) -> list[str]:
     into the trial root. Nothing had ever pruned `state/pipeline-tests/`
     because of it.
 
-    A store is created through its directory constant, so the names subtracted
-    here gain a member in the same commit that adds a store and discovery
-    cannot fall out of step. The four below are the stores `ledger` does not
+    A ledger is created through its directory constant, so the names subtracted
+    here gain a member in the same commit that adds a ledger and discovery
+    cannot fall out of step. The four below are the ledgers `ledger` does not
     own; each is read from its owning module rather than retyped, and they are
     imported here rather than into `ledger` because two of those modules import
     `ledger` themselves.
     """
     if not state.is_dir():
         return []
-    stores = ledger.STORE_DIRNAMES | {
+    ledgers = ledger.LEDGER_DIRNAMES | {
         telemetry.TRACES_DIRNAME,
         day_metrics.DIRNAME,
         assemble.FRAGMENTS_DIRNAME,
         score_archive.ARCHIVE_DIRNAME,
     }
     return sorted(
-        child.name for child in state.iterdir() if child.is_dir() and child.name not in stores
+        child.name for child in state.iterdir() if child.is_dir() and child.name not in ledgers
     )
 
 
@@ -505,7 +505,7 @@ def _prune_score_shards(
 ) -> list[str]:
     """Archive the score months past their full-grain window, then delete their days.
 
-    The one store here whose deletion is preceded by a summary that is written,
+    The one ledger here whose deletion is preceded by a summary that is written,
     read back and reconciled against the files it replaces. The log says what the
     archive weighs against what those files weighed, because that ratio is the
     measurement this policy rests on and a dry run is where a person reads it.

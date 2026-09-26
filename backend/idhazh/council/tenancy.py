@@ -78,7 +78,7 @@ class Tenant(Protocol):
     """A judge, as the council sees it. Seven members, and the count is the point.
 
     Three of them are facts about the tenant, one is a question about its own
-    store, and three are units of work. Every member that does work takes the
+    ledger, and three are units of work. Every member that does work takes the
     run id, because a tenant's own rows are keyed on it.
 
     The three facts are read-only, so a tenant may answer them with a module
@@ -103,7 +103,7 @@ class Tenant(Protocol):
 
     @property
     def committed_paths(self) -> tuple[str, ...]:
-        """The store paths this tenant's own work writes, for the collecting job
+        """The ledger paths this tenant's own work writes, for the collecting job
         to stage.
 
         Without it the workflow spells one tenant's paths as literals and a

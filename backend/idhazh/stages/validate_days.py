@@ -212,7 +212,7 @@ def _receipts_for(state_dir: Path, identity: str) -> dict[str, DayValidationRece
     says nothing about the rules in force, and dropping it here is what makes a
     rule change re-validate everything rather than nothing.
 
-    **One row a day, because the store settles them.** A day is a directory of
+    **One row a day, because the ledger settles them.** A day is a directory of
     writer-owned files and every run that validated that day left one, so a
     closed day that `backfill.yml` re-encoded carries a truthful new row beside
     a row about the payload that used to be there. `DAY_VALIDATION_RULE` takes
@@ -224,7 +224,7 @@ def _receipts_for(state_dir: Path, identity: str) -> dict[str, DayValidationRece
     step earlier, so a row this cannot place means the writer and this reader
     disagree about the shape - the rule every other day tree here keeps.
 
-    The cover is every recorded day, which the store bounds:
+    The cover is every recorded day, which the ledger bounds:
     `retention.day_validation_keep_months` deletes a receipt for a day the
     archive no longer holds, and a receipt for a day that is gone answers
     nothing (Guardrail #12).

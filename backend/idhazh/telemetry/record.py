@@ -307,7 +307,7 @@ def persist(items_dir: Path, row: ItemHealthRow) -> Path:
 
     It lands beside `<item_id>.article.json` and `<item_id>.summary.json` because
     that directory is what a work shard uploads and what assemble downloads: a
-    store of its own would need a second artifact, and a commit of its own would
+    ledger of its own would need a second artifact, and a commit of its own would
     be one commit an item.
 
     Temp-file-plus-rename, like every other per-item payload (CLAUDE.md section

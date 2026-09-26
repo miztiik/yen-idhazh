@@ -1,7 +1,7 @@
 """Does a row the council knows nothing about survive the whole trip?
 
 Written on a runner, uploaded under a name the collecting job looks for, and
-appended to the store the tenant named. Every payload here is declared in this
+appended to the ledger the tenant named. Every payload here is declared in this
 file, so nothing in it names a judge and the whole module runs in a repository
 with no judge in it.
 """
@@ -249,7 +249,7 @@ def test_a_truncated_upload_fails_before_it_reaches_the_store(tmp_path: Path) ->
     into = tmp_path / "state" / "paper-tenant" / "metrics" / "20.csv"
     with pytest.raises(ValueError):
         collect_judge_metrics(shipped, judge_id="paper-tenant", contract=PaperMetrics, into=into)
-    assert not into.exists(), "a store never gains a row the contract refused"
+    assert not into.exists(), "a ledger never gains a row the contract refused"
 
 
 def test_the_upload_name_matches_what_the_collecting_job_downloads() -> None:

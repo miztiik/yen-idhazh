@@ -43,7 +43,7 @@ def a_date(given: str, *, what: str) -> DateStamp:
     """`given` as a date the contracts accept, or a refusal naming what was wrong.
 
     Refused here rather than traced later. A date nothing accepts still reaches
-    a matrix, names an artifact and addresses a store, so the run finds out
+    a matrix, names an artifact and addresses a ledger, so the run finds out
     about two hours of model time in.
 
     The calendar is checked as well as the shape, because `DateStamp` counts

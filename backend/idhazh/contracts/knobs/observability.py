@@ -21,7 +21,7 @@ class LogLevel(StrEnum):
 
 
 #: The `observability` names this block used to carry, and the knob that governs
-#: the same store now. An empty value means the store itself is gone.
+#: the same ledger now. An empty value means the ledger itself is gone.
 SUPERSEDED_RETENTION_NAMES: Final[Mapping[str, str]] = MappingProxyType(
     {
         "keep_months": "item_health_full_grain_months",
@@ -143,7 +143,7 @@ class ObservabilityConfig(Model):
     row, so a month file stays readable across a day somebody turned something
     off.
 
-    **Every store names its own cleanup age.** One age covered
+    **Every ledger names its own cleanup age.** One age covered
     `state/item-health/` while `state/feed-health/`, `state/scores/` and
     `frontend/public/telemetry/` had none, so three of the four grew with nothing
     to stop them and the fourth was tuned by a number that said nothing about
@@ -488,7 +488,7 @@ class ObservabilityConfig(Model):
         """Fail a config that still names one of the five retired knobs.
 
         `keep_months` and `hard_delete_after_months` governed `state/item-health/`
-        and nothing else, while three other stores had no age at all. They were
+        and nothing else, while three other ledgers had no age at all. They were
         read and dropped for a day so the rows that spend the new ages could land
         one at a time; now that every reader has moved, a file still spelling one
         is refused by name.
@@ -499,7 +499,7 @@ class ObservabilityConfig(Model):
         nothing ever fetched; the ledgers stay and keep their own ages.
 
         `runtime_counters_scrape` is the fifth and has no successor either. It
-        switched off a row in `state/runtime-counters.csv`, and that store is
+        switched off a row in `state/runtime-counters.csv`, and that ledger is
         gone: the four cells a reader still wants are on the host row, which
         `job-clock` writes from the same scrape. Honouring the flag would now
         switch off nothing at all.

@@ -187,7 +187,7 @@ def item_health_days(state_dir: Path) -> list[Path]:
     """Every item-health file, oldest first, through the pipeline's own walk.
 
     A day is a directory of writer-owned files, so a day answers with as many
-    paths as writers reached it. The whole store, because a retention test asks
+    paths as writers reached it. The whole ledger, because a retention test asks
     what the prune left and a window would hide the months it took.
     """
     return list(
@@ -248,7 +248,7 @@ def a_state_tree(tmp_path: Path) -> Path:
 
 #: Names of the right width and shape that are not a month. Every one was
 #: accepted by at least one month reader and refused by another before
-#: 2026-09-08, which is what made the same file survive in one store and get
+#: 2026-09-08, which is what made the same file survive in one ledger and get
 #: deleted in the next.
 NOT_MONTHS: Final = (
     "2025-00",

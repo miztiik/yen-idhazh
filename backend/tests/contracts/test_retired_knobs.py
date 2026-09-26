@@ -35,13 +35,13 @@ def test_a_config_still_carrying_a_removed_knob_is_refused_by_name() -> None:
 
 
 def test_an_age_whose_store_is_gone_says_so_instead_of_naming_a_successor() -> None:
-    """The stores these three governed were deleted, so there is nowhere to send the value.
+    """The ledgers these three governed were deleted, so there is nowhere to send the value.
 
     `refuse_a_removed_knob` reads an empty replacement as "gone and nothing
     replaces it". Pointing the two ages at `scores_full_grain_months` would be
     worse than silence: that knob governs `state/scores/`, which is still there,
     so an operator would move their number onto a live ledger's age. And
-    `runtime_counters_scrape` switched off a row in a store that no longer
+    `runtime_counters_scrape` switched off a row in a ledger that no longer
     exists, so honouring it today would switch off nothing at all.
     """
     for removed, value in (

@@ -15,7 +15,7 @@ exactly the days something had already gone wrong with the decoder.
 **A reply the grammar cannot have written is written down rather than thrown.**
 The reading keeps its clock, its tokens and its window, and carries a null
 verdict with the grammar flag false. A shard that died on the first such reply
-left every pair after it absent, and absence on this store already means "never
+left every pair after it absent, and absence on this ledger already means "never
 drawn" - so the one thing an operator most needs to tell apart, a decoder that
 came loose from a day nothing judged, was the one thing the record could not say.
 """

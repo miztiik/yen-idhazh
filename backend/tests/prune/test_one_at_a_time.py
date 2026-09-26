@@ -305,6 +305,6 @@ def test_a_name_outside_the_vocabulary_is_refused(name: str) -> None:
 
 
 def test_the_noun_in_a_refusal_is_the_caller_s_own_word() -> None:
-    """A store and a GitHub collection are the same shape and not the same word."""
-    with pytest.raises(ValueError, match="the name of a store"):
-        one_at_a_time.refuse_by_name("nope", allowed=("item-health",), refused={}, noun="store")
+    """A ledger and a GitHub collection are the same shape and not the same word."""
+    with pytest.raises(ValueError, match="the name of a ledger"):
+        one_at_a_time.refuse_by_name("nope", allowed=("item-health",), refused={}, noun="ledger")

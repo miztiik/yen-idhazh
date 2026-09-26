@@ -383,7 +383,7 @@ def test_a_bench_machine_row_cannot_land_where_the_console_reads(tmp_path: Path)
     # caller: the bench by the step after its probe, production by `assemble`. A
     # compaction of one root must not reach the other, and the two calls below
     # are how that is asked rather than assumed - the bench root is INSIDE the
-    # production root, so a store built one directory higher would fold the
+    # production root, so a ledger built one directory higher would fold the
     # bench's row into the ledger the console reads.
     compact_stage.stage_compact(bench_root, date=A_DAY_AFTER_THE_PROBE, after_days=FOLD_AFTER_DAYS)
     compact_stage.stage_compact(
@@ -460,7 +460,7 @@ def test_the_bench_folds_its_own_segment_before_it_commits_the_row() -> None:
 
     Without the fold the commit step stages a day file the dispatch never wrote,
     reports `no machine recorded`, and the segment goes to the bin with the
-    runner - the same loss the segment store exists to stop, arriving from the
+    runner - the same loss the segment ledger exists to stop, arriving from the
     one workflow that has no second caller to catch it.
 
     It sits before the sweep rather than beside the commit because the commit is
@@ -491,7 +491,7 @@ def test_no_bench_stage_can_reach_the_production_state_root() -> None:
     `cli` moves the state root off `run.trial_state_dirname`, and only the
     scratch copy carries it - so a stage invoked without `--config` loads the
     committed config and appends where the console reads. `plan` was invoked
-    that way until 2026-09-17, and `plan` writes the seen store: a bench marked
+    that way until 2026-09-17, and `plan` writes the seen ledger: a bench marked
     real addresses seen, and the next production day skipped those stories with
     nothing in the log to say why. Feed health, feed retirements and the
     counterfactual scores went the same way.

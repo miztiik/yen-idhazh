@@ -1,27 +1,27 @@
-"""Re-file every committed day of one store under the column list its contract holds now.
+"""Re-file every committed day of one ledger under the column list its contract holds now.
 
 `ledger.require_matching_header` compares the committed header to the contract's
 columns and raises rather than append, so a column added to or removed from a row
-shape leaves its store unappendable until the files on disk carry the new header.
+shape leaves its ledger unappendable until the files on disk carry the new header.
 The next run to append then loses its whole commit step and every ledger staged
 beside it. The contract change and this pass are therefore one commit
 (`docs/architecture/contracts/schemas.md`).
 
 **Nothing in the repository could do this from a command line before.**
 `ledger.migrate_header` is the engine and it is only ever reached from the
-compaction verb, which folds a segment into a head and has no store argument.
+compaction verb, which folds a segment into a head and has no ledger argument.
 This is the operator's door onto it.
 
-The store is named from the prune verb's own word list, so one set of words means
-one set of stores wherever an operator types one - and that list is taken whole,
+The ledger is named from the prune verb's own word list, so one set of words means
+one set of ledgers wherever an operator types one - and that list is taken whole,
 including the two words the prune verb refuses by name. Those two are refused
-there because a store that forgets cannot be the guard it exists to be, and
+there because a ledger that forgets cannot be the guard it exists to be, and
 re-filing a header forgets nothing. The contract that reads a row comes off the
 two registries that already pair a committed file with its reader -
 `ledger._TREE_SHAPES` through `segment_contract` for a day tree, and
-`ledger.keyed_paths` for a store the post-merge settlement still covers. No list
+`ledger.keyed_paths` for a ledger the post-merge settlement still covers. No list
 is restated here, so none can drift from this one. A word outside the vocabulary
-and a store neither registry names a reader for are two different refusals, and
+and a ledger neither registry names a reader for are two different refusals, and
 each says which it is.
 
 **The dry run is the default, as it is for the prune verb.** Writing takes a word
@@ -42,7 +42,7 @@ heading this build cannot place, keeps a row no reader could place and raises,
 and re-files through the contract's own reader rather than cell by cell.
 
     python backend/utilities/widen_ledger_header.py --target content-similarity-judge-scored-pairs
-    python backend/utilities/widen_ledger_header.py --target <store> --no-dry-run
+    python backend/utilities/widen_ledger_header.py --target <ledger> --no-dry-run
 
 Exit code 1 when a file could not be re-filed, so a shell can gate on it.
 """
@@ -65,12 +65,12 @@ from idhazh.telemetry import prune
 
 DEFAULT_STATE_DIR: Final = config.REPO_ROOT / ledger.STATE_DIRNAME
 
-#: Which stores this can re-file, as a path under `state/`. The prune verb's
+#: Which ledgers this can re-file, as a path under `state/`. The prune verb's
 #: whole word list, INCLUDING the two words it refuses by name: `published` and
-#: `seen` are refused there because a store that forgets cannot be the guard it
+#: `seen` are refused there because a ledger that forgets cannot be the guard it
 #: exists to be, and re-filing a header forgets nothing. One vocabulary, two
 #: commands, and each one says its own no.
-STORES: Final[Mapping[str, str]] = MappingProxyType(
+LEDGERS: Final[Mapping[str, str]] = MappingProxyType(
     dict(sorted({**prune.TARGETS, **{name: name for name in prune.REFUSED}}.items()))
 )
 
@@ -81,7 +81,7 @@ class Refiled:
 
     `path` is the POSIX form relative to the state directory (CLAUDE.md section
     2), which is the minimal reconstructable form once `--target` has named the
-    store. It is the same string on both sides of `dry_run` - named before
+    ledger. It is the same string on both sides of `dry_run` - named before
     anything is written, so the list a dry run prints is the list a live run
     rewrites.
     """
@@ -121,9 +121,9 @@ def _refile(
     live run wants the answer it is about to commit to - taking both off one pass
     is what stops the printed report and the written file being two claims.
 
-    `carried` is the store's own retired-heading set, read off the same registry
+    `carried` is the ledger's own retired-heading set, read off the same registry
     as the reader. Without it this door only ever WIDENS: `migrate_header`
-    refuses a heading it cannot place, so a store that lost a column would be
+    refuses a heading it cannot place, so a ledger that lost a column would be
     unappendable and unrepairable at the same time.
     """
     columns = model.csv_columns()
@@ -154,34 +154,34 @@ def _refile(
 
 
 def _reader_for(root: Path, state_dir: Path) -> tuple[type[CsvContract], frozenset[str]]:
-    """The contract that reads one row of this store, and the headings it carries.
+    """The contract that reads one row of this ledger, and the headings it carries.
 
     **Two registries, asked in turn, and neither one restated here.** A day tree
     declares its reader in `ledger._TREE_SHAPES`, reached through
-    `segment_contract` and `segment_carried`; every other store declares it in
+    `segment_contract` and `segment_carried`; every other ledger declares it in
     `ledger.keyed_paths`, where a committed file is paired with the contract the
-    post-merge settlement reads it with. A store is in one or the other, so the
+    post-merge settlement reads it with. A ledger is in one or the other, so the
     order only decides which answer arrives first.
 
     Asking both is the whole point. Five day trees left `keyed_paths` on
     2026-09-22 when each became a day directory whose writers cannot collide, and
     a door that knew only that registry refused them from that morning on -
-    silently, because refusing a store that has no reader is also the correct
-    answer for a store that genuinely has none.
+    silently, because refusing a ledger that has no reader is also the correct
+    answer for a ledger that genuinely has none.
 
     The carried set travels with the reader, from whichever registry answered: a
-    store whose retired headings were looked up separately is a store where the
+    ledger whose retired headings were looked up separately is a ledger where the
     two lists can disagree.
 
-    A store neither registry names a reader for is refused with the reason rather
+    A ledger neither registry names a reader for is refused with the reason rather
     than skipped: an operator who typed it is holding a real question, and
     "nothing happened" is not the answer to it.
 
     **The `keyed_paths` cover is asked for one day rather than for every file**
     (Guardrail #12). This wants a SHAPE, and a shape is the same on every day of
-    a store, so the cover that lists the whole tree costs a walk that grows with
+    a ledger, so the cover that lists the whole tree costs a walk that grows with
     the archive to answer a question that does not. The day it names need not
-    exist: the dated cover joins one path per store rather than opening anything,
+    exist: the dated cover joins one path per ledger rather than opening anything,
     and only the parents of that path are read here.
     """
     try:
@@ -199,25 +199,25 @@ def _reader_for(root: Path, state_dir: Path) -> tuple[type[CsvContract], frozens
         f"{root.name} holds files that neither `ledger.SegmentLedger` nor "
         "`ledger.keyed_paths` names a reader for, so nothing here knows which "
         "contract writes its header. Register the shape in one of them, or re-file "
-        "the store from the code that owns it."
+        "the ledger from the code that owns it."
     )
 
 
 def widen(
     target: str, *, state_dir: Path = DEFAULT_STATE_DIR, write: bool = False
 ) -> list[Refiled]:
-    """Every day file of one store, oldest first, and what re-filing each one moved.
+    """Every day file of one ledger, oldest first, and what re-filing each one moved.
 
-    A store with no file yet reports nothing and raises nothing. There is no
+    A ledger with no file yet reports nothing and raises nothing. There is no
     header on disk to disagree with the contract, so there is nothing to re-file
-    - and every store in the vocabulary is named before its first writer lands.
+    - and every ledger in the vocabulary is named before its first writer lands.
     """
-    if target not in STORES:
+    if target not in LEDGERS:
         raise ValueError(
-            f"this re-files a store, and {target!r} is not the name of one. A path is "
-            f"never a name here. It knows {', '.join(STORES)}"
+            f"this re-files a ledger, and {target!r} is not the name of one. A path is "
+            f"never a name here. It knows {', '.join(LEDGERS)}"
         )
-    root = state_dir / STORES[target]
+    root = state_dir / LEDGERS[target]
     paths = sorted(root.rglob("*.csv"))
     if not paths:
         return []
@@ -238,8 +238,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--target",
         required=True,
-        metavar="STORE",
-        help="Which store to re-file. One of " + ", ".join(STORES) + ".",
+        metavar="LEDGER",
+        help="Which ledger to re-file. One of " + ", ".join(LEDGERS) + ".",
     )
     parser.add_argument("--state-dir", type=Path, default=DEFAULT_STATE_DIR)
     parser.add_argument("--dry-run", action="store_true", default=True)

@@ -1,17 +1,17 @@
-"""Can a store whose contract MOVED its columns be appended to again, and is the pass repeatable?
+"""Can a ledger whose contract MOVED its columns be appended to again, and is the pass repeatable?
 
 The oracle is the append. A read-only check cannot see the header equality test
-that makes a stale store unappendable, so every case here puts a stale file on
+that makes a stale ledger unappendable, so every case here puts a stale file on
 disk, proves the append refuses it, re-files it, and proves the append lands.
 Both directions are covered: a header narrower than the contract, and one wider.
 
-**Two kinds of store, because the utility has two registries to ask.** A store
+**Two kinds of ledger, because the utility has two registries to ask.** A ledger
 the post-merge settlement covers declares its reader in `ledger.keyed_paths`; a
 day tree declares it in `ledger._TREE_SHAPES`. Driving only the first is how
-nine of fourteen stores were refused for a day with every test green.
+nine of fourteen ledgers were refused for a day with every test green.
 
 Everything is driven from three small committed fixtures, read inside the test
-that needs it. Nothing walks the committed store (`CLAUDE.md` section 13) - the
+that needs it. Nothing walks the committed ledger (`CLAUDE.md` section 13) - the
 question is what the utility does to a file, and a fixture holds a header the
 archive can no longer produce.
 """
@@ -41,7 +41,7 @@ TARGET = "content-similarity-judge-scored-pairs"
 TREE_TARGET = ledger.ITEM_HEALTH_DIRNAME
 TREE_DATE = "2026-09-16"
 
-#: The header this store carried before the judge-call stamp was appended.
+#: The header this ledger carried before the judge-call stamp was appended.
 NARROW = FIXTURES_DIR / "state" / "scored-pairs-before-the-stamp.csv"
 
 #: The header it carried while `decode_digest` was a column, taken off the
@@ -54,11 +54,11 @@ WIDE = FIXTURES_DIR / "state" / "scored-pairs-carrying-the-decode-digest.csv"
 #: it yet, and three cells the reader has since retired still are.
 STALE_TREE_DAY = FIXTURES_DIR / "state" / "item-health-before-the-machine-probe-widened-it.csv"
 
-#: The stores in the vocabulary that neither registry names a reader for.
-#: Named rather than counted, because a count that falls by one says a store lost
+#: The ledgers in the vocabulary that neither registry names a reader for.
+#: Named rather than counted, because a count that falls by one says a ledger lost
 #: its reader and never says which one - and that is exactly the failure this
 #: file missed on 2026-09-22, when five day trees left `ledger.keyed_paths` and
-#: the only test watching a refusal was watching a store that had just joined
+#: the only test watching a refusal was watching a ledger that had just joined
 #: them.
 UNREGISTERED: Final = frozenset(
     {
@@ -71,7 +71,7 @@ UNREGISTERED: Final = frozenset(
 
 
 def a_narrow_day(state_dir: Path) -> Path:
-    """One day file at the pre-widening header, where the store's own path helper puts it."""
+    """One day file at the pre-widening header, where the ledger's own path helper puts it."""
     path = ledger.scored_pairs_path(state_dir, DATE)
     path.parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(NARROW, path)
@@ -104,7 +104,7 @@ def a_stale_tree_day(state_dir: Path) -> Path:
     """One day file of a DAY TREE, at a header the archive really produced.
 
     Put where the tree's own path helper puts it: a day directory rather than a
-    dated file, which is the move that took these five stores out of
+    dated file, which is the move that took these five ledgers out of
     `ledger.keyed_paths` in the first place.
     """
     path = ledger.item_health_path(state_dir, TREE_DATE) / ledger.BEFORE_PARTITION_NAME
@@ -123,7 +123,7 @@ def test_a_narrow_day_refuses_the_append_that_the_widened_one_takes(tmp_path: Pa
     """The load-bearing half. A read-only check cannot see the header equality test.
 
     `require_matching_header` compares the committed header to the contract's
-    columns and raises rather than write, so the store is dead to the next run
+    columns and raises rather than write, so the ledger is dead to the next run
     until the file on disk carries the new header.
     """
     path = a_narrow_day(tmp_path)
@@ -162,7 +162,7 @@ def test_widening_keeps_every_cell_the_narrow_header_named(tmp_path: Path) -> No
         carried = {name: value for name, value in old.items() if name not in DROPPED_CELLS}
         assert set(old) - set(new) == DROPPED_CELLS & set(old)
         # `judge_id` is the one appended cell the widening fills rather than
-        # leaves empty: these rows were judged by the judge that owns the store.
+        # leaves empty: these rows were judged by the judge that owns the ledger.
         assert {name: new[name] for name in carried} == carried
         assert new["judge_id"] == "content-similarity-judge"
         assert new["judged_by_run_id"] == ""
@@ -278,7 +278,7 @@ def test_a_dry_run_reports_what_a_live_run_writes_and_writes_nothing(tmp_path: P
 
 
 def test_a_store_no_registry_names_a_reader_for_is_refused_by_name(tmp_path: Path) -> None:
-    """An operator who typed a real store is holding a real question.
+    """An operator who typed a real ledger is holding a real question.
 
     `published` is in the prune vocabulary, it has committed files back to
     2026-08, and neither registry names the contract that reads one of its rows.
@@ -287,8 +287,8 @@ def test_a_store_no_registry_names_a_reader_for_is_refused_by_name(tmp_path: Pat
 
     **This target used to be `scores`, and that was the bug this commit fixes.**
     `scores` is a day tree, so the refusal it was asserting stopped being about a
-    store with no reader the moment the lookup learnt to ask
-    `ledger.SegmentLedger`. A refusal is the right answer for exactly the stores
+    ledger with no reader the moment the lookup learnt to ask
+    `ledger.SegmentLedger`. A refusal is the right answer for exactly the ledgers
     in `UNREGISTERED` below, and the census there is what keeps this one honest.
     """
     day = ledger.published_path(tmp_path, "2026-09-18")
@@ -301,7 +301,7 @@ def test_a_store_no_registry_names_a_reader_for_is_refused_by_name(tmp_path: Pat
 
 def test_the_utility_refuses_a_word_that_is_not_a_store(tmp_path: Path) -> None:
     """A path is never a name here, and the refusal names the command that said no."""
-    with pytest.raises(ValueError, match="re-files a store"):
+    with pytest.raises(ValueError, match="re-files a ledger"):
         widen_ledger_header.widen("scored-pairs", state_dir=tmp_path)
 
 
@@ -313,15 +313,15 @@ def test_the_two_stores_a_prune_refuses_by_name_are_still_re_filable() -> None:
     about a column list, and a widener that inherited them would refuse a
     legitimate migration with a sentence about deletion.
     """
-    assert set(widen_ledger_header.STORES) >= set(prune.REFUSED)
-    assert set(widen_ledger_header.STORES) >= set(prune.TARGETS)
+    assert set(widen_ledger_header.LEDGERS) >= set(prune.REFUSED)
+    assert set(widen_ledger_header.LEDGERS) >= set(prune.TARGETS)
 
 
 def test_a_store_with_no_file_yet_reports_nothing_and_raises_nothing(tmp_path: Path) -> None:
-    """Every store in the vocabulary is named before its first writer lands.
+    """Every ledger in the vocabulary is named before its first writer lands.
 
     There is no header on disk to disagree with the contract, so there is
-    nothing to re-file - and a refusal there would say a store was broken when
+    nothing to re-file - and a refusal there would say a ledger was broken when
     it was only new.
     """
     a_narrow_day(tmp_path)
@@ -337,13 +337,13 @@ def test_a_store_with_no_file_yet_reports_nothing_and_raises_nothing(tmp_path: P
 def test_a_day_tree_re_files_onto_the_column_list_its_contract_holds_now(
     tmp_path: Path,
 ) -> None:
-    """The whole class of store this door was refusing, driven end to end.
+    """The whole class of ledger this door was refusing, driven end to end.
 
     A day tree is where a writer holds its own file, so there is no append to
     refuse the stale header the way `require_matching_header` refuses one on a
-    shared file - the fold is what rewrites it, and the fold has no store
+    shared file - the fold is what rewrites it, and the fold has no ledger
     argument. That is precisely why an operator needs this door, and it is why
-    the store that measured stale in the archive is the store the test drives.
+    the ledger that measured stale in the archive is the ledger the test drives.
 
     Read by name on both sides, so a row that lost the wrong cell fails here
     rather than passing a width check that only counts columns. Then read again
@@ -396,22 +396,22 @@ def test_a_day_tree_carries_its_retired_headings_with_its_reader(tmp_path: Path)
 def test_every_store_in_the_vocabulary_resolves_except_the_four_named_here(
     tmp_path: Path,
 ) -> None:
-    """The census. A store that quietly loses its reader is named here, not counted.
+    """The census. A ledger that quietly loses its reader is named here, not counted.
 
     This is the test the file did not have on 2026-09-22, when five day trees
     left `ledger.keyed_paths` and the door started refusing them. Nine of
-    fourteen stores were dead and every test was green, because the only refusal
+    fourteen ledgers were dead and every test was green, because the only refusal
     under test was one the file asserted was correct.
 
     Asserted as set equality in both directions at once, so it is red when a
-    store loses its reader AND red when one of these four gains one. Either way
-    the diff names the store.
+    ledger loses its reader AND red when one of these four gains one. Either way
+    the diff names the ledger.
 
-    One header-only file per store, because `widen` reports nothing for a store
+    One header-only file per ledger, because `widen` reports nothing for a ledger
     with no file and the question here is the lookup, not the re-file.
     """
     refused: set[str] = set()
-    for name, relpath in widen_ledger_header.STORES.items():
+    for name, relpath in widen_ledger_header.LEDGERS.items():
         day = tmp_path / relpath / TREE_DATE.replace("-", "/")
         day.parent.mkdir(parents=True, exist_ok=True)
         day.with_suffix(".csv").write_text("version\n", encoding="utf-8", newline="")
@@ -422,6 +422,6 @@ def test_every_store_in_the_vocabulary_resolves_except_the_four_named_here(
             refused.add(name)
 
     assert refused == UNREGISTERED
-    assert len(widen_ledger_header.STORES) - len(refused) == 10, (
+    assert len(widen_ledger_header.LEDGERS) - len(refused) == 10, (
         "ten of fourteen; the other four are named in UNREGISTERED with the reason"
     )

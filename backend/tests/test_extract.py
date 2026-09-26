@@ -907,7 +907,7 @@ def test_an_empty_page_is_not_reported_as_boilerplate() -> None:
 def test_nothing_in_the_pipeline_supplies_the_other_half_of_the_comparison() -> None:
     """The signal cannot fire, and that is why `boilerplate` stays source-neutral.
 
-    A store that fed `seen_elsewhere` shipped on 2026-09-17 and was reverted the
+    A ledger that fed `seen_elsewhere` shipped on 2026-09-17 and was reverted the
     same day - over a full run it moved the signal zero times. This pins the
     resting state so the next person to wire one up has to change a test that
     says out loud what they are changing.

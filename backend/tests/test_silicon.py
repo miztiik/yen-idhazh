@@ -588,7 +588,7 @@ def test_the_clock_half_lands_in_the_probes_own_segment(
 
     `state/segments/<ledger>/<run>-<attempt>-<job>-<shard>.csv` has no element a
     second step of one job could differ in, so a second file is not something
-    this store can express. The two halves are two rows of the file this job
+    this grammar can express. The two halves are two rows of the file this job
     owns, and neither is ever edited.
     """
     monkeypatch.setenv("GITHUB_RUN_ATTEMPT", "1")

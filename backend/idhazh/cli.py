@@ -579,12 +579,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         # files decides nothing about the open web, and starting a fetcher to do
         # it would read every host's robots.txt for nothing.
         #
-        # The receipt store travels with the tree it is about. A receipt records
+        # The receipt ledger travels with the tree it is about. A receipt records
         # a payload's length and a day is settled on that length alone, never on
         # a re-read, so a receipt earned over the committed tree will settle a
         # same-length day in a scratch copy without opening it - measured
         # 2026-09-13: a copy of the newest day with `"items"` overwritten by
-        # `"itemz"`, one byte for one byte, passed against the committed store
+        # `"itemz"`, one byte for one byte, passed against the committed ledger
         # and was refused against an empty one. Forgetting the pair is therefore
         # a wrong answer rather than an untidy one, and this refuses it.
         if args.state_root is None and args.digest_root.resolve() != common.PUBLIC_ROOT.resolve():

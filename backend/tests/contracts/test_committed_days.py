@@ -192,13 +192,13 @@ def test_a_tree_that_is_not_the_committed_one_has_to_name_its_own_receipts(
     length, never on a re-read. So the committed receipts will settle a
     same-length day in any other tree without opening it. Measured 2026-09-13: a
     copy of the newest committed day with `"items"` overwritten by `"itemz"`,
-    one byte for one byte, passed against the committed receipt store and
-    reported `0 of them opened`; against an empty store the same file was
+    one byte for one byte, passed against the committed receipt ledger and
+    reported `0 of them opened`; against an empty ledger the same file was
     refused. `frontend/tests/malformed-day.spec.ts` was making exactly that
     call, so the control case that exists because a guard which only ever refuses
     proves nothing was passing on a receipt about a different file - and the
     receipts it filed about its scratch trees landed in the tracked receipt
-    store, which `frontend/scripts/build-state.ts` fingerprints, so the
+    ledger, which `frontend/scripts/build-state.ts` fingerprints, so the
     `publishing` group changed one of its own build's inputs while it ran. That
     was defect 20, and this is what stops the next caller repeating it.
 
@@ -220,11 +220,11 @@ def test_a_tree_that_is_not_the_committed_one_has_to_name_its_own_receipts(
     assert "--state-root" in said, "the refusal has to name the flag that settles it"
     assert "--digest-root" in said, "and the flag that caused it"
 
-    store = tmp_path / "receipts"
-    assert main(["validate-days", "--digest-root", str(copy), "--state-root", str(store)]) == 0
+    receipts = tmp_path / "receipts"
+    assert main(["validate-days", "--digest-root", str(copy), "--state-root", str(receipts)]) == 0
     filed = list(
         day_shards.shard_files(
-            store / ledger.DAY_VALIDATIONS_DIRNAME, days=UNBOUNDED_WINDOW
+            receipts / ledger.DAY_VALIDATIONS_DIRNAME, days=UNBOUNDED_WINDOW
         )
     )
     assert filed, "the receipt belongs beside the tree it is about"

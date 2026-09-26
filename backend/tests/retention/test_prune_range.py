@@ -15,7 +15,7 @@ deleted and the record says where the next pass resumes.
 Every tree here is BUILT (CLAUDE.md section 13). The committed archive grows, so
 a test that read it would cost more every month for the same answer
 (Guardrail #12) - and a built tree carries the cases the archive has never
-produced: a day either side of a boundary, a store whose month directory is
+produced: a day either side of a boundary, a ledger whose month directory is
 emptied exactly, and a delete that fails on the third file of four.
 """
 
@@ -44,14 +44,14 @@ from ._trees import feed_health_history, health_row
 pytestmark = pytest.mark.contract
 
 
-#: Where one day of each store this prunes lands, asked of the module that owns
-#: the store. The test below holds this against `prune.TARGETS`, so a target
-#: added to the vocabulary without a store that files by day fails here rather
+#: Where one day of each ledger this prunes lands, asked of the module that owns
+#: the ledger. The test below holds this against `prune.TARGETS`, so a target
+#: added to the vocabulary without a ledger that files by day fails here rather
 #: than by quietly selecting nothing.
 #:
 #: The two nested keys are spelled the way an operator types them - two directory
 #: names joined by a hyphen - and the value is the two-segment path the same
-#: module files at. That pairing is the whole of what makes a nested store
+#: module files at. That pairing is the whole of what makes a nested ledger
 #: prunable, so it is the pairing this file holds.
 DAY_PATHS: Final[dict[str, Callable[[Path, str], Path]]] = {
     ledger.COUNTERFACTUAL_SCORES_DIRNAME: ledger.counterfactual_scores_path,
@@ -94,7 +94,7 @@ DAYS: Final = tuple(
 def a_census(state_root: Path, days: Iterable[str] = DAYS) -> Path:
     """One item-health day per day, written through the real appender.
 
-    Real rows rather than invented text: the prune walks a store the pipeline
+    Real rows rather than invented text: the prune walks a ledger the pipeline
     writes, and a tree assembled by hand could be a shape no run produces.
     """
     for number, day in enumerate(days):
@@ -157,7 +157,7 @@ def fingerprints(root: Path) -> dict[str, str]:
 
 
 def a_day_on_disk(day_path: Callable[[Path, str], Path], state_root: Path, day: str) -> Path:
-    """Put one file where a store's own helper says the day goes, and name it.
+    """Put one file where a ledger's own helper says the day goes, and name it.
 
     A helper that answers with a `<DD>.csv` names the file itself. A helper that
     answers with a directory names a day whose files each carry a writer's name,
@@ -175,7 +175,7 @@ def a_day_on_disk(day_path: Callable[[Path, str], Path], state_root: Path, day: 
 
 
 def dates_on_disk(state_root: Path, target: str) -> list[str]:
-    """Which days the store still holds, through the pipeline's own walk.
+    """Which days the ledger still holds, through the pipeline's own walk.
 
     One entry a day, however many writers reached it, because the question here
     is which days survived and not how many files each one holds.
@@ -244,7 +244,7 @@ def test_one_day_is_a_range_of_itself(tmp_path: Path) -> None:
 def test_every_sibling_outside_the_range_is_byte_identical(tmp_path: Path) -> None:
     """The files a prune did not name are the files it did not touch.
 
-    Two stores, so the check also covers the one the prune was never pointed at:
+    Two ledgers, so the check also covers the one the prune was never pointed at:
     a walk that reached the wrong directory would move a file nobody named.
     """
     state = a_census(tmp_path / "state")
@@ -301,7 +301,7 @@ def test_a_day_that_is_not_a_day_is_refused(tmp_path: Path, value: str) -> None:
 
 
 def test_the_month_and_year_a_prune_empties_go_with_it(tmp_path: Path) -> None:
-    """A store that keeps its emptied directories makes its own walk cost more.
+    """A ledger that keeps its emptied directories makes its own walk cost more.
 
     `DAYS` crosses a month end, so a range that takes July whole leaves August
     standing - which is what says the drop is scoped to what emptied.
@@ -312,22 +312,22 @@ def test_the_month_and_year_a_prune_empties_go_with_it(tmp_path: Path) -> None:
         state, target=ledger.ITEM_HEALTH_DIRNAME, since=DAYS[0], until=DAYS[2], dry_run=False
     )
 
-    store = state / ledger.ITEM_HEALTH_DIRNAME
-    assert not (store / "2026" / "07").exists(), "an emptied month directory was left behind"
-    assert (store / "2026" / "08").is_dir(), "the month that still holds days was removed"
+    ledger_root = state / ledger.ITEM_HEALTH_DIRNAME
+    assert not (ledger_root / "2026" / "07").exists(), "an emptied month directory was left behind"
+    assert (ledger_root / "2026" / "08").is_dir(), "the month that still holds days was removed"
 
 
 # --- The vocabulary ------------------------------------------------------------
 
 
 def test_every_target_names_a_store_that_files_by_day(tmp_path: Path) -> None:
-    """The vocabulary and the stores are held against each other, both ways.
+    """The vocabulary and the ledgers are held against each other, both ways.
 
-    A target with no day-filing store would select nothing for every range an
+    A target with no day-filing ledger would select nothing for every range an
     operator ever names - a command that reports success and removes nothing.
     """
     assert set(prune.TARGETS) == set(DAY_PATHS), (
-        "the prune vocabulary and the stores that file by day disagree: "
+        "the prune vocabulary and the ledgers that file by day disagree: "
         f"{sorted(set(prune.TARGETS) ^ set(DAY_PATHS))}"
     )
 
@@ -390,7 +390,7 @@ def test_a_day_taken_back_loses_the_machine_rows_that_produced_it(tmp_path: Path
 def test_the_two_stores_that_must_not_forget_are_refused(tmp_path: Path, target: str) -> None:
     """`published` and `seen` are refused by name, with the reason attached.
 
-    Refused rather than left out of the vocabulary: a store missing from a list
+    Refused rather than left out of the vocabulary: a ledger missing from a list
     reads as an oversight, and somebody who typed one of these is holding a real
     question whose answer is why the answer is no.
     """
@@ -419,7 +419,7 @@ def test_the_two_stores_that_must_not_forget_are_refused(tmp_path: Path, target:
     ],
 )
 def test_a_target_outside_the_vocabulary_is_refused(tmp_path: Path, target: str) -> None:
-    """A path is never a target, and neither is a store this does not name.
+    """A path is never a target, and neither is a ledger this does not name.
 
     The three path-shaped values are the point: a deletion primitive that
     resolved its argument against the file system is the one accident nobody can
@@ -432,7 +432,7 @@ def test_a_target_outside_the_vocabulary_is_refused(tmp_path: Path, target: str)
     with pytest.raises(ValueError) as refusal:
         prune.prune_range(state, target=target, since=DAYS[0], until=DAYS[6], dry_run=False)
 
-    assert "the name of a store" in str(refusal.value)
+    assert "the name of a ledger" in str(refusal.value)
     assert fingerprints(state) == before
 
 
@@ -525,7 +525,7 @@ def test_a_delete_that_fails_part_way_keeps_what_it_already_removed(
 def test_a_ceiling_stops_a_pass_and_names_the_day_to_resume_at(tmp_path: Path) -> None:
     """A range wider than the bite an operator wants is taken in bites.
 
-    The point of the ceiling on a store's day files is the same as on a
+    The point of the ceiling on a ledger's day files is the same as on a
     collection of 612 artifacts: one command, a bounded cost, and a record that
     says whether there is more.
     """

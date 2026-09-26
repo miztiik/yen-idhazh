@@ -8,7 +8,7 @@ names and calls the matching member on every tenant it got.
 clock, calls the tenant, and files its own row on the way out - so the venue's
 record of a unit exists whether or not the tenant remembered to write anything
 of its own. The cost cells on that row come off what the tenant handed back and
-none of them is read out of a tenant's store.
+none of them is read out of a tenant's ledger.
 
 Nothing here reads a result by name beyond those. What a tenant hands back
 crosses whole, so a venue hosting a judge with a funnel and a judge with none
@@ -155,7 +155,7 @@ def settle(
 ) -> tuple[ShardResult, ...]:
     """Count, fit, or do nothing, once a date after every shard has reported.
 
-    Then collect the night's own rows into the council's store, which is the one
+    Then collect the night's own rows into the council's ledger, which is the one
     place in the night that writes under `state/`. The collect runs on the way
     out whatever the tenants did, so a tenant that died still leaves the venue
     holding the record of every unit that reported before it.

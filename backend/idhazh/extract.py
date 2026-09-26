@@ -702,7 +702,7 @@ def boilerplate_ratio(lines: list[str], seen_elsewhere: set[str]) -> float:
     """Share of an item's lines that also appear on sibling items from the same host.
 
     **Nothing supplies `seen_elsewhere`, so this returns 0.0 on every page.** A
-    store that fed it shipped on 2026-09-17 and was reverted the same day: over
+    ledger that fed it shipped on 2026-09-17 and was reverted the same day: over
     one full run it moved the signal exactly zero times, against 12,917 committed
     item-health rows carrying no `boilerplate` cell at all. Comparing a page to
     its siblings is still the right idea and a bad page is still perfectly

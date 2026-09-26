@@ -546,7 +546,7 @@ FAILURE_CODE_STAGES: Final[Mapping[FailureCode, frozenset[ItemStage]]] = Mapping
 #: **`BOILERPLATE` is here because it cannot fire.** `extract.boilerplate_ratio`
 #: compares a page to lines the same host printed elsewhere, and nothing supplies
 #: that second set, so it divides by an empty set and answers 0.0 on every page.
-#: A store that fed it shipped on 2026-09-17 and was reverted the same day: over
+#: A ledger that fed it shipped on 2026-09-17 and was reverted the same day: over
 #: a full run it moved the signal zero times, against 12,917 committed rows with
 #: no `boilerplate` cell among them. A signal that cannot fire must not count
 #: against a publisher - the only thing it could do is be wrong.

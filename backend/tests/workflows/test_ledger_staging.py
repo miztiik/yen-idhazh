@@ -1,6 +1,6 @@
-"""Is every store the pipeline commits wired into the run that writes it?
+"""Is every ledger the pipeline commits wired into the run that writes it?
 
-Two halves of one question. A store the writing job never stages is deleted with
+Two halves of one question. A ledger the writing job never stages is deleted with
 the runner, and a keyed ledger nothing settles keeps every row a retried job wrote
 twice. Both failures are silent: the pipeline logs a row it wrote, the step that
 would have carried it says nothing, and the next reader sees a shorter file than
@@ -11,12 +11,12 @@ shipped and staged by nothing, so every row went to the bin with the runner.
 `state/span-rollup` was both halves at once: nine days written and discarded, then
 staged but missing from the settlement registry.
 
-Nothing here names a store. Both sides are derived - the store side from the
-`*_relpath` helpers the store modules already export, the job side from the CLI's
+Nothing here names a ledger. Both sides are derived - the ledger side from the
+`*_relpath` helpers the ledger modules already export, the job side from the CLI's
 own dispatch and the workflow's own `run:` bodies - because a hand-written list of
 ledger names is the thing that went missing in the first place.
 
-A store is filled two ways and both count here. A ledger takes an `append_*` or a
+A ledger is filled two ways and both count here. A ledger takes an `append_*` or a
 `write_*` call; the trace tree takes a file sink opened on its own path helper, and
 a sink is still something a run writes and a job must stage. The three hand-written
 lists this replaced were each scoped to one source file, so a second writer in a
@@ -63,7 +63,7 @@ pytestmark = pytest.mark.workflow
 # staged list closed-world in test_bench_targets.py - so a ledger it does not
 # stage is a decision rather than a loss. Every other commit label the harness
 # declares is in scope, so a sixth commit step joins without an edit here, and a
-# second workflow that writes a store is held to the same parity as the daily
+# second workflow that writes a ledger is held to the same parity as the daily
 # run.
 TRIAL_WORKFLOW: Final = "measure.yml"
 
@@ -72,23 +72,23 @@ TRIAL_WORKFLOW: Final = "measure.yml"
 # a year or a month.
 OTHER_DATE: Final = "2027-01-02"
 
-# Every module that declares a committed store, each by exporting a `*_relpath`
+# Every module that declares a committed ledger, each by exporting a `*_relpath`
 # helper for one. `idhazh.ledger` holds the CSV ledgers; `idhazh.telemetry.traces`
 # holds the trace tree beside them, which a sink writes rather than a writer
 # function - which is why every guard that looked for a writer missed it.
-STORE_MODULES: Final = (ledger, traces)
+LEDGER_MODULES: Final = (ledger, traces)
 
-# A store whose path helper ships ahead of the thing that fills it, and what will
+# A ledger whose path helper ships ahead of the thing that fills it, and what will
 # fill it. Guardrail #3 puts the shape and the path in first, and
 # `state/feed-retirements.csv` is the precedent: it was registered for settlement
 # one commit before the plan stage wrote a row into it, so that two stale
 # checkouts could not leave one address retired twice from the very first row.
 #
-# It is a list rather than a rule, so a NEW unfilled store fails this file instead
+# It is a list rather than a rule, so a NEW unfilled ledger fails this file instead
 # of joining it unnoticed. An entry goes when its filler lands, and a name here
-# that has since gained a writer fails too - a store nothing fills is a directory
+# that has since gained a writer fails too - a ledger nothing fills is a directory
 # a commit step may be staging for nothing.
-STORES_NOTHING_FILLS_YET: Final[Mapping[str, str]] = MappingProxyType(
+LEDGERS_NOTHING_FILLS_YET: Final[Mapping[str, str]] = MappingProxyType(
     {
         "state/content-similarity-judge/metrics": (
             "the council's shipping capability, which this derivation cannot see: it "
@@ -100,15 +100,15 @@ STORES_NOTHING_FILLS_YET: Final[Mapping[str, str]] = MappingProxyType(
     }
 )
 
-# A store no run ever fills, and who does. These are the operator's files: a
+# A ledger no run ever fills, and who does. These are the operator's files: a
 # person runs the verb, reads what it wrote, and commits it from their own
 # checkout. No job stages them because no job writes them, which is a different
 # answer from the list above rather than a softer one - waiting for a filler is
 # temporary, and this is the design.
 #
-# It is a list rather than a rule for the same reason: a store that stops having a
+# It is a list rather than a rule for the same reason: a ledger that stops having a
 # writing job fails this file instead of joining it unnoticed.
-STORES_NO_RUN_FILLS: Final[Mapping[str, str]] = MappingProxyType(
+LEDGERS_NO_RUN_FILLS: Final[Mapping[str, str]] = MappingProxyType(
     {
         "state/content-similarity-judge/holdout-pairs.csv": (
             "a person, typing the marks, or the labelling loop in "
@@ -122,10 +122,10 @@ STORES_NO_RUN_FILLS: Final[Mapping[str, str]] = MappingProxyType(
     }
 )
 
-# Both lists excuse a store from needing a writer this derivation can follow, so
+# Both lists excuse a ledger from needing a writer this derivation can follow, so
 # every assertion that subtracts one subtracts the other.
-STORES_NO_JOB_WRITES: Final = frozenset(STORES_NOTHING_FILLS_YET) | frozenset(
-    STORES_NO_RUN_FILLS
+LEDGERS_NO_JOB_WRITES: Final = frozenset(LEDGERS_NOTHING_FILLS_YET) | frozenset(
+    LEDGERS_NO_RUN_FILLS
 )
 
 # A module a verb used to reach and now reaches only through a tenant the council
@@ -171,12 +171,12 @@ SINK_CALL: Final = re.compile(
 )
 
 
-def _store_publics(
+def _ledger_publics(
     *, suffix: str = "", prefixes: tuple[str, ...] = ()
 ) -> dict[str, Callable[..., Any]]:
-    """The public callables the store modules export under a suffix or a prefix."""
+    """The public callables the ledger modules export under a suffix or a prefix."""
     found: dict[str, Callable[..., Any]] = {}
-    for module in STORE_MODULES:
+    for module in LEDGER_MODULES:
         for name, value in sorted(vars(module).items()):
             if name.startswith("_") or not callable(value):
                 continue
@@ -186,7 +186,7 @@ def _store_publics(
                 continue
             assert name not in found, (
                 f"{module.__name__} and {found[name].__module__} both export {name}, and "
-                "this test keys a store by the bare helper name. Rename one of them."
+                "this test keys a ledger by the bare helper name. Rename one of them."
             )
             found[name] = value
     return found
@@ -195,13 +195,13 @@ def _store_publics(
 def _helper_arguments(date: str) -> dict[str, object]:
     """What to pass a path helper, named by the parameter that asks for it.
 
-    A store filed by something other than a date says so in its own signature - the
+    A ledger filed by something other than a date says so in its own signature - the
     trace tree files by run and by shard, a segment by run, attempt, job and shard,
     and an archived record files by the stamp its counts were taken under - so the
     value follows the parameter's name rather than the helper's.
 
     `ledger` picks one member of the declared set and any member would do: what the
-    staging check asks is whether the job that writes a day shard stages the store,
+    staging check asks is whether the job that writes a day shard stages the ledger,
     and every member reduces to its own tree directory under `state/`.
     """
     return {
@@ -217,7 +217,7 @@ def _helper_arguments(date: str) -> dict[str, object]:
 
 
 def _relpath_for(name: str, helper: Callable[..., Any], date: str) -> str:
-    """One store path for one date, from the helper the module already exports."""
+    """One ledger path for one date, from the helper the module already exports."""
     supplied = _helper_arguments(date)
     required = [
         parameter.name
@@ -245,14 +245,14 @@ def _shared_prefix(first: str, second: str) -> str:
     return "/".join(shared)
 
 
-def _stores() -> dict[str, str]:
-    """Every store the store modules declare: helper name -> the path a job stages.
+def _ledgers() -> dict[str, str]:
+    """Every ledger the ledger modules declare: helper name -> the path a job stages.
 
     The staged path is the longest prefix two dates share, so a dated ledger reduces
     to its own directory and an undated one stays the file it is.
     """
     found: dict[str, str] = {}
-    for name, helper in _store_publics(suffix="_relpath").items():
+    for name, helper in _ledger_publics(suffix="_relpath").items():
         shared = _shared_prefix(
             _relpath_for(name, helper, SUBSTITUTED_DATE),
             _relpath_for(name, helper, OTHER_DATE),
@@ -262,28 +262,28 @@ def _stores() -> dict[str, str]:
     return found
 
 
-def _writer_stores() -> dict[str, str]:
-    """Every public ledger writer, and the store it writes.
+def _writer_ledgers() -> dict[str, str]:
+    """Every public ledger writer, and the ledger it writes.
 
     Resolved from the path helper the writer's own body calls, so a writer named for
     one thing and writing another follows the code rather than the name.
     """
-    stores = _stores()
+    ledgers = _ledgers()
     resolved: dict[str, str] = {}
-    for name, writer in _store_publics(prefixes=("append_", "write_")).items():
+    for name, writer in _ledger_publics(prefixes=("append_", "write_")).items():
         source = inspect.getsource(writer)
         stems = [
             call.removesuffix("_path").removesuffix("_relpath")
             for call in re.findall(r"\b([a-z_]+_(?:rel)?path)\(", source)
         ]
         stems.append(name.split("_", 1)[1])
-        helper = next((f"{stem}_relpath" for stem in stems if f"{stem}_relpath" in stores), None)
+        helper = next((f"{stem}_relpath" for stem in stems if f"{stem}_relpath" in ledgers), None)
         assert helper is not None, (
-            f"{writer.__module__}.{name} writes a store this test cannot name: it calls "
-            "no path helper it shares a name with. Add a `<store>_relpath()` helper "
+            f"{writer.__module__}.{name} writes a ledger this test cannot name: it calls "
+            "no path helper it shares a name with. Add a `<ledger>_relpath()` helper "
             f"beside the others and call it from {name}."
         )
-        resolved[name] = stores[helper]
+        resolved[name] = ledgers[helper]
     return resolved
 
 
@@ -302,37 +302,37 @@ def _package_sources() -> dict[str, str]:
     }
 
 
-def _sink_stores() -> dict[str, str]:
-    """Every path helper a file sink is opened on, and the store it fills.
+def _sink_ledgers() -> dict[str, str]:
+    """Every path helper a file sink is opened on, and the ledger it fills.
 
     Read out of the package's own source, because a sink has no `append_*` name to be
-    found by: the call site is the only place that says which store it writes.
+    found by: the call site is the only place that says which ledger it writes.
     """
-    stores = _stores()
+    ledgers = _ledgers()
     opened = {
         helper for source in _package_sources().values() for helper in SINK_CALL.findall(source)
     }
     resolved: dict[str, str] = {}
     for helper in sorted(opened):
         stem = helper.removesuffix("_path")
-        assert f"{stem}_relpath" in stores, (
-            f"a file sink is opened on {helper}(), and no store module exports a "
+        assert f"{stem}_relpath" in ledgers, (
+            f"a file sink is opened on {helper}(), and no ledger module exports a "
             f"{stem}_relpath() helper for it. Add one beside the path helper, so this "
-            "test can say which store the sink fills and which job has to stage it."
+            "test can say which ledger the sink fills and which job has to stage it."
         )
-        resolved[helper] = stores[f"{stem}_relpath"]
+        resolved[helper] = ledgers[f"{stem}_relpath"]
     return resolved
 
 
 def _declared_keys() -> dict[str, tuple[str, ...]]:
-    """Store -> the key its writer's own code names, for every writer that names one.
+    """Ledger -> the key its writer's own code names, for every writer that names one.
 
     Read from the syntax tree rather than the text, so a key mentioned in a docstring
     is not mistaken for a key the writer settles rows on.
     """
-    stores = _writer_stores()
+    ledgers = _writer_ledgers()
     declared: dict[str, tuple[str, ...]] = {}
-    for name, writer in _store_publics(prefixes=("append_", "write_")).items():
+    for name, writer in _ledger_publics(prefixes=("append_", "write_")).items():
         tree = ast.parse(inspect.getsource(writer).lstrip())
         used = sorted(
             {
@@ -348,7 +348,7 @@ def _declared_keys() -> dict[str, tuple[str, ...]]:
         assert isinstance(key, tuple), (
             f"{writer.__module__}.{used[0]} must be a tuple of columns"
         )
-        declared[stores[name]] = key
+        declared[ledgers[name]] = key
     return declared
 
 
@@ -387,7 +387,7 @@ def _dispatched_modules() -> dict[str, set[ModuleType]]:
     **The marker cannot be a name prefix.** The digest pipeline calls its entry
     points `stage_*`; the council names its own after the work they do, because a
     verb named for its mechanism is what this plan's rename removed. A prefix test
-    therefore saw the council enter no module at all and left its store charged to
+    therefore saw the council enter no module at all and left its ledger charged to
     no job.
     """
     reached: dict[str, set[ModuleType]] = {}
@@ -431,7 +431,7 @@ def _writers_called_by(module: ModuleType) -> set[str]:
 
 
 def _sinks_opened_by(module: ModuleType) -> set[str]:
-    """The store path helpers this module's source hands to a file sink."""
+    """The ledger path helpers this module's source hands to a file sink."""
     return set(SINK_CALL.findall(inspect.getsource(module)))
 
 
@@ -452,31 +452,31 @@ def _reachable_modules() -> dict[str, set[ModuleType]]:
     return reachable
 
 
-def _verb_stores() -> dict[str, dict[str, str]]:
-    """CLI verb -> store -> the sentence that says why that verb writes it.
+def _verb_ledgers() -> dict[str, dict[str, str]]:
+    """CLI verb -> ledger -> the sentence that says why that verb writes it.
 
-    A ledger writer and a file sink are both writes, and a store filled either way
-    is a store the job that runs the verb has to stage.
+    A ledger writer and a file sink are both writes, and a ledger filled either way
+    is a ledger the job that runs the verb has to stage.
     """
-    stores = _writer_stores()
-    sunk = _sink_stores()
-    compacted = _compacted_stores()
+    ledgers = _writer_ledgers()
+    sunk = _sink_ledgers()
+    compacted = _compacted_ledgers()
     charged: dict[str, dict[str, str]] = {}
     for verb, reachable in _reachable_modules().items():
         for module in sorted(reachable, key=lambda entered: entered.__name__):
             if module is compact_stage:
-                for store, which in sorted(compacted.items()):
-                    charged.setdefault(verb, {})[store] = (
+                for ledger_path, which in sorted(compacted.items()):
+                    charged.setdefault(verb, {})[ledger_path] = (
                         f"`python -m idhazh {verb}` reaches {module.__name__}, "
                         f"which folds every waiting {which} segment into this head"
                     )
             for writer in sorted(_writers_called_by(module)):
-                assert writer in stores, (
+                assert writer in ledgers, (
                     f"{module.__name__} calls ledger.{writer}, which idhazh.ledger does "
                     "not export. Rename the call, or export the writer so this test can "
-                    "find the store it fills."
+                    "find the ledger it fills."
                 )
-                charged.setdefault(verb, {})[stores[writer]] = (
+                charged.setdefault(verb, {})[ledgers[writer]] = (
                     f"`python -m idhazh {verb}` reaches {module.__name__}, "
                     f"which calls ledger.{writer}"
                 )
@@ -511,9 +511,9 @@ def _job_commit_calls() -> dict[tuple[str, str], dict[str, list[str]]]:
     return calls
 
 
-def _covers(staged: str, store: str) -> bool:
-    """Would `git add <staged>` carry this store?"""
-    return store == staged or store.startswith(f"{staged}/")
+def _covers(staged: str, ledger: str) -> bool:
+    """Would `git add <staged>` carry this ledger?"""
+    return ledger == staged or ledger.startswith(f"{staged}/")
 
 
 def _folded_day(which: ledger.SegmentLedger, date: str) -> str:
@@ -533,16 +533,16 @@ def _folded_day(which: ledger.SegmentLedger, date: str) -> str:
     return f"{written.rsplit('/', 1)[0]}/{day_shards.SETTLED_NAME}"
 
 
-def _compacted_stores() -> dict[str, str]:
-    """Every tree the fold writes into, and the store a job has to stage for it.
+def _compacted_ledgers() -> dict[str, str]:
+    """Every tree the fold writes into, and the ledger a job has to stage for it.
 
     The fold writes generically - one function over every declared tree, and no
-    `append_*` name for `_writer_stores` to find - so it is read out of
+    `append_*` name for `_writer_ledgers` to find - so it is read out of
     `SegmentLedger` rather than named here. That is what keeps a ledger joining the
     set from leaving its folded day charged to no job, which is the loss this whole
     file exists to catch.
 
-    The store is the prefix two dates share, taken from the one helper that names a
+    The ledger is the prefix two dates share, taken from the one helper that names a
     day shard for any tree. Reading it per tree from `day_shard_relpath` is what
     reaches all nine: a tree also has a `*_relpath` helper of its own only where a
     reader outside the fold asks for one day of it by date.
@@ -560,40 +560,40 @@ def _compacted_stores() -> dict[str, str]:
 def test_every_store_is_filled_by_a_writer_this_test_can_follow() -> None:
     """The derivation must not answer an empty question.
 
-    Every assertion below reads a list the staging check also reads. A store nothing
+    Every assertion below reads a list the staging check also reads. A ledger nothing
     writes, a sink class nothing matches, or a writer nothing calls would each shrink
     one of them in silence and leave a green test saying nothing at all about the
-    store that went missing.
+    ledger that went missing.
     """
-    stores = _stores()
-    written = set(_writer_stores().values()) | set(_sink_stores().values())
-    written |= set(_compacted_stores())
+    ledgers = _ledgers()
+    written = set(_writer_ledgers().values()) | set(_sink_ledgers().values())
+    written |= set(_compacted_ledgers())
 
-    assert stores, "the store modules export no *_relpath helper, so nothing here is checked"
+    assert ledgers, "the ledger modules export no *_relpath helper, so nothing here is checked"
     assert SINK_CLASSES, (
         f"{sinks.__name__} declares no sink class that takes a path, so the sink half of "
-        "the derivation matches nothing and a store written by one is checked by nobody."
+        "the derivation matches nothing and a ledger written by one is checked by nobody."
     )
-    unknown = sorted(STORES_NO_JOB_WRITES - set(stores.values()))
+    unknown = sorted(LEDGERS_NO_JOB_WRITES - set(ledgers.values()))
     assert not unknown, (
-        f"{', '.join(unknown)} is excused from needing a writer and no store module "
+        f"{', '.join(unknown)} is excused from needing a writer and no ledger module "
         "declares a path helper for it, so the excuse covers nothing. Delete the entry "
-        "from STORES_NOTHING_FILLS_YET or STORES_NO_RUN_FILLS."
+        "from LEDGERS_NOTHING_FILLS_YET or LEDGERS_NO_RUN_FILLS."
     )
-    landed = sorted(STORES_NO_JOB_WRITES & written)
+    landed = sorted(LEDGERS_NO_JOB_WRITES & written)
     assert not landed, (
         f"{', '.join(landed)} now has a public writer and is still excused from having "
-        "one. Delete the entry from STORES_NOTHING_FILLS_YET or STORES_NO_RUN_FILLS, so "
-        "the store is held to the staging and settlement checks below from its first row."
+        "one. Delete the entry from LEDGERS_NOTHING_FILLS_YET or LEDGERS_NO_RUN_FILLS, so "
+        "the ledger is held to the staging and settlement checks below from its first row."
     )
-    unwritten = sorted(set(stores.values()) - written - STORES_NO_JOB_WRITES)
+    unwritten = sorted(set(ledgers.values()) - written - LEDGERS_NO_JOB_WRITES)
     assert not unwritten, (
         f"{', '.join(unwritten)} has a path helper and nothing public fills it. Either the "
         "writer is private - make it public, so the staging test can see it - or the "
         "helper is dead and a commit step is staging a directory nothing fills. A helper "
         "that is deliberately ahead of its writer (Guardrail #3) goes in "
-        "STORES_NOTHING_FILLS_YET, named with what will fill it; a store only a person "
-        "ever fills goes in STORES_NO_RUN_FILLS, named with who fills it."
+        "LEDGERS_NOTHING_FILLS_YET, named with what will fill it; a ledger only a person "
+        "ever fills goes in LEDGERS_NO_RUN_FILLS, named with who fills it."
     )
 
     called = {
@@ -607,17 +607,17 @@ def test_every_store_is_filled_by_a_writer_this_test_can_follow() -> None:
         for name in MODULES_ONLY_A_TENANT_REACHES
         for writer in _writers_called_by(importlib.import_module(name))
     }
-    uncalled = sorted(set(_writer_stores()) - called)
+    uncalled = sorted(set(_writer_ledgers()) - called)
     assert not uncalled, (
         f"{', '.join(uncalled)} is exported as a writer and no module a `python -m idhazh "
-        "<verb>` reaches calls it, so its store is charged to no job and the staging check "
-        "below says nothing about it. Call it from the stage that fills the store, or "
+        "<verb>` reaches calls it, so its ledger is charged to no job and the staging check "
+        "below says nothing about it. Call it from the stage that fills the ledger, or "
         "delete it and the path helper beside it."
     )
 
 
 def test_every_module_that_writes_a_store_is_reached_by_a_cli_verb() -> None:
-    """A writer no verb reaches is a store no job can be asked to stage.
+    """A writer no verb reaches is a ledger no job can be asked to stage.
 
     This is the hole the staging assertion would otherwise fall through. A stage that
     writes rows from a module the CLI never enters is charged to no job, so the
@@ -641,7 +641,7 @@ def test_every_module_that_writes_a_store_is_reached_by_a_cli_verb() -> None:
 
     unknown = sorted(set(MODULES_ONLY_A_TENANT_REACHES) - writing)
     assert not unknown, (
-        f"{', '.join(unknown)} is excused from needing a verb and writes no store, so "
+        f"{', '.join(unknown)} is excused from needing a verb and writes no ledger, so "
         "the excuse covers nothing. Delete the entry from MODULES_ONLY_A_TENANT_REACHES."
     )
     landed = sorted(set(MODULES_ONLY_A_TENANT_REACHES) & reached)
@@ -655,14 +655,14 @@ def test_every_module_that_writes_a_store_is_reached_by_a_cli_verb() -> None:
         writing - reached - {ledger.__name__} - set(MODULES_ONLY_A_TENANT_REACHES)
     )
     assert not stranded, (
-        f"{', '.join(stranded)} writes a store and no `python -m idhazh <verb>` reaches "
+        f"{', '.join(stranded)} writes a ledger and no `python -m idhazh <verb>` reaches "
         "it, so no job can be held to staging what it writes. Dispatch it from a verb in "
         "backend/idhazh/cli.py, or call it from a module a verb already enters."
     )
 
 
 def test_every_store_is_staged_by_the_job_whose_stage_writes_it() -> None:
-    """A store no job stages is written on a runner and deleted with it.
+    """A ledger no job stages is written on a runner and deleted with it.
 
     `state/host-fingerprint` was written and staged by nobody until 2026-09-16,
     `state/span-rollup` until 2026-09-15, and `state/traces` beside it. None of them
@@ -676,7 +676,7 @@ def test_every_store_is_staged_by_the_job_whose_stage_writes_it() -> None:
     daily one: a second workflow's runner is no closer to the daily run's tree.
     """
     workflows = _load_workflows()
-    verb_stores = _verb_stores()
+    verb_ledgers = _verb_ledgers()
     commit_calls = _job_commit_calls()
 
     missing: list[str] = []
@@ -684,14 +684,14 @@ def test_every_store_is_staged_by_the_job_whose_stage_writes_it() -> None:
     for (workflow_name, job_name), labels in sorted(commit_calls.items()):
         staged = {path for paths in labels.values() for path in paths}
         for verb in sorted(_job_verbs(workflows[workflow_name], job_name)):
-            for store, because in sorted(verb_stores.get(verb, {}).items()):
+            for ledger_path, because in sorted(verb_ledgers.get(verb, {}).items()):
                 credited.add((workflow_name, job_name))
-                if any(_covers(path, store) for path in staged):
+                if any(_covers(path, ledger_path) for path in staged):
                     continue
                 steps = ", ".join(f'"{COMMIT_STEPS[label]}"' for label in sorted(labels))
                 missing.append(
-                    f"{store} is written by the {job_name} job ({because}) and no commit "
-                    f"step in that job stages it. Add {store} to the paths of the {steps} "
+                    f"{ledger_path} is written by the {job_name} job ({because}) and no commit "
+                    f"step in that job stages it. Add {ledger_path} to the paths of the {steps} "
                     f"step in .github/workflows/{workflow_name}. Another job staging a "
                     "parent of it is not enough: that job runs on its own runner and "
                     "cannot see a file this one wrote."
@@ -700,15 +700,15 @@ def test_every_store_is_staged_by_the_job_whose_stage_writes_it() -> None:
     assert not missing, "\n".join(missing)
     assert credited == set(commit_calls), (
         f"the {sorted(set(commit_calls) - credited)} job commits and this test charged "
-        "it with no store at all, so nothing above was checked for it."
+        "it with no ledger at all, so nothing above was checked for it."
     )
 
 
-def _rewritten_stores() -> set[str]:
-    """The stores a writer replaces whole, rather than appends a row to.
+def _rewritten_ledgers() -> set[str]:
+    """The ledgers a writer replaces whole, rather than appends a row to.
 
     `append_*` adds to the file and `write_*` replaces it - the convention the module
-    already spells in its own names, and the one `_store_publics` already splits on.
+    already spells in its own names, and the one `_ledger_publics` already splits on.
     A writer that replaces settles nothing as it writes, so it names no key. The
     post-merge key is still right for it: two runs' folds can both land in the
     merged copy and the settler is the only thing that can take
@@ -719,10 +719,10 @@ def _rewritten_stores() -> set[str]:
     and it has no `append_*`/`write_*` name at all - so it is added here from the
     declared head table. `state/host-fingerprint` is the case.
     """
-    stores = _writer_stores()
-    replaced = {store for name, store in stores.items() if name.startswith("write_")}
-    replaced |= set(_compacted_stores())
-    appended = {store for name, store in stores.items() if name.startswith("append_")}
+    ledgers = _writer_ledgers()
+    replaced = {ledger for name, ledger in ledgers.items() if name.startswith("write_")}
+    replaced |= set(_compacted_ledgers())
+    appended = {ledger for name, ledger in ledgers.items() if name.startswith("append_")}
     return replaced - appended
 
 
@@ -734,11 +734,11 @@ def test_every_ledger_that_declares_a_key_is_registered_for_settlement() -> None
     declares no key must also be absent from the registry - which is what
     `keyed_paths` says about the one ledger it deliberately leaves out.
 
-    A store whose writer replaces the file is the exception, and it is derived rather
-    than named: see `_rewritten_stores`.
+    A ledger whose writer replaces the file is the exception, and it is derived rather
+    than named: see `_rewritten_ledgers`.
 
-    A store registered before its writer exists is the second exception, and that one
-    is named rather than derived: `STORES_NOTHING_FILLS_YET` and `STORES_NO_RUN_FILLS`.
+    A ledger registered before its writer exists is the second exception, and that one
+    is named rather than derived: `LEDGERS_NOTHING_FILLS_YET` and `LEDGERS_NO_RUN_FILLS`.
     Registering the key with the shape rather than with its first writer is what makes
     the settlement true from the first row instead of from the second, which is the
     position `state/feed-retirements.csv` was in on 2026-09-02.
@@ -747,17 +747,17 @@ def test_every_ledger_that_declares_a_key_is_registered_for_settlement() -> None
     of globbing the tree, and this test reads no committed file.
     """
     declared = _declared_keys()
-    stores = set(_stores().values())
+    ledgers = set(_ledgers().values())
 
     registered: dict[str, tuple[str, ...]] = {}
     for entry in ledger.keyed_paths(Path("state"), date=SUBSTITUTED_DATE):
         path = entry.path.as_posix()
-        store = next((name for name in stores if _covers(name, path)), None)
-        assert store is not None, (
-            f"{path} is registered for settlement and matches no store idhazh.ledger "
+        ledger_path = next((name for name in ledgers if _covers(name, path)), None)
+        assert ledger_path is not None, (
+            f"{path} is registered for settlement and matches no ledger idhazh.ledger "
             "declares a path helper for, so nothing can say which writer fills it."
         )
-        registered[store] = entry.key
+        registered[ledger_path] = entry.key
 
     unregistered = sorted(set(declared) - set(registered))
     assert not unregistered, (
@@ -766,7 +766,7 @@ def test_every_ledger_that_declares_a_key_is_registered_for_settlement() -> None
         "dropped. Add it to keyed_paths() in backend/idhazh/ledger.py."
     )
 
-    keyless = sorted(set(registered) - set(declared) - _rewritten_stores() - STORES_NO_JOB_WRITES)
+    keyless = sorted(set(registered) - set(declared) - _rewritten_ledgers() - LEDGERS_NO_JOB_WRITES)
     assert not keyless, (
         f"{', '.join(keyless)} is registered for settlement, its writer appends rows, and "
         "that writer names no key - so the settler has a key the writer does not use. Name "
@@ -774,8 +774,8 @@ def test_every_ledger_that_declares_a_key_is_registered_for_settlement() -> None
         "keyed_paths()."
     )
 
-    for store, key in sorted(declared.items()):
-        assert registered[store] == key, (
-            f"{store} is written on {key} and settled on {registered[store]}. The two must "
+    for ledger_path, key in sorted(declared.items()):
+        assert registered[ledger_path] == key, (
+            f"{ledger_path} is written on {key} and settled on {registered[ledger_path]}. The two must "
             "be one tuple, or a repeat the writer would have dropped survives the merge."
         )

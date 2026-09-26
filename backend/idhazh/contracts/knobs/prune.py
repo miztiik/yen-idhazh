@@ -33,7 +33,7 @@ class PrunableCollection(StrEnum):
 
     A closed vocabulary, so a word outside it is refused with the whole list
     rather than resolved against anything. The same rule `idhazh telemetry
-    prune` holds for its stores: a deletion command whose destination is an
+    prune` holds for its ledgers: a deletion command whose destination is an
     arbitrary string is a deletion primitive pointed at whatever the caller
     happened to pass (Guardrail #11).
     """

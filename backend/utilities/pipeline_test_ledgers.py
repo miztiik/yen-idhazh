@@ -40,7 +40,7 @@ from pathlib import Path
 from idhazh import day_shards, ledger
 from idhazh.contracts.pipeline_tests import PipelineTestsConfig
 
-#: How deep a writer's file sits below a trial root: the store, a year, a month,
+#: How deep a writer's file sits below a trial root: the ledger, a year, a month,
 #: a day, and the filename. A ledger row and a trace share the grammar, so they
 #: share the number.
 DAY_SHARD_PARTS = 5
@@ -103,7 +103,7 @@ def refusals(tree: Path, *, roots: frozenset[str]) -> list[str]:
         if parts[0] not in roots:
             found.append(f"{relative} is filed under {parts[0]}, which no declared case names")
         elif len(parts) < 3:
-            found.append(f"{relative} sits directly under a trial root and names no store")
+            found.append(f"{relative} sits directly under a trial root and names no ledger")
         elif parts[1] == TRACES:
             found += _refuse_trace(path, "/".join(parts[1:]))
         else:

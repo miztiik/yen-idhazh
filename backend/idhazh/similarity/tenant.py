@@ -36,12 +36,12 @@ from idhazh.stages.common import LOG
 #: This judge's own slug, narrowed to the one member it can be. The closed set
 #: is declared once beside the column that holds it, and named here because this
 #: is the module the council reads it off - a second spelling of the string is a
-#: second thing to keep in step with the store's directory name.
+#: second thing to keep in step with the ledger's directory name.
 JUDGE_ID: Final[ContentSimilarityJudgeId] = "content-similarity-judge"
 
-#: Everything this judge's own work commits, as one prefix. Every store it fills
+#: Everything this judge's own work commits, as one prefix. Every ledger it fills
 #: hangs off its slug, so naming the prefix stages the pairs, the record, the
-#: fitted line and the instrument rows in one go - and a store it gains later is
+#: fitted line and the instrument rows in one go - and a ledger it gains later is
 #: staged the day it is written rather than the day somebody remembers this list.
 COMMITTED_PATHS: Final = (f"{ledger.STATE_DIRNAME}/{ledger.CONTENT_SIMILARITY_JUDGE_DIRNAME}",)
 
@@ -154,7 +154,7 @@ class ContentSimilarityJudge:
         The row goes out through the venue's own capability, which writes it
         under the columns its contract names - so a cell this judge declares and
         this unit did not fill fails on this runner rather than arriving in a
-        committed store as an empty string.
+        committed ledger as an empty string.
         """
         report = judge_item_pairs.stage_judge_item_pairs(
             date,

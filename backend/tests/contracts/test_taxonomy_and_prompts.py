@@ -260,9 +260,9 @@ def test_a_signal_that_publishes_is_never_charged_to_a_source() -> None:
 def test_a_signal_that_cannot_fire_is_never_charged_to_a_source() -> None:
     """`boilerplate` left the neutral set on 2026-09-17 and came back the same day.
 
-    It moved out when a store started feeding the comparison it rests on. Over one
-    full run that store changed the signal exactly zero times - 12,917 committed
-    item-health rows, no `boilerplate` cell among them - so the store was reverted
+    It moved out when a ledger started feeding the comparison it rests on. Over one
+    full run that ledger changed the signal exactly zero times - 12,917 committed
+    item-health rows, no `boilerplate` cell among them - so the ledger was reverted
     and the code is back to dividing by an empty set. A signal that cannot fire
     must not count against a publisher, because the only thing it could ever do
     then is be wrong.

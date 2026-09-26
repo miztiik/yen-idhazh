@@ -391,7 +391,7 @@ def test_the_venue_runs_a_shard_under_its_own_clock_and_files_the_row(venue: Pat
     does. What is asserted is that the venue handed it a deadline it never asked
     for, and filed its own row on the way out.
     """
-    a_venue(venue, package=A_VENUE, slugs={A_SLUG: (2, ("state/a-judgeless-store",))})
+    a_venue(venue, package=A_VENUE, slugs={A_SLUG: (2, ("state/a-judgeless-ledger",))})
     council = _council(A_SLUG)
     state_root = venue / "state"
     run_id = run_identity.council_run_id(opened_on=TONIGHT, platform_run_id=A_PLATFORM_RUN)

@@ -159,7 +159,7 @@ VALIDATION_DIRNAME: Final = "validation"
 SCORES_DIRNAME: Final = "scores"
 SCORE_INDEX_DIRNAME: Final = "score-index"
 
-#: The council's own prefix, and the one store under it that records how a night
+#: The council's own prefix, and the one ledger under it that records how a night
 #: went. Nested for the reason the judge's prefix below is: everything the venue
 #: writes about itself hangs off one word, so a commit step stages one prefix and
 #: a reader sees the whole footprint in one place.
@@ -170,7 +170,7 @@ SCORE_INDEX_DIRNAME: Final = "score-index"
 COUNCIL_DIRNAME: Final = "llm-council"
 SHARD_OUTCOMES_DIRNAME: Final = "shard-outcomes"
 
-#: The content-similarity judge's own prefix, and every store under it. The judge
+#: The content-similarity judge's own prefix, and every ledger under it. The judge
 #: slug is the group, so everything that judge produces hangs off one word: the
 #: pairs it scored, the line fitted from them, the record those pairs are folded
 #: into, the hand-marked holdout the line is measured against, how its instrument
@@ -209,19 +209,19 @@ DAY_VALIDATIONS_DIRNAME: Final = "day-validations"
 #: spelling of it would file a row under a day nobody can find it in.
 DATE_CELL: Final = "date"
 
-#: Every directory under `state/` this module owns a store in. `prune-state`
-#: subtracts it, and the few stores other modules own, from the children of
+#: Every directory under `state/` this module owns a ledger in. `prune-state`
+#: subtracts it, and the few ledgers other modules own, from the children of
 #: `state/`; what is left is a trial run's tree, and that is how the prune finds
 #: a tree to empty without being told its name.
 #:
-#: Built from the constants above rather than from their text, so a store added
+#: Built from the constants above rather than from their text, so a ledger added
 #: through its own constant joins this set in the same commit. A name missing
 #: here reads as a trial root, which is why the subtraction is spelled out
 #: rather than guessed at.
 #:
 #: The nested names are deliberately absent: `shard-outcomes` and the judge's
 #: five are one level further down, inside a prefix already named here.
-STORE_DIRNAMES: Final[frozenset[str]] = frozenset(
+LEDGER_DIRNAMES: Final[frozenset[str]] = frozenset(
     {
         SEEN_DIRNAME,
         HEALTH_DIRNAME,
@@ -527,7 +527,7 @@ def health_path(state_dir: Path, date: str) -> Path:
 
     A day rather than a month, for the reason `item_health_path` gives: taking a
     day back is one `rm` rather than an edit inside a shared shard, which an
-    append-only ledger cannot express. Nothing mirrors this store into
+    append-only ledger cannot express. Nothing mirrors this ledger into
     `frontend/public/`.
 
     A directory rather than a file, because two `plan` jobs of one night both
@@ -589,7 +589,7 @@ def scores_path(state_dir: Path, date: str) -> Path:
 
     A day rather than a month, for the reason `published_path` gives: taking a
     day back is one `rm` rather than an edit inside a shared shard, which an
-    append-only ledger cannot express. Nothing mirrors this store into
+    append-only ledger cannot express. Nothing mirrors this ledger into
     `frontend/public/`.
 
     Two jobs of one run measure items - a work shard as each item settles, and
@@ -645,7 +645,7 @@ def telemetry_aggregate_path(state_dir: Path, month: str) -> Path:
 
     Its own directory rather than a second name inside `item-health/`, because
     `day_partition.day_files` refuses anything that is not a `<YYYY>/<MM>/<DD>.csv`
-    - a month file beside the day tree would stop every read of the store rather
+    - a month file beside the day tree would stop every read of the ledger rather
     than be skipped. The shape differs too: the aggregate is a fold, not a census
     row.
     """
@@ -854,7 +854,7 @@ def content_similarity_judge_metrics_path(state_dir: Path, date: str) -> Path:
 
     The date is the digest date the shard judged, which is the date the council's
     own record files by - so a reader holding one night's units against one
-    night's readings opens one day file in each store.
+    night's readings opens one day file in each ledger.
     """
     root = state_dir / CONTENT_SIMILARITY_JUDGE_DIRNAME / JUDGE_METRICS_DIRNAME
     return root / date[:4] / date[5:7] / f"{date[8:10]}.csv"
@@ -1116,8 +1116,8 @@ def extend_ledger_file(path: Path, columns: tuple[str, ...], rows: Sequence[CsvR
     """Write every row it is handed. This path does not deduplicate, on purpose.
 
     **Public because a caller outside this module now writes a file this module
-    does not name.** The council ships a tenant's rows to a store the tenant
-    names, so there is no `<store>_relpath` helper here to hang an `append_*`
+    does not name.** The council ships a tenant's rows to a ledger the tenant
+    names, so there is no `<ledger>_relpath` helper here to hang an `append_*`
     writer off - and rewriting the append beside that caller would give one
     ledger two shapes.
 
@@ -1361,7 +1361,7 @@ def _as_item_health_row(raw: dict[str, str]) -> dict[str, str]:
 #: the cell goes, which is the point of dropping it.
 ITEM_HEALTH_CARRIED: Final[frozenset[str]] = frozenset(RETIRED_CELLS) | DROPPED_CELLS
 
-#: The same, for the judged-pair store. One column has left this row and none has
+#: The same, for the judged-pair ledger. One column has left this row and none has
 #: moved, so there is no retired half: `from_csv_row` reads a day file by the
 #: names the contract holds now and the dropped heading simply goes.
 STORY_SIMILARITY_PAIR_CARRIED: Final[frozenset[str]] = DROPPED_PAIR_CELLS
@@ -1515,7 +1515,7 @@ def append_story_similarity_pairs(
 def load_story_similarity_pairs(state_dir: Path, date: str) -> list[StorySimilarityPair]:
     """One named day's judged pairs, and never a second file.
 
-    **Guardrail #12 declaration, and it is the whole point of this store's
+    **Guardrail #12 declaration, and it is the whole point of this ledger's
     shape.** The fold counts one date into the record and the record is then the
     only thing the fit reads, so this opens the file the date names and stops.
     It costs the same on the thousandth day as on the third whatever the tree
@@ -1574,7 +1574,7 @@ def append_council_shard_outcomes(
     this writer differs from the three above it. A header with no rows under it
     is a real day file to the partition walker, so an empty write here would put
     a permanent day in the prune target and the day inventory that no council
-    run ever had. The store's directory is kept in the checkout by its own
+    run ever had. The ledger's directory is kept in the checkout by its own
     `.gitkeep`, so the staged path is there whether or not tonight wrote to it.
 
     Returns how many rows the file gained, so a caller can log the count.

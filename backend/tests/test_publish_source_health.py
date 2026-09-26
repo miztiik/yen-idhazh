@@ -851,7 +851,7 @@ _GAP_SHORT = COLLECT.model_copy(update={"source_yield_min_complete_days": _GAP_K
 
 
 def _day_relpath(date: str) -> str:
-    """The settled file of one day, relative to the store - what a folded day holds."""
+    """The settled file of one day, relative to the ledger - what a folded day holds."""
     return f"{date[:4]}/{date[5:7]}/{date[8:10]}/{day_shards.SETTLED_NAME}"
 
 

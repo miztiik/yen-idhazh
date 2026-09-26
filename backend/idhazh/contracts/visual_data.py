@@ -188,7 +188,7 @@ class VisualData(Contract):
 
     Published at `frontend/public/digest/<YYYY>/<MM>/<DD>/<item_id>.json`, beside
     the day payload that points at it. **The shard is the day directory**, which
-    is what every other published store uses and what a reader fetches. The chart
+    is what every other published collection uses and what a reader fetches. The chart
     data is kept out of `digest.json` because the day payload is never deleted,
     so anything inside it would be undeletable and `retention.image_months` would
     have nothing to act on (owner, 2026-09-13).

@@ -2,7 +2,7 @@
 
 `backend/utilities/` is outside `testpaths`, so nothing there is collected by
 pytest. Its pure functions are still owed tests, and this is where they live -
-the same arrangement `test_check_seeded_stores.py` uses.
+the same arrangement `test_check_seeded_ledgers.py` uses.
 
 Every case here is built in the test. Nothing reads the draw tree, the published
 days or the committed sheet, so none of it gets slower as the archive grows

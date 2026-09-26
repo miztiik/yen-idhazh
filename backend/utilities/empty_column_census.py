@@ -1,7 +1,7 @@
 """Which published column has a heading on every row and a value on none.
 
 **An operator script, never a test.** Answering it means opening every committed
-day file of every store, which costs more as the archive grows (CLAUDE.md
+day file of every ledger, which costs more as the archive grows (CLAUDE.md
 Guardrail #12) and which section 13 forbids a test to do. It would put a fuse on
 the answer besides: a test asserting a column empty goes red the day that column
 first fills, which is a date on the calendar rather than an edit anybody made. So
@@ -11,7 +11,7 @@ Run it from the repository root:
 
     python backend/utilities/empty_column_census.py
 
-**What it settles.** For each store, which columns of the contract carry a value
+**What it settles.** For each ledger, which columns of the contract carry a value
 somewhere in the committed archive and which carry one nowhere - and, crossed
 with the reader maps on the contracts themselves, which columns have neither a
 reader nor a writer. That last set is the one to act on: a column nobody draws
@@ -46,7 +46,7 @@ from idhazh.contracts.item_health import RETIRED_CELLS, UNREAD_CELLS, ItemHealth
 from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
 
 
-class Store(NamedTuple):
+class Ledger(NamedTuple):
     """One day-partitioned ledger, and what it takes to read its headings."""
 
     #: What the report calls it, in the words a person uses for the thing.
@@ -64,8 +64,8 @@ class Store(NamedTuple):
     unread: frozenset[str]
 
 
-STORES: Final[tuple[Store, ...]] = (
-    Store(
+LEDGERS: Final[tuple[Ledger, ...]] = (
+    Ledger(
         title="item health",
         root="state/item-health",
         columns=tuple(ItemHealthRow.csv_columns()),
@@ -74,7 +74,7 @@ STORES: Final[tuple[Store, ...]] = (
             name for names in UNREAD_CELLS.values() for name in names
         ),
     ),
-    Store(
+    Ledger(
         title="host fingerprint",
         root="state/host-fingerprint",
         columns=tuple(HostFingerprintRow.csv_columns()),
@@ -83,7 +83,7 @@ STORES: Final[tuple[Store, ...]] = (
     ),
 )
 
-#: Which contract module names the reader of each store's columns, so the report
+#: Which contract module names the reader of each ledger's columns, so the report
 #: can say where to go and not only what is wrong.
 READERS: Final[Mapping[str, Mapping[str, Sequence[str]]]] = {
     "item health": ITEM_READERS,
@@ -92,7 +92,7 @@ READERS: Final[Mapping[str, Mapping[str, Sequence[str]]]] = {
 
 
 class Census(NamedTuple):
-    """What one store's committed archive holds, counted once."""
+    """What one ledger's committed archive holds, counted once."""
 
     filled: frozenset[str]
     headed: frozenset[str]
@@ -100,8 +100,8 @@ class Census(NamedTuple):
     files: int
 
 
-def census(root: Path, store: Store) -> Census:
-    """Open every committed day file of one store and pool what it carries.
+def census(root: Path, ledger: Ledger) -> Census:
+    """Open every committed day file of one ledger and pool what it carries.
 
     **This is the growing read.** A bounded input cannot answer it: the question
     is whether ANY run has ever written the column, and a window answers only
@@ -112,21 +112,21 @@ def census(root: Path, store: Store) -> Census:
     headed: set[str] = set()
     rows = 0
     files = 0
-    for path in day_shards.shard_files(root / store.root, days=UNBOUNDED_WINDOW):
+    for path in day_shards.shard_files(root / ledger.root, days=UNBOUNDED_WINDOW):
         files += 1
         with path.open(encoding="utf-8", newline="") as handle:
             reader = csv.DictReader(handle)
             headed.update(
-                store.carried.get(name, name) for name in reader.fieldnames or ()
+                ledger.carried.get(name, name) for name in reader.fieldnames or ()
             )
             for row in reader:
                 rows += 1
                 filled.update(
-                    store.carried.get(name, name)
+                    ledger.carried.get(name, name)
                     for name, cell in row.items()
                     if cell and cell.strip()
                 )
-    known = frozenset(store.columns)
+    known = frozenset(ledger.columns)
     return Census(frozenset(filled) & known, frozenset(headed) & known, rows, files)
 
 
@@ -139,27 +139,27 @@ def reader_of(title: str, column: str) -> str:
 
 
 def report(root: Path) -> int:
-    """Print one block a store, then the verdict. Non-zero means act."""
+    """Print one block a ledger, then the verdict. Non-zero means act."""
     orphans: list[str] = []
-    for store in STORES:
-        found = census(root, store)
-        empty = tuple(name for name in store.columns if name not in found.filled)
-        missing = tuple(name for name in store.columns if name not in found.headed)
-        print(f"\n## {store.title}")
+    for ledger in LEDGERS:
+        found = census(root, ledger)
+        empty = tuple(name for name in ledger.columns if name not in found.filled)
+        missing = tuple(name for name in ledger.columns if name not in found.headed)
+        print(f"\n## {ledger.title}")
         print(
             f"{found.files} day files, {found.rows} rows, "
-            f"{len(store.columns)} columns the contract names, "
+            f"{len(ledger.columns)} columns the contract names, "
             f"{len(found.headed)} of them under a heading somewhere"
         )
         if missing:
             print("\nNever under any heading - no run has written the column at all:")
             for name in missing:
-                print(f"  {name:<34} {reader_of(store.title, name)}")
+                print(f"  {name:<34} {reader_of(ledger.title, name)}")
         print(f"\nEmpty on all {found.rows} committed rows ({len(empty)}):")
         for name in empty or ("- none -",):
-            print(f"  {name:<34} {reader_of(store.title, name) if empty else ''}")
-        both = tuple(name for name in empty if name in store.unread)
-        orphans += [f"{store.title}: {name}" for name in both]
+            print(f"  {name:<34} {reader_of(ledger.title, name) if empty else ''}")
+        both = tuple(name for name in empty if name in ledger.unread)
+        orphans += [f"{ledger.title}: {name}" for name in both]
 
     print("\n## Neither a reader nor a writer")
     if not orphans:

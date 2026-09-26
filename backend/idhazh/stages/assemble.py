@@ -438,7 +438,7 @@ def stage_assemble(
         taxonomy_vectors=assemble.read_taxonomy_vectors(config.REPO_ROOT, settings.taxonomy),
         # Nothing waits any more. Every writer files its own path under the day
         # its rows name, so a run that died three days ago left those rows in
-        # that day rather than in a store somebody had to drain. The two
+        # that day rather than in a ledger somebody had to drain. The two
         # readings stay on the published payload at zero, because a reader of an
         # older day still finds them there and a field removed is a contract
         # break for a page nobody re-publishes.

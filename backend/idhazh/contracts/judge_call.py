@@ -26,7 +26,7 @@ each member, so a stem-less mixin registered there would break them. This is a
 registers itself.
 
 **A row with committed rows behind it does not inherit this.** Base fields are
-collected first, so inheriting reorders the header and makes the store
+collected first, so inheriting reorders the header and makes the ledger
 unappendable. Such a row declares the columns it needs in its own body, at the
 tail, where a header only grows to the right.
 

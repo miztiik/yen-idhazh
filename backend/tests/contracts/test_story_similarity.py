@@ -57,7 +57,7 @@ def keys_of(left: str, right: str) -> tuple[str, str, str]:
 def _narrow_file() -> list[list[str]]:
     """The committed pre-widening day file, read inside whichever test asked for it.
 
-    A fixture rather than the store itself: the archive can no longer produce a
+    A fixture rather than the ledger itself: the archive can no longer produce a
     narrow header, and a test that walked `state/` would go red the day somebody
     re-filed it (`CLAUDE.md` section 13).
     """
@@ -66,7 +66,7 @@ def _narrow_file() -> list[list[str]]:
 
 
 def narrow_header() -> tuple[str, ...]:
-    """The columns this store carried before the judge-call stamp was appended.
+    """The columns this ledger carried before the judge-call stamp was appended.
 
     Minus the two the row has since stopped naming. `ledger.migrate_header`
     re-files a committed day under the contract's own columns and drops what it
@@ -76,7 +76,7 @@ def narrow_header() -> tuple[str, ...]:
 
 
 def a_narrow_row() -> dict[str, str]:
-    """One judged row as the store held it before the widening, cell by cell."""
+    """One judged row as the ledger held it before the widening, cell by cell."""
     header, first = _narrow_file()[0], _narrow_file()[1]
     return dict(zip(header, first, strict=True))
 
@@ -272,7 +272,7 @@ def test_the_judge_call_stamp_sits_at_the_tail_of_the_pair_header() -> None:
     This is why the six are declared in the row's own body rather than
     inherited from `judge_call.JudgeConfigStamp`: pydantic collects a base
     class's fields first, so inheriting would put them at the HEAD. The header
-    the store carried before the widening is committed as a fixture, so this
+    the ledger carried before the widening is committed as a fixture, so this
     asserts the widening was additive rather than counting six names.
     """
     columns = StorySimilarityPair.csv_columns()
@@ -309,7 +309,7 @@ def test_a_row_written_before_the_stamp_reads_back_with_its_own_version() -> Non
 
 
 def test_a_widened_row_round_trips_through_the_csv_cells() -> None:
-    """Every appended column has to survive the render and the read, or the store loses it."""
+    """Every appended column has to survive the render and the read, or the ledger loses it."""
     stamped = StorySimilarityPair.model_validate(
         a_pair(
             judge_temperature=0.0,
@@ -328,7 +328,7 @@ def test_a_widened_row_round_trips_through_the_csv_cells() -> None:
 
 
 def test_a_pair_row_refuses_a_first_token_window_that_would_split_the_row() -> None:
-    """The window is the first model-written value this store commits.
+    """The window is the first model-written value this ledger commits.
 
     It lands as a quoted CSV value and never as a key, a name or a path
     (Guardrail #11). What it may not hold is a newline, which splits the row for

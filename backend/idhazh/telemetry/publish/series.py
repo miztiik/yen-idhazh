@@ -26,7 +26,7 @@ canary assertion non-deterministic.
 3. *Nothing outlives its knob.* Each published directory has an
    `observability.public_*_keep_months` value, so the directory holds at most
    that many files however long the project runs. That is what makes listing it
-   a bounded read rather than a growing one - the cover is enforced on the store
+   a bounded read rather than a growing one - the cover is enforced on the ledger
    rather than on the read (`docs/concepts/growing-reads.md`).
 """
 

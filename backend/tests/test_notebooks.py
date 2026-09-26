@@ -143,7 +143,7 @@ def test_the_merge_is_not_attempted_on_the_free_tier(every_cell: str) -> None:
 
 def test_no_token_is_committed(every_cell: str) -> None:
     """The notebook is public. A token reaches it only from the runtime's own secrets."""
-    assert 'userdata.get("HF_TOKEN")' in every_cell, "the token is not read from a secret store"
+    assert 'userdata.get("HF_TOKEN")' in every_cell, "the token is not read from the runtime's own secrets"
 
     for line in every_cell.splitlines():
         stripped = line.strip()

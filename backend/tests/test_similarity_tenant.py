@@ -5,7 +5,7 @@ config names, the object that answers to it, and the members the venue calls.
 Every one of them is asked of the committed config, because a tenant registered
 in a temporary file is a tenant the nightly run does not have.
 
-Nothing here opens a store or a published day.
+Nothing here opens a ledger or a published day.
 """
 
 from __future__ import annotations
@@ -116,9 +116,9 @@ def test_this_judge_splits_its_work_the_way_its_draw_is_dealt() -> None:
 
 
 def test_the_prefix_this_judge_stages_covers_the_store_every_unit_writes() -> None:
-    """One prefix, so a store this judge gains later is staged the day it is written.
+    """One prefix, so a ledger this judge gains later is staged the day it is written.
 
-    A list of the stores as they stand would commit the day a new one is added
+    A list of the ledgers as they stand would commit the day a new one is added
     and drop it on every night until somebody noticed.
     """
     under_the_prefix = ledger.content_similarity_judge_metrics_relpath(A_NIGHT)
@@ -136,12 +136,12 @@ def test_this_judge_names_no_night_the_council_did_not_ask_about(tmp_path: Path)
     planning job refuses one by name, and a tenant that answered with one would
     fail the night rather than be ignored.
 
-    On a store this test built. The committed one is appended to every night, so
+    On a ledger this test built. The committed one is appended to every night, so
     reading it here would put the archive's own contents inside the assertion
     (CLAUDE.md section 13).
     """
     answered = tenant.TENANT.nights_outstanding(
-        window=(A_NIGHT,), state_dir=tmp_path / "a-store-with-no-record-in-it"
+        window=(A_NIGHT,), state_dir=tmp_path / "a-ledger-with-no-record-in-it"
     )
 
     assert set(answered) <= {A_NIGHT}

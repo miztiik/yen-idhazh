@@ -153,7 +153,7 @@ def a_full_run(state: Path, date: str) -> Path:
 
 
 def test_a_store_with_no_days_folds_nothing_and_says_so(tmp_path: Path) -> None:
-    """A fresh clone is not a fault, and neither is a store a fold already drained."""
+    """A fresh clone is not a fault, and neither is a ledger a fold already drained."""
     report = fold(tmp_path / ledger.STATE_DIRNAME)
 
     assert report == compact.CompactionReport(0, 0, 0, (), None, None)
@@ -244,7 +244,7 @@ def test_every_closed_day_goes_in_one_pass_and_the_report_names_both_ends(
 def test_two_trees_closed_on_one_day_are_both_named(tmp_path: Path) -> None:
     """Every ledger is folded, not the first one that has a closed day.
 
-    `trees_touched` is what an operator reads to know which stores moved, so a
+    `trees_touched` is what an operator reads to know which ledgers moved, so a
     tree that folded and was not named is a diff nobody can account for.
     """
     state = tmp_path / ledger.STATE_DIRNAME
@@ -371,7 +371,7 @@ def test_every_day_a_tree_recorded_is_listed_once_and_oldest_first(tmp_path: Pat
 
 
 def test_a_tree_that_was_never_written_lists_no_days(tmp_path: Path) -> None:
-    """A store a clone has never run is not a fault."""
+    """A ledger a clone has never run is not a fault."""
     assert compact.recorded_days(tmp_path / ledger.HOST_FINGERPRINT_DIRNAME) == []
 
 

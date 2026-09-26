@@ -161,7 +161,7 @@ def test_a_council_verb_runs_a_night_that_hosts_nobody(verb: str, tmp_path: Path
     The config is written here rather than read out of `config/`, which has
     registered a judge since 2026-09-21. Reading the committed one would ask
     what that judge does instead of what an empty room does - and would run a
-    real night's work over the checkout's own stores on the way.
+    real night's work over the checkout's own ledgers on the way.
     """
     empty = _config_registering(tmp_path)
 
@@ -382,7 +382,7 @@ def test_a_tenant_with_no_model_files_empty_cost_cells_and_never_zeros(
     """Null and zero are different facts, and only the tenant knows which it is.
 
     Every one of these cells is copied off what the tenant handed back. The
-    council opens no store of a tenant's and reads no field of a tenant's
+    council opens no ledger of a tenant's and reads no field of a tenant's
     contract, so a tenant with no model files nothing rather than four zeros.
     """
     a_scripted_venue(venue, package=A_VENUE, slug=A_SLUG, shard_count=1)
@@ -435,8 +435,8 @@ def test_a_night_that_hosts_nobody_leaves_no_day_file_behind(tmp_path: Path) -> 
     """A header with no rows under it is a real day to the partition walker.
 
     Written once, it is a phantom day in the prune target and the day inventory
-    for as long as the store exists - so a night with nothing to record writes
-    nothing at all. The store's directory is kept by its own `.gitkeep`.
+    for as long as the ledger exists - so a night with nothing to record writes
+    nothing at all. The ledger's directory is kept by its own `.gitkeep`.
     """
     state_root = tmp_path / "state"
     empty = _config_registering(tmp_path)

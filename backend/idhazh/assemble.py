@@ -409,7 +409,7 @@ class TaxonomyVectors:
 
 
 def label_vector_texts(taxonomy: Taxonomy) -> tuple[str, ...]:
-    """What gets encoded into a label vector, in the order the file stores it.
+    """What gets encoded into a label vector, in the order the file holds it.
 
     Active verticals first, then active lenses, each in vocabulary order. A
     retired entry is not offered to a prompt and is not encoded here either.
@@ -508,7 +508,7 @@ def read_taxonomy_vectors(root: Path, taxonomy: Taxonomy) -> TaxonomyVectors | N
         )
     if dimensions != DIMENSIONS:
         raise ValueError(
-            f"{name} stores {dimensions}-wide vectors and this build reads {DIMENSIONS}"
+            f"{name} holds {dimensions}-wide vectors and this build reads {DIMENSIONS}"
         )
     if len(raw) - start != count * dimensions:
         raise ValueError(
@@ -549,7 +549,7 @@ def nearest_label_cosines(
         return []
     if embeddings.dimensions != labels.dimensions:
         LOG.warning(
-            "the day stores %s-wide vectors and the label vectors are %s wide, so the "
+            "the day holds %s-wide vectors and the label vectors are %s wide, so the "
             "day records no label similarity",
             embeddings.dimensions,
             labels.dimensions,
@@ -560,7 +560,7 @@ def nearest_label_cosines(
         raw = vector_bytes(encoded, embeddings.dimensions)
         if raw is None:
             LOG.warning(
-                "item %s stores a vector that is not %s bytes wide, so it is left out "
+                "item %s holds a vector that is not %s bytes wide, so it is left out "
                 "of the day's label similarity",
                 item_id,
                 embeddings.dimensions,
@@ -1060,7 +1060,7 @@ def _day_scoring(
             raw = vector_bytes(encoded, block_vectors.dimensions)
             if raw is None:
                 LOG.warning(
-                    "item %s stores a vector that is not %s bytes wide, so it is not "
+                    "item %s holds a vector that is not %s bytes wide, so it is not "
                     "grouped with anything",
                     item_id,
                     block_vectors.dimensions,
@@ -1827,7 +1827,7 @@ def build_search_index(month: str, days: Sequence[DigestDay]) -> tuple[SearchInd
                 raw = vector_bytes(encoded, dimensions)
                 if raw is None:
                     LOG.warning(
-                        "item %s on %s stores a vector this index cannot lay out at %s "
+                        "item %s on %s holds a vector this index cannot lay out at %s "
                         "bytes, so it gets none",
                         item.item_id,
                         day.date,

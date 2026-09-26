@@ -466,7 +466,7 @@ class TestTheCommittedShard:
         assert [(record.date, record.item_id) for record in committed.entries] == expected
 
     def test_the_committed_vectors_rebuild_byte_for_byte(self, tmp_path: Path) -> None:
-        """The day payloads are the only store the vectors have, and this proves it.
+        """The day payloads are the only collection the vectors have, and this proves it.
 
         Nothing in a browser opens the block. The published day pages dropped it
         on 2026-08-27 and the staged copy never carries it, so the committed tree

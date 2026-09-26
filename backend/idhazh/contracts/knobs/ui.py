@@ -335,14 +335,14 @@ class UiConfig(Model):
             "`archive_recent_days` lists, so the days the archive offers as rows of "
             "their own are exactly the days a reader can still see their own marks "
             "on. THIS RULE TRUSTS THE DEVICE CLOCK AND THE RULE IT REPLACED "
-            "DELIBERATELY DID NOT: keeping the newest N dates present in the store "
+            "DELIBERATELY DID NOT: keeping the newest N dates present in `localStorage` "
             "needed no clock at all, and expiry by calendar cannot work without one, "
             "so a clock set wrong now keeps marks too long or drops them early. That "
-            "is the price. It is worth paying because the old rule bounded the store "
+            "is the price. It is worth paying because the old rule bounded `localStorage` "
             "by how often a reader came back rather than by time: a reader who opened "
             "one day a month kept marks from seven different months, and every one "
             "of them greyed out an article last seen most of a year ago. A wrong "
-            "mark is the thing this store exists to avoid."
+            "mark is the thing this rule exists to avoid."
         ),
     )
     archive_page_size: int = Field(

@@ -1,6 +1,6 @@
 """Can the council name its own run, with no judge and no state to read?
 
-Nothing here imports a judge, a stage or a store. That is the point of the
+Nothing here imports a judge, a stage or a ledger. That is the point of the
 module rather than a property of it: the name a council night files under has to
 be mintable in a repository with no judge in it at all.
 """
@@ -41,7 +41,7 @@ def test_the_prefix_is_the_day_the_council_runs_and_not_the_day_it_judges() -> N
 
     So a name prefixed with the judged date publishes a standing lag of a day or
     more that nothing actually waited. The judged date is the `date` column,
-    which is what routes a row to its store.
+    which is what routes a row to its ledger.
     """
     minted = council_run_id(opened_on=COUNCIL_DAY, platform_run_id=PLATFORM_RUN)
 
