@@ -57,7 +57,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | 4 | The chart vocabulary and the house style, with no panel moved | - | B | PENDING | - | - | - |
 | 5 | One readout strip, every chart, and hover a keyboard can reach | 1, 4 | C | PENDING | - | - | - |
 | 6 | The ten sufficiency gates and the panel capture group | 4, 5 | C | PENDING | - | - | - |
-| 7 | The query door module and its two entry points | - | C | PENDING | - | - | - |
+| 7 | The query door module and its two entry points | 4; plan 50's row titled "The index task, two compact periods, and the diagram moves into the page" | C | PENDING | - | - | - |
 | 8 | One panel end to end: the browser fetches the ledger and draws it in d3 | 1, 2, 3, 4, 5, 6, 7 | D | PENDING | - | - | - |
 
 **Readiness is the file-disjointness test, not the group letter** (execute-a-plan.md). The letters record which rows the author believed independent; the `Files touched` lists are the fact, and the shared-file notes below are why three depends-on edges exist that the letters do not show.
@@ -66,9 +66,9 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 
 **Rows 3 and 4 run two-wide.** Row 3 is backend, config and the build (`config/idhazh.json`, `copy-visuals.mjs`, `bundle-gate.mjs`, the ceiling test); row 4 is new frontend chart modules under `frontend/src/lib/charts/d3/`. Disjoint.
 
-**Group C is rows 5, 6 and 7, and two depends-on edges make it safe.** Two overlaps force the edges: **rows 5 and 6 both edit `config/appearance.json`** (row 5 the `chart.readout_max_share` value, row 6 the `console.panel_groups` object), so row 6 depends on row 5 and the file is edited once at a time; and **rows 1 and 5 both edit `fleet.ts`** (row 5 rebuilds its `Readout` producer), so row 5 depends on row 1. Row 7 writes the query door under `frontend/src/lib/data/`, shares no file with 5 or 6, and **depends on nothing** - its modules are tested against recorded fixtures, not live published data, so it can run as early as the pool has a slot.
+**Group C is rows 5, 6 and 7, and depends-on edges make it safe.** The overlaps that force the edges: **rows 5 and 6 both edit `config/appearance.json`** (row 5 the `chart.readout_max_share` value, row 6 the `console.panel_groups` and `console.judged_panel_ids` keys), so row 6 depends on row 5 and the file is edited once at a time; **rows 1 and 5 both edit `fleet.ts`** (row 5 rebuilds its `Readout` producer), so row 5 depends on row 1; and **row 7 edits `chart-vocabulary.spec.ts` and `frontend/package.json`, which row 4 creates and touches** (row 4 adds `d3-shape`, row 7 adds the engine), so row 7 depends on row 4. Row 7's index-shape test binds to the Pydantic index contracts **plan 50's index-task row** declares, so it also waits on that plan-50 row - for the shape only, never for live data. Row 7 shares `bundle-gate.mjs` with row 3 (row 3 the ceiling key, row 7 the engine's `FORBIDDEN` entry), but row 3 waits on plan 50's migration, which waits on row 7, so row 7 always lands first and the file is edited in order. **The cross-plan chain stays acyclic**: plan 50's migration -> plan 51 row 7 -> plan 51 row 4 -> nothing, and plan 51 row 7 -> plan 50's index-task row, which reaches nothing in plan 51.
 
-**Why the query door is its own row (row 7) and not folded into the panel.** It is the N2 and N3 keystone every one of plan 52's fifty panels calls, so it ships as an independently revertible row with its own witness, exactly as the vocabulary (row 4), the strip (row 5) and the gates (row 6) do. Plan 50's row titled "The three ledgers the console's routes read become parquet" also depends on this row by name; the door depends on nothing itself, so it can land before that migration and the cross-plan pointer resolves without a cycle.
+**Why the query door is its own row (row 7) and not folded into the panel.** It is the N2 and N3 keystone every one of plan 52's fifty panels calls, so it ships as an independently revertible row with its own witness, exactly as the vocabulary (row 4), the strip (row 5) and the gates (row 6) do. Plan 50's row titled "The three ledgers the console's routes read become parquet" also depends on this row by name; the door depends only on row 4 and on plan 50's index-task row (for the shape of the index it reads), neither of which reaches plan 50's migration, so the door lands before that migration and the cross-plan pointer resolves without a cycle.
 
 **Rows 4, 5, 6 and 7 are the shared deliverable; row 8 is the proof.** Sections 2.2 and 2.6 to 2.9 declare all of them, so no row invents anything. Row 4 writes modules and no panel, which is why it runs beside row 3.
 
@@ -120,10 +120,19 @@ The query door is three modules under `frontend/src/lib/data/`, and a panel sees
 export async function slice(
 	ledger: LedgerName,
 	opts: { columns: readonly string[]; from: DateStamp; to: DateStamp; where?: readonly Predicate[] }
-): Promise<Row[]>;
+): Promise<SliceResult>;
 
 /** One parquet row as the engine hands it back. */
 export type Row = Record<string, string | number | boolean | null>;
+
+/** What the door hands a panel, so the panel draws the right one of four nothings
+ *  without inspecting an error. `rows` is empty for every state but `ok`; `loading`
+ *  is the panel's own state before the promise resolves and is not returned here. */
+export type SliceResult =
+	| { state: 'ok'; rows: Row[] }
+	| { state: 'quiet'; rows: [] }                        // the window is covered but held no rows
+	| { state: 'missing'; rows: [] }                      // the ledger is not published
+	| { state: 'unreachable'; rows: []; at: DateStamp };  // a date named in no index
 
 /** A structured filter, never raw SQL. Each clause names a column, an operator and
  *  a value the caller supplies; the door binds the value as a query parameter, so
@@ -194,7 +203,7 @@ A panel asks for a span; the door turns it into whole files. **There are no byte
 
 **A date is reachable through exactly one file, and that is an invariant with a test rather than a convention.** A date in two periods is read twice and every number on the panel doubles - the same defect class as the double count filed as 33. Plan 50's row titled **The index task, two compact periods, and the diagram moves into the page** carries the oracle that asserts it, over a fixture ledger carrying both periods, in one process, at one moment.
 
-**A hole is `unreachable`, never a low chart.** A date at or before the daily watermark that is named in neither index is a hole: the door renders the `unreachable` state with the date in the console and draws nothing. Drawing the rest would be an undercount nobody could see.
+**A hole is `unreachable`, never a low chart.** A date at or before the daily watermark that is named in neither index is a hole: the door returns `{ state: 'unreachable', at }` and the panel draws the `unreachable` state with that date in the console and nothing else. Drawing the rest would be an undercount nobody could see.
 
 **A date after the daily watermark is not drawn at all, and the freshness sentence says so.** No raw file is published, so the newest data a panel can show is the newest compact daily file - at most one content run old, because the daily compaction runs at the end of every run.
 
@@ -247,13 +256,14 @@ Every value below is a knob (Guardrail #6). Some exist and some are minted; the 
 | `console.window_presets` | **Exists as `[1, 7, 14, 30, 90]`** | unchanged | Row 2's five-segment control reads it, and the door reads its widest value for file selection. **No second key naming the same five values** |
 | `console.absent_hatch_degrees` | **New** | `45` | Row 8's hatch for a known machine with no throughput reading |
 | `console.plot_min_fill_share` | **New** | `0.85` | Gate 1 (section 2.8), specced in row 6. A fill floor with the same standing as `console.fleet_min_rows`: the spec asserts the drawn plot fills at least this share of the panel's content box |
+| `console.judged_panel_ids` | **New** | `[]` (row 8 adds `6b`) | Row 6's sufficiency specs only. The opt-in subset of `console.panel_groups` the gates judge; capture still runs over all of `panel_groups`, so a panel is captured before it is judged |
 | `page_weight.payload_ceilings_bytes."state/compact/<ledger>/index/"` | **New, one per published ledger** | set in row 3 from the built `daily.json`, at least twice its size per the field's own rule | `frontend/scripts/bundle-gate.mjs` and `backend/tests/contracts/test_page_ceilings.py`. **The key names the one directory that holds files directly**: `payloadsFor` does not recurse, so a key naming `state/compact/<ledger>/` returns nothing and fails the gate by name. It lives in `config/idhazh.json`, not `config/appearance.json` |
 
 **`console.bandwidth_min_kinds` and `console.min_attempts_for_rate` already exist and are unchanged.** The chart types in section 2.6 name them, but the panels that read them are plan 52's; no row here reads them, so they are not in the table above.
 
 **Three page-weight gates fire before the site cap, and row 3 must clear all three.** `page_weight.cold_console_load_bytes` is what a console reader's first load may cost, so **the query engine ships behind a dynamic import**, the same rule the gate already enforces for the on-device encoder. `page_weight.payload_ceilings_bytes` caps each fetched payload and has **no key covering `state/`** today, so a staged ledger is a payload no gate can see until the key above is minted. And `test_page_ceilings.py` asserts `cold_console_load_bytes` sits between the worst page and that page plus the telemetry ceiling, so adding a payload key moves that two-sided assertion - **which is why the key, the ceiling and the assertion move in one commit, row 3's.**
 
-**`cold_console_load_bytes` counts month-grained copies, and the door fetches days.** Row 3 sets the ledger's payload ceiling on `index/daily.json` only, and the fetched-data total is bounded by `console.window_presets`' widest value against `daily_keep_days` - which is the bound `test_page_ceilings.py` is given, in the same commit.
+**`cold_console_load_bytes` counts month-grained copies, and the door fetches days.** Row 3 sets the ledger's payload ceiling on `index/daily.json` only, and the fetched-data total is bounded by `console.window_presets`' widest value against `daily_keep_days` (plan 50's gardener config) - which is the bound `test_page_ceilings.py` is given, in the same commit.
 
 ### 2.5 What a panel may not do
 
@@ -283,7 +293,7 @@ Ruled by Susan, 2026-09-26. **A panel that needs a type not on this list stops a
 | 8 | `flow` | `(stages: readonly {label: string; arrived: number; left: number; drops: readonly {label: string; count: number}[]}[], opts: {narrow: boolean}) => FlowGeometry \| SteppedGeometry` | where did they go, and where did they leave | a funnel of four or fewer stages with named drops | never - below `frame.breakpoints_px[0]` it returns the stepped shape from the same call | `Flow.svelte`; the panel computes `narrow` from the width against `frame.breakpoints_px[0]`, `d3-sankey` at or above it and a markup list below |
 | 9 | `pairedScatter` | `(points: readonly {label: string; x: number; y: number}[], opts: {frame: Frame}) => ScatterGeometry` | do these two move together | at least `console.fleet_min_rows` rows **and** `console.bandwidth_min_kinds` distinct subjects | below either floor. Two points define a line, so a scatter of two is a claim. It draws nothing and names the floor it missed | `PairedScatter.svelte`. **No trend line, ever** - a fitted line is a verdict nobody agreed to |
 
-**Every geometry type is exported from its own module and every one has a no-data answer**: the `.ts` returns `null` and the component renders `emptyState` (section 2.3). A type that returns an empty geometry rather than `null` draws an empty frame, which gate 8 fails.
+**Every geometry function returns its type or `null`** - the `| null` is dropped from the signature column above for brevity and is not optional. On `null` the component renders `emptyState` (section 2.3), which takes the reason to show; for the floor-guarded types (`distribution`, `paired`, `pairedScatter`) that reason is the floor it missed, named in words (for example "fewer than 160 readings"). A type that returns an empty geometry rather than `null` draws an empty frame, which gate 8 fails.
 
 **Refused, so nobody re-argues them:** pie, donut over anything but a single completed share, gauge, dial, radar, treemap, word cloud, bubble, anything in three dimensions, and a bar chart of a rate below `console.min_attempts_for_rate` placements. **The reader loses nothing**: each answers a question one of the nine answers better.
 
@@ -311,7 +321,7 @@ Ruled by Susan, 2026-09-26. **A panel that needs a type not on this list stops a
 
 **One module owns it**, `ChartReadout.svelte`, fed by one builder, `frontend/src/lib/charts/readout.ts`. Every chart calls the builder and passes its result. No chart composes its own strip and no chart sets `title=` on a mark.
 
-**`DayReadout` in `frontend/src/lib/charts/frame.ts` is replaced by `Readout`, and `readoutCapStyle` moves to `readout.ts` with it.** **Ten producing functions across eight files** build a `DayReadout` today and thirteen components consume it; **all of them move in row 5's single commit**, which is why that row cannot be split by panel - there is no intermediate commit where half the console is on the new shape and the tree compiles.
+**`DayReadout` in `frontend/src/lib/charts/frame.ts` is replaced by `Readout`, and `readoutCapStyle` moves to `readout.ts` with it.** The pointer-nearest-column and keyboard-stepping machinery `frame.ts` holds for the old shape - `columnStrip`, `nearestColumn`, `pointerReadout`, `readoutMarks` and their types `ReadoutMark`, `ReadoutRow`, `StripSeries`, `ReadoutOptions` - moves into `readout.ts` too, retyped onto `Readout`, so behaviours 3 and 4 have one home. **Ten producing functions across eight files** build a `DayReadout` today and thirteen components consume it; **all of them move in row 5's single commit**, which is why that row cannot be split by panel - there is no intermediate commit where half the console is on the new shape and the tree compiles.
 
 ```ts
 /** What a chart hands the builder. Only the three column types call this; the
@@ -323,8 +333,9 @@ export type ReadoutInput = {
 		label: string;
 		swatch: string | null;
 		values: readonly (number | null)[];
+		format: (value: number) => string; // this series' own number-to-text, so a count and a share sit in one strip
+		note?: string;                     // one constant printed once for the series, e.g. a per-kind rate
 	}[];
-	format: (value: number) => string;   // the one place a number becomes reader text
 	notMeasured: string;                 // from the same vocabulary as the panel's empty state
 	resting: 'newest' | 'median' | 'first';
 };
@@ -334,6 +345,7 @@ export type ReadoutSeries = {
 	label: string;             // at most 24 characters; a label that wraps turns one row into two
 	swatch: string | null;
 	values: (string | null)[]; // one per column; null prints the not-measured word
+	note?: string;             // a constant printed once beside the label, never per column
 };
 
 /** The column-major shape, for a chart with a shared column across its series. */
@@ -361,12 +373,14 @@ export function factsOf(subject: string, facts: readonly [string, number | null]
 | Type | Returns | The strip contains | Resting column |
 | --- | --- | --- | --- |
 | `dateSeries` | `Readout` | the date in reader spelling, then every series at that date with its swatch and value | the newest |
-| `distribution` | `Readout` | the bin's two bounds, the count in it, the cumulative share at it | the bin holding the median |
+| `distribution` | `Readout`, two series | the bin's two bounds as the column, then two rows - the count in the bin and the cumulative share at it, each with its own `format` | the bin holding the median |
 | `tileStrip` | `Readout` | the date, the state in words, and the reading where one was taken | the newest tile |
 | `overlapTimeline` | `ReadoutFacts` | the item, its source, its shard, its start offset, and each drawn step's own ms | the first item |
 | `flow` | `ReadoutFacts` | the stage name, what arrived, what left, what dropped and why | the first stage |
 | `rankedList`, `partsOfOne`, `paired` | neither | **no strip** - the row already prints its own name and number | - |
 | `pairedScatter` | neither | **no strip** - there is no shared column. Each mark carries a printed row in a list beneath the plot, in ranking order | - |
+
+**`factsOf` and the `ReadoutFacts` record layout are built and unit-tested in row 5** so the vocabulary is complete, but no plan-51 panel returns a `ReadoutFacts` - the first is a plan-52 `overlapTimeline` or `flow` panel. Row 5's oracle covers the three column types plus a unit test on `factsOf`.
 
 **Every chart declares one of two attributes and a test enumerates them.** `data-readout-columns="<count>"` or `data-readout-none="<five words>"`. A chart declaring neither fails `frontend/tests/console-readout.spec.ts`, **which already declares all five routes and already fails a declared count with no strip** - it is not widened by this plan, only made to cover more charts. **A chart somebody decided needs no hover and a chart where the strip was forgotten are the same chart on screen.**
 
@@ -395,7 +409,7 @@ A reviewer fails a pull request on any of these. A panel that fails ships only w
 | 2 | **Separates figure from ground** | the spec reads the computed background of page, panel and plot area | any adjacent pair identical |
 | 3 | **One thing lands first** | exactly one element carries `data-lede`, and the spec asserts its measured type size or mark area is the largest in the panel | zero, two, or one that is not the largest |
 | 4 | **Made this year** | read the component | a native `title=` on a mark; a bare table of numbers with no shape beside it; a plot with no tint or elevation separating it from the panel; a control that is a `<select>` or a verb-button where the two-state radio is the rule |
-| 5 | **The comparison reads in two seconds** | the panel carries `data-comparison="..."` and the spec asserts the sentence contains the word ` against ` | a missing attribute, or a sentence with no "against" in it. "Peak memory" is a subject; "how near 16 GiB the worst shard got, against the rest" is a comparison |
+| 5 | **The comparison reads in two seconds** | the panel carries `data-comparison="..."` whose sentence contains ` against `, **or** a composition-over-time panel (a stacked `dateSeries` of counts or shares) declares `data-comparison="composition"` and ships a `## Design rationale` line saying it has no two-quantity comparison | a missing attribute; a sentence with no "against" that is not the declared composition case. "Peak memory" is a subject; "how near 16 GiB the worst shard got, against the rest" is a comparison |
 | 6 | **A trend carries its confounders** | every `dateSeries` renders the settings-change rule, or declares `data-settings-rule="none in window"` | a trend drawn with neither. **A line that moved because somebody changed the temperature looks exactly like a line that moved because the model got worse** |
 | 7 | **Every column it draws has a reader** | already enforced by `backend/tests/contracts/test_column_readers.py`, unchanged by this plan | a column drawn while its name is still in `UNREAD_CELLS`. The worker moves the name up rather than routing around the test |
 | 8 | **Four nothings, told apart** | the panel renders waiting, quiet, missing and unreachable as four distinct states, from the vocabulary `frontend/src/lib/console/waiting.ts` already owns | any two drawing the same thing. **A quiet pipeline and a broken fetch must never be the same picture** |
@@ -404,7 +418,7 @@ A reviewer fails a pull request on any of these. A panel that fails ships only w
 
 **Where each gate is enforced.** Gates 1, 2, 3, 5, 6 and 8 are specs in `panel-sufficiency.spec.ts` (row 6). Gate 10 is `chart-vocabulary.spec.ts` (row 4). Gates 7 and 9 are tests that exist today (`test_column_readers.py` and `console-readout.spec.ts`) and are listed so a worker does not write a second copy. Gate 4 is a reviewer reading the component against the capture section 2.9 produces - it is not a spec because "a bare table of numbers with no shape beside it" is not decidable by a selector.
 
-**These gates ship enforcing on an opt-in list, not on the whole console.** Gate 3 needs `data-lede`, gate 5 needs `data-comparison` and gate 6 needs `data-settings-rule`; none of those attributes exists anywhere in `frontend/src` today, so every addressable panel would fail three gates on the day row 6 lands. **A gate that is red on arrival is a gate people learn to skip.** A panel joins the judged set in the pull request that redraws it; row 8's panel is the first.
+**These gates ship enforcing on an opt-in list, not on the whole console.** The judged set is `console.judged_panel_ids`, a subset of `console.panel_groups` that only the sufficiency specs read; capture (section 2.9) still runs over all of `panel_groups`. Gate 3 needs `data-lede`, gate 5 needs `data-comparison` and gate 6 needs `data-settings-rule`; none of those attributes exists anywhere in `frontend/src` today, so judging every addressable panel would fail three gates on the day row 6 lands. **A gate that is red on arrival is a gate people learn to skip.** A panel joins `judged_panel_ids` in the pull request that redraws it; row 8's panel is the first, and row 6 ships one fixture panel so the gates have a witness before then.
 
 ### 2.9 The screenshot gate
 
@@ -423,7 +437,7 @@ A reviewer fails a pull request on any of these. A panel that fails ships only w
 | 7 | Pass | all seven present, the ten gates green, and **the reviewer can state the panel's comparison sentence after two seconds of looking at the 390 dark image**. That image decides: it is the narrowest, the least tested, and the theme nobody checks |
 | 8 | Fail | a missing image; an empty plot where gate 8 was not declared; a strip captured blank; **a 390 image that is the 1440 image with everything smaller.** A panel that only works at one width has not been drawn, it has been positioned |
 | 9 | Tooling | Playwright, already here. A new spec group `panels` in `frontend/scripts/test-groups.ts` so the shared selector can skip it when nothing it renders moved. `page.screenshot({ clip })` per panel - no new dependency, no new config file |
-| 10 | The list is config, not an array | the spec reads panel ids from `console.panel_groups` in `config/appearance.json`, **which holds 26 ids across a `pipelines` and a `machine` key today**. **A panel added without a capture fails the gate rather than shipping unseen** - within the routes that can produce an id at all |
+| 10 | The list is config, not an array | the capture spec reads every id in `console.panel_groups`; the sufficiency spec reads only `console.judged_panel_ids`, a subset. **A panel added to `panel_groups` without a capture fails the capture gate rather than shipping unseen**, and a panel added to `judged_panel_ids` without the three attributes fails the sufficiency gates - within the routes that can produce an id at all |
 
 ### 2.10 The panel-by-panel verdict table lives in plan 52
 
@@ -445,7 +459,7 @@ Susan ruled all fifty-one panels on 2026-09-26 - each KEEP, REDRAW, REPLACE, DEL
 
 - **Files touched:**
   - `frontend/src/lib/server/payload.ts` (section 2.1's key and rule, beside `ITEM_HEALTH_KEY`)
-  - `frontend/src/lib/server/host-fingerprint.ts`, `frontend/src/lib/server/machine-counters.ts` (both move to `settledDayShards`)
+  - `frontend/src/lib/server/host-fingerprint.ts`, `frontend/src/lib/server/machine-counters.ts` (both move to `mergedDayShards`, section 2.1 - a cell union, never `settledDayShards`)
   - `frontend/src/lib/charts/fleet.ts` (the merge names its own series)
   - `frontend/src/lib/console/machine/PlatformMixPanel.svelte` (stops guessing)
   - `frontend/tests/console-machine-data.spec.ts`, `frontend/tests/console-machine-panels.spec.ts`, `frontend/tests/console-machine-cards.spec.ts`
@@ -612,7 +626,7 @@ Ruled by Susan on 2026-09-24. The complaint: the Hardware route is fifteen panel
 
 **This row replaces one exported type and cannot be split by panel.** There is no intermediate commit where half the console is on the new shape and the tree compiles, so every producer and consumer moves together; the change is structural in every file but `ChartReadout.svelte`, where the behaviour lands. **It depends on row 1** (both edit `fleet.ts`) **and row 4** (it draws to the house style).
 - **Files touched:**
-  - `frontend/src/lib/charts/readout.ts` (new, the builder and `readoutCapStyle`), `frontend/src/lib/components/ChartReadout.svelte` (the strip, and the narrow-width fix), `frontend/src/lib/charts/frame.ts` (`DayReadout` and `readoutCapStyle` leave)
+  - `frontend/src/lib/charts/readout.ts` (new, the builder, `readoutCapStyle`, and the pointer/keyboard machinery), `frontend/src/lib/components/ChartReadout.svelte` (the strip, and the narrow-width fix), `frontend/src/lib/charts/frame.ts` (`DayReadout`, `readoutCapStyle`, `columnStrip`, `nearestColumn`, `pointerReadout`, `readoutMarks`, `ReadoutMark`, `ReadoutRow`, `StripSeries`, `ReadoutOptions` all leave for `readout.ts`)
   - the seven other producer files: `cost.ts`, `fleet.ts`, `glance.ts` (two functions), `machine.ts` (two functions), `doubt-reasons.ts`, `eval-instruments.ts`, `context-cost.ts` under `frontend/src/lib/`
   - the thirteen consumers: `Chart.svelte`, `BandDistance.svelte`, `FailurePanels.svelte`, `RunLengths.svelte`, `StageTimings.svelte`, `ThroughputTrend.svelte`, `TimeHistogram.svelte`, `ContextCostPanel.svelte`, `TailTrendPanel.svelte`, `console/+page.svelte`, `JudgeAgreement.svelte`, `MergedStoriesPanel.svelte`, `MergeLinePlot.svelte`
   - the ten files carrying a native `title=` on a mark: `ShardBoard.svelte` (eight), `voices/+page.svelte` (three), `DiskReadsPanel.svelte` (two), `ProcessorLostPanel.svelte` (two), `ConsoleBand.svelte`, `FailureList.svelte`, `MemoryBoard.svelte`, `RecordGates.svelte`, `RunTimelinePanel.svelte`, `console/+page.svelte`
@@ -651,11 +665,12 @@ Ruled by Susan on 2026-09-24. The complaint: the Hardware route is fifteen panel
   - `frontend/tests/panel-sufficiency.spec.ts` (new: gates 1, 2, 3, 5, 6 and 8 - **gate 4 is a reviewer reading the component and is not a spec**), `frontend/tests/panel-captures.spec.ts` (new, the seven images a panel)
   - `frontend/scripts/test-groups.ts` (the `panels` name in `FRONTEND_GROUPS`, its entry in the `FILES` record, **and its key in the object literal inside `groupedSpecs`** - a missing key there throws `No test group owns <file>`)
   - `frontend/scripts/test-scope.ts` (`CONSOLE` gains `panels`), `frontend/playwright.config.ts` (the project)
-  - `config/appearance.json` (`console.panel_groups` gains the ids of the panels in the judged set; it holds 26 across a `pipelines` and a `machine` key today)
+  - `config/appearance.json` (**new key `console.judged_panel_ids`**, the opt-in subset the sufficiency specs read; `console.panel_groups` unchanged, still the capture and nav source), `backend/idhazh/contracts/knobs/console.py` (the new key)
+  - `frontend/tests/fixtures/panels/` (a test-only panel exercising gates 1, 2, 3, 5, 6 and 8 on one passing and one deliberately failing input, so the gates have a witness before row 8's real panel)
   - `.github/workflows/ci.yml` (**a third `actions/upload-artifact@v7` with `if: always()`, `name: panel-captures`, `path: frontend/test-results/panels/`, `retention-days: 14`** - the two existing uploads are `if: failure()`, and a capture gate whose artefact only exists on red is a gate nobody can read. Plus `SKIP_PANELS_SUITE`, the twin of the console switch)
   - `docs/concepts/design-system.md` (the ten gates **rewrite the five sufficiency checks in place** rather than adding a second list - CLAUDE.md section 5)
-- **Acceptance gates:** local `npm --prefix frontend run test:changed -- --list` then the selected checks, including a first run of the `panels` group over **the judged set, which is empty until row 8 adds one**. CI runs the full suite and uploads the artefact. **The browser job's own timeout and the site-cap walk are the checks on the capture set** - if the seven-image-a-panel set does not fit, the 768 width is dropped first, because 390 and 1440 are the two the gates are judged at.
-- **Oracle:** **the judged set and the capture set are the same set, both ways.** Every id in the judged list produces seven images and is judged by the five specced gates, and every id in that list resolves to a `[data-console-panel-id]` element on a route the spec visits. A panel added to the list without a capture fails. It cannot settle whether a panel is good; a reviewer reading the 390 dark image does that, and it cannot reach the three routes that draw no id at all.
+- **Acceptance gates:** local `npm --prefix frontend run test:changed -- --list` then the selected checks, including a first run of the `panels` group over the fixture panel this row ships (the real judged set is just row 8's panel, later). CI runs the full suite and uploads the artefact. **The browser job's own timeout and the site-cap walk are the checks on the capture set** - if the seven-image-a-panel set does not fit, the 768 width is dropped first, because 390 and 1440 are the two the gates are judged at.
+- **Oracle:** **every judged id is captured, and every gate catches its failing fixture.** `console.judged_panel_ids` is a subset of `console.panel_groups`, so every judged id resolves to a captured `[data-console-panel-id]`; and over the fixture panel this row ships, each of gates 1, 2, 3, 5, 6 and 8 clears the good input and fails the deliberately bad one - a witness independent of row 8. It cannot settle whether a real panel is good; a reviewer reading the 390 dark image does that, and it cannot reach the three routes that draw no id at all.
 - **Decisions:**
 
   | # | Decision | Authority |
@@ -666,7 +681,7 @@ Ruled by Susan on 2026-09-24. The complaint: the Hardware route is fifteen panel
   | 4 | **Three viewports, reusing the three `console-axis.spec.ts` already measures at.** The console measures at three different sets today; this collapses them to one rather than adding a fourth | Susan, Guardrail #4 |
   | 5 | **The naming rule is the comparison tool.** Two artefacts, two folders, side by side. No diffing tool and no dependency | Susan |
   | 6 | The gates ship before the first panel they judge. A gate that lands with the panel it judges has no independent witness | Fowler |
-  | 7 | **The gates enforce on an opt-in list, not on the whole console.** Twenty-six panels would fail three gates today, because `data-lede`, `data-comparison` and `data-settings-rule` exist nowhere yet. A panel joins the judged set in the pull request that redraws it | Fowler |
+  | 7 | **The gates enforce on an opt-in list, not on the whole console**, and `console.judged_panel_ids` is where that set lives - separate from `console.panel_groups` so capture still covers every panel. Twenty-six panels would fail three gates today, because `data-lede`, `data-comparison` and `data-settings-rule` exist nowhere yet. A panel joins `judged_panel_ids` in the pull request that redraws it | Fowler |
   | 8 | **The capture reaches 26 panels on two routes, not 51 on five.** Three routes draw no panel id at all; wrapping them is a route-plan row and is named in Hard scope - out rather than assumed | Fowler |
 
 - **Rejected alternatives:**
@@ -682,7 +697,7 @@ Ruled by Susan on 2026-09-24. The complaint: the Hardware route is fifteen panel
 
 ### Row #7 - The query door module and its two entry points
 
-- **Scope:** the three modules of the query door under `frontend/src/lib/data/`, and the hand-written index-shape copy the door reads. **No panel, no chart, no config change** - this is the shared reader every later panel calls, shipped with its own witness. **It depends on nothing**: the modules are tested against recorded fixtures, not live published data, which is why plan 50's migration row can depend on it in turn.
+- **Scope:** the three modules of the query door under `frontend/src/lib/data/`, and the hand-written index-shape copy the door reads. **No panel, no chart, no config change** - this is the shared reader every later panel calls, shipped with its own witness. **It depends on row 4** (it edits the vocabulary spec and the package manifest that row creates) **and on plan 50's index-task row** (its index-shape test binds to the Pydantic contracts that row declares); it needs no live published data, which is why plan 50's migration row can depend on it in turn.
 
 **This is the N2 and N3 keystone.** Section 2.2 is its full contract: `ledger.ts` is the public door (`slice(ledger, {columns, from, to, where?})`, the closed `LedgerName`, the address composed inside the module); `engine.ts` is the only `@duckdb/duckdb-wasm` importer; `slice.ts` turns a date range into the coarsest-period file set with the one-file-per-date invariant. The engine is reached only through a dynamic `import()`, so it is not first-load.
 
@@ -691,7 +706,7 @@ Ruled by Susan on 2026-09-24. The complaint: the Hardware route is fifteen panel
   - `frontend/src/lib/data/engine.ts` (new: **the only module that imports `@duckdb/duckdb-wasm`**, single-threaded build, behind a dynamic `import()`)
   - `frontend/src/lib/data/slice.ts` (new: a date range to a file set, coarsest period per date, one file per date)
   - `frontend/package.json`, `frontend/package-lock.json` (`@duckdb/duckdb-wasm`)
-  - `frontend/scripts/bundle-gate.mjs` (the `FORBIDDEN` list gains the engine's module and wasm symbols, so a static import fails the gate)
+  - `frontend/scripts/bundle-gate.mjs` (the `FORBIDDEN` list gains `@duckdb/duckdb-wasm` and its `.wasm` asset names, so a static import of the engine or its wasm fails the gate)
   - `frontend/tests/chart-vocabulary.spec.ts` (the single-engine walk now finds exactly one importer of the engine)
   - `backend/tests/contracts/test_frontend_index_shapes.py` (new: binds the hand-written `CompactEntry`, `CompactIndex` and `Watermark` copy in `ledger.ts` to the Pydantic originals plan 50 declares)
   - `frontend/tests/console-cold-load.spec.ts` (the engine is not first-load)
@@ -745,7 +760,7 @@ machine on one day, over the last {windowDays} days. It counts what we were
 given and predicts nothing about the next job. Darker bars are faster machines.
 ```
 
-**Colour carries speed, ordered, bound to the whole record.** One hue, five steps (`console.machine_colour_stops`), ranked by each machine kind's median prompt throughput from `server_prompt_tokens / server_prompt_seconds` - both columns of `host-fingerprint`, so no second ledger is needed. **The five steps are quantile cuts over the whole record**, so a step stays stable as kinds are added and a machine keeps its colour when the operator changes the span - surviving the span control is the one thing this colour has to do. Not the confidence hues: a machine that draws slow is a draw, not a failure. A five-step key chip reads `slower` to `faster`, and every readout row prints an absolute rate, so no share, probability or pie returns.
+**Colour carries speed, ordered, bound to the whole record.** One hue, five steps (`console.machine_colour_stops`), ranked by each machine kind's median prompt throughput from `server_prompt_tokens / server_prompt_seconds` - both columns of `host-fingerprint`, so no second ledger is needed. **The five steps are quantile cuts over the whole record**, so a step stays stable as kinds are added and a machine keeps its colour when the operator changes the span - surviving the span control is the one thing this colour has to do. Not the confidence hues: a machine that draws slow is a draw, not a failure. A five-step key chip reads `slower` to `faster` and names each step's rate; the readout at a hovered day prints each kind's count that day, with its median rate as the series `note` (section 2.7); the drill-through prints the rate per job. No share, probability or pie returns.
 
 | Case | Colour |
 | --- | --- |
@@ -762,6 +777,10 @@ given and predicts nothing about the next job. Darker bars are faster machines.
 
 **The drill-through.** A click or Enter on a day or a mark opens a list below the plot naming, per job, its run, job, shard, machine, seconds and rate. It reuses the rows already fetched for the window - no second `slice()` - is a tab stop, and closes on Escape or a click outside. A full-record context band under the plot shows where the open window sits in the whole record; it is indicative only, not a second span control.
 
+**The three gate attributes this panel carries** (section 2.8): `data-lede` on the stacked-plot group, which is the lede; `data-settings-rule="none in window"`, because the settings-change rule tracks model settings that do not bear on which machine the platform handed us; and `data-comparison="composition"` with a `## Design rationale` line, because a stacked count over days is a composition, not a two-quantity comparison - the gate-5 exemption, not a miss.
+
+**Four rules in the machine-pooling doc change, not one.** Besides the ramp reversal (decision 5): the under-threshold form becomes one dot per job (the doc's "a list with a sentence and no bar" was an ECharts-era rule); the doc's sentence that the route "is prerendered, so there is no fetch, no waiting state and no unreachable state" is removed, because this panel now fetches after mount; and the fold justification stops citing ECharts pixel widths. All four edits land in this row's commit.
+
 - **Files touched:**
   - `frontend/src/lib/charts/fleet.ts` (the option builder becomes a d3 draw), `frontend/src/lib/console/machine/PlatformMixPanel.svelte` (queries the door, draws in d3, drill-through), `frontend/src/routes/console/machine/+page.server.ts` (drops the build-time read of this panel's data)
   - `frontend/src/lib/server/host-fingerprint.ts` (this panel stops reading it at build time)
@@ -769,7 +788,7 @@ given and predicts nothing about the next job. Darker bars are faster machines.
   - `frontend/src/lib/server/config.ts` (the hardcoded `machine_colour_stops: 7` fallback moves to 5)
   - `frontend/src/lib/charts/machine-colour.ts` (**the arbitrary-key rule reverses to an ordered ramp - see decision 5**), `docs/concepts/console-design/how-the-machines-work-is-drawn-and-what-may-not-be-pooled.md`
   - `frontend/tests/console-machine-split.spec.ts` (the "Seven stops for a machine" assertion becomes five), `frontend/tests/console-machine-panels.spec.ts`, `frontend/tests/console-machine-data.spec.ts`
-- **Acceptance gates:** the browser smoke on `/console/machine` (CLAUDE.md section 12) - zero new `[error]`, zero new `404`, **the panel still renders when its ledger is absent, empty, or when the engine fails to start**. Local `npm --prefix frontend run test:changed -- --list` then the selected checks; `ruff check .`, `mypy backend`, `pytest backend/tests/contracts -q`. CI runs the full suite.
+- **Acceptance gates:** the browser smoke on `/console/machine` (CLAUDE.md section 12) - zero new `[error]`, zero new `404`, and **the panel draws each of gate 8's four nothings**: `loading` before the door resolves, `missing` when its ledger is not published, `quiet` when the window is covered but empty, and `unreachable` when a date is a hole or the engine fails to start. Local `npm --prefix frontend run test:changed -- --list` then the selected checks; `ruff check .`, `mypy backend`, `pytest backend/tests/contracts -q`. CI runs the full suite.
 - **Oracle:** given a recorded `slice()` response for one fixture day, the d3 panel draws one stacked bar per day with one segment per machine kind, the kinds in median-throughput order, the unrecorded kind last and outside the merged group, and every readout row carrying an absolute rate. **It is not a comparison against the ECharts panel**: this row rewrites `fleet.ts` from an option builder into a draw, so the old panel does not survive the commit, and the row changes the colour count, the shape under the threshold, the merge rule and the readout - so "same colours, same labels" would be false by design. It cannot settle whether the drawing is good enough to ship; Susan rules that (CLAUDE.md section 14).
 - **Decisions:**
 
@@ -796,7 +815,7 @@ given and predicts nothing about the next job. Darker bars are faster machines.
 
 ## Dependent plans
 
-- `TODO/20260924-50-idhazh-gardener-plan.md`. Row 3 waits on its rows titled **The index task, two compact periods, and the diagram moves into the page** and **The three ledgers the console's routes read become parquet**. In the other direction, plan 50's row titled **The three ledgers the console's routes read become parquet** waits on this plan's row 7, titled **The query door module and its two entry points** - and row 7 depends on nothing, so it lands before that migration and the two pointers resolve without a cycle. Nothing else in that plan is a predecessor here.
+- `TODO/20260924-50-idhazh-gardener-plan.md`. Row 3 waits on its rows titled **The index task, two compact periods, and the diagram moves into the page** and **The three ledgers the console's routes read become parquet**. In the other direction, plan 50's row titled **The three ledgers the console's routes read become parquet** waits on this plan's row 7, titled **The query door module and its two entry points** - and row 7 depends only on row 4 and on plan 50's index-task row, neither of which reaches that migration, so row 7 lands first and the two pointers resolve without a cycle. Nothing else in that plan is a predecessor here.
 - **[`20260926-52-fifty-panels-move-and-six-projections-go-plan.md`](20260926-52-fifty-panels-move-and-six-projections-go-plan.md), a placeholder and not yet a plan**, takes over after row 8. **The panel-by-panel verdict table Susan ruled now lives in plan 52** - all fifty-one panels, each KEEP, REDRAW, REPLACE, DELETE or NEW, with the columns each queries and the chart it becomes. Many of the redraws and new panels exist only because the browser can now query the ledger. One row per route; each row moves that route's panels to the query door and **deletes the projection under `frontend/public/` that fed them**. Rows 4 to 8 here exist to make that plan cheap, not to be it.
 - **The old charts are evidence of an old limit, not a decision to preserve** (Susan). They were drawn against what a build-time projection could carry - a narrow, pre-summed slice of the columns - so columns of real answers sat unread on every run: why an article was chosen, why a fetch was slow, what the source answered, how old the news was, whether a summary was cut off and reported as a success, which rule refused a reply, and whether a trend moved because of the model or because somebody changed a setting. Plan 52 draws them.
 - `TODO/20260823-known-defects-plan.md`, defect 33, closes in row 1's pull request.
