@@ -17,8 +17,8 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | Hard scope - out | see the table below |
 | ESCALATE triggers | see the enumerated list below |
 | Chosen strategy | Retire the word, promote the file to a package behind a stable facade, mint the vocabulary, then move one concern per pull request - reader before writer, behaviour unchanged, no byte on disk moved. Ruled by Fowler (CLAUDE.md section 14). |
-| Execution | autonomous orchestrator per docs/how-to/execute-a-plan.md. **Parallel N = 2.** The extraction is serial on `ledger/__init__.py`; the second slot exists for the one disjoint code row (row 4). Not 4, because there is one disjoint row to run beside the chain and no more. |
-| Blocks | **Plan 50's row titled "The payload ledger, the two roots, and the arrow mapping" is unblocked once rows 2 and 3 merge** - it needs a package to live in and a `LedgerName` to type its first argument. It then edits `ledger/__init__.py` to export `persist`, so landing all six rows first is the recommendation: an open branch against a file the extraction rows are still moving is a branch that gets redone. |
+| Execution | autonomous orchestrator per docs/how-to/execute-a-plan.md. **Parallel N = 2.** Measured 2026-09-26: rows 3 and 4 are NOT disjoint - they share three test files (`test_worker_ledgers.py`, `test_daily_commit_steps.py`, `test_path_classes.py`, all of which name both `SegmentLedger` and `idhazh.paths`), so the code chain 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 is fully serial. The parallelism this plan actually has is **inside** row 1, whose three trees are file-disjoint (section "Row #1"). |
+| Blocks | **Plan 50 rows 2, 3, 5 and 6 - its whole critical path.** Plan 50 row 1 has no blocker here and runs beside this plan from day one. Row 4 of this plan blocks nothing in plan 50. A cross-plan `Depends-on` cites a row by NUMBER, never by title: six pointers on `main` today are title drift, where a row was retitled and the pointer silently stopped resolving (plan 50 handover, 2026-09-26). |
 
 ### Hard scope - in
 
@@ -64,18 +64,16 @@ One row is one pull request. **Seven: six that change code, and one that distill
 | 1 | The retired word `store` leaves | - | A | PENDING | - | - | - |
 | 2 | `ledger.py` becomes the package, and its docstring becomes a page | 1 | B | PENDING | - | - | - |
 | 3 | One `LedgerName` for one ledger | 2 | C | PENDING | - | - | - |
-| 4 | `paths.py` becomes `path_classes.py` | 2 | P | PENDING | - | - | - |
+| 4 | `paths.py` becomes `path_classes.py` | 3 | P | PENDING | - | - | - |
 | 5 | The ledger registry moves to `config/ledgers.json` | 3, 4 | D | PENDING | - | - | - |
 | 6 | The rest of the module splits, and the facade becomes provably empty | 5 | E | PENDING | - | - | - |
 | 7 | The diagram and the vocabulary land in docs, and the plan-doc goes | 6 | F | PENDING | - | - | - |
 
 **Every row wears one hat and it is the structural one.** No signature, default or return-type changes, and no byte on disk moves. A row that finds itself wanting a behaviour change has found a defect, and the defect gets its own pull request (ESCALATE trigger 1).
 
-**The critical path is 1 -> 2 -> 3 -> 5 -> 6 -> 7.** Row 4 is the one disjoint code row and fills the second slot.
+**The critical path is every row: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7.** An earlier draft called row 4 disjoint and gave it the second slot. It is not: measured 2026-09-26, `backend/tests/workflows/test_worker_ledgers.py`, `backend/tests/workflows/test_daily_commit_steps.py` and `backend/tests/contracts/test_path_classes.py` each name **both** `SegmentLedger` and `idhazh.paths`, so row 4 shares three files with row 3 and one more with row 6. Rows 3, 5 and 6 each edit `ledger/__init__.py`, and row 4 now edits it too (the `SEGMENT_NAME` comment). **There is no disjoint pair among the code rows.**
 
-**Rows 3, 5 and 6 each edit `ledger/__init__.py`, so they are serial whatever their letters say** (execute-a-plan.md: rows that share one surface do not parallelise). That is why Parallel N is 2 and not 4.
-
-**Row 4 shares exactly two test files with rows 3 and 6** - `backend/tests/workflows/test_worker_ledgers.py` and `backend/tests/workflows/test_daily_commit_steps.py`, which both name `idhazh.paths` and `SegmentLedger`. The pool holds row 4 while row 3 or row 6 is in flight and runs it in the gap; readiness is the file-disjointness test, never the letter. Everywhere else row 4 is disjoint - `ledger.py` never imports `idhazh.paths`, it only mentions it in one comment.
+**So the plan's parallelism is inside row 1, not across the Reckoner.** Row 1's three trees - `docs/`; `frontend/` + `.github/` + `TODO/`; and `backend/` - share no file, so they run as three pull requests at once. That is the whole of it, and saying so beats a `Parallel-group` column that promises a second slot the file lists refuse.
 
 **The plan-doc is excluded from the disjointness diff.** Every row stamps its own Reckoner line in its own change (execute-a-plan.md), so the file is in every row's real set.
 
@@ -137,6 +135,7 @@ Everything a worker needs to build is declared here. Where a shape is derived fr
 One `StrEnum`, one member per ledger the module can address today, the value being the on-disk name exactly. It replaces three spellings of one vocabulary: `SegmentLedger`, `STORE_DIRNAMES` (renamed `LEDGER_DIRNAMES` in row 1), and the `*_DIRNAME` constants.
 
 - **Membership is the union of two sets, so nothing falls through.** One set is the `*_path` / `*_relpath` functions in `ledger.py` at the base commit (a `*_path` and its `*_relpath` twin count once); this catches the filename-addressed ledgers a `*_DIRNAME`-keyed rule would miss - `feed-retirements.csv`, `holdout-pairs.csv`, `score-distribution.json` and its stamped archive. The other set is `DAY_TREES`: `day-validations` is a day tree with no path function of its own - it is written only through `day_shard_path` - so the function set alone would drop it. Every member of the union gets an entry in `config/ledgers.json` (section 4.2); `day-validations`'s entry is hand-written because no old function derives it. The config is the registry, and `LedgerName` is the typed handle it is validated against.
+- **A member's value is the ledger's name, never a filename.** For a directory-grained ledger the value is the directory (`item-health`). For a `FLAT` ledger it is the stem with **no extension** - `LedgerName.FEED_RETIREMENTS = "feed-retirements"`, not `feed-retirements.csv` - because the entry already carries `stem` and `suffix` as separate fields (section 4.2) and a value carrying the extension would be a second spelling of `suffix` that can disagree with it. An earlier draft of this section said "the value being the on-disk name exactly", which the bijection validator plus a `.csv` suffix would have made self-contradictory on its first load. Corrected 2026-09-26; plan 50 independently asks for `feed-retirements` as the member name, which is this rule.
 - **The oracle is the bijection, at load.** `LedgerName` and the `config/ledgers.json` entries are exactly each other (section 4.2), so a member with no entry, or an entry with no member, fails the build by name. That is the anti-footgun that replaces the old hand-coded `STORE_DIRNAMES`: a ledger left out is no longer a directory `prune-state` silently empties. `prune-state` derives its protected set from the config (row 5), so there is no `LEDGER_DIRNAMES` constant to keep in step.
 
 ```python
@@ -153,7 +152,7 @@ DAY_TREES: Final[frozenset[LedgerName]] = frozenset({...})   # the nine, no more
 
 The set of ledgers, each one's lifecycle state, and where each one lives is one fact, and it lives in one config file - `config/ledgers.json`. It is not a hand-coded set in Python (which the plan's own investigation found is a data-loss footgun: `stages/prune_state.py` empties every `state/` child directory not in the hand-coded set, so a ledger left out is silently wiped), and it is not discovered by a glob (nothing walks `state/`, so the cost never grows with the data - Guardrail #12). A ledger is added by adding an entry; it is retired or paused by changing one field. `config/idhazh.json` is not touched.
 
-**The schema is a contract, validated at load.** `backend/idhazh/contracts/ledgers.py` declares it. `Grain` moves here from the package, because the config references it and `contracts/` cannot import the package (CLAUDE.md section 4):
+**The schema is a contract, validated at load.** `backend/idhazh/contracts/ledgers.py` declares it. **`Grain` is minted here; it does not exist anywhere today** - an earlier draft said it "moves here from the package", and a worker would have gone looking for a definition that was never written (verified 2026-09-26). It lives in `contracts/` because the config references it and `contracts/` cannot import the package (CLAUDE.md section 4):
 
 ```python
 class LedgerState(StrEnum):
@@ -198,6 +197,8 @@ class LedgersConfig(BaseModel):
 **Where this plan and the north star share a concept they share its name.** The builders take `covers` - N11's word for the day the rows describe, never the day the job woke (CLAUDE.md section 2) - and `LedgerName` is N11's `<ledger>`. So plan 50's migration is an edit to an entry rather than a translation between two vocabularies, which is the failure this whole plan exists to prevent.
 
 **What this plan deliberately keeps out of the registry**: the `raw` / `compact` tier (N10) and the parquet format (N1). Both are plan 50's, that plan is frozen, and minting its fields here would be the second vocabulary again.
+
+**The tier is a builder argument and never an entry field, and plan 50 must build on that.** Plan 50 asked (handover, 2026-09-26) whether this shape can express a two-segment root discriminator - `state/raw/<ledger>/` beside `state/compact/<ledger>/`. **As one entry, no, and it must not**: the config is one entry per `LedgerName`, and a migrated ledger has **both** roots at once, so a tier written into `prefix` would need two entries for one member and break the bijection on its first load. The seam that does work is the builder signature. `prefix` is the nest under `state/` for the shape a ledger has TODAY; plan 50's `raw_path`, `compact_path`, `raw_index_path`, `compact_index_path` and `watermark_path` take the tier as an argument and compose it with the same entry, and plan 50's refusal on a path whose second segment is neither `raw` nor `compact` sits in those builders rather than in the schema. Nothing in this plan forecloses it, and no field here needs to change for it to land.
 
 Three builders, driven by the entry's `grain`:
 
@@ -360,11 +361,27 @@ Two functions leave, every reader that reaches them is repointed to the new home
 
 **This row is the one place in the repository allowed to spell the retired word, because it is the row that removes it.** The ratchet in the oracle allow-lists exactly this section and nothing else. Everywhere the old spelling is needed it sits inside a fenced block, so a later sweep cannot quietly flatten the instructions into `X -> X`.
 
-- **Scope:** every occurrence across the repository. No file moves and no identifier outside the block below changes.
-- **The rule, applied per occurrence:** under `state/` it becomes **ledger**; under `frontend/public/` it becomes **collection**; where the word is the ordinary English verb it is **left alone**.
+- **Scope:** every occurrence across the repository. No file moves and no identifier outside the block below changes. **It lands as three file-disjoint pull requests that run in parallel** - `docs/`; `frontend/src/` + `frontend/tests/` + `.github/` + `TODO/`; and `backend/`. This is the only parallelism this plan has (section 0), and staging it per tree also keeps any one commit off the whole repository: this project force-pushes a squash of its own history every `prune_every_days`, so a single 1167-line rename would put itself on the blame tip of every touched line and then take the pre-rename reason with it inside one prune cycle (Carmack, 2026-09-26). The ratchet ships in the `backend/` pull request, which rebases on the other two before its final gate run.
+- **The rule, applied per occurrence.** A ladder; first match wins; the worker never chooses. Converged ruling of Fowler and Carmack in debate, 2026-09-26.
+
+  | # | Is the occurrence... | Then |
+  | --- | --- | --- |
+  | 1 | a spelling the counted text strips - `no-store`, `ast.Store` | leave the bytes alone |
+  | 2 | inside this row's fenced blocks | leave it; it is the instruction that removes the word |
+  | 3 | naming a tree under `state/` | **ledger** |
+  | 4 | naming a tree under `frontend/public/` | **collection** |
+  | 5 | naming something this repository declares anywhere else | the noun that is already its name |
+  | 6 | naming something the **browser or Svelte** declares | that declaration's own identifier, in backticks - `` `Cache` `` for a `caches.open` result, `` `localStorage` `` for read-state, "auto-subscription" for Svelte's `$name` |
+  | 7 | the standalone English verb ("the ledger stores it") | **holds** / **keeps** / **records** / **writes** |
+
+  The single test behind the ladder, for anything it misses: **can these bytes change without changing what a program outside this repository does?** Yes, rewrite. No, row 1 of the ladder.
+
+- **Why rule 6 is a rewrite and not an exemption.** MDN has no "store" in the Cache API - `caches.open` returns a `Cache`, the collection is `CacheStorage`, and `localStorage` is a `Storage`. So the frontend comments saying "the store" were never preserving the browser's vocabulary; they were this repository inventing a synonym for somebody else's object. Naming the object moves **toward** the upstream docs, and CLAUDE.md section 0b requires it twice over - a word earns a name only when its ordinary English meaning is what the thing does, and a term from a subsystem is not a term for a user. Twenty of the twenty-three `frontend/src` lines are rewritten under this rule.
+- **Why the verb clause narrowed.** `stores` standing alone matches the counted regex, so "leave the English verb alone" and "the count is zero" could not both hold - and telling the two apart is the per-occurrence human judgement a ratchet is forbidden to need. Every form in the LEFT ALONE block below is a form the regex **already misses**, which is why that block is safe and why a standalone verb is not in it.
 
 ```text
-LEFT ALONE - the ordinary English verb, not the vocabulary
+LEFT ALONE - every one of these is a form the counted regex already misses,
+so the block is a reader's note rather than an exception the ratchet honours
   restore  restores  restored  restoreAnchor  storedChoice  storedDates
   store_true  store_false
   test_the_row_stores_counts_and_leaves_every_rate_to_be_derived
@@ -389,15 +406,16 @@ FILES THAT RENAME
 
 THE DIAGRAM CLASS VOCABULARY
   docs/reference/documentation-structure.md defines `classDef store` for the
-  cylinder that means "something persisted", and four pages use it. The class
-  renames to `ledger` - the fill, stroke and meaning are unchanged, and one
-  page already draws it that way. Both the classDef line and every `class X
-  store;` line move:
+  cylinder that means "something persisted". The class renames to `ledger` -
+  the fill, stroke and meaning are unchanged. No page draws it as `ledger`
+  today; an earlier draft claimed one did, and a worker would have copied a
+  line that does not exist (verified 2026-09-26). Both the classDef line and
+  every `class X store;` line move:
       docs/reference/documentation-structure.md   (the definition and its table row)
-      docs/architecture/publishing/autotune-content-similarity.md
-      docs/architecture/publishing/visuals.md
-      docs/how-to/evaluate-new-summarizer-model.md
-      docs/reference/github-actions.md            (two diagrams)
+      docs/architecture/publishing/autotune-content-similarity.md   line 216
+      docs/architecture/publishing/visuals.md                       line 336
+      docs/how-to/evaluate-new-summarizer-model.md                  line 135
+      docs/reference/github-actions.md            lines 275 and 420 (two diagrams)
 
 SIGNATURES AND MEMBERS THAT CHANGE
   backend/utilities/empty_column_census.py
@@ -408,12 +426,16 @@ SIGNATURES AND MEMBERS THAT CHANGE
       day_collection(state_root, store: str) -> (state_root, ledger: str)
       as_outcome(store: str, ...)            -> as_outcome(ledger: str, ...)
 
-ABOUT THIRTY TEST FUNCTION NAMES carrying the word, listed by the sweep
+EVERY TEST FUNCTION NAME carrying the word, listed by the sweep. No count is
+quoted here: an earlier draft said "about thirty" and the sweep found more.
+A count in prose that nothing reads is a number that goes wrong quietly.
 ```
 
-- **Files touched:** every file that spells the retired word, plus `.github/` where the renamed utility is called, plus [docs/concepts/glossary.md](../docs/concepts/glossary.md) (already done, 2026-09-26) and the plan-docs under `TODO/` (their prose was swept 2026-09-26).
+- **Files touched:** every file that spells the retired word, plus [docs/concepts/glossary.md](../docs/concepts/glossary.md) (already done, 2026-09-26) and the plan-docs under `TODO/` (their prose was swept 2026-09-26). **`.github/` is in scope for its own ten occurrences** - workflow comments naming a tree under `state/` ("the seen store", "a tenant's own store") - and **not** because anything there calls the renamed utility: nothing does, which an earlier draft assumed (verified 2026-09-26).
+- **The trap the `docs/` pull request must clear before it edits anything:** `frontend/tests` contains a spec that reads a `docs/` page by exact string, and `run-checks.ts` classifies a documentation-only diff as "no code suite", so a prose sweep can go red in a suite the local selector never ran. Grep `frontend/tests` for tests that read `docs/` first, and run that spec explicitly.
 - **Acceptance gates:** `ruff check .`, `mypy backend`, the full `pytest backend/tests`, and the frontend selector. **A test function rename is zero-risk** - pytest discovers by prefix - so the suite is the check that nothing else moved.
-- **Oracle:** a ratchet test. The retired word appears **zero** times outside this row and a third-party quotation, counted with `(?<![A-Za-z0-9_])[Ss]tores?(?![A-Za-z0-9_])` over `backend/`, `frontend/src/`, `frontend/tests/`, `config/`, `docs/`, `TODO/` and `.github/`. **Without the ratchet the word walks back in** - it was already swept out of the plans once and would return with the next draft.
+- **Oracle:** a ratchet test. The retired word appears **zero** times outside this row's fenced blocks, counted with `(?<![A-Za-z0-9_])[Ss]tores?(?![A-Za-z0-9_])` over `backend/`, `frontend/src/`, `frontend/tests/`, `config/`, `docs/`, `TODO/` and `.github/`, **after the byte-strings `no-store` and `ast.Store` are stripped from the text being counted**. Those two strips are the whole of the allow-list. **The strip is a defect fix, not a concession**: measured 2026-09-26, the regex as the plan first wrote it matches `cache: 'no-store'` - a Fetch API wire value, used in the published site's kill-switch fetch - so a worker obeying "zero occurrences" would have edited a request header and changed behaviour inside a row that forbids it. The list cannot grow, because an entry is not a file or a concept but a spelling that is **not the word**, and admitting a third one means naming the outside program that parses those bytes.
+  **Without the ratchet the word walks back in** - it was already swept out of the plans once and would return with the next draft.
 - **Decisions:**
 
   | # | Decision | Authority |
@@ -426,10 +448,11 @@ ABOUT THIRTY TEST FUNCTION NAMES carrying the word, listed by the sweep
 
 ## Row #2 - `ledger.py` becomes the package, and its docstring becomes a page
 
-- **Scope:** `git mv ledger.py -> ledger/__init__.py`, add `__all__`, move the 90-line state-layout docstring to a docs page, fix four string literals, repoint two glossary rows.
+- **Scope:** `git mv ledger.py -> ledger/__init__.py`, add `__all__`, move the state-layout module docstring to a docs page, fix the string literals naming the old path, repoint two glossary rows. **This row also carries its own staleness sweep**: every statement in `TODO/` that names `backend/idhazh/ledger.py` is a statement a later worker reads as instruction, so the rename fixes them in the same change. Nobody owned that pass before (plan 50 handover, 2026-09-26); the rule is now that the row causing the staleness clears it, because a sweep deferred to a closing row is the one that rots.
 - **Files touched:**
   - `backend/idhazh/ledger.py` -> `backend/idhazh/ledger/__init__.py`
-  - `backend/tests/pipeline/test_day_shards.py` lines 274 and 340, `backend/tests/workflows/test_ledger_staging.py` lines 766 and 773 - the four literals naming the old path
+  - `backend/tests/pipeline/test_day_shards.py`, `backend/tests/workflows/test_ledger_staging.py` - the string literals naming the old path. Find them by grep rather than by the line numbers an earlier draft quoted; the file moves under them
+  - `TODO/` - every plan-doc statement naming `backend/idhazh/ledger.py`, `TODO/20260924-50-idhazh-gardener-plan.md` included
   - `docs/concepts/glossary.md` - the `ledger` and `segment` rows repoint to `ledger/__init__.py` and `ledger/filenames.py`
   - `docs/architecture/contracts/` - the new page carrying the module docstring
 - **Acceptance gates:** `ruff check .`, `mypy backend`, the changed-file selector locally; full `pytest backend/tests` on CI.
@@ -439,7 +462,7 @@ ABOUT THIRTY TEST FUNCTION NAMES carrying the word, listed by the sweep
   | # | Decision | Authority |
   | --- | --- | --- |
   | 1 | Zero call sites change. `from idhazh import ledger` resolves identically against `ledger/__init__.py` | Fowler, Branch by Abstraction: the facade is the stable seam while modules move underneath it |
-  | 2 | **The 90-line docstring moves in this same row, not a later one.** It is the best explanation the project has of its own state directory - why `state/published` files by day, what a read costs on real hardware, why `visual-prunes` is the declared partition exception. It belongs in `docs/architecture/contracts/` (Guardrail #4), and folding it into the git-mv keeps the plan at minimal pull requests without breaking the rename signal. Row 2 is not done until the page exists | Owner, reconciling Fowler (keep the move clean) with the minimal-PR goal |
+  | 2 | **The state-layout module docstring moves in this same row, not a later one.** It is the best explanation the project has of its own state directory - why `state/published` files by day, what a read costs on real hardware, why `visual-prunes` is the declared partition exception. It belongs in `docs/architecture/contracts/` (Guardrail #4), and folding it into the git-mv keeps the plan at minimal pull requests without breaking the rename signal. Row 2 is not done until the page exists | Owner, reconciling Fowler (keep the move clean) with the minimal-PR goal |
   | 3 | `__all__` is grouped by the module each name will end up in, one comment per group, so `__init__.py` reads as an index | Fowler |
 
 ---
@@ -462,6 +485,9 @@ ABOUT THIRTY TEST FUNCTION NAMES carrying the word, listed by the sweep
   | 3 | `LedgerName` lives in `contracts/` because `FileEnvelope` (plan 50) is typed by it and CLAUDE.md section 4 forbids `contracts/` importing another subpackage | CLAUDE.md section 4 |
   | 4 | The `*_DIRNAME` constants are NOT deleted here - their users, the path functions, are still in `__init__.py` until row 5. Row 5 deletes them once the config registry replaces their users | Fowler, dependency order |
   | 5 | Two utilities build the vocabulary from a path string (`pipeline_test_ledgers.py`, `widen_ledger_header.py`). After the collapse `LedgerName("published")` succeeds where `SegmentLedger("published")` raised, so the fail-fast on a non-day-tree directory moves from construction to the segment refusal. Both only ever feed day-tree directory names, so the shift is inert - named so it is not discovered | Fowler |
+  | 6 | **Plan 50 needs `item-health`, `scores`, `host-fingerprint`, `feed-retirements` and `visual-prunes` as members, and this row mints all five** - the first three from `DAY_TREES`, the last two from the path-function set. It also asks for `gardener`, which this row does **not** mint: no such ledger exists today, so it has no path function and no day tree, and plan 50 adds the entry and the member in the commit that creates the ledger. That is the onboarding path section 4.3 exists to give it, and a member minted here for a directory nothing writes would be a name the bijection validator cannot check against anything | Owner, 2026-09-26 |
+  | 7 | **The member is `visual-prunes`, plural.** Plan 50's handover asks for `visual-prune`; the directory on disk, `VISUAL_PRUNES_DIRNAME` and `state/visual-prunes/` are all plural, and **this plan moves no bytes**, so the plural is what ships. Renaming the directory is a migration and belongs to whichever plan moves the files | Owner, 2026-09-26 |
+  | 8 | **`span-rollup` stays a member.** That ledger is still written today. Plan 50's migration row for it is COLLAPSED and its deletion moved to plan 52, so nothing here depends on its going away | Plan 50 handover, 2026-09-26 |
 
 - **Rejected alternatives:**
 
@@ -474,10 +500,12 @@ ABOUT THIRTY TEST FUNCTION NAMES carrying the word, listed by the sweep
 
 ## Row #4 - `paths.py` becomes `path_classes.py`
 
-- **Scope:** rename `backend/idhazh/paths.py` to `path_classes.py` and update its importers. The one code row disjoint from the extraction chain.
+- **Scope:** rename `backend/idhazh/paths.py` to `path_classes.py` and update its importers, the one comment that names it, and the plan-docs that quote it.
 - **Files touched:**
   - `backend/idhazh/paths.py` -> `backend/idhazh/path_classes.py`
   - `backend/idhazh/cli.py` (the `refresh_paths` call site)
+  - `backend/idhazh/ledger/__init__.py` - the `SEGMENT_NAME` comment reads "Public because `idhazh.paths` answers whether a committed path has exactly one writer, and it has to ask this pattern rather than carry a copy of it." It names the module this row renames, so it moves with it. That comment is the written form of section 4.5, and a rename that leaves it pointing at a module that no longer exists is how the rule gets quietly dropped
+  - `TODO/` - every plan-doc statement naming `backend/idhazh/paths.py`, for the same reason row 2 sweeps its own
   - `backend/tests/contracts/test_derived_paths.py`, `backend/tests/contracts/test_path_classes.py`, and the other test files that `from idhazh import paths` (`retention/test_union_safe_repeats.py`, `workflows/_harness.py`, `workflows/test_daily_commit_steps.py`, `workflows/test_staged_paths.py`, `workflows/test_worker_ledgers.py`)
 - **Acceptance gates:** `ruff check .`, `mypy backend`, the changed-file selector locally; full `pytest backend/tests` on CI.
 - **Oracle:** `pytest --collect-only -q` byte-identical; mypy names any importer left on the old name. `ledger.py` is untouched - it never imports `idhazh.paths`.
@@ -486,7 +514,7 @@ ABOUT THIRTY TEST FUNCTION NAMES carrying the word, listed by the sweep
   | # | Decision | Authority |
   | --- | --- | --- |
   | 1 | It answers "how does git settle two runs on one path", which is not a path-building question; `path_classes` is the name its own test already carries | Fowler |
-  | 2 | Depends on row 2 only, but the pool holds it while row 3 or row 6 is in flight, because it shares `test_worker_ledgers.py` and `test_daily_commit_steps.py` with them | execute-a-plan.md, file-disjointness |
+  | 2 | **It is not disjoint from row 3, which an earlier draft claimed.** Measured 2026-09-26: `test_worker_ledgers.py`, `test_daily_commit_steps.py` and `test_path_classes.py` each name both `SegmentLedger` and `idhazh.paths`, so row 4 runs after row 3 rather than beside it | execute-a-plan.md, file-disjointness |
   | 3 | The renamed module keeps **asking** the ledger for `SEGMENT_NAME` and never inlines a copy of the pattern. That is why the pattern is public, and the ledger owning every name under `state/` is the rule the rename must not quietly break (section 4.5) | Owner, 2026-09-26 |
 
 ---
@@ -504,7 +532,7 @@ ABOUT THIRTY TEST FUNCTION NAMES carrying the word, listed by the sweep
   - `backend/idhazh/stages/validate_days.py`, `backend/idhazh/retention.py`, and any test reading `state_dir / X_DIRNAME` - repointed onto `tree_root`
   - every other caller mypy names when the wrappers go
 - **Acceptance gates:** `ruff check .`, `mypy backend`, the changed-file selector locally; full `pytest backend/tests` on CI.
-- **Oracle:** four checks. **Bijection** - the `config/ledgers.json` names are exactly the `LedgerName` members, at load and in a test. **Path parity** - for every entry and a fixed date, `path` and `relpath` equal the old function, extension included; a dated grain handed `None` raises. **Tree-root parity** - for every `DAY_FILE` / `DAY_TREE` entry, `tree_root` equals the old inline `state_dir / X_DIRNAME`, the nested trees included. **Known-set parity** - the directories `_trial_roots` now protects (the `prefix[0]` of every configured ledger, of any state, plus the four other-module trees) reproduce today's `STORE_DIRNAMES`-based decision exactly. A census that every `state_dir / <literal>` site maps to a config prefix backs it.
+- **Oracle:** four checks. **Bijection** - the `config/ledgers.json` names are exactly the `LedgerName` members, at load and in a test. **Path parity** - for every entry and a fixed date, `path` and `relpath` equal the old function, extension included; a dated grain handed `None` raises. **Tree-root parity** - for every `DAY_FILE` / `DAY_TREE` entry, `tree_root` equals the old inline `state_dir / X_DIRNAME`, the nested trees included. **Known-set parity** - the directories `_trial_roots` now protects (the `prefix[0]` of every configured ledger, of any state, plus the four other-module trees - `traces`, `day-metrics`, `digest-fragments`, `score-archive`) reproduce today's `STORE_DIRNAMES`-based decision on every directory except `day-validations`, which the test names as the one addition. A census that every `state_dir / <literal>` site maps to a config prefix backs it.
 - **Decisions:**
 
   | # | Decision | Authority |
@@ -513,7 +541,8 @@ ABOUT THIRTY TEST FUNCTION NAMES carrying the word, listed by the sweep
   | 2 | States are `live` / `paused` / `retired`; all three are known to `prune-state` (protected), so retiring or pausing never exposes a ledger to trial-pruning. The write-side and cleanup meaning of the states is the gardener's to act on, not this structural row | Owner, 2026-09-26 |
   | 3 | Settlement (key, preference, tree-shape) stays in `keys.py` keyed by `LedgerName`, because a preference is a callable and a callable is not JSON. The config carries where a ledger lives and its lifecycle only | Owner, Fowler |
   | 4 | `prune_state.py` is edited here to read the config. Plan 50 refactors `prune_state.py` into gardener tasks and rebases onto this; its frozen design is untouched, and the config becomes the registry both read | Owner |
-- **ESCALATE:** if the config's known-set does not reproduce today's `_trial_roots` decision, stop. The known case is `day-validations`, a real `state/` child absent from today's `STORE_DIRNAMES`. **The owner has ruled that `validate-days` and its `day-validations` ledger are wasteful and will be decommissioned in their own change** (2026-09-26), so this plan does not delete them and does not change what `prune-state` does to them: the entry is written to reproduce today's behaviour exactly, and the decom change deletes the entry and the `LedgerName` member. If the decom lands first, this row simply has one fewer entry. Any *other* directory whose treatment would change is a behaviour change needing sign-off, not a silent flip inside a structural row.
+- **`day-validations` is the one directory this row newly protects, and the test names it.** It is a real `state/` child written by the `validate_days` stage, it is one of the nine day trees with its own settlement shape, and it is **absent** from today's hand-coded set - so `prune-state` currently reads it as a trial tree and deletes files in it past a window. The registry claims every ledger it knows, so the bijection makes it protected. The parity oracle is therefore written as *exact except `day-validations`*, with that one difference asserted by name rather than waived. **The owner has confirmed `validate_days` and its ledger are being decommissioned** (2026-09-26), so the difference is erased by the change that deletes the stage, the entry and the member - not carried. This plan does not do that deletion, does not mint a fourth lifecycle state to encode today's gap, and does not ship a separate protection pull request ahead of itself: protecting a ledger for the few weeks before it is deleted on purpose buys a few megabytes and costs a review. Any *other* directory whose treatment would change is a behaviour change needing sign-off, not a silent flip inside a structural row.
+- **ESCALATE:** stop if the config's known-set differs from today's `_trial_roots` decision on **any directory other than `day-validations`**.
 - **Rejected alternatives:**
 
   | # | Option | Why rejected | What it would cost to take | Authority |
@@ -578,11 +607,14 @@ ABOUT THIRTY TEST FUNCTION NAMES carrying the word, listed by the sweep
 
 Plan 50 is frozen from a design point of view; this plan does not change it. What this plan hands it:
 
-- A package `backend/idhazh/ledger/` for `persist.py`, `parquet.py`, `json_lines.py` and `arrow_schema.py` to live in.
-- A `LedgerName` enum in `contracts/` to type `FileEnvelope` and `persist`'s first argument.
+- A package `backend/idhazh/ledger/` for `persist.py`, `parquet.py`, `json_lines.py` and `arrow_schema.py` to live in. Plan 50's `naming.py` folds into `ledger/filenames.py` (collision 3), and plan 50's `unit_id`, `file_id` and `_pack_v8` land there.
+- A `LedgerName` enum in `contracts/` to type `FileEnvelope` and `persist`'s first argument, carrying the members row 3's decisions 6 to 8 name.
+- `ledger/paths.py` with the registry behind it, and the tier kept **out** of the entry so plan 50's five builders can take it as an argument (section 4.2).
 - `write_segment` and `extend_segment` moved verbatim, so plan 50's `persist` stands on the behaviour it was designed against.
 
-**The minimum that unblocks plan 50 is rows 2 and 3.** Landing all six first is the recommendation: plan 50's persist row edits `ledger/__init__.py`, and an open branch against a file the extraction rows are still moving is a branch that gets redone - measured once on this repository, on `app_config.py`, which collected 54 commits of divergence in a day.
+**Plan 50 is blocked by rows 2, 3, 5 and 6 - this plan's whole critical path.** Its row 1 has no blocker here and runs beside this plan from day one; row 4 blocks nothing in it. An earlier draft said "rows 2 and 3" and understated the chain by two merge cycles: plan 50 row 2 edits `ledger/__init__.py`, and an open branch against a file rows 5 and 6 are still moving is a branch that gets redone - measured once on this repository, on `app_config.py`, which collected 54 commits of divergence in a day.
+
+**Plan 50 owns registering `state/raw` and `state/compact` with the trial-root computation**, in the same commit that creates them, or the gardener deletes its own records. That computation is `_trial_roots` in `backend/idhazh/stages/prune_state.py` - not `retention.py` - and row 5 of this plan changes what feeds it without moving it.
 
 ## What this costs
 
