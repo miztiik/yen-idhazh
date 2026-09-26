@@ -41,7 +41,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 ### ESCALATE triggers
 
 1. **A row cannot finish without a behaviour change.** Every row here is structural - no signature, default, return type or on-disk byte moves. A row that finds it cannot preserve behaviour has found a defect: stop, and give the defect its own pull request (CLAUDE.md section 5; do not interleave structural and behavioural change).
-2. **`write_segment` or `extend_segment` cannot move with its body unchanged** (row 6). "Verbatim" means the body is byte-identical while its imports are rewired to the sibling modules (section 4.4); if the body itself must change to work, that is a behaviour change plan 50's frozen `persist` stands on - stop before the commit.
+2. **`write_segment` or `extend_segment` cannot move with its body unchanged** (row 6). "Verbatim" means the body is byte-identical while its imports are rewired to the sibling modules (section 4.5); if the body itself must change to work, that is a behaviour change plan 50's frozen `persist` stands on - stop before the commit.
 3. **`LedgerName` is about to enter a persisted `contracts/` payload before row 3 lands.** That makes row 3 Level 5 - pause for sign-off (CLAUDE.md section 6).
 4. **The `store` ratchet would have to allow a word outside row 1's fenced block.** The sweep missed a real occurrence; surface it, do not widen the allow-list.
 
@@ -82,7 +82,7 @@ One row is one pull request. **Six rows, not eight.** The extraction funnels thr
 
 No counts here - functionality is what the contracts must preserve, not a measurement. These are the load-bearing facts a worker relies on:
 
-- **Callers reach the module by attribute access.** Almost every caller does `from idhazh import ledger` then `ledger.X`. The facade must bind every name they reach, public or private (section 4.5).
+- **Callers reach the module by attribute access.** Almost every caller does `from idhazh import ledger` then `ledger.X`. The facade must bind every name they reach, public or private (section 4.6).
 - **`day_shards` imports names back out of the ledger package at its own module top, and `ledger.py` imports `day_shards` only inside function bodies.** That asymmetry is the only thing keeping the two acyclic. The split must preserve it: `rows.py` keeps its `day_shards` import function-local (section 3).
 - **`SegmentLedger` has readers across the pipeline, the utilities and the tests.** Row 3 rewires each `SegmentLedger.X` to `LedgerName.X` and each `for x in SegmentLedger` to `for x in DAY_TREES`; mypy names any it missed.
 - **`ledger.py` does not import `idhazh.paths`** - it mentions it in one comment. So the `path_classes` rename (row 4) is disjoint from the extraction, and only `cli.py` and a few test files import `idhazh.paths`.
@@ -94,6 +94,9 @@ No counts here - functionality is what the contracts must preserve, not a measur
 ## 3. The shape this plan builds
 
 ```
+config/
+    ledgers.json              the registry: every ledger, its state, where it lives
+
 backend/idhazh/
     contracts/
         ledger_name.py        LedgerName + DAY_TREES live HERE, not in the package
@@ -116,7 +119,7 @@ backend/idhazh/
 
 **`LedgerName` is in `contracts/`, not in the package.** `FileEnvelope` (plan 50) is typed by it, and CLAUDE.md section 4 forbids `contracts/` from importing another `idhazh` subpackage. Contracts are the bottom of the graph, so the vocabulary lives there.
 
-**Where a ledger lives is config, how its rows settle is code.** `config/ledgers.json` carries each ledger's lifecycle state and path shape (section 4.2); `keys.py` carries the key and preference (section 4.3), keyed by `LedgerName`, because a preference is a callable and a callable is not config. Keeping them apart is why `paths.py` never imports `keys.py`. Rejected: a single merged table (the `LedgerShape` an earlier draft drew) that re-coupled the two.
+**Where a ledger lives is config, how its rows settle is code.** `config/ledgers.json` carries each ledger's lifecycle state and path shape (section 4.2); `keys.py` carries the key and preference (section 4.4), keyed by `LedgerName`, because a preference is a callable and a callable is not config. Keeping them apart is why `paths.py` never imports `keys.py`. Rejected: a single merged table (the `LedgerShape` an earlier draft drew) that re-coupled the two.
 
 **The intra-package import graph is a DAG the worker follows exactly.** `contracts/` and the external sibling `day_partition` are the bottom and import nothing from the package. Then `csv_file`, `paths`, `keys` and `filenames` import only `contracts`; `headers` imports `csv_file`; `settle` imports `keys`, `csv_file`, `paths`, `contracts` and `day_partition`; `rows` imports `keys`, `filenames`, `csv_file`, `paths`, `contracts` and `day_partition`. Every external module-top import a moved body already had (`contracts`, `day_partition`) travels with it. `__init__` imports the submodules to build the facade, and **no submodule imports `__init__`** - importing the package runs `__init__`, so a submodule reaching back up would re-enter a half-built facade.
 
@@ -139,7 +142,7 @@ One `StrEnum`, one member per ledger the module can address today, the value bei
 DAY_TREES: Final[frozenset[LedgerName]] = frozenset({...})   # the nine, no more
 ```
 
-`DAY_TREES` is the subset a writer files a segment into - exactly the nine `SegmentLedger` had. It is what `write_segment`, `segment_contract` and the tree-shape table key on (section 4.3), and what every `for tree in SegmentLedger` loop becomes (`telemetry/prune.py`'s `WRITER_OWNED_LEDGERS`, `stages/compact.py`, and the tests). **Its coverage oracle**: `{m.value for m in DAY_TREES}` equals the old `SegmentLedger` value set, computed from git.
+`DAY_TREES` is the subset a writer files a segment into - exactly the nine `SegmentLedger` had. It is what `write_segment`, `segment_contract` and the tree-shape table key on (section 4.4), and what every `for tree in SegmentLedger` loop becomes (`telemetry/prune.py`'s `WRITER_OWNED_LEDGERS`, `stages/compact.py`, and the tests). **Its coverage oracle**: `{m.value for m in DAY_TREES}` equals the old `SegmentLedger` value set, computed from git.
 
 **`SegmentLedger` is deleted, not aliased.** A second enum whose members duplicate a `LedgerName` subset is the defect this plan removes. One enum, one typed subset, one coverage test each.
 
@@ -159,6 +162,8 @@ class LedgerState(StrEnum):
 
 
 class Grain(StrEnum):
+    """Where a ledger's files sit TODAY. A member is deleted by the migration that
+    empties it; the enum goes when every entry is N11's one pattern."""
     FLAT = "flat"        # feed-retirements.csv - one file, no date in the path
     DAY_FILE = "day"     # seen/<YYYY>/<MM>/<DD>.csv - one file per day
     DAY_TREE = "tree"    # item-health/<YYYY>/<MM>/<DD>/ - a day directory writers file into
@@ -187,6 +192,12 @@ class LedgersConfig(BaseModel):
 
 **`paths.py` reads and validates `config/ledgers.json` once into `dict[LedgerName, LedgerEntry]`** and the builders operate on it. Config-driven, one sane file, no source edit to change a state (Guardrail #6).
 
+**`Grain` is transitional and carries its removal condition on its declaring line** (Guardrail #6). The north star is [docs/concepts/telemetry-intent.md](../docs/concepts/telemetry-intent.md), and N11 is explicit: every tree under `state/` is sharded to **one** pattern with no exceptions - `state/raw/<ledger>/<YYYY>/<MM>/<DD>/<file_id>.parquet`, the date being `covers`, the name being N9's minted `<file_id>`. Five grains describes the mess N11 exists to remove, so writing it into a new contract as a permanent shape would codify the defect. It is recorded because this plan moves no bytes and every ledger really does sit in one of those five shapes today: the registry is the honest map of that, and it is the seam plan 50 edits one entry at a time as it migrates a ledger to the one pattern.
+
+**Where this plan and the north star share a concept they share its name.** The builders take `covers` - N11's word for the day the rows describe, never the day the job woke (CLAUDE.md section 2) - and `LedgerName` is N11's `<ledger>`. So plan 50's migration is an edit to an entry rather than a translation between two vocabularies, which is the failure this whole plan exists to prevent.
+
+**What this plan deliberately keeps out of the registry**: the `raw` / `compact` tier (N10) and the parquet format (N1). Both are plan 50's, that plan is frozen, and minting its fields here would be the second vocabulary again.
+
 Three builders, driven by the entry's `grain`:
 
 ```python
@@ -197,13 +208,79 @@ def tree_root(state_dir: Path, ledger: LedgerName) -> Path   # state_dir / Path(
 
 `covers` is the period - a `YYYY-MM-DD` day for `DAY_FILE`/`DAY_TREE`, a `YYYY-MM` month for `MONTH_FILE`, a stamp for `STAMPED`, `None` for `FLAT`. A dated grain handed `None` raises; a `FLAT` handed a `covers` raises - `path` never guesses. `tree_root` returns the whole-tree directory a reader hands to `day_shards.settled_rows` / `day_partition.day_files` (which walk every day under it); it is defined only for `DAY_FILE`/`DAY_TREE` and raises otherwise, and it is a separate builder rather than `path(covers=None)` so `path` keeps its fail-fast. Because `suffix` is data on the entry, the STAMPED archive's `.json` sits on its row and the builder is physically unable to emit `.csv`.
 
-**Settlement stays in code, not in the config.** A dedup key is a tuple and a preference is a callable, and a callable is not JSON. So `keys.py` (section 4.3) holds the key, the preference and the tree-shape, keyed by `LedgerName`, for the `DAY_TREES` subset. The config carries where a ledger lives and its lifecycle; the code carries how its rows settle.
+**Settlement stays in code, not in the config.** A dedup key is a tuple and a preference is a callable, and a callable is not JSON. So `keys.py` (section 4.4) holds the key, the preference and the tree-shape, keyed by `LedgerName`, for the `DAY_TREES` subset. The config carries where a ledger lives and its lifecycle; the code carries how its rows settle.
 
 **Onboarding and offboarding, in full.** Add a ledger: one entry in `config/ledgers.json` at `state: live` (plus a `LedgerName` member for typing, which the bijection test binds, plus a `keys.py` row if it is a settled day tree). Pause it or retire it: change `state`. Nothing is discovered and nothing is a hand-list to forget - a missing pairing fails the build by name.
 
 **Four oracles bind the registry.** Bijection: the config names are exactly the `LedgerName` members, at load and in a test. Path parity: for every entry and a fixed date, `path` and `relpath` equal the old function, extension included. Tree-root parity: for every `DAY_FILE`/`DAY_TREE` entry, `tree_root` equals the old inline `state_dir / X_DIRNAME`, the nested trees included. Known-set parity: the directories `prune-state` protects (the `prefix[0]` of every configured ledger, of any state, plus the four other-module trees) reproduce today's decision exactly - so replacing the hand-list changes no prune outcome, and any directory the config would newly protect (see row 5 on `day-validations`) is surfaced, never silently changed.
 
-### 4.3 The settlement structures - `backend/idhazh/ledger/keys.py`
+### 4.3 How a ledger is onboarded, and what the door offers
+
+Drawn to the Mermaid contract in [docs/reference/documentation-structure.md](../docs/reference/documentation-structure.md) so row 5 can lift it into the docs page unchanged.
+
+```mermaid
+%%{init: {"theme": "base", "themeVariables": {"background": "#0f1117", "primaryColor": "#222834", "primaryTextColor": "#e6e9f0", "primaryBorderColor": "#4b5468", "lineColor": "#8b93a7", "textColor": "#e6e9f0", "clusterBkg": "#1a1e27", "clusterBorder": "#3a4254", "titleColor": "#e6e9f0", "edgeLabelBackground": "#1a1e27", "fontSize": "14px"}}}%%
+flowchart TB
+  subgraph ONBOARD["Onboarding a ledger - two edits, no logic"]
+    ENTRY["add one entry to config/ledgers.json<br/>name, state, grain, prefix, stem, suffix"]
+    MEMBER["add its LedgerName member"]
+  end
+
+  subgraph LOAD["Load time - idhazh/ledger/paths.py"]
+    READ["read and validate the config"]
+    BIJ{"entries and LedgerName<br/>exactly each other?"}
+    REFUSE["build stops, naming the ledger"]
+    REG[("the registry, in memory")]
+  end
+
+  subgraph DOOR["The one door - idhazh/ledger/"]
+    PATHS["paths: path, relpath, tree_root"]
+    KEYS["keys: the dedup key and preference"]
+    ROWS["rows: append, load, write_segment"]
+    SETTLE["settle: drop repeated rows"]
+  end
+
+  TREE[("the committed files under state/")]
+  PRUNE{"directory in the registry?"}
+  KEEP["kept, whatever its state"]
+  EMPTY["treated as a trial tree, emptied"]
+
+  ENTRY --> READ
+  MEMBER --> READ
+  READ --> BIJ
+  BIJ -->|"no"| REFUSE
+  BIJ -->|"yes"| REG
+  REG --> PATHS
+  PATHS --> ROWS
+  KEYS --> ROWS
+  KEYS --> SETTLE
+  ROWS --> TREE
+  SETTLE --> TREE
+  REG -->|"prune-state asks"| PRUNE
+  PRUNE -->|"yes"| KEEP
+  PRUNE -->|"no"| EMPTY
+  TREE --> PRUNE
+
+  classDef stage fill:#222834,stroke:#4b5468,stroke-width:1px,color:#e6e9f0;
+  classDef decision fill:#11141c,stroke:#5b6477,stroke-width:1.5px,color:#ffffff;
+  classDef yes fill:#176032,stroke:#2ea04f,stroke-width:1.5px,color:#ffffff;
+  classDef no fill:#a32020,stroke:#d23b3b,stroke-width:1.5px,color:#ffffff;
+  classDef ledger fill:#1b3a5c,stroke:#2d6ca3,stroke-width:1.5px,color:#ffffff;
+  classDef sys fill:#1a1e27,stroke:#8b93a7,stroke-width:1.5px,color:#c8cdd8;
+
+  class ENTRY,MEMBER,READ,PATHS,KEYS,ROWS,SETTLE stage;
+  class BIJ,PRUNE decision;
+  class KEEP yes;
+  class REFUSE,EMPTY no;
+  class REG,TREE ledger;
+  class ONBOARD,LOAD,DOOR sys;
+```
+
+**Reading it in one line:** a ledger exists because an entry says so; the entry and the typed name must agree or the build stops; everything that touches `state/` goes through the door the registry feeds; and `prune-state` empties only what the registry does not claim - which is why a missing entry used to be silent data loss and is now a refusal.
+
+**The three states, and what each one changes.** `live` is written and read. `paused` is not written now and will resume. `retired` is no longer written and is not coming back. All three are **claimed**, so all three are protected from the trial-tree sweep; the difference is what a writer may do, not whether the data survives. Deleting a ledger's data for good is a deletion somebody performs on purpose, never a side effect of changing a state.
+
+### 4.4 The settlement structures - `backend/idhazh/ledger/keys.py`
 
 What settles two rows is a separate question from where a file lives, so it is a separate module keyed on `LedgerName`. `keys.py` takes, with bodies unchanged, every name that answers it:
 
@@ -212,7 +289,7 @@ What settles two rows is a separate question from where a file lives, so it is a
 - `DATE_CELL`, the column a day tree routes a row by, lands here beside the settlement it feeds; `rows.py`'s `_dated_rows` imports it.
 - `DAY_TREES` is imported here from `contracts/ledger_name.py`; `_TREE_SHAPES` is re-keyed from `SegmentLedger` onto `LedgerName` and its keys must equal `DAY_TREES` (the coverage oracle). `segment_contract` / `segment_key` / `segment_carried` and the `write_segment` family (in `rows.py`) raise the named refusal of section 4.1 for a `LedgerName` not in `DAY_TREES`.
 
-### 4.4 The remaining modules - which name goes where
+### 4.5 The remaining modules - which name goes where
 
 Each module takes the names below with bodies unchanged. **The oracle for every one is the same**: `pytest --collect-only -q` is byte-identical before and after, the moved-name set is recomputed from the source and destination files rather than hand-listed, and every moved module-level constant is asserted value-identical (a moved regex or tuple that changed is what `collect-only` cannot see).
 
@@ -227,7 +304,7 @@ Each module takes the names below with bodies unchanged. **The oracle for every 
 
 **"Verbatim" means the body is unchanged, not the namespace.** `write_segment`, `extend_segment` and `_dated_rows` move with their bodies byte-for-byte, but their helpers now live in sibling modules, so `rows.py` imports them: `_TREE_SHAPES`, the carried-sets and `DATE_CELL` from `keys`; `render_file` and `_read_rows` from `csv_file`; `SegmentName` and `segment_name` from `filenames`; the `path` builders from `paths`; and `day_shards` function-local (section 3). Two of those imports are private (`_TREE_SHAPES`, `_read_rows`); a private import across siblings in one package is allowed and is what keeps the move behaviour-preserving. A worker who reads "verbatim" as "no new import lines" gets a `NameError` - so the rule is stated here and in ESCALATE trigger 2.
 
-### 4.5 `ledger/__init__.py` - the facade, and what keeps it honest
+### 4.6 `ledger/__init__.py` - the facade, and what keeps it honest
 
 Callers reach the ledger by attribute access - `from idhazh import ledger` then `ledger.X` - so the facade's one job is to bind every name the module exposes today. The split is for the maintainer, not the caller.
 
@@ -236,7 +313,7 @@ Callers reach the ledger by attribute access - `from idhazh import ledger` then 
 - `__init__.py` holds imports, a single `__all__`, and a leading module docstring, and **nothing else** - no definition and no bound value. Row 6's AST walk asserts every top-level node is an `Import`/`ImportFrom`, the one `__all__` assignment, or the leading docstring; a stray top-level constant `Assign` - a second source of truth for a moved constant - fails it. A re-export is an import line, so a facade of pure re-exports passes.
 - **The facade never binds the pyarrow module** (section 3). When plan 50 lands `parquet.py`, `__init__` does not import it - not at module scope, not to re-export it; a parquet caller does `from idhazh.ledger import parquet`. Row 6 arms a fresh-interpreter subprocess oracle: `from idhazh import ledger`, then assert neither `pyarrow` nor `idhazh.ledger.parquet` is loaded. Green now, load-bearing the moment plan 50 adds the submodule.
 
-### 4.6 What leaves the package, and what must NOT
+### 4.7 What leaves the package, and what must NOT
 
 Two functions leave, every reader that reaches them is repointed to the new home, and the facade stops binding them. **`_run_n` and `load_health` stay** - `load_health` has many `ledger.load_health` callers and is not leaving, and `_run_n` is its private helper, so moving `_run_n` would break `load_health`.
 
@@ -253,7 +330,7 @@ Two functions leave, every reader that reaches them is repointed to the new home
 | # | Collision | Settled as |
 | --- | --- | --- |
 | 1 | `ledger/paths.py` beside the existing `backend/idhazh/paths.py` | The top-level one becomes `path_classes.py` (row 4). It answers "how does git settle two runs on one path", which is not a path question, and its own test is already `test_path_classes.py` |
-| 2 | `ledger` in `docs/concepts/partitions.md` does not all mean `ledger` | That page lists `frontend/public/digest/<YYYY>/<MM>/<DD>/`, which nothing reads as a later run's memory. **Under `state/` it is a ledger; under `frontend/public/` it is a collection.** The test is the reader, never the shape on disk |
+| 2 | `ledger` under `frontend/public/` does not mean what it means under `state/` | `frontend/public/digest/<YYYY>/<MM>/<DD>/` is a published tree a reader opens, not a fact one run left for the next. **Under `state/` it is a ledger; under `frontend/public/` it is a collection.** The test is the reader, never the shape on disk. The north star for what `state/` becomes is [docs/concepts/telemetry-intent.md](../docs/concepts/telemetry-intent.md), which that page's own opening defers to; [docs/concepts/partitions.md](../docs/concepts/partitions.md) describes today and is read as today |
 | 3 | The glossary rows for `ledger` and `segment` both link to `backend/idhazh/ledger.py` | Repointed in row 2 to `ledger/__init__.py` and `ledger/filenames.py`. The glossary's rule is that the link is the definition, so a broken link is a broken definition |
 
 ---
@@ -288,6 +365,18 @@ FILES THAT RENAME
       class Store        -> class Ledger
       seeded_stores()    -> seeded_ledgers()
   backend/tests/test_check_seeded_stores.py -> test_check_seeded_ledgers.py
+
+THE DIAGRAM CLASS VOCABULARY
+  docs/reference/documentation-structure.md defines `classDef store` for the
+  cylinder that means "something persisted", and four pages use it. The class
+  renames to `ledger` - the fill, stroke and meaning are unchanged, and one
+  page already draws it that way. Both the classDef line and every `class X
+  store;` line move:
+      docs/reference/documentation-structure.md   (the definition and its table row)
+      docs/architecture/publishing/autotune-content-similarity.md
+      docs/architecture/publishing/visuals.md
+      docs/how-to/evaluate-new-summarizer-model.md
+      docs/reference/github-actions.md            (two diagrams)
 
 SIGNATURES AND MEMBERS THAT CHANGE
   backend/utilities/empty_column_census.py
@@ -389,6 +478,7 @@ ABOUT THIRTY TEST FUNCTION NAMES carrying the word, listed by the sweep
   - `backend/idhazh/ledger/paths.py` (new: loads and validates the config, the `path` / `relpath` / `tree_root` builders, `STATE_DIRNAME`)
   - `backend/idhazh/ledger/__init__.py` - delete the path functions, the per-ledger `*_DIRNAME` constants and `STORE_DIRNAMES`; migrate the inline `state_dir / X_DIRNAME` tree-root reads (`load_item_health`, `load_health`, `load_published`, `keyed_paths`) onto `tree_root`; re-export from `paths.py`; cut `__all__`
   - `backend/idhazh/stages/prune_state.py` - `_trial_roots` reads the config's known-set instead of `ledger.STORE_DIRNAMES`
+  - `docs/architecture/contracts/` - the onboarding diagram and the three states, lifted from section 4.3 into the page row 2 created
   - `backend/idhazh/stages/validate_days.py`, `backend/idhazh/retention.py`, and any test reading `state_dir / X_DIRNAME` - repointed onto `tree_root`
   - every other caller mypy names when the wrappers go
 - **Acceptance gates:** `ruff check .`, `mypy backend`, the changed-file selector locally; full `pytest backend/tests` on CI.
@@ -401,7 +491,7 @@ ABOUT THIRTY TEST FUNCTION NAMES carrying the word, listed by the sweep
   | 2 | States are `live` / `paused` / `retired`; all three are known to `prune-state` (protected), so retiring or pausing never exposes a ledger to trial-pruning. The write-side and cleanup meaning of the states is the gardener's to act on, not this structural row | Owner, 2026-09-26 |
   | 3 | Settlement (key, preference, tree-shape) stays in `keys.py` keyed by `LedgerName`, because a preference is a callable and a callable is not JSON. The config carries where a ledger lives and its lifecycle only | Owner, Fowler |
   | 4 | `prune_state.py` is edited here to read the config. Plan 50 refactors `prune_state.py` into gardener tasks and rebases onto this; its frozen design is untouched, and the config becomes the registry both read | Owner |
-- **ESCALATE:** if the config's known-set does not reproduce today's `_trial_roots` decision - the live question is `day-validations`, a real `state/` child absent from today's `STORE_DIRNAMES` - stop. Protecting it is almost certainly a bug fix, but a change to what `prune-state` empties is a behaviour change and needs sign-off, not a silent flip inside a structural row.
+- **ESCALATE:** if the config's known-set does not reproduce today's `_trial_roots` decision, stop. The known case is `day-validations`, a real `state/` child absent from today's `STORE_DIRNAMES`. **The owner has ruled that `validate-days` and its `day-validations` ledger are wasteful and will be decommissioned in their own change** (2026-09-26), so this plan does not delete them and does not change what `prune-state` does to them: the entry is written to reproduce today's behaviour exactly, and the decom change deletes the entry and the `LedgerName` member. If the decom lands first, this row simply has one fewer entry. Any *other* directory whose treatment would change is a behaviour change needing sign-off, not a silent flip inside a structural row.
 - **Rejected alternatives:**
 
   | # | Option | Why rejected | What it would cost to take | Authority |
@@ -414,7 +504,7 @@ ABOUT THIRTY TEST FUNCTION NAMES carrying the word, listed by the sweep
 
 ## Row #6 - The rest of the module splits, and the facade becomes provably empty
 
-- **Scope:** extract `keys.py`, `filenames.py`, `csv_file.py`, `headers.py`, `rows.py`, `settle.py` and the `paths.py` state-root (sections 4.2-4.4); evict `feed_reliability`/`reliability` to `source_health.py` and `shards_in_window` to `month_partition.py`, repointing their readers (section 4.6); make `ledger/__init__.py` re-exports-and-`__all__` only, and never bind the pyarrow module.
+- **Scope:** extract `keys.py`, `filenames.py`, `csv_file.py`, `headers.py`, `rows.py`, `settle.py` and the `paths.py` state-root (sections 4.2-4.5); evict `feed_reliability`/`reliability` to `source_health.py` and `shards_in_window` to `month_partition.py`, repointing their readers (section 4.7); make `ledger/__init__.py` re-exports-and-`__all__` only, and never bind the pyarrow module.
 - **Files touched:**
   - `backend/idhazh/ledger/keys.py`, `filenames.py`, `csv_file.py`, `headers.py`, `rows.py`, `settle.py` (all new)
   - `backend/idhazh/ledger/__init__.py` - re-exports and `__all__`, no definition
@@ -434,7 +524,7 @@ ABOUT THIRTY TEST FUNCTION NAMES carrying the word, listed by the sweep
 
   | # | Decision | Authority |
   | --- | --- | --- |
-  | 1 | `write_segment`, `extend_segment` and `_dated_rows` move with their bodies unchanged; only their imports are rewired to the sibling modules (section 4.4). Same signature, same `int` return, same per-`date` routing. Plan 50's frozen `persist` stands on that behaviour (ESCALATE trigger 2) | Owner, CLAUDE.md section 0d |
+  | 1 | `write_segment`, `extend_segment` and `_dated_rows` move with their bodies unchanged; only their imports are rewired to the sibling modules (section 4.5). Same signature, same `int` return, same per-`date` routing. Plan 50's frozen `persist` stands on that behaviour (ESCALATE trigger 2) | Owner, CLAUDE.md section 0d |
   | 2 | The facade never binds the pyarrow module. A package `__getattr__` was rejected because it is a top-level definition the facade-shape oracle forbids; a parquet caller reaches the submodule directly | Carmack |
   | 3 | `reliability`/`feed_reliability`/`shards_in_window` leave and their readers are repointed, never re-exported - re-export would arm a facade-to-home-to-facade load cycle. `_run_n` and `load_health` stay, because `_run_n` is `load_health`'s helper and `load_health` is not leaving | Carmack |
 
