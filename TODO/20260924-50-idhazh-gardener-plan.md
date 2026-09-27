@@ -61,7 +61,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | The site-size instruments leave the prune module | - | A | PENDING | - | - | - |
+| 1 | The site-size instruments leave the prune module | - | A | DONE | p50r1 | - | p50-r1-worker |
 | 2 | The payload ledger, the two roots, and the arrow mapping | 1 | B | PENDING | - | - | - |
 | 3 | Two ledgers become parquet and their union drivers retire | 2 | C | PENDING | - | - | - |
 | 4 | The gardener: registry, config, schedule, record, commit loop | 2 | C | PENDING | - | - | - |

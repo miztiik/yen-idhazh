@@ -1339,7 +1339,7 @@ export function loadManifests(
  * so does this. Taking the count off a run manifest instead would divide the
  * bytes of one tree by somebody else's articles the first time a run planned
  * items it did not publish - which is the lesson
- * `backend/idhazh/retention.py` already wrote down about its own pairing.
+ * `backend/idhazh/site_weight.py` already wrote down about its own pairing.
  *
  * One day payload open a day inside `windowDays`, and none outside it. This is
  * the most expensive of the archive reads - a day payload is hundreds of

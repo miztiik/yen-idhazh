@@ -1,6 +1,6 @@
 # What a reader downloads
 
-**Last Updated**: 2026-09-18
+**Last Updated**: 2026-09-27
 Every number about **what the reader downloads**: the compression level the
 origin serves, each page's ceiling, what a cold load costs, how fast the site
 fills, and the weight of the archive, the search index and the published ledger.
@@ -1307,7 +1307,7 @@ inside the residual above. The measured figure is the one recorded.
 | The runner's own `site_bytes`, median over the twelve mature day-to-day steps of the sixteen committed run manifests | 3,517 +/- 448 | 1,910,234 +/- 642,682 |
 
 These two are independent in every input: a different machine (a GitHub-hosted
-runner against this laptop), a different code path (`retention.measure` during
+runner against this laptop), a different code path (`site_weight.measure` during
 the run against `git ls-tree -l` afterwards), and a different arithmetic (a
 dated level series against a two-endpoint difference). The last committed
 `site_bytes`, 22,827,239, is 0.014 percent under the tree measured here, which is
