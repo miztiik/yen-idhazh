@@ -114,7 +114,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 
 - **Scope:** The stored plan and element set a whole-day re-render reads, and a home for a rejected plan's body.
 - **Files touched:** `backend/idhazh/assemble.py`, `frontend/public/digest/**` or a `state/` ledger, `backend/idhazh/retention.py`, `config/idhazh.json`, `docs/concepts/adaptive-pruning.md` (the register), `backend/tests/**`, `docs/architecture/publishing/layout.md`
-- **Acceptance gates:** `ruff`; `mypy --strict`; export + drift; the full suite; `idhazh site-weight`; `idhazh validate-days`.
+- **Acceptance gates:** `ruff`; `mypy --strict`; export + drift; the full suite; `idhazh site-weight`; `idhazh check-publication`.
 - **Oracle:** A published day is re-rendered **from the committed ledger alone**, with no re-run of any model, and the output matches the committed visuals byte for byte. That is the only proof the ledger holds enough.
 
 ### Decisions

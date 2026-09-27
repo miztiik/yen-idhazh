@@ -235,7 +235,7 @@ class VisualData(Contract):
 
         A channel naming a mark that is not there is a hole in the picture. A
         mark no channel names is weight a reader downloads and never sees, which
-        is the same fault `validate-days` already holds a day's picture directory
+        is the same fault `check-publication` already holds a day's picture directory
         to. Two marks under one id is worse than either: whichever the drawing
         picks, the other one's provenance is what an auditor would read.
         """

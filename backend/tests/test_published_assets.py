@@ -1,9 +1,10 @@
 """One picture, one story - held by the producer that writes the day.
 
-Contract tier (CLAUDE.md section 13). The rule itself is
-`idhazh.stages.validate_days._picture_faults`, and it runs inside `idhazh validate-days`,
-which `ci.yml` runs on every change and `digest.yml` runs before every publish. That
-function's docstring carries the defect it exists for.
+Contract tier (CLAUDE.md section 13). The rule itself is the `pictures` check
+under `idhazh.publication_checks.checks.pictures`, and it runs inside
+`idhazh check-publication`, which `ci.yml` runs on every change and
+`digest.yml` runs before every publish. That module's docstring carries the
+defect it exists for.
 
 **It used to be one test per committed day, and that is what changed.** A day
 already published is frozen: no later run rewrites its payload or redraws its
@@ -20,13 +21,14 @@ has never produced, which is the other half of why it is the better instrument.
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 from typing import Any
 
 import pytest
 from conftest import CONTRACT_FIXTURES_DIR, read_text
 
-from idhazh.stages.validate_days import _day_faults, stage_validate_days
+from idhazh.publication_checks import run_publication_checks
 
 pytestmark = [pytest.mark.contract, pytest.mark.visual]
 
@@ -83,11 +85,16 @@ def draw(public_root: Path, path: str) -> None:
     file.write_text('{"item_id": "ai-01"}', encoding="utf-8")
 
 
-def faults_for(public_root: Path) -> list[str]:
-    return _day_faults(day_dir(public_root) / "digest.json", public_root)
+def faults_for(public_root: Path, caplog: pytest.LogCaptureFixture) -> list[str]:
+    """Every sentence the gate says about the tree built under `public_root`."""
+    with caplog.at_level(logging.ERROR):
+        run_publication_checks(public_root / "digest", run_id="2026-08-21-1")
+    return [record.getMessage() for record in caplog.records]
 
 
-def test_a_day_whose_pictures_line_up_reports_nothing(tmp_path: Path) -> None:
+def test_a_day_whose_pictures_line_up_reports_nothing(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
     """The denominator.
 
     A checker that passes everything reads exactly like one that passes a correct
@@ -96,32 +103,39 @@ def test_a_day_whose_pictures_line_up_reports_nothing(tmp_path: Path) -> None:
     a_day_naming(tmp_path, [picture(0), None])
     draw(tmp_path, picture(0))
 
-    assert faults_for(tmp_path) == []
+    assert faults_for(tmp_path, caplog) == []
 
 
-def test_two_stories_on_one_picture_is_refused(tmp_path: Path) -> None:
+def test_two_stories_on_one_picture_is_refused(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
     """The 2026-08-24 defect itself: one of the two shows the other's chart."""
     a_day_naming(tmp_path, [picture(0), picture(0)])
     draw(tmp_path, picture(0))
 
-    faults = faults_for(tmp_path)
+    faults = faults_for(tmp_path, caplog)
     assert any("one picture on two stories" in fault for fault in faults), faults
 
-def test_a_named_picture_that_is_not_there_is_refused(tmp_path: Path) -> None:
+
+def test_a_named_picture_that_is_not_there_is_refused(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
     """A broken image for the reader, and nothing else in the day is wrong."""
     a_day_naming(tmp_path, [picture(0)])
 
-    faults = faults_for(tmp_path)
+    faults = faults_for(tmp_path, caplog)
     assert any("not there" in fault for fault in faults), faults
 
 
-def test_a_picture_no_story_names_is_refused(tmp_path: Path) -> None:
+def test_a_picture_no_story_names_is_refused(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
     """Weight against the 1 GB Pages cap that renders nowhere, and what a
     repaired collision leaves behind."""
     a_day_naming(tmp_path, [None])
     draw(tmp_path, picture(2))
 
-    faults = faults_for(tmp_path)
+    faults = faults_for(tmp_path, caplog)
     assert any("no story names" in fault for fault in faults), faults
 
 
@@ -130,7 +144,7 @@ def test_the_stage_stops_the_publish_rather_than_logging_and_passing(tmp_path: P
     a_day_naming(tmp_path, [picture(0), picture(0)])
     draw(tmp_path, picture(0))
 
-    assert stage_validate_days(tmp_path / "digest") == 1
+    assert run_publication_checks(tmp_path / "digest", run_id="2026-08-21-1") == 1
 
 
 def test_naming_a_day_opens_that_day_and_leaves_the_rest_shut(tmp_path: Path) -> None:
@@ -147,8 +161,9 @@ def test_naming_a_day_opens_that_day_and_leaves_the_rest_shut(tmp_path: Path) ->
         json.dumps({**json.loads(read_text(FIXTURE)), "date": "2026-08-22"}), encoding="utf-8"
     )
 
-    assert stage_validate_days(tmp_path / "digest", ["2026-08-22"]) == 0
-    assert stage_validate_days(tmp_path / "digest") == 1
+    root = tmp_path / "digest"
+    assert run_publication_checks(root, ["2026-08-22"], run_id="2026-08-22-1") == 0
+    assert run_publication_checks(root, run_id="2026-08-22-1") == 1
 
 
 def test_a_day_that_is_not_committed_fails_rather_than_checking_nothing(tmp_path: Path) -> None:
@@ -156,4 +171,4 @@ def test_a_day_that_is_not_committed_fails_rather_than_checking_nothing(tmp_path
     a_day_naming(tmp_path, [picture(0)])
     draw(tmp_path, picture(0))
 
-    assert stage_validate_days(tmp_path / "digest", ["1999-01-01"]) == 1
+    assert run_publication_checks(tmp_path / "digest", ["1999-01-01"], run_id="1999-01-01-1") == 1

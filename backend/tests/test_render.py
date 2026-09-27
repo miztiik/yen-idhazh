@@ -509,7 +509,7 @@ class TestAssetPaths:
 
         An item id has to end in a hyphen and a run of digits or sixteen base32
         symbols, so no item can be called `digest` or `run` - which is what lets
-        the retention prune and `validate-days` read a file's identity off its
+        the retention prune and `check-publication` read a file's identity off its
         name instead of keeping a list of names to skip.
         """
         named = {

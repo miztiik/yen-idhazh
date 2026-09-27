@@ -105,7 +105,7 @@ file path.
 
 ### Checking the days a change can break
 
-`idhazh validate-days` costs **0.27 s per published day**, so the 16 committed
+`idhazh check-publication` costs **0.27 s per published day**, so the 16 committed
 days are 6.6 to 7.1 s and a year of them would be about 100 s on every run. The
 `scope` step decides: a push to `main` and any change to the contracts, the
 tooling or a committed payload opens every day; every other pull request opens

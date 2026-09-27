@@ -96,7 +96,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 
 - **Scope:** `retention.dry_run` becomes `false`; one scheduled run is watched end to end and its numbers recorded.
 - **Files touched:** `config/idhazh.json`, `tests/fixtures/contracts/app-config/tuned.json`, `docs/concepts/adaptive-pruning.md`, `docs/reference/pipeline-cost.md`
-- **Acceptance gates:** the full suite; one dispatch; `idhazh site-weight` before and after; `idhazh validate-days`.
+- **Acceptance gates:** the full suite; one dispatch; `idhazh site-weight` before and after; `idhazh check-publication`.
 - **Oracle:** After the run, **every published day still validates and every item that names a visual still has one** - the existing published-assets test, run over the whole corpus. Deletion that orphans a reference is the failure this row exists to avoid, and the site-size delta is the evidence it did something.
 
 ### Decisions
