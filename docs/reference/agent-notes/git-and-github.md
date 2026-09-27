@@ -95,6 +95,14 @@ git ls-remote --heads origin <branch>
 
 If it names your sha the push is done; `git fetch origin <branch>` then `git branch --set-upstream-to=origin/<branch>` finishes it. Setting the upstream before the fetch fails, because the push wrote the remote branch and not the remote-tracking ref.
 
+**A deleted committed tree can come back from a run that started before the delete merged.** A scheduled run works from the checkout it took when it started, so it runs the old writer and its commit lands on top of your delete. On 2026-09-27 a pipeline run re-created one file in a tree deleted 90 minutes earlier. Nothing read or wrote that tree any more, so every check stayed green and only a search of the trunk found it. After deleting a committed tree, search the trunk again once the next scheduled run has pushed:
+
+```powershell
+git fetch origin; git ls-tree -r --name-only origin/main -- <deleted tree> # no output: still gone
+```
+
+**A branch cut from a sibling's unmerged tip is brought up to date with a merge once the sibling squash-merges.** The squash replaces the sibling's commits with one new commit, so git cannot match them, and a plain `git rebase origin/main` replays the sibling's whole diff as conflicts. `git rebase --onto origin/main <sibling tip>` replays only your commits, but it rewrites a branch you have pushed, and the push then needs force, which [CLAUDE.md section 8](../../../CLAUDE.md#8-git-hygiene) avoids. `git merge origin/main` keeps the push a fast-forward. On two stacked branches on 2026-09-27 the only conflicts were files both branches had edited: the line each stamped in the plan-doc's status table, and one page the lower branch created.
+
 ## Contamination and recovery
 
 **Neither `git status` nor the commit output reveals a contaminated parent**, because it is in the branch's history, not in the index. Three checks do:
