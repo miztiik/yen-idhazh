@@ -6,6 +6,7 @@ import { compile, preprocess } from 'svelte/compiler';
 import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
 import { render } from 'svelte/server';
 import { sparklineMarks } from '../src/lib/charts/sparkline';
+import { CONSOLE_MODEL_LABELS_PAGE } from '../scripts/doc-test-inputs';
 
 /**
  * `What the model did` is eleven measures, so it is eleven cards.
@@ -65,15 +66,9 @@ function columns(): { key: string; label: string; line: string; polarity: string
  * ruling and not against its own last edit.
  */
 function documented(): { label: string; line: string }[] {
-	const doc = readFileSync(
-		path.join(repo, 'docs', 'concepts', 'console-design', 'what-the-quality-and-source-panels-draw.md'),
-		'utf8'
-	);
+	const doc = readFileSync(path.join(repo, CONSOLE_MODEL_LABELS_PAGE), 'utf8');
 	const start = doc.indexOf('| Label | The line under it |');
-	expect(
-		start,
-		'what-the-quality-and-source-panels-draw.md no longer carries the label set'
-	).toBeGreaterThan(-1);
+	expect(start, `${CONSOLE_MODEL_LABELS_PAGE} no longer carries the label set`).toBeGreaterThan(-1);
 	const found: { label: string; line: string }[] = [];
 	for (const row of doc.slice(start).split('\n').slice(2)) {
 		if (!row.startsWith('|')) break;

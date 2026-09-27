@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, readdirSync, rmSync, writeFileSync, mkdirSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, rmSync, writeFileSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
+import { CONSOLE_MODEL_LABELS_PAGE } from '../doc-test-inputs.ts';
 import { FRONTEND_GROUPS, groupedSpecs, groupForSpec } from '../test-groups.ts';
 import { changedPaths, ciAnswer, selectPaths, selectionForChange } from '../test-scope.ts';
 
@@ -86,7 +87,8 @@ test('a change carrying no code buys no code job, on a merge as well as a branch
 });
 
 test('a document a test reads is that test input, not documentation', () => {
-	const page = 'docs/concepts/console-design.md';
+	const page = CONSOLE_MODEL_LABELS_PAGE;
+	assert.ok(existsSync(join(FRONTEND, '..', page)), `${page} is gone, so the console spec that reads it cannot pass`);
 	assert.deepEqual(selectPaths([page]).groups, ['console']);
 	assert.equal(selectPaths([page]).reasons[0].reason, 'documentation a test reads');
 	const answer = ciAnswer([page], true);
