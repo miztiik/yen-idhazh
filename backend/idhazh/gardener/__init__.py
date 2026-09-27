@@ -9,10 +9,13 @@ a wake's tasks into shards, and lands one record per shard on main.
 - `shards` splits a wake's active tasks into shards, the same way the plan job does.
 - `schedule` says whether a UTC day is old enough to act on at an instant.
 - `runner` runs one shard or one task, checks what each task touched, and writes the record.
-- `publish` lands a shard's one commit on main, however many shards race it.
+- `outcome` is what a shard comes to: its exit code, and the paths it hands on to land.
 - `context` is what a task is handed; `report` turns what a pass did into its row.
 - `one_at_a_time` deletes a collection's members one at a time, under a ceiling.
 - `github_collections` lists and deletes what GitHub holds for this repository.
+
+Landing a shard's commit on main runs git, and nothing in this package starts a
+process, so the commit loop is `backend/utilities/gardener_publish.py`.
 
 A second driver of `one_at_a_time` lives in `idhazh.telemetry.prune`, because its
 question is an operator's ("which ledger, and which days?") and it belongs beside

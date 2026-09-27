@@ -5,6 +5,9 @@ clone, with no network. A race is staged the way it happens: another clone
 pushes first, or the origin refuses a push through its own hook. The idempotence
 oracle is that running the loop twice leaves the tree running it once left, and
 the moved-tip oracle is that the mover's change and this shard's both survive.
+
+The loop is `backend/utilities/gardener_publish.py`, because nothing under
+`backend/idhazh/` may start a process.
 """
 
 from __future__ import annotations
@@ -15,15 +18,15 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from idhazh.gardener import publish
-from idhazh.gardener.publish import (
+from idhazh.gardener.outcome import (
     EXIT_INTEGRITY,
     EXIT_OK,
     EXIT_PUSH_KEPT_LOSING,
     EXIT_TASK_FAILED,
     Shard,
+    worst,
 )
-from utilities import commit_and_push
+from utilities import commit_and_push, gardener_publish
 
 from ._garden import a_hook, an_origin, commits_on, git, on_origin, quiet_git, write
 
@@ -43,6 +46,7 @@ def a_shard(*, written: set[str] | None = None, deleted: set[str] | None = None)
         record_path=RECORD,
         written_paths=frozenset({RECORD, *(written or set())}),
         deleted_paths=frozenset(deleted or set()),
+        message=MESSAGE,
     )
 
 
@@ -56,7 +60,8 @@ def a_checkout(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, P
 
 def landed(shard: Shard, checkout: Path, *, attempts: int = 6) -> tuple[int, list[str]]:
     said: list[str] = []
-    return publish.publish(shard, MESSAGE, attempts=attempts, repo=checkout, say=said.append), said
+    code = gardener_publish.publish(shard, attempts=attempts, repo=checkout, say=said.append)
+    return code, said
 
 
 def test_a_shard_lands_its_writes_and_deletions_in_one_commit(
@@ -73,7 +78,7 @@ def test_a_shard_lands_its_writes_and_deletions_in_one_commit(
     assert on_origin(origin, KEPT) == "kept\n", "a file the shard did not delete went"
     identity = f"{commit_and_push.COMMITTER_NAME} <{commit_and_push.COMMITTER_EMAIL}>"
     assert commits_on(origin)[0] == f"{identity}: {MESSAGE}"
-    assert (publish.COMMITTER_NAME, publish.COMMITTER_EMAIL) == (
+    assert (gardener_publish.COMMITTER_NAME, gardener_publish.COMMITTER_EMAIL) == (
         commit_and_push.COMMITTER_NAME,
         commit_and_push.COMMITTER_EMAIL,
     )
@@ -235,10 +240,22 @@ def test_a_folder_named_for_deletion_is_refused_before_anything_stages(
 
 
 def test_a_shard_reports_the_worst_code_it_earned() -> None:
-    assert publish.worst() == EXIT_OK
-    assert publish.worst(EXIT_OK, EXIT_TASK_FAILED) == EXIT_TASK_FAILED
-    assert publish.worst(EXIT_TASK_FAILED, EXIT_PUSH_KEPT_LOSING) == EXIT_PUSH_KEPT_LOSING
-    assert publish.worst(EXIT_PUSH_KEPT_LOSING, EXIT_INTEGRITY, EXIT_OK) == EXIT_INTEGRITY
+    assert worst() == EXIT_OK
+    assert worst(EXIT_OK, EXIT_TASK_FAILED) == EXIT_TASK_FAILED
+    assert worst(EXIT_TASK_FAILED, EXIT_PUSH_KEPT_LOSING) == EXIT_PUSH_KEPT_LOSING
+    assert worst(EXIT_PUSH_KEPT_LOSING, EXIT_INTEGRITY, EXIT_OK) == EXIT_INTEGRITY
+
+
+def test_a_folder_that_is_not_a_checkout_has_no_commit_to_name(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The record's envelope names a commit, so a shard with none to name runs nothing."""
+    quiet_git(tmp_path, monkeypatch)
+    monkeypatch.setenv("GIT_CEILING_DIRECTORIES", str(tmp_path))
+    loose = tmp_path / "loose"
+    loose.mkdir()
+
+    assert gardener_publish.Checkout(loose).head() is None
 
 
 def test_a_shard_names_its_record_among_its_writes_and_never_both_writes_and_deletes() -> None:
@@ -249,6 +266,7 @@ def test_a_shard_names_its_record_among_its_writes_and_never_both_writes_and_del
             record_path=RECORD,
             written_paths=frozenset(),
             deleted_paths=frozenset(),
+            message=MESSAGE,
         )
     with pytest.raises(ValidationError, match="both written and deleted"):
         a_shard(written={KEPT}, deleted={KEPT})

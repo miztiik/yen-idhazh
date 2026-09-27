@@ -35,11 +35,11 @@ modules.
 | Step | Who | What it does |
 | --- | --- | --- |
 | 1 | `backend/utilities/gardener_shards.py` | Splits the active tasks into shards and prints the plan. Standard library only, reads `config/` alone |
-| 2 | `idhazh gardener run-task --shard N` | Loads the declarations through the typed loader, finds the modules, and runs the pre-flight |
+| 2 | `backend/utilities/gardener_publish.py --shard N` | Reads the commit the checkout is at, loads the declarations through the typed loader, finds the modules, and runs the pre-flight |
 | 3 | the runner | Runs every task of the shard, one after another, timing each |
 | 4 | the runner | Holds every path each task touched to what that task owns |
-| 5 | the runner | Writes the shard's one record through `ledger.persist` |
-| 6 | `publish.publish` | Stages exactly what the shard wrote and deleted, commits, pushes, and tries again on a newer tip if it lost |
+| 5 | the runner | Writes the shard's one record through `ledger.persist`, and hands back what to land |
+| 6 | `gardener_publish.publish` | Stages exactly what the shard wrote and deleted, commits, pushes, and tries again on a newer tip if it lost |
 
 **The split is round-robin over sorted names.** Every task the matrix runs - an
 active one whose kind is not `history`, which has a job of its own - is sorted by
@@ -105,11 +105,15 @@ working and began to publish. A slow push is therefore never read as a slow task
 
 ## Landing the commit
 
-`publish()` is the only code that pushes. Each attempt fetches `main`, resets
-the index to it with `--mixed`, stages exactly the shard's writes and deletions,
-checks what it staged, commits as `miztiik <miztiik@users.noreply.github.com>`
-and pushes. A lost push waits a random time - up to 1, 2, 4, 8 and then 8
-seconds - and tries again on the new tip. No wait follows the last attempt.
+`backend/utilities/gardener_publish.py` is the only code that pushes. It is the
+entry point a shard runs: it reads the commit the checkout is at, calls the
+runner, and lands the `Shard` the runner hands back - the record, every path the
+shard's live tasks wrote and deleted, and the commit message. Each attempt
+fetches `main`, resets the index to it with `--mixed`, stages exactly those
+writes and deletions, checks what it staged, commits as
+`miztiik <miztiik@users.noreply.github.com>` and pushes. A lost push waits a
+random time - up to 1, 2, 4, 8 and then 8 seconds - and tries again on the new
+tip. No wait follows the last attempt.
 
 **The record decides whether the shard already landed.** Its bytes are unique to
 the shard, so `main` holding that path with those bytes means an earlier attempt
@@ -122,9 +126,12 @@ deletion that staged nothing is an error only while `main` still holds the
 path, because a path already gone is a deletion somebody finished. A deletion
 that names a folder is refused before anything stages.
 
-**Nothing is pushed unless `--publish` says so.** Landing resets the checkout to
-`origin/main` and pushes to main, so running a task on a developer's machine
-without the flag writes the record into the checkout and stops there.
+**`idhazh gardener run-task` never pushes.** It runs the same tasks and writes
+the same record into the checkout, and stops there, so running a task on a
+developer's machine cannot reset their branch or push to main. It takes the
+commit as `--git-sha`, because the package does not start git to read it. The
+utility takes the same line without that flag, and both are built from one
+parser in `idhazh.gardener.cli`.
 
 ## Design rationale
 
@@ -146,6 +153,16 @@ than the names (Fowler and Carmack).
 read. A record now names the run, attempt, job and shard that made it, and a pass
 a person runs by hand is none of those, so the flag went rather than invent an
 identity (Fowler and Carmack).
+
+**2026-09-27: the commit loop lives outside the package.** The loop runs git,
+and `backend/tests/test_canaries.py` refuses `subprocess` anywhere under
+`backend/idhazh/`: the package that reads the open web holds none of the
+machinery an injected instruction would need to act (CLAUDE.md Guardrail #11).
+Every other git call in this repository already lives under `backend/utilities/`
+for the same reason. So the runner writes the record and hands back the paths,
+and `gardener_publish.py` reads the commit, calls it and lands them. A task that
+must run git itself - the corpus rewrite is one - has the same limit, and the
+design for it is still to be written.
 
 ## See also
 

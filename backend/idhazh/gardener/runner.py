@@ -1,9 +1,15 @@
-"""How does one gardener shard, or one named task, run from start to its landed record?
+"""How does one gardener shard, or one named task, run from start to its written record?
 
 In order, and each step before the next: the declarations are loaded and the
 task modules found, then the pre-flight checks the two against each other both
 ways, then every task runs, then what each one touched is held to what it owns,
-then one record is written, and only then is anything staged.
+then one record is written, and the paths to land are handed back.
+
+**Nothing here stages, commits or pushes.** Landing runs git, and nothing under
+`backend/idhazh/` may start a process, so the commit loop is
+`backend/utilities/gardener_publish.py`, which calls `run` and lands the `Shard`
+it hands back. For the same reason the commit this checkout is at arrives as an
+argument rather than being read here.
 
 **The pre-flight is the two refusals that need the modules.** A declaration no
 module serves, and a module no declaration uses, are both exit 2 before any
@@ -17,17 +23,16 @@ is on the row, because the core carries it out of any failure part way.
 **What a task touched must sit inside what it owns.** Every path it took and
 every file it wrote is checked, on a dry run too, because the check is over the
 selection rather than over what was deleted. A path outside is exit 2, and
-nothing is staged. A collection task is checked on what it wrote alone: what it
-takes lives on GitHub, not in this repository.
+nothing is handed on to land. A collection task is checked on what it wrote
+alone: what it takes lives on GitHub, not in this repository.
 
 **One record per shard, always.** Every task adds its row, a dry run included,
-so a shard of nothing but dry runs still writes one file and still pushes it.
+so a shard of nothing but dry runs still writes one file and still lands it.
 """
 
 from __future__ import annotations
 
 import logging
-import subprocess
 import time
 import uuid
 from collections.abc import Callable, Mapping, Sequence
@@ -44,11 +49,11 @@ from idhazh.contracts.collection_prune import CollectionPruneRow, StopReason
 from idhazh.contracts.file_envelope import Format, WriterIdentity
 from idhazh.contracts.knobs.gardener import TaskKind, TaskLifecycleStatus, TaskPolicy
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.gardener import publish, registry, report, shards
+from idhazh.gardener import registry, report, shards
 from idhazh.gardener import tasks as shipped_tasks
 from idhazh.gardener.context import TaskContext
 from idhazh.gardener.one_at_a_time import Pass, PruneInterruptedError
-from idhazh.gardener.publish import EXIT_INTEGRITY, EXIT_OK, EXIT_TASK_FAILED, Shard
+from idhazh.gardener.outcome import EXIT_INTEGRITY, EXIT_OK, EXIT_TASK_FAILED, Outcome, Shard
 
 logger = logging.getLogger(__name__)
 
@@ -63,15 +68,8 @@ class ShardRefusedError(Exception):
     """Something the shard cannot run past. The runner exits 2 on it."""
 
 
-@dataclass(frozen=True, slots=True)
-class Outcome:
-    """What one run of the runner came to: its exit code and its record, if it wrote one."""
-
-    exit_code: int
-    record: Path | None
-
-
-def _utc_now() -> datetime:
+def utc_now() -> datetime:
+    """The clock a run reads when none is handed in: now, in UTC."""
     return datetime.now(UTC)
 
 
@@ -208,15 +206,6 @@ def _refuse_a_path_outside(ran: _Ran, tasks: Mapping[str, TaskPolicy]) -> None:
         )
 
 
-def _git_sha(repo_root: Path) -> str:
-    done = subprocess.run(
-        ["git", "rev-parse", "HEAD"], cwd=repo_root, capture_output=True, text=True, check=False
-    )
-    if done.returncode != 0:
-        raise ShardRefusedError(f"{repo_root.name} is not a git checkout, so no record can name it")
-    return done.stdout.strip()
-
-
 def _record(
     ran: Sequence[_Ran], *, state_dir: Path, today: str, identity: WriterIdentity, ended: str
 ) -> Path:
@@ -264,24 +253,35 @@ def run(
     run_id: str,
     attempt: int,
     shard: int,
-    publish_it: bool,
+    git_sha: str,
     package: ModuleType = shipped_tasks,
-    clock: Callable[[], datetime] = _utc_now,
+    clock: Callable[[], datetime] = utc_now,
     say: Callable[[str], None] = print,
 ) -> Outcome:
-    """Run these tasks as one shard, write its record, and land it when asked to."""
+    """Run these tasks as one shard, write its record, and hand back what is left to land.
+
+    `git_sha` is the commit this checkout is at, which the record's envelope
+    names. It is read by whoever calls this, before any task runs.
+    """
     state_dir = repo_root / ledger.STATE_DIRNAME
     try:
         bound = preflight(settings.tasks, registry.discover(package))
-        git_sha = _git_sha(repo_root)
-    except (registry.DiscoveryError, ShardRefusedError) as refusal:
+    except registry.DiscoveryError as refusal:
         say(f"shard {shard}: {refusal}")
-        return Outcome(exit_code=EXIT_INTEGRITY, record=None)
+        return Outcome(exit_code=EXIT_INTEGRITY, record=None, landing=None)
 
     started = clock()
     today = started.date()
     kinds = {TaskKind(settings.tasks[name].kind) for name in names}
     job = ServerJob.HISTORY if kinds == {TaskKind.HISTORY} else ServerJob.RUN_TASKS
+    identity = WriterIdentity(
+        run_id=run_id,
+        attempt=attempt,
+        job=job,
+        shard=shard,
+        producer=PRODUCER,
+        git_sha=git_sha,
+    )
     ran: list[_Ran] = []
     try:
         for name in names:
@@ -299,29 +299,16 @@ def run(
             _refuse_a_path_outside(done, settings.tasks)
             ran.append(done)
         ended = clock().strftime(_INSTANT)
-        identity = WriterIdentity(
-            run_id=run_id,
-            attempt=attempt,
-            job=job,
-            shard=shard,
-            producer=PRODUCER,
-            git_sha=git_sha,
-        )
         record = _record(
             ran, state_dir=state_dir, today=today.isoformat(), identity=identity, ended=ended
         )
     except ShardRefusedError as refusal:
         say(f"shard {shard}: {refusal}")
-        return Outcome(exit_code=EXIT_INTEGRITY, record=None)
+        return Outcome(exit_code=EXIT_INTEGRITY, record=None, landing=None)
 
     for each in ran:
         for line in report.lines(each.outcome):
             say(line)
-    tasks_code = EXIT_TASK_FAILED if any(each.failed for each in ran) else EXIT_OK
-    if not publish_it:
-        say(f"shard {shard}: wrote {record.relative_to(repo_root).as_posix()} and pushed nothing")
-        return Outcome(exit_code=tasks_code, record=record)
-
     live = [each for each in ran if not each.context.policy.dry_run]
     recorded = record.relative_to(repo_root).as_posix()
     wrote = {path for each in live for path in each.outcome.written}
@@ -336,15 +323,10 @@ def run(
             if each.context.policy.kind != TaskKind.COLLECTION
             for path in each.outcome.taken
         ),
+        message=f"gardener: {', '.join(names)} on {today.isoformat()}",
     )
-    pushed = publish.publish(
-        landing,
-        f"gardener: {', '.join(names)} on {today.isoformat()}",
-        attempts=settings.config.attempts,
-        repo=repo_root,
-        say=say,
-    )
-    return Outcome(exit_code=publish.worst(tasks_code, pushed), record=record)
+    tasks_code = EXIT_TASK_FAILED if any(each.failed for each in ran) else EXIT_OK
+    return Outcome(exit_code=tasks_code, record=record, landing=landing)
 
 
 def tasks_of_shard(settings: GardenerSettings, index: int) -> tuple[str, ...]:

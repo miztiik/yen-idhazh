@@ -172,7 +172,7 @@ LEDGERS_AN_OWNER_WRITES: Final[Mapping[str, str]] = MappingProxyType(
         ),
         "state/raw/gardener": (
             "idhazh.gardener.runner, one record per shard through ledger.persist, which "
-            "idhazh.gardener.publish stages file by file and pushes itself - "
+            "backend/utilities/gardener_publish.py stages file by file and pushes itself - "
             "backend/tests/gardener/test_runner.py reads the record back off origin"
         ),
     }

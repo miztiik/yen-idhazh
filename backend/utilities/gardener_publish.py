@@ -1,10 +1,19 @@
-"""How does a gardener shard land its one commit on main, however many shards race it?
+"""How does one gardener shard land its one commit on main, however many shards race it?
 
-The work happens once, before this is called. What is left is to stage exactly
-what the shard wrote and deleted, commit it, and push - and to do that again
-against a newer tip when another shard pushed first. Each try starts from
-`origin/main` as it is now, so a lost race costs one fetch and one commit
-rather than a merge.
+This is the entry point a wake's shard runs: it reads the commit this checkout
+is at, runs the shard through `idhazh.gardener.runner`, and lands what the
+runner hands back. It sits here rather than in the package because landing runs
+git, and nothing under `backend/idhazh/` may start a process
+(`backend/tests/test_canaries.py`): the package that reads the open web holds no
+machinery an injected instruction could use to act.
+
+    python backend/utilities/gardener_publish.py NAME | --shard N --run-id R --attempt A
+
+The work happens once, before `publish` is called. What is left is to stage
+exactly what the shard wrote and deleted, commit it, and push - and to do that
+again against a newer tip when another shard pushed first. Each try starts from
+`origin/main` as it is now, so a lost race costs one fetch and one commit rather
+than a merge.
 
 **The record decides whether the shard has already landed.** Every shard writes
 one record under the gardener's own ledger, and its bytes are unique to the
@@ -12,42 +21,45 @@ shard. If `origin/main` already holds that path with those bytes, an earlier try
 landed and this one stops with success; the same path with other bytes is two
 runs claiming one identity, and that is exit 2.
 
-**Three checks run over what was staged, before every commit.** Every write is
-staged, unless its bytes already equal `origin/main`'s, which is a write that
-already landed. Nothing outside the shard's writes and deletions is staged. And
+**Three checks run over what was staged, before every commit.** Nothing outside
+the shard's writes and deletions is staged. Every write is staged, unless its
+bytes already equal `origin/main`'s, which is a write that already landed. And
 a deletion that staged nothing is an error only while the path still exists on
 `origin/main`, because a path already gone is a deletion somebody finished.
 
-**Exit codes, worst first:** 2 is ownership or integrity and is never retried;
-3 is a push that kept losing and is retried at the next wake; 1 is a task that
-failed and is retried at the next wake; 0 is everything landed. A shard reports
-the worst code any part of it earned.
+The exit codes, and the order that picks the worst, are
+`idhazh.gardener.outcome`'s.
 """
 
 from __future__ import annotations
 
+import argparse
+import dataclasses
 import random
 import subprocess
+import sys
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
+from datetime import datetime
 from pathlib import Path
-from typing import Final, Self
+from types import ModuleType
+from typing import Final
 
-from pydantic import Field, model_validator
-
-from idhazh.contracts.base import Model, RelPath
-
-EXIT_OK: Final = 0
-EXIT_TASK_FAILED: Final = 1
-EXIT_INTEGRITY: Final = 2
-EXIT_PUSH_KEPT_LOSING: Final = 3
-
-#: The four codes in the order a shard reports them: the worst one it earned.
-_WORST_FIRST: Final = (EXIT_INTEGRITY, EXIT_PUSH_KEPT_LOSING, EXIT_TASK_FAILED, EXIT_OK)
+from idhazh.config import GardenerSettings
+from idhazh.gardener import cli as gardener_cli
+from idhazh.gardener import runner
+from idhazh.gardener import tasks as shipped_tasks
+from idhazh.gardener.outcome import (
+    EXIT_INTEGRITY,
+    EXIT_OK,
+    EXIT_PUSH_KEPT_LOSING,
+    Outcome,
+    Shard,
+    worst,
+)
 
 #: The one identity every commit in this repository carries. The same two values
-#: `backend/utilities/commit_and_push.py` sets, which a test holds in step: this
-#: package cannot import a utility, so the value is written in both.
+#: `backend/utilities/commit_and_push.py` sets, which a test holds in step.
 COMMITTER_NAME: Final = "miztiik"
 COMMITTER_EMAIL: Final = "miztiik@users.noreply.github.com"
 
@@ -57,32 +69,6 @@ BRANCH: Final = "main"
 
 #: The longest one wait between two tries, in seconds.
 MAX_BACKOFF_SECONDS: Final = 8
-
-
-def worst(*codes: int) -> int:
-    """The worst of these exit codes, by the order above. No code at all is success."""
-    return next((code for code in _WORST_FIRST if code in codes), EXIT_OK)
-
-
-class Shard(Model):
-    """What one shard hands the commit loop: its record, and every path it changed."""
-
-    index: int = Field(ge=0, description="Which shard of the wake this is.")
-    task_names: tuple[str, ...] = Field(description="The tasks it ran, in the order they ran.")
-    record_path: RelPath = Field(description="The one record the shard wrote.")
-    written_paths: frozenset[RelPath] = Field(
-        description="Every file the shard wrote, the record among them."
-    )
-    deleted_paths: frozenset[RelPath] = Field(description="Every file the shard deleted.")
-
-    @model_validator(mode="after")
-    def _the_record_is_one_of_the_writes(self) -> Self:
-        if self.record_path not in self.written_paths:
-            raise ValueError("the shard's record is one of the files it writes")
-        both = sorted(self.written_paths & self.deleted_paths)
-        if both:
-            raise ValueError(f"{', '.join(both)} is both written and deleted by one shard")
-        return self
 
 
 class Checkout:
@@ -106,6 +92,11 @@ class Checkout:
     def git_ok(self, *args: str) -> bool:
         """Run one command and say whether it worked, for the ones that may fail."""
         return self._run(*args).returncode == 0
+
+    def head(self) -> str | None:
+        """The commit this checkout is at, or None when it is not a git checkout."""
+        done = self._run("rev-parse", "--verify", "--quiet", "HEAD")
+        return done.stdout.strip() if done.returncode == 0 else None
 
     def remote_blob(self, path: str) -> str | None:
         """The object `origin/main` holds at this path, or None when it holds nothing there."""
@@ -154,7 +145,6 @@ def _what_staging_missed(shard: Shard, checkout: Checkout) -> str | None:
 
 def publish(
     shard: Shard,
-    message: str,
     *,
     attempts: int,
     repo: Path,
@@ -195,7 +185,7 @@ def publish(
             "commit",
             "--quiet",
             "-m",
-            message,
+            shard.message,
         )
         if checkout.git_ok("push", "--quiet", REMOTE, f"HEAD:refs/heads/{BRANCH}"):
             say(f"shard {shard.index}: landed on {BRANCH}, try {attempt} of {attempts}")
@@ -204,3 +194,65 @@ def publish(
         if attempt < attempts:
             sleep_with_jitter(attempt)
     return EXIT_PUSH_KEPT_LOSING
+
+
+def run_and_land(
+    names: Sequence[str],
+    *,
+    settings: GardenerSettings,
+    repo_root: Path,
+    run_id: str,
+    attempt: int,
+    shard: int,
+    package: ModuleType = shipped_tasks,
+    clock: Callable[[], datetime] = runner.utc_now,
+    say: Callable[[str], None] = print,
+) -> Outcome:
+    """Read the commit, run the shard, and land what it hands back; the worst code wins."""
+    sha = Checkout(repo_root).head()
+    if sha is None:
+        say(f"shard {shard}: {repo_root.name} is not a git checkout, so no record can name it")
+        return Outcome(exit_code=EXIT_INTEGRITY, record=None, landing=None)
+    ran = runner.run(
+        names,
+        settings=settings,
+        repo_root=repo_root,
+        run_id=run_id,
+        attempt=attempt,
+        shard=shard,
+        git_sha=sha,
+        package=package,
+        clock=clock,
+        say=say,
+    )
+    if ran.landing is None:
+        return ran
+    pushed = publish(ran.landing, attempts=settings.config.attempts, repo=repo_root, say=say)
+    return dataclasses.replace(ran, exit_code=worst(ran.exit_code, pushed))
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(
+        prog="gardener_publish.py",
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    gardener_cli.add_the_run(parser)
+    args = parser.parse_args(argv)
+    settings = gardener_cli.settings_or_none(args.config)
+    if settings is None:
+        return EXIT_INTEGRITY
+    names, shard = gardener_cli.chosen(settings, args, parser)
+    outcome = run_and_land(
+        names,
+        settings=settings,
+        repo_root=args.repo_root,
+        run_id=args.run_id,
+        attempt=args.attempt,
+        shard=shard,
+    )
+    return outcome.exit_code
+
+
+if __name__ == "__main__":
+    sys.exit(main())

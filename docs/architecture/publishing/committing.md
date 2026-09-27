@@ -457,8 +457,8 @@ it is collected over time.
 ## The gardener lands its own commits, and never through this loop
 
 The gardener's shards do not use `backend/utilities/commit_and_push.py`. A shard
-knows every path it wrote and deleted, so `idhazh.gardener.publish` stages
-exactly those files against a fresh fetch of `main` rather than rebasing a
+knows every path it wrote and deleted, so `backend/utilities/gardener_publish.py`
+stages exactly those files against a fresh fetch of `main` rather than rebasing a
 commit, and it retries on the new tip when another shard pushed first. What it
 shares with this page is the identity every commit carries,
 `miztiik <miztiik@users.noreply.github.com>`, which a test holds equal to

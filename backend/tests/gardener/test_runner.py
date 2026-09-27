@@ -4,7 +4,8 @@ End to end, with nothing standing in: fixture declarations loaded through the
 real loader, real task modules from `tests/fixtures/gardener/task_packages/`,
 real day files in a real clone, and a bare repository standing in for origin.
 What reaches origin is read back from origin, so a record that was written and
-never pushed, or a file deleted and never staged, fails here.
+never pushed, or a file deleted and never staged, fails here. A shard that lands
+runs the way a wake runs it, through `backend/utilities/gardener_publish.py`.
 
 The clock is handed in rather than read, so every instant on a record is one
 written out below, in UTC.
@@ -22,7 +23,8 @@ from idhazh.config import GardenerSettings
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.collection_prune import CollectionPruneRow, StopReason
 from idhazh.gardener import runner
-from idhazh.gardener.publish import EXIT_INTEGRITY, EXIT_OK, EXIT_TASK_FAILED
+from idhazh.gardener.outcome import EXIT_INTEGRITY, EXIT_OK, EXIT_TASK_FAILED, Outcome
+from utilities import gardener_publish
 
 from ._garden import GARDENER_FIXTURES, a_config, an_origin, commits_on, git, on_origin, quiet_git
 from ._garden import task_package as a_package
@@ -50,21 +52,36 @@ def ran(
     package: str,
     monkeypatch: pytest.MonkeyPatch,
     *,
-    publish_it: bool = True,
-) -> tuple[runner.Outcome, list[str]]:
+    land: bool = True,
+) -> tuple[Outcome, list[str]]:
+    """One shard run, landed the way a wake lands it, or run alone and left in the checkout."""
     said: list[str] = []
-    outcome = runner.run(
-        names,
-        settings=settings,
-        repo_root=checkout,
-        run_id=RUN_ID,
-        attempt=1,
-        shard=0,
-        publish_it=publish_it,
-        package=a_package(package, monkeypatch),
-        clock=lambda: WAKE,
-        say=said.append,
-    )
+    tasks = a_package(package, monkeypatch)
+    if land:
+        outcome = gardener_publish.run_and_land(
+            names,
+            settings=settings,
+            repo_root=checkout,
+            run_id=RUN_ID,
+            attempt=1,
+            shard=0,
+            package=tasks,
+            clock=lambda: WAKE,
+            say=said.append,
+        )
+    else:
+        outcome = runner.run(
+            names,
+            settings=settings,
+            repo_root=checkout,
+            run_id=RUN_ID,
+            attempt=1,
+            shard=0,
+            git_sha=git(checkout, "rev-parse", "HEAD").strip(),
+            package=tasks,
+            clock=lambda: WAKE,
+            say=said.append,
+        )
     return outcome, said
 
 
@@ -109,21 +126,22 @@ def test_a_shard_runs_its_tasks_writes_one_record_and_lands_it(
     assert {row.work_ended_at for row in rows.values()} == {"2026-09-27T00:40:00Z"}
 
 
-def test_without_publish_the_record_stays_in_the_checkout(
+def test_the_runner_writes_the_record_and_hands_back_what_to_land_without_pushing(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Landing resets the checkout and pushes to main, so it happens only when asked for."""
+    """Landing resets the checkout and pushes to main, so it is never the runner's to do."""
     origin, checkout, settings = a_garden(tmp_path, monkeypatch, "runner", RUNNER_FILES)
     before = commits_on(origin)
 
-    outcome, said = ran(
-        ("old-days",), settings, checkout, "garden_tasks_ok", monkeypatch, publish_it=False
-    )
+    outcome, _ = ran(("old-days",), settings, checkout, "garden_tasks_ok", monkeypatch, land=False)
 
     assert outcome.exit_code == EXIT_OK
     assert outcome.record is not None and outcome.record.is_file()
-    assert commits_on(origin) == before, "a run without --publish pushed"
-    assert said[-1].endswith("and pushed nothing")
+    assert commits_on(origin) == before, "the runner pushed"
+    assert outcome.landing is not None
+    assert outcome.landing.record_path == outcome.record.relative_to(checkout).as_posix()
+    assert outcome.landing.deleted_paths == {f"state/old-days/{AGED}"}
+    assert outcome.landing.message == "gardener: old-days on 2026-09-27"
 
 
 def test_a_task_that_fails_still_has_a_row_and_its_sibling_still_runs(
@@ -171,7 +189,7 @@ def test_a_task_whose_folder_is_missing_fails_and_says_which(
         checkout,
         "garden_tasks_ok",
         monkeypatch,
-        publish_it=False,
+        land=False,
     )
 
     assert outcome.exit_code == EXIT_TASK_FAILED
@@ -200,7 +218,7 @@ def test_a_history_task_run_by_name_records_the_history_job(
     settings = config.load_gardener(a_config(checkout, GARDENER_FIXTURES / "garden" / "history.json"))
 
     outcome, _ = ran(
-        ("history",), settings, checkout, "garden_tasks_history", monkeypatch, publish_it=False
+        ("history",), settings, checkout, "garden_tasks_history", monkeypatch, land=False
     )
 
     assert outcome.exit_code == EXIT_OK

@@ -2,7 +2,8 @@
 
 The router holds no body of its own, so these drive it the way an operator or
 a workflow step does - through `idhazh.cli.main` - against a fixture config, and
-read what it printed and the code it exited with.
+read what it printed and the code it exited with. The landing utility takes the
+same line, and one test drives it the same way.
 """
 
 from __future__ import annotations
@@ -13,12 +14,16 @@ import pytest
 
 from idhazh import cli, config
 from idhazh.gardener import listing
-from idhazh.gardener.publish import EXIT_INTEGRITY
-from utilities import gardener_shards
+from idhazh.gardener.outcome import EXIT_INTEGRITY
+from utilities import gardener_publish, gardener_shards
 
 from ._garden import GARDENER_FIXTURES, a_config, an_origin, quiet_git
 
 pytestmark = pytest.mark.contract
+
+#: A commit the record's envelope can name. Nothing here reads it back.
+SHA = "5c606df91ccfc6071935c77a7dc13d230255b05a"
+RUN = ["--run-id", "2026-09-27-1", "--attempt", "1"]
 
 
 def the_garden(tmp_path: Path) -> Path:
@@ -76,12 +81,14 @@ def test_a_config_the_loader_refuses_exits_2_naming_the_file(
 @pytest.mark.parametrize(
     ("line", "refusal"),
     [
-        (["seen", "--attempt", "1"], "--run-id"),
-        (["seen", "--run-id", "tuesday", "--attempt", "1"], "--run-id takes YYYY-MM-DD-N"),
-        (["seen", "--run-id", "2026-09-27-1", "--attempt", "0"], "--attempt counts from 1"),
-        (["--shard", "7", "--run-id", "2026-09-27-1", "--attempt", "1"], "no shard 7"),
-        (["day-validations", "--run-id", "2026-09-27-1", "--attempt", "1"], "is retired"),
-        (["nobody", "--run-id", "2026-09-27-1", "--attempt", "1"], "no task is called nobody"),
+        (["seen", "--attempt", "1", "--git-sha", SHA], "--run-id"),
+        (["seen", *RUN], "--git-sha"),
+        (["seen", *RUN, "--git-sha", "HEAD"], "--git-sha takes the forty hex digits"),
+        (["seen", "--run-id", "tuesday", "--attempt", "1", "--git-sha", SHA], "--run-id takes"),
+        (["seen", "--run-id", "2026-09-27-1", "--attempt", "0", "--git-sha", SHA], "counts from 1"),
+        (["--shard", "7", *RUN, "--git-sha", SHA], "no shard 7"),
+        (["day-validations", *RUN, "--git-sha", SHA], "is retired"),
+        (["nobody", *RUN, "--git-sha", SHA], "no task is called nobody"),
     ],
 )
 def test_a_run_task_line_the_router_cannot_run_is_refused(
@@ -107,10 +114,9 @@ def test_a_task_no_shipped_module_serves_exits_2_before_it_runs(
             "gardener",
             "run-task",
             "seen",
-            "--run-id",
-            "2026-09-27-1",
-            "--attempt",
-            "1",
+            *RUN,
+            "--git-sha",
+            SHA,
             "--repo-root",
             str(checkout),
             "--config",
@@ -120,3 +126,21 @@ def test_a_task_no_shipped_module_serves_exits_2_before_it_runs(
 
     assert code == EXIT_INTEGRITY
     assert "config/gardener/seen.json is served by no module" in capsys.readouterr().out
+
+
+def test_the_landing_utility_takes_the_same_line_and_reads_the_commit_itself(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """One parser builds both lines, so a line one accepts the other accepts, less the commit."""
+    quiet_git(tmp_path, monkeypatch)
+    _, checkout = an_origin(tmp_path, {"state/seen/.keep": ""})
+    config_dir = a_config(checkout, GARDENER_FIXTURES / "garden" / "seen.json")
+
+    code = gardener_publish.main(
+        ["seen", *RUN, "--repo-root", str(checkout), "--config", str(config_dir)]
+    )
+
+    assert code == EXIT_INTEGRITY
+    assert "config/gardener/seen.json is served by no module" in capsys.readouterr().out
+    with pytest.raises(SystemExit):
+        gardener_publish.main(["seen", *RUN, "--git-sha", SHA, "--config", str(config_dir)])
