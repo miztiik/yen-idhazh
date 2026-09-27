@@ -55,7 +55,6 @@ class LedgerName(StrEnum):
     SHARD_OUTCOMES = "shard-outcomes"
     JUDGE_METRICS = "metrics"
     MERGE_LINE_HOLDOUT_SCORES = "merge-line-holdout-scores"
-    DAY_VALIDATIONS = "day-validations"
 
 
 #: The ledgers a writer files its own segment into, one file per writer under
@@ -72,6 +71,5 @@ DAY_TREES: Final[frozenset[LedgerName]] = frozenset(
         LedgerName.VALIDATION,
         LedgerName.HEALTH,
         LedgerName.COUNTERFACTUAL_SCORES,
-        LedgerName.DAY_VALIDATIONS,
     }
 )

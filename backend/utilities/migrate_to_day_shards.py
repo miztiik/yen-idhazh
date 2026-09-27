@@ -67,7 +67,7 @@ Usage, from the root of a checkout:
     python backend/utilities/migrate_to_day_shards.py \
         --shape day-to-directory --directory state/item-health
     python backend/utilities/migrate_to_day_shards.py \
-        --shape flat-to-day-directory --directory state/day-validations \
+        --shape flat-to-day-directory --directory state/<flat-ledger> \
         --date-column date
     python backend/utilities/migrate_to_day_shards.py \
         --shape traces --directory state/traces

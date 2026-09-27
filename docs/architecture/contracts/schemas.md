@@ -199,7 +199,6 @@ mirrors the digest tree its rows are derived from.
 | `state/score-index/` | day files | which measurements does the day file beside this one already hold? | no, and deliberately - `OBSERVATION_KEY` carries no date, so the same address, output and scorer is one measurement whenever it is re-taken. It files by the ledger's day rather than a grain of its own, because two grains in one relationship would be a mapping somebody maintains |
 | `state/score-archive/` | monthly documents | what did a month past `scores_full_grain_months` do, in totals and distributions - and which measurements did it hold? | it inherits the shard boundary of the file it replaces |
 | `state/feed-retirements.csv` | one file | is this address gone for good? | no - a retirement is permanent for one endpoint |
-| `state/day-validations.csv` | one file | which frozen days have passed, and against what? | no - a receipt file, read once a run |
 | `state/day-metrics/` | day files | what did one published day do, in totals? | it is addressed by day: the site opens the dates a page names and walks nothing |
 | `state/visual-prunes/` | day files | is the picture backlog shrinking? | no, and the layout saves this read nothing - see below |
 | `state/content-similarity-judge/scored-pairs/` | day files | what did the judge say about this day's borderline pairs? | no - the collecting job reads one named date and never opens that file again |
@@ -245,16 +244,13 @@ Two consequences worth stating so nobody re-derives them:
  the period is a layout change and not a contract change; see
  [../sources/item-health.md](../sources/item-health.md).
 
-**The two single files above are deliberately unsharded, and the burden is on a
-change that shards one.** `state/feed-retirements.csv` and
-`state/day-validations.csv` are not work left undone. Neither of their reads
-carries a window, so by the rule above a partition would open every file anyway
-and cost a directory walk a single `open` does not need. One of the two -
-`day-validations.csv` - grows for ever with no prune, and **that is a retention
-question rather than a grain question**: sharding it would make its read worse
-and leave the growth exactly where it is.
+**The single file above is deliberately unsharded, and the burden is on a
+change that shards it.** `state/feed-retirements.csv` is not work left undone.
+Its read carries no window, so by the rule above a partition would open every
+file anyway and cost a directory walk a single `open` does not need.
 
-There were four until 2026-09-13 and three until 2026-09-19.
+There were four until 2026-09-13, three until 2026-09-19 and two until
+2026-09-27.
 `state/fingerprints.csv` was the fourth, and it was deleted rather than sharded:
 its read had no window because it had no reader left at all.
 `state/runtime-counters.csv` was the third and went the same way - every cell a

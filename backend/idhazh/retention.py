@@ -1453,68 +1453,6 @@ def prune_counterfactual_scores(
     )
 
 
-# --- The day-validation receipts ---------------------------------------------
-
-
-def prune_day_validations(
-    state_dir: Path,
-    config: RetentionConfig,
-    today: date,
-    *,
-    dry_run: bool = False,
-) -> FeedHealthPruneResult:
-    """Delete every month of validation receipts the published archive outlived.
-
-    A receipt says one published day passed the rules as they stood, and its one
-    use is to skip re-reading that day. A day the published tree no longer holds
-    cannot be read at all, so a receipt about it settles nothing and is bytes
-    answering no question. One row a day arrives for ever without this
-    (Guardrail #12).
-
-    The knob is months and the files are days, so a month goes whole or not at
-    all - the split `prune_feed_health` already makes, and for its reason.
-
-    **Older than the oldest month kept, never merely outside a window.** The
-    boundary is a floor, so a run handed a date in the past deletes less rather
-    than deleting the live day.
-
-    The walk is `day_shards.shards_by_month`, because a day here is a directory
-    of writer-owned files: every run that validated one day left its own receipt
-    in it, and a walk that read one file would delete one and leave the rest.
-    """
-    boundary = oldest_month_kept(today, config.day_validation_keep_months)
-    root = ledger.tree_root(state_dir, LedgerName.DAY_VALIDATIONS)
-    by_month = day_shards.shards_by_month(root, days=UNBOUNDED_WINDOW)
-
-    deleted: list[str] = []
-    days_removed: list[str] = []
-    kept: list[str] = []
-    freed = 0
-    for month in sorted(by_month):
-        if month >= boundary:
-            kept.append(month)
-            continue
-        deleted.append(month)
-        for path in by_month[month]:
-            # Named and weighed before anything is unlinked, so the dry run
-            # prints the same list the live run removes.
-            days_removed.append(f"{ledger.STATE_DIRNAME}/{path.relative_to(state_dir).as_posix()}")
-            freed += path.stat().st_size
-            if not dry_run:
-                path.unlink()
-                # `path` is inside the day directory, so this drops that
-                # directory and the month above it.
-                day_partition.drop_empty_day_dirs(path)
-
-    return FeedHealthPruneResult(
-        deleted=tuple(deleted),
-        bytes_freed=freed,
-        kept=tuple(kept),
-        days_removed=tuple(days_removed),
-        dry_run=dry_run,
-    )
-
-
 # --- The trace tree ----------------------------------------------------------
 
 

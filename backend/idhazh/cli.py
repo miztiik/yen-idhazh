@@ -475,13 +475,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         type=Path,
         default=None,
         help=(
-            "Where `validate-days` keeps its receipts and where `compact` finds the "
-            "segments waiting. For `validate-days` it moves with --digest-root, and "
-            "the pairing is enforced rather than remembered: a receipt is a claim about "
-            "a payload in that tree, so pointing one at a copy and leaving the other at "
-            "the real state lets a day be skipped on a receipt earned by a different "
-            "file. Reading the committed tree defaults this to the committed state; "
-            "point --digest-root anywhere else and this has to be named."
+            "Where the ledgers under `state/` are read and written - where `compact` "
+            "finds the segments waiting, for one. It defaults to the committed state "
+            "tree; name it to point a run at a scratch copy."
         ),
     )
     parser.add_argument(
@@ -578,31 +574,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         # Above the fetcher for the same reason site-weight is: reading committed
         # files decides nothing about the open web, and starting a fetcher to do
         # it would read every host's robots.txt for nothing.
-        #
-        # The receipt ledger travels with the tree it is about. A receipt records
-        # a payload's length and a day is settled on that length alone, never on
-        # a re-read, so a receipt earned over the committed tree will settle a
-        # same-length day in a scratch copy without opening it - measured
-        # 2026-09-13: a copy of the newest day with `"items"` overwritten by
-        # `"itemz"`, one byte for one byte, passed against the committed ledger
-        # and was refused against an empty one. Forgetting the pair is therefore
-        # a wrong answer rather than an untidy one, and this refuses it.
-        if args.state_root is None and args.digest_root.resolve() != common.PUBLIC_ROOT.resolve():
-            parser.error(
-                "validate-days was given a --digest-root that is not the committed tree "
-                f"({args.digest_root}) and no --state-root. A receipt is a claim about a "
-                "payload in the tree it was earned over, and a day is settled on the "
-                "length that receipt recorded - so the committed receipts would settle a "
-                "day in this tree without opening it, and a pass here would mean nothing. "
-                "Name --state-root as well, or read the committed tree."
-            )
-        state_dir = common.STATE_ROOT if args.state_root is None else args.state_root
-        return validate_days.stage_validate_days(
-            args.digest_root,
-            args.day,
-            state_dir=state_dir,
-            run_id=plan_stage._run_id(args.date or _today(), args.execution),
-        )
+        return validate_days.stage_validate_days(args.digest_root, args.day)
 
     if args.stage == "score-merge-line-holdout":
         # Above the fetcher for the reason validate-days is: it reads the marked
