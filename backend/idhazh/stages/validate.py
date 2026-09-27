@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from idhazh import (
     assemble,
+    atomic_write,
     config,
     summarize,
     telemetry,
@@ -161,7 +162,7 @@ def stage_validate(
         attempted=len(plan.items),
     )
     common.VALIDATION_ROOT.mkdir(parents=True, exist_ok=True)
-    assemble.write_atomic(common.VALIDATION_ROOT / f"{model_id}.json", result.to_json())
+    atomic_write.write_atomic(common.VALIDATION_ROOT / f"{model_id}.json", result.to_json())
     LOG.info(
         "validated model=%s scored=%s/%s mean_hhem=%.4f",
         model_id,

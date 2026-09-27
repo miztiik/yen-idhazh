@@ -37,12 +37,11 @@ from __future__ import annotations
 
 import csv
 import hashlib
-import tempfile
 from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Final
 
-from idhazh import ledger, month_partition
+from idhazh import atomic_write, ledger, month_partition
 from idhazh.contracts.base import canonical_json, derive_text_digest
 from idhazh.contracts.eval_row import ConfidenceBand
 from idhazh.contracts.ledger_name import LedgerName
@@ -275,23 +274,8 @@ def summarise(days: Sequence[Path], *, month: str, observation_key: Sequence[str
 
 
 def write(path: Path, archive: ScoreArchive) -> None:
-    """Temp-then-rename, so the file either exists complete or does not exist.
-
-    Spelled here rather than taken from `assemble.write_atomic`, which is four
-    identical lines: `assemble` imports the embedder, so borrowing it would load
-    onnxruntime into every prune and every archive read.
-    """
-    path.parent.mkdir(parents=True, exist_ok=True)
-    handle = tempfile.NamedTemporaryFile(
-        "w", encoding="utf-8", newline="\n", dir=path.parent, delete=False
-    )
-    try:
-        with handle:
-            handle.write(archive.to_json())
-        Path(handle.name).replace(path)
-    except BaseException:
-        Path(handle.name).unlink(missing_ok=True)
-        raise
+    """Temp-then-rename, so the file either exists complete or does not exist."""
+    atomic_write.write_atomic(path, archive.to_json())
 
 
 def read(path: Path) -> ScoreArchive:

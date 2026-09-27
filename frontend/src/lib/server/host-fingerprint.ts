@@ -31,7 +31,17 @@ import { join } from 'node:path';
 import { dayShardFiles, LEDGER_WINDOW_DAYS, readDayShards, STATE_ROOT } from './payload';
 
 /** Which workflow job produced a row. `ServerJob` in `contracts/base.py`. */
-export const SERVER_JOB = ['plan', 'work', 'assemble', 'visuals', 'runtime', 'decide'] as const;
+export const SERVER_JOB = [
+	'plan',
+	'work',
+	'assemble',
+	'visuals',
+	'runtime',
+	'decide',
+	'migrate',
+	'run-tasks',
+	'history'
+] as const;
 
 export type ServerJob = (typeof SERVER_JOB)[number];
 

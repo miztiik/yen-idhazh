@@ -110,6 +110,19 @@ dev = [
     # One observation, so no spread. Beneficiary: workflow routing regression gate.
     "PyYAML>=6.0",
     "ruff>=0.9",
+    # The parquet engine, so the suite can drive the ledger door's parquet half.
+    # Spelled as this project's own extra rather than a second pin, so the floor
+    # lives in one place.
+    "idhazh[parquet]",
+]
+# The parquet engine behind the ledger door. Beneficiary: the one module that
+# writes and reads parquet, `backend/idhazh/ledger/parquet.py`. An optional extra
+# rather than a runtime dependency, because it is the largest thing the project
+# installs and most jobs never touch a parquet file: only a job that does
+# installs `.[parquet]`. Its size and install time on ubuntu-latest are recorded
+# in docs/architecture/contracts/persistence.md.
+parquet = [
+    "pyarrow>=21",
 ]
 # The faithfulness scorer. A 250M cross-encoder, but transformers plus torch is
 # hundreds of megabytes, so it stays out of the default install and out of the
@@ -165,6 +178,12 @@ enable_error_code = ["redundant-expr", "truthy-bool", "ignore-without-code"]
 # type stubs of their own.
 [[tool.mypy.overrides]]
 module = ["feedparser.*", "onnxruntime.*", "torch.*", "trafilatura.*", "transformers.*"]
+ignore_missing_imports = true
+
+# The parquet engine ships no type stubs and no py.typed marker. Its values are
+# untyped inside the one module that imports it, and nowhere else.
+[[tool.mypy.overrides]]
+module = ["pyarrow", "pyarrow.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

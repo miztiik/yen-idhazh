@@ -40,7 +40,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
 
-from idhazh.assemble import write_atomic
+from idhazh.atomic_write import write_atomic
 from idhazh.contracts.item_health import ItemHealthRow, ItemStage
 from idhazh.contracts.knobs.observability import LoggingConfig
 from idhazh.telemetry import events

@@ -1,15 +1,24 @@
-"""Where each ledger's file lives, read from `config/ledgers.json` and never guessed.
+"""Where each ledger's file lives under `state/`, and never guessed.
 
-The registry is loaded and validated once, when this module loads, so a config
-that does not describe every ledger stops the build rather than a run four
-hundred seconds in.
+Two kinds of address, and nine builders in all. A ledger that files the way the
+CSV trees do is read from `config/ledgers.json`, which is loaded and validated
+once, when this module loads, so a config that does not describe every ledger
+stops the build rather than a run four hundred seconds in. A ledger that goes
+through the door in `ledger/persist.py` files under `state/raw/` or
+`state/compact/`, and those two roots have one fixed grammar, so their five
+builders need no registry entry to answer.
 
-Four builders in two pairs, and no fifth. `path` and `relpath` are the same
-address in the two forms this project uses - a `Path` for local I/O, a POSIX
-string for anything leaving the process (CLAUDE.md section 2) - and they are
-built from one segment list so they cannot disagree. `tree_root` and
+The registry's four builders come in two pairs. `path` and `relpath` are the
+same address in the two forms this project uses - a `Path` for local I/O, a
+POSIX string for anything leaving the process (CLAUDE.md section 2) - and they
+are built from one segment list so they cannot disagree. `tree_root` and
 `tree_relpath` are the same pair for the folder a reader walks: the one that
 holds every file of a ledger and nothing else.
+
+**Nothing the door writes is born outside the two roots.** Each of the five
+root builders refuses, by name, a path whose first folder under `state/` is
+neither `raw` nor `compact`, so a third root is a `ValueError` rather than a
+convention somebody forgot.
 
 Nothing here globs `state/`. A walk would cost more every day, and it cannot tell
 a retired ledger from one that has never run (Guardrail #12).
@@ -20,18 +29,39 @@ is why this module imports nothing that answers it.
 
 from __future__ import annotations
 
-from pathlib import Path
+import os
+import uuid
+from pathlib import Path, PurePath
 from typing import Final
 
 from pydantic import ValidationError
 
 from idhazh import config
+from idhazh.contracts.file_envelope import Format, Period, Tier, covers_fits
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.ledgers import Grain, LedgerEntry, LedgersConfig
 
 STATE_DIRNAME: Final = "state"
 
 REGISTRY_FILENAME: Final = "ledgers.json"
+
+#: The folder each root takes under `state/`. The builders spell a root from
+#: these and the refusal checks against `Tier` itself, so a root renamed here
+#: without the enum moving is caught rather than written.
+RAW_DIRNAME: Final = Tier.RAW.value
+COMPACT_DIRNAME: Final = Tier.COMPACT.value
+
+#: The two roots, and the whole of them. A third is refused, never created.
+_THE_TWO_ROOTS: Final = frozenset(tier.value for tier in Tier)
+
+#: Where a raw day's listing and a compact period's listing sit inside a ledger.
+INDEX_DIRNAME: Final = "index"
+
+#: What each compact period's resume mark is called, inside that period's folder.
+WATERMARK_FILENAME: Final = "watermark.json"
+
+#: The suffix of the small JSON files the gardener rewrites whole.
+_JSON_SUFFIX: Final = ".json"
 
 #: What `covers` means for each dated grain, quoted back to a caller that omitted
 #: it. A grain names its period; a period is never the day a job woke.
@@ -67,7 +97,7 @@ def entry(ledger: LedgerName) -> LedgerEntry:
 
 
 def claimed_roots() -> frozenset[str]:
-    """Every family the registry names, whatever its lifecycle status.
+    """Every child of `state/` a writer owns, whatever its lifecycle status.
 
     What `prune-state` subtracts from the children of `state/` before treating
     what is left as a trial run's tree. An active family, a paused one and a
@@ -78,8 +108,13 @@ def claimed_roots() -> frozenset[str]:
     `state/`. `feed-retirements` is the one name that is a file's stem rather
     than a folder - its only ledger is `state/feed-retirements.csv` - and
     carrying it is harmless, because the sweep only ever looks at directories.
+
+    `raw` and `compact` are claimed too, and they are not families: they are the
+    two roots the ledger door files under. Unclaimed, the sweep would read them
+    as a trial run's trees and delete what the door wrote. Claimed means "not a
+    stray", never "not pruned" - a compaction bounds what sits in them.
     """
-    return frozenset(family.name for family in _CONFIG.families)
+    return frozenset(family.name for family in _CONFIG.families) | _THE_TWO_ROOTS
 
 
 def _segments(held: LedgerEntry, covers: str | None) -> tuple[str, ...]:
@@ -151,3 +186,117 @@ def tree_root(state_dir: Path, ledger: LedgerName) -> Path:
 def tree_relpath(ledger: LedgerName) -> str:
     """The same folder as `tree_root`, POSIX and relative, for a log line or a manifest."""
     return "/".join((STATE_DIRNAME, *_folder(_REGISTRY[ledger])))
+
+
+# --- the two roots the ledger door files under --------------------------------
+
+
+def _shown(state_dir: Path, built: Path) -> str:
+    """A path as it may leave the process: relative to the state root, POSIX (section 2)."""
+    try:
+        below = os.path.relpath(built.resolve(), state_dir.resolve())
+    except ValueError:
+        return built.name
+    return PurePath(STATE_DIRNAME, below).as_posix()
+
+
+def _under_the_two_roots(state_dir: Path, built: Path) -> Path:
+    """The path back, or a refusal naming it and the rule.
+
+    Checked on the resolved path, so a segment that walks back out of a root -
+    `raw/../scores` - is refused however its folders are spelled. The state root
+    is the one the caller handed in, so a trial run's tree is held to the same
+    rule as the production one.
+    """
+    try:
+        first = built.resolve().relative_to(state_dir.resolve()).parts[:1]
+    except ValueError:
+        first = ()
+    if not first or first[0] not in _THE_TWO_ROOTS:
+        raise ValueError(
+            f"{_shown(state_dir, built)} is outside the two roots. Everything the ledger "
+            f"door writes sits under {STATE_DIRNAME}/{Tier.RAW.value}/ or "
+            f"{STATE_DIRNAME}/{Tier.COMPACT.value}/, so a third root is refused rather "
+            "than created"
+        )
+    return built
+
+
+def _day_segments(date: str) -> tuple[str, str, str]:
+    """`YYYY`, `MM` and `DD`, or a refusal: a stamp that is not a day addresses nothing."""
+    if not covers_fits(date, tier=Tier.RAW, period=None):
+        raise ValueError(f"{date!r} is not a YYYY-MM-DD UTC day, so it names no raw day folder")
+    return date[:4], date[5:7], date[8:10]
+
+
+def raw_path(
+    state_dir: Path,
+    ledger: LedgerName,
+    date: str,
+    file_id: uuid.UUID,
+    *,
+    fmt: Format = Format.PARQUET,
+) -> Path:
+    """Where one writer's file for one day sits: `raw/<ledger>/<YYYY>/<MM>/<DD>/<file_id>`.
+
+    Many writers file into one day, and the minted `file_id` is what keeps two of
+    them off one path. The suffix is the format's own, so a JSON-lines file is
+    `<file_id>.json`.
+    """
+    year, month, day = _day_segments(date)
+    built = state_dir.joinpath(
+        RAW_DIRNAME, ledger.value, year, month, day, f"{file_id}.{fmt.value}"
+    )
+    return _under_the_two_roots(state_dir, built)
+
+
+def raw_index_path(state_dir: Path, ledger: LedgerName, date: str) -> Path:
+    """Where the listing of one raw day sits: `raw/<ledger>/index/<YYYY-MM-DD>.json`."""
+    _day_segments(date)
+    built = state_dir.joinpath(RAW_DIRNAME, ledger.value, INDEX_DIRNAME, f"{date}{_JSON_SUFFIX}")
+    return _under_the_two_roots(state_dir, built)
+
+
+def compact_path(
+    state_dir: Path,
+    ledger: LedgerName,
+    period: Period,
+    covers: str,
+    *,
+    fmt: Format = Format.PARQUET,
+) -> Path:
+    """Where one compact period's file sits, named for what it covers.
+
+    `compact/<ledger>/daily/<YYYY>/<MM>/<DD>` or `compact/<ledger>/monthly/<YYYY>/<MM>`.
+    A compact period has one writer, so its name is the period rather than a
+    minted id, and a reader can compute the address. `covers` has to be the shape
+    `period` covers, or this refuses rather than file a month under a day.
+    """
+    if not covers_fits(covers, tier=Tier.COMPACT, period=period):
+        raise ValueError(
+            f"{covers!r} is not a {period.value} period: a daily file covers YYYY-MM-DD "
+            "and a monthly file covers YYYY-MM"
+        )
+    *folders, leaf = covers.split("-")
+    built = state_dir.joinpath(
+        COMPACT_DIRNAME, ledger.value, period.value, *folders, f"{leaf}.{fmt.value}"
+    )
+    return _under_the_two_roots(state_dir, built)
+
+
+def compact_index_path(state_dir: Path, ledger: LedgerName, period: Period) -> Path:
+    """Where the listing of one compact period sits: `compact/<ledger>/index/<period>.json`."""
+    built = state_dir.joinpath(
+        COMPACT_DIRNAME, ledger.value, INDEX_DIRNAME, f"{period.value}{_JSON_SUFFIX}"
+    )
+    return _under_the_two_roots(state_dir, built)
+
+
+def watermark_path(state_dir: Path, ledger: LedgerName, period: Period) -> Path:
+    """Where one compact period's resume mark sits: `compact/<ledger>/<period>/watermark.json`.
+
+    It records the newest period this roll-up has looked at, including one that
+    held nothing, which is the one fact no listing of the tree can recover.
+    """
+    built = state_dir.joinpath(COMPACT_DIRNAME, ledger.value, period.value, WATERMARK_FILENAME)
+    return _under_the_two_roots(state_dir, built)

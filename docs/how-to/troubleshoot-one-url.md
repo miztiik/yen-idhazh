@@ -169,7 +169,7 @@ import os
 from datetime import UTC, datetime
 from pathlib import Path
 
-from idhazh import assemble, config
+from idhazh import atomic_write, config
 from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.run_plan import PlannedItem, RunPlan, VerticalPlan
 from idhazh.discover import canonicalise, clean_title
@@ -228,7 +228,7 @@ plan = RunPlan(
 path = Path("backend/var/run") / date / "plan.json"
 if path.exists:
  raise SystemExit(f"scratch plan already exists: {path.as_posix}")
-assemble.write_atomic(path, plan.to_json)
+atomic_write.write_atomic(path, plan.to_json)
 print(f"wrote {path.as_posix} item_id={item.item_id}")
 '@ |.venv\Scripts\python.exe -
 ```

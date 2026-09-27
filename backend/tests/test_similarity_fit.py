@@ -23,7 +23,7 @@ from conftest import read_text
 from test_same_story import at, block, item, unit
 from test_similarity_selection import MANIFEST_FIXTURE
 
-from idhazh import assemble, cli, config, ledger
+from idhazh import assemble, atomic_write, cli, config, ledger
 from idhazh.contracts.digest_day import DigestDay, DigestRunRef, DigestVerticalRef
 from idhazh.contracts.fitted_similarity_threshold import (
     ClampKind,
@@ -590,8 +590,8 @@ def a_published_day(root: Path, *, date: str = DATE) -> None:
         embeddings=block({one.item_id: unit(index * 12.0) for index, one in enumerate(items)}),
     )
     target = assemble.day_dir(root, date)
-    assemble.write_atomic(target / "digest.json", day.to_json())
-    assemble.write_atomic(target / "run.json", manifest.to_json())
+    atomic_write.write_atomic(target / "digest.json", day.to_json())
+    atomic_write.write_atomic(target / "run.json", manifest.to_json())
 
 
 def test_a_row_is_written_on_a_day_nothing_moved(

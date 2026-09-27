@@ -48,9 +48,10 @@ def _append(state_dir: Path, date: str, row: MergeLineHoldoutScore) -> int:
     under `set -euo pipefail`, and a path missing from the working tree aborts
     the step and costs the ledgers staged with it.
     """
-    path = ledger.path(
-        state_dir, LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES, date
-    )
+    which = LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES
+    if not ledger.accepts_new_rows(which, 1):
+        return 0
+    path = ledger.path(state_dir, which, date)
     columns = MergeLineHoldoutScore.csv_columns()
     if not path.exists():
         path.parent.mkdir(parents=True, exist_ok=True)

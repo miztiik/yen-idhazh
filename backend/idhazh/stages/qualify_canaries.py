@@ -10,7 +10,7 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from idhazh import (
-    assemble,
+    atomic_write,
     config,
 )
 from idhazh.contracts.base import canonical_json
@@ -35,7 +35,7 @@ def _canary_report(
     model. Fail-closed: a gate that cannot speak for every planted attack
     returns non-zero.
     """
-    assemble.write_atomic(
+    atomic_write.write_atomic(
         root / "canaries.json",
         canonical_json([observation.model_dump(mode="json") for observation in observations]),
     )

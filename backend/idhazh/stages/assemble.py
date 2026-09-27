@@ -12,7 +12,7 @@ from datetime import timedelta
 from pathlib import Path
 from typing import Final
 
-from idhazh import assemble, config, ledger, rank, run_context, telemetry
+from idhazh import assemble, atomic_write, config, ledger, rank, run_context, telemetry
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.digest_day import DigestDay
 from idhazh.contracts.digest_run_fragment import DigestRunFragment
@@ -300,24 +300,25 @@ def stage_assemble(
         if fragment_file.exists()
         else generated_at
     )
-    assemble.write_atomic(
-        fragment_file,
-        DigestRunFragment(
-            version=DigestRunFragment.schema_version(),
-            date=plan.date,
-            run_id=run_id,
-            completed_at=landed_at,
-            items=digest_items,
-            verticals=list(plan.verticals),
-            items_planned=len(plan.items),
-            failed_item_ids=[
-                row.item_id for row in item_health_rows if row.outcome is ItemOutcome.FAILED
-            ],
-            embeddings=assemble.build_embeddings(
-                digest_items, Embedder(config.REPO_ROOT, settings.app.assist)
-            ),
-        ).to_json(),
-    )
+    if ledger.accepts_new_rows(LedgerName.DIGEST_FRAGMENTS, len(digest_items)):
+        atomic_write.write_atomic(
+            fragment_file,
+            DigestRunFragment(
+                version=DigestRunFragment.schema_version(),
+                date=plan.date,
+                run_id=run_id,
+                completed_at=landed_at,
+                items=digest_items,
+                verticals=list(plan.verticals),
+                items_planned=len(plan.items),
+                failed_item_ids=[
+                    row.item_id for row in item_health_rows if row.outcome is ItemOutcome.FAILED
+                ],
+                embeddings=assemble.build_embeddings(
+                    digest_items, Embedder(config.REPO_ROOT, settings.app.assist)
+                ),
+            ).to_json(),
+        )
 
     if previous_day is not None and assemble.predates_fragments(previous_day):
         # This date was published before runs filed their own blocks, so the
@@ -341,7 +342,7 @@ def stage_assemble(
                 plan.date, window_hours=settings.app.assemble.same_story_window_hours
             ),
         )
-        assemble.write_atomic(target / "digest.json", day.to_json())
+        atomic_write.write_atomic(target / "digest.json", day.to_json())
 
     # The month shard is a projection of the days on disk, so it is rebuilt after
     # the day is written and never patched in place.
@@ -387,7 +388,7 @@ def stage_assemble(
         same_story_floor_applied=same_story.floor_min,
     )
     _report_prose_change(recorded_inputs, previous_manifest)
-    assemble.write_atomic(target / "run.json", manifest.to_json())
+    atomic_write.write_atomic(target / "run.json", manifest.to_json())
     published = ledger.append_published(common.STATE_ROOT, day.date, _published_rows(day, plan))
     # This job's own segments, never the day files. A work shard recorded the
     # same items hours ago on another runner, so two writers would be appending

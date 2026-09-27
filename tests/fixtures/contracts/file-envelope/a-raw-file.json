@@ -1,0 +1,24 @@
+{
+  "built_from": null,
+  "compression": "snappy",
+  "content_sha256": "9f2c000000000000000000000000000000000000000000000000000000000000",
+  "covers": "2026-09-24",
+  "file_id": "01a0d03c-2faf-8013-ae7e-7cf05d5b967b",
+  "identity": {
+    "attempt": 1,
+    "git_sha": "0735031c2a9e4b8f1d6c3a5e7b9d0f2a4c6e8b1d",
+    "job": "run-tasks",
+    "producer": "gardener.tasks",
+    "run_id": "2026-09-24-17482910337",
+    "shard": 3
+  },
+  "ledger": "visual-prunes",
+  "period": null,
+  "row_schema_version": "2026-09-24",
+  "tier": "raw",
+  "unit_id": "2094a253-284e-5cd2-b184-aef43d290f1f",
+  "version": "2026-09-25",
+  "writer": "idhazh.ledger.parquet",
+  "writer_version": "25.0.1",
+  "written_at_ms": 1790200000431
+}

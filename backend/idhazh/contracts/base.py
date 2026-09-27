@@ -129,6 +129,13 @@ class ServerJob(StrEnum):
     one enum answers "which workflow job" for the whole repository, which is why
     none of the three is version-stamped for it - a stamp says a shape moved, and
     theirs did not.
+
+    **`migrate`, `run-tasks` and `history` are here before any workflow runs
+    them.** The ledger door names a file's writer from this set, so a job has to
+    be in it before the first file carries its name. A migration job moves rows
+    already recorded, and the gardener's two jobs compact, age out and rewrite
+    what earlier runs wrote. None of the three records a new row, which is what
+    `MAINTENANCE_JOBS` below says.
     """
 
     # digest.yml, in the order a run reaches them.
@@ -145,6 +152,21 @@ class ServerJob(StrEnum):
     # verdict. It stands no server up and records no machine, so it names a
     # writer of the candidate-models ledger and of nothing else here.
     DECIDE = "decide"
+    # The jobs that maintain rows rather than record them: a one-off migration,
+    # and the gardener's sharded task job and its history rewrite.
+    MIGRATE = "migrate"
+    RUN_TASKS = "run-tasks"
+    HISTORY = "history"
+
+
+#: The jobs whose writes file rows again rather than record new ones. The
+#: ledger door skips a raw write into a paused or retired family unless the
+#: writer is one of these, because skipping a maintenance write would lose rows
+#: that were already recorded while the run reported success. A fact about the
+#: vocabulary rather than a knob, so it sits beside it.
+MAINTENANCE_JOBS: Final[frozenset[ServerJob]] = frozenset(
+    {ServerJob.MIGRATE, ServerJob.RUN_TASKS, ServerJob.HISTORY}
+)
 
 
 #: The default, and it is a reading rather than a guess: until 2026-09-12 exactly
@@ -169,6 +191,18 @@ CommitSha = Annotated[str, StringConstraints(pattern=COMMIT_SHA_PATTERN)]
 RelPath = Annotated[str, StringConstraints(pattern=REL_PATH_PATTERN, max_length=512)]
 UrlKey = Annotated[str, StringConstraints(pattern=SHA256_PATTERN)]
 FingerprintId = Annotated[str, StringConstraints(pattern=FINGERPRINT_PATTERN)]
+
+#: `<file_id>.parquet` or `<file_id>.json`. A name this project minted, never a
+#: name it was given: a filename can reach a fetch URL, so the schema is the
+#: control that refuses anything a fetched page could have supplied (Guardrail
+#: #11). Both suffixes, because the ledger door writes both formats.
+FILE_ID_NAME_PATTERN: Final = (
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-8[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.(parquet|json)$"
+)
+FileIdName = Annotated[str, StringConstraints(pattern=FILE_ID_NAME_PATTERN)]
+
+#: What one ledger file covers: a UTC day, `2026-09-23`, or a UTC month, `2026-08`.
+PeriodStamp = DateStamp | MonthStamp
 
 _STEM_PATTERN: Final = re.compile(SLUG_PATTERN)
 

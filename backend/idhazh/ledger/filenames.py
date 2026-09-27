@@ -7,17 +7,38 @@ will disagree with the parser the next time either one changes.
 
 Minting and parsing sit together because they are one question asked in two
 directions, and two files would let the pattern and its reader drift apart.
+
+**A file the ledger door writes carries two identifiers, because it answers two
+questions.** `unit_id` says which work unit the file records and is identical
+for every attempt at that unit, so a union keeps the highest attempt per unit.
+`file_id` is the file's name and differs for every file ever written, so no two
+writers take one path. `attempt` goes only into `file_id` and `producer` only
+into `unit_id`: put `attempt` into `unit_id` and two attempts at one unit would
+both survive the union, which is the duplicate the union exists to remove.
 """
 
 from __future__ import annotations
 
+import hashlib
 import re
+import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Final, NamedTuple
 
 from idhazh.contracts.base import RUN_ID_PATTERN, ServerJob
 from idhazh.ledger.paths import STATE_DIRNAME
+
+#: The namespace every `unit_id` is minted under. A protocol constant rather
+#: than a knob: change it and every `unit_id` ever written stops matching the
+#: ones minted after, so a union could no longer collapse a re-run onto its
+#: original.
+NAMESPACE: Final = uuid.uuid5(uuid.NAMESPACE_URL, "github.com/miztiik/yen-idhazh")
+
+#: The field widths RFC 9562 fixes for a version 8 UUID.
+_CLOCK_BITS: Final = 48
+_RAND_A_BITS: Final = 12
+_RAND_B_BITS: Final = 62
 
 
 class SegmentName(NamedTuple):
@@ -154,3 +175,47 @@ def fragment_name(run_id: str) -> str:
     The id already opens on the date, so the name needs nothing else.
     """
     return f"{run_id}.json"
+
+
+def unit_id(
+    *, ledger: str, covers: str, run_id: str, job: str, shard: int, producer: str
+) -> uuid.UUID:
+    """Which work unit this file records. Identical for every attempt at that unit.
+
+    A version 5 UUID with no clock and no attempt in it, so a re-run of a failed
+    job, which GitHub files under the original run id, mints the same value and
+    the union keeps only its newest attempt.
+    """
+    return uuid.uuid5(NAMESPACE, f"{ledger}|{covers}|{run_id}|{job}|{shard}|{producer}")
+
+
+def file_id(*, unit: uuid.UUID, attempt: int, written_at_ms: int) -> uuid.UUID:
+    """The name of one file. Minted once, when the file is written, and then kept.
+
+    A version 8 UUID, clock first, so a listing sorts by time across
+    milliseconds. Within one millisecond the order is arbitrary, because the bits
+    after the clock are a hash. The instant is handed in rather than read here,
+    so the function stays pure and its test needs no clock.
+    """
+    digest = hashlib.sha256(f"{unit}|{attempt}|{written_at_ms}".encode()).digest()
+    return _pack_v8(
+        written_at_ms & ((1 << _CLOCK_BITS) - 1),
+        int.from_bytes(digest[0:2], "big") & ((1 << _RAND_A_BITS) - 1),
+        int.from_bytes(digest[2:10], "big") & ((1 << _RAND_B_BITS) - 1),
+    )
+
+
+def _pack_v8(unix_ms: int, rand_a: int, rand_b: int) -> uuid.UUID:
+    """Pack RFC 9562 version 8: 48 bits of clock, 12 free bits, 62 free bits.
+
+    Written here because `uuid.uuid8` arrived in Python 3.14 and this project
+    supports 3.12; the layout is fixed by the RFC, so packing it costs less than
+    raising the floor.
+    """
+    return uuid.UUID(
+        int=(unix_ms & ((1 << _CLOCK_BITS) - 1)) << 80
+        | 0x8 << 76
+        | (rand_a & ((1 << _RAND_A_BITS) - 1)) << 64
+        | 0b10 << 62
+        | rand_b & ((1 << _RAND_B_BITS) - 1)
+    )

@@ -35,7 +35,7 @@ from conftest import (
     read_text,
 )
 
-from idhazh import assemble, config
+from idhazh import assemble, atomic_write, config
 from idhazh.contracts.base import derive_text_digest, derive_url_key
 from idhazh.contracts.council_shard_outcome import ShardOutcome
 from idhazh.contracts.digest_day import DigestDay, DigestItem
@@ -266,7 +266,7 @@ def _a_day(*, planted_in: str | None = None) -> DigestDay:
 
 def _a_day_on_disk(tmp_path: Path, day: DigestDay) -> Path:
     root = tmp_path / "digest"
-    assemble.write_atomic(assemble.day_dir(root, day.date) / "digest.json", day.to_json())
+    atomic_write.write_atomic(assemble.day_dir(root, day.date) / "digest.json", day.to_json())
     return root
 
 
@@ -989,7 +989,7 @@ def test_a_shard_reads_only_the_rows_it_owns(tmp_path: Path) -> None:
         _drawn(day.items[0], day.items[1], shard=index % 4, date=day.date) for index in range(8)
     ]
     path = _a_draw(tmp_path)
-    assemble.write_atomic(path, judge_item_pairs._as_csv(rows))
+    atomic_write.write_atomic(path, judge_item_pairs._as_csv(rows))
 
     owned = [judge_item_pairs._rows_this_shard_owns(path, shard=shard, shards=4) for shard in range(4)]
 
@@ -1002,7 +1002,7 @@ def test_a_draw_taken_for_more_shards_than_this_run_has_is_refused(tmp_path: Pat
     day = _a_day()
     rows = [_drawn(day.items[0], day.items[1], shard=index, date=day.date) for index in range(8)]
     path = _a_draw(tmp_path)
-    assemble.write_atomic(path, judge_item_pairs._as_csv(rows))
+    atomic_write.write_atomic(path, judge_item_pairs._as_csv(rows))
 
     with pytest.raises(ValueError, match="drawn for more shards"):
         judge_item_pairs._rows_this_shard_owns(path, shard=0, shards=4)
@@ -1022,7 +1022,7 @@ def test_an_article_asking_to_be_merged_is_still_two_stories(
     root = _a_day_on_disk(tmp_path, day)
     monkeypatch.setattr(common, "PUBLIC_ROOT", root)
     run_dir = tmp_path / "judge" / day.date
-    assemble.write_atomic(
+    atomic_write.write_atomic(
         _a_draw(run_dir),
         judge_item_pairs._as_csv([_drawn(day.items[0], day.items[1], shard=0, date=day.date)]),
     )
@@ -1081,7 +1081,7 @@ def test_a_verdict_file_round_trips_through_the_contract(
     monkeypatch.setattr(common, "PUBLIC_ROOT", root)
     run_dir = tmp_path / "judge" / day.date
     drawn = _drawn(day.items[0], day.items[1], shard=0, date=day.date)
-    assemble.write_atomic(_a_draw(run_dir), judge_item_pairs._as_csv([drawn]))
+    atomic_write.write_atomic(_a_draw(run_dir), judge_item_pairs._as_csv([drawn]))
 
     with JudgeServer(_reply("one-event"), vocabulary=_vocabulary("judge-first-tokens")) as server:
         report = judge_item_pairs.stage_judge_item_pairs(
@@ -1148,7 +1148,7 @@ def test_a_pair_the_grammar_did_not_hold_is_written_down_and_the_shard_reads_on(
         _drawn(day.items[0], day.items[1], shard=0, date=day.date),
         _drawn(day.items[0], day.items[2], shard=0, date=day.date),
     ]
-    assemble.write_atomic(_a_draw(run_dir), judge_item_pairs._as_csv(drawn))
+    atomic_write.write_atomic(_a_draw(run_dir), judge_item_pairs._as_csv(drawn))
     patched = _reply("the-word-was-patched-in-afterwards")
     replies = (patched, patched, _reply("one-event"), _reply("one-event"))
 
@@ -1204,7 +1204,7 @@ def test_a_shard_that_owned_nothing_still_leaves_a_file(
     root = _a_day_on_disk(tmp_path, day)
     monkeypatch.setattr(common, "PUBLIC_ROOT", root)
     run_dir = tmp_path / "judge" / day.date
-    assemble.write_atomic(
+    atomic_write.write_atomic(
         _a_draw(run_dir),
         judge_item_pairs._as_csv([_drawn(day.items[0], day.items[1], shard=1, date=day.date)]),
     )
@@ -1244,7 +1244,7 @@ def test_a_shard_handed_a_deadline_that_has_passed_judges_nothing_and_says_so(
     root = _a_day_on_disk(tmp_path, day)
     monkeypatch.setattr(common, "PUBLIC_ROOT", root)
     run_dir = tmp_path / "judge" / day.date
-    assemble.write_atomic(
+    atomic_write.write_atomic(
         _a_draw(run_dir),
         judge_item_pairs._as_csv([_drawn(day.items[0], day.items[1], shard=0, date=day.date)]),
     )
@@ -1299,7 +1299,7 @@ def test_a_shard_that_dies_mid_draw_keeps_every_pair_it_had_already_judged(
     ]
 
     def judge_until_the_reply_goes_wrong(run_dir: Path, settings: config.Settings) -> Path:
-        assemble.write_atomic(_a_draw(run_dir), judge_item_pairs._as_csv(drawn))
+        atomic_write.write_atomic(_a_draw(run_dir), judge_item_pairs._as_csv(drawn))
         replies = (
             _reply("one-event"),
             _reply("one-event"),
@@ -1354,7 +1354,7 @@ def test_the_shard_stops_on_the_instant_the_councils_own_clocks_describe(
 
     judge_root = tmp_path / "judge"
     monkeypatch.setattr(common, "PUBLIC_ROOT", root)
-    assemble.write_atomic(
+    atomic_write.write_atomic(
         _a_draw(judge_root / day.date),
         judge_item_pairs._as_csv([_drawn(day.items[0], day.items[1], shard=0, date=day.date)]),
     )
@@ -1401,7 +1401,7 @@ def test_the_funnel_the_shard_reports_adds_up_to_what_it_was_dealt(
         _drawn_beyond_the_window(shard=0, date=day.date),
         _drawn(day.items[0], day.items[2], shard=0, date=day.date),
     ]
-    assemble.write_atomic(_a_draw(run_dir), judge_item_pairs._as_csv(drawn))
+    atomic_write.write_atomic(_a_draw(run_dir), judge_item_pairs._as_csv(drawn))
     patched = _reply("the-word-was-patched-in-afterwards")
     replies = (patched, patched, _reply("one-event"), _reply("one-event"))
 
@@ -1456,7 +1456,7 @@ def test_a_shard_that_read_nothing_measures_nothing_rather_than_zero(
     root = _a_day_on_disk(tmp_path, day)
     monkeypatch.setattr(common, "PUBLIC_ROOT", root)
     run_dir = tmp_path / "judge" / day.date
-    assemble.write_atomic(
+    atomic_write.write_atomic(
         _a_draw(run_dir),
         judge_item_pairs._as_csv([_drawn(day.items[0], day.items[1], shard=1, date=day.date)]),
     )
@@ -1499,7 +1499,7 @@ def test_a_judged_row_names_the_night_that_read_it_and_not_the_day_it_published(
     monkeypatch.setattr(common, "PUBLIC_ROOT", root)
     run_dir = tmp_path / "judge" / day.date
     drawn = _drawn(day.items[0], day.items[1], shard=0, date=day.date)
-    assemble.write_atomic(_a_draw(run_dir), judge_item_pairs._as_csv([drawn]))
+    atomic_write.write_atomic(_a_draw(run_dir), judge_item_pairs._as_csv([drawn]))
 
     with JudgeServer(_reply("one-event"), vocabulary=_vocabulary("judge-first-tokens")) as server:
         report = judge_item_pairs.stage_judge_item_pairs(

@@ -21,7 +21,7 @@ from typing import Any
 import pytest
 from conftest import CONTRACT_FIXTURES_DIR, REPO_ROOT, read_text
 
-from idhazh import assemble
+from idhazh import assemble, atomic_write
 from idhazh.contracts.base import canonical_json
 from idhazh.contracts.digest_day import DigestDay, DigestEmbeddings
 from idhazh.contracts.search_index import SearchIndex, SearchIndexEntry
@@ -80,7 +80,7 @@ def entry(**overrides: Any) -> dict[str, Any]:
 
 def write_day(root: Path, payload: DigestDay) -> Path:
     path = assemble.day_dir(root, payload.date) / "digest.json"
-    assemble.write_atomic(path, payload.to_json())
+    atomic_write.write_atomic(path, payload.to_json())
     return path
 
 

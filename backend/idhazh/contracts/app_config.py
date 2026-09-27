@@ -44,6 +44,7 @@ from idhazh.contracts.knobs.council import CouncilConfig
 from idhazh.contracts.knobs.evaluation import DriftConfig, EvaluationConfig
 from idhazh.contracts.knobs.extract import ElementsConfig, ExtractConfig
 from idhazh.contracts.knobs.finetune import FinetuneConfig, ReferenceDatasetConfig
+from idhazh.contracts.knobs.ledger import LedgerConfig
 from idhazh.contracts.knobs.model_server import ModelServerConfig
 from idhazh.contracts.knobs.models import SUPERSEDED_MODELS_NAMES, ModelsConfig
 from idhazh.contracts.knobs.observability import LoggingConfig, ObservabilityConfig
@@ -100,6 +101,11 @@ class AppConfig(Contract):
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-27",
+            change="ledger block, additive: format, two compressions and the published list.",
+            why="The ledger door reads its format and compressions from config, not from source.",
+        ),
+        ChangelogEntry(
             version="2026-09-24",
             change="ui.filter_settle_ms, additive, default 120.",
             why="The list narrows on the keystroke; the count beside it settles after one.",
@@ -113,11 +119,6 @@ class AppConfig(Contract):
             version="2026-09-22T16:00",
             change="run.qualification_repeats, additive, default 3, floor 3, ceiling 10.",
             why="The replay count is a knob with a floor, not a dispatch input that could be 1.",
-        ),
-        ChangelogEntry(
-            version="2026-09-22T14:00",
-            change="observability.tracing_enabled drops the hosted-host sentence. No knob moved.",
-            why="A span has one destination now, and it is the committed file.",
         ),
         ChangelogEntry(
             version="2026-08-21",
@@ -159,6 +160,7 @@ class AppConfig(Contract):
     page_weight: PageWeightConfig = Field(default_factory=PageWeightConfig)
     finetune: FinetuneConfig = Field(default_factory=FinetuneConfig)
     reference_dataset: ReferenceDatasetConfig = Field(default_factory=ReferenceDatasetConfig)
+    ledger: LedgerConfig = Field(default_factory=LedgerConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
     model_server: ModelServerConfig = Field(default_factory=ModelServerConfig)
     observability: ObservabilityConfig = Field(default_factory=ObservabilityConfig)

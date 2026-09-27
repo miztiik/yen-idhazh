@@ -38,8 +38,10 @@ class LedgerLifecycleStatus(StrEnum):
     writer may do, never whether the data survives. Deleting a family's data for
     good is something a person does on purpose.
 
-    Nothing on the write path reads this yet, so a test holds every family at
-    `active` until something does.
+    Every route that writes new rows asks `ledger.accepts_new_rows` before it
+    writes, and into a paused or retired family it writes nothing and logs one
+    warning. Compaction and ageing do not ask, so old rows are kept on the
+    schedule their own pass sets.
     """
 
     ACTIVE = "active"

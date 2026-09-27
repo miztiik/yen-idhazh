@@ -22,7 +22,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
 
-from idhazh.assemble import write_atomic
+from idhazh.atomic_write import write_atomic
 from idhazh.contracts.seen import PublishedRow
 
 #: The file this migration rewrites. Spelled here rather than asked of

@@ -43,7 +43,7 @@ from pathlib import Path
 from typing import Final
 
 from idhazh import ledger
-from idhazh.assemble import write_atomic
+from idhazh.atomic_write import write_atomic
 from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.seen import PublishedRow

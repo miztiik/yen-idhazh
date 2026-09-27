@@ -16,7 +16,7 @@ import io
 from collections.abc import Mapping
 from pathlib import Path
 
-from idhazh import assemble, config
+from idhazh import assemble, atomic_write, config
 from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.digest_day import DigestItem
 from idhazh.contracts.story_similarity_pair import StorySimilarityPair
@@ -139,7 +139,7 @@ def stage_pick_item_pairs(
             date,
             draw_path.name,
         )
-        assemble.write_atomic(draw_path, _as_csv([]))
+        atomic_write.write_atomic(draw_path, _as_csv([]))
         return selection.Draw(taken=[], pairs_in_band=0)
 
     earlier = _earlier_days(date, window_hours=window_hours)
@@ -170,7 +170,7 @@ def stage_pick_item_pairs(
         _drawn_row(pair, shard=shard, date=date, run_id=run_id, by_id=by_id, stamp=stamp)
         for shard, pair in selection.assign_shards(drawn.taken, shards=shards)
     ]
-    assemble.write_atomic(draw_path, _as_csv(rows))
+    atomic_write.write_atomic(draw_path, _as_csv(rows))
     LOG.info(
         "pick-item-pairs date=%s run=%s in_band=%s drawn=%s budget=%s shards=%s out=%s",
         date,

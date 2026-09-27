@@ -7,7 +7,7 @@ body of its own (CLAUDE.md section 1a, "A router is the sharpest case").
 from __future__ import annotations
 
 from idhazh import (
-    assemble,
+    atomic_write,
     config,
     ledger,
     run_context,
@@ -100,8 +100,8 @@ def stage_qualify_decide(
             or f"every gate passed on {len(frozen.items)} frozen articles"
         ),
     )
-    assemble.write_atomic(common.QUALIFICATION_ROOT / "report.json", report.to_json())
-    assemble.write_atomic(
+    atomic_write.write_atomic(common.QUALIFICATION_ROOT / "report.json", report.to_json())
+    atomic_write.write_atomic(
         common.QUALIFICATION_ROOT / "report.md",
         qualification_summary.render_report(report),
     )

@@ -91,7 +91,7 @@ from pathlib import Path
 from typing import Final
 
 from idhazh import day_partition, day_shards, month_partition
-from idhazh.assemble import write_atomic
+from idhazh.atomic_write import write_atomic
 from idhazh.day_partition import day_files
 from idhazh.ledger import BEFORE_PARTITION_NAME
 from idhazh.telemetry.traces import TRACE_SUFFIX, trace_date

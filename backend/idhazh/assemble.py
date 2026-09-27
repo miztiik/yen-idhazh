@@ -18,7 +18,6 @@ import logging
 import math
 import re
 import struct
-import tempfile
 import unicodedata
 from array import array
 from collections.abc import Container, Iterator, Mapping, Sequence
@@ -31,7 +30,7 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Final, Literal
 
-from idhazh import ledger
+from idhazh import atomic_write, ledger
 from idhazh.contracts.article import Article
 from idhazh.contracts.base import canonical_json
 from idhazh.contracts.digest_day import (
@@ -106,38 +105,6 @@ def day_dir(root: Path, date: str) -> Path:
     """`<YYYY>/<MM>/<DD>` - readable, sortable, and free of any digest."""
     year, month, day = date.split("-")
     return root / year / month / day
-
-
-def write_atomic(path: Path, text: str) -> None:
-    """Temp-then-rename, so a file either exists complete or does not exist."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    handle = tempfile.NamedTemporaryFile(
-        "w", encoding="utf-8", newline="\n", dir=path.parent, delete=False
-    )
-    try:
-        with handle:
-            handle.write(text)
-        Path(handle.name).replace(path)
-    except BaseException:
-        Path(handle.name).unlink(missing_ok=True)
-        raise
-
-
-def write_atomic_bytes(path: Path, data: bytes) -> None:
-    """The same guarantee for a file that is not text.
-
-    The vector sibling is raw int8. Writing it through the text path would let a
-    host's line-ending rules rewrite bytes inside a vector.
-    """
-    path.parent.mkdir(parents=True, exist_ok=True)
-    handle = tempfile.NamedTemporaryFile("wb", dir=path.parent, delete=False)
-    try:
-        with handle:
-            handle.write(data)
-        Path(handle.name).replace(path)
-    except BaseException:
-        Path(handle.name).unlink(missing_ok=True)
-        raise
 
 
 def utc_now() -> str:
@@ -1863,8 +1830,8 @@ def rebuild_search_index(*, digest_root: Path, index_root: Path, month: str) -> 
     a shard that no longer names it.
     """
     index, vectors = build_search_index(month, days_in_month(digest_root, month))
-    write_atomic(index_root / f"{month}.json", index.to_json())
-    write_atomic_bytes(index_root / f"{month}.bin", vectors)
+    atomic_write.write_atomic(index_root / f"{month}.json", index.to_json())
+    atomic_write.write_atomic_bytes(index_root / f"{month}.bin", vectors)
     return index
 
 
