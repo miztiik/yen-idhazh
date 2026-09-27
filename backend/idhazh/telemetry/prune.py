@@ -86,10 +86,10 @@ PruneInterruptedError = one_at_a_time.PruneInterruptedError
 #: absent - they file `.json` and `.jsonl`, which
 #: `day_shards.shard_files` refuses, and a second walker here would be a second
 #: answer to what a day file is. Bringing either in means teaching that one
-#: walker its suffix, which is where the question belongs. `state/validation/`,
-#: `state/span-rollup/` and `state/day-validations/` are absent too: nobody has
-#: asked to take a range out of one, and joining this list is a decision rather
-#: than a consequence of the shape.
+#: walker its suffix, which is where the question belongs. `state/validation/`
+#: and `state/span-rollup/` are absent too: nobody has asked to take a range out
+#: of one, and joining this list is a decision rather than a consequence of the
+#: shape.
 #:
 #: **`host-fingerprint` is what a day taken off the site owes its machine rows.**
 #: It filed by day from 2026-09-16 and was missing from this list until

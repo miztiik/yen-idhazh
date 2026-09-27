@@ -6,23 +6,15 @@ body of its own (CLAUDE.md section 1a, "A router is the sharpest case").
 
 from __future__ import annotations
 
-import hashlib
-import inspect
 import json
 from collections import Counter
 from collections.abc import Callable, Sequence
 from pathlib import Path
-from typing import Final
 
 from pydantic import ValidationError
 
-from idhazh import day_shards, ledger, run_context
-from idhazh.contracts.base import ServerJob, canonical_json
-from idhazh.contracts.day_validation import DayValidationReceipt
 from idhazh.contracts.digest_day import DigestDay
 from idhazh.contracts.digest_view import DigestView
-from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
-from idhazh.contracts.ledger_name import LedgerName
 from idhazh.render.write import assets_in_day
 from idhazh.stages.common import LOG, published_days
 from idhazh.telemetry.publish import (
@@ -164,126 +156,9 @@ def _day_faults(path: Path, public_root: Path, *, payload: bytes | None = None) 
     return faults
 
 
-#: This stage runs once over the whole archive, so there is no fan-out and no
-#: shard element to carry. Zero is what one writer of one job spells.
-VALIDATE_SHARD: Final = 0
-
-
-def _receipts_root(state_dir: Path) -> Path:
-    """`state/day-validations/`: which days have passed, and against what."""
-    return ledger.tree_root(state_dir, LedgerName.DAY_VALIDATIONS)
-
-
-def _validator_identity() -> str:
-    """A digest of everything a committed day is checked against.
-
-    A published day is frozen, so the only thing that can turn a pass into a
-    failure is a move in the rules. This is what "the rules" means, spelled out
-    so that nobody has to remember to bump it: the two generated schemas, and
-    the source of the five functions that do the checking. Change a field, a
-    constraint, an enum member or a line of `_day_faults`, `_picture_faults`,
-    `_census_faults`, `assets_in_day` or `DigestView.project`, and this moves -
-    which invalidates every receipt at once and re-validates the whole archive,
-    once.
-
-    It is derived rather than declared on purpose. A hand-maintained constant is
-    a check that silently stops checking on the day somebody forgets it, and the
-    failure would be invisible: the gate keeps printing a pass.
-
-    The cost of deriving it is that a comment or a reformat inside one of those
-    functions moves it too. That buys one full re-validation, which is what this
-    stage did on every run before the receipt existed - the error is on the side
-    of doing the work again rather than skipping it.
-    """
-    rules = (_picture_faults, _census_faults, _day_faults, assets_in_day, DigestView.project)
-    material = canonical_json(
-        {
-            "digest_day": DigestDay.json_schema(),
-            "digest_view": DigestView.json_schema(),
-            "rules": [inspect.getsource(rule) for rule in rules],
-        }
-    )
-    return hashlib.sha256(material.encode("utf-8")).hexdigest()
-
-
-def _receipts_for(state_dir: Path, identity: str) -> dict[str, DayValidationReceipt]:
-    """The receipt each day carries under this validator, one row a day.
-
-    Only rows written under `identity` are kept: a row about an older validator
-    says nothing about the rules in force, and dropping it here is what makes a
-    rule change re-validate everything rather than nothing.
-
-    **One row a day, because the ledger settles them.** A day is a directory of
-    writer-owned files and every run that validated that day left one, so a
-    closed day that `backfill.yml` re-encoded carries a truthful new row beside
-    a row about the payload that used to be there. `DAY_VALIDATION_RULE` takes
-    the newest, which is the answer under the rules in force, and `_proved` asks
-    the only question that settles it - what is on disk now.
-
-    A row that will not read as a receipt stops the read rather than being
-    counted and skipped. It is written by this stage from a validated model one
-    step earlier, so a row this cannot place means the writer and this reader
-    disagree about the shape - the rule every other day tree here keeps.
-
-    The cover is every recorded day, which the ledger bounds:
-    `retention.day_validation_keep_months` deletes a receipt for a day the
-    archive no longer holds, and a receipt for a day that is gone answers
-    nothing (Guardrail #12).
-    """
-    held: dict[str, DayValidationReceipt] = {}
-    for cells in day_shards.settled_rows(
-        _receipts_root(state_dir),
-        ledger.DAY_VALIDATION_KEY,
-        DayValidationReceipt,
-        days=UNBOUNDED_WINDOW,
-    ):
-        receipt = DayValidationReceipt.from_csv_row(cells)
-        if receipt.validator_version == identity:
-            held[receipt.date] = receipt
-    return held
-
-
-def _proved(held: DayValidationReceipt | None, payload_bytes: int) -> bool:
-    """Whether this receipt settles what is on disk at this length.
-
-    The length comes from `os.stat`, which answers without opening the file -
-    that is the whole saving, so the digest a receipt carries cannot be the
-    thing consulted here.
-
-    A receipt whose length does not match is about a payload that is no longer
-    there. It settles nothing and the day is read, which is what lets a
-    re-encoded day settle down again instead of being read for ever.
-    """
-    return held is not None and held.payload_bytes == payload_bytes
-
-
-def _record_receipts(state_dir: Path, earned: list[DayValidationReceipt], *, run_id: str) -> int:
-    """Put what this run proved into this writer's own file, one a day.
-
-    Each receipt lands under the day it is about, in a file named for the run,
-    the attempt and the job that wrote it - so two runs that validated one day
-    never open one path and a lost push race costs a merge rather than the rows.
-
-    Written whole rather than appended for the same reason: the file is this
-    writer's alone, so there is no earlier row in it to keep.
-    """
-    return ledger.write_segment(
-        state_dir,
-        LedgerName.DAY_VALIDATIONS,
-        earned,
-        run_id=run_id,
-        attempt=run_context.run_attempt(),
-        job=ServerJob.ASSEMBLE,
-        shard=VALIDATE_SHARD,
-    )
-
-
 def stage_validate_days(
     root: Path,
     only: Sequence[str] = (),
-    *,
-    state_dir: Path | None = None,
-    run_id: str,
 ) -> int:
     """Committed days against the two contracts their readers hold.
 
@@ -296,31 +171,8 @@ def stage_validate_days(
     is weaker than it was and it is written down rather than hidden: a broken
     day can no longer be built, it can only no longer be merged.
 
-    `only` names the days to open, as `YYYY-MM-DD`. Naming a day is how a run
-    says it just wrote that day, so a named day is always opened and its receipt
-    is never consulted. Empty means every committed day.
-
-    **A frozen day is not re-validated, and that is a receipt rather than a
-    clock.** A published day cannot stop matching a contract on its own - the
-    only thing that can happen to it is deletion - so what invalidates a pass is
-    a move in the rules, not the passage of time. `state/day-validations/`
-    records the day, the length and digest of the payload that passed, and
-    `_validator_identity`. A later run skips a day whose receipt names this
-    validator and whose recorded length still matches `os.stat`, and never opens
-    the payload. `state_dir` is where those receipts live; pass nothing and every
-    day named is validated, which is what this did before the receipt existed.
-    `run_id` is what this run's receipts are filed under.
-
-    **On the first run against a tree with no receipts every day is validated**,
-    exactly as before, and every day that passes earns a receipt. Nothing is
-    skipped on trust it has not earned, so the machinery costs a full sweep once
-    and then costs a `stat` a day. The same thing happens after a rule change,
-    which is the whole point: the archive is re-validated once, not on a window.
-
-    Measured 2026-09-08 on an Intel Core i7-1265U: 18 committed days,
-    19,867,266 bytes, 0.45 s median over three runs against 0.02 s with every
-    receipt current, and one day more every day nobody writes any code
-    (Guardrail #12).
+    `only` names the days to open, as `YYYY-MM-DD`. Empty means every committed
+    day.
 
     An empty tree fails, and so does a named day that is not there. A validator
     that checked nothing prints the same line as one that checked every day,
@@ -343,19 +195,9 @@ def stage_validate_days(
             LOG.error("validate-days was asked for days that are not committed: %s", missing)
             return 1
 
-    identity = _validator_identity() if state_dir is not None else ""
-    # A named day was just written by this run, so its receipt is about the
-    # payload that stood there before it. Nothing to consult.
-    held = _receipts_for(state_dir, identity) if state_dir is not None and not only else {}
-
     broken = 0
-    skipped = 0
-    earned: list[DayValidationReceipt] = []
     for path in days:
         date = _day_of(path)
-        if _proved(held.get(date), path.stat().st_size):
-            skipped += 1
-            continue
         try:
             payload: bytes | None = path.read_bytes()
         except OSError:
@@ -364,16 +206,6 @@ def stage_validate_days(
         broken += bool(faults)
         for fault in faults:
             LOG.error("%s %s", date, fault)
-        if not faults and payload is not None and state_dir is not None:
-            earned.append(
-                DayValidationReceipt(
-                    version=DayValidationReceipt.schema_version(),
-                    date=date,
-                    payload_bytes=len(payload),
-                    payload_digest=hashlib.sha256(payload).hexdigest(),
-                    validator_version=identity,
-                )
-            )
 
     if broken:
         LOG.error(
@@ -396,16 +228,7 @@ def stage_validate_days(
         )
         return 1
 
-    if state_dir is not None:
-        LOG.info(
-            "validate-days: recorded %s receipts",
-            _record_receipts(state_dir, earned, run_id=run_id),
-        )
-    LOG.info(
-        "validate-days: %s committed days match both contracts, %s of them opened",
-        len(days),
-        len(days) - skipped,
-    )
+    LOG.info("validate-days: %s committed days match both contracts", len(days))
     return 0
 
 

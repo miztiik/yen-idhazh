@@ -180,7 +180,6 @@ is the count of month shards a console read opens, and no read opens a visual
 | `state/span-rollup/` | Keep | none of its own | the committed record a trace is not. No committed instance yet |
 | `state/visual-prunes/` | Keep | none | it is property 5 - the record of what the prune did, including the runs it did nothing |
 | `state/feed-retirements.csv` | Keep | never | it carries no time window at all. A run that forgot a retired address would start asking a dead one again |
-| `state/day-validations.csv` | Keep | none | one receipt a day, from `idhazh validate-days` |
 | `state/labels.csv` | **Keep, always** | never | the only ground truth here, and the one file in `state/` a person wrote rather than a machine. No committed instance yet |
 | `state/<run.trial_state_dirname>/validation/` | Keep | none of its own | one verdict a dispatch, filed on the day tree. It lands under the trial root because only a qualification writes it, and `prune-state` already bounds that root |
 

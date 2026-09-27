@@ -31,7 +31,6 @@ from idhazh.contracts.corpus import CorpusMeta, CorpusRow
 from idhazh.contracts.council_shard_outcome import CouncilShardOutcome
 from idhazh.contracts.counterfactual_score import CounterfactualScoreRow
 from idhazh.contracts.day_metrics import DayMetrics
-from idhazh.contracts.day_validation import DayValidationReceipt
 from idhazh.contracts.digest_day import (
     DigestDay,
     DigestItem,
@@ -137,7 +136,6 @@ CONTRACTS: Final[tuple[type[Contract], ...]] = (
     CouncilShardOutcome,
     CounterfactualScoreRow,
     DayMetrics,
-    DayValidationReceipt,
     DigestDay,
     DigestRunFragment,
     DigestView,

@@ -374,12 +374,12 @@ def test_a_partition_that_loses_a_row_leaves_every_day_file_where_it_was(
 
 
 def _flat(tmp_path: Path) -> Path:
-    """The `clean` fixture as one file, which is the shape `day-validations` had.
+    """The `clean` fixture as one file, which is the shape a flat ledger arrives in.
 
     Built from the committed shards rather than committed again, so the six rows
     and the two month boundaries are the same ones every other test here drives.
     """
-    ledger = tmp_path / "state" / "day-validations"
+    ledger = tmp_path / "state" / "item-health"
     ledger.parent.mkdir(parents=True, exist_ok=True)
     shards = sorted((FIXTURE / "clean").glob("*.csv"))
     header = read_text(shards[0]).split("\n")[0]
@@ -412,7 +412,7 @@ def test_every_row_of_a_flat_ledger_lands_in_the_day_its_own_cell_names(
 
     assert _day_shard_rows(ledger) == before
     assert report.rows_in == report.rows_out == 6
-    assert report.shards == ["day-validations.csv"]
+    assert report.shards == ["item-health.csv"]
     assert report.paths == [f"{name[:-4]}/{BEFORE_PARTITION_NAME}" for name in CLEAN_DAYS]
     assert not flat.exists()
 
@@ -431,7 +431,7 @@ def test_a_flat_row_it_cannot_place_stops_the_run_with_the_file_intact(
     )
     before = flat.read_bytes()
 
-    with pytest.raises(ValueError, match=re.escape("day-validations.csv line 8")):
+    with pytest.raises(ValueError, match=re.escape("item-health.csv line 8")):
         migrate.split_flat(ledger, DATE_COLUMN)
 
     assert flat.read_bytes() == before

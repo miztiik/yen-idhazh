@@ -294,7 +294,6 @@
     "rows_per_split_min": 200
   },
   "retention": {
-    "day_validation_keep_months": 14,
     "dry_run": true,
     "image_months": 13,
     "max_deletes_per_run": 200,

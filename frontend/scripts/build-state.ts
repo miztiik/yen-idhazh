@@ -70,8 +70,8 @@ export function treeFingerprint(root: string): string {
  * the console pages are prerendered from `state/`. So a run that finds one
  * changed underneath it is not being told a lie by this list; it has a producer
  * writing where it should not, and the answer belongs at that producer. That was
- * defect 20, and the producer was `idhazh validate-days` filing receipts about a
- * scratch tree into `state/day-validations.csv`. `changedInputNote` names the
+ * defect 20, and the producer was a publication gate filing rows about a scratch
+ * digest tree into a tracked ledger. `changedInputNote` names the
  * file so the next one costs a line rather than an afternoon.
  */
 function isInput(path: string, purpose: 'build' | 'checks'): boolean {

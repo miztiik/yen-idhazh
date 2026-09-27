@@ -15,7 +15,6 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING, Final, NamedTuple
 
 from idhazh.contracts.counterfactual_score import CounterfactualScoreRow
-from idhazh.contracts.day_validation import DayValidationReceipt
 from idhazh.contracts.eval_row import (
     DROPPED_CELLS as DROPPED_EVAL_CELLS,
 )
@@ -178,13 +177,6 @@ OBSERVATION_INDEX_KEY: Final = ("observation_digest",)
 VALIDATION_KEY: Final = ("date", "run_id", "model_id")
 
 
-#: What makes two day-validation receipts the same record. The day, and nothing
-#: else. A receipt says a frozen day passed the rules as they stood, so two
-#: receipts for one day are one answer written twice - and when the rules move,
-#: the newer receipt is the one that is true (`DAY_VALIDATION_RULE`).
-DAY_VALIDATION_KEY: Final = ("date",)
-
-
 #: Which of two rows holding one key survives the settlement. `True` means the
 #: later row replaces the one already kept. A key with no rule keeps the first
 #: row it saw, which is what every ledger but one wants: there a repeat is the
@@ -232,21 +224,6 @@ def _item_health_rule(later: dict[str, str], kept: dict[str, str]) -> bool:
     return bool(later.get("job")) and not kept.get("job")
 
 
-def _day_validation_rule(later: dict[str, str], kept: dict[str, str]) -> bool:
-    """The newer receipt wins, always.
-
-    A receipt says a frozen day passed the rules as they stood. When the rules
-    move, every day is re-judged and writes a fresh receipt, and the answer that
-    is true is the one taken under the rules in force. Keeping the first would
-    pin a day to a rule set nobody runs any more.
-
-    Both arguments are read and neither is compared, because the ordering has
-    already decided: `day_shards.settled_rows` walks a day's files oldest first,
-    so `later` is later.
-    """
-    return bool(later) or not kept
-
-
 #: The keys whose repeats can disagree, and how each one picks a winner.
 FEED_HEALTH_RULE: Final[Preference] = _feed_health_rule
 
@@ -254,13 +231,9 @@ FEED_HEALTH_RULE: Final[Preference] = _feed_health_rule
 ITEM_HEALTH_RULE: Final[Preference] = _item_health_rule
 
 
-DAY_VALIDATION_RULE: Final[Preference] = _day_validation_rule
-
-
 _PREFERENCES: Final[dict[tuple[str, ...], Preference]] = {
     FEED_HEALTH_KEY: FEED_HEALTH_RULE,
     ITEM_HEALTH_KEY: ITEM_HEALTH_RULE,
-    DAY_VALIDATION_KEY: DAY_VALIDATION_RULE,
 }
 
 
@@ -319,7 +292,6 @@ _TREE_SHAPES: Final[dict[LedgerName, _TreeShape]] = {
     LedgerName.COUNTERFACTUAL_SCORES: _TreeShape(
         COUNTERFACTUAL_SCORE_KEY, CounterfactualScoreRow
     ),
-    LedgerName.DAY_VALIDATIONS: _TreeShape(DAY_VALIDATION_KEY, DayValidationReceipt),
 }
 
 
