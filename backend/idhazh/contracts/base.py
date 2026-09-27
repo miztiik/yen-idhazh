@@ -122,7 +122,7 @@ class ServerJob(StrEnum):
     with no producer left is the only thing that can read them back.
 
     **`decide` is here for a filename and not for a column.** `validate.yml`'s
-    gate job writes the validation ledger's segment, and the segment grammar
+    gate job writes the candidate-models ledger's segment, and the segment grammar
     names its writer from this set - so the job belongs here. No row of the three
     ledgers that carry a `job` column can hold it: that job stands no server up,
     records no machine and reads no item. Their generated schemas list it because
@@ -143,7 +143,7 @@ class ServerJob(StrEnum):
     RUNTIME = "runtime"
     # validate.yml. The job that runs the gates and files the candidate's
     # verdict. It stands no server up and records no machine, so it names a
-    # writer of the validation ledger and of nothing else here.
+    # writer of the candidate-models ledger and of nothing else here.
     DECIDE = "decide"
 
 

@@ -934,13 +934,13 @@ def prune_telemetry(
         aggregate_rows += len(summary)
         if dry_run:
             continue
-        target = ledger.path(state_dir, LedgerName.TELEMETRY_AGGREGATE, month)
-        ledger.write_telemetry_aggregate(target, summary)
+        target = ledger.path(state_dir, LedgerName.ITEM_HEALTH_SUMMARY, month)
+        ledger.write_item_health_summary(target, summary)
         # Read back before the days go. A fold nobody verified is a deletion
         # nobody can undo.
-        if ledger.load_telemetry_aggregate(target) != summary:
+        if ledger.load_item_health_summary(target) != summary:
             raise ValueError(
-                f"{ledger.relpath(LedgerName.TELEMETRY_AGGREGATE, month)} did not read back as it "
+                f"{ledger.relpath(LedgerName.ITEM_HEALTH_SUMMARY, month)} did not read back as it "
                 f"was written, so the {len(days)} day files of {month} stay"
             )
         for day in days:
@@ -962,7 +962,7 @@ def prune_telemetry(
     hard_deleted: list[str] = []
     if config.item_health_aggregate_keep_months is not None:
         delete_from = oldest_month_kept(today, config.item_health_aggregate_keep_months)
-        for aggregate in month_shards(state_dir / LedgerName.TELEMETRY_AGGREGATE):
+        for aggregate in month_shards(state_dir / LedgerName.ITEM_HEALTH_SUMMARY):
             if aggregate.stem >= delete_from:
                 continue
             hard_deleted.append(aggregate.stem)

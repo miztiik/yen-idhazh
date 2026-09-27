@@ -91,30 +91,30 @@
       ]
     },
     {
-      "name": "validation",
+      "name": "candidate-models",
       "lifecycle_status": "active",
       "description": "The verdict on each candidate model, filed on the day it was measured.",
       "onboarded": "2026-09-27",
       "ledgers": [
         {
-          "name": "validation",
+          "name": "candidate-models",
           "grain": "tree",
-          "prefix": ["validation"],
+          "prefix": ["candidate-models"],
           "stem": null,
           "suffix": null
         }
       ]
     },
     {
-      "name": "telemetry-aggregate",
+      "name": "item-health-summary",
       "lifecycle_status": "active",
       "description": "Daily totals of item health for each step, kept after the per-item rows are deleted.",
       "onboarded": "2026-09-27",
       "ledgers": [
         {
-          "name": "telemetry-aggregate",
+          "name": "item-health-summary",
           "grain": "month",
-          "prefix": ["telemetry-aggregate"],
+          "prefix": ["item-health-summary"],
           "stem": null,
           "suffix": ".csv"
         }

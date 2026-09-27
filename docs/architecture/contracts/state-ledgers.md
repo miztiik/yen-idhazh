@@ -6,7 +6,7 @@
 
 Two neighbours own the other halves of the question. [schemas.md](schemas.md) owns the shape of a row and the rule that decides a grain. [../../concepts/partitions.md](../../concepts/partitions.md) owns what counts as a day file and a month name. This page is the per-ledger answer: this ledger, this grain, this reason.
 
-Every ledger here is append-only except `state/telemetry-aggregate/`, which is rewritten. The section on it says why.
+Every ledger here is append-only except `state/item-health-summary/`, which is rewritten. The section on it says why.
 
 ## A ledger partitions only when its read carries a time window
 
@@ -30,7 +30,7 @@ It sits at the bottom of the contract graph rather than inside `backend/idhazh/l
 | `state/published/<YYYY>/<MM>/<DD>.csv` | Have we already run this? | day file | `collect.published_window_days` |
 | `state/feed-health/<YYYY>/<MM>/<DD>.csv` | Is this source still working? One row per feed per run | day file | `HEALTH_WINDOW_DAYS` |
 | `state/item-health/<YYYY>/<MM>/<DD>.csv` | What did every planned item do? One row per planned item per run | day file | the published projection, a month at a time |
-| `state/telemetry-aggregate/<YYYY-MM>.csv` | What is left of an item-health month | month file | the whole file |
+| `state/item-health-summary/<YYYY-MM>.csv` | What is left of an item-health month | month file | the whole file |
 | `state/feed-retirements.csv` | Is this address gone for good? | one file | the whole file |
 | `state/visual-prunes/<YYYY>/<MM>/<DD>.csv` | Is the picture backlog shrinking? | day file | the whole tree |
 
@@ -63,7 +63,7 @@ That last row is the number to remember before reading any wall clock here as a 
 
 ## The aggregate files by month because it summarises a month
 
-`state/telemetry-aggregate/<YYYY-MM>.csv` is what is left of an item-health month once `observability.item_health_full_grain_months` has passed: one row per date and stage, folded by `retention.compact_month`.
+`state/item-health-summary/<YYYY-MM>.csv` is what is left of an item-health month once `observability.item_health_full_grain_months` has passed: one row per date and stage, folded by `retention.compact_month`.
 
 A day file of a month's totals is a shape nothing consumes, so it files by month. It is also the one ledger here that is rewritten rather than appended, because every row in it is derived from the days it summarises.
 

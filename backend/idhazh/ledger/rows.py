@@ -684,7 +684,7 @@ def load_item_health(state_dir: Path, *, today: str, within_days: int) -> list[I
     ]
 
 
-def write_telemetry_aggregate(path: Path, rows: list[TelemetryAggregateRow]) -> int:
+def write_item_health_summary(path: Path, rows: list[TelemetryAggregateRow]) -> int:
     """Write one month's folded summary whole, replacing whatever was there.
 
     The only writer here that rewrites rather than appends, and the reason is
@@ -704,7 +704,7 @@ def write_telemetry_aggregate(path: Path, rows: list[TelemetryAggregateRow]) -> 
     return len(rows)
 
 
-def load_telemetry_aggregate(path: Path) -> list[TelemetryAggregateRow]:
+def load_item_health_summary(path: Path) -> list[TelemetryAggregateRow]:
     """Every folded row of one month. Empty for a month never folded."""
     return [TelemetryAggregateRow.from_csv_row(row) for row in _read_rows(path)]
 

@@ -48,8 +48,8 @@ class LedgerName(StrEnum):
     HOST_FINGERPRINT = "host-fingerprint"
     SCORES = "scores"
     SCORE_INDEX = "score-index"
-    VALIDATION = "validation"
-    TELEMETRY_AGGREGATE = "telemetry-aggregate"
+    CANDIDATE_MODELS = "candidate-models"
+    ITEM_HEALTH_SUMMARY = "item-health-summary"
     SPAN_ROLLUP = "span-rollup"
     PUBLISHED = "published"
     FEED_RETIREMENTS = "feed-retirements"
@@ -76,7 +76,7 @@ DAY_TREES: Final[frozenset[LedgerName]] = frozenset(
         LedgerName.SPAN_ROLLUP,
         LedgerName.SCORES,
         LedgerName.SCORE_INDEX,
-        LedgerName.VALIDATION,
+        LedgerName.CANDIDATE_MODELS,
         LedgerName.FEED_HEALTH,
         LedgerName.COUNTERFACTUAL_SCORES,
     }

@@ -374,7 +374,7 @@ class VisualAggregateRow(Contract):
     attempts.
 
     **That eight-term tuple IS the key, and this description is where it is
-    declared** - the convention `state/telemetry-aggregate/` already sets by
+    declared** - the convention `state/item-health-summary/` already sets by
     naming its own `(date, stage)` pair in its description rather than leaving
     the group to be inferred from the code that writes it.
 

@@ -42,6 +42,11 @@ STATE: Final = Path("state")
 #:
 #: Computed from `5a9c6f32f:backend/idhazh/ledger/__init__.py` by calling those
 #: functions, so a row here is the old answer rather than a reading of it.
+#:
+#: Two rows are not the old answer, and the difference is only their first
+#: segment. `candidate-models` was `validation` and `item-health-summary` was
+#: `telemetry-aggregate`, renamed to say what they hold while neither had a
+#: single committed file - so the old addresses held nothing to move.
 AT_THE_BASE: Final[dict[str, tuple[str | None, str | None, str | None]]] = {
     "SEEN": ("state/seen/2026/09/18.csv", "state/seen/2026/09/18.csv", "state/seen"),
     "FEED_HEALTH": (
@@ -65,14 +70,14 @@ AT_THE_BASE: Final[dict[str, tuple[str | None, str | None, str | None]]] = {
         "state/score-index/2026/09/18",
         "state/score-index",
     ),
-    "VALIDATION": (
-        "state/validation/2026/09/18",
-        "state/validation/2026/09/18",
-        "state/validation",
+    "CANDIDATE_MODELS": (
+        "state/candidate-models/2026/09/18",
+        "state/candidate-models/2026/09/18",
+        "state/candidate-models",
     ),
-    "TELEMETRY_AGGREGATE": (
-        "state/telemetry-aggregate/2026-09.csv",
-        "state/telemetry-aggregate/2026-09.csv",
+    "ITEM_HEALTH_SUMMARY": (
+        "state/item-health-summary/2026-09.csv",
+        "state/item-health-summary/2026-09.csv",
         None,
     ),
     "SPAN_ROLLUP": (
@@ -378,11 +383,16 @@ def test_the_claimed_roots_differ_from_the_base_only_by_the_names_given() -> Non
     """The protected set, compared by name with what the sweep protected before.
 
     A claim is a family name now, so every folder claimed before is still
-    claimed. The one addition is a file's stem, which the sweep never meets
-    because it only looks at directories.
+    claimed under the name it has today. One addition is a file's stem, which
+    the sweep never meets because it only looks at directories. The other two
+    are the renamed empty ledgers, which leave their old names behind.
     """
-    assert ledger.claimed_roots() - CLAIMED_AT_THE_BASE == {"feed-retirements"}
-    assert CLAIMED_AT_THE_BASE - ledger.claimed_roots() == set()
+    assert ledger.claimed_roots() - CLAIMED_AT_THE_BASE == {
+        "feed-retirements",
+        "candidate-models",
+        "item-health-summary",
+    }
+    assert CLAIMED_AT_THE_BASE - ledger.claimed_roots() == {"validation", "telemetry-aggregate"}
 
 
 def test_every_directory_under_state_is_claimed_or_owned_elsewhere() -> None:

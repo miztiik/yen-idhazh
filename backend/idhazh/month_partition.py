@@ -1,7 +1,7 @@
 """What a `<YYYY-MM>` partition file is called, in one place.
 
 Six directories used to be pruned by month - `state/seen/`, `state/feed-health/`,
-`state/item-health/`, `state/telemetry-aggregate/`, `state/scores/` and
+`state/item-health/`, `state/item-health-summary/`, `state/scores/` and
 `state/score-archive/`, plus the browser's copy under
 `frontend/public/telemetry/` - and each one used to carry its own answer to "is
 this name a month?". The answers disagreed. Measured 2026-09-08: `retention`

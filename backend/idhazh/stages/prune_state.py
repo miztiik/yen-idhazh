@@ -132,7 +132,7 @@ def stage_prune_state(
         removed += list(result.days_removed)
         removed += [public_telemetry.shard_relpath(stem) for stem in result.public_deleted]
         removed += [
-            ledger.relpath(LedgerName.TELEMETRY_AGGREGATE, stem) for stem in result.hard_deleted
+            ledger.relpath(LedgerName.ITEM_HEALTH_SUMMARY, stem) for stem in result.hard_deleted
         ]
 
     if digest is not None:
