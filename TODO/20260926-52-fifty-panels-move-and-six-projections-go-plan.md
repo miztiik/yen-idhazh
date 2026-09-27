@@ -1,6 +1,6 @@
 # Plan 52 - Fifty panels move to the query door and six projections go
 
-**Last Updated**: 2026-09-26
+**Last Updated**: 2026-09-27
 **Status**: **PLACEHOLDER. Not execution-ready and not startable.** It holds the
 scope two earlier plans handed forward, so that work has an address instead of a
 phrase. Nothing here is a row yet. **A worker must not pick this up.**
@@ -83,7 +83,7 @@ requests, so one builder is edited once - and the new panels batch by which
 | 1 | Plan 51 section 0, Hard scope - out | **Three of the five routes draw no panel id today.** The gates and the captures reach 26 panels on two routes until a row here wraps the other three. A row must do that before those routes can be judged |
 | 2 | Plan 51, `echarts` | `echarts@^5.6.0` and sixteen importers stay installed while two grammars coexist. **The last row here uninstalls it**, and that deletion is the signal the plan is finished |
 | 3 | Plan 50 row titled *The three ledgers the console's routes read become parquet* | `backend/utilities/migrate_to_parquet.py` carries "delete when every `state/item-health`, `state/scores` and `state/host-fingerprint` CSV is gone from `main`". **The first row here names it in its scope line** |
-| 4 | Plan 50 row titled *`span-rollup` becomes parquet* | `migrate_span_rollup.py` carries the same shape of condition for `state/span-rollup`. Same treatment |
+| 4 | Plan 50 row titled *`span-rollup` becomes parquet*, now collapsed | **The ledger is deleted, not migrated, so no `migrate_span_rollup.py` is ever written.** `state/span-rollup/`, its producer in `stages/work.py` and its five readers go in the row for the last route out, beside the `span-rollup` projection that row already deletes. Plan 50's collapsed row holds the measurements and Susan's two rulings, and this row carries them across |
 | 5 | Plan 51, telemetry-intent N7 and N8 | Neither gets its stone until the projections go. This plan is where they are answered |
 
 ## Open questions this plan starts from, rather than discovers
@@ -95,11 +95,14 @@ recorded here so the first row of this plan begins with them already asked.
   per attempt. If what it scores is the feed rather than the item, the
   collection and its columns are misnamed, and no migration fixes that - a
   rename has to happen before or instead of the move.
-- **Does `span-rollup` belong inside `item-health`?** The grains differ: per run
-  and per stage against per item, so merging would repeat a span row once per
-  item. **Measured 2026-09-25: two collections in one file save 24 bytes against
-  two separate files.** There is no size argument for merging any pair of these,
-  so if they merge it is a modelling decision and this plan has to make it.
+- **Does `span-rollup` belong inside `item-health`?** **Closed on 2026-09-26:
+  it is deleted rather than kept anywhere (item 4 above).** The measurement
+  stays because it answers the same question for any other pair. The grains
+  differ: per run and per stage against per item, so merging would repeat a
+  span row once per item. **Measured 2026-09-25: two collections in one file
+  save 24 bytes against two separate files.** There is no size argument for
+  merging any pair of these, so if two merge it is a modelling decision and
+  this plan has to make it.
 
 ## What must be true before this becomes a plan
 
