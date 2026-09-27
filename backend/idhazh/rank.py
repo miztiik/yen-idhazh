@@ -228,7 +228,7 @@ def authority(
     below 1.0 and scores below a dependable feed of the same tier. The factor
     only ever reduces, because it is clamped at 1.0, and a feed we have no
     recent evidence on carries 1.0, so an untested feed is never punished. The
-    map is built once per run by `ledger.reliability`; a missing feed reads 1.0.
+    map is built once per run by `telemetry.source_health.reliability`; a missing feed reads 1.0.
     """
     return authority_terms(candidate, config, reliability).total
 

@@ -61,7 +61,7 @@ reader opens only the partitions in range. This is the right shape when the
 question itself has a time bound: *is this source still working*, *how old is
 this address*.
 
-`ledger.shards_in_window` turns the span into a list of stems, so a plan run
+`month_partition.shards_in_window` turns the span into a list of stems, so a plan run
 opens one or two month files instead of every month the project has written.
 
 **The worked example is the one that ships open.** `ledger.load_published`
@@ -238,7 +238,7 @@ reads are here and not how many. These are `backend/`'s;
 | `ledger.load_fitted_thresholds` | day files of `state/content-similarity-judge/fitted-thresholds/` | the caller's `within_days`, and the fit asks for `max(settled_window_days, step_change_window_rows * 2)` - 28 days on the committed knobs. **The cover is in days and the guard's median is in rows, which is why it is twice the row count rather than equal to it.** One missed run leaves 13 rows inside a 14-day cover, the median returns nothing, and a guard that silently never fires is worse than one that fires too readily. A bound set by two knobs, never by what the archive holds |
 | `similarity.applied.applied_line` | the same day files, through `load_fitted_thresholds` | `assemble.same_story.adaptive_dedup_threshold.applied_lookback_days`, committed at 7. It runs on every publish, so the bound is the one that matters most on this page: 8 file opens on the thousandth day and on the third. A gap longer than the lookback means the judge has been down that long, and the committed config floor is the honest answer - so the cover is also the policy |
 | the window refusal count | the same day files, through `load_item_health` | 30 days ending at the run date. **It took no new read.** The question - how many items the two-call sequence would not fit the window - is about the recent tail, and an answer over a longer span is dominated by shapes the pipeline no longer sends. The 30 dates are named by date arithmetic inside `load_item_health`, never by a directory walk, so the cost is 30 file opens whatever the archive holds. Read once on 2026-09-13 and written up in [the throughput page](../architecture/summarize/throughput.md); it is a verb a person types, off the daily path |
-| `ledger.reliability` | the feed-health day files in range | `collect.reliability_window_days` |
+| `telemetry.source_health.reliability` | the feed-health day files in range | `collect.reliability_window_days` |
 | `ledger.load_published` | day files of `state/published/` | `collect.published_window_days`, **committed at `-1`** |
 | `evals.retrieval.load_corpus` | day directories of `frontend/public/digest/` | `assist.eval_corpus_through`, a pinned day rather than a rolling count. The day is read off the path and a later one is never opened, which is the whole saving: the gate was loading 32 days to score 6. A rolling count would be the wrong cover here - the pin holds the competitor set still for a frozen label set, so a cover that moved with the calendar would put the gate back where it was. `None` reads every day and is what the operator surface asks for |
 | `evals.retrieval.load_index_corpus`, pinned | one month shard of `frontend/public/assist/index/` | `assist.eval_corpus_through` again, matched against the shard **stem** before the file is opened, then the rows narrowed to the day. A month shard is coarser than a pin, so the second step is what makes the read exact - and it is cheap only because the first already refused every later shard |

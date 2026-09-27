@@ -221,7 +221,7 @@ than for one of its two surfaces. It serves the front page box and the archive
 alike, so `archive-search-quality` would have claimed half of what it measures.
 
 **The filename follows the one-writer-per-path rule**, not a bare `<DD>.json`.
-That mechanism is `SEGMENT_NAME` in `backend/idhazh/ledger/__init__.py`:
+That mechanism is `SEGMENT_NAME` in `backend/idhazh/ledger/filenames.py`:
 `<run_id>-<attempt>-<job>-<shard>`, where the run id matches the contract's own
 pattern, the attempt is what keeps a GitHub re-run from writing the path its
 first try took, and the shard is two digits. `idhazh.path_classes` is what checks that
@@ -297,7 +297,7 @@ shapes already exist.
 | D1 | `backend/idhazh/contracts/fitted_similarity_threshold.py` | A working autotuned-threshold row: proposed, damped, applied, clamp kind, held reason, asymmetric step caps |
 | D2 | [autotune-content-similarity.md](autotune-content-similarity.md) | Damping, dead zone, step cap, band walls, and a judge that is already a council tenant |
 | D3 | [llm-council.md](llm-council.md) | The venue, three verbs, tenancy protocol, the 6 h arithmetic |
-| D4 | `backend/idhazh/ledger/__init__.py` | `SEGMENT_NAME`, the one-writer-per-path filename; `idhazh.path_classes` checks it |
+| D4 | `backend/idhazh/ledger/filenames.py` | `SEGMENT_NAME`, the one-writer-per-path filename; `idhazh.path_classes` checks it |
 | D5 | `backend/tests/test_retrieval_eval.py` | Noise 95th percentile **0.2716** over **126,843** pairs, 2026-08-26; off-domain probes at 0.235, 0.295, 0.258, 0.194 |
 | D6 | `backend/idhazh/contracts/knobs/assist.py` | Floor 0.35, `recall_min` 0.68, limit 10, months 1, min days 7, and the pin `eval_corpus_through` |
 | D7 | `tests/fixtures/search/retrieval-queries.json` | The 60 questions and 297 judgements, and their six-day span |

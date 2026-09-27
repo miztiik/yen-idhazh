@@ -149,7 +149,7 @@ Three more numbers are not one value, so they are not in the table above.
   story takes the heaviest lens it matched, never the sum. The heaviest today is
   0.3. Four of the live lenses sit at 0.0, so they label a story without moving
   it.
-- **`ledger.reliability`** - worked out every run from the feed's recent record
+- **`telemetry.source_health.reliability`** - worked out every run from the feed's recent record
   rather than set by anybody. It is the only learned number in this project. It
   can only ever reduce a score, because it is capped at 1.0 above and at
   `collect.reliability_floor` below, and a feed we have no recent record for is

@@ -135,7 +135,7 @@ judge's knob block. A check scoped to one directory reads green over both.
 **Three judge CONTRACTS still cross, and the list cannot grow.** Measured by a
 fresh walk on 2026-09-21: `story_similarity_pair` and
 `fitted_similarity_threshold` arrive through
-[../../../backend/idhazh/ledger/__init__.py](../../../backend/idhazh/ledger/__init__.py), the one
+[../../../backend/idhazh/ledger/csv_file.py](../../../backend/idhazh/ledger/csv_file.py), the one
 registry of CSV rows and the module the tenancy protocol reads its row types
 from; `story_similarity_distribution` arrives through the placement knob block
 `app_config` composes, which the registry loads to ask a tenant whether it can
@@ -482,7 +482,7 @@ writer file does: `<date>-<tenant>-<unit>`, the unit two digits wide. Eight unit
 writing eight names cannot land on one path, and a file merged out of eight
 artifacts still says which night, which tenant and which unit produced it. The
 grammar is spelled in the council rather than taken from
-[../../../backend/idhazh/ledger/__init__.py](../../../backend/idhazh/ledger/__init__.py)'s
+[../../../backend/idhazh/ledger/filenames.py](../../../backend/idhazh/ledger/filenames.py)'s
 `segment_name`, which asks for a run attempt the council never reads and a job
 name none of this workflow's jobs is a member of - a name carrying an invented
 cell names nothing.
@@ -533,7 +533,7 @@ the three nights these uploads keep.
 
 The council starts a clock, calls the tenant, and files one row of its own on
 the way out - into
-[../../../backend/idhazh/ledger/__init__.py](../../../backend/idhazh/ledger/__init__.py)'s
+[../../../backend/idhazh/ledger/rows.py](../../../backend/idhazh/ledger/rows.py)'s
 `state/llm-council/shard-outcomes/<YYYY>/<MM>/<DD>.csv`, through the same
 shipping path a tenant's own row travels on. The row says which unit ran, for
 which tenant, under which name, how it ended, how long it took, and what the

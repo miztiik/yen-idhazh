@@ -38,6 +38,7 @@ from idhazh.contracts.source_health_view import (
 from idhazh.contracts.sources import FeedDef, SourceForm
 from idhazh.contracts.taxonomy import SourceKind, SourceTier
 from idhazh.telemetry.publish import source_health
+from idhazh.telemetry.source_health import reliability
 
 DATE = "2026-08-20"
 COLLECT = CollectConfig()
@@ -497,7 +498,7 @@ def test_the_active_census_is_exactly_the_addresses_a_run_would_ask() -> None:
 
 
 def test_the_published_factor_is_the_one_the_ranker_applied(tmp_path) -> None:  # type: ignore[no-untyped-def]
-    """THE ORACLE: the page's factor equals `ledger.reliability`, over one state tree.
+    """THE ORACLE: the page's factor equals `telemetry.source_health.reliability`.
 
     Both cases read the same written ledger through their own loader, which is
     the only way this catches the two divergences that were live while the field
@@ -541,7 +542,7 @@ def test_the_published_factor_is_the_one_the_ranker_applied(tmp_path) -> None:  
         state_root=state,
         path=tmp_path / "public" / source_health.PUBLIC_FILENAME,
     )
-    ranked = ledger.reliability(
+    ranked = reliability(
         state,
         today=DATE,
         within_days=collect.reliability_window_days,

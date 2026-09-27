@@ -1,13 +1,14 @@
-"""Which addresses a run may ask, decided from committed events and nothing else.
+"""What the committed health record says about a source, decided from events alone.
 
-Four different facts get four different answers here, and keeping them apart is
+Five different facts get five different answers here, and keeping them apart is
 the whole design. **Permission** is what a site's own `robots.txt` said.
 **Rest** is a circuit breaker that lifts itself. **Retirement** is the one
 permanent answer, and only a server reporting `410 Gone` on five distinct runs
-earns it. **Eligibility** is what the feed floor counts. A single credibility
-score across the four was refused: they have different units and different
-remedies, and one number cannot say which of them fired
-(`docs/architecture/sources/health.md`).
+earns it. **Eligibility** is what the feed floor counts. **Reliability** is how
+often the feed's reads carried entries, which discounts a story's score rather
+than stopping a request. A single credibility score across the five was refused:
+they have different units and different remedies, and one number cannot say
+which of them fired (`docs/architecture/sources/health.md`).
 
 Everything here is a fold over rows an earlier run committed. Nothing opens a
 socket, nothing reads a clock and nothing edits `config/sources.json` - a run
@@ -31,6 +32,7 @@ from __future__ import annotations
 
 from collections.abc import Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Final
 
 from idhazh.contracts.feed_health import FeedHealthRow, RobotsOutcome, derive_endpoint_key
@@ -38,6 +40,7 @@ from idhazh.contracts.feed_retirement import FeedRetirementRow, RetirementCause
 from idhazh.contracts.source_health_view import SourceHealthView
 from idhazh.contracts.sources import FeedDef
 from idhazh.discover import live, settled
+from idhazh.ledger import load_health
 
 #: The one status that says an address is not coming back. A 403, a 404, a
 #: paywall, a transient failure and an empty feed all say something about today.
@@ -264,3 +267,38 @@ def eligible(
             continue
         kept.append(feed)
     return kept
+
+
+def feed_reliability(rows: Iterable[FeedHealthRow], *, floor: float) -> float:
+    """How often one feed's reads carried entries, over the rows given.
+
+    Evidence-bearing is every read that did not preserve the streak, so a rest
+    and a robots answer are set aside - neither asked the feed whether it works.
+    Everything else counts: a read that came back with entries, a read that
+    parsed to nothing, and an address we could not reach. Productive is the read
+    that came back with entries. The reliability is productive over
+    evidence-bearing, clamped so it never rises above 1.0 and never falls below
+    `floor`. A feed with no evidence-bearing read in the window scores 1.0 -
+    unknown is not the same as bad, and a rested or politely-refused feed is not
+    penalised for being asked to wait.
+    """
+    evidence = [row for row in rows if not row.preserves]
+    if not evidence:
+        return 1.0
+    productive = sum(1 for row in evidence if row.answered)
+    return max(floor, min(1.0, productive / len(evidence)))
+
+
+def reliability(state_dir: Path, *, today: str, within_days: int, floor: float) -> dict[str, float]:
+    """Each feed's reliability over the trailing window, keyed by feed id.
+
+    Reads the same health shards `load_health` reads, groups them by feed, and
+    reduces each feed's rows through `feed_reliability`. The read is bounded by
+    `within_days` (Guardrail #12): it is the feeds' recent record, never the whole
+    ledger. A feed absent from the map had no evidence-bearing read in the
+    window, so a caller reads a miss as 1.0.
+    """
+    grouped: dict[str, list[FeedHealthRow]] = {}
+    for row in load_health(state_dir, today=today, within_days=within_days):
+        grouped.setdefault(row.feed_id, []).append(row)
+    return {feed_id: feed_reliability(rows, floor=floor) for feed_id, rows in grouped.items()}

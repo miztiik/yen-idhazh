@@ -256,7 +256,7 @@ def test_a_window_names_both_of_its_ends(tmp_path: Path) -> None:
 
     Stated because moving this out of `ledger` made it a named public rule, and
     an off-by-one in a cover is a day the reader silently stops opening.
-    `ledger.shards_in_window` counts the same way at month grain.
+    `month_partition.shards_in_window` counts the same way at month grain.
     """
     days = day_partition.days_in_window("2026-03-02", 3)
 
