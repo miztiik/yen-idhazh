@@ -266,6 +266,66 @@
           "suffix": ".csv"
         }
       ]
+    },
+    {
+      "name": "traces",
+      "lifecycle_status": "active",
+      "description": "Raw step timings of recent runs, kept a short while so an operator can open one.",
+      "onboarded": "2026-09-15",
+      "ledgers": [
+        {
+          "name": "traces",
+          "grain": "tree",
+          "prefix": ["traces"],
+          "stem": null,
+          "suffix": null
+        }
+      ]
+    },
+    {
+      "name": "day-metrics",
+      "lifecycle_status": "active",
+      "description": "One record per published day of what its runs measured, read back by the operator console.",
+      "onboarded": "2026-09-07",
+      "ledgers": [
+        {
+          "name": "day-metrics",
+          "grain": "day",
+          "prefix": ["day-metrics"],
+          "stem": null,
+          "suffix": ".json"
+        }
+      ]
+    },
+    {
+      "name": "digest-fragments",
+      "lifecycle_status": "active",
+      "description": "Each run's own block of a published day, from which the day is assembled.",
+      "onboarded": "2026-09-23",
+      "ledgers": [
+        {
+          "name": "digest-fragments",
+          "grain": "tree",
+          "prefix": ["digest-fragments"],
+          "stem": null,
+          "suffix": null
+        }
+      ]
+    },
+    {
+      "name": "score-archive",
+      "lifecycle_status": "active",
+      "description": "Monthly summaries of old scores, kept after that month's day files are deleted.",
+      "onboarded": "2026-09-27",
+      "ledgers": [
+        {
+          "name": "score-archive",
+          "grain": "month",
+          "prefix": ["score-archive"],
+          "stem": null,
+          "suffix": ".json"
+        }
+      ]
     }
   ]
 }

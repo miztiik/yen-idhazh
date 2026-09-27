@@ -6,11 +6,12 @@ names through `from idhazh import telemetry`, so the question worth a test is
 narrow: is every name a caller outside the package still reaches reachable, and
 is it the same object rather than a copy?
 
-Seven of the original 37 are gone, and that is the other half of the question.
+Eight of the original 37 are gone, and that is the other half of the question.
 Four of them nobody outside the package ever reached, so the split cut them. One
 is `record`, which a submodule of the same name now takes. Two went with the
-hosted span sink on 2026-09-22 and are deleted rather than cut. This file is
-where all three kinds are recorded.
+hosted span sink on 2026-09-22 and are deleted rather than cut. One went when the
+ledger registry took over the trace tree's address on 2026-09-27. This file is
+where all four kinds are recorded.
 
 **What this cannot settle: whether the seam is in the right place.** It would
 pass just as green with all 31 names left in one file, and it would pass with
@@ -121,6 +122,12 @@ CUT_AS_UNREACHED_ALIASES: Final[frozenset[str]] = frozenset(
 #: runtime call to a third party, `docs/concepts/telemetry.md`).
 DELETED_WITH_THE_HOSTED_SINK: Final[frozenset[str]] = frozenset({"langfuse_sink", "refuse_text"})
 
+#: The trace tree's directory name, deleted when `config/ledgers.json` took the
+#: tree's address. A second spelling of where a ledger lives is the thing the
+#: registry exists to remove, so this one is gone from the module as well as from
+#: the package: `ledger.tree_root(state, LedgerName.TRACES)` is the one answer.
+DELETED_FOR_THE_REGISTRY: Final[frozenset[str]] = frozenset({"TRACES_DIRNAME"})
+
 #: Names added since the split, each with the row that added it and the caller
 #: that needs it. A public name is a promise, so one arrives here deliberately
 #: rather than by being noticed failing this test.
@@ -132,13 +139,14 @@ DELETED_WITH_THE_HOSTED_SINK: Final[frozenset[str]] = frozenset({"langfuse_sink"
 ADDED_AFTER_THE_SPLIT: Final[frozenset[str]] = frozenset({"census_row"})
 
 #: What the package re-exports today: the pre-split surface, less the four the
-#: split cut as unreached, the one a submodule took and the two the hosted sink
-#: took, plus what later rows added.
+#: split cut as unreached, the one a submodule took, the two the hosted sink took
+#: and the one the registry took, plus what later rows added.
 RE_EXPORTED: Final[frozenset[str]] = (
     BEFORE_THE_SPLIT
     - CUT_AS_UNREACHED_ALIASES
     - TAKEN_BY_A_MODULE
     - DELETED_WITH_THE_HOSTED_SINK
+    - DELETED_FOR_THE_REGISTRY
     | ADDED_AFTER_THE_SPLIT
 )
 
@@ -206,6 +214,19 @@ def test_the_hosted_sink_left_nothing_of_itself_behind() -> None:
             assert not hasattr(module, name), f"{module.__name__}.{name} is back"
     source = Path(sinks.__file__).read_text(encoding="utf-8")
     assert "langfuse" not in source.lower(), "the hosted sink is back in sinks.py"
+
+
+def test_the_trace_tree_has_one_address_and_it_is_the_registrys() -> None:
+    """The directory name the trace module carried is gone from it, not just un-exported.
+
+    A constant left in `traces.py` would be a second spelling of where the tree
+    lives, and the next reader would have no way to tell which one the prune
+    walks.
+    """
+    for name in sorted(DELETED_FOR_THE_REGISTRY):
+        assert not hasattr(telemetry, name), f"telemetry.{name} is back"
+        for module in MODULES:
+            assert not hasattr(module, name), f"{module.__name__}.{name} is back"
 
 
 def test_the_flat_module_left_no_shim_behind() -> None:

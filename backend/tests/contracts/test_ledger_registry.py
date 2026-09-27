@@ -21,10 +21,13 @@ from typing import Any, Final
 import pytest
 from pydantic import ValidationError
 
-from idhazh import ledger
+from idhazh import assemble, ledger, telemetry
+from idhazh.contracts.base import ServerJob
 from idhazh.contracts.ledger_name import DAY_TREES, LedgerName
 from idhazh.contracts.ledgers import Grain, LedgersConfig, LifecycleStatus
+from idhazh.evals import archive as score_archive
 from idhazh.ledger import paths
+from idhazh.telemetry.publish import day_metrics
 
 pytestmark = pytest.mark.contract
 
@@ -141,6 +144,42 @@ AT_THE_BASE: Final[dict[str, tuple[str | None, str | None, str | None]]] = {
         "state/llm-council/shard-outcomes/2026/09/18.csv",
         "state/llm-council/shard-outcomes",
     ),
+    # The four below were never in the old ledger module. Each row is what its
+    # owning module built before the registry took its address: the trace day
+    # directory and the trace root from `telemetry.traces` and `retention`, the
+    # record and its root from `day_metrics`, the day's blocks and their root from
+    # `assemble` and `retention`, and the month summary from `evals.archive`.
+    "TRACES": (
+        "state/traces/2026/09/18",
+        "state/traces/2026/09/18",
+        "state/traces",
+    ),
+    "DAY_METRICS": (
+        "state/day-metrics/2026/09/18.json",
+        "state/day-metrics/2026/09/18.json",
+        "state/day-metrics",
+    ),
+    "DIGEST_FRAGMENTS": (
+        "state/digest-fragments/2026/09/18",
+        "state/digest-fragments/2026/09/18",
+        "state/digest-fragments",
+    ),
+    "SCORE_ARCHIVE": (
+        "state/score-archive/2026-09.json",
+        "state/score-archive/2026-09.json",
+        None,
+    ),
+}
+
+#: What each of those four owners built for one fixed writer on `A_DAY`, file
+#: name included, read by calling the owner's own function before it was pointed
+#: at the registry.
+A_RUN: Final = "2026-09-18-35786586868"
+OWNER_BUILT_AT_THE_BASE: Final[dict[str, str]] = {
+    "trace": "state/traces/2026/09/18/2026-09-18-1-1-work-00.jsonl",
+    "day record": "state/day-metrics/2026/09/18.json",
+    "run block": f"state/digest-fragments/2026/09/18/{A_RUN}.json",
+    "month summary": "state/score-archive/2026-09.json",
 }
 
 #: Which directories `prune-state` protected before the registry claimed them,
@@ -384,49 +423,49 @@ def test_the_claimed_roots_differ_from_the_base_only_by_the_names_given() -> Non
 
     A claim is a family name now, so every folder claimed before is still
     claimed under the name it has today. One addition is a file's stem, which
-    the sweep never meets because it only looks at directories. The other two
-    are the renamed empty ledgers, which leave their old names behind.
+    the sweep never meets because it only looks at directories. Two are the
+    renamed empty ledgers, which leave their old names behind. The last four
+    are the folders other modules used to own, protected before by a list typed
+    into the sweep itself and now by the registry.
     """
     assert ledger.claimed_roots() - CLAIMED_AT_THE_BASE == {
         "feed-retirements",
         "candidate-models",
         "item-health-summary",
+        "traces",
+        "day-metrics",
+        "digest-fragments",
+        "score-archive",
     }
     assert CLAIMED_AT_THE_BASE - ledger.claimed_roots() == {"validation", "telemetry-aggregate"}
 
 
-def test_every_directory_under_state_is_claimed_or_owned_elsewhere() -> None:
-    """The census behind the parity check, driven from a fixed list rather than a walk.
+def test_the_four_owners_build_the_paths_they_built_before() -> None:
+    """Each owner now composes its address from the registry, and lands on the same bytes.
 
-    Every child of `state/` in the checkout today, and who answers for it. Four
-    are ledgers other modules own and one is a trial root; everything else is the
-    registry's. A directory in neither set is a directory the trial sweep would
-    empty, which is the failure this row removes. The list is fixed, so this
-    costs the same whatever the archive holds (Guardrail #12).
+    The parity table above holds each ledger's directory. This holds the whole
+    file name as well, because two of the four mint a name inside that
+    directory and the name is where a writer and a reader would part company.
     """
-    elsewhere = {"traces", "day-metrics", "digest-fragments", "score-archive"}
-    trial = {"pipeline-tests"}
-    on_disk = {
-        "content-similarity-judge",
-        "counterfactual-scores",
-        "day-metrics",
-        "digest-fragments",
-        "feed-health",
-        "host-fingerprint",
-        "item-health",
-        "llm-council",
-        "pipeline-tests",
-        "published",
-        "score-index",
-        "scores",
-        "seen",
-        "span-rollup",
-        "traces",
-        "visual-prunes",
+    built = {
+        "trace": telemetry.committed_trace_path(
+            STATE, run_id="2026-09-18-1", attempt=1, job=ServerJob.WORK, shard=0
+        ),
+        "day record": day_metrics.day_metrics_path(STATE, A_DAY),
+        "run block": assemble.fragment_path(STATE, date=A_DAY, run_id=A_RUN),
+        "month summary": score_archive.archive_path(STATE, A_MONTH),
+    }
+    spelled = {
+        "trace": telemetry.committed_trace_relpath(
+            run_id="2026-09-18-1", attempt=1, job=ServerJob.WORK, shard=0
+        ),
+        "day record": day_metrics.day_metrics_relpath(A_DAY),
+        "month summary": score_archive.archive_relpath(A_MONTH),
     }
 
-    assert ledger.claimed_roots() & elsewhere == set()
-    assert on_disk - ledger.claimed_roots() - elsewhere == trial
+    assert {what: where.as_posix() for what, where in built.items()} == OWNER_BUILT_AT_THE_BASE
+    for what, relpath in spelled.items():
+        assert relpath == OWNER_BUILT_AT_THE_BASE[what]
 
 
 def test_every_entry_carries_the_fields_its_grain_needs() -> None:
@@ -438,10 +477,19 @@ def test_every_entry_carries_the_fields_its_grain_needs() -> None:
 
 
 def test_every_day_tree_files_as_a_day_directory() -> None:
-    """The segment writers and the registry agree on which ledgers hold day directories."""
-    assert {member for member in LedgerName if paths.entry(member).grain is Grain.DAY_TREE} == set(
-        DAY_TREES
-    )
+    """Every settled day tree is a day directory, and the two that are not settled are named.
+
+    A trace is JSON lines and a run's block of a day is one JSON file, so
+    neither has rows for a settlement key to repeat: both are day directories a
+    writer files into, and neither is a settled day tree. A third day directory
+    fails here until somebody decides which it is.
+    """
+    day_directories = {
+        member for member in LedgerName if paths.entry(member).grain is Grain.DAY_TREE
+    }
+
+    assert day_directories - set(DAY_TREES) == {LedgerName.TRACES, LedgerName.DIGEST_FRAGMENTS}
+    assert set(DAY_TREES) <= day_directories
 
 
 def test_every_family_is_active_until_the_write_path_reads_the_status() -> None:

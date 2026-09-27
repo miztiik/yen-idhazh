@@ -112,8 +112,8 @@ def _ledger(state_dir: Path) -> list[dict[str, str]]:
             raise SystemExit(
                 f"every month of {(state_dir / SCORES_RELDIR).as_posix()} has aged out of "
                 f"the full-grain window - {', '.join(summarised)} exist only as summaries "
-                f"under {archive.ARCHIVE_RELDIR}/, and a summary holds no row to label. "
-                f"{archive.RAW_WINDOW_NOTE}"
+                f"at {archive.archive_relpath('<YYYY-MM>')}, and a summary holds no row to "
+                f"label. {archive.RAW_WINDOW_NOTE}"
             )
         raise SystemExit(f"no eval ledger under {(state_dir / SCORES_RELDIR).as_posix()}")
     return rows

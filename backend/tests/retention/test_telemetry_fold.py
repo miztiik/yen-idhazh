@@ -301,7 +301,7 @@ def test_the_month_readers_all_agree_on_what_a_month_is(tmp_path: Path) -> None:
             lambda: month_shards(state / LedgerName.ITEM_HEALTH_SUMMARY),
         ),
         "evals.archive.archive_files": (
-            state / score_archive.ARCHIVE_DIRNAME,
+            state / LedgerName.SCORE_ARCHIVE,
             ".json",
             lambda: score_archive.archive_files(state),
         ),

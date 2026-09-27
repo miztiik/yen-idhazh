@@ -208,10 +208,16 @@ def test_every_declared_ledger_is_subtracted_from_the_trial_roots(tmp_path: Path
     files would then be aged out against a window that is not its own. The
     registry refuses a missing entry at load, so this drives the other half: the
     claim really does reach the sweep.
+
+    The four folders other modules used to own are made by their own names too,
+    because the sweep used to protect them from a list of its own. Each one has
+    to be kept now for no reason but its registry entry.
     """
     state = tmp_path / "state"
     for name in sorted(ledger.claimed_roots()):
         (state / name).mkdir(parents=True)
+    for owned_elsewhere in ("traces", "day-metrics", "digest-fragments", "score-archive"):
+        (state / owned_elsewhere).mkdir(parents=True, exist_ok=True)
     (state / TRIAL).mkdir()
 
     assert _trial_roots(state) == [TRIAL]

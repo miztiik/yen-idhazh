@@ -150,7 +150,7 @@ from datetime import date, timedelta
 from pathlib import Path
 from typing import Final, NamedTuple, NoReturn
 
-from idhazh import assemble, day_partition, day_shards, ledger, month_partition, telemetry
+from idhazh import day_partition, day_shards, ledger, month_partition, telemetry
 from idhazh.contracts.base import ITEM_ID_PATTERN
 from idhazh.contracts.item_health import ItemHealthRow, ItemOutcome, ItemStage
 from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
@@ -694,7 +694,7 @@ def prune_digest_fragments(
     never opened - the cost follows the backlog this pass has to clear and
     shrinks as it clears it.
     """
-    root = state_dir / assemble.FRAGMENTS_DIRNAME
+    root = ledger.tree_root(state_dir, LedgerName.DIGEST_FRAGMENTS)
     limit = cutoff(today, config.image_months)
     if limit is None or not root.is_dir():
         return FragmentPruneResult((), 0, dry_run or config.dry_run)
@@ -1502,7 +1502,7 @@ def prune_traces(
     name what a live run would remove (section 2); `kept` is a count, because a
     full window is many files and naming them all is noise.
     """
-    root = state_dir / telemetry.TRACES_DIRNAME
+    root = ledger.tree_root(state_dir, LedgerName.TRACES)
     if not root.is_dir():
         return TracePruneResult((), 0, 0, dry_run)
 
