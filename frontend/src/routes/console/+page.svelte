@@ -61,6 +61,7 @@
 	import KpiCard from '$lib/components/KpiCard.svelte';
 	import Panel from '$lib/components/Panel.svelte';
 	import PanelGroup from '$lib/components/PanelGroup.svelte';
+	import RunYield from '$lib/components/RunYield.svelte';
 	import TargetBar from '$lib/components/TargetBar.svelte';
 	import { shortDate } from '$lib/format';
 	import { movementVerdict } from '$lib/charts/theme';
@@ -81,7 +82,6 @@
 		failureMixColumns,
 		publishedSkyline,
 		publishingHorizon,
-		runHealth,
 		siteCost,
 		sizeGain,
 		timeSplitChart,
@@ -695,11 +695,6 @@
 	/** The server drew stacked, like the mix chart. Picking `Lines` redraws the
 	 * identical values. */
 	let timeShape = $state<StackShape>('bars');
-	/** The share of planned items that finished, drawn from the manifests the
-	 * page already carries. Built here rather than on the server: the shape is
-	 * the engine's and the numbers are two, so drawing it at build time put a
-	 * finished picture in the document to say what one sentence says. */
-	const runsChart = $derived(runHealth(data.manifests));
 	/** Where items go between the planner reaching one and a visual publishing.
 	 * One call, so the diagram and the stepped list beside it cannot report two
 	 * different flows. */
@@ -858,25 +853,29 @@
 		     the 1 GB cap and the runway, and it states them on all three routes;
 		     one page may not state one figure twice. What is left below is the
 		     windowed per-article cost, which is the rate under that runway. -->
-		{#if !runsChart.empty}
-			<figure class="panel" data-glance-chart="runs">
-				<figcaption class="text-[0.75rem] text-text-tertiary">Runs that finished</figcaption>
-				<Chart
-					svg=""
-					option={runsChart.option}
-					width={260}
-					height={200}
-					label="Share of planned items that finished, against those that failed"
-					noReadout="two shares of one total, and each share carries its own label"
-					pending="{runsChart.share === null
-						? 'No run is on record.'
-						: `${Math.round(runsChart.share * 100)}% of ${grouped(runsChart.total)} planned items finished.`} The shape is drawn once the engine loads."
-				/>
-			</figure>
-		{/if}
 		<!-- No minutes card here. `Visuals drawn for articles` prints the
 		     same window median against the same target, with the coverage half of
 		     the rule beside it, and one page may not state one figure twice. -->
+	</div>
+	<!-- Full width and below the cards, because thirty days of three counts and a
+	     line will not fit a 17rem cell: the day ticks collide and the three bars
+	     of a day fall under a pixel each. It replaced a two-slice donut over the
+	     whole manifest set, which gave one number for the window and could not
+	     say which day lost the items. -->
+	<div class="panel run-yield-panel mt-4" data-glance-chart="run-yield">
+		<h3 class="run-yield-title">Items published against items planned</h3>
+		<p class="run-yield-note">
+			The three counts are not parts of one total, so published plus failed will not equal planned.
+			The line is the published share of planned, on the right axis.
+		</p>
+		<RunYield
+			days={data.runYieldDays}
+			window={viewport}
+			height={data.console.chart_height}
+			width={data.console.chart_width}
+			tickDensity={data.chart.tick_density}
+			readoutMaxShare={data.chart.readout_max_share}
+		/>
 	</div>
 	{/snippet}
 
@@ -1962,6 +1961,26 @@ border-radius: 2px;
 background: var(--color-surface-sunken);
 box-shadow: 0 0 0 2px var(--color-surface-sunken);
 border-radius: 2px;
+}
+
+/* The one full-width figure in the glance section. `.panel` carries tint,
+   radius and elevation and no padding, because most of its users are cells in a
+   grid that already has gaps; a block spanning the frame has to set its own. */
+.run-yield-panel {
+padding: var(--space-5);
+}
+
+.run-yield-title {
+font-size: var(--text-base);
+line-height: var(--leading-base);
+font-weight: 600;
+color: var(--color-text);
+}
+
+.run-yield-note {
+margin-block-start: var(--space-1);
+font-size: var(--text-sm);
+color: var(--color-text-tertiary);
 }
 
 @media (max-width: 48rem) {

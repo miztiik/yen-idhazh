@@ -14,7 +14,6 @@
 import type { EChartsOption } from 'echarts';
 import type { RunSummary } from '$lib/server/payload';
 import { dayMonth } from '../format';
-import { donut } from './donut';
 import type { DayReadout } from './frame';
 import { sparklineMarks, type SparklineMarks } from './sparkline';
 import { stacked, type StackShape } from './stacked';
@@ -54,24 +53,6 @@ function middleOf(values: readonly number[]): number | null {
 	const sorted = [...values].sort((a, b) => a - b);
 	const middle = Math.floor(sorted.length / 2);
 	return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
-}
-
-/** Were the runs clean?
- *
- * Planned against failed across the window. A count of failures on its own does
- * not say whether that is most of the work or a rounding error, which is the
- * only thing the question is asking.
- */
-export function runHealth(manifests: readonly RunSummary[]) {
-	const planned = manifests.reduce((sum, m) => sum + m.planned, 0);
-	const failed = manifests.reduce((sum, m) => sum + m.failed, 0);
-	return donut(
-		[
-			{ label: 'finished', value: Math.max(0, planned - failed), token: '--band-high' },
-			{ label: 'failed', value: failed, token: '--band-low' }
-		],
-		'finished'
-	);
 }
 
 /** What share of a day's published items carried a chart, in percent.

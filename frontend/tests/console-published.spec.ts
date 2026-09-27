@@ -386,8 +386,21 @@ test('THE ORACLE: the cost panel says what it is for, and its chart fills its fr
 
 	// The chart tracks its container rather than the 760 it was once given. Read
 	// at three widths, because a hardcoded number matches one of them by luck.
+	//
+	// Go to the panel first, at every width. The engine draws a chart once it is
+	// within a screen of the viewport, so a panel further down has no plot until
+	// a reader arrives - and this one is two screens down at 1440 and three at
+	// 390. Reading it from the top of the page never tested the rule it looks
+	// like it tests: measured 2026-09-27 at 1440x1000, the plot sat 19px inside
+	// that reach here and outside it on a Linux runner, where the fonts are not
+	// the same. Waiting for the plot rather than for a clock is also the stricter
+	// read - a sleep passes a chart that was never drawn at all.
 	for (const width of [1440, 768, 390]) {
 		await page.setViewportSize({ width, height: 1000 });
+		await panel.evaluate((node) => node.scrollIntoView({ behavior: 'instant', block: 'center' }));
+		await expect(panel.locator('svg'), `${width}: the cost chart is not drawn`).toHaveCount(1);
+		// The frame settles on the next paint: the chart reads its own width back
+		// and redraws at it. This is that settle, not a wait for the engine.
 		await page.waitForTimeout(500);
 		const drawnAt = await panel.evaluate((node) => {
 			const svg = node.querySelector('svg');
