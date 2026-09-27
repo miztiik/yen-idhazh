@@ -1,6 +1,6 @@
 # Agent Notes - Git and GitHub
 
-**Last Updated**: 2026-09-24
+**Last Updated**: 2026-09-27
 
 Traps in `git`, worktrees, merges and the `gh` CLI. Index and scope:
 [../agent-notes.md](../agent-notes.md).
@@ -35,11 +35,13 @@ Remove-Item -LiteralPath <path> -Recurse -Force; git worktree prune; git branch 
 
 Check `Test-Path <path>\.git` afterwards; progress lines reaching 100 percent do not mean the `.git` file was written.
 
-**`git worktree remove` can deregister a worktree and still fail to delete it.** On Windows it stops at the first locked path and reports `failed to delete...: Invalid argument` with the administrative entry already gone. Read the exit as "partly done", find the holder, then re-run the filesystem delete - not `git worktree remove`, which has nothing left to deregister.
+**`git worktree remove` can deregister a worktree and still fail to delete it.** On Windows it stops at the first locked path and reports `failed to delete...: Invalid argument` or `Permission denied` with the administrative entry already gone. Read the exit as "partly done", find the holder, then re-run the filesystem delete - not `git worktree remove`, which has nothing left to deregister.
 
 ```powershell
 Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*<worktree>*' }
 ```
+
+**The holder can be your own shell, and that search cannot find it.** A shell whose current directory is inside the tree holds the directory itself open, and its command line does not name the path, so the search above returns nothing. `Set-Location` out of the tree before removing it.
 
 **Nothing removes a finished worktree on its own, and `git worktree prune` is not that thing** - it only clears the entry for a directory that has already gone. One sweep found 38 abandoned sibling directories holding 156,482 files, every one a row whose pull request had merged days earlier, because the closing step is the one a worker killed mid-row never reaches. Sweep them, and read the report before removing, because a sibling creates a worktree between any two commands:
 
