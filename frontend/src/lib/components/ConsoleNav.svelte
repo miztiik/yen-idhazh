@@ -213,10 +213,10 @@
 			border-block-end: 0;
 		}
 
-		/* One row at every count of tabs. A tab keeps the width its label and its
-		   worst state need and shares whatever the row has left, and when the row
-		   has nothing left the list scrolls rather than wrapping or shortening a
-		   label. */
+		/* One row at every count of tabs. A tab keeps the width the longer of its
+		   label and its worst state needs and shares whatever the row has left, and
+		   when the row has nothing left the list scrolls rather than wrapping or
+		   shortening a label. */
 		.tabs {
 			flex-wrap: nowrap;
 			overflow-x: auto;
@@ -227,6 +227,22 @@
 		.tab-slot {
 			flex: 1 1 0;
 			min-inline-size: max-content;
+		}
+
+		/* The worst state stands on its own line under the label, never broken
+		   inside the phrase, so a tab is as wide as the longer line rather than as
+		   both side by side. Measured 2026-09-27 off the built page: side by side,
+		   the landing route showed four of five tabs whole at every width from
+		   1366 to 1920; stacked, all five from 1366. What it costs is one line of
+		   every tab's height. */
+		.tab-head {
+			flex-direction: column;
+			align-items: flex-start;
+			gap: 0;
+		}
+
+		.tab-state {
+			white-space: nowrap;
 		}
 
 		/* The description takes the width its tab already has and never widens

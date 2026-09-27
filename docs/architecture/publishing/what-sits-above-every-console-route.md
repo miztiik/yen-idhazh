@@ -37,32 +37,57 @@ must agree, because the strip a reader sees is whichever one answered.
 **The strip has to fit, and the basis is what moved to make it.** `.tab-slot` at
 `flex: 1 1 14rem` - 224px at a 16px root - puts one tab on a row of a 360px
 phone, so five tabs stand five deep directly above the band. It is `8rem` now,
-128px, so two fit the 288px content box of a 320px phone and five fit one row of
-a desktop. The per-tab description is hidden by default and shown from `1024px`,
-the breakpoint three other components already use.
+128px, so two fit the 288px content box of a 320px phone. From `1024px`, the
+breakpoint three other components already use, the tabs are one row: each is as
+wide as the longer of its label and its worst state, and the per-tab description
+is shown under both.
 
-Measured 2026-09-12 off the built page in headless Chromium, `window.innerWidth`
-read inside the page beside every figure:
+Measured 2026-09-27 off the real built page in headless Chromium, 900px tall,
+with `window.innerWidth` read inside the page and equal to the asked width at
+every row. The strip is the tabs and the days control together, at the top of
+the page; the Pipelines control is taller on a phone because its tiles carry
+prices:
 
-| Width | Rows | Tab | Strip | Description |
-| ---: | ---: | ---: | ---: | --- |
-| 320 | 3 | 140px | 215px | hidden |
-| 360 | 3 | 160px | 199px | hidden |
-| 414 | 3 | 186px | 199px | hidden |
-| 480 | 2 | 142px | 162px | hidden |
-| 640 | 2 | 141px | 138px | hidden |
-| 768 | 1 | 135px | 86px | hidden |
-| 900 | 1 | 161px | 86px | hidden |
-| 1024 | 1 | 186px | 136px | shown |
-| 1440 | 1 | 269px | 80px | shown |
+| Width | Tab rows | First tab | Strip, Pipelines | Strip, Hardware | Description |
+| ---: | ---: | ---: | ---: | ---: | --- |
+| 320 | 3 | 140px | 396px | 339px | hidden |
+| 360 | 3 | 160px | 348px | 267px | hidden |
+| 390 | 3 | 175px | 348px | 267px | hidden |
+| 414 | 3 | 186px | 348px | 267px | hidden |
+| 480 | 2 | 142px | 267px | 238px | hidden |
+| 640 | 2 | 141px | 211px | 206px | hidden |
+| 768 | 1 | 135px | 158px | 154px | hidden |
+| 900 | 1 | 161px | 158px | 154px | hidden |
+| 1024 | 1 | 148px | 152px | 152px | shown |
+| 1280 | 1 | 148px | 152px | 120px | shown |
+| 1440 | 1 | 157px | 120px | 120px | shown |
 
-**Two numbers were taken from that sweep rather than from the rule.** `9rem`
-clears 360px and still stacks five deep at 320px, which is the same defect one
-screen narrower, so the basis went to `8rem`. And the description at the narrower
-`48rem` breakpoint made the strip 168px at 800px against 86px at 768px - so
-widening the window made the chrome taller, which is a discontinuity a reader
-notices and cannot explain. At 1024px each tab is 186px and the line costs 50px
-once, then falls back as the tabs widen.
+Stuck, the strip is 70px on both routes at every width measured from 1024 to
+1920.
+
+**What moving the days control onto the strip cost a phone, and what it gave
+back.** Before, the control stood under the band. Measured the same way off the
+build this change started from; `Panels start` is where the last line above the
+first panel ends:
+
+| Width | Band starts, before | Band starts, Pipelines | Band starts, Hardware | Panels start, before | Panels start, Pipelines | Panels start, Hardware |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 390 | 383px | 575px | 493px | 912px | 923px | 923px |
+| 768 | 279px | 364px | 359px | 647px | 616px | 669px |
+| 1440 | 282px | 330px | 330px | 515px | 487px | 520px |
+
+So on a phone the band starts 192px lower on Pipelines and 110px lower on
+Hardware, while the first panel starts 11px lower on both: the band moved, and
+what sits under it barely did. Hardware's panels include its new `On this page`
+row.
+
+**Two numbers were taken from the first sweep, on 2026-09-12, rather than from
+the rule.** `9rem` cleared 360px and still stacked five deep at 320px, which is
+the same defect one screen narrower, so the basis went to `8rem`. And the
+description at the narrower `48rem` breakpoint made the strip 168px at 800px
+against 86px at 768px - so widening the window made the chrome taller, which is a
+discontinuity a reader notices and cannot explain. That is still why the
+description waits for `1024px`.
 
 The description is not lost below the breakpoint: it is still the anchor's
 `title` and the page it opens prints it in full, so what a hidden line costs is
@@ -94,14 +119,14 @@ the screen**, so the span and the other routes stay in reach. Below that width i
 scrolls away with the title, because there the tabs stand on up to three rows and
 a stuck strip that tall would cover a phone.
 
-**Where it sticks it is one row, at any count of tabs.** Each tab keeps the width
-its label and its worst state need and shares whatever the row has left; when the
-row runs out, the tab list scrolls sideways inside the strip and the days control
-stays pinned at the trailing end. The strip never wraps to a second row and no
-label is shortened. Adding a route is an entry in the route list in
+**Where it sticks it is one row, at any count of tabs.** Each tab stands its
+worst state on a line under its label, keeps the width the longer of the two
+needs, and shares whatever the row has left; when the row runs out, the tab list
+scrolls sideways inside the strip and the days control stays pinned at the
+trailing end. The strip never wraps to a second row and no label is shortened. Adding a route is an entry in the route list in
 [band.ts](../../../frontend/src/lib/console/band.ts) and a page, never a layout
 change, and `console-shell.spec.ts` holds the row with one tab more than the
-console has.
+console has, and again with as many more as it takes to make the list scroll.
 
 **The days control is on the strip at every width.** It is one number per
 `console.window_presets` value, with the months that preset would fetch under
@@ -352,6 +377,18 @@ print the same words twice in one row and take about 200px from the tabs, and
 hiding the other routes' fragments while stuck to make room would shorten the
 labels the one-row rule protects. **What it costs:** when the tab list scrolls,
 the worst tab can be scrolled out of view - the list opens with it in view.
+
+**A tab's worst state stands under its label from the breakpoint up.** Side by
+side, a tab is as wide as both together, and on Pipelines - whose days control is
+the widest, because its tiles carry prices - four of five tabs were whole at
+every width from 1366 to 1920, the fifth 5px short at the widest. Stacked, a tab
+is as wide as its longer line: all five are whole from 1366 on Pipelines and from
+1280 on Hardware, and three and four of them at 1024. Taking the prices off the
+tiles while stuck was rejected: it hides what a choice downloads at the moment a
+reader deep in a route makes it, which is why a dropdown was refused, and the
+tabs would slide sideways as the strip sticks. **What it costs:** one line of
+every tab's height - the stuck strip is 70px where one line made it 46 to 50px -
+and below 1366 on Pipelines one or two tabs still need a sideways scroll.
 
 **`Complete to`, and never `today`.** The console's subject is the pipeline's own
 record, and the last run finished writing it at that instant, so `complete` is a

@@ -557,7 +557,7 @@ Ruled by Susan on 2026-09-24. The complaint: the Hardware route is fifteen panel
 
 - **Files touched:**
   - `frontend/src/routes/console/+layout.svelte` (the strip, sticky from the breakpoint; the span control on it; the completeness sentence; the days sentence under the band; the `On this page` row)
-  - `frontend/src/lib/components/ConsoleNav.svelte` (one row and a sideways-scrolling tab list from the breakpoint up; the description line's stuck state; the `Worst:` word on the band's worst route)
+  - `frontend/src/lib/components/ConsoleNav.svelte` (one row and a sideways-scrolling tab list from the breakpoint up, each tab's worst state under its label; the description line's stuck state; the `Worst:` word on the band's worst route)
   - `frontend/src/lib/components/WindowControl.svelte` (the compact control) and `WindowStatus.svelte` (its sentence, split out so it can stay under the band)
   - `frontend/src/lib/components/WindowControlSource.svelte`, `frontend/src/lib/console/window-slot.ts` (each route hands its window up to the layout that draws the control), and the five route pages' `<WindowControl>` line, `machine/+page.svelte` included at that line only
   - `frontend/src/lib/console/strip.ts` (when the strip is stuck; the page kept still; the scroll padding)
@@ -581,6 +581,7 @@ Ruled by Susan on 2026-09-24. The complaint: the Hardware route is fifteen panel
   | 6 | This row does not touch `PlatformMixPanel.svelte`. Row 1 owns that file and runs beside this one | Fowler |
   | 7 | **The band's first fact is labelled `Latest day`, not `Yesterday`.** The verdict is the newest day the record holds, which is today once today's first run has finished, so `Yesterday` contradicted the sentence above it. A fixed name needs no clock and stays true on a page read a week later | Susan, 2026-09-27. Reader and Fowler asked for the date itself; the fixed name meets both their reasons without printing the date three times in one band |
   | 8 | **The one-day preset says `1 day`**, in the sentence under the band and to a screen reader | All four, 2026-09-27 |
+  | 9 | **From the breakpoint up a tab's worst state stands on its own line under its label**, never broken inside the phrase, so a tab is as wide as the longer line. Measured on the built page with each tab one line wide, the landing route - whose control carries prices and is the widest - showed four of five tabs whole at every width from 1366 to 1920 | Jony, Susan and Reader, 2026-09-27. Susan's condition: every label starts level, a tab with no worst state included |
 
 - **Rejected alternatives:**
 
@@ -594,6 +595,8 @@ Ruled by Susan on 2026-09-24. The complaint: the Hardware route is fifteen panel
   | 6 | The band above the strip | The completeness sentence could not sit both under the strip and above the band, and it reverses the order that puts the tabs first on a phone | Zero; costs that order | Fowler and Jony, 2026-09-27 |
   | 7 | A pinned `Worst now:` line while stuck, beside the tabs | It prints the worst tab's own fragment twice in one row and takes about 200 px from the tabs, so they scroll even at 1440 | Zero; costs that width | Susan, Fowler and Jony, 2026-09-27 |
   | 8 | `today` in the sentence, relative to the reader | The page's day is the UTC day and a reader's is not always; beside a UTC time `today` names the wrong day for part of every day far from UTC | Zero; costs the glance `today` gave | Reader and Susan, 2026-09-27 |
+  | 9 | Each tab one line wide, label and worst state side by side | On the landing route the fifth tab stayed out of view at every width up to 1920, 5px short at the widest | Zero; saves one line of every tab's height | Jony, Susan and Reader, 2026-09-27 |
+  | 10 | The prices leave the tiles while the strip is stuck | It hides what a choice downloads at the moment a reader deep in a route makes it, which is what refused the dropdown, and the tabs slide sideways as the strip sticks | Zero; buys one tab at 1024 and 1280 on the landing route, while stuck only | Jony, Susan and Reader, 2026-09-27 |
 
 ---
 

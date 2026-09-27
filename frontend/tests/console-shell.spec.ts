@@ -17,7 +17,9 @@ import {
  * row and every jump link lands its heading below the strip rather than behind
  * it; at 768 nothing is stuck. And the strip is held to one row with one tab
  * more than the console has, because the next route is already foreseen and
- * adding it has to be a list entry, never a layout change.
+ * adding it has to be a list entry, never a layout change - and with as many
+ * more as it takes to make the tab list scroll, so the scrolling case is
+ * checked whatever width today's tabs happen to be.
  *
  * Every geometry figure is printed beside `window.innerWidth`, because a
  * viewport asked for and a viewport rendered are two numbers.
@@ -116,13 +118,40 @@ async function addTab(page: Page): Promise<void> {
 	});
 }
 
-for (const extra of [0, 1]) {
-	const count = extra === 0 ? 'the routes the console has' : 'one tab more than it has';
-	test(`THE ORACLE: at 1440 the stuck strip is one row, with ${count}`, async ({ page }) => {
+/** Tabs added one at a time until the row cannot hold them, so the list has to
+ * scroll. How many that takes depends on how wide today's tabs are, which is
+ * why it is counted rather than fixed. */
+async function addTabsUntilTheListScrolls(page: Page): Promise<number> {
+	for (let added = 1; added <= 12; added += 1) {
+		await addTab(page);
+		const scrolls = await page.evaluate(() => {
+			const list = document.querySelector('[data-console-nav] ul') as HTMLElement;
+			return list.scrollWidth > list.clientWidth;
+		});
+		if (scrolls) return added;
+	}
+	throw new Error('twelve more tabs still fitted one row, so the list never had to scroll');
+}
+
+const CASES: { name: string; grow: (page: Page) => Promise<number>; mustScroll: boolean }[] = [
+	{ name: 'the routes the console has', grow: async () => 0, mustScroll: false },
+	{
+		name: 'one tab more than it has',
+		grow: async (page) => {
+			await addTab(page);
+			return 1;
+		},
+		mustScroll: false
+	},
+	{ name: 'more tabs than the row holds', grow: addTabsUntilTheListScrolls, mustScroll: true }
+];
+
+for (const { name, grow, mustScroll } of CASES) {
+	test(`THE ORACLE: at 1440 the stuck strip is one row, with ${name}`, async ({ page }) => {
 		await page.setViewportSize(WIDE);
 		await page.goto('/console/machine/');
 		await hydrated(page);
-		if (extra > 0) await addTab(page);
+		const extra = await grow(page);
 
 		await scrollPastStrip(page);
 		const strip = page.locator('[data-console-strip]');
@@ -148,11 +177,54 @@ for (const extra of [0, 1]) {
 		expect(at.control.bottom).toBeLessThanOrEqual(at.bottom);
 		// And the control stays pinned at the trailing end, scrolling list or not.
 		expect(Math.abs(at.control.right - at.right), 'the control left the end of the strip').toBeLessThanOrEqual(1);
-		if (extra > 0) {
-			expect(at.scrolls, 'one tab more fitted, so this case never asked the list to scroll').toBe(true);
+		if (mustScroll) {
+			expect(at.scrolls, 'the stuck strip made room, so this case never asked the list to scroll').toBe(true);
 		}
 	});
 }
+
+test("from the breakpoint up a tab's worst state stands under its label, and every label starts level", async ({
+	page
+}) => {
+	// Side by side, a tab is as wide as its label and its worst state together,
+	// and on the landing route - whose days control is the widest, because it
+	// carries prices - the fifth tab stayed out of view at every width up to
+	// 1920. Stacked, a tab is as wide as the longer of the two.
+	await page.setViewportSize(WIDE);
+	await page.goto('/console/');
+	await hydrated(page);
+	const at = await page.evaluate(() => {
+		const list = document.querySelector('[data-console-nav] ul') as HTMLElement;
+		const shown = list.getBoundingClientRect();
+		const tabs = [...document.querySelectorAll('[data-console-tab]')].map((node) => {
+			const label = (node.querySelector('.tab-label') as HTMLElement).getBoundingClientRect();
+			const state = node.querySelector('.tab-state')?.getBoundingClientRect() ?? null;
+			const tab = node.getBoundingClientRect();
+			return {
+				id: node.getAttribute('data-console-tab') ?? '',
+				labelTop: Math.round(label.top),
+				labelBottom: Math.round(label.bottom),
+				stateTop: state === null ? null : Math.round(state.top),
+				whole: tab.left >= shown.left - 1 && tab.right <= shown.right + 1
+			};
+		});
+		return { innerWidth: window.innerWidth, tabs };
+	});
+	console.log(
+		`[tabs] asked ${WIDE.width} -> innerWidth ${at.innerWidth}, ` +
+			`${at.tabs.filter((tab) => tab.whole).length} of ${at.tabs.length} whole, ` +
+			at.tabs.map((tab) => `${tab.id} label@${tab.labelTop} state@${tab.stateTop}`).join(' ')
+	);
+
+	const stated = at.tabs.filter((tab) => tab.stateTop !== null);
+	expect(stated.length, 'no tab carries a worst state, so nothing here was checked').toBeGreaterThan(0);
+	for (const tab of stated) {
+		expect(tab.stateTop, `${tab.id}'s worst state stands beside its label`).toBeGreaterThanOrEqual(
+			tab.labelBottom - 1
+		);
+	}
+	expect(new Set(at.tabs.map((tab) => tab.labelTop)).size, 'the labels do not start level').toBe(1);
+});
 
 test('THE ORACLE: every jump link lands its heading below the stuck strip', async ({ page }) => {
 	await page.setViewportSize(WIDE);
