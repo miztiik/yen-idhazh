@@ -120,12 +120,20 @@ def read_status(pid: int, *, proc_root: Path = PROC) -> dict[str, str]:
     carry the kernel's own `kB` suffix: `measure_llm.py` parses them back out of
     a committed bench summary, which makes this dict a payload shape rather than
     a convenience.
+
+    Nothing at all when the read does not land. Checking that the file is there
+    first cannot make the read safe, and that check was the defect: the kernel
+    can release the task in between, and the read then raises on a path that was
+    there a microsecond earlier. The failure is absorbed rather than coerced -
+    an unread process is missing from the roll-call and an unread server is a
+    null figure, which is a different claim from a zero and is the one all three
+    callers already handle.
     """
-    status = proc_root / str(pid) / "status"
     values: dict[str, str] = {}
-    if not status.exists():
+    text = _text(proc_root / str(pid) / "status")
+    if text is None:
         return values
-    for line in status.read_text(encoding="utf-8", errors="replace").splitlines():
+    for line in text.splitlines():
         if line.startswith(("VmRSS:", "VmHWM:")):
             key, value = line.split(":", 1)
             values[key] = value.strip()
