@@ -1,0 +1,13 @@
+{
+  "dry_run": true,
+  "kind": "retention",
+  "lifecycle_status": "retired",
+  "max_deletes_per_run": null,
+  "owns": [
+    "state/day-validations"
+  ],
+  "window": {
+    "unit": "months",
+    "value": 14
+  }
+}

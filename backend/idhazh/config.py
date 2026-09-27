@@ -10,21 +10,47 @@ edited between two runs changes every output and is otherwise invisible. The
 active model's file is one of them: it is named by `models_file` rather than
 fixed, so a run that did not record it could not say which model's numbers it
 read.
+
+The gardener reads its own two inputs through `load_gardener`: its knobs in
+`config/idhazh_gardener.json` and one declaration per task under
+`config/gardener/`. They are loaded apart from `load`, because a digest run has
+no use for them and a gardener run has no use for the model files. Every
+refusal that needs only those files and `config/idhazh.json` is made here, as
+they load; the two that need the task modules are the gardener runner's.
 """
 
 from __future__ import annotations
 
 import hashlib
+import re
+from collections.abc import Mapping
 from dataclasses import dataclass
-from pathlib import Path
+from datetime import date as date_type
+from functools import cache
+from itertools import combinations
+from operator import attrgetter
+from pathlib import Path, PurePosixPath
+from types import MappingProxyType
 from typing import Final
 
-from pydantic import ValidationError
+from pydantic import TypeAdapter, ValidationError
 
 from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.appearance_config import AppearanceConfig
+from idhazh.contracts.base import SLUG_PATTERN
+from idhazh.contracts.knobs.gardener import (
+    CompactionPolicy,
+    DaysWindow,
+    ForeverWindow,
+    GardenerConfig,
+    MonthsWindow,
+    RetentionPolicy,
+    TaskPolicy,
+    Window,
+)
 from idhazh.contracts.knobs.models import ModelsConfig
 from idhazh.contracts.knobs.windows import months_a_window_can_touch
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.run_manifest import ConfigDigest
 from idhazh.contracts.sources import Sources
 from idhazh.contracts.taxonomy import Taxonomy
@@ -163,3 +189,392 @@ def load(config_dir: Path = DEFAULT_CONFIG_DIR) -> Settings:
             for name, text in sorted(read.items())
         ),
     )
+
+
+# --- the gardener ------------------------------------------------------------
+
+#: The gardener's own knobs: how a wake is sharded and how hard a shard pushes.
+GARDENER_FILE: Final = "idhazh_gardener.json"
+#: One declaration a task, named for the task. A missing folder means no tasks.
+GARDENER_TASKS_DIR: Final = "gardener"
+#: What a declaration's name ends in. The plan job's glob reads the same suffix.
+DECLARATION_SUFFIX: Final = ".json"
+
+#: The two declarations whose window a knob in `config/idhazh.json` still reads.
+#: The task deletes by its window and the knob is how far back a reader looks,
+#: so a window shorter than the knob deletes a day somebody still opens.
+_WINDOW_FLOORS: Final[Mapping[str, str]] = MappingProxyType(
+    {
+        "seen": "collect.seen_window_days",
+        "counterfactual-scores": "lens_weights.window_days",
+    }
+)
+
+#: The one task that keeps several series of one tree family at different ages.
+SERIES_TASK: Final = "telemetry-aggregate"
+
+
+@dataclass(frozen=True, slots=True)
+class _SeriesFloor:
+    """The `observability` key one series must outlive, and the ledger it covers, if any."""
+
+    #: In months, and null there means never delete.
+    knob: str
+    #: The ledger under `state/` whose files the series deletes. The published
+    #: copy covers a tree outside `state/`, so it names none.
+    ledger: LedgerName | None
+
+
+#: Every series `telemetry-aggregate` may keep, and the knob each one must reach.
+_SERIES_FLOORS: Final[Mapping[str, _SeriesFloor]] = MappingProxyType(
+    {
+        "full-grain": _SeriesFloor("item_health_full_grain_months", LedgerName.ITEM_HEALTH),
+        "public-copy": _SeriesFloor("public_telemetry_keep_months", None),
+        "aggregate": _SeriesFloor(
+            "item_health_aggregate_keep_months", LedgerName.ITEM_HEALTH_SUMMARY
+        ),
+    }
+)
+
+#: The longest a calendar month runs, in days. A gap measured in "one whole
+#: month" is measured at the month that is hardest to fit.
+_LONGEST_MONTH_DAYS: Final = 31
+
+_TASK_POLICY: Final[TypeAdapter[TaskPolicy]] = TypeAdapter(TaskPolicy)
+_A_TASK_NAME: Final = re.compile(SLUG_PATTERN)
+
+
+@dataclass(frozen=True, slots=True)
+class GardenerSettings:
+    """The gardener's knobs and every declaration, validated as one set."""
+
+    config: GardenerConfig
+    #: Every declaration whatever its status, keyed by task name in sorted order.
+    tasks: Mapping[str, TaskPolicy]
+    #: The rest of the configuration the declarations were checked against.
+    app: AppConfig
+
+
+def load_gardener(config_dir: Path = DEFAULT_CONFIG_DIR) -> GardenerSettings:
+    """The gardener's settings, or a refusal naming the file and the rule it broke.
+
+    The declarations are validated as one set and never one at a time, because
+    most of what can be wrong with a declaration is a clash: with another
+    declaration, or with a knob in `config/idhazh.json` it has to outlive.
+    """
+    gardener = _gardener_config(config_dir)
+    tasks = _declarations(config_dir)
+    app = AppConfig.from_json((config_dir / _FILES[0]).read_text(encoding="utf-8"))
+    appearance = AppearanceConfig.from_json(
+        (config_dir / _APPEARANCE_FILE).read_text(encoding="utf-8")
+    )
+    refuse_what_the_declarations_break(
+        tasks, app=app, appearance=appearance, repo_root=config_dir.parent
+    )
+    return GardenerSettings(config=gardener, tasks=MappingProxyType(tasks), app=app)
+
+
+def _gardener_config(config_dir: Path) -> GardenerConfig:
+    text = (config_dir / GARDENER_FILE).read_text(encoding="utf-8")
+    try:
+        return GardenerConfig.model_validate_json(text)
+    except ValidationError as error:
+        raise ValueError(f"config/{GARDENER_FILE} is refused: {error}") from error
+
+
+def _declarations(config_dir: Path) -> dict[str, TaskPolicy]:
+    """Every declaration, by name, in sorted order. No folder is no tasks, not a fault."""
+    folder = config_dir / GARDENER_TASKS_DIR
+    if not folder.is_dir():
+        return {}
+    found: dict[str, TaskPolicy] = {}
+    for path in sorted(folder.glob(f"*{DECLARATION_SUFFIX}")):
+        where = f"config/{GARDENER_TASKS_DIR}/{path.name}"
+        if not _A_TASK_NAME.fullmatch(path.stem):
+            raise ValueError(
+                f"{where} is refused: a task is named by its file, and {path.stem!r} is "
+                "not a lower-case word or words joined by hyphens"
+            )
+        try:
+            found[path.stem] = _TASK_POLICY.validate_json(path.read_text(encoding="utf-8"))
+        except ValidationError as error:
+            raise ValueError(f"{where} is refused: {error}") from error
+    return found
+
+
+def refuse_what_the_declarations_break(
+    tasks: Mapping[str, TaskPolicy],
+    *,
+    app: AppConfig,
+    appearance: AppearanceConfig,
+    repo_root: Path,
+) -> None:
+    """Every rule the declarations must keep that needs no task module to check."""
+    _refuse_overlapping_claims(tasks)
+    _refuse_a_second_complement(tasks)
+    _refuse_a_file_where_a_folder_belongs(tasks, repo_root)
+    _refuse_a_window_under_its_floor(tasks, app)
+    _refuse_a_series_under_its_floor(tasks, app)
+    for name, policy in tasks.items():
+        if isinstance(policy, CompactionPolicy):
+            _refuse_a_compaction_that_cuts_its_ledger(
+                name, policy, tasks, app=app, appearance=appearance
+            )
+
+
+def _nested(one: str, other: str) -> bool:
+    """Whether two folders are the same folder or one holds the other, segment by segment."""
+    first, second = PurePosixPath(one).parts, PurePosixPath(other).parts
+    shorter = min(len(first), len(second))
+    return first[:shorter] == second[:shorter]
+
+
+def _refuse_overlapping_claims(tasks: Mapping[str, TaskPolicy]) -> None:
+    """Two tasks may not own one folder, or one folder and a folder inside it.
+
+    Every status takes part. A paused task still owns what it owns, and a retired
+    one keeps its claim so its window stays readable after its tree has moved.
+    The complement form is left out on purpose: it is everything nothing else
+    claims, so it holds every other task's folders by definition.
+    """
+    for (first, one), (second, other) in combinations(tasks.items(), 2):
+        for mine in one.owns or ():
+            for theirs in other.owns or ():
+                if _nested(mine, theirs):
+                    raise ValueError(
+                        f"config/{GARDENER_TASKS_DIR}/{first}.json owns {mine} and "
+                        f"config/{GARDENER_TASKS_DIR}/{second}.json owns {theirs}. Two "
+                        "tasks may not own one folder or a folder inside the other's, "
+                        "whatever their status, or both would delete in it"
+                    )
+
+
+def _refuse_a_second_complement(tasks: Mapping[str, TaskPolicy]) -> None:
+    using = sorted(name for name, policy in tasks.items() if policy.owns is None)
+    if len(using) > 1:
+        raise ValueError(
+            f"{', '.join(using)} all own everything else under a root. One task may take "
+            "the complement; two would each claim what the other claims"
+        )
+
+
+def _refuse_a_file_where_a_folder_belongs(tasks: Mapping[str, TaskPolicy], repo_root: Path) -> None:
+    """A shard checks out folders, so a file named as owned would match nothing."""
+    for name, policy in tasks.items():
+        for claimed in policy.claims():
+            if (repo_root / claimed).is_file():
+                raise ValueError(
+                    f"config/{GARDENER_TASKS_DIR}/{name}.json owns {claimed}, which is a "
+                    "file. A task owns folders: the shard that runs it checks out "
+                    "folders, and a file there would match nothing"
+                )
+
+
+@cache
+def _month_run_days(months: int) -> tuple[int, int]:
+    """The fewest and the most days `months` calendar months in a row can hold.
+
+    Swept over the month-firsts of one 400-year Gregorian cycle, which is exact
+    rather than a sample: the calendar repeats every 400 years.
+    """
+    lengths: list[int] = []
+    for year in range(2000, 2400):
+        for month in range(1, 13):
+            later = year * 12 + month - 1 + months
+            start = date_type(year, month, 1)
+            end = date_type(later // 12, later % 12 + 1, 1)
+            lengths.append((end - start).days)
+    return min(lengths), max(lengths)
+
+
+def _days_kept(window: Window) -> int | None:
+    """The fewest days a window keeps, wherever the calendar puts it. None is forever."""
+    if isinstance(window, ForeverWindow):
+        return None
+    if isinstance(window, DaysWindow):
+        return window.value
+    return _month_run_days(window.value)[0]
+
+
+def _days_needed(window: Window) -> int | None:
+    """The most days a window can ask for, wherever the calendar puts it. None is forever."""
+    if isinstance(window, ForeverWindow):
+        return None
+    if isinstance(window, DaysWindow):
+        return window.value
+    return _month_run_days(window.value)[1]
+
+
+def _reaches(kept: Window, needed: Window) -> bool:
+    """Whether a window that deletes keeps at least as far back as one that is needed.
+
+    One unit against the same unit compares the numbers, because both count the
+    same calendar the same way. Days against months is compared where it is
+    hardest to pass: the fewest days the kept window can hold against the most
+    the needed one can ask for, so the answer never depends on the build's date.
+    """
+    if isinstance(needed, ForeverWindow):
+        return isinstance(kept, ForeverWindow)
+    if isinstance(kept, ForeverWindow):
+        return True
+    if type(kept) is type(needed):
+        return kept.value >= needed.value
+    kept_days, needed_days = _days_kept(kept), _days_needed(needed)
+    assert kept_days is not None and needed_days is not None
+    return kept_days >= needed_days
+
+
+def _spelled(window: Window) -> str:
+    if isinstance(window, ForeverWindow):
+        return "forever"
+    return f"{window.value} {window.unit}"
+
+
+def _refuse_a_window_under_its_floor(tasks: Mapping[str, TaskPolicy], app: AppConfig) -> None:
+    for name, knob in _WINDOW_FLOORS.items():
+        policy = tasks.get(name)
+        if policy is None:
+            continue
+        floor: int = attrgetter(knob)(app)
+        if not _reaches(policy.window, DaysWindow(unit="days", value=floor)):
+            raise ValueError(
+                f"config/{GARDENER_TASKS_DIR}/{name}.json keeps {_spelled(policy.window)} "
+                f"and {knob} reads {floor} days back, so the task would delete days a "
+                "reader still opens"
+            )
+
+
+def _knob_window(months: int | None) -> Window:
+    """An `observability` month knob as a window. Null there means never delete."""
+    if months is None:
+        return ForeverWindow(unit="forever")
+    return MonthsWindow(unit="months", value=months)
+
+
+def _refuse_a_series_under_its_floor(tasks: Mapping[str, TaskPolicy], app: AppConfig) -> None:
+    """Series belong to one task, and each must outlive the knob it covers."""
+    for name, policy in tasks.items():
+        carries = isinstance(policy, RetentionPolicy) and bool(policy.series)
+        if name != SERIES_TASK and carries:
+            raise ValueError(
+                f"config/{GARDENER_TASKS_DIR}/{name}.json keeps series. Only "
+                f"{SERIES_TASK} keeps several series at once"
+            )
+    keeper = tasks.get(SERIES_TASK)
+    if keeper is None:
+        return
+    if not isinstance(keeper, RetentionPolicy) or not keeper.series:
+        raise ValueError(
+            f"config/{GARDENER_TASKS_DIR}/{SERIES_TASK}.json keeps no series. It is the "
+            "retention task that keeps several, so it names each one with its window"
+        )
+    for series, window in sorted(keeper.series.items()):
+        floor = _SERIES_FLOORS.get(series)
+        if floor is None:
+            raise ValueError(
+                f"config/{GARDENER_TASKS_DIR}/{SERIES_TASK}.json keeps a series called "
+                f"{series}, which covers no observability key. It keeps "
+                f"{', '.join(sorted(_SERIES_FLOORS))}"
+            )
+        months: int | None = getattr(app.observability, floor.knob)
+        if not _reaches(window, _knob_window(months)):
+            raise ValueError(
+                f"config/{GARDENER_TASKS_DIR}/{SERIES_TASK}.json keeps its {series} series "
+                f"{_spelled(window)} and observability.{floor.knob} is "
+                f"{'never delete' if months is None else f'{months} months'}, so the "
+                "series would delete what that knob keeps"
+            )
+
+
+def _old_tree_floor(ledger: LedgerName, tasks: Mapping[str, TaskPolicy]) -> Window | None:
+    """How far back a ledger reached before it moved, read off the task that limited it.
+
+    That is the retention task whose `owns` names the ledger's old tree, or, for a
+    task with series, the series that covers that ledger. A retired task keeps
+    its declaration, so the answer outlives the tree it was about.
+    """
+    # Imported here rather than at the top: the ledger package reads this module
+    # while it loads, so importing it back at module scope would be a cycle.
+    from idhazh.ledger.paths import STATE_DIRNAME
+
+    old_tree = f"{STATE_DIRNAME}/{ledger.value}"
+    for policy in tasks.values():
+        if not isinstance(policy, RetentionPolicy) or old_tree not in (policy.owns or ()):
+            continue
+        for series, window in (policy.series or {}).items():
+            floor = _SERIES_FLOORS.get(series)
+            if floor is not None and floor.ledger is ledger:
+                return window
+        return policy.window
+    return None
+
+
+def _refuse_a_compaction_that_cuts_its_ledger(
+    name: str,
+    policy: CompactionPolicy,
+    tasks: Mapping[str, TaskPolicy],
+    *,
+    app: AppConfig,
+    appearance: AppearanceConfig,
+) -> None:
+    """Once a ledger is compacted its two periods are its retention, so they must reach.
+
+    The pair reaches back `daily_keep_days` plus `monthly_window`, counted at the
+    fewest days those months can hold.
+    """
+    where = f"config/{GARDENER_TASKS_DIR}/{name}.json"
+    ledger = policy.ledger
+    if name != f"compact-{ledger.value}":
+        raise ValueError(
+            f"{where} compacts {ledger.value}, and a compaction is named for its ledger: "
+            f"call it compact-{ledger.value}.json"
+        )
+    if policy.raw_index_keep_days < policy.daily_keep_days:
+        raise ValueError(
+            f"{where} keeps raw_index_keep_days {policy.raw_index_keep_days} and "
+            f"daily_keep_days {policy.daily_keep_days}. The raw index must outlive the "
+            "daily period, which may still need it to rebuild a daily file"
+        )
+    monthly_kept = _days_kept(policy.monthly_window)
+    if monthly_kept is not None and monthly_kept < policy.daily_keep_days + _LONGEST_MONTH_DAYS:
+        raise ValueError(
+            f"{where} keeps daily_keep_days {policy.daily_keep_days} and monthly_window "
+            f"{_spelled(policy.monthly_window)}, which leaves less than one whole month "
+            "between them. A month absorbed that late would be deleted before a reader "
+            "could reach it, a gap no period covers"
+        )
+    reach = None if monthly_kept is None else policy.daily_keep_days + monthly_kept
+    if ledger in app.ledger.published:
+        if reach is None:
+            raise ValueError(
+                f"{where} keeps monthly_window forever and {ledger.value} is in "
+                "ledger.published. A published ledger may not keep its month files "
+                "forever, or what a reader's first request fetches grows with the archive"
+            )
+        widest = max(appearance.console.window_presets)
+        if reach < widest:
+            raise ValueError(
+                f"{where} reaches back {reach} days with daily_keep_days "
+                f"{policy.daily_keep_days} and monthly_window "
+                f"{_spelled(policy.monthly_window)}, and console.window_presets offers "
+                f"{widest}. The widest span the console offers would have days no file holds"
+            )
+    floor = _old_tree_floor(ledger, tasks)
+    if floor is None or isinstance(policy.monthly_window, ForeverWindow):
+        return
+    needed = _days_needed(floor)
+    if needed is None:
+        raise ValueError(
+            f"{where} keeps monthly_window {_spelled(policy.monthly_window)}, and the task "
+            f"that limited {ledger.value} before it moved kept it forever. A person chose "
+            "never to delete this ledger, so its compaction may not either"
+        )
+    assert reach is not None
+    if reach < needed:
+        raise ValueError(
+            f"{where} reaches back {reach} days with daily_keep_days "
+            f"{policy.daily_keep_days} and monthly_window "
+            f"{_spelled(policy.monthly_window)}, and the task that limited "
+            f"{ledger.value} before it moved kept {_spelled(floor)}. The pair would "
+            "silently cut how far back the ledger reaches"
+        )

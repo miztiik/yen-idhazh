@@ -19,7 +19,10 @@ writes, never from the committed ones.
 The registry is read through its own contract, so a registry the build would
 refuse is refused here too, with the same message. A ledger's folder comes from
 its prefix, the same field every path builder reads; a ledger that is one file is
-counted as that file or nothing. A name that opens on a dot, such as a
+counted as that file or nothing. A ledger that goes through the door has two
+folders, one under each of `state/raw/` and `state/compact/`, and each is counted
+on its own line, because they answer different questions: what runs wrote, and
+what compaction has kept of it. A name that opens on a dot, such as a
 `.gitkeep` placeholder, holds no rows and is not counted.
 """
 
@@ -31,15 +34,27 @@ from pathlib import Path
 from idhazh.contracts.ledgers import Grain, LedgerEntry, LedgersConfig
 from idhazh.ledger import paths
 
+#: The two roots a ledger that goes through the door files under, in order.
+THE_TWO_ROOTS = (paths.RAW_DIRNAME, paths.COMPACT_DIRNAME)
+
+
+def _files_in(root: Path) -> int:
+    if not root.is_dir():
+        return 0
+    return sum(1 for found in root.rglob("*") if found.is_file() and not found.name.startswith("."))
+
 
 def files_held(state_dir: Path, held: LedgerEntry) -> int:
     """How many files this ledger holds under the state tree. Zero for one never written."""
     if held.grain is Grain.FLAT:
         return int(state_dir.joinpath(*held.prefix, f"{held.stem}{held.suffix}").is_file())
-    root = state_dir.joinpath(*held.prefix)
-    if not root.is_dir():
-        return 0
-    return sum(1 for found in root.rglob("*") if found.is_file() and not found.name.startswith("."))
+    if held.grain is Grain.RAW_AND_COMPACT:
+        return sum(_files_in(state_dir.joinpath(root, *held.prefix)) for root in THE_TWO_ROOTS)
+    return _files_in(state_dir.joinpath(*held.prefix))
+
+
+def _counted(count: int) -> str:
+    return f"{count} file{'' if count == 1 else 's'}"
 
 
 def listing(config_dir: Path, state_dir: Path) -> list[str]:
@@ -55,8 +70,12 @@ def listing(config_dir: Path, state_dir: Path) -> list[str]:
         )
         lines.append(f"  {family.description}")
         for held in family.ledgers:
-            count = files_held(state_dir, held)
-            lines.append(f"  - {held.name.value}: {count} file{'' if count == 1 else 's'}")
+            if held.grain is Grain.RAW_AND_COMPACT:
+                for root in THE_TWO_ROOTS:
+                    count = _files_in(state_dir.joinpath(root, *held.prefix))
+                    lines.append(f"  - {held.name.value} under {root}/: {_counted(count)}")
+                continue
+            lines.append(f"  - {held.name.value}: {_counted(files_held(state_dir, held))}")
     return lines
 
 

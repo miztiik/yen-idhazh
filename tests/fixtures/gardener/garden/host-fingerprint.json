@@ -1,0 +1,13 @@
+{
+  "dry_run": true,
+  "kind": "retention",
+  "lifecycle_status": "paused",
+  "max_deletes_per_run": null,
+  "owns": [
+    "state/host-fingerprint"
+  ],
+  "window": {
+    "unit": "months",
+    "value": 14
+  }
+}

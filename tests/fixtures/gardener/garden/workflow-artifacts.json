@@ -1,0 +1,11 @@
+{
+  "dry_run": true,
+  "kind": "collection",
+  "lifecycle_status": "active",
+  "max_deletes_per_run": 50,
+  "owns": [],
+  "window": {
+    "unit": "days",
+    "value": 30
+  }
+}

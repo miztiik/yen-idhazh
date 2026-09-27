@@ -9,7 +9,7 @@ has removed only the days it had already reached.
 That second property changed on 2026-09-17. Until then the prune moved a whole
 range into a scratch directory and rolled every move back if one failed, so a
 failed pass removed nothing at all. It deletes one day file at a time now
-through `idhazh.prune.one_at_a_time`, so a failed pass keeps what it had
+through `idhazh.gardener.one_at_a_time`, so a failed pass keeps what it had
 deleted and the record says where the next pass resumes.
 
 Every tree here is BUILT (CLAUDE.md section 13). The committed archive grows, so

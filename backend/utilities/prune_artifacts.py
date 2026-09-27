@@ -19,9 +19,13 @@ at. Run it again, or schedule it - each run is the same shape and the same cost
 whatever the backlog is.
 
 Every default is read from `config/`. Nothing tunable is spelled in this file
-(Guardrail #6), and the work is in `idhazh.prune.one_at_a_time` and
-`idhazh.prune.github_collections` - this routes arguments to them and prints
+(Guardrail #6), and the work is in `idhazh.gardener.one_at_a_time` and
+`idhazh.gardener.github_collections` - this routes arguments to them and prints
 what came back.
+
+**It writes no record.** A record names the run, attempt, job and shard that
+made it, and a pass a person runs by hand is none of those. The gardener's own
+collection tasks are what write one, into the record of the shard that ran them.
 """
 
 from __future__ import annotations
@@ -32,10 +36,10 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from idhazh import config
-from idhazh.contracts.knobs.prune import PrunableCollection
-from idhazh.prune import github_collections, one_at_a_time, report
+from idhazh.contracts.knobs.gardener import PrunableCollection
+from idhazh.gardener import github_collections, one_at_a_time, report
 
-#: Names a member whose delete failed, so a scheduler can tell "there is more to
+#: Names a pass that failed part way, so a scheduler can tell "there is more to
 #: do" from "something is wrong". A ceiling reached is exit 0: it is the normal
 #: end of a bounded pass.
 EXIT_A_DELETE_FAILED = 1
@@ -105,13 +109,6 @@ def build_parser(defaults: dict[str, object]) -> argparse.ArgumentParser:
             "prune.dry_run, which ships true. Pass --no-dry-run to delete."
         ),
     )
-    parser.add_argument(
-        "--record",
-        type=Path,
-        default=None,
-        metavar="PATH",
-        help="Write the pass as a collection-prune-row JSON payload to this path.",
-    )
     parser.add_argument("--config-root", type=Path, default=config.DEFAULT_CONFIG_DIR)
     return parser
 
@@ -167,11 +164,6 @@ def main(argv: list[str] | None = None) -> int:
 
     for line in report.lines(outcome):
         print(line)
-    if args.record is not None:
-        args.record.parent.mkdir(parents=True, exist_ok=True)
-        args.record.write_text(
-            report.row(outcome, date=today).to_json(), encoding="utf-8", newline="\n"
-        )
     return EXIT_A_DELETE_FAILED if failed else 0
 
 

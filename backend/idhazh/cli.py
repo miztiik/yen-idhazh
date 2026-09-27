@@ -22,11 +22,13 @@ for the commit step that runs seconds later, and its answer comes from
 `idhazh.path_classes`.
 
     idhazh telemetry <subcommand>   read or republish one day's instrument
+    idhazh gardener <subcommand>    list, plan or run the tasks that delete and rewrite
 
-`telemetry` is the one verb whose line is `<verb> <subcommand> ...` rather than
-`<verb> --flags`. Its subcommands belong to the package that owns the
-instrument, so `idhazh.telemetry.cli` parses them and this file hands over the
-rest of the line unread.
+`telemetry` and `gardener` are the two verbs whose line is
+`<verb> <subcommand> ...` rather than `<verb> --flags`. Their subcommands belong
+to the package that owns them, so `idhazh.telemetry.cli` and
+`idhazh.gardener.cli` parse them and this file hands over the rest of the line
+unread.
 
 Each stage is a module under `idhazh.stages`, and this router imports the
 module rather than the names inside it. So `cli.stage_work` does not resolve,
@@ -69,6 +71,7 @@ from idhazh.fingerprint import (
     file_digest,
     runtime_build,
 )
+from idhazh.gardener import cli as gardener_cli
 from idhazh.publication_checks import PublicationCheckError
 from idhazh.publication_checks import runner as publication_runner
 from idhazh.stages import (
@@ -157,8 +160,9 @@ STAGES: Final[tuple[str, ...]] = (
     "council-settle",
     "council-shard",
     # Listed so `--help` names every verb, and never parsed: `main` hands the
-    # line to the telemetry package before this parser is built.
+    # line to the telemetry or the gardener package before this parser is built.
     telemetry_cli.VERB,
+    gardener_cli.VERB,
 )
 
 
@@ -296,6 +300,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         return telemetry_cli.main(
             words[1:], state_root=common.STATE_ROOT, digest_root=common.PUBLIC_ROOT
         )
+    if words and words[0] == gardener_cli.VERB:
+        # The same hand-over, for the same reason. The gardener resolves its own
+        # checkout, because what it runs in is a checkout rather than a state tree.
+        return gardener_cli.main(words[1:])
 
     parser = argparse.ArgumentParser(prog="idhazh", description=__doc__)
     parser.add_argument("stage", choices=STAGES)

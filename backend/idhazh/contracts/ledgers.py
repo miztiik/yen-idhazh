@@ -55,8 +55,13 @@ class Grain(StrEnum):
 
     Removal condition: `docs/concepts/telemetry-intent.md` requires every tree
     under `state/` to reach one pattern. A member is deleted by the migration
-    that empties it, and the enum with the last of them. Five shapes are recorded
-    because all five are really on disk right now, not because five is a design.
+    that empties it, and the enum with the last of them. Six shapes are recorded
+    because all six are really in use right now, not because six is a design.
+
+    `RAW_AND_COMPACT` is that one pattern. A ledger that files this way goes
+    through the door in `ledger/persist.py` and sits under the two roots,
+    `state/raw/<ledger>/` and `state/compact/<ledger>/`, which is why its prefix
+    is the path inside each root rather than a folder of its own.
     """
 
     FLAT = "flat"
@@ -64,16 +69,19 @@ class Grain(StrEnum):
     DAY_TREE = "tree"
     MONTH_FILE = "month"
     STAMPED = "stamp"
+    RAW_AND_COMPACT = "raw-and-compact"
 
 
 #: Which of `stem` and `suffix` each grain needs. A flat file is the only one
-#: that names itself; a day directory is the only one with no extension.
+#: that names itself; a day directory is the only one with no extension, and a
+#: raw-and-compact ledger names every file from its own grammar.
 _NEEDS_A_STEM: dict[Grain, bool] = {
     Grain.FLAT: True,
     Grain.DAY_FILE: False,
     Grain.DAY_TREE: False,
     Grain.MONTH_FILE: False,
     Grain.STAMPED: False,
+    Grain.RAW_AND_COMPACT: False,
 }
 _NEEDS_A_SUFFIX: dict[Grain, bool] = {
     Grain.FLAT: True,
@@ -81,6 +89,7 @@ _NEEDS_A_SUFFIX: dict[Grain, bool] = {
     Grain.DAY_TREE: False,
     Grain.MONTH_FILE: True,
     Grain.STAMPED: True,
+    Grain.RAW_AND_COMPACT: False,
 }
 
 
@@ -116,6 +125,13 @@ class LedgerEntry(Model):
             raise ValueError(
                 f"{self.name} files by {self.grain.value} and has no prefix, so its files "
                 "would sit loose at the top of state/. Give it a directory"
+            )
+        if self.grain is Grain.RAW_AND_COMPACT and self.prefix != (self.name.value,):
+            raise ValueError(
+                f"{self.name} files by {self.grain.value}, so its prefix is the path "
+                f"inside each of the two roots, and the builders file it under "
+                f"{self.name.value}/. A prefix of {list(self.prefix)} names a folder "
+                f"nothing writes. Set it to [{self.name.value!r}]"
             )
         if _NEEDS_A_STEM[self.grain] != (self.stem is not None):
             raise ValueError(

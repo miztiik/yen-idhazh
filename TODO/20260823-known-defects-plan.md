@@ -166,7 +166,7 @@ remove, and the first one removed by substituting a sixth.
 
 ## 28 - The one-at-a-time guard tells the operator the wrong verb (OPEN)
 
-`backend/idhazh/prune/one_at_a_time.refuse_by_name` spells the word "prune" into
+`backend/idhazh/gardener/one_at_a_time.refuse_by_name` spells the word "prune" into
 the message it refuses with. The helper is general - it is what stops any verb
 running over two members at once - so the first other verb to reuse it refuses
 an operator in the name of a verb they did not run.

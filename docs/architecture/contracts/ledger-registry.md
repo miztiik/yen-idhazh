@@ -24,7 +24,7 @@ It sits at the bottom of the contract graph rather than inside `backend/idhazh/l
 
 A **family** is one top-level folder under `state/`. `content-similarity-judge` is one family holding seven ledgers; most families hold one ledger of the same name. A family carries what is decided for the folder as a whole: its `name`, its `lifecycle_status`, a one-line `description` of what it holds, the UTC day it was `onboarded`, and its `ledgers`.
 
-A **ledger** is one row shape, filed one way, at one address. Each carries five things: its `name`, its `grain`, the `prefix` of directories it sits under inside `state/`, and - for a ledger that is a single file - the `stem` and `suffix` that name it. A dated ledger carries no stem, because its period names it. A day directory carries no suffix, because it is a directory. The prefix keeps the whole nest, the family's folder included, so an address is read off the ledger alone.
+A **ledger** is one row shape, filed one way, at one address. Each carries five things: its `name`, its `grain`, the `prefix` of directories it sits under inside `state/`, and - for a ledger that is a single file - the `stem` and `suffix` that name it. A dated ledger carries no stem, because its period names it. A day directory carries no suffix, because it is a directory. The prefix keeps the whole nest, the family's folder included, so an address is read off the ledger alone. A ledger that goes through the door carries neither stem nor suffix, and its prefix is the path inside each root ([A ledger under the two roots](#a-ledger-under-the-two-roots)).
 
 Four builders read the registry, in two pairs, and nothing else builds a path under `state/`:
 
@@ -41,6 +41,14 @@ A flat file has no folder of its own: `feed-retirements.csv` sits at the top of 
 
 Because the extension is data on the entry, a builder cannot emit the wrong one.
 
+## A ledger under the two roots
+
+A ledger that goes through the ledger door files under two roots rather than one: what a writer wrote under `state/raw/`, and what compaction left under `state/compact/` ([persistence.md](persistence.md)). Its grain is `raw-and-compact`, the sixth, and `gardener` is the first ledger born at it.
+
+**For this grain the `prefix` is the path inside each of the two roots.** Everywhere else it is the path from `state/`, but `["gardener"]` means `state/raw/gardener/` and `state/compact/gardener/`. The family check still passes, because the prefix still opens on the family's name, and the registry refuses any other prefix, because the five root builders file the ledger under its own name.
+
+**The four builders above refuse the grain by name.** `path`, `relpath`, `tree_root` and `tree_relpath` each answer with an error that names the ledger and points at the five that build its addresses: `raw_path`, `raw_index_path`, `compact_path`, `compact_index_path` and `watermark_path`. So nothing reads or writes a moved ledger at its old CSV address by accident. `ledger_families.py` counts its files under each root on a line of its own.
+
 ## What the registry refuses when it loads
 
 The check runs when the config loads, so each of these stops the build with the offender's name in the message:
@@ -52,6 +60,7 @@ The check runs when the config loads, so each of these stops the build with the 
 | lists one family twice | one folder with two lists would have two statuses |
 | lists a ledger whose prefix does not start with its family's name | the ledger would sit in one folder and take another folder's status. A file at the top of `state/` has no folder, so `feed-retirements` is named for its stem |
 | holds a member whose Python name is not spelled from its family and its value | a Python name that says something the value does not is a second name a reader has to learn - the rule is in the section on typed names above |
+| gives a `raw-and-compact` ledger a prefix other than its own name | the five root builders file it under its own name, so any other prefix names a folder nothing writes |
 
 The first row is what the registry is for. The claim used to be a hand-written Python set, and a ledger somebody forgot to add to it was a production directory the trial sweep quietly emptied. It is now a build that will not start.
 
@@ -198,7 +207,7 @@ The config carries where each ledger lives and each family's lifecycle status. I
 
 CLAUDE.md section 11 does not apply to this file. It is a config file this project authors, nothing but this repository reads it, and a file a person edits in place has no older copy for a later build to read - so it carries no `version` and no `changelog`.
 
-**`Grain` is transitional and its declaring line says so.** [../../concepts/telemetry-intent.md](../../concepts/telemetry-intent.md) requires every tree under `state/` to reach one pattern, so five grains describes the mess that page exists to remove. It is recorded because all five really are on disk: the registry is an honest map of today, and it is the seam a migration edits one entry at a time.
+**`Grain` is transitional and its declaring line says so.** [../../concepts/telemetry-intent.md](../../concepts/telemetry-intent.md) requires every tree under `state/` to reach one pattern, and `raw-and-compact` is that pattern, so the other five grains describe the mess that page exists to remove. They are recorded because all five really are on disk: the registry is an honest map of today, and it is the seam a migration edits one entry at a time.
 
 ## See also
 
