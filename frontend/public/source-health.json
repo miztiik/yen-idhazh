@@ -19,13 +19,13 @@
   ],
   "dwell_days": 14,
   "first_date": "2026-08-28",
-  "generated_at": "2026-09-27T15:12:53Z",
+  "generated_at": "2026-09-27T18:23:02Z",
   "headline_sentence": "10 of 156 feeds are discounted to the 50% floor, which is as far as the ranking takes one.",
   "last_date": "2026-09-26",
   "min_complete_days": 30,
   "reliability_floor": 0.5,
   "reliability_window_days": 30,
-  "run_id": "2026-09-27-36317957358",
+  "run_id": "2026-09-27-36328542513",
   "sources": [
     {
       "availability": "answering",
