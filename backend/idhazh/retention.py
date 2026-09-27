@@ -962,7 +962,7 @@ def prune_telemetry(
     hard_deleted: list[str] = []
     if config.item_health_aggregate_keep_months is not None:
         delete_from = oldest_month_kept(today, config.item_health_aggregate_keep_months)
-        for aggregate in month_shards(state_dir / LedgerName.ITEM_HEALTH_SUMMARY):
+        for aggregate in month_shards(ledger.tree_root(state_dir, LedgerName.ITEM_HEALTH_SUMMARY)):
             if aggregate.stem >= delete_from:
                 continue
             hard_deleted.append(aggregate.stem)
@@ -1743,7 +1743,7 @@ def prune_scores(
     archive_bytes = 0
 
     by_month = day_shards.shards_by_month(
-        state_dir / score_writer.LEDGER_DIRNAME, days=UNBOUNDED_WINDOW
+        ledger.tree_root(state_dir, LedgerName.SCORES), days=UNBOUNDED_WINDOW
     )
     for month in sorted(by_month):
         if month >= keep_from:
@@ -1784,7 +1784,7 @@ def prune_scores(
     covered = {path.stem for path in score_archive.archive_files(state_dir)} | set(archived)
     index_days_removed: list[str] = []
     for shard in day_shards.shard_files(
-        state_dir / score_writer.INDEX_DIRNAME, days=UNBOUNDED_WINDOW
+        ledger.tree_root(state_dir, LedgerName.SCORE_INDEX), days=UNBOUNDED_WINDOW
     ):
         month = day_shards.date_of(shard)[:7]
         if month >= keep_from or month not in covered:

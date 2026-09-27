@@ -26,10 +26,10 @@ from statistics import median
 from typing import Final
 from urllib.parse import urlsplit
 
-from idhazh import day_shards
+from idhazh import day_shards, ledger
 from idhazh.contracts.knobs.evaluation import DriftConfig
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.day_partition import days_in_window
-from idhazh.evals.writer import LEDGER_DIRNAME, LEDGER_RELDIR
 
 #: Bumped when a rule below changes, because a fired alert has to be
 #: interpretable against the rules in force when it fired.
@@ -156,7 +156,7 @@ def read_windows(state_dir: Path, *, today: date, recent_days: int, baseline_day
     recent: list[Observation] = []
     baseline: list[Observation] = []
     days_read: list[str] = []
-    root = state_dir / LEDGER_DIRNAME
+    root = ledger.tree_root(state_dir, LedgerName.SCORES)
     dates = days_in_window(
         (today - timedelta(days=1)).isoformat(), recent_days + baseline_days - 1
     )
@@ -166,7 +166,7 @@ def read_windows(state_dir: Path, *, today: date, recent_days: int, baseline_day
             continue
         days_read.append(when_read)
         for path in shards:
-            where = f"{LEDGER_RELDIR}/{path.relative_to(root).as_posix()}"
+            where = f"{ledger.tree_relpath(LedgerName.SCORES)}/{path.relative_to(root).as_posix()}"
             with path.open(encoding="utf-8", newline="") as handle:
                 reader = csv.DictReader(handle)
                 required = {"date", "source_url", "hhem", "extractiveness", "source_word_count"}
@@ -433,7 +433,10 @@ def report(
             f"{unknown} rows do not record the article's length; recorded dates: {span}."
         )
     if not windows.days_read:
-        lines.append("state/scores/ holds no day in the requested window - nothing was compared")
+        lines.append(
+            f"{ledger.tree_relpath(LedgerName.SCORES)}/ holds no day in the requested window "
+            "- nothing was compared"
+        )
         return "\n".join(lines), 1
     thin = shortfall(windows.recent, windows.baseline, config.min_window_rows)
     if thin:

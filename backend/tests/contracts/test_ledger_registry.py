@@ -50,6 +50,12 @@ STATE: Final = Path("state")
 #: segment. `candidate-models` was `validation` and `item-health-summary` was
 #: `telemetry-aggregate`, renamed to say what they hold while neither had a
 #: single committed file - so the old addresses held nothing to move.
+#:
+#: Three folders are not the old module's answer either, because it built no
+#: folder for a ledger filed by month or by stamp. Each is the folder its callers
+#: reached by joining the ledger's name onto the state root - `retention` for the
+#: item-health summary, `evals.archive` for the score archive - or, for the
+#: judge's archive, the folder `path` files every record into.
 AT_THE_BASE: Final[dict[str, tuple[str | None, str | None, str | None]]] = {
     "SEEN": ("state/seen/2026/09/18.csv", "state/seen/2026/09/18.csv", "state/seen"),
     "FEED_HEALTH": (
@@ -81,7 +87,7 @@ AT_THE_BASE: Final[dict[str, tuple[str | None, str | None, str | None]]] = {
     "ITEM_HEALTH_SUMMARY": (
         "state/item-health-summary/2026-09.csv",
         "state/item-health-summary/2026-09.csv",
-        None,
+        "state/item-health-summary",
     ),
     "SPAN_ROLLUP": (
         "state/span-rollup/2026/09/18",
@@ -127,7 +133,7 @@ AT_THE_BASE: Final[dict[str, tuple[str | None, str | None, str | None]]] = {
     "CONTENT_SIMILARITY_JUDGE_ARCHIVE": (
         "state/content-similarity-judge/archive/20260918T120000Z.json",
         "state/content-similarity-judge/archive/20260918T120000Z.json",
-        None,
+        "state/content-similarity-judge/archive",
     ),
     "CONTENT_SIMILARITY_JUDGE_METRICS": (
         "state/content-similarity-judge/metrics/2026/09/18.csv",
@@ -167,7 +173,7 @@ AT_THE_BASE: Final[dict[str, tuple[str | None, str | None, str | None]]] = {
     "SCORE_ARCHIVE": (
         "state/score-archive/2026-09.json",
         "state/score-archive/2026-09.json",
-        None,
+        "state/score-archive",
     ),
 }
 
@@ -394,6 +400,41 @@ def test_a_day_tree_root_is_where_it_was(member: LedgerName) -> None:
             paths.tree_root(STATE, member)
         return
     assert paths.tree_root(STATE, member).as_posix() == old_root
+
+
+def test_the_two_forms_of_one_folder_agree() -> None:
+    """`tree_relpath` is `tree_root` in POSIX form, the way `relpath` is `path`'s."""
+    for member in LedgerName:
+        if paths.entry(member).grain is Grain.FLAT:
+            continue
+        assert paths.tree_relpath(member) == paths.tree_root(STATE, member).as_posix()
+
+
+def test_every_month_ledger_and_every_stamped_ledger_has_a_folder() -> None:
+    """A ledger filed by month or by stamp names each file after its period, in one folder.
+
+    That folder is what a caller walks to find every month or every stamp, so it
+    has to be the directory each of the ledger's files sits in.
+    """
+    periods = {Grain.MONTH_FILE, Grain.STAMPED}
+    members = [member for member in LedgerName if paths.entry(member).grain in periods]
+
+    assert {paths.entry(member).grain for member in members} == periods
+    for member in members:
+        filed = paths.path(STATE, member, COVERS[paths.entry(member).grain])
+        assert filed.parent == paths.tree_root(STATE, member)
+
+
+def test_a_flat_ledger_has_no_folder_to_walk_and_the_refusal_names_it() -> None:
+    """A flat file shares its folder, so a walk handed that folder would read other files."""
+    flat = [member for member in LedgerName if paths.entry(member).grain is Grain.FLAT]
+
+    assert flat
+    for member in flat:
+        with pytest.raises(ValueError, match=f"^{member.value} is one file in a folder"):
+            paths.tree_root(STATE, member)
+        with pytest.raises(ValueError, match=f"^{member.value} is one file in a folder"):
+            paths.tree_relpath(member)
 
 
 def test_the_two_forms_of_one_address_agree() -> None:

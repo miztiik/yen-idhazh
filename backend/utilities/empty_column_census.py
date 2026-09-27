@@ -38,12 +38,13 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Final, NamedTuple
 
-from idhazh import day_shards
+from idhazh import day_shards, ledger
 from idhazh.contracts.host_fingerprint import COLUMN_READERS as HOST_READERS
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.item_health import COLUMN_READERS as ITEM_READERS
 from idhazh.contracts.item_health import RETIRED_CELLS, UNREAD_CELLS, ItemHealthRow
 from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
+from idhazh.contracts.ledger_name import LedgerName
 
 
 class Ledger(NamedTuple):
@@ -51,8 +52,8 @@ class Ledger(NamedTuple):
 
     #: What the report calls it, in the words a person uses for the thing.
     title: str
-    #: Where the day files live, relative to the repository root.
-    root: str
+    #: Which ledger it is. Where its day files live is the registry's answer.
+    which: LedgerName
     #: The columns the contract names today.
     columns: tuple[str, ...]
     #: Headings an earlier run wrote, and the column each is read into now. A
@@ -67,7 +68,7 @@ class Ledger(NamedTuple):
 LEDGERS: Final[tuple[Ledger, ...]] = (
     Ledger(
         title="item health",
-        root="state/item-health",
+        which=LedgerName.ITEM_HEALTH,
         columns=tuple(ItemHealthRow.csv_columns()),
         carried=RETIRED_CELLS,
         unread=frozenset(
@@ -76,7 +77,7 @@ LEDGERS: Final[tuple[Ledger, ...]] = (
     ),
     Ledger(
         title="host fingerprint",
-        root="state/host-fingerprint",
+        which=LedgerName.HOST_FINGERPRINT,
         columns=tuple(HostFingerprintRow.csv_columns()),
         carried={},
         unread=frozenset(),
@@ -100,7 +101,7 @@ class Census(NamedTuple):
     files: int
 
 
-def census(root: Path, ledger: Ledger) -> Census:
+def census(root: Path, subject: Ledger) -> Census:
     """Open every committed day file of one ledger and pool what it carries.
 
     **This is the growing read.** A bounded input cannot answer it: the question
@@ -112,21 +113,22 @@ def census(root: Path, ledger: Ledger) -> Census:
     headed: set[str] = set()
     rows = 0
     files = 0
-    for path in day_shards.shard_files(root / ledger.root, days=UNBOUNDED_WINDOW):
+    folder = ledger.tree_root(root / ledger.STATE_DIRNAME, subject.which)
+    for path in day_shards.shard_files(folder, days=UNBOUNDED_WINDOW):
         files += 1
         with path.open(encoding="utf-8", newline="") as handle:
             reader = csv.DictReader(handle)
             headed.update(
-                ledger.carried.get(name, name) for name in reader.fieldnames or ()
+                subject.carried.get(name, name) for name in reader.fieldnames or ()
             )
             for row in reader:
                 rows += 1
                 filled.update(
-                    ledger.carried.get(name, name)
+                    subject.carried.get(name, name)
                     for name, cell in row.items()
                     if cell and cell.strip()
                 )
-    known = frozenset(ledger.columns)
+    known = frozenset(subject.columns)
     return Census(frozenset(filled) & known, frozenset(headed) & known, rows, files)
 
 
@@ -141,25 +143,25 @@ def reader_of(title: str, column: str) -> str:
 def report(root: Path) -> int:
     """Print one block a ledger, then the verdict. Non-zero means act."""
     orphans: list[str] = []
-    for ledger in LEDGERS:
-        found = census(root, ledger)
-        empty = tuple(name for name in ledger.columns if name not in found.filled)
-        missing = tuple(name for name in ledger.columns if name not in found.headed)
-        print(f"\n## {ledger.title}")
+    for subject in LEDGERS:
+        found = census(root, subject)
+        empty = tuple(name for name in subject.columns if name not in found.filled)
+        missing = tuple(name for name in subject.columns if name not in found.headed)
+        print(f"\n## {subject.title}")
         print(
             f"{found.files} day files, {found.rows} rows, "
-            f"{len(ledger.columns)} columns the contract names, "
+            f"{len(subject.columns)} columns the contract names, "
             f"{len(found.headed)} of them under a heading somewhere"
         )
         if missing:
             print("\nNever under any heading - no run has written the column at all:")
             for name in missing:
-                print(f"  {name:<34} {reader_of(ledger.title, name)}")
+                print(f"  {name:<34} {reader_of(subject.title, name)}")
         print(f"\nEmpty on all {found.rows} committed rows ({len(empty)}):")
         for name in empty or ("- none -",):
-            print(f"  {name:<34} {reader_of(ledger.title, name) if empty else ''}")
-        both = tuple(name for name in empty if name in ledger.unread)
-        orphans += [f"{ledger.title}: {name}" for name in both]
+            print(f"  {name:<34} {reader_of(subject.title, name) if empty else ''}")
+        both = tuple(name for name in empty if name in subject.unread)
+        orphans += [f"{subject.title}: {name}" for name in both]
 
     print("\n## Neither a reader nor a writer")
     if not orphans:

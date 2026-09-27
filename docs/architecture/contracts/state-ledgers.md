@@ -91,15 +91,18 @@ A **family** is one top-level folder under `state/`. `content-similarity-judge` 
 
 A **ledger** is one row shape, filed one way, at one address. Each carries five things: its `name`, its `grain`, the `prefix` of directories it sits under inside `state/`, and - for a ledger that is a single file - the `stem` and `suffix` that name it. A dated ledger carries no stem, because its period names it. A day directory carries no suffix, because it is a directory. The prefix keeps the whole nest, the family's folder included, so an address is read off the ledger alone.
 
-Three builders read the registry and nothing else builds a path under `state/`:
+Four builders read the registry, in two pairs, and nothing else builds a path under `state/`:
 
 | Builder | Answers |
 | --- | --- |
 | `path(state_dir, ledger, covers)` | where the rows covering this period go, as a `Path` |
 | `relpath(ledger, covers)` | the same address, POSIX and relative, for a log line or a manifest |
-| `tree_root(state_dir, ledger)` | the whole-tree directory a reader walks, for a ledger that files by day |
+| `tree_root(state_dir, ledger)` | the folder that holds every file of this ledger and nothing else - what a reader walks, whether the ledger files by day, by month or by stamp |
+| `tree_relpath(ledger)` | the same folder, POSIX and relative, for a log line or a manifest |
 
 `covers` is the period the rows describe and never the day the job woke (CLAUDE.md section 2). A dated ledger handed nothing raises, and a flat one handed a period raises - `path` does not guess, because a guessed period files a row where nobody will look for it. `tree_root` is a builder of its own rather than `path` with no period, so `path` keeps that refusal.
+
+A flat file has no folder of its own: `feed-retirements.csv` sits at the top of `state/` and `holdout-pairs.csv` beside the similarity judge's other ledgers, so a walk handed either folder would read files that are not the ledger's. `tree_root` and `tree_relpath` refuse a flat ledger by name, and a caller asks `path` for the file.
 
 Because the extension is data on the entry, a builder cannot emit the wrong one.
 
@@ -152,7 +155,7 @@ flowchart TB
   end
 
   subgraph DOOR["idhazh/ledger/ - the four modules a row moves through"]
-    PATHS["paths: path, relpath, tree_root"]
+    PATHS["paths: path, relpath, tree_root, tree_relpath"]
     KEYS["keys: the dedup key and preference"]
     ROWS["rows: append, load, write_segment"]
     SETTLE["settle: drop repeated rows"]
@@ -238,6 +241,8 @@ The config carries where each ledger lives and each family's lifecycle status. I
 **A lifecycle status belongs to a family, and an address to a ledger.** Owner decision, 2026-09-27. A status is a decision about a whole folder: pausing the similarity judge means none of its seven ledgers is written, and a status stored on each ledger made that seven edits that could disagree with each other. An address is a fact about one row shape - which folder, which grain, which file name - and two ledgers in one family still file differently. So the status is written once per folder, and the prefix keeps the whole nest so no builder has to ask the family anything.
 
 **The last four folders joined the registry rather than keep their own names.** `traces`, `day-metrics`, `digest-fragments` and `score-archive` were built by their owning modules from directory constants, and `prune-state` protected them from a list typed into the sweep beside the registry. That list was a second place to forget a folder, and each constant was a second spelling of where a ledger lives - the two defects the registry exists to remove. Each is now a one-ledger family, its owner composes its paths from the registry, and the one file name an owner minted, a digest fragment's, is minted inside the package like every other name under `state/`. None of them moved: each builder lands on the bytes it built before, and a test holds it.
+
+**No module outside the package joins a ledger's name onto a root.** A hand-joined folder is right only until the registry moves the ledger, and then it reads a folder that no longer holds anything - which reads as a ledger with no history rather than as a fault. So every folder comes from `tree_root` or `tree_relpath`. `backend/tests/contracts/test_ledger_package.py` refuses a join of a `LedgerName` member anywhere else under `backend/`, and a typed `state/<family>` string in any module that is not a test.
 
 **Retention stays with the pass that deletes.** A family's status says whether new rows are written. How long old rows are kept is answered by the retention passes, each from its own knob, and a window written here would be a second place to set it. So pausing a family does not freeze its old rows; pausing the pass that deletes them does.
 

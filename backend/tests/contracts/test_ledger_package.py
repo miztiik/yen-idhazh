@@ -1,9 +1,10 @@
 """Is the ledger a package with one door, and does the door stay empty?
 
-Six checks. Most pass at both ends of the split by design - what each one has to
+Seven checks. Most pass at both ends of the split by design - what each one has to
 be able to fail is the property the move could break, and the ones that can are
 the facade shape, the write-path composition, the load order and the pyarrow
-probe.
+probe. The seventh is the door itself: no module outside the package spells
+where a ledger's folder is.
 
 Nothing here reads `state/`. Every walk is over the package's own files, so what
 it costs grows with the code rather than with the archive (Guardrail #12).
@@ -65,6 +66,19 @@ OWNED_PATTERNS: Final = ("SEGMENT_NAME", "SEGMENT_SUFFIX", "REPAIR_NAME", "REPAI
 #: cell of writer identity is a name being built, wherever it sits.
 IDENTITY_CELLS: Final = ("run_id", "attempt", "shard", "job")
 ROW_SUFFIXES: Final = (".csv", ".jsonl", ".json", ".parquet")
+
+#: Where a typed folder under `state/` is refused: every module that is not a
+#: test. A test may build a fixture tree under any root it likes, and the join
+#: check below still holds it to the registry's names.
+READS_STATE: Final = ("backend/idhazh/", "backend/utilities/", "backend/bin/")
+
+#: The one module outside the package that types folders under `state/`, and why.
+#: `path_classes` copies the per-path rules `.gitattributes` declares, so each
+#: folder in it is that file's spelling rather than a reach into the registry,
+#: and `backend/tests/contracts/test_path_classes.py` holds the two in step.
+#:
+#: Written out so a SECOND one fails here rather than joining it unnoticed.
+TYPES_ITS_OWN_FOLDERS: Final[frozenset[str]] = frozenset({"backend/idhazh/path_classes.py"})
 
 
 @cache
@@ -409,3 +423,141 @@ def test_nothing_outside_the_package_mints_a_name_under_state() -> None:
         f"identity ({minting}). Hand the rows and the identity to the ledger and let it "
         "name the file, or say here why this tree names its own."
     )
+
+
+# --- the ledger owns every folder under state/ -------------------------------
+
+
+def _is_a_ledger_name(node: ast.AST) -> bool:
+    """`LedgerName.X` or `LedgerName.X.value`: one ledger's name, written in code."""
+    if isinstance(node, ast.Attribute) and node.attr == "value":
+        node = node.value
+    return (
+        isinstance(node, ast.Attribute)
+        and isinstance(node.value, ast.Name)
+        and node.value.id == LedgerName.__name__
+    )
+
+
+def _hand_joins(tree: ast.Module) -> list[int]:
+    """The lines where a ledger's name is joined onto a path by `/` or `joinpath`."""
+    lines: set[int] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Div):
+            if _is_a_ledger_name(node.left) or _is_a_ledger_name(node.right):
+                lines.add(node.lineno)
+        elif (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "joinpath"
+            and any(_is_a_ledger_name(argument) for argument in node.args)
+        ):
+            lines.add(node.lineno)
+    return sorted(lines)
+
+
+def _docstrings(tree: ast.Module) -> set[int]:
+    """The node ids of every docstring in one module, which is prose and not a path."""
+    found: set[int] = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Module | ast.ClassDef | ast.FunctionDef | ast.AsyncFunctionDef):
+            continue
+        first = node.body[0] if node.body else None
+        if (
+            isinstance(first, ast.Expr)
+            and isinstance(first.value, ast.Constant)
+            and isinstance(first.value.value, str)
+        ):
+            found.add(id(first.value))
+    return found
+
+
+def _typed_folders(tree: ast.Module, families: frozenset[str]) -> list[int]:
+    """The lines where a string spells `state/<family>`, or a path inside one."""
+    prose = _docstrings(tree)
+    spelled = [f"{ledger.STATE_DIRNAME}/{family}" for family in families]
+    lines: set[int] = set()
+    for node in ast.walk(tree):
+        if not (isinstance(node, ast.Constant) and isinstance(node.value, str)):
+            continue
+        if id(node) in prose:
+            continue
+        if any(node.value == folder or node.value.startswith(f"{folder}/") for folder in spelled):
+            lines.add(node.lineno)
+    return sorted(lines)
+
+
+def _where(found: dict[str, list[int]]) -> str:
+    """Every offender as `file:line`, so the failure says where to look."""
+    return ", ".join(
+        f"{relpath}:{line}" for relpath, lines in sorted(found.items()) for line in lines
+    )
+
+
+def test_nothing_outside_the_package_joins_a_ledgers_name_onto_a_path() -> None:
+    """A ledger's folder comes from the registry, so moving the ledger moves every reader.
+
+    A hand join agrees with the registry only until the registry files that
+    ledger somewhere else. Then the reader walks a folder that holds nothing,
+    which reads as a ledger with no history rather than as a fault. Tests are
+    held to it too: a fixture built by a hand join is a fixture in the old place.
+    """
+    joined: dict[str, list[int]] = {}
+    for relpath, tree in _backend_modules().items():
+        if relpath.startswith("backend/idhazh/ledger/"):
+            continue
+        lines = _hand_joins(tree)
+        if lines:
+            joined[relpath] = lines
+
+    assert not joined, (
+        f"{_where(joined)} joins a LedgerName member onto a path by hand. Ask the "
+        "registry instead: ledger.tree_root(state_dir, which) for the ledger's folder, "
+        "ledger.path(state_dir, which, covers) for one of its files."
+    )
+
+
+def test_no_module_types_a_folder_under_state() -> None:
+    """A typed `state/<family>` is a second spelling of where a family's ledgers sit.
+
+    The families are the registry's, so one added tomorrow is covered the day it
+    lands. A docstring is prose and is not read. The one module allowed to type
+    them is named above with its reason.
+    """
+    families = ledger.claimed_roots()
+    typed: dict[str, list[int]] = {}
+    for relpath, tree in _backend_modules().items():
+        if not relpath.startswith(READS_STATE) or relpath in TYPES_ITS_OWN_FOLDERS:
+            continue
+        lines = _typed_folders(tree, families)
+        if lines:
+            typed[relpath] = lines
+
+    assert not typed, (
+        f"{_where(typed)} types a folder under {ledger.STATE_DIRNAME}/ by hand. Build it "
+        "from the registry - ledger.tree_relpath(which) for a log line, "
+        "ledger.tree_root(state_dir, which) for a read - or say in "
+        "TYPES_ITS_OWN_FOLDERS why this module spells its own."
+    )
+
+
+def test_the_folder_checks_can_see_what_they_refuse() -> None:
+    """Both walks are only worth running while each still finds what it looks for.
+
+    A walk that has drifted from the syntax it reads passes on everything, so
+    each is handed one offender of its own - and the exempt module is checked to
+    still type the folders it is exempt for.
+    """
+    joined = ast.parse(
+        "from idhazh.contracts.ledger_name import LedgerName\n"
+        "root = state_dir / LedgerName.SCORES\n"
+        "other = state_dir.joinpath(LedgerName.SEEN.value, '2026')\n"
+    )
+    typed = ast.parse('"""A docstring naming state/scores is prose."""\nROOT = "state/scores"\n')
+
+    assert _hand_joins(joined) == [2, 3]
+    assert _typed_folders(typed, ledger.claimed_roots()) == [2]
+    for exempt in TYPES_ITS_OWN_FOLDERS:
+        assert _typed_folders(_backend_modules()[exempt], ledger.claimed_roots()), (
+            f"{exempt} no longer types a folder under state/, so its exemption is stale"
+        )
