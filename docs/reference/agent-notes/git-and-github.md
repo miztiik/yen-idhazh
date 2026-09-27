@@ -52,6 +52,12 @@ python backend/utilities/sweep_worktrees.py --remove # remove what it named
 
 It keeps a tree unless the pull request is `MERGED`, the branch is gone from the remote, and the tree is clean. All three are needed: a squash merge leaves the branch a non-ancestor, so ancestry cannot say whether the row landed, and a branch with no pull request is pending work rather than stale work.
 
+**A removed worktree can come back as a plain folder, and the sweep cannot see it.** On 2026-09-27 a worktree removed cleanly at 17:47 UTC was a folder again at 17:57, holding exactly the three files edited in it, byte-identical to `main`, and no `.git`. The likeliest writer is the editor saving copies it still had open (an estimate: no process held the folder when checked). `git worktree list` does not name such a folder, so the sweep never considers it, and folders of a few files with no `.git` collect in the container. Check the container again at the end of a session, and delete a folder with no `.git` only when every file in it is already in git:
+
+```powershell
+Get-ChildItem -LiteralPath <folder> -Recurse -File | Where-Object { git -C <repo> cat-file -e (git -C <repo> hash-object -- $_.FullName) 2>$null; $LASTEXITCODE -ne 0 } # no output: all in git
+```
+
 **Two process classes hold a dead tree's files and only one is safe to kill.** An `esbuild` service whose executable is inside the tree keeps running after the row ends - stop it. The editor's **Svelte language server** loads `rollup`, `lightningcss` and `tailwindcss-oxide` `.node` out of every worktree it has indexed (many dead trees at once); it runs as `Code.exe`, so match on the command line (`svelte-language-server/bin/server.js`), never on the name. Stopping it released all 42 files and the editor respawned it untouched. Find any holder by loaded module:
 
 ```powershell
