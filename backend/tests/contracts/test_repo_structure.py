@@ -573,30 +573,6 @@ RETIRED_LEDGER_WORD_SWEEP = (
     ":(exclude)backend/var",
 )
 
-#: The one section allowed to spell the word, because it is the change that
-#: removes it. The exemption is that row's own section, found by its heading
-#: rather than by a line range, and it deletes itself: the row that closes plan
-#: 53 deletes the plan-doc, and a plan-doc that is not there excuses nothing and
-#: fails nothing.
-RETIRING_ROW_DOC = "TODO/20260926-53-one-door-into-state-plan.md"
-RETIRING_ROW_HEADING = re.compile(r"^## Row #1\b")
-MARKDOWN_SECTION = re.compile(r"^## ")
-
-
-def _lines_the_retiring_row_owns(relative: str, text: str) -> set[int]:
-    """The plan row that retires the word, from its heading to the next one."""
-    if relative != RETIRING_ROW_DOC:
-        return set()
-    lines = text.split("\n")
-    opened = [n for n, line in enumerate(lines, start=1) if RETIRING_ROW_HEADING.match(line)]
-    if not opened:
-        return set()
-    start = opened[0]
-    after = [
-        n for n, line in enumerate(lines, start=1) if n > start and MARKDOWN_SECTION.match(line)
-    ]
-    return set(range(start, (after[0] if after else len(lines) + 1)))
-
 
 def test_the_retired_ledger_word_has_not_come_back() -> None:
     """One thing under `state/` has one name, and `ledger` is it.
@@ -631,10 +607,7 @@ def test_the_retired_ledger_word_has_not_come_back() -> None:
     offenders: list[str] = []
     for relative in listed:
         text = (REPO_ROOT / relative).read_bytes().decode("utf-8", "replace")
-        excused = _lines_the_retiring_row_owns(relative, text)
         for number, line in enumerate(text.split("\n"), start=1):
-            if number in excused:
-                continue
             counted = SOMEBODY_ELSES_ADDRESS.sub("", line)
             for spelling in NOT_THE_LEDGER_WORD:
                 counted = counted.replace(spelling, "")

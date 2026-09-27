@@ -132,7 +132,7 @@ flowchart TB
     REG[("the registry, in memory")]
   end
 
-  subgraph DOOR["The one door - idhazh/ledger/"]
+  subgraph DOOR["idhazh/ledger/ - the four modules a row moves through"]
     PATHS["paths: path, relpath, tree_root"]
     KEYS["keys: the dedup key and preference"]
     ROWS["rows: append, load, write_segment"]
@@ -151,8 +151,10 @@ flowchart TB
   BIJ -->|"yes"| REG
   REG --> PATHS
   PATHS --> ROWS
+  PATHS --> SETTLE
   KEYS --> ROWS
   KEYS --> SETTLE
+  SETTLE --> ROWS
   ROWS --> TREE
   SETTLE --> TREE
   REG -->|"prune-state asks"| PRUNE
@@ -165,17 +167,19 @@ flowchart TB
   classDef yes fill:#176032,stroke:#2ea04f,stroke-width:1.5px,color:#ffffff;
   classDef no fill:#a32020,stroke:#d23b3b,stroke-width:1.5px,color:#ffffff;
   classDef ledger fill:#1b3a5c,stroke:#2d6ca3,stroke-width:1.5px,color:#ffffff;
-  classDef sys fill:#1a1e27,stroke:#8b93a7,stroke-width:1.5px,color:#c8cdd8;
+  classDef sysOps fill:#1a1e27,stroke:#8b93a7,stroke-width:1.5px,color:#c8cdd8;
 
   class ENTRY,MEMBER,READ,PATHS,KEYS,ROWS,SETTLE stage;
   class BIJ,PRUNE decision;
   class KEEP yes;
   class REFUSE,EMPTY no;
   class REG,TREE ledger;
-  class ONBOARD,LOAD,DOOR sys;
+  class ONBOARD,LOAD,DOOR sysOps;
 ```
 
 In one line: a ledger exists because an entry says so; the entry and the typed name must agree or the build stops; everything that touches `state/` goes through the door the registry feeds; and `prune-state` empties only what the registry does not claim.
+
+The four drawn are the ones a row moves through. The other three - `csv_file`, `filenames` and `headers` - are read and written by those four and reach neither the registry nor `state/` on their own; the table below lists all eight.
 
 ### The seven modules behind the door
 
@@ -194,6 +198,14 @@ In one line: a ledger exists because an entry says so; the entry and the typed n
 
 Two edges in that graph carry a reason rather than a preference. **`paths.py` imports nothing from `keys.py`**: where a ledger lives and how its rows settle are two questions that change for different reasons, and one module holding both is how a path edit starts moving a settlement rule. **`rows.py` imports `day_shards` inside the function bodies that need it, never at the top of the file**: `day_shards` imports names back out of this package at its own module top, so a module-scope import in `rows.py` would close a load-time cycle - importing the package runs `__init__`, which imports `rows`, which re-enters a package that is still being built.
 
+A fresh interpreter importing either module is not what proves the second one. Measured 2026-09-27 by promoting that import on purpose: both orders still loaded, because the door happens to bind `csv_file` before `rows`, so the name is already there by the time `day_shards` asks for it. Reorder the door and the same promotion raises. What holds the rule is the check that reads the import statements themselves, and a green load says only that the package loads.
+
+### Nothing outside the package names a file under state/
+
+A producer hands the ledger its rows and the identity of the writer, and the ledger decides what the file is called. A caller that builds its own name is a caller that will disagree with the parser the next time either of them changes, and the two are a day apart in the same package.
+
+One module outside may ask, and none may carry a copy. `backend/idhazh/path_classes.py` answers whether a committed path was written by exactly one writer, which it can only do by reading the pattern that minted the name - so that pattern is public for it, and inlining a second copy of it is the thing being refused.
+
 ### Design rationale
 
 **The set of ledgers is a config file, not a Python set and not a glob.** Owner decision, 2026-09-26.
@@ -203,6 +215,8 @@ A frozen set in Python was what this replaced, and it is the defect rather than 
 A glob over `state/` was the other candidate and it fails twice. Its cost rises with the data (CLAUDE.md Guardrail #12), and it cannot tell a retired ledger from one that has never run - a ledger whose first write failed is simply invisible to a walk, which is the opposite of what a protected set needs.
 
 The config carries where a ledger lives and its lifecycle. It does not carry how the ledger's rows settle: a dedup key is a tuple and a preference is a callable, and a callable is not JSON. Merging the two into one table was considered and rejected - it re-couples two questions that change for different reasons, which is why `paths.py` imports nothing that answers the second one.
+
+**A root that tells one copy of a ledger from another is an argument to a builder, never a field on an entry.** The registry is one entry per name and the check above refuses a second, so a ledger that ends up sitting under two roots at once cannot express that as two entries - it would break the check on the first load. `prefix` is the nest a ledger sits in, and a builder that has to choose between two roots takes the choice from its caller and composes it with the same entry.
 
 CLAUDE.md section 11 does not apply to this file. It is a config file this project authors, nothing but this repository reads it, and a file a person edits in place has no older copy for a later build to read - so it carries no `version` and no `changelog`.
 
