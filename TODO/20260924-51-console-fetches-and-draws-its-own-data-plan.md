@@ -1,6 +1,6 @@
 # Plan 51 - The console fetches and draws its own data
 
-**Last Updated**: 2026-09-26
+**Last Updated**: 2026-09-27
 
 **Level**: 5 (CLAUDE.md section 6). Row 3 decides whether `state/` reaches a browser, which is a publishing contract, and sections 2.6 to 2.9 are the design contract the panels are built to. The other rows are Level 2 to Level 3 and carry no contract change beyond one copied settlement key.
 
@@ -13,9 +13,9 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | Field | Value |
 | --- | --- |
 | Why this plan exists | The Hardware route counts every job twice, its span control sits far above the reader who wants it, and every chart on the console is drawn from data baked into the page by the build. This plan corrects the count, moves the chrome, and writes the query door, the chart vocabulary, the hover strip and the gates the fifty later panels follow - then proves the whole chain on one panel: query the ledger in the browser, draw it in d3. |
-| Hard scope - in | - `state/host-fingerprint/` is read settled, so a job counts once.<br>- The five-tab console strip sticks, the span control rides on it, and a sentence says how complete the page is.<br>- The three ledgers the console reads reach the browser as published parquet.<br>- `frontend/src/lib/data/` holds the one query door every later panel calls; `frontend/src/lib/charts/d3/` holds the house style every later chart draws to.<br>- One panel queries the published ledger for the columns and days it draws and is redrawn in d3. |
+| Hard scope - in | - `state/host-fingerprint/` is read settled, so a job counts once.<br>- The console's tab strip sticks, however many tabs it holds, the span control rides on it, and a sentence says how complete the page is.<br>- The three ledgers the console reads reach the browser as published parquet.<br>- `frontend/src/lib/data/` holds the one query door every later panel calls in the browser and every build-time reader calls while the site is built; `frontend/src/lib/charts/d3/` holds the house style every later chart draws to.<br>- One panel queries the published ledger for the columns and days it draws and is redrawn in d3. |
 | Hard scope - out | see the table below |
-| ESCALATE triggers | 1. A tenth prerendered route, or retiring an existing one.<br>2. A charting library that is not d3.<br>3. A new committed payload under `frontend/public/`.<br>4. Any change to `ConsoleBand`'s shape - it is the payload every console route fetches first, so a retyped or removed field ripples to every route.<br>5. **A chart type that is not one of the nine in section 2.6.** A tenth is a design question, not an improvisation.<br><br>**"How the browser reaches the bytes" is settled**: `state/` carries its own indexes, declared and committed by plan 50 (its section titled "The shapes a worker must not invent"); the build copies the published ledgers' compact periods verbatim into gitignored `frontend/static/state/` and generates nothing.<br><br>**Compaction and the ledger migration are plan 50's, not this plan's.** Plan 50 migrates the ledgers to parquet, owns every compaction trigger and its eligibility rule, and declares the index and watermark shapes. This plan publishes what plan 50 compacted and reads it in the browser. |
+| ESCALATE triggers | 1. A tenth prerendered route, or retiring an existing one.<br>2. A charting library that is not d3.<br>3. A new committed payload under `frontend/public/`.<br>4. Any change to `ConsoleBand`'s shape - it is the payload every console route fetches first, so a retyped or removed field ripples to every route.<br><br>**A new chart type is not an escalation.** It is Susan's call (section 2.6).<br><br>**"How the browser reaches the bytes" is settled**: `state/` carries its own indexes, declared and committed by plan 50 (its section titled "The shapes a worker must not invent"); the build copies the published ledgers' compact periods verbatim into gitignored `frontend/static/state/` and generates nothing.<br><br>**Compaction and the ledger migration are plan 50's, not this plan's.** Plan 50 migrates the ledgers to parquet, owns every compaction trigger and its eligibility rule, and declares the index and watermark shapes. **Its compaction also merges: a compacted file holds one row per record**, so the two halves of a job's machine record arrive as one row and the door never merges (owner decision, 2026-09-27). This plan publishes what plan 50 compacted and reads it in the browser. |
 | Chosen strategy | Correct the number first, move the chrome and publish second, write the shared parts third, prove them on one panel last. Ruled by Fowler (CLAUDE.md section 14). |
 | Execution | autonomous orchestrator per docs/how-to/execute-a-plan.md. Parallel N = 2. |
 
@@ -23,7 +23,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 
 | What is out | What it costs to leave out | What would bring it in |
 | --- | --- | --- |
-| The other fifty panels, on all five console routes | Two grammars coexist: one panel queries parquet and draws in d3, fifty read CSV at build time and draw in ECharts. `echarts@^5.6.0` stays installed with its importers | [`20260926-52-fifty-panels-move-and-six-projections-go-plan.md`](20260926-52-fifty-panels-move-and-six-projections-go-plan.md), which starts from the vocabulary, the strip and the gates in sections 2.6 to 2.9, and from the panel-by-panel verdict table Susan ruled, now carried in plan 52. **Rows 4 to 8 exist to make that plan cheap, not to be it** |
+| The other fifty panels, on every console route | Two grammars coexist: one panel queries parquet and draws in d3, fifty read CSV at build time and draw in ECharts. `echarts@^5.6.0` stays installed with its importers | [`20260926-52-fifty-panels-move-and-six-projections-go-plan.md`](20260926-52-fifty-panels-move-and-six-projections-go-plan.md), which starts from the vocabulary, the strip and the gates in sections 2.6 to 2.9, and from the panel-by-panel verdict table Susan ruled, now carried in plan 52. **Rows 4 to 8 exist to make that plan cheap, not to be it** |
 | The panel-by-panel verdict table for all fifty-one panels (KEEP / REDRAW / REPLACE / DELETE / NEW) | Plan 52 has no execution backlog until a `prepare-plan` pass turns those verdicts into rows | It lives in plan 52 now; this plan executes only panel 6b, whose spec stays here in row 8 |
 | Panel ids on `/console/model/`, `/console/voices/` and `/console/judgement/` | Those three routes import neither `Panel.svelte` nor `PanelGroup.svelte`, so they draw no `data-console-panel-id` and **no gate and no capture can reach them**. Row 6's judged set is the addressable panels on the two routes that draw an id, and a panel on the other three ships unseen | A route-plan row in plan 52 that wraps those three routes' sections in `Panel.svelte` and adds their route keys to `console.panel_groups`. It is a prerequisite of a full capture, not a follow-up |
 | Three `/console/` panels nested inside another panel's body | "Reading the prompt", "Writing the summary" and "How much of each prompt was already in memory" are `<Panel>` elements inside another panel and carry no id, so the capture never sees them | A route-plan row that either gives each an id and its parent's group, or takes its `Panel.svelte` wrapper away. It is one or the other, not both |
@@ -42,7 +42,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | N2 | The browser queries the parquet itself | **Stone laid by row 7**, the query door: one module owns the engine and every later panel queries through it |
 | N3 | The browser fetches its own data at view time | **Stone laid by rows 7 and 8** - the door fetches at view time and one panel proves it after mount |
 | N4 | Prerendering is an anti-pattern | **Not here.** Nine files keep `export const prerender`, and ESCALATE trigger 1 stops a row adding a tenth |
-| N5 | d3 is the only charting library | **Stone laid by rows 4 to 6**, which write the nine chart types, the hover strip and the ten gates, and by row 8, which moves one importer |
+| N5 | d3 is the only charting library | **Stone laid by rows 4 to 6**, which write the starting chart types, the hover strip and the ten gates, and by row 8, which moves one importer |
 | N6 | One writer per path | **Inherited** from plan 50's door |
 | N7, N8 | `state/` is the only source; no production artefact under `frontend/` in git | **Stone laid by row 3.** What reaches the site is the ledger itself, copied unchanged and gitignored, so it cannot say anything `state/` does not. **The projections that can are retired by plan 52**, each in the pull request that moves its last reader |
 | N9, N10, N11 | The name, the two roots, the one shard pattern | **Inherited** from plan 50's door. This plan mints no naming rule of its own |
@@ -52,7 +52,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | The Hardware route stops counting every job twice | - | A | PENDING | - | - | - |
-| 2 | The console shell: a stuck tab strip, the span control on it, four named anchors, a completeness sentence | - | A | PENDING | - | - | - |
+| 2 | The console shell: a stuck tab strip, the span control on it, jump links, a completeness sentence | - | A | PENDING | - | - | - |
 | 3 | The three ledgers the console reads are published | plan 50's rows titled "The index task, two compact periods, and the diagram moves into the page" and "The three ledgers the console's routes read become parquet" | B | PENDING | - | - | - |
 | 4 | The chart vocabulary and the house style, with no panel moved | - | B | PENDING | - | - | - |
 | 5 | One readout strip, every chart, and hover a keyboard can reach | 1, 4 | C | PENDING | - | - | - |
@@ -72,7 +72,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 
 **Rows 4, 5, 6 and 7 are the shared deliverable; row 8 is the proof.** Sections 2.2 and 2.6 to 2.9 declare all of them, so no row invents anything. Row 4 writes modules and no panel, which is why it runs beside row 3.
 
-**Row 5 replaces one exported type and cannot be split by panel.** `DayReadout` becomes `Readout` across its producers and consumers, so there is no intermediate commit where half the console is on the new shape and the tree compiles. That is why its `Files touched` is long and why row 6 (which shares the config file) waits on it.
+**Row 5 replaces one exported type and cannot be split by panel.** `DayReadout` becomes `Readout` across its producers and consumers, so there is no intermediate commit where half the console is on the new shape and the tree compiles. That is why its `Files touched` is long and why row 6 (which shares the config file) waits on it. **Plan 54's run-yield chart has landed on `DayReadout`** (#1117): `RunYield.svelte` builds its own columns of the old type, so row 5 converts it with every other chart and the type is swapped once.
 
 **Row 3 publishes; it migrates nothing and triggers no compaction.** Plan 50 migrates the ledgers and owns every compaction trigger and its eligibility rule. Row 3 adds the copy step, the allow-list, the ceiling and the test that binds a panel's ledger to that list. It reverts to nothing.
 
@@ -82,11 +82,11 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 
 ### 2.1 `HOST_FINGERPRINT_KEY`, the frontend copy
 
-`backend/idhazh/ledger/__init__.py` declares `HOST_FINGERPRINT_KEY: Final = ("date", "run_id", "job", "shard")`. The frontend carries a hand-written copy beside `ITEM_HEALTH_KEY` in `frontend/src/lib/server/payload.ts`:
+`backend/idhazh/ledger/keys.py` declares `HOST_FINGERPRINT_KEY: Final = ("date", "run_id", "job", "shard")`. The frontend carries a hand-written copy beside `ITEM_HEALTH_KEY` in `frontend/src/lib/server/payload.ts`, and `frontend/tests/day-shards.spec.ts` holds the copies in step:
 
 ```ts
 /** What makes two machine rows the same record. The Pydantic original is
- *  `ledger.HOST_FINGERPRINT_KEY`; the test below holds this copy in step. */
+ *  `ledger.HOST_FINGERPRINT_KEY`; `day-shards.spec.ts` holds this copy in step. */
 export const HOST_FINGERPRINT_KEY = ['date', 'run_id', 'job', 'shard'] as const;
 ```
 
@@ -110,17 +110,36 @@ export function mergedDayShards(
 
 **Settlement is per day.** The key carries a `date` cell, so a re-measurement of the same job on a later day cannot be deleted by settling over the whole window.
 
+**This merge is for the build-time CSV reader only.** Once plan 50 moves this ledger to parquet, its compaction does the merge (owner decision, 2026-09-27): a compacted file already holds one row per job, so no reader merges, and plan 50 deletes `mergedDayShards` if nothing else calls it.
+
 ### 2.2 The query door
 
 The query door is three modules under `frontend/src/lib/data/`, and a panel sees only the first. `ledger.ts` is the public door every panel calls; `engine.ts` is **the only module in `frontend/` that imports the query engine** (`@duckdb/duckdb-wasm`), mirroring the backend's single-engine rule; `slice.ts` turns a date range into the set of files to fetch. A panel imports `ledger.ts` and nothing deeper.
 
+**`ledger.ts` has two entry points over one query.** `slice()` is what a panel calls in the browser; it fetches the compacted files over HTTP. `sliceFromDisk()` is what a build-time reader under `frontend/src/lib/server/` calls while the site is built; it reads the same files from `state/` on disk. Plan 50's row titled "The three ledgers the console's routes read become parquet" moves today's build-time readers onto `sliceFromDisk()` and adds no export of its own.
+
 ```ts
 /** Ask a committed ledger for the slice a panel draws. Columns and a date range
  *  are named by the caller; nothing fetches a whole ledger. */
-export async function slice(
+export async function slice(ledger: LedgerName, opts: SliceOptions): Promise<SliceResult>;
+
+/** The same query over the same compacted files, read from disk while the site is
+ *  built. `stateDir` is `STATE_ROOT` from `frontend/src/lib/server/payload.ts`.
+ *  Only build-time readers under `frontend/src/lib/server/` call it; a panel never does. */
+export async function sliceFromDisk(
+	stateDir: string,
 	ledger: LedgerName,
-	opts: { columns: readonly string[]; from: DateStamp; to: DateStamp; where?: readonly Predicate[] }
+	opts: SliceOptions
 ): Promise<SliceResult>;
+
+/** What a caller asks for. `columns` is required and non-empty; the range is closed
+ *  at both ends. */
+export type SliceOptions = {
+	columns: readonly string[];
+	from: DateStamp;
+	to: DateStamp;
+	where?: readonly Predicate[];
+};
 
 /** One parquet row as the engine hands it back. */
 export type Row = Record<string, string | number | boolean | null>;
@@ -150,6 +169,8 @@ export type LedgerName = 'host-fingerprint' | 'item-health' | 'scores';
 
 **`LedgerName` maps to an address inside `ledger.ts` and nowhere else.** The door joins `visuals.asset_base_url` - or SvelteKit's own repository prefix when that knob is empty, which is the shipped default - onto the committed path unchanged: `state/compact/<ledger>/index/daily.json`, `state/compact/<ledger>/daily/<YYYY>/<MM>/<DD>.parquet`, `state/compact/<ledger>/monthly/<YYYY>/<MM>.parquet`. Getting the prefix wrong is the commonest failure on this host, so one module owns it. A panel that could name a path could name any path, and the published list would stop being the bound.
 
+**The engine runs in two places, and `engine.ts` owns both.** In the browser it loads the package's single-threaded build behind a dynamic `import()` (row 7 decisions 3 and 4). At build time, in Node, it loads the package's blocking Node build and reads its wasm from the installed package. So there is still one engine and one importer (section 2.5 refusal 1). Both entry points run the same query over the same compacted files, so a build-time page and a browser panel asking for the same span get the same rows.
+
 **Whole files are fetched and handed to the engine as buffers**, the same way the month search index already is. There are no byte-range requests anywhere in this plan - a date-range query and an HTTP range request are different things, and only the first is used. Column projection saves parse time, not bytes.
 
 **File selection follows the span.** `console.window_presets` is `[1, 7, 14, 30, 90]`. A span of 30 days or less is served entirely from the daily period - the two indexes plus one daily file per date; only the widest span reaches a monthly file. No raw file is published, so the one-day span reads one daily file and is the cheapest in the set.
@@ -162,17 +183,17 @@ export type LedgerName = 'host-fingerprint' | 'item-health' | 'scores';
 
 **A band-carried list would have undercounted, silently.** `console/band.json` is written by `stages/assemble.py` during a digest run at one moment; the files reach the site at a later one. `digest.yml` has no concurrency group by design, so more shards land in between, and the list would name fewer files than the tree holds. The browser would read twelve shards of sixteen and the chart would be quietly low, with no error and no 404 - the defect-33 class arriving through a new door, and no test could have caught it, because the invariant would have had to hold across two processes at two different times.
 
-**A list generated at build time has the same hole, one step later.** Plan 50 closes it at the source instead: the index task re-lists a raw day directory at every wake and the daily compaction re-lists it again before reading, so no elapsed-time guess stands between the tree and the list. **That re-list is what makes a committed index trustworthy**, and it is what this plan depends on.
+**A list generated at build time has the same hole, one step later.** Plan 50 closes it at the source instead: its compaction task, one per ledger, re-lists a raw day directory before it reads it, so no elapsed-time guess stands between the tree and the list. **That re-list is what makes a committed index trustworthy**, and it is what this plan depends on.
 
 | # | File | Writer | Why that writer is safe | Committed |
 | --- | --- | --- | --- | --- |
-| 1 | `state/compact/<ledger>/index/<period>.json` | that period's compaction | one period, one task, one writer | **yes** |
+| 1 | `state/compact/<ledger>/index/<period>.json` | that ledger's compaction task | one task per ledger, the only writer of its indexes | **yes** |
 
 **No watermark is on this list.** The door finds the compaction edge in `daily.json`, whose newest day is the newest day compacted, so a watermark stays a file only the gardener reads. Plan 50 states the rule; owner decision, 2026-09-27.
 
 #### What the build does, which is copy bytes and nothing else
 
-**The staged tree is a verbatim subtree copy, so the published path and the committed path are the same string.** The step copies, for every ledger whose `LedgerConfig.published` names it: the two compact periods and their indexes. Nothing else, and nothing is renamed, merged, re-sorted or regenerated.
+**The staged tree is a verbatim subtree copy, so the published path and the committed path are the same string.** The step copies, for every ledger whose `LedgerConfig.published` names it: the two compact periods and their indexes. `LedgerConfig` is the `ledger` block in `config/idhazh.json`, declared by plan 50 in `backend/idhazh/contracts/knobs/ledger.py` - **not** the ledger registry `LedgersConfig` in `backend/idhazh/contracts/ledgers.py`, which differs by one letter. Nothing else is copied, and nothing is renamed, merged, re-sorted or regenerated.
 
 | # | What reaches the site | Published address |
 | --- | --- | --- |
@@ -204,6 +225,8 @@ A panel asks for a span; the door turns it into whole files. **There are no byte
 
 **A date is reachable through exactly one file, and that is an invariant with a test rather than a convention.** A date in two periods is read twice and every number on the panel doubles - the same defect class as the double count filed as 33. Plan 50's row titled **The index task, two compact periods, and the diagram moves into the page** carries the oracle that asserts it, over a fixture ledger carrying both periods, in one process, at one moment.
 
+**A compacted file holds one row per record, and the door does not merge.** Plan 50's compaction applies each ledger's own merge rule while it builds the file, so the two halves of a job's machine record arrive as one row (owner decision, 2026-09-27). The door returns rows exactly as the files hold them. A second merge rule in TypeScript would be a copy of plan 50's that somebody has to keep in step.
+
 **A hole is `unreachable`, never a low chart.** A date at or before the newest day `daily.json` names that neither index names is a hole: the door returns `{ state: 'unreachable', at }` and the panel draws the `unreachable` state with that date in the console and nothing else. Drawing the rest would be an undercount nobody could see.
 
 **A date after the newest day `daily.json` names has not been compacted yet, so it is not drawn at all, and the freshness sentence says so.** No raw file is published, so the newest data a panel can show is the newest compact daily file. Compaction runs at the gardener's wake, never at the end of a content run: at plan 50's defaults - a 00:40 UTC wake and `compact_after_hours: 24` - the newest day a panel can show is the day before yesterday, once that wake's files are published.
@@ -214,9 +237,9 @@ A panel asks for a span; the door turns it into whole files. **There are no byte
 
 **This is Guardrail #12 pointed at a reader.** An index that gained an entry every month would make a reader's request grow for as long as the project runs, so its length is bounded by config.
 
-**The bound: an index holds its keep-window of entries and no more. `daily.json` holds at most `daily_keep_days + 31`, `monthly.json` at most `monthly_keep_months`.** Two config values a person sets, and no term of elapsed time. The `+31` is the month-absorption rule, not slack: a month is absorbed whole, so the daily period holds between `daily_keep_days` and `daily_keep_days + 31` days.
+**The bound: an index holds its keep-window of entries and no more. `daily.json` holds at most `daily_keep_days + 31`, `monthly.json` at most the months `monthly_window` keeps.** Two config values a person sets, and no term of elapsed time. The `+31` is the month-absorption rule, not slack: a month is absorbed whole, so the daily period holds between `daily_keep_days` and `daily_keep_days + 31` days.
 
-**Two controls hold the bound.** First, a published ledger may not leave either of its windows null (null means never delete); plan 50's section titled "`config/idhazh_gardener.json`" refuses a null window at load, along with a `monthly_keep_months` that does not cover the widest value in `console.window_presets` once `daily_keep_days` is subtracted. The daily window is deliberately narrower than the widest span - that is what the monthly period is for. Second, `page_weight.payload_ceilings_bytes` gains an entry for each published `index/daily.json`, and `bundle-gate.mjs` checks it every build - a smoke alarm derived from config that moves when config moves.
+**Two controls hold the bound.** First, plan 50's gardener config refuses two things at load for a published ledger: monthly files kept forever (a `monthly_window` of `{unit: forever}`), and daily and monthly files that together reach back less far than the widest value in `console.window_presets`. The daily window is deliberately narrower than the widest span - that is what the monthly period is for. Second, `page_weight.payload_ceilings_bytes` gains an entry for each published `index/daily.json`, and `bundle-gate.mjs` checks it every build - a smoke alarm derived from config that moves when config moves.
 
 **Each file carries its own version, taken from the index entry that names it.** `CompactIndex.entries` holds `covers`, `rows` and `bytes` per file, and the door appends `?v=<rows>-<bytes>` from that entry. A daily file is written once and never rewritten, so its entry never changes and the browser caches it forever; a single site-wide stamp would re-fetch every daily file each day to deliver one new one. The indexes themselves are fetched `cache: 'no-store'`, because a stale index is what file selection would act on.
 
@@ -254,7 +277,7 @@ Every value below is a knob (Guardrail #6). Some exist and some are minted; the 
 | `console.fleet_min_rows` | Exists | `160`, unchanged | Row 8. The knob keeps its job and changes what it switches: below it the panel draws one mark per job instead of switching off |
 | `console.fleet_top_kinds` | Exists | `4`, unchanged | Row 8's merge rule |
 | `frame.breakpoints_px` | Exists as `[640, 1024, 1400]` | unchanged | Row 2 sticks at `breakpoints_px[1]`. **No second key naming that width** |
-| `console.window_presets` | **Exists as `[1, 7, 14, 30, 90]`** | unchanged | Row 2's five-segment control reads it, and the door reads its widest value for file selection. **No second key naming the same five values** |
+| `console.window_presets` | **Exists as `[1, 7, 14, 30, 90]`** | unchanged | Row 2's span control draws one segment per value, and the door reads its widest value for file selection. **No second key naming the same values** |
 | `console.absent_hatch_degrees` | **New** | `45` | Row 8's hatch for a known machine with no throughput reading |
 | `console.plot_min_fill_share` | **New** | `0.85` | Gate 1 (section 2.8), specced in row 6. A fill floor with the same standing as `console.fleet_min_rows`: the spec asserts the drawn plot fills at least this share of the panel's content box |
 | `console.judged_panel_ids` | **New** | `[]` (row 8 adds `6b`) | Row 6's sufficiency specs only. The opt-in subset of `console.panel_groups` the gates judge; capture still runs over all of `panel_groups`, so a panel is captured before it is judged |
@@ -273,12 +296,12 @@ Three refusals, each enforced by a test rather than a review note.
 | # | Refusal | Enforced by |
 | --- | --- | --- |
 | 1 | A panel imports the query engine directly | `git grep -l duckdb -- frontend/src` returns exactly one path |
-| 2 | A panel builds a URL or a path | `slice()` takes a `LedgerName`, never a path |
+| 2 | A panel builds a URL or a path | `slice()` takes a `LedgerName`, never a path; and an import walk in `chart-vocabulary.spec.ts` finds `sliceFromDisk` imported only under `frontend/src/lib/server/` |
 | 3 | A panel asks for every column | `columns` is required and non-empty, refused by name at the door |
 
-### 2.6 The chart vocabulary - nine types, and a tenth is an escalation
+### 2.6 The chart vocabulary - nine types to start, and Susan adds more
 
-Ruled by Susan, 2026-09-26. **A panel that needs a type not on this list stops and asks.** The five mark shapes already ruled in [docs/concepts/console-design/the-mark-shapes-a-panel-may-reach-for.md](../docs/concepts/console-design/the-mark-shapes-a-panel-may-reach-for.md) are marks **inside** these types, not types; nothing there is superseded.
+Susan's starting set, 2026-09-26. **It is a starting set, not a closed one** (owner, 2026-09-27). A panel that needs a type this table lacks asks Susan; her ruling adds the type - its name, signature and drawing component - to this table and to the vocabulary page before it is built. That is a design call, not an escalation. The five mark shapes already ruled in [docs/concepts/console-design/the-mark-shapes-a-panel-may-reach-for.md](../docs/concepts/console-design/the-mark-shapes-a-panel-may-reach-for.md) are marks **inside** these types, not types; nothing there is superseded.
 
 **Each type is one `.ts` module returning geometry and one `.svelte` component that draws it.** The `.ts` module is pure and takes every number as an argument (section 2.3); the component owns the DOM. Where a type's drawing half already lives in an existing component, the table names it and no new component is made.
 
@@ -296,11 +319,13 @@ Ruled by Susan, 2026-09-26. **A panel that needs a type not on this list stops a
 
 **Every geometry function returns its type or `null`** - the `| null` is dropped from the signature column above for brevity and is not optional. On `null` the component renders `emptyState` (section 2.3), which takes the reason to show; for the floor-guarded types (`distribution`, `paired`, `pairedScatter`) that reason is the floor it missed, named in words (for example "fewer than 160 readings"). A type that returns an empty geometry rather than `null` draws an empty frame, which gate 8 fails.
 
-**Refused, so nobody re-argues them:** pie, donut over anything but a single completed share, gauge, dial, radar, treemap, word cloud, bubble, anything in three dimensions, and a bar chart of a rate below `console.min_attempts_for_rate` placements. **The reader loses nothing**: each answers a question one of the nine answers better.
+**Susan's current advice is to avoid** pie, donut over anything but a single completed share, gauge, dial, radar, treemap, word cloud, bubble, anything in three dimensions, and a bar chart of a rate below `console.min_attempts_for_rate` placements, because each answers a question a listed type answers better. Changing that advice is her call.
+
+**A panel may offer more than one view of its data** (owner, 2026-09-27). Where Susan rules a panel needs it, the panel shows a switch between two or more chart types over the same query result: a small set of radio buttons, never a drop-down. Switching redraws and fetches nothing. Which panels get a switch, and between which types, is Susan's call per panel. No panel in this plan has one; the first is built by the plan-52 row that needs it.
 
 **A reused component takes the new geometry as its data prop.** Types 1, 6 and 7 name an existing component (`RankedList.svelte`, `SwapDots.svelte`, `RunTimelinePanel.svelte`) rather than a new one; each takes its type's geometry (`RankedGeometry`, `PairedGeometry`, `TimelineGeometry`) as its data prop and renders `emptyState` (section 2.3) on a `null` return. "No new component" is not "no prop change": the row that first uses one of these three updates its props to the geometry type in the same commit.
 
-**Plan 52 may find a panel that needs a mark none of the nine hosts** - a range mark (a fill to a median with a notch at the max) or a target marker on a bar. That is ESCALATE trigger 5: plan 52 either restates the panel onto an existing type or escalates a tenth type with its signature and component, and gets it ruled before building. This plan's own panel (6b, row 8) is a `dateSeries`, so it needs no tenth type.
+**Plan 52 already has two panels that need a type this table lacks** - a range mark (a fill to a median with a notch at the worst) and a target marker on a bar. The plan-52 row that builds either asks Susan to add the type first. This plan's own panel (6b, row 8) is a `dateSeries`.
 
 **The packages, and the rule that keeps them small.**
 
@@ -316,17 +341,19 @@ Ruled by Susan, 2026-09-26. **A panel that needs a type not on this list stops a
 
 **On this console d3 is a maths library, not a drawing library.** A worker who writes `select()` inside a Svelte component has left the vocabulary.
 
-### 2.7 The readout strip - one module, every chart, and hover that a keyboard can reach
+### 2.7 The readout strip - hover data on every chart, reachable by keyboard and touch
 
-**The console has two hover systems today and one of them is invisible.** `frontend/src/lib/components/ChartReadout.svelte` is the ruled one, a fixed strip below the plot. **Twenty-one marks across ten files use a native `title=` instead**, which no keyboard reaches, no thumb reaches, no theme styles and no test reads - eight in `ShardBoard.svelte`, three in `voices/+page.svelte`, two each in `DiskReadsPanel.svelte` and `ProcessorLostPanel.svelte`, and one each in `ConsoleBand.svelte`, `FailureList.svelte`, `MemoryBoard.svelte`, `RecordGates.svelte`, `RunTimelinePanel.svelte` and `console/+page.svelte`. **That is the defect this section closes.**
+**Every chart shows hover data** (owner, 2026-09-27). Point at, tab to or tap a mark and the readout under the chart shows its values. The only exception is a chart with nothing to show beyond what it already prints, and that exception needs Susan's agreement.
+
+**The console has two hover systems today, and one of them only a mouse can use.** `frontend/src/lib/components/ChartReadout.svelte` is the ruled one, a fixed strip below the plot. Other charts put their hover text in a native `title=`, the browser's own tooltip: no keyboard reaches it, no thumb reaches it, no theme styles it and no test reads it. It is used in `ShardBoard.svelte`, `voices/+page.svelte`, `DiskReadsPanel.svelte`, `ProcessorLostPanel.svelte`, `ConsoleBand.svelte`, `FailureList.svelte`, `MemoryBoard.svelte`, `RecordGates.svelte`, `RunTimelinePanel.svelte`, `console/+page.svelte` and the machine and judgement panels row 5 lists. **Row 5 moves every one of those texts into its chart's readout, so no hover data is lost** - the same words now reach a keyboard and a tap too.
 
 **One module owns it**, `ChartReadout.svelte`, fed by one builder, `frontend/src/lib/charts/readout.ts`. Every chart calls the builder and passes its result. No chart composes its own strip and no chart sets `title=` on a mark.
 
-**`DayReadout` in `frontend/src/lib/charts/frame.ts` is replaced by `Readout`, and `readoutCapStyle` moves to `readout.ts` with it.** The pointer-nearest-column and keyboard-stepping machinery `frame.ts` holds for the old shape - `columnStrip`, `nearestColumn`, `pointerReadout`, `readoutMarks` and their types `ReadoutMark`, `ReadoutRow`, `StripSeries`, `ReadoutOptions` - moves into `readout.ts` too, retyped onto `Readout`, so behaviours 3 and 4 have one home. **Ten producing functions across eight files** build a `DayReadout` today and thirteen components consume it; **all of them move in row 5's single commit**, which is why that row cannot be split by panel - there is no intermediate commit where half the console is on the new shape and the tree compiles.
+**`DayReadout` in `frontend/src/lib/charts/frame.ts` is replaced by `Readout`, and `readoutCapStyle` moves to `readout.ts` with it.** The pointer-nearest-column and keyboard-stepping machinery `frame.ts` holds for the old shape - `columnStrip`, `nearestColumn`, `pointerReadout`, `readoutMarks`, `notMeasuredRow` and their types `ReadoutMark`, `ReadoutRow`, `StripSeries`, `ReadoutOptions` - moves into `readout.ts` too, retyped onto `Readout`, so behaviours 3 and 4 have one home. **Every producer and consumer of `DayReadout` moves in row 5's single commit**, which is why that row cannot be split by panel - there is no intermediate commit where half the console is on the new shape and the tree compiles.
 
 ```ts
-/** What a chart hands the builder. Only the three column types call this; the
- *  two record types call `factsOf` below. */
+/** What a chart hands the builder. Only the three column types call this; every
+ *  other type calls `factsOf` below. */
 export type ReadoutInput = {
 	type: 'dateSeries' | 'distribution' | 'tileStrip';
 	columns: readonly string[];          // the label of each hoverable column, in draw order
@@ -369,36 +396,38 @@ export function factsOf(subject: string, facts: readonly [string, number | null]
                         format: (v: number) => string, notMeasured: string): ReadoutFacts;
 ```
 
-**Two shapes, because two of the types do not have a shared column.** `overlapTimeline` and `flow` describe one entity - an item, or a stage - so their hover is a record and not a column of a matrix. `readoutOf` builds a `Readout` and is called only by the three column types; `factsOf` builds a `ReadoutFacts` and is called only by `overlapTimeline` and `flow`. `ChartReadout.svelte` selects its layout from the shape it is handed: the column strip for a `Readout`, the record list for a `ReadoutFacts`. The table below says which each type returns.
+**Two shapes, because most types have no shared column.** A column chart - `dateSeries`, `distribution`, `tileStrip` - has one column per day or bin, and its hover is that column across every series. Every other type describes one thing at a time - a row, a segment, a point, an item or a stage - so its hover is a record. `readoutOf` builds a `Readout` and is called only by the three column types; `factsOf` builds a `ReadoutFacts` and is called by every other type. `ChartReadout.svelte` selects its layout from the shape it is handed: the column strip for a `Readout`, the record for a `ReadoutFacts`. The table below says what each type shows.
 
-| Type | Returns | The strip contains | Resting column |
+| Type | Returns | The strip shows | At rest |
 | --- | --- | --- | --- |
-| `dateSeries` | `Readout` | the date in reader spelling, then every series at that date with its swatch and value | the newest |
+| `dateSeries` | `Readout` | the date in reader spelling, then every series at that date with its swatch and value | the newest date |
 | `distribution` | `Readout`, two series | the bin's two bounds as the column, then two rows - the count in the bin and the cumulative share at it, each with its own `format` | the bin holding the median |
 | `tileStrip` | `Readout` | the date, the state in words, and the reading where one was taken | the newest tile |
+| `rankedList` | `ReadoutFacts` | the hovered row: its label, its value, and each segment's value and share of the row | the first row |
+| `partsOfOne` | `ReadoutFacts` | the hovered part: its label, its value and its share of the whole | the largest part of the first row |
+| `paired` | `ReadoutFacts` | the hovered row: before, after, the change, and the attempts behind each side | the first row |
 | `overlapTimeline` | `ReadoutFacts` | the item, its source, its shard, its start offset, and each drawn step's own ms | the first item |
 | `flow` | `ReadoutFacts` | the stage name, what arrived, what left, what dropped and why | the first stage |
-| `rankedList`, `partsOfOne`, `paired` | neither | **no strip** - the row already prints its own name and number | - |
-| `pairedScatter` | neither | **no strip** - there is no shared column. Each mark carries a printed row in a list beneath the plot, in ranking order | - |
+| `pairedScatter` | `ReadoutFacts` | the hovered point: its label and both values | the first point in ranking order |
 
-**`factsOf` and the `ReadoutFacts` record layout are built and unit-tested in row 5** so the vocabulary is complete, but no plan-51 panel returns a `ReadoutFacts` - the first is a plan-52 `overlapTimeline` or `flow` panel. Row 5's oracle covers the three column types plus a unit test on `factsOf`.
+**`factsOf` has real callers in row 5.** The charts that move a native tooltip into their readout, and the charts that gain hover data for the first time, are mostly record charts - boards, ranked rows, bars against a target - so row 5 builds the record layout and uses it.
 
-**Every chart declares one of two attributes and a test enumerates them.** `data-readout-columns="<count>"` or `data-readout-none="<five words>"`. A chart declaring neither fails `frontend/tests/console-readout.spec.ts`, **which already declares all five routes and already fails a declared count with no strip** - it is not widened by this plan, only made to cover more charts. **A chart somebody decided needs no hover and a chart where the strip was forgotten are the same chart on screen.**
+**Every chart declares one of three attributes, and a test enumerates them.** `data-readout-columns="<count>"` for a column strip, `data-readout-records="<count>"` for a record strip, or - rarely - `data-readout-none="<reason>; agreed with Susan"`. A chart declaring none of the three fails `frontend/tests/console-readout.spec.ts`, which row 5 widens to the three attributes and to every console route. **A chart somebody decided needs no hover and a chart where the strip was forgotten are the same chart on screen**, which is why the exception must say why and who agreed.
 
 | # | Behaviour |
 | --- | --- |
-| 1 | **The strip does not move and never floats.** A fixed block below the plot, capped at `chart.readout_max_share`. A floating box covers the mark it explains; one that dodges the cursor moves the thing being read |
+| 1 | **The strip does not move and never floats.** A fixed block below the plot, capped at `chart.readout_max_share`. **Its entries lie side by side and wrap to a new line only when they run out of room - never one entry per line stacked under the chart** (owner, 2026-09-27). A floating box covers the mark it explains; one that dodges the cursor moves the thing being read |
 | 2 | **There is no edge case because there is no edge.** The strip cannot leave the panel. What is clamped is the vertical guide, to the plot's own inset |
-| 3 | **Pointer:** the nearest column to the pointer's x, on `pointermove`, whatever the y. A reader should not have to hit a 2px line |
+| 3 | **Pointer:** a column chart takes the nearest column to the pointer's x, on `pointermove`, whatever the y - a reader should not have to hit a 2px line. A record chart takes the row, segment or point under the pointer |
 | 4 | **Keyboard:** the wrapping element is one tab stop. Left and Right step a column, Home and End jump, Escape returns to rest. **One stop per chart, never one per mark.** A `ReadoutFacts` strip has no columns to step: Up and Down move between records and Escape rests |
-| 5 | **Touch:** a tap sets the column and it stays set. No long-press, no drag-to-scrub, no hover-only value. A tap outside returns to rest |
+| 5 | **Touch:** a tap sets the column or the record and it stays set. No long-press, no drag-to-scrub, no hover-only value. A tap outside returns to rest |
 | 6 | **Dismiss:** pointer leave, Escape, or a tap outside. It returns to the resting column and **is never blank** - an emptying strip changes the panel's height |
 | 7 | **A mark with no data prints the not-measured word**, from the same vocabulary the panel's empty state uses. Never a zero, never a dash, never a blank cell. **A null drawn as a zero is the commonest lie a console tells** |
 | 8 | **A series absent from the whole window has no row.** A key for a series with no committed rows is a claim the data does not support |
-| 9 | **The strip is the legend.** No chart draws a second key |
-| 10 | **`title=` on a mark is refused.** All twenty-one go in the same pull request as the builder. A navigation anchor outside a plot is not a mark and is exempt by selector: the rule is that **no element inside a `[data-readout-columns]` or `[data-readout-none]` subtree carries a `title`**. **The reader loses** a pointer-only sentence a keyboard and a thumb never had |
+| 9 | **The strip is the legend, and it lies horizontal** (behaviour 1). No chart draws a second key |
+| 10 | **No native tooltip on a mark.** Row 5 moves every one into its chart's readout, so the text a pointer showed is now shown to a keyboard and a tap as well; nothing is lost. A `title` outside a chart - a link, a badge - is not a mark and is untouched: the rule is that **no element inside a `[data-readout-columns]`, `[data-readout-records]` or `[data-readout-none]` subtree carries a `title`** |
 
-**One open defect lands with the builder rather than being left where it is.** `chart.readout_max_share` was written for a desktop and wraps the readout into a tall block on a narrow plot. The fix: lay the rows along one line, wrap across the full plot width, then re-set the cap at the width where the readout wraps. It rewrites three assertions in `console-chrome.spec.ts` and `console-timings.spec.ts`, **and that is correct** - a guard moved as a side effect of something else is a guard nobody meant to move, and this one is moved on purpose.
+**One open defect lands with the builder rather than being left where it is.** `chart.readout_max_share` was written for a desktop and wraps the readout into a tall block on a narrow plot. The fix is behaviour 1: entries side by side across the full plot width, then the cap re-set at the width where the readout wraps. It rewrites three assertions in `console-chrome.spec.ts` and `console-timings.spec.ts`, **and that is correct** - a guard moved as a side effect of something else is a guard nobody meant to move, and this one is moved on purpose.
 
 ### 2.8 The sufficiency gates - ten, each decidable
 
@@ -414,7 +443,7 @@ A reviewer fails a pull request on any of these. A panel that fails ships only w
 | 6 | **A trend carries its confounders** | every `dateSeries` renders the settings-change rule, or declares `data-settings-rule="none in window"` | a trend drawn with neither. **A line that moved because somebody changed the temperature looks exactly like a line that moved because the model got worse** |
 | 7 | **Every column it draws has a reader** | already enforced by `backend/tests/contracts/test_column_readers.py`, unchanged by this plan | a column drawn while its name is still in `UNREAD_CELLS`. The worker moves the name up rather than routing around the test |
 | 8 | **Four nothings, told apart** | the panel renders waiting, quiet, missing and unreachable as four distinct states, from the vocabulary `frontend/src/lib/console/waiting.ts` already owns | any two drawing the same thing. **A quiet pipeline and a broken fetch must never be the same picture** |
-| 9 | **The strip is declared** | `frontend/tests/console-readout.spec.ts`, unchanged - it already declares all five routes | a chart declaring neither attribute; a declared column count with no strip; a swatch drawn inside a chart that has one |
+| 9 | **The strip is declared** | `frontend/tests/console-readout.spec.ts`, widened by row 5 to the three attributes | a chart declaring none of the three attributes; a declared count with no strip; a `data-readout-none` without its reason and Susan's agreement; a swatch drawn inside a chart that has one |
 | 10 | **It queries columns, not ledgers** | `frontend/tests/chart-vocabulary.spec.ts` walks the query door's call sites | `SELECT *`, an unbounded date range, or a ledger fetched whole. **A column ledger read as a row ledger has paid for the format and not used it** |
 
 **Where each gate is enforced.** Gates 1, 2, 3, 5, 6 and 8 are specs in `panel-sufficiency.spec.ts` (row 6). Gate 10 is `chart-vocabulary.spec.ts` (row 4). Gates 7 and 9 are tests that exist today (`test_column_readers.py` and `console-readout.spec.ts`) and are listed so a worker does not write a second copy. Gate 4 is a reviewer reading the component against the capture section 2.9 produces - it is not a spec because "a bare table of numbers with no shape beside it" is not decidable by a selector.
@@ -444,7 +473,7 @@ A reviewer fails a pull request on any of these. A panel that fails ships only w
 
 Susan ruled all fifty-one panels on 2026-09-26 - each KEEP, REDRAW, REPLACE, DELETE or NEW, with the columns it queries and the chart it becomes. **That verdict table is plan 52's contract, not this plan's**, and it now lives in [`20260926-52-fifty-panels-move-and-six-projections-go-plan.md`](20260926-52-fifty-panels-move-and-six-projections-go-plan.md). This plan executes exactly one of those panels - **panel 6b, "What kinds of machine we keep being given"** - and its full spec is row 8.
 
-**One thing the verdict table surfaced belongs here, because it validates section 2.6.** Two plan-52 panels - a machine-speed range and a feed-discount target bar - want a mark none of the nine types hosts. That is ESCALATE trigger 5, and plan 52 resolves it before it builds either: restate the panel onto an existing type, or escalate a tenth type with its signature and component. This plan's own panel needs no tenth type.
+**One thing the verdict table surfaced belongs here, because it tests section 2.6.** Two plan-52 panels - a machine-speed range and a feed-discount target bar - want a type the starting list does not have. Susan adds it when plan 52 builds them (section 2.6). This plan's own panel needs no new type.
 
 ---
 
@@ -489,7 +518,7 @@ Susan ruled all fifty-one panels on 2026-09-26 - each KEEP, REDRAW, REPLACE, DEL
 
 ---
 
-### Row #2 - The console shell: a stuck tab strip, the span control on it, four named anchors
+### Row #2 - The console shell: a stuck tab strip, the span control on it, jump links, a completeness sentence
 
 - **Scope:** the chrome every console route sits in, and **the sentence that says how complete the page is**. No panel changes, no ledger is read differently, and no data moves.
 
@@ -513,11 +542,13 @@ The load-bearing word is **complete**: a promise about the left side and an admi
 
 Ruled by Susan on 2026-09-24. The complaint: the Hardware route is fifteen panels long with no quick way back, and the span control sits at the top where a reader nine panels down cannot reach it.
 
+**The strip is built for any number of tabs** (owner, 2026-09-27). The console will gain routes - a Security tab for the canary-feed checks is the next one foreseen - so nothing in this row may assume today's count. The tabs come from the route list in `frontend/src/lib/console/band.ts`, and every layout rule below holds for one tab more or one fewer. Adding a route is a list entry and a page, never a layout change.
+
 | # | Element | Ruling | What the reader loses |
 | --- | --- | --- | --- |
-| 1 | The five-tab strip | **Stuck from `frame.breakpoints_px[1]` up.** Below that it stays where it is | one strip-height of every screen above that width, against a long route of scrolling |
-| 2 | `Days shown` | Moves to the trailing edge of the stuck strip at that width and up, as a **compact five-segment control**. Below it, unchanged and full width | the word `days` repeated five times |
-| 3 | The tab description line, while stuck | Hidden. It is already hidden below 1400 px and is the anchor's `title` | the one-line summary of the other four routes while scrolled; it returns at the top |
+| 1 | The tab strip | **Stuck from `frame.breakpoints_px[1]` up**, one tab per console route, however many there are. Below that it stays where it is | one strip-height of every screen above that width, against a long route of scrolling |
+| 2 | `Days shown` | Moves to the trailing edge of the stuck strip at that width and up, as a **compact control with one segment per `console.window_presets` value**. Below it, unchanged and full width | the word `days` on every segment |
+| 3 | The tab description line, while stuck | Hidden. It is already hidden below 1400 px and is the anchor's `title` | the one-line summary of the other routes while scrolled; it returns at the top |
 | 4 | Back to the top | An **`On this page` row of the route's own group names** under the span control, read from `console.panel_groups[route]`, and a `Top` link on each group heading. A route with no groups, or one unnamed group, shows no anchor row | nothing |
 | 5 | The site header | Not stuck, unchanged. Its tagline drops on console routes only | the site's one-line self-description on operator routes; it stays on every reading route |
 | 6 | The `Console` heading | Not stuck, scrolls away | nothing. It names the surface once, and repeating it every screen is furniture |
@@ -525,30 +556,30 @@ Ruled by Susan on 2026-09-24. The complaint: the Hardware route is fifteen panel
 
 - **Files touched:**
   - `frontend/src/routes/console/+layout.svelte` (the strip sticks; the span control moves onto it)
-  - `frontend/src/lib/components/ConsoleNav.svelte` (the five-segment control, the description line's stuck state)
+  - `frontend/src/lib/components/ConsoleNav.svelte` (the span control with one segment per preset, the tab list that scrolls sideways when stuck, the description line's stuck state)
   - `frontend/src/lib/components/SiteHeader.svelte` (the tagline drops on console routes)
   - `frontend/src/lib/console/band.ts` (the worst-thing fragment the stuck strip carries)
   - `frontend/src/app.css` (the stuck band's tokens)
   - `frontend/tests/console-nav.spec.ts`, `frontend/tests/console-chrome.spec.ts`, `frontend/tests/console-title.spec.ts`
-- **Acceptance gates:** the browser smoke on all five console routes at 390, 768 and 1440 - the set section 2.9 fixes, straddling the `breakpoints_px[1]` sticky boundary (CLAUDE.md section 12); zero new `[error]` and zero new `404`. Local `npm --prefix frontend run test:changed -- --list`, then the selected checks. CI runs the full suite.
-- **Oracle:** at 1440 (above the boundary) the stuck strip's measured height equals one row and each of the route's anchors scrolls its heading into view below the stuck band rather than behind it; at 768 (below) nothing is stuck. It cannot settle whether the breakpoint is the right one; decision 4 makes it a knob so it moves without a code change.
+- **Acceptance gates:** the browser smoke on every console route at 390, 768 and 1440 - the set section 2.9 fixes, straddling the `breakpoints_px[1]` sticky boundary (CLAUDE.md section 12); zero new `[error]` and zero new `404`. Local `npm --prefix frontend run test:changed -- --list`, then the selected checks. CI runs the full suite.
+- **Oracle:** at 1440 (above the boundary) the stuck strip's measured height equals one row and each of the route's anchors scrolls its heading into view below the stuck band rather than behind it; at 768 (below) nothing is stuck. **The spec runs twice - with the real routes and with one extra test route added** - so a new tab cannot break the strip. It cannot settle whether the breakpoint is the right one; decision 4 makes it a knob so it moves without a code change.
 - **Decisions:**
 
   | # | Decision | Authority |
   | --- | --- | --- |
-  | 1 | **A dropdown is refused for the span control.** A menu hides four of five options, and it hides the price at the moment the browser starts fetching its own data | Susan, 2026-09-24 |
+  | 1 | **A dropdown is refused for the span control.** A menu hides all but one option, and it hides the price at the moment the browser starts fetching its own data | Susan, 2026-09-24 |
   | 2 | **Collapsing the logo on scroll is refused.** It buys zero pixels because the header already leaves the screen, and scroll-linked motion has to be designed twice for reduced motion | Susan, 2026-09-24 |
   | 3 | **Collapsing the band is refused.** The band is what an operator reads on landing; collapsed, he opens a disclosure to learn that yesterday failed. Its worst-thing fragment rides in the stuck strip as one short line instead | Susan, 2026-09-24 |
-  | 4 | It sticks at `frame.breakpoints_px[1]` (inclusive), reusing the existing key. A stuck control is one band at the width it sticks at, so the five tabs and the span control together are one row there; if they do not fit, the tab labels shorten to their initials before the span control wraps to a second line. Below the breakpoint the strip is not stuck and may reflow | Susan. A second key naming that width is the duplicate this project rejects everywhere else |
-  | 5 | Four named anchors beat one floating arrow. Fifteen panels sit in four declared groups, and named anchors work with no script at every width | Susan, 2026-09-24 |
+  | 4 | It sticks at `frame.breakpoints_px[1]` (inclusive), reusing the existing key. A stuck control is one band at the width it sticks at, so the tabs and the span control together are one row there. **When the tabs do not fit, the tab list scrolls sideways inside the strip and the span control stays pinned at its end**; the strip never wraps to a second line and no label is shortened, whatever the number of tabs. Below the breakpoint the strip is not stuck and may wrap | Owner, 2026-09-27, for any number of tabs; Susan for the breakpoint. A second key naming that width is the duplicate this project rejects everywhere else |
+  | 5 | Named anchors beat one floating arrow. A long route's panels sit in declared groups, and named anchors work with no script at every width | Susan, 2026-09-24 |
   | 6 | This row does not touch `PlatformMixPanel.svelte`. Row 1 owns that file and runs beside this one | Fowler |
 
 - **Rejected alternatives:**
 
   | # | Option | Why rejected | What it would cost to take | Authority |
   | --- | --- | --- | --- | --- |
-  | 1 | Stick the strip at every width | At 640 px it is two rows and at 360 px three, and a stuck control that reflows eats a third of a small screen | Zero; costs the small-screen reader a third of the page | Susan |
-  | 2 | A floating back-to-top arrow | It goes one place. Fifteen panels in four groups need four destinations, and an arrow needs script where an anchor does not | Zero; costs three of the four destinations | Susan |
+  | 1 | Stick the strip at every width | On a narrow screen the tabs wrap onto several lines, and a stuck control that wraps covers much of a small screen | Zero; costs the small-screen reader much of the page | Susan |
+  | 2 | A floating back-to-top arrow | It goes one place; a route with several groups needs one destination per group, and an arrow needs script where an anchor does not | Zero; costs every destination but one | Susan |
   | 3 | Merge this into row 1 | Route chrome and a settlement-key change in one pull request, because both happen to be about one route | Zero; costs the independent revert | Fowler |
 
 ---
@@ -594,14 +625,14 @@ Ruled by Susan on 2026-09-24. The complaint: the Hardware route is fifteen panel
 
 ### Row #4 - The chart vocabulary and the house style, with no panel moved
 
-- **Scope:** section 2.6's nine types become a module and a doc page; `d3-shape` is added; the house style in section 2.3 is written. **No panel moves**, which is what lets this revert to nothing.
+- **Scope:** section 2.6's starting chart types become modules and a doc page; `d3-shape` is added; the house style in section 2.3 is written. **No panel moves**, which is what lets this revert to nothing.
 - **Files touched:**
   - `frontend/src/lib/charts/d3/` - the directory this row creates, which no other row in either plan touches: `scale.ts`, `axis.ts`, `ordered-colour.ts`, `motion.ts`, `empty.ts`, and **one `.ts` module and one `.svelte` component per chart type**, named exactly as section 2.6 names them. `overlapTimeline` gets its `.ts` only; `RunTimelinePanel.svelte` keeps its own SVG and is its first caller
   - `frontend/package.json`, `frontend/package-lock.json` (`d3-shape`; **`d3-sankey` only when the flow type is built and the bundle gate passes**)
-  - `docs/concepts/console-design/the-mark-shapes-a-panel-may-reach-for.md` (the nine types join the five marks, and the page says marks sit inside types)
-  - `frontend/tests/chart-vocabulary.spec.ts` (new: the closed-set walk, the single-engine-importer walk section 2.5 refusal 1 names, and gate 10's columns-not-ledgers walk, which is vacuous until a panel queries in rows 7 and 8)
+  - `docs/concepts/console-design/the-mark-shapes-a-panel-may-reach-for.md` (the starting types join the five marks, the page says marks sit inside types, and **the page is the list a new type is added to**, with Susan's ruling beside it)
+  - `frontend/tests/chart-vocabulary.spec.ts` (new: every chart-type module under `frontend/src/lib/charts/d3/` is listed on the vocabulary page and every listed type has its module; the single-engine-importer walk section 2.5 refusal 1 names; and gate 10's columns-not-ledgers walk, which is vacuous until a panel queries in rows 7 and 8)
 - **Acceptance gates:** local `npm --prefix frontend run test:changed -- --list` then the selected checks, and `python backend/utilities/doc_load.py` before and after. CI runs the full suite. **`ci.yml`'s bundle gate is the check on any package that lands** - if it does not pass, the package is dropped and the type keeps hand maths (the flow type is the first candidate, since it has one caller).
-- **Oracle:** **the vocabulary is closed and nothing has left it.** Every module under `frontend/src/lib/charts/d3/` is either named in section 2.6's table or is one of the five house-style modules section 2.3 declares, and every name in that table has a `.ts` module there - a type whose drawing half lives in an existing component names that component in the table rather than adding one. An AST walk finds no `d3-selection`, `d3-transition`, `d3-axis` or `d3-scale-chromatic` import anywhere under `frontend/src/`. It cannot settle whether the nine types are the right nine; the first panel of each is what tests that.
+- **Oracle:** **every chart type is written down, and nothing has left the house style.** Every chart-type module under `frontend/src/lib/charts/d3/` is listed on the vocabulary page and every listed type has its `.ts` module there, so a new type arrives on purpose - with its page entry and Susan's ruling - never by accident; the five house-style modules section 2.3 declares are the only other modules there. An AST walk finds no `d3-selection`, `d3-transition`, `d3-axis` or `d3-scale-chromatic` import anywhere under `frontend/src/`. It cannot settle whether the starting types are the right ones; the first panel of each, and Susan, do that.
 - **Decisions:**
 
   | # | Decision | Authority |
@@ -609,7 +640,7 @@ Ruled by Susan on 2026-09-24. The complaint: the Hardware route is fifteen panel
   | 1 | **Doctrine ships before the panel that proves it.** A vocabulary plus a panel cannot be reverted without reverting the panel, and the vocabulary is the half more likely to need editing | Susan, 2026-09-26 |
   | 2 | **On this console d3 is a maths library.** Scales and path generators only; Svelte owns the DOM. A `select()` inside a component has left the vocabulary | Susan |
   | 3 | Four packages are refused by name - the axis, selection, transition and colour-ramp ones - so nobody re-argues them. Each would fork a rule this console already owns | Susan, section 2.6 |
-  | 4 | **Nine types, and a tenth is an escalation.** A reader learns a vocabulary with few words | Susan |
+  | 4 | **Nine types to start, and the list grows.** Susan adds a type when a panel needs one; the list lives on the vocabulary page and the test keeps the page and the code in step. It is not an escalation | Owner, 2026-09-27, giving the call to Susan |
 
 - **Rejected alternatives:**
 
@@ -623,33 +654,35 @@ Ruled by Susan on 2026-09-24. The complaint: the Hardware route is fifteen panel
 
 ### Row #5 - One readout strip, every chart, and hover a keyboard can reach
 
-- **Scope:** section 2.7's builder and strip; **`DayReadout` is replaced by `Readout` across every file that produces or consumes it**; the narrow-width defect fixed; the native `title=` hovers swept.
+- **Scope:** section 2.7's builder and strip, and **hover data on every chart**: `DayReadout` becomes `Readout` everywhere it is built or read; every native tooltip's text moves into its chart's readout; every chart that shows no hover data today gains it, unless Susan agrees it has nothing more to show; and the narrow-width defect is fixed.
 
-**This row replaces one exported type and cannot be split by panel.** There is no intermediate commit where half the console is on the new shape and the tree compiles, so every producer and consumer moves together; the change is structural in every file but `ChartReadout.svelte`, where the behaviour lands. **It depends on row 1** (both edit `fleet.ts`) **and row 4** (it draws to the house style).
+**This row replaces one exported type and cannot be split by panel.** There is no intermediate commit where half the console is on the new shape and the tree compiles, so every producer and consumer moves together. **Commits inside this pull request:** the type swap first, with no visible change; then one commit per chart that moves a tooltip into its readout or gains hover data. **It depends on row 1** (both edit `fleet.ts` and `PlatformMixPanel.svelte`) **and row 4** (it draws to the house style). It also converts plan 54's run-yield chart, which landed on `DayReadout` (#1117).
 - **Files touched:**
-  - `frontend/src/lib/charts/readout.ts` (new, the builder, `readoutCapStyle`, and the pointer/keyboard machinery), `frontend/src/lib/components/ChartReadout.svelte` (the strip, and the narrow-width fix), `frontend/src/lib/charts/frame.ts` (`DayReadout`, `readoutCapStyle`, `columnStrip`, `nearestColumn`, `pointerReadout`, `readoutMarks`, `ReadoutMark`, `ReadoutRow`, `StripSeries`, `ReadoutOptions` all leave for `readout.ts`)
-  - the seven other producer files: `cost.ts`, `fleet.ts`, `glance.ts` (two functions), `machine.ts` (two functions), `doubt-reasons.ts`, `eval-instruments.ts`, `context-cost.ts` under `frontend/src/lib/`
-  - the thirteen consumers: `Chart.svelte`, `BandDistance.svelte`, `FailurePanels.svelte`, `RunLengths.svelte`, `StageTimings.svelte`, `ThroughputTrend.svelte`, `TimeHistogram.svelte`, `ContextCostPanel.svelte`, `TailTrendPanel.svelte`, `console/+page.svelte`, `JudgeAgreement.svelte`, `MergedStoriesPanel.svelte`, `MergeLinePlot.svelte`
-  - the ten files carrying a native `title=` on a mark: `ShardBoard.svelte` (eight), `voices/+page.svelte` (three), `DiskReadsPanel.svelte` (two), `ProcessorLostPanel.svelte` (two), `ConsoleBand.svelte`, `FailureList.svelte`, `MemoryBoard.svelte`, `RecordGates.svelte`, `RunTimelinePanel.svelte`, `console/+page.svelte`
+  - `frontend/src/lib/charts/readout.ts` (new, the builder, `readoutCapStyle`, and the pointer/keyboard machinery), `frontend/src/lib/components/ChartReadout.svelte` (the strip - entries side by side, the column and record layouts - and the narrow-width fix), `frontend/src/lib/charts/frame.ts` (`DayReadout`, `readoutCapStyle`, `columnStrip`, `nearestColumn`, `pointerReadout`, `readoutMarks`, `notMeasuredRow`, `ReadoutMark`, `ReadoutRow`, `StripSeries`, `ReadoutOptions` all leave for `readout.ts`)
+  - the other producers of `DayReadout`, under `frontend/src/lib/`: `cost.ts`, `fleet.ts`, `glance.ts` (`timeSplitColumns`, `failureMixColumns`), `machine.ts` (two functions), `doubt-reasons.ts`, `eval-instruments.ts`, `context-cost.ts`
+  - the consumers: `Chart.svelte`, `BandDistance.svelte`, `FailurePanels.svelte`, `RunLengths.svelte`, `StageTimings.svelte`, `ThroughputTrend.svelte`, `TimeHistogram.svelte`, `ContextCostPanel.svelte`, `TailTrendPanel.svelte`, `console/+page.svelte`, `JudgeAgreement.svelte`, `MergedStoriesPanel.svelte`, `MergeLinePlot.svelte`, and plan 54's `components/RunYield.svelte`, which builds its own columns
+  - the charts whose native tooltips move into their readout: `ShardBoard.svelte`, `voices/+page.svelte`, `DiskReadsPanel.svelte`, `ProcessorLostPanel.svelte`, `ConsoleBand.svelte`, `FailureList.svelte`, `MemoryBoard.svelte`, `RecordGates.svelte`, `RunTimelinePanel.svelte`, `console/+page.svelte`, `MachineCardsPanel.svelte`, `MachineSplitPanel.svelte`, `PlatformMixPanel.svelte`, `HoldoutMargin.svelte`, `VerdictSplit.svelte`
+  - the charts that show no hover data today: `KpiCard.svelte`, `Sparkline.svelte`, `SwapDots.svelte`, `TargetBar.svelte`, `SourceCutRange.svelte`, and `Chart.svelte`'s no-column case. **Each gains a readout, or keeps `data-readout-none` with its reason and Susan's agreement written beside it**
   - `config/appearance.json` (`chart.readout_max_share` re-set at the width where the readout wraps)
-  - `frontend/tests/console-chrome.spec.ts`, `frontend/tests/console-timings.spec.ts` (three assertions move with the cap)
-- **Acceptance gates:** local `npm --prefix frontend run test:changed -- --list` then the selected checks, and the browser smoke on all five console routes at 390, 768 and 1440 in both themes. CI runs the full suite.
-- **Oracle:** **every chart declares its strip, and the strip is reachable without a pointer.** Every chart element on five routes carries `data-readout-columns` or `data-readout-none`; **no element inside one of those subtrees carries a `title` attribute** - a navigation anchor outside a plot is exempt by selector rather than by review; and for one chart of each declaring type, Tab reaches it, Left and Right step a column, Home and End jump, and Escape returns to the resting column. It cannot settle whether the strip reads well; the capture group and a reviewer do that.
+  - `frontend/tests/console-readout.spec.ts` (the three attributes, every console route, and the moved-tooltip check), `frontend/tests/console-chrome.spec.ts`, `frontend/tests/console-timings.spec.ts` (three assertions move with the cap)
+- **Acceptance gates:** local `npm --prefix frontend run test:changed -- --list` then the selected checks, and the browser smoke on every console route at 390, 768 and 1440 in both themes. CI runs the full suite.
+- **Oracle:** **every chart shows hover data, and no hover text was lost.** Every chart on every console route carries `data-readout-columns`, `data-readout-records` or `data-readout-none`, and every `data-readout-none` names its reason and Susan's agreement; for every chart mark that carried a native tooltip before this row, hovering that mark shows the same facts in the chart's readout; no element inside a declared chart carries a `title`; and for one chart of each shape, Tab reaches it, Left and Right step a column (Up and Down a record), Home and End jump, and Escape returns to rest. It cannot settle whether the strip reads well; the capture group and a reviewer do that.
 - **Decisions:**
 
   | # | Decision | Authority |
   | --- | --- | --- |
-  | 1 | **A chart that needs no hover says so.** `data-readout-none` with five words. A chart somebody decided needs no hover and a chart where the strip was forgotten are the same chart on screen | Susan, 2026-09-26 |
+  | 1 | **Every chart shows hover data.** `data-readout-none` is a rare exception - a chart with nothing to show beyond what it already prints - with its reason and Susan's agreement written in the component. A chart somebody decided needs no hover and a chart where the strip was forgotten look the same on screen, so the exception has to say why | Owner, 2026-09-27; Susan rules each exception |
   | 2 | **The strip never floats and never empties.** A floating box covers the mark it explains; an emptying strip changes the panel's height | Susan |
   | 3 | **A mark with no data prints the not-measured word.** Never a zero, never a dash, never a blank cell. A null drawn as a zero is the commonest lie a console tells | Susan |
   | 4 | **The narrow-width cap is re-set here, on purpose.** It was written for a desktop and wraps the readout on a narrow plot. A guard moved as a side effect of something else is a guard nobody meant to move; this one is moved deliberately and the three assertions move with it | Susan |
-  | 5 | The strip is the legend. No chart draws a second key | Susan |
+  | 5 | **The strip is the legend, and it lies horizontal**: entries side by side, wrapping only when they run out of room. No chart draws a second key | Owner, 2026-09-27 |
+  | 6 | **No hover text is dropped.** Every native tooltip's words move into the readout; changing how hover works must not shrink what a reader can see | Owner, 2026-09-27 |
 
 - **Rejected alternatives:**
 
   | # | Option | Why rejected | What it would cost to take | Authority |
   | --- | --- | --- | --- | --- |
-  | 1 | Keep the native hover attributes where they are | No keyboard reaches them, no thumb reaches them, no theme styles them and no test reads them. **The reader loses** those files their pointer-only sentence, which a phone never had | Zero; costs every swept mark its hover | Susan |
+  | 1 | Keep the native tooltips where they are | Only a mouse reaches them - no keyboard, no tap, no theme and no test | Zero; costs keyboard and touch readers every one of those texts | Susan |
   | 2 | A floating tooltip that follows the cursor | It covers the mark it explains, and one that dodges the cursor moves the thing being read | Zero; costs readability | Susan |
   | 3 | Move the strip per panel, as each panel is redrawn | `DayReadout` is one exported type with many producers and consumers, so no intermediate commit type-checks | It does not compile | Fowler |
 
@@ -698,21 +731,22 @@ Ruled by Susan on 2026-09-24. The complaint: the Hardware route is fifteen panel
 
 ### Row #7 - The query door module and its two entry points
 
-- **Scope:** the three modules of the query door under `frontend/src/lib/data/`, and the hand-written index-shape copy the door reads. **No panel, no chart, no config change** - this is the shared reader every later panel calls, shipped with its own witness. **It depends on row 4** (it edits the vocabulary spec and the package manifest that row creates) **and on plan 50's index-task row** (its index-shape test binds to the Pydantic contracts that row declares); it needs no live published data, which is why plan 50's migration row can depend on it in turn.
+- **Scope:** the three modules of the query door under `frontend/src/lib/data/`, **both of its entry points** - `slice()` for a panel in the browser and `sliceFromDisk()` for a build-time reader - and the hand-written index-shape copy the door reads. **No panel, no chart, no config change** - this is the shared reader every later panel calls, shipped with its own witness. **It depends on row 4** (it edits the vocabulary spec and the package manifest that row creates) **and on plan 50's index-task row** (its index-shape test binds to the Pydantic contracts that row declares); it needs no live published data, which is why plan 50's migration row can depend on it in turn.
 
-**This is the N2 and N3 keystone.** Section 2.2 is its full contract: `ledger.ts` is the public door (`slice(ledger, {columns, from, to, where?})`, the closed `LedgerName`, the address composed inside the module); `engine.ts` is the only `@duckdb/duckdb-wasm` importer; `slice.ts` turns a date range into the coarsest-period file set with the one-file-per-date invariant. The engine is reached only through a dynamic `import()`, so it is not first-load.
+**This is the N2 and N3 keystone.** Section 2.2 is its full contract: `ledger.ts` is the public door (`slice()` and `sliceFromDisk()`, the closed `LedgerName`, the address composed inside the module); `engine.ts` is the only `@duckdb/duckdb-wasm` importer and runs in both places; `slice.ts` turns a date range into the coarsest-period file set with the one-file-per-date invariant. In the browser the engine is reached only through a dynamic `import()`, so it is not first-load. **The door does not merge rows**: plan 50's compaction writes one row per record.
 
 - **Files touched:**
-  - `frontend/src/lib/data/ledger.ts` (new: the public door and the closed `LedgerName`; **the address is composed here and nowhere else**)
-  - `frontend/src/lib/data/engine.ts` (new: **the only module that imports `@duckdb/duckdb-wasm`**, single-threaded build, behind a dynamic `import()`)
+  - `frontend/src/lib/data/ledger.ts` (new: the public door - `slice()` and `sliceFromDisk()` - and the closed `LedgerName`; **the address is composed here and nowhere else**)
+  - `frontend/src/lib/data/engine.ts` (new: **the only module that imports `@duckdb/duckdb-wasm`** - the single-threaded browser build behind a dynamic `import()`, and the blocking Node build for `sliceFromDisk()`)
   - `frontend/src/lib/data/slice.ts` (new: a date range to a file set, coarsest period per date, one file per date)
   - `frontend/package.json`, `frontend/package-lock.json` (`@duckdb/duckdb-wasm`)
   - `frontend/scripts/bundle-gate.mjs` (the `FORBIDDEN` list gains `@duckdb/duckdb-wasm` and its `.wasm` asset names, so a static import of the engine or its wasm fails the gate)
-  - `frontend/tests/chart-vocabulary.spec.ts` (the single-engine walk now finds exactly one importer of the engine)
+  - `frontend/tests/chart-vocabulary.spec.ts` (the single-engine walk finds exactly one importer of the engine, and the import walk finds `sliceFromDisk` only under `frontend/src/lib/server/`)
+  - `frontend/tests/ledger-door.spec.ts` (new, in the `logic` group of `frontend/scripts/test-groups.ts`), `tests/fixtures/ledger-door/` (a compacted fixture ledger: daily files, one monthly file, one zero-row day, and both indexes)
   - `backend/tests/contracts/test_frontend_index_shapes.py` (new: binds the hand-written `CompactEntry` and `CompactIndex` copy in `ledger.ts` to the Pydantic originals plan 50 declares)
   - `frontend/tests/console-cold-load.spec.ts` (the engine is not first-load)
 - **Acceptance gates:** local `npm --prefix frontend run test:changed -- --list` then the selected checks; `pytest backend/tests/contracts -q`. `ci.yml`'s bundle gate and site-cap walk are re-read, because a package and a wasm asset landed. CI runs the full suite.
-- **Oracle:** given recorded index and parquet responses for a fixture ledger, `slice()` returns exactly the requested columns for exactly the requested date range, reads each date through one file only, and renders `unreachable` on a hole; and `git grep -l duckdb -- frontend/src` returns exactly one path. It cannot settle whether a panel draws the result well; row 8 and Susan do that.
+- **Oracle:** given recorded index and parquet responses for the fixture ledger, `slice()` returns exactly the requested columns for exactly the requested date range, reads each date through one file only, returns `quiet` for the zero-row day and `unreachable` on a hole; `sliceFromDisk()` over the same fixture files on disk returns the same rows; and `git grep -l duckdb -- frontend/src` returns exactly one path. It cannot settle whether a panel draws the result well; row 8 and Susan do that.
 - **Decisions:**
 
   | # | Decision | Authority |
@@ -723,7 +757,9 @@ Ruled by Susan on 2026-09-24. The complaint: the Hardware route is fifteen panel
   | 4 | **The engine is reached only through a dynamic `import()`, and the `FORBIDDEN` list enforces it.** Without that line the rule is a habit, and a careless static import lands the engine in first-load | Carmack |
   | 5 | **`where` is a structured predicate, never raw SQL.** The door binds each value as a query parameter, so no text a panel passes can become SQL (Guardrail #11) | Fowler |
   | 6 | **The door reads a hand-written copy of two shapes plan 50 declares** - `CompactEntry` and `CompactIndex` - bound to the Pydantic originals by `test_frontend_index_shapes.py`, the same binding `test_frontend_field_set.py` already uses. **No `Watermark` copy**: the edge is the newest day `daily.json` names. This plan declares no new persisted contract | Fowler; owner 2026-09-27 for dropping `Watermark` |
-  | 7 | **A date is reachable through exactly one file.** The door takes the coarsest period covering a date; the oracle over the two-period rule lives with plan 50's index task, and this row consumes it | Fowler |
+  | 7 | **A date is reachable through exactly one file.** The door takes the coarsest period covering a date; the oracle over the two-period rule lives with plan 50's row titled "The index task, two compact periods, and the diagram moves into the page", and this row consumes it | Fowler |
+  | 8 | **The door has both entry points, and plan 50 only calls the second.** Plan 50's parquet migration needs today's build-time readers to keep working once the CSV files go; building that entry here keeps one owner for the door and for the engine's Node set-up | Owner, 2026-09-27 |
+  | 9 | **The door does not merge rows.** Plan 50's compaction writes one row per record (section 2.2), so a merge here would be a second copy of plan 50's rule | Owner, 2026-09-27 |
 
 - **Rejected alternatives:**
 
@@ -733,6 +769,7 @@ Ruled by Susan on 2026-09-24. The complaint: the Hardware route is fifteen panel
   | 2 | Let a panel build its own path | A panel that could name a path could name any path, and the published list would stop being the bound | Zero; costs the trust boundary | Fowler |
   | 3 | Have the browser probe files until a 404 | A 404 stops being a defect signal and becomes a loop terminator, so a genuinely missing file reads as a normal end | Zero; costs telling an absence from a fault | Fowler |
   | 4 | A `where` clause of raw SQL | It is the Guardrail #11 surface: fetched text reaching the query. A structured predicate closes it | Zero; costs the boundary | Fowler |
+  | 5 | Let plan 50 add the build-time entry point | Two plans would edit `ledger.ts` and `engine.ts`, and the engine's Node set-up would have no owner | Zero; costs one owner per module | Owner, 2026-09-27 |
 
 ---
 
@@ -790,7 +827,7 @@ given and predicts nothing about the next job. Darker bars are faster machines.
   - `frontend/src/lib/charts/machine-colour.ts` (**the arbitrary-key rule reverses to an ordered ramp - see decision 5**), `docs/concepts/console-design/how-the-machines-work-is-drawn-and-what-may-not-be-pooled.md`
   - `frontend/tests/console-machine-split.spec.ts` (the "Seven stops for a machine" assertion becomes five), `frontend/tests/console-machine-panels.spec.ts`, `frontend/tests/console-machine-data.spec.ts`
 - **Acceptance gates:** the browser smoke on `/console/machine` (CLAUDE.md section 12) - zero new `[error]`, zero new `404`, and **the panel draws each of gate 8's four nothings**: `loading` before the door resolves, `missing` when its ledger is not published, `quiet` when the window is covered but empty, and `unreachable` when a date is a hole or the engine fails to start. Local `npm --prefix frontend run test:changed -- --list` then the selected checks; `ruff check .`, `mypy backend`, `pytest backend/tests/contracts -q`. CI runs the full suite.
-- **Oracle:** given a recorded `slice()` response for one fixture day, the d3 panel draws one stacked bar per day with one segment per machine kind, the kinds in median-throughput order, the unrecorded kind last and outside the merged group, and every readout row carrying an absolute rate. **It is not a comparison against the ECharts panel**: this row rewrites `fleet.ts` from an option builder into a draw, so the old panel does not survive the commit, and the row changes the colour count, the shape under the threshold, the merge rule and the readout - so "same colours, same labels" would be false by design. It cannot settle whether the drawing is good enough to ship; Susan rules that (CLAUDE.md section 14).
+- **Oracle:** given a recorded `slice()` response for one compacted fixture day - one row per job, as plan 50's compaction writes it - the d3 panel draws one stacked bar per day with one segment per machine kind, the kinds in median-throughput order, the unrecorded kind last and outside the merged group, and every readout row carrying an absolute rate. **It is not a comparison against the ECharts panel**: this row rewrites `fleet.ts` from an option builder into a draw, so the old panel does not survive the commit, and the row changes the colour count, the shape under the threshold, the merge rule and the readout - so "same colours, same labels" would be false by design. It cannot settle whether the drawing is good enough to ship; Susan rules that (CLAUDE.md section 14).
 - **Decisions:**
 
   | # | Decision | Authority |
@@ -816,7 +853,8 @@ given and predicts nothing about the next job. Darker bars are faster machines.
 
 ## Dependent plans
 
-- `TODO/20260924-50-idhazh-gardener-plan.md`. Row 3 waits on its rows titled **The index task, two compact periods, and the diagram moves into the page** and **The three ledgers the console's routes read become parquet**. In the other direction, plan 50's row titled **The three ledgers the console's routes read become parquet** waits on this plan's row 7, titled **The query door module and its two entry points** - and row 7 depends only on row 4 and on plan 50's index-task row, neither of which reaches that migration, so row 7 lands first and the two pointers resolve without a cycle. Nothing else in that plan is a predecessor here.
+- `TODO/20260924-50-idhazh-gardener-plan.md`. Row 3 waits on its rows titled **The index task, two compact periods, and the diagram moves into the page** and **The three ledgers the console's routes read become parquet**. In the other direction, plan 50's row titled **The three ledgers the console's routes read become parquet** waits on this plan's row 7, titled **The query door module and its two entry points** - and row 7 depends only on row 4 and on plan 50's index-task row, neither of which reaches that migration, so row 7 lands first and the two pointers resolve without a cycle. **Plan 50 also owns two things this plan relies on**: its compaction writes one row per record, so the door never merges; and its migration row moves today's build-time readers onto row 7's `sliceFromDisk()` and adds no export to `ledger.ts`. Nothing else in that plan is a predecessor here.
+- `TODO/20260926-54-check-publication-plan.md`. Its run-yield chart landed on `DayReadout` (#1117); row 5 converts `RunYield.svelte` with every other chart. Nothing here waits on plan 54.
 - **[`20260926-52-fifty-panels-move-and-six-projections-go-plan.md`](20260926-52-fifty-panels-move-and-six-projections-go-plan.md), a placeholder and not yet a plan**, takes over after row 8. **The panel-by-panel verdict table Susan ruled now lives in plan 52** - all fifty-one panels, each KEEP, REDRAW, REPLACE, DELETE or NEW, with the columns each queries and the chart it becomes. Many of the redraws and new panels exist only because the browser can now query the ledger. One row per route; each row moves that route's panels to the query door and **deletes the projection under `frontend/public/` that fed them**. Rows 4 to 8 here exist to make that plan cheap, not to be it.
 - **The old charts are evidence of an old limit, not a decision to preserve** (Susan). They were drawn against what a build-time projection could carry - a narrow, pre-summed slice of the columns - so columns of real answers sat unread on every run: why an article was chosen, why a fetch was slow, what the source answered, how old the news was, whether a summary was cut off and reported as a success, which rule refused a reply, and whether a trend moved because of the model or because somebody changed a setting. Plan 52 draws them.
 - `TODO/20260823-known-defects-plan.md`, defect 33, closes in row 1's pull request.
