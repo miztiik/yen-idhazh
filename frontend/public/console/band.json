@@ -1,41 +1,41 @@
 {
   "compaction_lag_days": 0,
-  "covers_through": "2026-09-26",
-  "generated_at": "2026-09-27T00:26:19Z",
+  "covers_through": "2026-09-27",
+  "generated_at": "2026-09-27T11:19:35Z",
   "months": [
     "2026-08",
     "2026-09"
   ],
   "routes": [
     {
-      "carries": "The model spent 46 h 29 m of this.",
+      "carries": "The model spent 9 h 42 m of this.",
       "description": "Did the runs work, and what each stage cost.",
       "href": "/console/",
       "id": "pipelines",
       "label": "Pipelines",
       "severity": 3,
-      "worst": "23 feeds resting"
+      "worst": "24 feeds resting"
     },
     {
-      "carries": "This day ran in 5 runs, 1.45x apart on read speed.",
+      "carries": "This day ran as one run, so there is nothing to compare it against.",
       "description": "What the model wrote, how long it took, and what it got wrong.",
       "href": "/console/model/",
       "id": "model",
       "label": "Summaries",
       "severity": 3,
-      "worst": "32 items failed"
+      "worst": "8 items failed"
     },
     {
-      "carries": "366 articles on this day.",
+      "carries": "72 articles on this day.",
       "description": "The hardware the model ran on, and how much it varied between runs.",
       "href": "/console/machine/",
       "id": "machine",
       "label": "Hardware",
       "severity": 2,
-      "worst": "20 runs cannot be read"
+      "worst": "21 runs cannot be read"
     },
     {
-      "carries": "36 summaries were marked \"not sure\" on this day.",
+      "carries": "7 summaries were marked \"not sure\" on this day.",
       "description": "What the model made of each article, and where we disagreed.",
       "href": "/console/judgement/",
       "id": "judgement",
@@ -44,7 +44,7 @@
       "worst": null
     },
     {
-      "carries": "23 feeds rested over these 157 runs.",
+      "carries": "24 feeds rested over these 158 runs.",
       "description": "Who supplied the day, and how far each feed is discounted.",
       "href": "/console/voices/",
       "id": "voices",
@@ -55,46 +55,30 @@
   ],
   "rows_uncompacted": 0,
   "size": {
-    "articles_to_cap": 330960,
-    "bytes": 32860074,
-    "cap_fraction": 0.030603328719735146,
-    "left_mb": 992.6621913909912,
-    "measured_days": 35,
-    "sentence": "31.3 MB of the 1 GB limit - room for about 331,000 more articles."
+    "articles_to_cap": 338345,
+    "bytes": 33024794,
+    "cap_fraction": 0.030756736174225807,
+    "left_mb": 992.5051021575928,
+    "measured_days": 36,
+    "sentence": "31.5 MB of the 1 GB limit - room for about 338,000 more articles."
   },
   "verdict": {
-    "date": "2026-09-26",
+    "date": "2026-09-27",
     "health": "amber",
     "more_runs": 0,
     "runs": [
       {
         "health": "amber",
         "label": "Run 1 is worth a look"
-      },
-      {
-        "health": "amber",
-        "label": "Run 2 is worth a look"
-      },
-      {
-        "health": "amber",
-        "label": "Run 3 is worth a look"
-      },
-      {
-        "health": "amber",
-        "label": "Run 4 is worth a look"
-      },
-      {
-        "health": "amber",
-        "label": "Run 5 is worth a look"
       }
     ],
-    "sentence": "2026-09-26 ran 5 runs and published 366 of 398 planned items. 32 items failed."
+    "sentence": "2026-09-27 ran 1 run and published 72 of 80 planned items. 8 items failed."
   },
   "version": "2026-09-23",
   "worst": {
     "href": "/console/",
     "id": "pipelines",
     "label": "Pipelines",
-    "sentence": "23 feeds are resting, so nothing they carry reaches the digest. Each is asked again after 5 runs."
+    "sentence": "24 feeds are resting, so nothing they carry reaches the digest. Each is asked again after 5 runs."
   }
 }

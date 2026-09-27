@@ -1958,5 +1958,33 @@
     "site_bytes": 32860074,
     "site_files": 72,
     "version": "2026-09-09"
+  },
+  {
+    "date": "2026-09-27",
+    "models": [
+      "qwen3-5-9b-q4-k-m"
+    ],
+    "published_charts": 0,
+    "published_items": 72,
+    "runs": [
+      {
+        "charts_drafted": 13,
+        "decided": 72,
+        "decision_ms": 1,
+        "failed": 8,
+        "n": 1,
+        "planned": 80,
+        "prefiltered": 0,
+        "run_id": "2026-09-27-36305712086",
+        "skipped": 0,
+        "source_list_stale": false,
+        "started_at": "2026-09-27T08:17:37Z",
+        "status": "partial",
+        "succeeded": 72
+      }
+    ],
+    "site_bytes": 33024794,
+    "site_files": 73,
+    "version": "2026-09-09"
   }
 ]
