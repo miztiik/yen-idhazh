@@ -417,7 +417,6 @@ export interface ChartConfig {
 	palette: 'categorical' | 'sequential';
 	tick_density: number;
 	sparkline_height_px: number;
-	donut_thickness_px: number;
 }
 
 export interface IconsConfig {
@@ -635,8 +634,7 @@ const CHART_DEFAULTS: ChartConfig = {
 	readout_max_share: 0.33,
 	palette: 'categorical',
 	tick_density: 6,
-	sparkline_height_px: 36,
-	donut_thickness_px: 10
+	sparkline_height_px: 36
 };
 const ICONS_DEFAULTS: IconsConfig = {
 	size_px: 16,

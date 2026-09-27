@@ -1,6 +1,6 @@
 # What the page is drawn from
 
-**Last Updated**: 2026-09-23
+**Last Updated**: 2026-09-27
 
 Every knob a reader's page or an operator's console is drawn from: the file that
 owns them, the rule that decides which file owns a key when two name it, the
@@ -21,7 +21,7 @@ Its blocks:
 | `assist` | On-device archive search. Formerly `idhazh.json`'s `assist` block. |
 | `frame` | The frame maximums, the reading measure, the gutter range, and the three breakpoints. |
 | `theme` | Whether gradients, elevation and the display face are drawn, and how strongly a panel takes a tint. |
-| `chart` | Drawn height and server-side width, whether a chart answers a pointer and how wide that readout may be, the palette, tick density, and the sparkline and donut geometry. |
+| `chart` | Drawn height and server-side width, how wide the readout under a chart may be, tick density, and the sparkline height. `hover_readout` and `palette` are still in the contract, but nothing reads them, so setting either changes nothing. |
 | `icons` | Icon size, whether an icon takes the hue of what it means, and whether a topic carries a mark. |
 | `motion` | The two durations, and one switch. `prefers-reduced-motion` sits above the switch and is deliberately not configurable. |
 
