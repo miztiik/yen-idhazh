@@ -13,6 +13,7 @@ import pytest
 from conftest import CONFIG_DIR, REPO_ROOT, read_text
 
 from idhazh import ledger
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.telemetry.publish import public_telemetry, series
 
 from ._harness import (
@@ -207,7 +208,7 @@ def test_the_fold_stages_state_whole_because_two_of_its_stores_appear_late() -> 
     staged = COMMIT_STAGED_PATHS["fold"]
 
     assert "state" in staged
-    assert ledger.visual_prunes_relpath(SUBSTITUTED_DATE).split("/")[0] in staged
+    assert ledger.relpath(LedgerName.VISUAL_PRUNES, SUBSTITUTED_DATE).split("/")[0] in staged
     for late in ("telemetry-aggregate", "score-archive"):
         assert f"state/{late}" not in staged, (
             f"state/{late} appears only once production writes it, so naming it here "
@@ -305,7 +306,7 @@ def test_every_path_the_plan_stages_exists_in_a_fresh_checkout() -> None:
     for relative in named:
         assert (REPO_ROOT / relative).exists(), f"{relative} must be in a fresh checkout"
     tracked = subprocess.run(
-        ["git", "ls-files", "--error-unmatch", ledger.feed_retirements_relpath()],
+        ["git", "ls-files", "--error-unmatch", ledger.relpath(LedgerName.FEED_RETIREMENTS)],
         cwd=REPO_ROOT,
         capture_output=True,
         text=True,

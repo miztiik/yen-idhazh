@@ -44,6 +44,7 @@ from typing import Final
 from idhazh import day_shards, ledger
 from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.run_timeline import RunTimelineRow
 from idhazh.telemetry.publish import series
 
@@ -210,7 +211,7 @@ def publish(
     day, and a browser fetches one month. So a named month opens at most 31
     census files whatever the archive grows to (`CLAUDE.md` Guardrail #12).
     """
-    census_root = state_root / ledger.ITEM_HEALTH_DIRNAME
+    census_root = ledger.tree_root(state_root, LedgerName.ITEM_HEALTH)
     by_month = day_shards.dates_by_month(census_root, days=UNBOUNDED_WINDOW)
 
     def encode(month: str) -> bytes:

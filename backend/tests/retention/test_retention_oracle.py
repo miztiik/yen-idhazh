@@ -15,6 +15,7 @@ from idhazh.contracts.item_health import ItemStage
 from idhazh.contracts.knobs.collect import CollectConfig
 from idhazh.contracts.knobs.observability import ObservabilityConfig
 from idhazh.contracts.knobs.retention import RetentionConfig
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.retention import month_shards
 from idhazh.stages.prune_state import stage_prune_state
 from idhazh.telemetry.publish import public_telemetry
@@ -86,15 +87,15 @@ def test_the_oracle_fifteen_months_leave_fourteen_of_each_and_one_verified_summa
 
     # The expired month survives as one summary, and the summary is checked
     # against the file it replaced rather than against the code that wrote it.
-    aggregate = ledger.telemetry_aggregate_path(state, expired)
-    assert [path.stem for path in month_shards(state / ledger.TELEMETRY_AGGREGATE_DIRNAME)] == [
+    aggregate = ledger.path(state, LedgerName.TELEMETRY_AGGREGATE, expired)
+    assert [path.stem for path in month_shards(state / LedgerName.TELEMETRY_AGGREGATE)] == [
         expired
     ]
     assert totals_from_aggregate(ledger.load_telemetry_aggregate(aggregate)) == totals_from_shard(
         doomed_texts
     )
     assert not public_telemetry.shard_path(public, expired).exists()
-    assert not ledger.health_path(state, f"{expired}-11").exists()
+    assert not ledger.path(state, LedgerName.HEALTH, f"{expired}-11").exists()
 
     # Every window a 366-day console read can select still names a file that is
     # there. `shards_in_window` is the reader's own helper, so this is the read
@@ -188,14 +189,14 @@ def test_the_stage_names_every_file_a_live_run_would_remove(
     assert named == sorted(
         [
             *expired_days,
-            f"{ledger.health_relpath(f'{expired}-11')}/{feed_health_file}",
+            f"{ledger.relpath(LedgerName.HEALTH, f'{expired}-11')}/{feed_health_file}",
             f"frontend/public/telemetry/{expired}.csv",
         ]
     )
     assert "\\" not in caplog.text, "a path leaving the process is POSIX (section 2)"
     assert all((state.parent / relpath).exists() for relpath in expired_days)
     assert public_telemetry.shard_path(public, expired).exists()
-    assert ledger.health_path(state, f"{expired}-11").exists()
+    assert ledger.path(state, LedgerName.HEALTH, f"{expired}-11").exists()
 
 
 def test_the_stage_says_so_when_there_is_nothing_to_remove(
@@ -265,4 +266,4 @@ def test_the_stage_says_so_when_every_month_is_still_at_full_grain(
             == 0
         )
     assert "every month is still at full grain" in caplog.text
-    assert ledger.item_health_path(state, day).exists()
+    assert ledger.path(state, LedgerName.ITEM_HEALTH, day).exists()

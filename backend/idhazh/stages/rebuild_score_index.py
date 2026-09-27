@@ -11,8 +11,10 @@ from pathlib import Path
 
 from idhazh import (
     day_shards,
+    ledger,
 )
 from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.evals import writer
 from idhazh.stages import common
 from idhazh.stages.common import LOG
@@ -75,7 +77,7 @@ def stage_rebuild_score_index(
     for date, drift in sorted(found.items()):
         LOG.info(
             "index repaired day=%s held_the_rows_cannot_produce=%s rows_it_did_not_hold=%s",
-            writer.index_relpath(date),
+            ledger.relpath(LedgerName.SCORE_INDEX, date),
             len(drift.extra),
             len(drift.missing),
         )

@@ -304,7 +304,7 @@ def stale_header(path: Path, columns: tuple[str, ...]) -> None:
 
 def test_seen_ledger_rejects_stale_committed_header(tmp_path: Path) -> None:
     state = tmp_path / "state"
-    stale_header(ledger.seen_path(state, DATE), SeenRow.csv_columns())
+    stale_header(ledger.path(state, LedgerName.SEEN, DATE), SeenRow.csv_columns())
 
     with pytest.raises(ValueError, match="Migrate the ledger before appending to it"):
         ledger.append_seen(state, DATE, [seen_row()])
@@ -312,7 +312,7 @@ def test_seen_ledger_rejects_stale_committed_header(tmp_path: Path) -> None:
 
 def test_published_ledger_rejects_stale_committed_header(tmp_path: Path) -> None:
     state = tmp_path / "state"
-    stale_header(ledger.published_path(state, DATE), PublishedRow.csv_columns())
+    stale_header(ledger.path(state, LedgerName.PUBLISHED, DATE), PublishedRow.csv_columns())
 
     with pytest.raises(ValueError, match="Migrate the ledger before appending to it"):
         ledger.append_published(state, DATE, [published_row()])
@@ -363,7 +363,7 @@ def test_the_state_ledgers_append_blind_and_the_reads_absorb_a_repeat(tmp_path: 
     assert ledger.append_published(state, DATE, [published_row()]) == 1
     assert ledger.append_published(state, DATE, [published_row()]) == 1
 
-    with ledger.published_path(state, DATE).open(encoding="utf-8", newline="") as handle:
+    with ledger.path(state, LedgerName.PUBLISHED, DATE).open(encoding="utf-8", newline="") as handle:
         rows = list(csv.DictReader(handle))
 
     assert len(rows) == 2, "the append path does not deduplicate"
@@ -759,8 +759,8 @@ def test_append_published_writes_the_day_its_rows_name_and_no_other_file(
 
     assert landed == 1
     assert list(_tree(state)) == ["published/2026/09/07.csv"]
-    assert ledger.published_relpath(date) == "state/published/2026/09/07.csv"
-    assert ledger.published_path(state, date) == _day_file(state, date)
+    assert ledger.relpath(LedgerName.PUBLISHED, date) == "state/published/2026/09/07.csv"
+    assert ledger.path(state, LedgerName.PUBLISHED, date) == _day_file(state, date)
 
 
 def test_a_run_in_a_later_month_leaves_the_earlier_one_byte_identical(
@@ -1093,7 +1093,7 @@ def test_the_older_generation_is_refiled_whichever_block_the_merge_put_first(
     here yet, so it is built rather than waited for.
     """
     state = tmp_path / "state"
-    path = the_settled_file(ledger.item_health_path(state, DATE))
+    path = the_settled_file(ledger.path(state, LedgerName.ITEM_HEALTH, DATE))
     stranded, settled = timed_row(1), timed_row(2)
     path.write_text(
         a_generation(A_RETIRED_GENERATION, [stranded])
@@ -1116,7 +1116,7 @@ def test_a_day_file_under_a_retired_header_alone_is_appendable_again(tmp_path: P
     step, every ledger staged beside this one included.
     """
     state = tmp_path / "state"
-    path = the_settled_file(ledger.item_health_path(state, DATE))
+    path = the_settled_file(ledger.path(state, LedgerName.ITEM_HEALTH, DATE))
     stranded = timed_row(1)
     path.write_text(
         a_generation(A_RETIRED_GENERATION, [stranded]), encoding="utf-8", newline=""
@@ -1152,7 +1152,7 @@ def test_a_dropped_heading_is_carried_and_its_cell_goes(tmp_path: Path, dropped:
     (`CLAUDE.md` section 13).
     """
     state = tmp_path / "state"
-    path = the_settled_file(ledger.item_health_path(state, DATE))
+    path = the_settled_file(ledger.path(state, LedgerName.ITEM_HEALTH, DATE))
     row = timed_row(1)
     header = (*ItemHealthRow.csv_columns(), dropped)
     cells = row.csv_row() | {dropped: A_DROPPED_CELL_HELD[dropped]}
@@ -1185,7 +1185,7 @@ def test_without_the_carried_entry_the_same_file_refuses_to_re_file(
     call the append makes with the entry missing.
     """
     state = tmp_path / "state"
-    path = the_settled_file(ledger.item_health_path(state, DATE))
+    path = the_settled_file(ledger.path(state, LedgerName.ITEM_HEALTH, DATE))
     header = (*ItemHealthRow.csv_columns(), dropped)
     cells = timed_row(1).csv_row() | {dropped: A_DROPPED_CELL_HELD[dropped]}
     buffer = io.StringIO()
@@ -1212,7 +1212,7 @@ def test_a_day_file_already_under_the_current_header_is_left_byte_identical(
     """A pass with nothing to do leaves no diff, so a run never rewrites a settled day."""
     state = tmp_path / "state"
     assert seed_item_health(state, DATE, [timed_row(1)]) == 1
-    path = the_settled_file(ledger.item_health_path(state, DATE))
+    path = the_settled_file(ledger.path(state, LedgerName.ITEM_HEALTH, DATE))
     before = path.read_bytes()
 
     assert seed_item_health(state, DATE, []) == 0
@@ -1236,7 +1236,7 @@ def test_a_file_wider_than_this_checkout_is_refused_and_left_byte_identical(
     """
     state = tmp_path / "state"
     assert seed_item_health(state, DATE, [timed_row(1)]) == 1
-    path = the_settled_file(ledger.item_health_path(state, DATE))
+    path = the_settled_file(ledger.path(state, LedgerName.ITEM_HEALTH, DATE))
     before = path.read_bytes()
     narrow = A_RETIRED_GENERATION
 
@@ -1323,7 +1323,7 @@ def test_the_header_check_reads_one_line_whatever_the_file_holds(
     state = tmp_path / "state"
     rows = [carried_row(number, source_id="wire") for number in range(50)]
     assert seed_item_health(state, DATE, rows) == 50
-    path = the_settled_file(ledger.item_health_path(state, DATE))
+    path = the_settled_file(ledger.path(state, LedgerName.ITEM_HEALTH, DATE))
     _, lines = counted_reads(monkeypatch, path)
 
     assert ledger.migrate_header(
@@ -1349,7 +1349,7 @@ def test_the_records_a_day_already_holds_are_read_in_one_pass(
     state = tmp_path / "state"
     rows = [carried_row(number, source_id="wire") for number in range(20)]
     assert seed_item_health(state, DATE, rows) == 20
-    path = the_settled_file(ledger.item_health_path(state, DATE))
+    path = the_settled_file(ledger.path(state, LedgerName.ITEM_HEALTH, DATE))
     opens, lines = counted_reads(monkeypatch, path)
 
     assert len(ledger.recorded_item_health(path)) == len(rows)
@@ -1522,8 +1522,8 @@ def test_the_retirement_ledger_is_named_where_the_commit_step_stages_it() -> Non
     collect. What stays here is the half a code change can break - the path the
     commit step has to be handed.
     """
-    assert ledger.feed_retirements_relpath() == "state/feed-retirements.csv"
-    assert ledger.feed_retirements_path(Path("state")) == Path("state/feed-retirements.csv")
+    assert ledger.relpath(LedgerName.FEED_RETIREMENTS) == "state/feed-retirements.csv"
+    assert ledger.path(Path("state"), LedgerName.FEED_RETIREMENTS) == Path("state/feed-retirements.csv")
 
 
 def test_the_hand_marked_holdout_is_named_where_the_commit_step_stages_it() -> None:
@@ -1537,10 +1537,10 @@ def test_the_hand_marked_holdout_is_named_where_the_commit_step_stages_it() -> N
     handed.
     """
     assert (
-        ledger.similarity_holdout_relpath()
+        ledger.relpath(LedgerName.SIMILARITY_HOLDOUT)
         == "state/content-similarity-judge/holdout-pairs.csv"
     )
-    assert ledger.similarity_holdout_path(Path("state")) == Path(
+    assert ledger.path(Path("state"), LedgerName.SIMILARITY_HOLDOUT) == Path(
         "state/content-similarity-judge/holdout-pairs.csv"
     )
 
@@ -1558,10 +1558,10 @@ def test_the_judged_pairs_are_filed_under_the_day_they_were_drawn_from() -> None
     state = Path("state")
 
     assert (
-        ledger.scored_pairs_relpath(date)
+        ledger.relpath(LedgerName.SCORED_PAIRS, date)
         == "state/content-similarity-judge/scored-pairs/2026/09/18.csv"
     )
-    assert ledger.scored_pairs_path(state, date) == Path(
+    assert ledger.path(state, LedgerName.SCORED_PAIRS, date) == Path(
         "state/content-similarity-judge/scored-pairs/2026/09/18.csv"
     )
 
@@ -1577,10 +1577,10 @@ def test_the_fitted_line_is_filed_under_the_day_it_was_fitted_for() -> None:
     state = Path("state")
 
     assert (
-        ledger.fitted_thresholds_relpath(date)
+        ledger.relpath(LedgerName.FITTED_THRESHOLDS, date)
         == "state/content-similarity-judge/fitted-thresholds/2026/09/18.csv"
     )
-    assert ledger.fitted_thresholds_path(state, date) == Path(
+    assert ledger.path(state, LedgerName.FITTED_THRESHOLDS, date) == Path(
         "state/content-similarity-judge/fitted-thresholds/2026/09/18.csv"
     )
 
@@ -1592,7 +1592,7 @@ def test_the_score_record_is_one_file_that_never_grows_with_the_archive() -> Non
     (Guardrail #12), so the path carries no date and there is nothing here for a
     partition to place.
     """
-    assert ledger.score_distribution_path(Path("state")) == Path(
+    assert ledger.path(Path("state"), LedgerName.SCORE_DISTRIBUTION) == Path(
         "state/content-similarity-judge/score-distribution.json"
     )
 
@@ -1611,15 +1611,15 @@ def test_the_cleanup_record_is_a_day_tree_and_needs_no_seeded_header() -> None:
     change can break. Whether this checkout holds the tree is a clone question
     and is asked by `backend/utilities/check_seeded_ledgers.py`.
     """
-    assert ledger.visual_prunes_relpath("2026-09-06") == "state/visual-prunes/2026/09/06.csv"
-    assert ledger.visual_prunes_relpath("2026-09-06").split("/")[0] == ledger.STATE_DIRNAME
+    assert ledger.relpath(LedgerName.VISUAL_PRUNES, "2026-09-06") == "state/visual-prunes/2026/09/06.csv"
+    assert ledger.relpath(LedgerName.VISUAL_PRUNES, "2026-09-06").split("/")[0] == ledger.STATE_DIRNAME
 
 
 # --- The cleanup record, one day at a time ----------------------------------
 
 
 def _prunes_root(state: Path) -> Path:
-    return state / ledger.VISUAL_PRUNES_DIRNAME
+    return ledger.tree_root(state, LedgerName.VISUAL_PRUNES)
 
 
 def test_load_visual_prunes_reads_no_history_from_a_fresh_clone(tmp_path: Path) -> None:
@@ -1642,7 +1642,7 @@ def test_a_cleanup_pass_writes_only_its_own_day_file(tmp_path: Path) -> None:
     """
     state = tmp_path / "state"
     assert ledger.append_visual_prunes(state, "2026-09-07", [prune_row(on="2026-09-07")]) == 1
-    september = ledger.visual_prunes_path(state, "2026-09-07")
+    september = ledger.path(state, LedgerName.VISUAL_PRUNES, "2026-09-07")
     frozen = september.read_bytes()
 
     assert ledger.append_visual_prunes(state, "2026-10-01", [prune_row(on="2026-10-01")]) == 1
@@ -1720,7 +1720,7 @@ def test_a_repeated_cleanup_row_is_settled_inside_the_day_that_holds_it(
     """
     state = tmp_path / "state"
     ledger.append_visual_prunes(state, "2026-09-07", [prune_row(on="2026-09-07")])
-    path = ledger.visual_prunes_path(state, "2026-09-07")
+    path = ledger.path(state, LedgerName.VISUAL_PRUNES, "2026-09-07")
     clean = path.read_text(encoding="utf-8")
     with path.open("a", encoding="utf-8", newline="") as handle:
         handle.write(clean.splitlines()[1] + "\n")
@@ -1840,7 +1840,7 @@ def test_a_repeated_row_is_dropped_and_every_other_byte_is_left_alone(tmp_path: 
     state = tmp_path / "state"
     a_fingerprint_day(state, [fingerprint_row(shard=0, cpu="first")])
     a_fingerprint_day(state, [fingerprint_row(shard=1, cpu="second")], attempt=2)
-    path = the_settled_file(ledger.host_fingerprint_path(state, DATE))
+    path = the_settled_file(ledger.path(state, LedgerName.HOST_FINGERPRINT, DATE))
     header = ",".join(HostFingerprintRow.csv_columns())
     clean = path.read_text(encoding="utf-8")
     assert clean.startswith(header)
@@ -1900,7 +1900,7 @@ def test_the_keyed_set_names_every_ledger_that_declares_one(tmp_path: Path) -> N
     ledger.append_visual_prunes(tmp_path, DATE, [prune_row(on=DATE)])
     ledger.append_story_similarity_pairs(tmp_path, DATE, [pair_row()])
     ledger.append_council_shard_outcomes(tmp_path, DATE, [council_row()])
-    fitted = ledger.fitted_thresholds_path(tmp_path, DATE)
+    fitted = ledger.path(tmp_path, LedgerName.FITTED_THRESHOLDS, DATE)
     fitted.parent.mkdir(parents=True, exist_ok=True)
     fitted.write_text(
         ",".join(FittedSimilarityThreshold.csv_columns()) + "\n", encoding="utf-8"
@@ -2000,13 +2000,13 @@ def test_a_repeated_fingerprint_and_span_fold_are_settled_when_a_reader_asks(
         )
 
     machines = day_shards.settled_day(
-        state / ledger.HOST_FINGERPRINT_DIRNAME,
+        ledger.tree_root(state, LedgerName.HOST_FINGERPRINT),
         DATE,
         ledger.HOST_FINGERPRINT_KEY,
         HostFingerprintRow,
     )
     spans = day_shards.settled_day(
-        state / ledger.SPAN_ROLLUP_DIRNAME, DATE, ledger.SPAN_ROLLUP_KEY, SpanRollupRow
+        ledger.tree_root(state, LedgerName.SPAN_ROLLUP), DATE, ledger.SPAN_ROLLUP_KEY, SpanRollupRow
     )
 
     assert len(machines) == 1, "one machine, written down twice, is one machine"
@@ -2154,7 +2154,7 @@ def test_the_day_grain_answers_what_the_month_grain_answered_over_the_same_rows(
         a_day.setdefault(row.date, []).append(row)
     for date_read, day_rows in a_day.items():
         seed_feed_health(day_tree, date_read, day_rows)
-    month_root = tmp_path / "month" / "state" / ledger.HEALTH_DIRNAME
+    month_root = ledger.tree_root(tmp_path / "month" / "state", LedgerName.HEALTH)
     month_grain_tree(month_root, rows)
 
     window = ledger.HEALTH_WINDOW_DAYS
@@ -2162,7 +2162,7 @@ def test_the_day_grain_answers_what_the_month_grain_answered_over_the_same_rows(
         {
             day_shards.date_of(shard)
             for shard in day_shards.shard_files(
-                day_tree / ledger.HEALTH_DIRNAME, days=UNBOUNDED_WINDOW
+                ledger.tree_root(day_tree, LedgerName.HEALTH), days=UNBOUNDED_WINDOW
             )
         }
     )
@@ -2274,7 +2274,7 @@ def test_the_ledgers_prefill_rate_agrees_with_the_servers_own_counters() -> None
     server = pool_counters(rows)
     captured = pool_ledger(
         day_shards.one_day(
-            STATE_FIXTURES / "prefill-oracle" / ledger.ITEM_HEALTH_DIRNAME, RECONCILED_DATE
+            ledger.tree_root(STATE_FIXTURES / "prefill-oracle", LedgerName.ITEM_HEALTH), RECONCILED_DATE
         ),
         run_id=RECONCILED_RUN,
     )

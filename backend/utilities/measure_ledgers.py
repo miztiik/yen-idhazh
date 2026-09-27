@@ -92,6 +92,7 @@ from idhazh.classify import calls
 from idhazh.contracts.base import WORK_JOB
 from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.day_shards import shard_files
 from idhazh.extract import TOKENS_PER_WORD
 from idhazh.llm.server import window
@@ -138,7 +139,7 @@ def _cell(row: dict[str, str], name: str) -> int | None:
 
 def read_items(state_dir: Path) -> list[Item]:
     """Every committed item-health row, from every day file."""
-    directory = state_dir / ledger.ITEM_HEALTH_DIRNAME
+    directory = ledger.tree_root(state_dir, LedgerName.ITEM_HEALTH)
     items: list[Item] = []
     for path in shard_files(directory, days=UNBOUNDED_WINDOW):
         with path.open("r", encoding="utf-8", newline="") as handle:
@@ -279,7 +280,7 @@ def _job_clock_rows(state_dir: Path) -> list[dict[str, str]]:
     the question is which runs filed a clock at all and a row that no longer
     parses still answers it.
     """
-    directory = state_dir / ledger.HOST_FINGERPRINT_DIRNAME
+    directory = ledger.tree_root(state_dir, LedgerName.HOST_FINGERPRINT)
     rows: list[dict[str, str]] = []
     for path in shard_files(directory, days=UNBOUNDED_WINDOW):
         with path.open("r", encoding="utf-8", newline="") as handle:
@@ -520,7 +521,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Three figures the committed ledgers hold.")
     parser.add_argument("--state", type=Path, default=Path("state"))
     args = parser.parse_args()
-    if not (args.state / ledger.ITEM_HEALTH_DIRNAME).is_dir():
+    if not (ledger.tree_root(args.state, LedgerName.ITEM_HEALTH)).is_dir():
         print(f"no item-health ledger under {args.state.as_posix()} - nothing to read")
         return 1
     settings = config.load()

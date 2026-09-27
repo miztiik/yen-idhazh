@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import csv
 import shutil
+from collections.abc import Callable
 from pathlib import Path
 from typing import Final
 
@@ -29,6 +30,7 @@ import pytest
 
 from idhazh import day_shards, ledger
 from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.span_rollup import SpanRollupRow
 from idhazh.stages import compact
 
@@ -69,7 +71,7 @@ def test_a_day_directory_settles_to_what_the_fold_writes_into_its_settled_file(
     """The oracle. Same bytes, two settlements, one answer, row for row."""
     root = _root()
 
-    day = tmp_path / ledger.STATE_DIRNAME / ledger.SPAN_ROLLUP_DIRNAME / "2026" / "09" / "18"
+    day = ledger.tree_root(tmp_path / ledger.STATE_DIRNAME, LedgerName.SPAN_ROLLUP) / "2026" / "09" / "18"
     day.mkdir(parents=True)
     for name in WRITERS:
         shutil.copy(root / "2026" / "09" / "18" / name, day / name)
@@ -299,13 +301,22 @@ MOVED: Final = (
     ("backend/utilities/empty_column_census.py", "day_files(root / ledger.root)", "shard_files("),
 )
 
-#: The two ledgers that keep the day-file walk. `state/published/` and
-#: `state/visual-prunes/` are not moving, and `day_partition.day_files` refusing
-#: a directory is the tripwire that catches a twelfth tree arriving without a
-#: plan.
+#: The two ledgers that keep the day-file walk, and the reader that walks each.
+#: `state/published/` and `state/visual-prunes/` are not moving, and
+#: `day_partition.day_files` refusing a directory is the tripwire that catches a
+#: twelfth tree arriving without a plan.
+#:
+#: The reader is called rather than read, so what is checked is that the refusal
+#: still reaches a caller - a walk swapped for one that skips what it cannot
+#: place fails here even when the call still spells `day_files`.
 KEPT: Final = (
-    "day_partition.day_files(state_dir / PUBLISHED_DIRNAME)",
-    "day_partition.day_files(state_dir / VISUAL_PRUNES_DIRNAME)",
+    (
+        LedgerName.PUBLISHED,
+        lambda state_dir: ledger.load_published(
+            state_dir, today=None, within_days=UNBOUNDED_WINDOW
+        ),
+    ),
+    (LedgerName.VISUAL_PRUNES, ledger.load_visual_prunes),
 )
 
 
@@ -335,11 +346,23 @@ def test_every_named_reader_walks_the_shards_and_not_the_day_files(
     )
 
 
-def test_the_two_stores_that_keep_the_day_file_walk_still_have_it() -> None:
-    """The tripwire is only a tripwire while something still trips it."""
-    source = _squeezed("backend/idhazh/ledger/__init__.py")
-    for kept in KEPT:
-        assert kept in source, (
-            f"`{kept}` is gone, so nothing refuses a day directory under a ledger that never "
-            "planned to hold one."
-        )
+@pytest.mark.parametrize(("which", "read"), KEPT, ids=[which.value for which, _ in KEPT])
+def test_the_two_ledgers_that_keep_the_day_file_walk_still_refuse_a_day_directory(
+    which: LedgerName, read: Callable[[Path], object], tmp_path: Path
+) -> None:
+    """The tripwire is only a tripwire while something still trips it.
+
+    A day directory is what a tree that gained writer-owned files looks like from
+    a reader that was never told. These two readers must stop rather than return a
+    short answer, because a report that quietly drops a day is a report of the
+    wrong series.
+
+    The tree is built from the registry, so this cannot drift from where the
+    ledger actually lives, and it holds one directory whatever `state/` grows to
+    (Guardrail #12).
+    """
+    state_dir = tmp_path / "state"
+    (ledger.tree_root(state_dir, which) / "2026" / "09" / "18").mkdir(parents=True)
+
+    with pytest.raises(ValueError, match=f"state/{which.value} holds 2026/09/18"):
+        read(state_dir)

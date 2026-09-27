@@ -19,6 +19,7 @@ from conftest import seed_item_health
 
 from idhazh import day_shards, ledger
 from idhazh.contracts.item_health import ItemHealthRow, ItemOutcome, ItemStage
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.run_timeline import STEP_COLUMNS, RunTimelineRow
 from idhazh.telemetry.publish import dispatch, run_timeline, series
 
@@ -121,7 +122,7 @@ def census(tmp_path: Path) -> Path:
 def project(census: Path) -> list[RunTimelineRow]:
     return run_timeline.project(
         day_shards.settled_day(
-            census / ledger.ITEM_HEALTH_DIRNAME, DAY, ledger.ITEM_HEALTH_KEY, ItemHealthRow
+            ledger.tree_root(census, LedgerName.ITEM_HEALTH), DAY, ledger.ITEM_HEALTH_KEY, ItemHealthRow
         )
     )
 

@@ -35,6 +35,7 @@ from typing import Final
 from idhazh import day_shards, ledger
 from idhazh.contracts.base import WORK_JOB
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.ledger import load_host_fingerprint_shard
 
 #: How far apart the two instruments may be before one of them is wrong.
@@ -182,13 +183,14 @@ def reconcile(state_dir: Path, *, run_id: str) -> Reconciliation:
     return Reconciliation(
         run_id=run_id,
         ledger=pool_ledger(
-            day_shards.one_day(state_dir / ledger.ITEM_HEALTH_DIRNAME, date), run_id=run_id
+            day_shards.one_day(ledger.tree_root(state_dir, LedgerName.ITEM_HEALTH), date),
+            run_id=run_id,
         ),
         server=pool_counters(
             [
                 row
                 for shard in day_shards.one_day(
-                    state_dir / ledger.HOST_FINGERPRINT_DIRNAME, date
+                    ledger.tree_root(state_dir, LedgerName.HOST_FINGERPRINT), date
                 )
                 for row in load_host_fingerprint_shard(shard)
                 if row.run_id == run_id and row.job == WORK_JOB

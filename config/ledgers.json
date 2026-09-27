@@ -1,0 +1,180 @@
+{
+  "ledgers": [
+    {
+      "name": "seen",
+      "state": "live",
+      "grain": "day",
+      "prefix": ["seen"],
+      "stem": null,
+      "suffix": ".csv"
+    },
+    {
+      "name": "feed-health",
+      "state": "live",
+      "grain": "tree",
+      "prefix": ["feed-health"],
+      "stem": null,
+      "suffix": null
+    },
+    {
+      "name": "item-health",
+      "state": "live",
+      "grain": "tree",
+      "prefix": ["item-health"],
+      "stem": null,
+      "suffix": null
+    },
+    {
+      "name": "host-fingerprint",
+      "state": "live",
+      "grain": "tree",
+      "prefix": ["host-fingerprint"],
+      "stem": null,
+      "suffix": null
+    },
+    {
+      "name": "scores",
+      "state": "live",
+      "grain": "tree",
+      "prefix": ["scores"],
+      "stem": null,
+      "suffix": null
+    },
+    {
+      "name": "score-index",
+      "state": "live",
+      "grain": "tree",
+      "prefix": ["score-index"],
+      "stem": null,
+      "suffix": null
+    },
+    {
+      "name": "validation",
+      "state": "live",
+      "grain": "tree",
+      "prefix": ["validation"],
+      "stem": null,
+      "suffix": null
+    },
+    {
+      "name": "telemetry-aggregate",
+      "state": "live",
+      "grain": "month",
+      "prefix": ["telemetry-aggregate"],
+      "stem": null,
+      "suffix": ".csv"
+    },
+    {
+      "name": "span-rollup",
+      "state": "live",
+      "grain": "tree",
+      "prefix": ["span-rollup"],
+      "stem": null,
+      "suffix": null
+    },
+    {
+      "name": "published",
+      "state": "live",
+      "grain": "day",
+      "prefix": ["published"],
+      "stem": null,
+      "suffix": ".csv"
+    },
+    {
+      "name": "feed-retirements",
+      "state": "live",
+      "grain": "flat",
+      "prefix": [],
+      "stem": "feed-retirements",
+      "suffix": ".csv"
+    },
+    {
+      "name": "visual-prunes",
+      "state": "live",
+      "grain": "day",
+      "prefix": ["visual-prunes"],
+      "stem": null,
+      "suffix": ".csv"
+    },
+    {
+      "name": "counterfactual-scores",
+      "state": "live",
+      "grain": "tree",
+      "prefix": ["counterfactual-scores"],
+      "stem": null,
+      "suffix": null
+    },
+    {
+      "name": "scored-pairs",
+      "state": "live",
+      "grain": "day",
+      "prefix": ["content-similarity-judge", "scored-pairs"],
+      "stem": null,
+      "suffix": ".csv"
+    },
+    {
+      "name": "fitted-thresholds",
+      "state": "live",
+      "grain": "day",
+      "prefix": ["content-similarity-judge", "fitted-thresholds"],
+      "stem": null,
+      "suffix": ".csv"
+    },
+    {
+      "name": "holdout-pairs",
+      "state": "live",
+      "grain": "flat",
+      "prefix": ["content-similarity-judge"],
+      "stem": "holdout-pairs",
+      "suffix": ".csv"
+    },
+    {
+      "name": "score-distribution",
+      "state": "live",
+      "grain": "flat",
+      "prefix": ["content-similarity-judge"],
+      "stem": "score-distribution",
+      "suffix": ".json"
+    },
+    {
+      "name": "archive",
+      "state": "live",
+      "grain": "stamp",
+      "prefix": ["content-similarity-judge", "archive"],
+      "stem": null,
+      "suffix": ".json"
+    },
+    {
+      "name": "metrics",
+      "state": "live",
+      "grain": "day",
+      "prefix": ["content-similarity-judge", "metrics"],
+      "stem": null,
+      "suffix": ".csv"
+    },
+    {
+      "name": "merge-line-holdout-scores",
+      "state": "live",
+      "grain": "day",
+      "prefix": ["content-similarity-judge", "merge-line-holdout-scores"],
+      "stem": null,
+      "suffix": ".csv"
+    },
+    {
+      "name": "shard-outcomes",
+      "state": "live",
+      "grain": "day",
+      "prefix": ["llm-council", "shard-outcomes"],
+      "stem": null,
+      "suffix": ".csv"
+    },
+    {
+      "name": "day-validations",
+      "state": "live",
+      "grain": "tree",
+      "prefix": ["day-validations"],
+      "stem": null,
+      "suffix": null
+    }
+  ]
+}

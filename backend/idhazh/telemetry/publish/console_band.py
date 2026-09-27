@@ -68,6 +68,7 @@ from idhazh.contracts.knobs.collect import CollectConfig
 from idhazh.contracts.knobs.console import ConsoleConfig
 from idhazh.contracts.knobs.run import RunConfig
 from idhazh.contracts.knobs.windows import months_a_window_can_touch
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.public_run_day import PublicRunDay, PublicRunRecord
 from idhazh.contracts.run_manifest import RunManifest
 from idhazh.contracts.source_health_view import SourceHealthRow
@@ -1453,7 +1454,7 @@ def _machine_rows(
     accumulated (Guardrail #12). A day nothing wrote opens nothing.
     """
     found: list[Mapping[str, str]] = []
-    root = state_root / ledger.HOST_FINGERPRINT_DIRNAME
+    root = ledger.tree_root(state_root, LedgerName.HOST_FINGERPRINT)
     for day in day_partition.days_in_window(anchor, within_days):
         for source in day_shards.one_day(root, day):
             with source.open("r", encoding="utf-8", newline="") as handle:

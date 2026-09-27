@@ -59,19 +59,15 @@ from idhazh.evals import archive
 from idhazh.ledger import read_header as _read_header
 from idhazh.ledger import require_matching_header
 
-#: The ledger, its POSIX prefix, and where one date's rows go. All four are
-#: `idhazh.ledger`'s, spelled once there: the compaction's head table has to name
-#: the file a segment drains into, and that table cannot import this module
-#: without a cycle. The names below are this module's own vocabulary for them.
-LEDGER_DIRNAME: Final = ledger.SCORES_DIRNAME
+#: The two ledgers this module fills, and the POSIX prefix of each. Both names
+#: are `idhazh.contracts.ledger_name`'s and where they sit is the registry's; the
+#: words below are this module's own vocabulary for them. A caller wanting one
+#: date's file asks `ledger.path` for it, so there is no third spelling here.
+LEDGER_DIRNAME: Final = LedgerName.SCORES
 LEDGER_RELDIR: Final = f"{ledger.STATE_DIRNAME}/{LEDGER_DIRNAME}"
-ledger_relpath = ledger.scores_relpath
-ledger_path = ledger.scores_path
 
-INDEX_DIRNAME: Final = ledger.SCORE_INDEX_DIRNAME
+INDEX_DIRNAME: Final = LedgerName.SCORE_INDEX
 INDEX_RELDIR: Final = f"{ledger.STATE_DIRNAME}/{INDEX_DIRNAME}"
-index_relpath = ledger.score_index_relpath
-index_path = ledger.score_index_path
 
 #: What makes two rows the same measurement. `idhazh.ledger.OBSERVATION_KEY` is
 #: the definition and this is the name this module has always called it; the
@@ -268,12 +264,14 @@ def rebuild_index(state_dir: Path, days: Iterable[str]) -> dict[str, IndexDrift]
         produced = _digests_of_day(live[date])
         found[date] = _drift(_indexed_on(state_dir, date), produced)
         if found[date].missing:
-            _append_index(index_path(state_dir, date) / name, sorted(found[date].missing))
+            index = ledger.path(state_dir, LedgerName.SCORE_INDEX, date)
+            _append_index(index / name, sorted(found[date].missing))
         after = _drift(_indexed_on(state_dir, date), produced)
         if after.missing:
             raise RuntimeError(
-                f"{index_relpath(date)} still does not hold {len(after.missing)} digests the "
-                "rows beside it produce, after a repair that was meant to add them"
+                f"{ledger.relpath(LedgerName.SCORE_INDEX, date)} still does not hold "
+                f"{len(after.missing)} digests the rows beside it produce, after a repair "
+                "that was meant to add them"
             )
     return found
 

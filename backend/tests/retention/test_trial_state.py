@@ -9,6 +9,7 @@ import pytest
 
 from idhazh import ledger, retention
 from idhazh.contracts.knobs.retention import RetentionConfig
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.stages.prune_state import _prune_trial_shards, _trial_roots
 
 pytestmark = pytest.mark.contract
@@ -28,7 +29,7 @@ def a_tree(root: Path, *, days: dict[str, list[str]]) -> Path:
 
 def a_ledger_day(root: Path, *, written: str) -> Path:
     """One declared ledger's day file, beside the trial roots and not one of them."""
-    day = root / ledger.ITEM_HEALTH_DIRNAME / written[:4] / written[5:7] / f"{written[8:10]}.csv"
+    day = ledger.tree_root(root, LedgerName.ITEM_HEALTH) / written[:4] / written[5:7] / f"{written[8:10]}.csv"
     day.parent.mkdir(parents=True, exist_ok=True)
     day.write_text("version,date\n2026-09-15," + written + "\n", encoding="utf-8")
     return day
@@ -200,14 +201,16 @@ def test_the_production_config_prunes_a_trial_root_it_was_never_told_about(
     assert ledger_day.is_file(), "a declared ledger is not a trial root, however old its rows"
 
 
-def test_every_declared_store_is_subtracted_from_the_trial_roots(tmp_path: Path) -> None:
-    """What holds `LEDGER_DIRNAMES` honest.
+def test_every_declared_ledger_is_subtracted_from_the_trial_roots(tmp_path: Path) -> None:
+    """What holds the registry's claim honest.
 
-    A ledger missing from the set reads as a trial root, and its files would then
-    be aged out against a window that is not its own.
+    A ledger missing from `config/ledgers.json` reads as a trial root, and its
+    files would then be aged out against a window that is not its own. The
+    registry refuses a missing entry at load, so this drives the other half: the
+    claim really does reach the sweep.
     """
     state = tmp_path / "state"
-    for name in sorted(ledger.LEDGER_DIRNAMES):
+    for name in sorted(ledger.claimed_roots()):
         (state / name).mkdir(parents=True)
     (state / TRIAL).mkdir()
 

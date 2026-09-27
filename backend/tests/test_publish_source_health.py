@@ -27,6 +27,7 @@ from idhazh.contracts.feed_health import (
 )
 from idhazh.contracts.item_health import FailureCode, ItemHealthRow, ItemOutcome, ItemStage
 from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW, CollectConfig
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.source_health_view import (
     FORBIDDEN_FIELDS,
     SourceAvailability,
@@ -945,7 +946,7 @@ def test_publish_opens_only_the_shards_that_hold_the_selected_dates(
     _write_item_health(state, _gap_items())
     opened: list[str] = []
     real = day_shards.rows_of
-    root = state / ledger.ITEM_HEALTH_DIRNAME
+    root = ledger.tree_root(state, LedgerName.ITEM_HEALTH)
 
     def spy(shard: Path) -> Iterator[tuple[int, dict[str, str]]]:
         if root in shard.parents:

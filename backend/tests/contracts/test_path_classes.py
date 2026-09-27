@@ -173,7 +173,7 @@ def test_an_operators_repair_is_written_once_so_it_never_collides_with_a_writer(
     instant it was minted rather than a run identity, which is what keeps two
     repairs apart and what keeps a repair out of every writer's way.
     """
-    repair = f"state/{ledger.SCORE_INDEX_DIRNAME}/2026/08/20/repair-20260820T091500Z.csv"
+    repair = f"state/{LedgerName.SCORE_INDEX}/2026/08/20/repair-20260820T091500Z.csv"
 
     assert _classes(repair) == {"written once"}
 
@@ -185,5 +185,5 @@ def test_a_name_outside_the_grammar_is_in_no_class_at_all() -> None:
     what a lost push race turns into a conflict. It has to read as unclassified
     here, or the rule above proves nothing.
     """
-    assert _classes(f"state/{ledger.SCORES_DIRNAME}/2026/08/20/notes.csv") == set()
+    assert _classes(f"state/{LedgerName.SCORES}/2026/08/20/notes.csv") == set()
     assert _classes("state/some-tree-nobody-declared/2026/08/20.csv") == set()

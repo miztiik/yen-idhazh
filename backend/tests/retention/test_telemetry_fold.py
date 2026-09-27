@@ -13,6 +13,7 @@ from conftest import seed_item_health
 from idhazh import ledger
 from idhazh.contracts.item_health import ItemStage
 from idhazh.contracts.knobs.observability import ObservabilityConfig
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.telemetry_aggregate import percentile
 from idhazh.evals import archive as score_archive
 from idhazh.retention import compact_month, month_shards, oldest_month_kept, prune_telemetry
@@ -89,7 +90,7 @@ def test_the_fold_loses_no_total(tmp_path: Path) -> None:
     prune_telemetry(state, config, TODAY)
 
     for month, texts in doomed.items():
-        folded = ledger.load_telemetry_aggregate(ledger.telemetry_aggregate_path(state, month))
+        folded = ledger.load_telemetry_aggregate(ledger.path(state, LedgerName.TELEMETRY_AGGREGATE, month))
         assert totals_from_aggregate(folded) == totals_from_shard(texts), (
             f"{month} lost a total in the fold"
         )
@@ -168,7 +169,7 @@ def test_a_dry_run_changes_nothing_on_disk(tmp_path: Path) -> None:
     assert result.folded, "it still has to report what it would have done"
     assert result.rows_folded > 0
     assert after == before
-    assert not (state / ledger.TELEMETRY_AGGREGATE_DIRNAME).exists()
+    assert not (state / LedgerName.TELEMETRY_AGGREGATE).exists()
 
 
 def test_the_aggregate_is_kept_forever_unless_somebody_asks_for_the_bytes_back(
@@ -184,14 +185,14 @@ def test_the_aggregate_is_kept_forever_unless_somebody_asks_for_the_bytes_back(
     assert config.item_health_aggregate_keep_months is None
 
     first = prune_telemetry(state, config, TODAY)
-    written = sorted(path.stem for path in month_shards(state / ledger.TELEMETRY_AGGREGATE_DIRNAME))
+    written = sorted(path.stem for path in month_shards(state / LedgerName.TELEMETRY_AGGREGATE))
     again = prune_telemetry(state, config, TODAY)
 
     assert written == sorted(first.folded)
     assert again.folded == (), "the shards are gone, so a second fold has nothing to do"
     assert again.hard_deleted == ()
     assert (
-        sorted(path.stem for path in month_shards(state / ledger.TELEMETRY_AGGREGATE_DIRNAME))
+        sorted(path.stem for path in month_shards(state / LedgerName.TELEMETRY_AGGREGATE))
         == written
     )
 
@@ -208,14 +209,14 @@ def test_a_hard_delete_takes_the_aggregate_only_after_the_fold_has_had_it(
     state = a_state_tree(tmp_path)
     config = ObservabilityConfig(item_health_aggregate_keep_months=16)
     prune_telemetry(state, ObservabilityConfig(), TODAY)
-    before = sorted(path.stem for path in month_shards(state / ledger.TELEMETRY_AGGREGATE_DIRNAME))
+    before = sorted(path.stem for path in month_shards(state / LedgerName.TELEMETRY_AGGREGATE))
 
     result = prune_telemetry(state, config, TODAY)
 
     boundary = oldest_month_kept(TODAY, 16)
     assert sorted(result.hard_deleted) == [stem for stem in before if stem < boundary]
     assert result.hard_deleted, "a threshold inside the fixture has to remove something"
-    left = sorted(path.stem for path in month_shards(state / ledger.TELEMETRY_AGGREGATE_DIRNAME))
+    left = sorted(path.stem for path in month_shards(state / LedgerName.TELEMETRY_AGGREGATE))
     assert left == [stem for stem in before if stem >= boundary]
 
 
@@ -263,8 +264,8 @@ def test_the_prune_takes_the_expired_day_and_keeps_the_day_beside_it(tmp_path: P
         seed_item_health(
             state, day, [health_row(day=day, run=1, number=1, stage=ItemStage.PUBLISH)]
         )
-    expired_path = ledger.item_health_path(state, expired_day)
-    kept_path = ledger.item_health_path(state, kept_day)
+    expired_path = ledger.path(state, LedgerName.ITEM_HEALTH, expired_day)
+    kept_path = ledger.path(state, LedgerName.ITEM_HEALTH, kept_day)
     expired_texts = [
         shard.read_text(encoding="utf-8") for shard in sorted(expired_path.iterdir())
     ]
@@ -276,7 +277,7 @@ def test_the_prune_takes_the_expired_day_and_keeps_the_day_beside_it(tmp_path: P
     assert kept_path.exists(), "the day inside the window was deleted"
     assert list(result.folded) == [expired_day[:7]]
     assert item_health_months(state) == [kept_day[:7]]
-    folded = ledger.load_telemetry_aggregate(ledger.telemetry_aggregate_path(state, expired_day[:7]))
+    folded = ledger.load_telemetry_aggregate(ledger.path(state, LedgerName.TELEMETRY_AGGREGATE, expired_day[:7]))
     assert totals_from_aggregate(folded) == totals_from_shard(expired_texts)
 
 
@@ -295,9 +296,9 @@ def test_the_month_readers_all_agree_on_what_a_month_is(tmp_path: Path) -> None:
     state = tmp_path / "state"
     readers: dict[str, tuple[Path, str, Callable[[], list[Path]]]] = {
         "retention.month_shards": (
-            state / ledger.TELEMETRY_AGGREGATE_DIRNAME,
+            state / LedgerName.TELEMETRY_AGGREGATE,
             ".csv",
-            lambda: month_shards(state / ledger.TELEMETRY_AGGREGATE_DIRNAME),
+            lambda: month_shards(state / LedgerName.TELEMETRY_AGGREGATE),
         ),
         "evals.archive.archive_files": (
             state / score_archive.ARCHIVE_DIRNAME,
@@ -317,7 +318,7 @@ def test_the_month_readers_all_agree_on_what_a_month_is(tmp_path: Path) -> None:
 
 def test_a_file_that_is_not_a_month_shard_is_never_a_candidate(tmp_path: Path) -> None:
     """A directory this deletes from names what it recognises, never the rest."""
-    directory = tmp_path / "state" / ledger.TELEMETRY_AGGREGATE_DIRNAME
+    directory = tmp_path / "state" / LedgerName.TELEMETRY_AGGREGATE
     directory.mkdir(parents=True)
     for stem in ("2025-01", *NOT_MONTHS, *OTHER_STRAYS):
         (directory / f"{stem}.csv").write_text("header\n", encoding="utf-8")

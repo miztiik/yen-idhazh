@@ -1,6 +1,6 @@
 # The ledgers under state/
 
-**Last Updated**: 2026-09-26
+**Last Updated**: 2026-09-27
 
 `state/` is the only memory this pipeline has. Every run starts on a fresh machine with a fresh checkout, so anything one run needs to tell the next is committed (CLAUDE.md Guardrail #1). This page says what each committed ledger answers and why it files at the grain it does.
 
@@ -79,7 +79,119 @@ A row is written on every run, including the runs where the policy is switched o
 
 No reader fails on a missing file. A fresh clone has no history, and a run with no history is a run where nothing was seen, nothing was published and no feed has a record yet - which is exactly what an empty result says.
 
-Callers pass the state directory and never the file name. The layout is one fact, and it lives in `backend/idhazh/ledger/`.
+Callers pass the state directory and never the file name. The layout is one fact, and it lives in `config/ledgers.json`.
+
+## The registry: one entry per ledger, and a build that stops without it
+
+`config/ledgers.json` says which ledgers exist, what state each one is in, and where each one sits. `backend/idhazh/contracts/ledgers.py` is its shape and `backend/idhazh/ledger/paths.py` loads it once, when the module loads.
+
+Each entry carries five things: the ledger's `name`, its `state`, its `grain`, the `prefix` of directories it sits under inside `state/`, and - for a ledger that is a single file - the `stem` and `suffix` that name it. A dated ledger carries no stem, because its period names it. A day directory carries no suffix, because it is a directory.
+
+Three builders read the registry and nothing else builds a path under `state/`:
+
+| Builder | Answers |
+| --- | --- |
+| `path(state_dir, ledger, covers)` | where the rows covering this period go, as a `Path` |
+| `relpath(ledger, covers)` | the same address, POSIX and relative, for a log line or a manifest |
+| `tree_root(state_dir, ledger)` | the whole-tree directory a reader walks, for a ledger that files by day |
+
+`covers` is the period the rows describe and never the day the job woke (CLAUDE.md section 2). A dated ledger handed nothing raises, and a flat one handed a period raises - `path` does not guess, because a guessed period files a row where nobody will look for it. `tree_root` is a builder of its own rather than `path` with no period, so `path` keeps that refusal.
+
+Because the extension is data on the entry, a builder cannot emit the wrong one.
+
+### The entries and the typed names are exactly each other
+
+Every `LedgerName` member has one entry and every entry names one member. The check runs when the config loads, so a ledger with no entry - or an entry naming a member twice - stops the build with the ledger's name in the message.
+
+That refusal is what the registry is for. `prune-state` empties every directory under `state/` the registry does not claim, and the claim used to be a hand-written Python set. A ledger somebody forgot to add to that set was a production directory the trial sweep quietly emptied. It is now a build that will not start.
+
+### The three states, and what each one changes
+
+`live` is written and read. `paused` is not written now and will resume. `retired` is no longer written and is not coming back.
+
+**All three are claimed, so all three are protected.** The state says what a writer may do, never whether the rows survive. Deleting a ledger's data for good is something a person does on purpose, never a side effect of changing a state.
+
+### Onboarding a ledger, and retiring one
+
+Adding one is two edits and no logic: one entry in `config/ledgers.json` at `state: live`, and its `LedgerName` member. A settled day tree needs a third - its key and preference, which stay in code because a preference is a callable and a callable is not JSON.
+
+Pausing or retiring one is a single field. Nothing is discovered, and nothing is a hand-list somebody can forget.
+
+```mermaid
+%%{init: {"theme": "base", "themeVariables": {"background": "#0f1117", "primaryColor": "#222834", "primaryTextColor": "#e6e9f0", "primaryBorderColor": "#4b5468", "lineColor": "#8b93a7", "textColor": "#e6e9f0", "clusterBkg": "#1a1e27", "clusterBorder": "#3a4254", "titleColor": "#e6e9f0", "edgeLabelBackground": "#1a1e27", "fontSize": "14px"}}}%%
+flowchart TB
+  subgraph ONBOARD["Onboarding a ledger - two edits, no logic"]
+    ENTRY["add one entry to config/ledgers.json<br/>name, state, grain, prefix, stem, suffix"]
+    MEMBER["add its LedgerName member"]
+  end
+
+  subgraph LOAD["Load time - idhazh/ledger/paths.py"]
+    READ["read and validate the config"]
+    BIJ{"entries and LedgerName<br/>exactly each other?"}
+    REFUSE["build stops, naming the ledger"]
+    REG[("the registry, in memory")]
+  end
+
+  subgraph DOOR["The one door - idhazh/ledger/"]
+    PATHS["paths: path, relpath, tree_root"]
+    KEYS["keys: the dedup key and preference"]
+    ROWS["rows: append, load, write_segment"]
+    SETTLE["settle: drop repeated rows"]
+  end
+
+  TREE[("the committed files under state/")]
+  PRUNE{"directory in the registry?"}
+  KEEP["kept, whatever its state"]
+  EMPTY["treated as a trial tree, emptied"]
+
+  ENTRY --> READ
+  MEMBER --> READ
+  READ --> BIJ
+  BIJ -->|"no"| REFUSE
+  BIJ -->|"yes"| REG
+  REG --> PATHS
+  PATHS --> ROWS
+  KEYS --> ROWS
+  KEYS --> SETTLE
+  ROWS --> TREE
+  SETTLE --> TREE
+  REG -->|"prune-state asks"| PRUNE
+  PRUNE -->|"yes"| KEEP
+  PRUNE -->|"no"| EMPTY
+  TREE --> PRUNE
+
+  classDef stage fill:#222834,stroke:#4b5468,stroke-width:1px,color:#e6e9f0;
+  classDef decision fill:#11141c,stroke:#5b6477,stroke-width:1.5px,color:#ffffff;
+  classDef yes fill:#176032,stroke:#2ea04f,stroke-width:1.5px,color:#ffffff;
+  classDef no fill:#a32020,stroke:#d23b3b,stroke-width:1.5px,color:#ffffff;
+  classDef ledger fill:#1b3a5c,stroke:#2d6ca3,stroke-width:1.5px,color:#ffffff;
+  classDef sys fill:#1a1e27,stroke:#8b93a7,stroke-width:1.5px,color:#c8cdd8;
+
+  class ENTRY,MEMBER,READ,PATHS,KEYS,ROWS,SETTLE stage;
+  class BIJ,PRUNE decision;
+  class KEEP yes;
+  class REFUSE,EMPTY no;
+  class REG,TREE ledger;
+  class ONBOARD,LOAD,DOOR sys;
+```
+
+In one line: a ledger exists because an entry says so; the entry and the typed name must agree or the build stops; everything that touches `state/` goes through the door the registry feeds; and `prune-state` empties only what the registry does not claim.
+
+`keys.py`, `rows.py` and `settle.py` are drawn as the door's other panels. Today their bodies still sit in `backend/idhazh/ledger/__init__.py`; the diagram is the shape the package is being split into, and the panel names are the modules that will hold them.
+
+### Design rationale
+
+**The set of ledgers is a config file, not a Python set and not a glob.** Owner decision, 2026-09-26.
+
+A frozen set in Python was what this replaced, and it is the defect rather than the alternative. `prune-state` subtracts the set from the children of `state/` and treats the remainder as a trial run's tree, so a ledger left out of the set is a production directory it empties. `state/day-validations/` was exactly that: a real ledger, written by the `validate_days` stage, absent from the set. Nothing in the old design could catch it, because a missing name reads as a name that was never meant to be there.
+
+A glob over `state/` was the other candidate and it fails twice. Its cost rises with the data (CLAUDE.md Guardrail #12), and it cannot tell a retired ledger from one that has never run - a ledger whose first write failed is simply invisible to a walk, which is the opposite of what a protected set needs.
+
+The config carries where a ledger lives and its lifecycle. It does not carry how the ledger's rows settle: a dedup key is a tuple and a preference is a callable, and a callable is not JSON. Merging the two into one table was considered and rejected - it re-couples two questions that change for different reasons, which is why `paths.py` imports nothing that answers the second one.
+
+CLAUDE.md section 11 does not apply to this file. It is a config file this project authors, nothing but this repository reads it, and a file a person edits in place has no older copy for a later build to read - so it carries no `version` and no `changelog`.
+
+**`Grain` is transitional and its declaring line says so.** [../../concepts/telemetry-intent.md](../../concepts/telemetry-intent.md) requires every tree under `state/` to reach one pattern, so five grains describes the mess that page exists to remove. It is recorded because all five really are on disk: the registry is an honest map of today, and it is the seam a migration edits one entry at a time.
 
 ## See also
 

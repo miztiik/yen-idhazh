@@ -19,6 +19,7 @@ from typing import Final
 from idhazh import config, ledger
 from idhazh.contracts.base import DateStamp, RunId
 from idhazh.contracts.council_shard_outcome import ShardOutcome
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.story_similarity_distribution import StorySimilarityDistribution
 from idhazh.contracts.story_similarity_pair import ContentSimilarityJudgeId
 from idhazh.council import metrics_sink, session
@@ -43,7 +44,7 @@ JUDGE_ID: Final[ContentSimilarityJudgeId] = "content-similarity-judge"
 #: hangs off its slug, so naming the prefix stages the pairs, the record, the
 #: fitted line and the instrument rows in one go - and a ledger it gains later is
 #: staged the day it is written rather than the day somebody remembers this list.
-COMMITTED_PATHS: Final = (f"{ledger.STATE_DIRNAME}/{ledger.CONTENT_SIMILARITY_JUDGE_DIRNAME}",)
+COMMITTED_PATHS: Final = (f"{ledger.STATE_DIRNAME}/{JUDGE_ID}",)
 
 #: The slot this judge's units leave their verdicts in, beside the slots the
 #: venue names for itself. A slot of its own rather than the venue's selection
@@ -113,7 +114,7 @@ class ContentSimilarityJudge:
         and the writer cannot drift apart.
         """
         state = state_dir if state_dir is not None else config.REPO_ROOT / ledger.STATE_DIRNAME
-        record_path = ledger.score_distribution_path(state)
+        record_path = ledger.path(state, LedgerName.SCORE_DISTRIBUTION)
         if not record_path.exists():
             return ()
         record = StorySimilarityDistribution.from_json(

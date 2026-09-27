@@ -36,6 +36,7 @@ from typing import Final
 
 from idhazh import ledger
 from idhazh.contracts.feed_retirement import FeedRetirementRow
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.similarity_holdout_pair import SimilarityHoldoutPair
 
 REPO_ROOT: Final = Path(__file__).resolve().parents[2]
@@ -67,12 +68,12 @@ def seeded_ledgers() -> tuple[Ledger, ...]:
     return (
         Ledger(
             name="feed retirements",
-            relpath=ledger.feed_retirements_relpath(),
+            relpath=ledger.relpath(LedgerName.FEED_RETIREMENTS),
             columns=FeedRetirementRow.csv_columns(),
         ),
         Ledger(
             name="similarity holdout pairs",
-            relpath=ledger.similarity_holdout_relpath(),
+            relpath=ledger.relpath(LedgerName.SIMILARITY_HOLDOUT),
             columns=SimilarityHoldoutPair.csv_columns(),
         ),
     )

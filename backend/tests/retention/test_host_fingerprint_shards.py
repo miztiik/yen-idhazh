@@ -13,6 +13,7 @@ from idhazh.contracts.base import ServerJob
 from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW, CollectConfig
 from idhazh.contracts.knobs.observability import ObservabilityConfig
 from idhazh.contracts.knobs.retention import RetentionConfig
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.retention import oldest_month_kept, prune_host_fingerprint
 from idhazh.stages.prune_state import stage_prune_state
 
@@ -41,7 +42,7 @@ def committed_window() -> int:
 def host_fingerprint_days(state_dir: Path) -> list[Path]:
     """Every host-fingerprint file, oldest first, through the pipeline's own walk."""
     return list(
-        day_shards.shard_files(state_dir / ledger.HOST_FINGERPRINT_DIRNAME, days=UNBOUNDED_WINDOW)
+        day_shards.shard_files(ledger.tree_root(state_dir, LedgerName.HOST_FINGERPRINT), days=UNBOUNDED_WINDOW)
     )
 
 
@@ -53,7 +54,7 @@ def the_file_the_fixture_wrote(date: str) -> str:
     string this test froze.
     """
     name = ledger.segment_name(run_id=f"{date}-1", attempt=1, job=ServerJob.PLAN, shard=0)
-    return f"{ledger.host_fingerprint_relpath(date)}/{name}"
+    return f"{ledger.relpath(LedgerName.HOST_FINGERPRINT, date)}/{name}"
 
 
 def test_the_host_fingerprint_prune_takes_the_expired_day_and_keeps_the_day_beside_it(
@@ -74,8 +75,8 @@ def test_the_host_fingerprint_prune_takes_the_expired_day_and_keeps_the_day_besi
     kept_day = f"{boundary}-09"
     assert expired_day[:7] < boundary <= kept_day[:7], "the fixture must straddle the boundary"
     host_fingerprint_history(state, [expired_day[:7], kept_day[:7]], day_of_month=9)
-    expired_path = ledger.host_fingerprint_path(state, expired_day)
-    kept_path = ledger.host_fingerprint_path(state, kept_day)
+    expired_path = ledger.path(state, LedgerName.HOST_FINGERPRINT, expired_day)
+    kept_path = ledger.path(state, LedgerName.HOST_FINGERPRINT, kept_day)
     assert expired_path.exists() and kept_path.exists()
 
     result = prune_host_fingerprint(state, config, TODAY, dry_run=False)
@@ -159,5 +160,5 @@ def test_the_prune_stage_reaches_the_host_fingerprint_tree(tmp_path: Path) -> No
     )
 
     assert code == 0
-    assert not ledger.host_fingerprint_path(state, expired_day).exists()
-    assert ledger.host_fingerprint_path(state, kept_day).exists()
+    assert not ledger.path(state, LedgerName.HOST_FINGERPRINT, expired_day).exists()
+    assert ledger.path(state, LedgerName.HOST_FINGERPRINT, kept_day).exists()

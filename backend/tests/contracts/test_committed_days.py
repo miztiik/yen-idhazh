@@ -21,6 +21,7 @@ from idhazh.cli import main
 from idhazh.contracts.digest_day import DigestDay, DigestVerticalRef
 from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
 from idhazh.contracts.knobs.ui import UiConfig
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.stages import common
 from idhazh.stages.validate_days import stage_validate_days
 
@@ -224,7 +225,7 @@ def test_a_tree_that_is_not_the_committed_one_has_to_name_its_own_receipts(
     assert main(["validate-days", "--digest-root", str(copy), "--state-root", str(receipts)]) == 0
     filed = list(
         day_shards.shard_files(
-            receipts / ledger.DAY_VALIDATIONS_DIRNAME, days=UNBOUNDED_WINDOW
+            ledger.tree_root(receipts, LedgerName.DAY_VALIDATIONS), days=UNBOUNDED_WINDOW
         )
     )
     assert filed, "the receipt belongs beside the tree it is about"

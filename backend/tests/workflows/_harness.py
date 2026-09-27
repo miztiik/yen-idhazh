@@ -25,6 +25,7 @@ from conftest import CONFIG_DIR, REPO_ROOT, read_text
 
 from idhazh import ledger, path_classes
 from idhazh.contracts.base import ServerJob
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.visual_decision import PAYLOAD_SUFFIX, VisualDecision, VisualKind, VisualState
 from idhazh.telemetry.publish import series
 from utilities.commit_and_push import PUSH_ATTEMPT_LABEL
@@ -724,7 +725,7 @@ COMMIT_STAGED_PATHS: Final = {
     # The fingerprint directory alone, not `state/pipeline-tests` whole: the
     # sweep's item-health, scores and traces land under the same trial root
     # because the whole state root moved, and nothing reads them back.
-    "bench": [f"{BENCH_LEDGER_ROOT}/{ledger.HOST_FINGERPRINT_DIRNAME}"],
+    "bench": [f"{BENCH_LEDGER_ROOT}/{LedgerName.HOST_FINGERPRINT}"],
 }
 
 # The step that folds an out-of-window month before the step above commits it.

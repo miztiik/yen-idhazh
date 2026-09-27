@@ -11,6 +11,7 @@ from conftest import FIXTURES_DIR, fold
 from idhazh import config, day_shards, ledger
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.run_plan import RunPlan
 from idhazh.telemetry import silicon
 
@@ -34,7 +35,7 @@ def writer_files(state: Path) -> list[Path]:
     The fold's own `settled.csv` is left out, because a test asking what a
     writer left is asking what the fold has not taken yet.
     """
-    root = state / ledger.HOST_FINGERPRINT_DIRNAME
+    root = ledger.tree_root(state, LedgerName.HOST_FINGERPRINT)
     return [
         path
         for path in day_shards.one_day(root, FINGERPRINT_DAY)
@@ -44,7 +45,7 @@ def writer_files(state: Path) -> list[Path]:
 
 def settled_fingerprint(state: Path) -> Path:
     """The fold of the fingerprint day, which is the file every reader opens."""
-    return ledger.host_fingerprint_path(state, FINGERPRINT_DAY) / day_shards.SETTLED_NAME
+    return ledger.path(state, LedgerName.HOST_FINGERPRINT, FINGERPRINT_DAY) / day_shards.SETTLED_NAME
 
 
 def a_plan() -> RunPlan:
@@ -485,7 +486,7 @@ def test_a_day_file_written_before_the_two_prompt_cells_still_folds(tmp_path: Pa
 
 def _head_row(state_dir: Path, date: str = "2026-09-16") -> dict[str, str]:
     """The one row of the day's settled file, by column name."""
-    path = ledger.host_fingerprint_path(state_dir, date) / day_shards.SETTLED_NAME
+    path = ledger.path(state_dir, LedgerName.HOST_FINGERPRINT, date) / day_shards.SETTLED_NAME
     header, *body = path.read_text(encoding="utf-8").splitlines()
     assert len(body) == 1, f"one machine, one row, and the head holds {len(body)}"
     return dict(zip(header.split(","), body[0].split(","), strict=True))

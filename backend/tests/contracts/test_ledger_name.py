@@ -1,4 +1,4 @@
-"""Does one typed name cover every ledger the module can address?"""
+"""Does one typed name cover every ledger the pipeline can address?"""
 
 from __future__ import annotations
 
@@ -12,50 +12,31 @@ from idhazh.contracts.ledger_name import DAY_TREES, LedgerName
 
 pytestmark = pytest.mark.contract
 
-#: The module that builds every path under `state/`. Read here rather than
-#: imported, because the question is which functions it declares.
-LEDGER_SOURCE = REPO_ROOT / "backend" / "idhazh" / "ledger" / "__init__.py"
+#: The package that builds every path under `state/`. Read here rather than
+#: imported, because the question is which functions it declares. Every file in
+#: it, so a second builder module is read the day it is written.
+LEDGER_PACKAGE = REPO_ROOT / "backend" / "idhazh" / "ledger"
 
 
-def _module_constants(tree: ast.Module) -> dict[str, str]:
-    """Every module-level name bound to a string literal, and what it is bound to."""
-    found: dict[str, str] = {}
-    for node in tree.body:
-        if isinstance(node, ast.Assign) and len(node.targets) == 1:
-            target, value = node.targets[0], node.value
-        elif isinstance(node, ast.AnnAssign) and node.value is not None:
-            target, value = node.target, node.value
-        else:
-            continue
-        if isinstance(target, ast.Name) and isinstance(value, ast.Constant):
-            if isinstance(value.value, str):
-                found[target.id] = value.value
-    return found
-
-
-def _ledger_naming_functions(tree: ast.Module) -> dict[str, set[str]]:
-    """Each path builder that names a ledger, and the constant values it reads.
+def _path_builders(tree: ast.Module) -> tuple[set[str], set[str]]:
+    """One module's public path builders, split by how each says which ledger.
 
     A builder handed a `LedgerName` names no ledger of its own - it builds the
-    path for whichever one it was given - so it is not one of these.
+    address of whichever one it was given. A builder that takes none has a single
+    ledger written into its body, and that is the second spelling this refuses.
     """
-    constants = _module_constants(tree)
-    found: dict[str, set[str]] = {}
+    generic: set[str] = set()
+    naming: set[str] = set()
     for node in tree.body:
-        if not isinstance(node, ast.FunctionDef):
+        if not isinstance(node, ast.FunctionDef) or node.name.startswith("_"):
             continue
-        if not node.name.endswith(("_path", "_relpath")):
+        if not node.name.endswith(("path", "root")):
             continue
-        annotations = {ast.unparse(arg.annotation) for arg in node.args.args if arg.annotation}
-        if "LedgerName" in annotations:
-            continue
-        read = {
-            constants[inner.id]
-            for inner in ast.walk(node)
-            if isinstance(inner, ast.Name) and inner.id in constants
-        }
-        found[node.name] = read
-    return found
+        arguments = [*node.args.posonlyargs, *node.args.args, *node.args.kwonlyargs]
+        annotations = {ast.unparse(arg.annotation) for arg in arguments if arg.annotation}
+        target = generic if LedgerName.__name__ in annotations else naming
+        target.add(node.name)
+    return generic, naming
 
 
 def test_the_day_trees_are_exactly_the_ledgers_with_a_settlement_shape() -> None:
@@ -71,26 +52,30 @@ def test_the_day_trees_are_exactly_the_ledgers_with_a_settlement_shape() -> None
     assert set(ledger._TREE_SHAPES) == DAY_TREES
 
 
-def test_every_path_a_builder_names_belongs_to_a_ledger_this_vocabulary_knows() -> None:
-    """Derived from the module rather than listed, so a new builder cannot slip past.
+def test_every_path_under_state_is_built_from_a_name_this_vocabulary_declares() -> None:
+    """Derived from the package rather than listed, so a new builder cannot slip past.
 
-    A ledger addressed by filename rather than by a directory is the one this
-    would otherwise miss - `feed-retirements.csv` and `holdout-pairs.csv` are
-    ledgers with no directory of their own. The extension is dropped because a
-    name is not a filename.
+    Every builder takes the ledger as a typed argument, so no address under
+    `state/` can be reached by a name this vocabulary does not declare. A builder
+    with one ledger written into it is what this refuses, and it refuses it
+    whether or not the ledger is a known one: a second place that spells where a
+    ledger lives is a second place that can disagree with the registry, and a
+    path built outside the vocabulary is a path nothing downstream can key on.
     """
-    tree = ast.parse(LEDGER_SOURCE.read_text(encoding="utf-8"))
-    builders = _ledger_naming_functions(tree)
-    known = {member.value for member in LedgerName}
+    generic: set[str] = set()
+    naming: dict[str, str] = {}
+    for source in sorted(LEDGER_PACKAGE.rglob("*.py")):
+        takes, names = _path_builders(ast.parse(source.read_text(encoding="utf-8")))
+        generic |= takes
+        naming.update(dict.fromkeys(names, source.name))
 
-    assert builders, "no path builder was found, so this test is asserting nothing"
-    for name, read in sorted(builders.items()):
-        named = {value.rsplit(".", 1)[0] for value in read} | read
-        assert named & known, (
-            f"{name} builds a path out of {sorted(read)}, and none of those is a "
-            "LedgerName. A ledger with a path but no typed name is one nothing "
-            "downstream can key on"
-        )
+    assert generic, "no path builder was found, so this test is asserting nothing"
+    offenders = ", ".join(f"{name} in {where}" for name, where in sorted(naming.items()))
+    assert not naming, (
+        f"{offenders} builds a path with one ledger written into it. Take a "
+        f"{LedgerName.__name__} argument and read the address from the registry, so "
+        "every ledger has one spelling of where it lives."
+    )
 
 
 def test_a_ledgers_name_is_one_segment_and_carries_no_extension() -> None:
