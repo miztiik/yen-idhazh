@@ -167,16 +167,17 @@ export type LedgerName = 'host-fingerprint' | 'item-health' | 'scores';
 | # | File | Writer | Why that writer is safe | Committed |
 | --- | --- | --- | --- | --- |
 | 1 | `state/compact/<ledger>/index/<period>.json` | that period's compaction | one period, one task, one writer | **yes** |
-| 2 | `state/compact/<ledger>/<period>/watermark.json` | that period's compaction | same task, written after the data | **yes** |
+
+**No watermark is on this list.** The door finds the compaction edge in `daily.json`, whose newest day is the newest day compacted, so a watermark stays a file only the gardener reads. Plan 50 states the rule; owner decision, 2026-09-27.
 
 #### What the build does, which is copy bytes and nothing else
 
-**The staged tree is a verbatim subtree copy, so the published path and the committed path are the same string.** The step copies, for every ledger whose `LedgerConfig.published` names it: the two compact periods, their indexes and their watermarks. Nothing else, and nothing is renamed, merged, re-sorted or regenerated.
+**The staged tree is a verbatim subtree copy, so the published path and the committed path are the same string.** The step copies, for every ledger whose `LedgerConfig.published` names it: the two compact periods and their indexes. Nothing else, and nothing is renamed, merged, re-sorted or regenerated.
 
 | # | What reaches the site | Published address |
 | --- | --- | --- |
 | 1 | Compact data, both periods | `state/compact/<ledger>/daily/<YYYY>/<MM>/<DD>.parquet`, `state/compact/<ledger>/monthly/<YYYY>/<MM>.parquet` |
-| 2 | Compact indexes and watermarks | `state/compact/<ledger>/index/<period>.json`, `state/compact/<ledger>/<period>/watermark.json` |
+| 2 | Compact indexes | `state/compact/<ledger>/index/<period>.json` |
 
 **The raw tier is not published.** Publishing an open raw day would make the cheapest span the worst value in the set - many per-writer shards to draw one day - so only compact periods reach the site. The newest thing a panel can draw is therefore the newest compact daily file; plan 50's eligibility rule sets how fresh that is, and row 2's completeness sentence is what tells the reader.
 
@@ -197,15 +198,15 @@ A panel asks for a span; the door turns it into whole files. **There are no byte
 | # | Step |
 | --- | --- |
 | 1 | **At view time, from the query door - never from `+layout.ts`.** That loader prerenders, so anything fetched there is inlined into every console document. This is the whole reason the address book never went in the band |
-| 2 | Fetch only the indexes the span could touch, plus `daily/watermark.json`. A span of 30 days or less touches `daily.json` only, so that is two small requests |
+| 2 | Fetch only the indexes the span could touch. A span of 30 days or less touches `daily.json` only, so that is one small request |
 | 3 | For each date in the span take the **coarsest period that covers it** - monthly, then daily - and fetch that file once |
 | 4 | Hand every buffer to the engine as one query with a date predicate |
 
 **A date is reachable through exactly one file, and that is an invariant with a test rather than a convention.** A date in two periods is read twice and every number on the panel doubles - the same defect class as the double count filed as 33. Plan 50's row titled **The index task, two compact periods, and the diagram moves into the page** carries the oracle that asserts it, over a fixture ledger carrying both periods, in one process, at one moment.
 
-**A hole is `unreachable`, never a low chart.** A date at or before the daily watermark that is named in neither index is a hole: the door returns `{ state: 'unreachable', at }` and the panel draws the `unreachable` state with that date in the console and nothing else. Drawing the rest would be an undercount nobody could see.
+**A hole is `unreachable`, never a low chart.** A date at or before the newest day `daily.json` names that neither index names is a hole: the door returns `{ state: 'unreachable', at }` and the panel draws the `unreachable` state with that date in the console and nothing else. Drawing the rest would be an undercount nobody could see.
 
-**A date after the daily watermark is not drawn at all, and the freshness sentence says so.** No raw file is published, so the newest data a panel can show is the newest compact daily file - at most one content run old, because the daily compaction runs at the end of every run.
+**A date after the newest day `daily.json` names has not been compacted yet, so it is not drawn at all, and the freshness sentence says so.** No raw file is published, so the newest data a panel can show is the newest compact daily file. Compaction runs at the gardener's wake, never at the end of a content run: at plan 50's defaults - a 00:40 UTC wake and `compact_after_hours: 24` - the newest day a panel can show is the day before yesterday, once that wake's files are published.
 
 **Two periods are what make an arbitrary span affordable.** The widest span reads one or two monthly files plus the daily files past the newest whole month, instead of one daily file per day. At month grain alone a span would pull whole months it did not ask for; at day grain alone the widest span would be a request per day.
 
@@ -708,7 +709,7 @@ Ruled by Susan on 2026-09-24. The complaint: the Hardware route is fifteen panel
   - `frontend/package.json`, `frontend/package-lock.json` (`@duckdb/duckdb-wasm`)
   - `frontend/scripts/bundle-gate.mjs` (the `FORBIDDEN` list gains `@duckdb/duckdb-wasm` and its `.wasm` asset names, so a static import of the engine or its wasm fails the gate)
   - `frontend/tests/chart-vocabulary.spec.ts` (the single-engine walk now finds exactly one importer of the engine)
-  - `backend/tests/contracts/test_frontend_index_shapes.py` (new: binds the hand-written `CompactEntry`, `CompactIndex` and `Watermark` copy in `ledger.ts` to the Pydantic originals plan 50 declares)
+  - `backend/tests/contracts/test_frontend_index_shapes.py` (new: binds the hand-written `CompactEntry` and `CompactIndex` copy in `ledger.ts` to the Pydantic originals plan 50 declares)
   - `frontend/tests/console-cold-load.spec.ts` (the engine is not first-load)
 - **Acceptance gates:** local `npm --prefix frontend run test:changed -- --list` then the selected checks; `pytest backend/tests/contracts -q`. `ci.yml`'s bundle gate and site-cap walk are re-read, because a package and a wasm asset landed. CI runs the full suite.
 - **Oracle:** given recorded index and parquet responses for a fixture ledger, `slice()` returns exactly the requested columns for exactly the requested date range, reads each date through one file only, and renders `unreachable` on a hole; and `git grep -l duckdb -- frontend/src` returns exactly one path. It cannot settle whether a panel draws the result well; row 8 and Susan do that.
@@ -721,7 +722,7 @@ Ruled by Susan on 2026-09-24. The complaint: the Hardware route is fifteen panel
   | 3 | **The single-threaded build is the pick.** The threaded one needs cross-origin isolation, which needs response headers a static host cannot set; the engine's own bundle selector already chooses correctly | Carmack. Written down so nobody spends a day discovering it |
   | 4 | **The engine is reached only through a dynamic `import()`, and the `FORBIDDEN` list enforces it.** Without that line the rule is a habit, and a careless static import lands the engine in first-load | Carmack |
   | 5 | **`where` is a structured predicate, never raw SQL.** The door binds each value as a query parameter, so no text a panel passes can become SQL (Guardrail #11) | Fowler |
-  | 6 | **The door reads a hand-written copy of three shapes plan 50 declares** - `CompactEntry`, `CompactIndex`, `Watermark` - bound to the Pydantic originals by `test_frontend_index_shapes.py`, the same binding `test_frontend_field_set.py` already uses. This plan declares no new persisted contract | Fowler |
+  | 6 | **The door reads a hand-written copy of two shapes plan 50 declares** - `CompactEntry` and `CompactIndex` - bound to the Pydantic originals by `test_frontend_index_shapes.py`, the same binding `test_frontend_field_set.py` already uses. **No `Watermark` copy**: the edge is the newest day `daily.json` names. This plan declares no new persisted contract | Fowler; owner 2026-09-27 for dropping `Watermark` |
   | 7 | **A date is reachable through exactly one file.** The door takes the coarsest period covering a date; the oracle over the two-period rule lives with plan 50's index task, and this row consumes it | Fowler |
 
 - **Rejected alternatives:**
