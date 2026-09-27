@@ -24,7 +24,7 @@ from pydantic import ValidationError
 from idhazh import assemble, ledger, telemetry
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.ledger_name import DAY_TREES, LedgerName
-from idhazh.contracts.ledgers import Grain, LedgersConfig, LifecycleStatus
+from idhazh.contracts.ledgers import Grain, LedgerLifecycleStatus, LedgersConfig
 from idhazh.evals import archive as score_archive
 from idhazh.ledger import paths
 from idhazh.telemetry.publish import day_metrics
@@ -504,7 +504,7 @@ def test_every_family_is_active_until_the_write_path_reads_the_status() -> None:
     not_active = sorted(
         f"{family.name} ({family.lifecycle_status.value})"
         for family in families
-        if family.lifecycle_status is not LifecycleStatus.ACTIVE
+        if family.lifecycle_status is not LedgerLifecycleStatus.ACTIVE
     )
 
     assert not not_active, (
