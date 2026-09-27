@@ -1,6 +1,6 @@
 # Agent Notes - Browser
 
-**Last Updated**: 2026-09-19
+**Last Updated**: 2026-09-27
 Traps in Playwright, the integrated browser, the service worker, and the Svelte
 components a spec drives. Index and scope:
 [../agent-notes.md](../agent-notes.md).
@@ -76,6 +76,8 @@ Ask what moves the number you are watching. A `ResizeObserver` delivers in the r
 await page.goto('/evals/', { waitUntil: 'commit' }).catch( => {});
 await expect.poll( => page.url).toMatch(/\/console\/$/);
 ```
+
+**The same redirect makes `layout-overflow.spec.ts` blame `/evals/` for a console fault.** The spec still lists `/evals/`, so it measures the console after the refresh and reports the overflow under the old address. On 2026-09-27 a console chart drawn wider than a phone until the page hydrated failed that spec about one run in four, under the name `/evals/`. Read a failure there as the console's, and reproduce it with `console-frame.spec.ts`, which draws the console at 360 px with scripts off, so the same fault fails every run.
 
 **`page.url` read straight after a click still says the page you left**, because every route is prerendered and the client router takes the click - so a smoke reports that a link went nowhere. Wait for the address alongside the click: `await Promise.all([page.waitForURL('**/archive/'), locator.click])`.
 
