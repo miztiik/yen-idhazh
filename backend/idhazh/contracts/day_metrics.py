@@ -438,7 +438,15 @@ class DayMetrics(Contract):
         )
     )
 
-    items_published: int = Field(ge=0, description="Items in the day's published set. Additive.")
+    items_published: int = Field(
+        ge=0,
+        description=(
+            "Items in the day's published set, counted once each. Additive. This is the "
+            "day's own set, where items_planned and items_failed are sums across its runs, "
+            "so the three never partition: a story a later run skipped is planned twice and "
+            "published once, and a skipped item is counted by none of them."
+        ),
+    )
     items_planned: int = Field(ge=0, description="Items the day's runs planned. Additive.")
     items_failed: int = Field(
         ge=0, description="Planned items that never reached the digest. Additive."
