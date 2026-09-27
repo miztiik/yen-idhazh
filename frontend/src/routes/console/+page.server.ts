@@ -2,6 +2,7 @@ import type { StageTiming, StageTimingDay } from '$lib/charts/series';
 import { windowOfDays } from '$lib/charts/viewport';
 import { chartFlow } from '$lib/charts/chart-flow';
 import type { ExtractionDay } from '$lib/charts/extraction-trend';
+import type { RunYieldSource } from '$lib/charts/run-yield';
 import { itemCost, type ItemCost } from '$lib/console/item-cost';
 import { extraction, type Extraction } from '$lib/console/extraction';
 import { pipelineChanges, wasCut } from '$lib/server/model-work';
@@ -339,6 +340,26 @@ export async function load() {
 				? []
 				: [{ date, chartable: block.chartable, charted: block.chartableCharted }];
 		});
+	// The same records a third time, for the three item counts the glance chart
+	// draws. Four numbers a day over the widest preset, sliced from the map above
+	// rather than read again: this opens no file the page was not already opening
+	// (`CLAUDE.md` Guardrail #12). Only the cells the chart reads cross, so the
+	// extraction block above is not shipped twice.
+	const runYieldDays: RunYieldSource[] = chartDates
+		.filter((date) => date >= widestSpan.start && date <= widestSpan.end)
+		.flatMap((date) => {
+			const record = recordsByDate.get(date);
+			return record === undefined
+				? []
+				: [
+						{
+							date,
+							itemsPlanned: record.itemsPlanned,
+							itemsPublished: record.itemsPublished,
+							itemsFailed: record.itemsFailed
+						}
+					];
+		});
 	return {
 		timingDays,
 		manifests,
@@ -393,6 +414,7 @@ export async function load() {
 		// it to the open preset, so the trend and the cards can never be drawn over
 		// two different spans.
 		extractionDays,
+		runYieldDays,
 		// **No telemetry rows.** The page fetches its months, and the list of which
 		// months exist rides on the band the layout already fetched. Inlined they
 		// were 3,414,043 of this document's 3,880,361 bytes - 88 percent of what an

@@ -56,7 +56,7 @@ One PR-group is one pull request. **Four: two backend, one frontend, one close.*
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | The day-validation receipt is decommissioned end to end | - | none - plan 53 closed, so the ordering bound expired (ESCALATE #2) | A | DONE | p54d1 | - | worker subagent |
 | 2 | The `check-publication` framework, the rename, and the live hook | 1 | after "One `LedgerName` for one ledger" | B | DONE | p54d2 | - | worker subagent |
-| 3 | The run-yield chart replaces the donut | - | none | A | PENDING | - | - | - |
+| 3 | The run-yield chart replaces the donut | - | none | A | DONE | p54d3 | - | one worker |
 | 4 | Closure and distillation | 1, 2, 3 | - | C | PENDING | - | - | - |
 
 **Critical path: D1 -> D2 -> D4, with D3 parallel to D1.** D1 (backend decom) and D3 (frontend chart) share no files and run together (N=2). D2 is single-threaded behind both D1 and plan 53's `LedgerName` row - it types the hook `LedgerName` and never `SegmentLedger`. **D1 is delete-only, so it needs no `LedgerName` and lands in the gap between plan 53's package row and its config-registry row.** Wall-clock is gated by plan 53's progress to the `LedgerName` row, not by plan-54 fan-out (Carmack).

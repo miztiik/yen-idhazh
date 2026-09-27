@@ -1,5 +1,4 @@
 import { expect, test } from '@playwright/test';
-import { donut } from '../src/lib/charts/donut';
 import { sparkline } from '../src/lib/charts/sparkline';
 import { stacked } from '../src/lib/charts/stacked';
 import { targetBar } from '../src/lib/charts/targetbar';
@@ -27,39 +26,6 @@ function colours(option: unknown): string[] {
 	walk(option);
 	return found;
 }
-
-test.describe('the donut gauge', () => {
-	test('the arc is the fraction, not the rank', () => {
-		const d = donut(
-			[
-				{ label: 'clean', value: 37, token: '--band-high' },
-				{ label: 'failed', value: 3, token: '--band-low' }
-			],
-			'clean'
-		);
-		expect(d.empty).toBe(false);
-		expect(d.total).toBe(40);
-		// Recomputed here, not read back from the option.
-		expect(d.share).toBeCloseTo(37 / 40, 10);
-
-		const series = (d.option.series as Record<string, unknown>[])[0];
-		const data = series.data as { value: number }[];
-		// A pie draws in data order, so the order in the argument is the order on
-		// screen and the first slice is the one the centre label is about.
-		expect(data.map((s) => s.value)).toEqual([37, 3]);
-	});
-
-	test('nothing measured is empty, not zero percent', () => {
-		const d = donut(
-			[
-				{ label: 'clean', value: 0, token: '--band-high' },
-				{ label: 'failed', value: 0, token: '--band-low' }
-			],
-			'clean'
-		);
-		expect(d.empty).toBe(true);
-	});
-});
 
 test.describe('the target bar', () => {
 	test('the marker sits at the target fraction of the track', () => {
@@ -197,7 +163,6 @@ test.describe('the sparkline', () => {
 
 test.describe('every chart in the vocabulary', () => {
 	const built = [
-		donut([{ label: 'a', value: 3, token: '--band-high' }], 'a').option,
 		targetBar(4, 6, 'lower-is-better', 'x').option,
 		waterfall(10, [{ label: 'a', delta: 2 }]).option,
 		stacked(['a'], [{ label: 's', token: '--chart-1', values: [1] }]).option,
