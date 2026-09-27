@@ -1,6 +1,6 @@
 # Atomic deletes
 
-**Last Updated**: 2026-09-17
+**Last Updated**: 2026-09-27
 
 What does "atomic" mean for a delete in this project, and why is a range not one?
 
@@ -21,7 +21,7 @@ a transaction and does not try to be one.
 | **Resumable** | the record names the member the next pass starts at | a backlog is cleared in bites nobody has to size |
 
 The core that holds all three is
-[`backend/idhazh/prune/one_at_a_time.py`](../../backend/idhazh/prune/one_at_a_time.py),
+[`backend/idhazh/gardener/one_at_a_time.py`](../../backend/idhazh/gardener/one_at_a_time.py),
 and its first sentence is the question it answers: how do I delete a
 collection's members one at a time, safely, resumably, under a ceiling. A
 collection reaches it as three callables - a listing that yields members, a

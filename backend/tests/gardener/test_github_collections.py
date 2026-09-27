@@ -20,9 +20,9 @@ import pytest
 from conftest import FIXTURES_DIR
 
 from idhazh.contracts.collection_prune import StopReason
-from idhazh.contracts.knobs.prune import PrunableCollection
-from idhazh.prune import github_collections, one_at_a_time
-from idhazh.prune.one_at_a_time import Window
+from idhazh.contracts.knobs.gardener import PrunableCollection
+from idhazh.gardener import github_collections, one_at_a_time
+from idhazh.gardener.one_at_a_time import Window
 
 pytestmark = pytest.mark.contract
 

@@ -218,6 +218,15 @@ COVERS: Final[dict[Grain, str | None]] = {
     Grain.STAMPED: A_STAMP,
 }
 
+#: The ledgers that file under `state/raw/` and `state/compact/` through the door.
+#: They were never CSV trees, so they have no address from before the registry
+#: and no registry address now: the four registry builders refuse them by name.
+THROUGH_THE_DOOR: Final = frozenset(
+    member for member in LedgerName if paths.entry(member).grain is Grain.RAW_AND_COMPACT
+)
+#: Every ledger the registry still builds a CSV address for.
+CSV_LEDGERS: Final = [member for member in LedgerName if member not in THROUGH_THE_DOOR]
+
 
 def a_registry(families: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     """The committed registry as a payload, with its family list optionally replaced."""
@@ -378,7 +387,7 @@ def test_a_member_named_for_the_wrong_place_stops_the_build_naming_it() -> None:
     assert "LedgerName.SEEN should be CONTENT_SIMILARITY_JUDGE_SEEN" in str(refusal.value)
 
 
-@pytest.mark.parametrize("member", list(LedgerName), ids=lambda m: m.value)
+@pytest.mark.parametrize("member", CSV_LEDGERS, ids=lambda m: m.value)
 def test_a_ledger_sits_where_it_sat_before_the_registry(member: LedgerName) -> None:
     """Path parity, extension included, against the module git holds at the base."""
     old_relpath, old_path, _ = AT_THE_BASE[member.name]
@@ -390,7 +399,7 @@ def test_a_ledger_sits_where_it_sat_before_the_registry(member: LedgerName) -> N
         assert paths.relpath(member, covers) == old_relpath
 
 
-@pytest.mark.parametrize("member", list(LedgerName), ids=lambda m: m.value)
+@pytest.mark.parametrize("member", CSV_LEDGERS, ids=lambda m: m.value)
 def test_a_day_tree_root_is_where_it_was(member: LedgerName) -> None:
     """Tree-root parity, the nested trees included."""
     _, _, old_root = AT_THE_BASE[member.name]
@@ -404,7 +413,7 @@ def test_a_day_tree_root_is_where_it_was(member: LedgerName) -> None:
 
 def test_the_two_forms_of_one_folder_agree() -> None:
     """`tree_relpath` is `tree_root` in POSIX form, the way `relpath` is `path`'s."""
-    for member in LedgerName:
+    for member in CSV_LEDGERS:
         if paths.entry(member).grain is Grain.FLAT:
             continue
         assert paths.tree_relpath(member) == paths.tree_root(STATE, member).as_posix()
@@ -440,7 +449,7 @@ def test_a_flat_ledger_has_no_folder_to_walk_and_the_refusal_names_it() -> None:
 def test_the_two_forms_of_one_address_agree() -> None:
     """`path` and `relpath` are the same answer, so neither can drift alone."""
     root = Path("anywhere")
-    for member in LedgerName:
+    for member in CSV_LEDGERS:
         covers = COVERS[paths.entry(member).grain]
         under = paths.path(root, member, covers).relative_to(root).as_posix()
         assert paths.relpath(member, covers) == f"{paths.STATE_DIRNAME}/{under}"
@@ -467,9 +476,10 @@ def test_the_claimed_roots_differ_from_the_base_only_by_the_names_given() -> Non
     the sweep never meets because it only looks at directories. Two are the
     renamed empty ledgers, which leave their old names behind. Four are the
     folders other modules used to own, protected before by a list typed into the
-    sweep itself and now by the registry. The last two are not families at all:
-    they are the roots the ledger door files under, claimed so the sweep never
-    reads them as a trial run's trees.
+    sweep itself and now by the registry. One is the gardener's own ledger, which
+    files under the two roots and is claimed like every family. The last two are
+    not families at all: they are the roots the ledger door files under, claimed
+    so the sweep never reads them as a trial run's trees.
     """
     assert ledger.claimed_roots() - CLAIMED_AT_THE_BASE == {
         "feed-retirements",
@@ -479,6 +489,7 @@ def test_the_claimed_roots_differ_from_the_base_only_by_the_names_given() -> Non
         "day-metrics",
         "digest-fragments",
         "score-archive",
+        "gardener",
         "raw",
         "compact",
     }
@@ -514,11 +525,36 @@ def test_the_four_owners_build_the_paths_they_built_before() -> None:
 
 
 def test_every_entry_carries_the_fields_its_grain_needs() -> None:
-    """A flat file names itself; a day directory has no extension."""
+    """A flat file names itself; a day directory and a ledger under the two roots have no extension."""
+    unsuffixed = {Grain.DAY_TREE, Grain.RAW_AND_COMPACT}
     for member in LedgerName:
         held = paths.entry(member)
         assert (held.stem is not None) == (held.grain is Grain.FLAT)
-        assert (held.suffix is None) == (held.grain is Grain.DAY_TREE)
+        assert (held.suffix is None) == (held.grain in unsuffixed)
+
+
+def test_a_ledger_under_the_two_roots_has_no_registry_address() -> None:
+    """All four registry builders refuse it by name and point at the five that can build it."""
+    assert LedgerName.GARDENER in THROUGH_THE_DOOR
+    for member in sorted(THROUGH_THE_DOOR):
+        refusal = f"^{member.value} files by raw-and-compact: .* Ask raw_path"
+        with pytest.raises(ValueError, match=refusal):
+            paths.path(STATE, member, A_DAY)
+        with pytest.raises(ValueError, match=refusal):
+            paths.relpath(member, A_DAY)
+        with pytest.raises(ValueError, match=refusal):
+            paths.tree_root(STATE, member)
+        with pytest.raises(ValueError, match=refusal):
+            paths.tree_relpath(member)
+
+
+def test_a_ledger_under_the_two_roots_is_prefixed_by_its_own_name() -> None:
+    """The five builders file it under `<root>/<name>/`, so any other prefix names nothing."""
+    gardener = a_family(LedgerName.GARDENER.value)
+    moved = {**gardener, "ledgers": [{**gardener["ledgers"][0], "prefix": ["gardener", "x"]}]}
+
+    with pytest.raises(ValidationError, match="names a folder nothing writes"):
+        LedgersConfig.model_validate(a_registry([moved, *without(LedgerName.GARDENER.value)]))
 
 
 def test_every_day_tree_files_as_a_day_directory() -> None:

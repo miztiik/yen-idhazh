@@ -1,0 +1,122 @@
+"""Does `idhazh gardener` route each subcommand to its body and refuse a bad line by name?
+
+The router holds no body of its own, so these drive it the way an operator or
+a workflow step does - through `idhazh.cli.main` - against a fixture config, and
+read what it printed and the code it exited with.
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+import pytest
+
+from idhazh import cli, config
+from idhazh.gardener import listing
+from idhazh.gardener.publish import EXIT_INTEGRITY
+from utilities import gardener_shards
+
+from ._garden import GARDENER_FIXTURES, a_config, an_origin, quiet_git
+
+pytestmark = pytest.mark.contract
+
+
+def the_garden(tmp_path: Path) -> Path:
+    return a_config(tmp_path, GARDENER_FIXTURES / "garden")
+
+
+def test_the_gardener_is_a_verb_the_router_lists() -> None:
+    assert "gardener" in cli.STAGES
+
+
+def test_list_tasks_prints_one_line_a_task(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    config_dir = the_garden(tmp_path)
+
+    assert cli.main(["gardener", "list-tasks", "--config", str(config_dir)]) == 0
+
+    printed = capsys.readouterr().out.splitlines()
+    assert len(printed) == len(list((config_dir / "gardener").glob("*.json")))
+    assert "trials: active retention, keeps 90 days, reports only, owns everything else under state" in printed
+
+
+def test_plan_shards_prints_the_payload_the_plan_job_prints(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    config_dir = the_garden(tmp_path)
+
+    assert cli.main(["gardener", "plan-shards", "--json", "--config", str(config_dir)]) == 0
+    assert capsys.readouterr().out.strip() == gardener_shards.payload(
+        gardener_shards.plan(config_dir)
+    )
+
+    assert cli.main(["gardener", "plan-shards", "--config", str(config_dir)]) == 0
+    printed = capsys.readouterr().out.splitlines()
+    assert printed[0] == "5 shards"
+    assert printed[-1] == "fullest: shard 0, with 2 tasks"
+
+
+def test_an_empty_garden_lists_nothing_and_plans_nothing(tmp_path: Path) -> None:
+    config_dir = a_config(tmp_path)
+    (config_dir / "gardener").rmdir()
+
+    settings = config.load_gardener(config_dir)
+    assert listing.tasks(settings) == ["no task is declared: config/gardener/ holds no declaration"]
+
+
+def test_a_config_the_loader_refuses_exits_2_naming_the_file(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    config_dir = the_garden(tmp_path)
+    (config_dir / "gardener" / "Not A Name.json").write_text("{}", encoding="ascii")
+
+    assert cli.main(["gardener", "list-tasks", "--config", str(config_dir)]) == EXIT_INTEGRITY
+    assert "config/gardener/Not A Name.json is refused" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    ("line", "refusal"),
+    [
+        (["seen", "--attempt", "1"], "--run-id"),
+        (["seen", "--run-id", "tuesday", "--attempt", "1"], "--run-id takes YYYY-MM-DD-N"),
+        (["seen", "--run-id", "2026-09-27-1", "--attempt", "0"], "--attempt counts from 1"),
+        (["--shard", "7", "--run-id", "2026-09-27-1", "--attempt", "1"], "no shard 7"),
+        (["day-validations", "--run-id", "2026-09-27-1", "--attempt", "1"], "is retired"),
+        (["nobody", "--run-id", "2026-09-27-1", "--attempt", "1"], "no task is called nobody"),
+    ],
+)
+def test_a_run_task_line_the_router_cannot_run_is_refused(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], line: list[str], refusal: str
+) -> None:
+    config_dir = the_garden(tmp_path)
+    with pytest.raises(SystemExit) as stopped:
+        cli.main(["gardener", "run-task", *line, "--config", str(config_dir)])
+    assert stopped.value.code == 2
+    assert refusal in capsys.readouterr().err
+
+
+def test_a_task_no_shipped_module_serves_exits_2_before_it_runs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The shipped task folder is empty, so a declared task has nothing to run it yet."""
+    quiet_git(tmp_path, monkeypatch)
+    _, checkout = an_origin(tmp_path, {"state/seen/.keep": ""})
+    config_dir = a_config(checkout, GARDENER_FIXTURES / "garden" / "seen.json")
+
+    code = cli.main(
+        [
+            "gardener",
+            "run-task",
+            "seen",
+            "--run-id",
+            "2026-09-27-1",
+            "--attempt",
+            "1",
+            "--repo-root",
+            str(checkout),
+            "--config",
+            str(config_dir),
+        ]
+    )
+
+    assert code == EXIT_INTEGRITY
+    assert "config/gardener/seen.json is served by no module" in capsys.readouterr().out

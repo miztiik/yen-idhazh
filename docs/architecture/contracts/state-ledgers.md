@@ -37,6 +37,7 @@ It sits at the bottom of the contract graph rather than inside `backend/idhazh/l
 | `state/item-health-summary/<YYYY-MM>.csv` | What is left of an item-health month | month file | the whole file |
 | `state/feed-retirements.csv` | Is this address gone for good? | one file | the whole file |
 | `state/visual-prunes/<YYYY>/<MM>/<DD>.csv` | Is the picture backlog shrinking? | day file | the whole tree |
+| `state/raw/gardener/<YYYY>/<MM>/<DD>/<file_id>.parquet` | What did each gardener task see, take and leave at one wake? One file per shard | raw and compact | none yet |
 
 `state/seen/` has no published mirror at all, so unlike the two health ledgers there is no second grain anywhere near it.
 
@@ -45,6 +46,12 @@ It sits at the bottom of the contract graph rather than inside `backend/idhazh/l
 `state/item-health/` is the fastest-growing of the four day-filed ledgers. The console reads it a month at a time through the published projection, which stays monthly: `public_telemetry.publish` folds a month from that month's day files.
 
 `state/feed-retirements.csv` is read whole because a retirement has no time bound, so it is one file. It is also the smallest: a row is written only when a server has reported one address permanently gone on five distinct runs.
+
+## The gardener
+
+`state/raw/gardener/` is the first ledger born under the two roots the ledger door files into. Each gardener shard writes one file a wake through `ledger.persist`, holding one `CollectionPruneRow` per task it ran - a dry run included - and lands it itself ([../publishing/idhazh-gardener.md](../publishing/idhazh-gardener.md)). A row names the task, the run, the attempt, the job and the shard that wrote it, what the pass saw and took, why it stopped, the task's own wall clock and the instant the shard finished working.
+
+Its grain is `raw-and-compact`, the sixth. **For this grain the `prefix` is the path inside each of the two roots**, so `["gardener"]` means `state/raw/gardener/` and `state/compact/gardener/`, and the registry refuses any other prefix because the five root builders file the ledger under its own name. The four registry builders - `path`, `relpath`, `tree_root` and `tree_relpath` - refuse the grain by name and point at the five that build it: `raw_path`, `raw_index_path`, `compact_path`, `compact_index_path` and `watermark_path`. `ledger_families.py` counts its files under each root on a line of its own.
 
 ## The published ledger sizes from the ceiling, not from today
 
@@ -91,7 +98,7 @@ Callers pass the state directory and never the file name. The layout is one fact
 
 A **family** is one top-level folder under `state/`. `content-similarity-judge` is one family holding seven ledgers; most families hold one ledger of the same name. A family carries what is decided for the folder as a whole: its `name`, its `lifecycle_status`, a one-line `description` of what it holds, the UTC day it was `onboarded`, and its `ledgers`.
 
-A **ledger** is one row shape, filed one way, at one address. Each carries five things: its `name`, its `grain`, the `prefix` of directories it sits under inside `state/`, and - for a ledger that is a single file - the `stem` and `suffix` that name it. A dated ledger carries no stem, because its period names it. A day directory carries no suffix, because it is a directory. The prefix keeps the whole nest, the family's folder included, so an address is read off the ledger alone.
+A **ledger** is one row shape, filed one way, at one address. Each carries five things: its `name`, its `grain`, the `prefix` of directories it sits under inside `state/`, and - for a ledger that is a single file - the `stem` and `suffix` that name it. A dated ledger carries no stem, because its period names it. A day directory carries no suffix, because it is a directory. The prefix keeps the whole nest, the family's folder included, so an address is read off the ledger alone. A ledger that goes through the door carries neither stem nor suffix, and its prefix is the path inside each root ([The gardener](#the-gardener)).
 
 Four builders read the registry, in two pairs, and nothing else builds a path under `state/`:
 
@@ -119,6 +126,7 @@ The check runs when the config loads, so each of these stops the build with the 
 | lists one family twice | one folder with two lists would have two statuses |
 | lists a ledger whose prefix does not start with its family's name | the ledger would sit in one folder and take another folder's status. A file at the top of `state/` has no folder, so `feed-retirements` is named for its stem |
 | holds a member whose Python name is not spelled from its family and its value | a Python name that says something the value does not is a second name a reader has to learn - the rule is in the section on typed names above |
+| gives a `raw-and-compact` ledger a prefix other than its own name | the five root builders file it under its own name, so any other prefix names a folder nothing writes |
 
 The first row is what the registry is for. The claim used to be a hand-written Python set, and a ledger somebody forgot to add to it was a production directory the trial sweep quietly emptied. It is now a build that will not start.
 

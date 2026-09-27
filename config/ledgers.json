@@ -326,6 +326,21 @@
           "suffix": ".json"
         }
       ]
+    },
+    {
+      "name": "gardener",
+      "lifecycle_status": "active",
+      "description": "One record per gardener shard per wake: what each of its tasks saw, took and left.",
+      "onboarded": "2026-09-27",
+      "ledgers": [
+        {
+          "name": "gardener",
+          "grain": "raw-and-compact",
+          "prefix": ["gardener"],
+          "stem": null,
+          "suffix": null
+        }
+      ]
     }
   ]
 }

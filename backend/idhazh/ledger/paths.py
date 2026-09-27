@@ -20,6 +20,11 @@ root builders refuses, by name, a path whose first folder under `state/` is
 neither `raw` nor `compact`, so a third root is a `ValueError` rather than a
 convention somebody forgot.
 
+**A ledger the registry lists as `raw-and-compact` has no registry address.**
+Its files sit under the two roots and are named by their grammar, so the four
+registry builders refuse it by name and point at the five that can build it,
+rather than hand back a CSV address nothing writes.
+
 Nothing here globs `state/`. A walk would cost more every day, and it cannot tell
 a retired ledger from one that has never run (Guardrail #12).
 
@@ -117,8 +122,20 @@ def claimed_roots() -> frozenset[str]:
     return frozenset(family.name for family in _CONFIG.families) | _THE_TWO_ROOTS
 
 
+def _no_registry_address(held: LedgerEntry) -> ValueError:
+    """The refusal a ledger that files under the two roots gets from a registry builder."""
+    return ValueError(
+        f"{held.name} files by {held.grain.value}: its files sit under "
+        f"{STATE_DIRNAME}/{RAW_DIRNAME}/ and {STATE_DIRNAME}/{COMPACT_DIRNAME}/ and are "
+        "named by their own grammar, so the registry holds no single address for it. "
+        "Ask raw_path, raw_index_path, compact_path, compact_index_path or watermark_path"
+    )
+
+
 def _segments(held: LedgerEntry, covers: str | None) -> tuple[str, ...]:
     """The address under `state/`, one segment at a time, for the grain it carries."""
+    if held.grain is Grain.RAW_AND_COMPACT:
+        raise _no_registry_address(held)
     if held.grain is Grain.FLAT:
         if covers is not None:
             raise ValueError(
@@ -162,8 +179,11 @@ def _folder(held: LedgerEntry) -> tuple[str, ...]:
     A flat file has none. It shares its folder with other files -
     `feed-retirements.csv` sits at the top of `state/` and `holdout-pairs.csv`
     beside the similarity judge's other ledgers - so a walk handed that folder
-    would read files that are not this ledger's.
+    would read files that are not this ledger's. A ledger under the two roots has
+    two folders rather than one, so it is refused too.
     """
+    if held.grain is Grain.RAW_AND_COMPACT:
+        raise _no_registry_address(held)
     if held.grain is Grain.FLAT:
         raise ValueError(
             f"{held.name} is one file in a folder it shares with other files, so it has "

@@ -1,15 +1,21 @@
 {
+  "attempt": 1,
   "bytes_freed": 804208640,
   "candidates_seen": 214,
-  "collection": "workflow-artifacts",
-  "date": "2026-09-17",
+  "date": "2026-09-27",
   "deleted": 50,
   "dry_run": false,
+  "duration_ms": 41250,
+  "job": "run-tasks",
   "max_deletes_per_run": 50,
   "resume_from": "4529182755",
+  "run_id": "2026-09-27-18012345678",
   "selected": 51,
+  "shard": 3,
   "since": null,
   "stopped_because": "ceiling",
-  "until": "2026-08-18",
-  "version": "2026-09-17"
+  "task": "workflow-artifacts",
+  "until": "2026-08-28",
+  "version": "2026-09-27",
+  "work_ended_at": "2026-09-27T00:47:12Z"
 }

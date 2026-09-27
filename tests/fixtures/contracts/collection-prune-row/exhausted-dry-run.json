@@ -1,15 +1,21 @@
 {
+  "attempt": 2,
   "bytes_freed": 18422,
   "candidates_seen": 41,
-  "collection": "item-health",
-  "date": "2026-09-17",
+  "date": "2026-09-27",
   "deleted": 7,
   "dry_run": true,
-  "max_deletes_per_run": 7,
+  "duration_ms": 1873,
+  "job": "run-tasks",
+  "max_deletes_per_run": null,
   "resume_from": null,
+  "run_id": "2026-09-27-18012345678",
   "selected": 7,
-  "since": "2026-07-29",
+  "shard": 1,
+  "since": null,
   "stopped_because": "exhausted",
-  "until": "2026-08-04",
-  "version": "2026-09-17"
+  "task": "traces",
+  "until": "2026-09-20",
+  "version": "2026-09-27",
+  "work_ended_at": "2026-09-27T00:46:58Z"
 }

@@ -1,28 +1,45 @@
 """What does one pass say to a person, and what does it write down?
 
 Two readings of the same `one_at_a_time.Pass`, kept together because they have
-to agree. `lines` is what an operator sees; `row` is the `CollectionPruneRow` a
-caller may keep. Split between the core and the CLI, they would drift the day
-somebody added a field to one and not the other.
+to agree. `lines` is what an operator sees; `row` is the `CollectionPruneRow`
+the gardener lands in its record. Split between the core and the CLI, they
+would drift the day somebody added a field to one and not the other.
 
 **Both say where it stopped, and that is the sentence that matters.** A pass
-that deleted 50 and a pass that cleared the backlog both print 50. Only the
-resume point tells them apart, so it is on the first line rather than buried
-under a list.
+that deleted 50 and a pass that cleared the backlog both print 50. Only why it
+stopped tells them apart, so it is on the first line rather than buried under a
+list.
+
+**The row names the run that wrote it, and the pass cannot.** A pass knows what
+it walked; which run, attempt, job and shard it ran in, which task declared it,
+how long it took and when the shard finished its work are the runner's to say,
+so the runner hands them in.
 """
 
 from __future__ import annotations
 
 from idhazh.contracts.collection_prune import CollectionPruneRow, StopReason
-from idhazh.prune.one_at_a_time import Pass
+from idhazh.gardener.context import TaskContext
+from idhazh.gardener.one_at_a_time import Pass
 
 
-def row(outcome: Pass, *, date: str) -> CollectionPruneRow:
-    """The pass as the persisted shape, with today's date on it."""
+def row(
+    outcome: Pass,
+    *,
+    task: str,
+    context: TaskContext,
+    duration_ms: int,
+    work_ended_at: str,
+) -> CollectionPruneRow:
+    """The pass as the persisted shape, under the name and identity of the run that took it."""
     return CollectionPruneRow(
         version=CollectionPruneRow.schema_version(),
-        date=date,
-        collection=outcome.collection,
+        date=context.today.isoformat(),
+        task=task,
+        run_id=context.run_id,
+        attempt=context.attempt,
+        job=context.job,
+        shard=context.shard,
         since=outcome.since,
         until=outcome.until,
         max_deletes_per_run=outcome.ceiling,
@@ -33,6 +50,8 @@ def row(outcome: Pass, *, date: str) -> CollectionPruneRow:
         bytes_freed=outcome.bytes_freed,
         stopped_because=outcome.stopped_because,
         resume_from=outcome.resume_from,
+        duration_ms=duration_ms,
+        work_ended_at=work_ended_at,
     )
 
 
@@ -74,10 +93,17 @@ def _what_next(outcome: Pass) -> list[str]:
             "there is more, so run it again"
         )
     elif outcome.stopped_because is StopReason.FAILED:
-        said.append(
-            f"  a delete failed at {outcome.resume_from} - the members above are gone, "
-            "and the next pass retries that one"
-        )
+        if outcome.resume_from is None:
+            said.append(
+                f"  the pass failed after {len(outcome.taken)} members, before it could "
+                "name the next one - the members above are gone, and the next pass starts "
+                "again from the oldest member the window holds"
+            )
+        else:
+            said.append(
+                f"  the pass failed at {outcome.resume_from} - the members above are gone, "
+                "and the next pass retries that one"
+            )
     else:
         said.append("  the collection is exhausted: nothing else is inside the window")
     if outcome.dry_run and outcome.taken:

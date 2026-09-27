@@ -41,6 +41,7 @@ import ast
 import importlib
 import inspect
 import re
+import uuid
 from collections.abc import Callable, Mapping
 from pathlib import Path
 from types import MappingProxyType, ModuleType
@@ -148,10 +149,11 @@ LEDGERS_NO_RUN_FILLS: Final[Mapping[str, str]] = MappingProxyType(
 # A ledger whose files the module that owns it writes straight to the registry's
 # address, with no `append_*` or `write_*` in the ledger package and no sink for
 # this derivation to follow. The registry says where each one lives; the module
-# named here is who writes it, and the job that runs that module stages `state`
-# whole, which is the only reason nothing here checks it more closely.
+# named here is who writes it, and its owner stages what it writes - the job that
+# runs the module stages `state` whole, or the owner stages each file itself -
+# which is the only reason nothing here checks it more closely.
 #
-# It is a list rather than a rule for the reason the two above are: a fourth such
+# It is a list rather than a rule for the reason the two above are: another such
 # ledger fails this file instead of joining it unnoticed, and an entry that gains a
 # writer this derivation can follow fails too.
 LEDGERS_AN_OWNER_WRITES: Final[Mapping[str, str]] = MappingProxyType(
@@ -167,6 +169,11 @@ LEDGERS_AN_OWNER_WRITES: Final[Mapping[str, str]] = MappingProxyType(
         "state/score-archive": (
             "idhazh.evals.archive, called by retention.prune_scores from "
             "`python -m idhazh prune-state` the first time a month of scores ages out"
+        ),
+        "state/raw/gardener": (
+            "idhazh.gardener.runner, one record per shard through ledger.persist, which "
+            "idhazh.gardener.publish stages file by file and pushes itself - "
+            "backend/tests/gardener/test_runner.py reads the record back off origin"
         ),
     }
 )
@@ -322,6 +329,19 @@ def _period(grain: Grain, date: str) -> str | None:
     return date
 
 
+def _address(member: LedgerName, date: str) -> str:
+    """One ledger's file for one date, from the builder its grain uses.
+
+    A ledger that goes through the door has no registry address, so its raw file
+    for the day is asked of the raw builder instead, under a fixed file id.
+    """
+    grain = paths.entry(member).grain
+    if grain is Grain.RAW_AND_COMPACT:
+        state = Path(paths.STATE_DIRNAME)
+        return paths.raw_path(state, member, date, uuid.UUID(int=0)).as_posix()
+    return paths.relpath(member, _period(grain, date))
+
+
 def _ledgers() -> dict[str, str]:
     """Every ledger the pipeline declares: its own name -> the path a job stages.
 
@@ -335,10 +355,8 @@ def _ledgers() -> dict[str, str]:
     """
     found: dict[str, str] = {}
     for member in LedgerName:
-        grain = paths.entry(member).grain
         shared = _shared_prefix(
-            paths.relpath(member, _period(grain, SUBSTITUTED_DATE)),
-            paths.relpath(member, _period(grain, OTHER_DATE)),
+            _address(member, SUBSTITUTED_DATE), _address(member, OTHER_DATE)
         )
         assert shared, f"{member.value} addresses two dates with nothing in common"
         found[member.value] = shared

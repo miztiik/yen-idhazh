@@ -155,16 +155,23 @@ class Pass:
     sides of `dry_run` - named as the pass walks, so the list a dry run prints is
     the list a live pass removes, member for member. That list is the deliverable
     of a dry run, which is why a count would not do.
+
+    `written` is the files the pass wrote, or would have written on a dry run,
+    as repository-relative POSIX paths. A pass that only deletes writes nothing,
+    so `take` always leaves it empty; a task that writes a file of its own fills
+    it, and the runner holds every path in it to what the task owns.
     """
 
     collection: str
     since: str | None
     until: str | None
-    ceiling: int
+    #: The most one pass may take. None is no ceiling at all, and 0 is a survey.
+    ceiling: int | None
     dry_run: bool
     seen: int
     selected: int
     taken: tuple[str, ...]
+    written: tuple[str, ...]
     bytes_freed: int
     stopped_because: StopReason
     resume_from: str | None
@@ -175,24 +182,38 @@ class Pass:
 
     @property
     def more_to_do(self) -> bool:
-        """Whether running this again would take anything else."""
-        return self.resume_from is not None
+        """Whether running this again would take anything else.
+
+        Read off why the pass stopped rather than off the resume point: a pass
+        that failed before it could name a member has no resume point and still
+        has everything left to do.
+        """
+        return self.stopped_because is not StopReason.EXHAUSTED
 
 
 class PruneInterruptedError(Exception):
-    """A delete failed part way. `so_far` says what had already gone.
+    """A pass failed part way. `so_far` says what had already gone.
 
-    Raised rather than returned, because a delete that failed is a failure and
+    Raised rather than returned, because a failed pass is a failure and
     swallowing it would report a clean pass over a collection this could not
     touch. Carried rather than bare, because the caller still has to know that
     members 1 to N are gone and which one to retry - an exception with no record
     would leave an operator unable to answer either.
+
+    A delete is not the only thing that fails. The listing can raise part way
+    through a walk and `describe` can raise on one member, and either can happen
+    after some members are already gone - so both are carried the same way.
     """
 
     def __init__(self, so_far: Pass) -> None:
+        where = (
+            f"the next pass resumes at {so_far.resume_from}"
+            if so_far.resume_from is not None
+            else "the next pass starts again from the oldest member the window holds"
+        )
         super().__init__(
-            f"{so_far.collection}: a delete failed after {len(so_far.taken)} members. "
-            f"Those are gone; the next pass resumes at {so_far.resume_from}"
+            f"{so_far.collection}: the pass failed after {len(so_far.taken)} members. "
+            f"Those are gone; {where}"
         )
         self.so_far = so_far
 
@@ -235,7 +256,7 @@ def take[Raw](
     collection: Collection[Raw],
     *,
     window: Window,
-    ceiling: int,
+    ceiling: int | None,
     dry_run: bool = True,
 ) -> Pass:
     """Delete up to `ceiling` members the window holds, one at a time, in listing order.
@@ -248,8 +269,20 @@ def take[Raw](
     would stop at the next member it saw and name it - and that member might be
     one the window never held, so the next pass would start from a member it has
     no business deleting.
+
+    A ceiling of None takes every member the window holds. It is a real answer
+    rather than a large number standing in for one, so the record can say "no
+    ceiling" instead of printing a number nobody chose.
+
+    **Anything that raises part way is carried, not just a delete.** A listing
+    that fails on its third page, or a member `describe` cannot read, can come
+    after members are already gone. Raised bare, that failure would reach the
+    caller with no record of them, and the row it wrote would say nothing was
+    deleted. Neither failure has a member to name, so the record's resume point
+    is empty and the next pass starts again from the oldest member the window
+    holds.
     """
-    if ceiling < 0:
+    if ceiling is not None and ceiling < 0:
         raise ValueError(f"a ceiling is a count of members, not {ceiling}")
 
     seen = 0
@@ -258,7 +291,7 @@ def take[Raw](
     freed = 0
 
     def stopped(because: StopReason, resume_from: str | None) -> Pass:
-        """The record, built in one place so three exits cannot describe a pass differently."""
+        """The record, built in one place so four exits cannot describe a pass differently."""
         return Pass(
             collection=collection.name,
             since=window.since,
@@ -268,19 +301,33 @@ def take[Raw](
             seen=seen,
             selected=selected,
             taken=tuple(taken),
+            written=(),
             bytes_freed=freed,
             stopped_because=because,
             resume_from=resume_from,
         )
 
-    for raw in collection.listing():
+    try:
+        members = iter(collection.listing())
+    except Exception as failure:
+        raise PruneInterruptedError(stopped(StopReason.FAILED, None)) from failure
+    while True:
+        try:
+            raw = next(members)
+        except StopIteration:
+            break
+        except Exception as failure:
+            raise PruneInterruptedError(stopped(StopReason.FAILED, None)) from failure
         seen += 1
-        member = collection.describe(raw)
+        try:
+            member = collection.describe(raw)
+        except Exception as failure:
+            raise PruneInterruptedError(stopped(StopReason.FAILED, None)) from failure
         if not window.holds(member.day):
             continue
         selected += 1
 
-        if len(taken) >= ceiling:
+        if ceiling is not None and len(taken) >= ceiling:
             return stopped(StopReason.CEILING, member.id)
 
         if not dry_run:
