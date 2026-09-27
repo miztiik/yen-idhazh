@@ -54,6 +54,17 @@ width. The knob is what keeps the prerendered chart honest: without a width
 given to it, a server-rendered SVG has to pick an arbitrary one, and picking an
 arbitrary one is the defect.
 
+**Every chart `svg` therefore caps at its container, with `block max-w-full` or
+`w-full` on the element.** The fallback is a coordinate space, not a size, and
+uncapped it becomes the document's width for as long as hydration takes -
+measured 2026-09-27 at 800px inside a 360px screen, about 200ms on an idle box
+and longer on a phone. That frame reaches a reader: `/evals/` is a signpost
+carrying a `meta refresh` to `/console/`, so an old link lands on it. Ten chart
+SVGs carried the cap by hand and `RunYield.svelte` shipped without one, which
+turned a layout fact into one red `layout-overflow.spec.ts` in a job whose other
+theme passed. `console-frame.spec.ts` now draws this page at 360px with scripts
+off, where the overflow is the only state there is.
+
 The arithmetic comes from `d3-scale` and `d3-array`, which compute and draw
 nothing. This is not a chart library returning ([../../concepts/design-system.md](../../concepts/design-system.md)):
 they own no element, no canvas and no theme, and no reader route imports either
