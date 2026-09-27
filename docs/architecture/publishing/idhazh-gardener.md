@@ -151,5 +151,6 @@ identity (Fowler and Carmack).
 
 - [../../concepts/config/idhazh-gardener.md](../../concepts/config/idhazh-gardener.md) - every knob, and every refusal the loader makes.
 - [committing.md](committing.md) - how every other job commits, and why the gardener stages its own files.
-- [../contracts/state-ledgers.md](../contracts/state-ledgers.md) - the gardener's ledger and the grain it files at.
+- [../contracts/state-ledgers.md](../contracts/state-ledgers.md) - the gardener's ledger, and what one of its rows holds.
+- [../contracts/ledger-registry.md](../contracts/ledger-registry.md) - the grain that ledger files at, and the builders that refuse it.
 - [../../concepts/atomic-deletes.md](../../concepts/atomic-deletes.md) - what one delete at a time buys.
