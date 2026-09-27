@@ -6,7 +6,7 @@
 
 **Chain** (CLAUDE.md section 0d). **Intent**: [docs/concepts/telemetry-intent.md](../docs/concepts/telemetry-intent.md) N2, N3 and N5 - the browser queries the ledger for the slice it draws, fetches at view time, and d3 draws it. **Contract**: section 2 declares every shape, key, signature and config literal these rows need, so a worker builds each row with no further decision. **Code**: the eight rows.
 
-Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delegates a row where delegation pays; keep parallel N = 2 rows in flight, refilling a slot as a worker returns and never waiting on a merge; serialise merges and re-check each branch against the advanced main; run the browser and build gates one at a time behind the shared gate lock (execute-a-plan.md, "the workers are parallel; the machine is not"); consult a persona only where two answers would lead to different code; AUTO-merge on green gates where no ESCALATE trigger fired; honor the ESCALATE triggers in section 0. AUTHOR-AND-STOP until the user authorizes.
+Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delegates a row where delegation pays; keep parallel N = 2 rows in flight, refilling a slot as a worker returns and never waiting on a merge; serialise merges and re-check each branch against the advanced main; run the browser and build gates one at a time behind the shared gate lock (execute-a-plan.md, "the workers are parallel; the machine is not"); consult a persona only where two answers would lead to different code; AUTO-merge on green gates where no ESCALATE trigger fired; honor the ESCALATE triggers in section 0.
 
 ## 0. Operating contract
 
@@ -51,10 +51,10 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | The Hardware route stops counting every job twice | - | A | PENDING | - | - | - |
-| 2 | The console shell: a stuck tab strip, the span control on it, jump links, a completeness sentence | - | A | PENDING | - | - | - |
+| 1 | The Hardware route stops counting every job twice | - | A | IN-FLIGHT | p51r1 | - | p51-r1-worker |
+| 2 | The console shell: a stuck tab strip, the span control on it, jump links, a completeness sentence | - | A | IN-FLIGHT | p51r2 | - | p51-r2-worker |
 | 3 | The three ledgers the console reads are published | plan 50's rows titled "One compaction task a ledger, two compact periods, and the diagrams move into the page" and "The three ledgers the console's routes read become parquet" | B | PENDING | - | - | - |
-| 4 | The chart vocabulary and the house style, with no panel moved | - | B | PENDING | - | - | - |
+| 4 | The chart vocabulary and the house style, with no panel moved | - | B | IN-FLIGHT | p51r4 | - | p51-r4-worker |
 | 5 | One readout strip, every chart, and hover a keyboard can reach | 1, 4 | C | PENDING | - | - | - |
 | 6 | The ten sufficiency gates and the panel capture group | 4, 5 | C | PENDING | - | - | - |
 | 7 | The query door module and its two entry points | 4; plan 50's row titled "The index and watermark shapes are declared" | C | PENDING | - | - | - |
