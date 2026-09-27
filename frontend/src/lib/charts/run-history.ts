@@ -124,6 +124,33 @@ export function denseCellFor(available: number, days: number): StripMetrics {
 	return { cell, gap, width: days * cell + Math.max(0, days - 1) * gap };
 }
 
+/** How much of a day's slot a run square takes when it stands under a day
+ * chart's bars. The rest is air between neighbouring days, so two days' squares
+ * never read as one column. */
+const SLOT_SHARE = 0.8;
+
+/** A run square and the gap between two squares of one day. */
+export interface SlotCell {
+	cell: number;
+	gap: number;
+}
+
+/** How big a run square is when it stands in a day chart's own slot.
+ *
+ * `SLOT_SHARE` of the slot, held to the same pair a dense strip is: no smaller
+ * than a square that is still visible, no larger than the bar beside it. The gap
+ * keeps the share it has everywhere else, a quarter of a square, and at least a
+ * pixel. Null where the slot cannot hold even the smallest square - the caller
+ * draws the scrolling strip instead, which has room of its own.
+ */
+export function slotCellFor(slot: number): SlotCell | null {
+	if (!Number.isFinite(slot) || slot <= 0) return null;
+	const raw = Math.floor(slot * SLOT_SHARE);
+	if (raw < DENSE_MIN) return null;
+	const cell = Math.min(DENSE_MAX, raw);
+	return { cell, gap: Math.max(1, Math.round(cell * GAP_SHARE)) };
+}
+
 /** A label a week apart, because a week is the cadence an operator counts in. */
 const WEEK = 7;
 

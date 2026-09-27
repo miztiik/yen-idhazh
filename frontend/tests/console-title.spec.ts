@@ -107,11 +107,15 @@ test('the three titles the row was opened for are the ones that changed', async 
 
 	// And the panels themselves are still drawn, under their new names, so this
 	// reads as a rename and not as four deletions. `Runs that finished` was the
-	// donut's caption; the run-yield chart took the question over, per day.
+	// donut's caption; the run-yield chart took the question over, per day, and
+	// now heads `Run health` above the day's runs.
 	await page.goto('/console/');
-	await expect(page.locator('[data-glance-chart="run-yield"] h3')).toHaveText(
-		'Items published against items planned'
+	await expect(page.locator('[data-console-panel="Run health"] h3')).toHaveText(
+		'Articles published against planned'
 	);
+	await expect(
+		page.locator('[data-console-panel="Run health"] svg[data-run-yield-chart]')
+	).toHaveCount(1);
 	await page.goto('/console/machine/');
 	const machine = await titlesOn(page);
 	expect(machine, 'the clock check lost its panel').toContain(

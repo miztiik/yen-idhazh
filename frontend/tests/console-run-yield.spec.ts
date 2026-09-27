@@ -27,7 +27,7 @@ import { expect, test } from '@playwright/test';
  * committed tree can turn this file red (`CLAUDE.md` section 13).
  */
 
-const PANEL = '[data-glance-chart="run-yield"]';
+const PANEL = '[data-console-panel="Run health"]';
 const PLOT = `${PANEL} svg[data-run-yield-chart]`;
 
 /** A window wide enough that the three bars of a day are drawn at all. Below

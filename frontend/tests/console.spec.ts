@@ -9,6 +9,7 @@ import {
 } from '../src/lib/charts/series';
 import { axisLabels, centreOffset, spanLabel } from '../src/lib/charts/run-history';
 import { dayKey, monthsInWindow, panWindow, toDay, windowOfDays } from '../src/lib/charts/viewport';
+import { shortDate } from '../src/lib/format';
 import { CUT_FLAG_MEANS_A_CUT_FROM, modelWork } from '../src/lib/server/model-work';
 import { readCsv, readDayShards, telemetryMonths, telemetryRows } from '../src/lib/server/payload';
 import { failing, preserves, reliability, type FeedRecord } from '../src/lib/feed-health';
@@ -163,10 +164,15 @@ interface Box {
 	bottom: number;
 }
 
-/** Wide enough that the run strip cannot fill its frame at any day count the
- * window admits, because `cellFor` caps a day column. That is what lets an
- * alignment test assert on spare room without depending on today's ledger. */
-const UNDERFULL_VIEWPORT = { width: 1680, height: 900 };
+/** A phone, where the run squares draw their own strip. The strip keeps its
+ * floor there and cannot shrink, so a week of days leaves it room to spare -
+ * which is what lets an alignment test assert on spare room without depending on
+ * today's ledger. Wider than a phone the squares stand under the chart's own
+ * days instead. */
+const UNDERFULL_VIEWPORT = { width: 390, height: 844 };
+
+/** A phone, for the rules only the scrolling strip has. */
+const PHONE = { width: 360, height: 720 };
 
 /** `DOMRect` does not survive the wire, so only the numbers cross it. */
 const TO_BOX = (nodes: Element[]): Box[] =>
@@ -343,7 +349,12 @@ test('every recorded run gets a square, and nothing else does', async ({ page })
 });
 
 test('runs rise from a shared baseline, on a square day track', async ({ page }) => {
+	// The phone strip, where a day is a track of its own. Under the chart a day
+	// takes the chart's slot instead, and `console-run-health.spec.ts` holds it to
+	// the bars.
+	await page.setViewportSize(PHONE);
 	await page.goto('/console/');
+	await expect(page.locator('[data-run-history="strip"]')).toHaveCount(1);
 
 	const stack = await page.locator(`[data-day="${DAY}"] [data-health]`).evaluateAll(TO_BOX);
 	expect(stack.length).toBe(runCount());
@@ -394,7 +405,11 @@ test('runs rise from a shared baseline, on a square day track', async ({ page })
 });
 
 test('no two date labels print on top of each other', async ({ page }) => {
+	// The phone strip's own date row. Under the chart the squares have none - the
+	// chart's date row is directly above them.
+	await page.setViewportSize(PHONE);
 	await page.goto('/console/');
+	await expect(page.locator('[data-run-history="strip"]')).toHaveCount(1);
 
 	const labels = await page.locator('[data-axis-label]').evaluateAll(TO_BOX);
 	expect(labels.length).toBeGreaterThan(1);
@@ -405,7 +420,7 @@ test('no two date labels print on top of each other', async ({ page }) => {
 	}
 });
 
-test('a strip that cannot fill its frame is centred in it', async ({ page }) => {
+test('a phone strip that cannot fill its frame is centred in it', async ({ page }) => {
 	// Where an OVERFLOWING strip opens and where an UNDERFULL one sits are two
 	// questions, and `today_anchor` only answers the first. Anchored left, the
 	// spare room piled up on the right - and the right of a time axis whose last
@@ -465,9 +480,10 @@ test('THE ORACLE: the run strip fills its frame, keeps a cadence and reads a day
 	).toBeGreaterThanOrEqual(0.7);
 
 	// A cadence needs at least three marks. Two is a pair of endpoints, which
-	// says the span and nothing about where in it a run sits.
+	// says the span and nothing about where in it a run sits. The squares read
+	// the chart's date row, directly above them, rather than carrying their own.
 	const labels = await page
-		.locator('[data-axis-label]')
+		.locator('[data-console-panel="Run health"] svg[data-run-yield-chart] [data-day-axis]')
 		.evaluateAll((nodes) => nodes.map((node) => node.textContent?.trim() ?? ''));
 	expect(labels.length, `the axis drew ${labels.join(', ')}`).toBeGreaterThanOrEqual(3);
 
@@ -495,18 +511,22 @@ test('THE ORACLE: the run strip fills its frame, keeps a cadence and reads a day
 	expect(oldest.day, 'the oldest and the newest column print the same day').not.toBe(newest.day);
 
 	// The newest column of the canary is a day that ran, so it prints a line per
-	// run and every line is a run rather than a stage.
+	// run after the day's own counts, and every such line is a run rather than a
+	// stage.
 	const runs = await page.locator('[data-day]').last().locator('[data-health]').count();
 	expect(runs, 'the newest column carries no run, so the per-run rule is untested').toBeGreaterThan(
 		0
 	);
-	expect(newest.rows).toEqual(
+	expect(newest.rows.filter((row) => row.startsWith('Run '))).toEqual(
 		Array.from({ length: runs }, (_, index) => `Run ${index + 1}`)
 	);
 
-	// And the standing key is gone. The readout prints the swatch and the word
+	// And the standing key is gone. The readout prints the swatch and the counts
 	// for the run it is on, so a key beside it would draw the same pair twice.
-	await expect(page.locator('[data-windowed="run-health"] ul')).toHaveCount(0);
+	// The one list left is the chart's days in words, for a screen reader.
+	await expect(
+		page.locator('[data-windowed="run-health"] ul:not([data-run-yield-values])')
+	).toHaveCount(0);
 });
 
 test('on a phone the strip scrolls, and opens on the newest run', async ({ page }) => {
@@ -559,7 +579,7 @@ test('a square says what happened without a mouse', async ({ page }) => {
 	// The colour alone is not the answer. Anyone who cannot see the difference
 	// between amber and red still has to be able to read the run.
 	const first = page.locator(`[data-day="${DAY}"] [data-health]`).first();
-	await expect(first).toHaveAttribute('aria-label', new RegExp(`^${DAY} block 1,`));
+	await expect(first).toHaveAttribute('aria-label', new RegExp(`^Run 1 on ${shortDate(DAY)}: `));
 	await expect(first).toHaveAttribute('title', /succeeded/);
 });
 
@@ -589,7 +609,7 @@ test('the run that read only the start of an article says so on its own square',
 	expect(carried).toHaveLength(cutByRun.size);
 	for (const [runId, keys] of cutByRun) {
 		const n = Number(runId.split('-').at(-1));
-		expect(carried[0]).toContain(`block ${n},`);
+		expect(carried[0]).toContain(`Run ${n} on `);
 		expect(carried[0]).toContain(`${keys.size} read only in part`);
 	}
 

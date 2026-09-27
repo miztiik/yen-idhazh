@@ -17,7 +17,6 @@
 	 */
 	import { base } from '$app/paths';
 	import { onMount } from 'svelte';
-	import { axisLabels, cellFor, centreOffset, type LabelAlign } from '$lib/charts/run-history';
 	import {
 		datesIn,
 		failureSeries,
@@ -28,7 +27,6 @@
 		type TelemetryRow
 	} from '$lib/charts/series';
 	import {
-		daysInWindow,
 		defaultWindow,
 		panWindow,
 		stepPreset,
@@ -57,23 +55,15 @@
 	import Reserved from '$lib/components/Reserved.svelte';
 	import StageTimings from '$lib/components/StageTimings.svelte';
 	import TimeHistogram from '$lib/components/TimeHistogram.svelte';
-	import ChartReadout from '$lib/components/ChartReadout.svelte';
 	import KpiCard from '$lib/components/KpiCard.svelte';
 	import Panel from '$lib/components/Panel.svelte';
 	import PanelGroup from '$lib/components/PanelGroup.svelte';
-	import RunYield from '$lib/components/RunYield.svelte';
 	import TargetBar from '$lib/components/TargetBar.svelte';
 	import { shortDate } from '$lib/format';
 	import { movementVerdict } from '$lib/charts/theme';
 	import type { TargetSense } from '$lib/charts/targetbar';
 	import Chart from '$lib/charts/Chart.svelte';
-	import {
-		columnStrip,
-		notMeasuredRow,
-		readoutMarks,
-		pointerReadout,
-		type DayReadout
-	} from '$lib/charts/frame';
+	import { columnStrip } from '$lib/charts/frame';
 	import { chartFlow, FLOW_HEIGHT } from '$lib/charts/chart-flow';
 	import { extractionTrend, extractionTrendColumns } from '$lib/charts/extraction-trend';
 	import {
@@ -94,8 +84,8 @@
 	import Sparkline from '$lib/components/Sparkline.svelte';
 	import Viewport from '$lib/components/Viewport.svelte';
 	import WindowControl from '$lib/components/WindowControl.svelte';
+	import RunHealthPanel from './RunHealthPanel.svelte';
 	import RunTimelinePanel from './RunTimelinePanel.svelte';
-	import type { Health } from './+page.server';
 
 	let { data } = $props();
 
@@ -514,128 +504,9 @@
 		return bar.published === 0 ? 0 : Math.max(1, bar.height * SKYLINE.height);
 	}
 
-	let strip = $state<HTMLDivElement | null>(null);
-
-	// The fill ramp, not the band ramp. The band tokens are text colours and a
-	// 16px solid is not text: at text weight the light theme drew olive and
-	// brick. tokens.css carries both ramps and design-system.md the band a fill
-	// has to land in.
-	const COLOUR: Record<Health, string> = {
-		green: 'var(--fill-high)',
-		amber: 'var(--fill-medium)',
-		red: 'var(--fill-low)'
-	};
-
-	/** What a square means, in words. Colour is one signal and never the only
-	 * one: the readout under the strip prints this word beside the swatch for
-	 * the run the pointer is on, and the panel note states the rule once. A
-	 * standing key would print the same pair a second time. */
-	const VERDICT: Record<Health, string> = {
-		green: 'ran clean',
-		amber: 'worth a look',
-		red: 'failed'
-	};
-	/** One column per day of the window, whether or not a run happened on it.
-	 *
-	 * The strip drew only the days a manifest exists for until 2026-09-01, so a
-	 * thirty-day window drew eleven columns and a third of a page-wide frame.
-	 * The other two thirds read as a chart that failed to load. An empty column
-	 * is the fact this strip exists to show: nothing ran that day.
-	 */
-	// Built once from the committed grid, not per pan. `data.grid` holds every
-	// recorded day and never changes in the browser, so rebuilding this index on
-	// every window move re-read the whole history to answer a windowed question
-	// (finding 109). The window walk below is output-sized: one lookup a day in
-	// view.
-	const gridByDate = $derived(new Map(data.grid.map((day) => [day.date, day.squares])));
-	const windowGrid = $derived(
-		daysInWindow(viewport).map((date) => ({ date, squares: gridByDate.get(date) ?? [] }))
-	);
-	const windowRuns = $derived(windowGrid.reduce((count, day) => count + day.squares.length, 0));
-
-	/** A label is placed inside its column, not laid out by it, so the widest
-	 * date on the axis cannot push a single day track out of step. */
-	const ANCHOR: Record<LabelAlign, string> = {
-		start: 'left: 0',
-		centre: 'left: 50%; transform: translateX(-50%)',
-		end: 'right: 0'
-	};
-
-	// The newest run is the one an operator came to see, and it sits at the far
-	// end. One frame, so the strip has been laid out before it is moved, and
-	// never again - after this the scroll position belongs to the operator.
-	$effect(() => {
-		const node = strip;
-		if (!node) return;
-		const frame = requestAnimationFrame(() => {
-			node.scrollLeft = node.scrollWidth - node.clientWidth;
-		});
-		return () => cancelAnimationFrame(frame);
-	});
-
-	/** The room the strip actually has. Null until a browser measures it, which
-	 * is what keeps the prerendered strip drawing at the fixed pair rather than
-	 * at zero. */
-	let stripWidth = $state<number | null>(null);
-	/** The strip grows into the room it has, and centres when it cannot fill it.
-	 *
-	 * Thirty columns fill a page-wide frame; seven cannot, whatever the cell
-	 * size, and a seven-day strip drawn hard left leaves its spare room where a
-	 * reader looks for the days that just happened.
-	 */
-	const strip_ = $derived(cellFor(stripWidth, windowGrid.length));
-	const stripPad = $derived(centreOffset(stripWidth, strip_.width));
-
-	/** Which columns of the run strip carry a date. The cell here grows from 16px
-	 * to 34px with the room the strip has, so the number of labels that fit is a
-	 * measurement and not a constant. */
-	const axis = $derived(
-		axisLabels(
-			windowGrid.map((day) => day.date),
-			{ density: data.chart.tick_density, pitch: strip_.cell + strip_.gap }
-		)
-	);
-
-	/** One column of the run strip, as the readout under it prints it.
-	 *
-	 * A `title` attribute was the whole hover here until 2026-09-01, and a
-	 * native tooltip is not keyboard-reachable, takes no styling and prints one
-	 * square rather than the day's whole column. The strip prints every run of
-	 * the day at once, each with the swatch it is drawn in - so the readout is
-	 * the key as well, and no standing legend is drawn.
-	 */
-	const runColumns: DayReadout[] = $derived(
-		windowGrid.map((day, index) => ({
-			x: index * (strip_.cell + strip_.gap) + strip_.cell / 2,
-			date: shortDate(day.date),
-			rows:
-				day.squares.length === 0
-					? [notMeasuredRow('No run recorded a manifest')]
-					: day.squares.map((square) => ({
-							label: `Run ${square.n}`,
-							value: VERDICT[square.health],
-							colour: COLOUR[square.health]
-						}))
-		}))
-	);
-	/** The column a pointer or an arrow key has picked, or null for none. */
+	/** The day `Run health` has picked, on its chart or on its squares, or null
+	 * for the newest. One value for both figures, so they cannot show two days. */
 	let runAt = $state<number | null>(null);
-	/** The newest day, which is the one an operator came for. It is what the
-	 * strip prints before anything is pointed at, so it is never blank and the
-	 * panel does not change height as it fills. */
-	const runReadout = $derived(
-		runAt === null ? (runColumns.at(-1) ?? null) : (runColumns[runAt] ?? null)
-	);
-
-	$effect(() => {
-		const node = strip;
-		if (!node || typeof ResizeObserver === 'undefined') return;
-		const observer = new ResizeObserver(([entry]) => {
-			stripWidth = Math.round(entry.contentRect.width);
-		});
-		observer.observe(node);
-		return () => observer.disconnect();
-	});
 
 	/** Whole bytes with thousands separators. The per-article cost is a
 	 * four-digit number, so a rounded kilobyte would hide the whole range the
@@ -857,26 +728,10 @@
 		     same window median against the same target, with the coverage half of
 		     the rule beside it, and one page may not state one figure twice. -->
 	</div>
-	<!-- Full width and below the cards, because thirty days of three counts and a
-	     line will not fit a 17rem cell: the day ticks collide and the three bars
-	     of a day fall under a pixel each. It replaced a two-slice donut over the
-	     whole manifest set, which gave one number for the window and could not
-	     say which day lost the items. -->
-	<div class="panel run-yield-panel mt-4" data-glance-chart="run-yield">
-		<h3 class="run-yield-title">Items published against items planned</h3>
-		<p class="run-yield-note">
-			The three counts are not parts of one total, so published plus failed will not equal planned.
-			The line is the published share of planned, on the right axis.
-		</p>
-		<RunYield
-			days={data.runYieldDays}
-			window={viewport}
-			height={data.console.chart_height}
-			width={data.console.chart_width}
-			tickDensity={data.chart.tick_density}
-			readoutMaxShare={data.chart.readout_max_share}
-		/>
-	</div>
+	<!-- No chart here. The per-day chart of articles published against planned
+	     is the first figure in `Run health`, under the day's runs, because the two
+	     answer one question and drawn apart they disagreed with nothing on the
+	     page saying why. -->
 	{/snippet}
 
 	{#snippet siteCostPerItemPanel()}
@@ -1078,109 +933,29 @@
 	{/snippet}
 
 	{#snippet runHealthPanel()}
-	<div data-windowed="run-health" data-window-days={windowDays}>
-		<Panel
-			verdict
-			title="Run health"
-			note="The last {windowDays} days, one column per day, oldest on the left, one square per recorded run with run 1 at the bottom. A column with no square is a day nothing ran. A run is green when it published what it planned, amber when it found nothing new, and red when it failed or published under {data.floorPct}%. A skipped item does not count against a run - an article we already published is skipped by design."
-		>
-			{#if data.grid.length === 0}
-				<p class="text-[0.9375rem] text-text-secondary" data-grid="empty">
-					No run has recorded a manifest yet. The strip fills as runs publish.
-				</p>
-			{:else if windowRuns === 0}
-				<!-- A different fact from the one above, so a different sentence: the
-				     ledger answered, and the answer was nothing in this span. -->
-				<p class="text-[0.9375rem] text-text-secondary" data-grid="outside-window">
-					No run recorded a manifest in these {windowDays} days. Widen the window to look further
-					back.
-				</p>
-			{:else}
-				<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-				<div
-					class="overflow-x-auto pb-1"
-					role="region"
-					tabindex="0"
-					aria-label="Run health history for the last {windowDays} days, oldest to newest"
-					bind:this={strip}
-					data-run-history
-				>
-					<!-- Left-anchored while it overflows, centred while it does not, and
-					     that is not the same question as where an overflowing strip
-					     opens. `today_anchor` governs the scroll position; a strip with
-					     room to spare puts its spare room on both sides, because the
-					     right of a time axis ending today is where a reader looks for
-					     the days that just happened. -->
-					<div
-						class="grid w-max items-end justify-start"
-						style="grid-template-columns: repeat({windowGrid.length}, {strip_.cell}px); gap: {strip_.gap}px; margin-inline-start: {stripPad}px"
-						data-grid="days"
-						data-strip-pad={stripPad}
-						tabindex="0"
-						role="group"
-						aria-label="Run health, one column a day. Left and Right read a day, Escape returns to the newest."
-						use:pointerReadout={{
-							marks: readoutMarks(runColumns),
-							width: strip_.width,
-							onSelect: (index) => (runAt = index)
-						}}
-					>
-						{#each windowGrid as day, index (day.date)}
-							<!-- Column-reverse, so run 1 sits on the baseline and later runs stack
-							     upward, while the DOM keeps reading run 1 first.
-
-							     Stretched to the row rather than sized by its squares. A day with
-							     no run has no squares, so a column sized by its content is a
-							     zero-height box: nothing to point at, and no room for the tint
-							     that says which day the readout is on - which is the column a
-							     reader most needs to see selected. -->
-							<div
-								class="flex flex-col-reverse justify-start self-stretch"
-								style="grid-row: 1; grid-column: {index + 1}; gap: {strip_.gap}px"
-								data-day={day.date}
-								data-day-selected={runAt === index ? 'true' : null}
-							>
-								{#each day.squares as square (square.runId)}
-									<span
-										class="rounded-sm"
-										style="width: {strip_.cell}px; height: {strip_.cell}px; background: {COLOUR[
-											square.health
-										]}"
-										title={square.label}
-										aria-label={square.label}
-										data-health={square.health}
-										role="img"
-									></span>
-								{/each}
-							</div>
-						{/each}
-
-						{#each axis as label (label.column)}
-							<div class="relative h-4" style="grid-row: 2; grid-column: {label.column}">
-								<span
-									class="absolute top-0 whitespace-nowrap text-[0.625rem] leading-4 tabular-nums text-text-tertiary"
-									style={ANCHOR[label.align]}
-									data-day-axis
-									data-axis-label={label.column}
-								>
-									{label.text}
-								</span>
-							</div>
-						{/each}
-					</div>
-				</div>
-
-				<ChartReadout
-					readout={runReadout}
-					name="run-health"
-					maxShare={data.chart.readout_max_share}
-					resting={runAt === null}
-					restingNote=", the newest day"
-					hint="Point at a day to read every run on it. Left and Right step through the days, Escape returns to the newest."
-				/>
-			{/if}
+	<!-- The span in the panel's own label, because the panel has no note under
+	     its title to carry it - the same way `Failure rate against volume`
+	     names its own. A sighted reader has the window control above and the
+	     chart's date row. -->
+	<section
+		data-windowed="run-health"
+		data-window-days={windowDays}
+		aria-label="Run health, over {windowDays} days"
+	>
+		<Panel verdict title="Run health">
+			<RunHealthPanel
+				yieldDays={data.runYieldDays}
+				grid={data.grid}
+				window={viewport}
+				floorPct={data.floorPct}
+				height={data.console.chart_height}
+				width={data.console.chart_width}
+				tickDensity={data.chart.tick_density}
+				readoutMaxShare={data.chart.readout_max_share}
+				bind:selected={runAt}
+			/>
 		</Panel>
-	</div>
+	</section>
 	{/snippet}
 
 	{#snippet throughputViewportPanel()}
@@ -1948,35 +1723,6 @@ inline-size: 10px;
 block-size: 10px;
 flex-shrink: 0;
 border-radius: 2px;
-}
-
-/* The column the readout is printing. A tint behind the day rather than a rule
-   through it: an empty column has no square for a rule to land on, and an empty
-   column is exactly the one a reader most needs to see selected. */
-[data-day-selected] {
-background: var(--color-surface-sunken);
-box-shadow: 0 0 0 2px var(--color-surface-sunken);
-border-radius: 2px;
-}
-
-/* The one full-width figure in the glance section. `.panel` carries tint,
-   radius and elevation and no padding, because most of its users are cells in a
-   grid that already has gaps; a block spanning the frame has to set its own. */
-.run-yield-panel {
-padding: var(--space-5);
-}
-
-.run-yield-title {
-font-size: var(--text-base);
-line-height: var(--leading-base);
-font-weight: 600;
-color: var(--color-text);
-}
-
-.run-yield-note {
-margin-block-start: var(--space-1);
-font-size: var(--text-sm);
-color: var(--color-text-tertiary);
 }
 
 @media (max-width: 48rem) {

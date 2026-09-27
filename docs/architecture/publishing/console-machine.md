@@ -1,6 +1,6 @@
 # What the Hardware route draws
 
-**Last Updated**: 2026-09-21
+**Last Updated**: 2026-09-27
 `/console/machine/` answers a question no other route can ask: what machine did
 the run actually get, and does the day's rate mean anything because of it.
 
@@ -481,9 +481,13 @@ nobody knew to check - which is exactly how a ledger goes four days unread.
 **The run strip is a time axis: one column per day of the window, oldest on the
 left.** Days advance left to right the way every other time series does, so "it
 broke on Tuesday and has been amber since" is a shape rather than a sentence.
-Each day is a track that grows with the room the strip has, floored at 16px with
-a 4px gap, and a label may never widen a track - two days apart must measure
-twice one day apart, whatever the date under it says.
+Under the chart of articles published against planned a day takes that chart's
+own slot, so its runs stand under its bars
+([what-the-pipelines-route-draws.md](what-the-pipelines-route-draws.md#run-health-is-one-panel-the-days-articles-and-every-run-under-them)).
+On a phone, where the squares draw a strip of their own, each day is a track that
+grows with the room the strip has, floored at 16px with a 4px gap, and a label may
+never widen a track - two days apart must measure twice one day apart, whatever
+the date under it says.
 
 **A column with no square is a day nothing ran, and it is drawn.** A strip with
 one column per manifest is rejected: at the default thirty-day window over the
@@ -512,7 +516,8 @@ the payload does not carry. Drawing missed runs needs a persisted schedule or
 attempt contract first; until one exists, the strip says what happened and
 nothing about what should have.
 
-**Dates are a separate, sparse row.** One day gets one full date. Two to six
+**Dates are a separate, sparse row on the phone strip.** Under the chart the
+squares carry none - the chart's own date row is directly above them. One day gets one full date. Two to six
 days get one compact span (`18-20 Aug 2026`). Seven or more get a full date at
 each end and as many between them as `dayTicks` measures room for. The year is
 printed on the first label that changes it and not again. The arithmetic lives in
@@ -525,18 +530,20 @@ native tooltip is rejected: it needs a hover, so on a phone the run's verdict
 does not exist; it takes no styling; and it prints one square where a reader
 wants the day. The strip below the
 plot prints every run of the hovered day, each with the swatch it is drawn in
-and the word for what it did, and the arrow keys step through the days. The
+and what it did in counts - `8 of 8 succeeded`, `nothing new to try` - after the
+day's own counts from the chart, and the arrow keys step through the days. The
 `title` and the `aria-label` stay on each square, because nothing the readout
 reports may be needed to read the chart
 ([../../concepts/design-system.md](../../concepts/design-system.md)).
 
-**The standing key went with it.** The readout prints the swatch and the verdict
+**The standing key went with it.** The readout prints the swatch and the counts
 for the run it is on, so a key beside it drew the same pair a second time - and
 one fact drawn twice is how two of them drift. The rule the key's red entry
 carried, `failed, or under N% published`, is a rule and not a legend, so it is
-in the panel's note where the rest of the reading instructions are.
+in the caption that closes the panel, where the rest of the reading instructions
+are.
 
-**A strip that cannot fill its frame is centred in it.** Left alignment is
+**A phone strip that cannot fill its frame is centred in it.** Left alignment is
 rejected when the window calendar is drawn: the spare room piles up on the right,
 and the right of a time axis whose last column is today is where a reader looks
 for the days that just happened, so the room reads as a run that has stopped.
@@ -570,12 +577,12 @@ animation frame after mount, and never again: after that the position belongs to
 the operator.
 
 **The strip is a panel, and it follows the page's window.** It draws the days
-inside the span the window control holds, states that span in its own note and
-in its accessible label, and carries `data-windowed="run-health"` like every
-other windowed section. A window that reaches no run says so in its own sentence
-rather than showing an empty grid, and that sentence is not the one an empty
-ledger gets - "no run recorded a manifest in the last N days" and "no run has
-recorded a manifest yet" are different facts.
+inside the span the window control holds, states that span in the panel's own
+accessible label - `Run health, over N days` - and carries
+`data-windowed="run-health"` like every other windowed section. A window that
+reaches no run says so in its own sentence rather than showing an empty grid, and
+that sentence is not the one an empty record gets - "no run is on record in these
+N days" and "no run is on record yet" are different facts.
 
 Three colours, and the boundaries are read from config rather than chosen by the page:
 

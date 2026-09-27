@@ -1,6 +1,6 @@
 # What the Pipelines route draws
 
-**Last Updated**: 2026-09-23
+**Last Updated**: 2026-09-27
 
 `/console/` answers two questions: did the runs work, and what each stage cost.
 This page holds three of its panels - where a run's time went, what one item cost
@@ -91,29 +91,98 @@ gone the view is empty by construction and the route still renders whole.
 unset draws the named empty state for the sub-steps, which is correct rather than
 broken.
 
-## Run health, and the strip of runs beside it
+## Run health is one panel: the day's articles, and every run under them
 
-`Run health` is the route's first panel and its verdict: did the runs work.
+`Run health` is the route's first panel and its verdict: did the runs work. It
+draws two figures on one day axis, and they answer one question between them -
+did each day's runs deliver.
 
-- **The run strip reads left to right in time**, like every other time series on
+1. **`Articles published against planned`**, a heading and a caption over a chart:
+   three bars a day - planned, published, failed - on the left axis, and the
+   share published as a line on a right axis fixed at 0 to 100 percent. A day
+   nothing was planned on is tinted. Under 480 px of drawing the chart keeps the
+   planned bar and the line.
+2. **The run squares**: one square a run, stacked on the day it ran, run 1 at the
+   bottom. A day's squares stand directly under that day's bars, 8 px
+   (`--space-2`) below the chart's date row, with nothing between.
+
+One readout and one hint sit under both, and the panel's reading rule closes it.
+The panel has no note under its title.
+
+- **Both figures take their x from one function.** `daySlots` in
+  [../../../frontend/src/lib/charts/day-slots.ts](../../../frontend/src/lib/charts/day-slots.ts)
+  turns the chart's drawn width, its number of days and its margins into one
+  equal slot a day. The chart computes it once and hands that same object to the
+  squares, so the squares cannot drift off the bars when a margin moves. Before
+  the two figures shared a panel they were laid out by two calculations from two
+  left edges, about 41 and 43 px a day apart, and reading down from a bar landed
+  on the previous day's squares.
+- **A square is 80 percent of its day's slot, and 3 to 14 px.** Those are the
+  dense strip's own limits in
+  [../../../frontend/src/lib/charts/run-history.ts](../../../frontend/src/lib/charts/run-history.ts):
+  no smaller than a square a reader can still see, and no larger than the bar
+  beside it, because a square larger than the bar reads as the more important of
+  the two. Two squares of one day are a quarter of a square apart, and at least
+  1 px.
+- **One picked day.** Pointing at either figure, or stepping with Left and Right,
+  picks one day on both: the chart draws its guide line, that day's squares take
+  the selected tint, and the readout prints the day's counts and one row per run.
+  Escape on either figure returns both to the newest day.
+- **On a phone the squares keep their own strip.** Where the chart draws its
+  narrow shape, or where a square would come out under 3 px - a window of about
+  330 days at 1440 px - the squares draw the scrolling strip instead: 16 px
+  squares, a date row of their own, and a view that opens on the newest day. A
+  tap or an arrow key on the chart scrolls that strip only as far as it takes to
+  show the day. A hover, or the start of a touch, never scrolls it; without that
+  guard every page scroll that started on the chart would drag the strip with it.
+- **A run row says what the run did, in counts.** `Run 1` reads `8 of 8
+  succeeded`. A red run adds `under 70%`, a run that tried nothing reads `nothing
+  new to try`, and a run that crashed reads `the run failed`. The words `ran
+  clean` and `worth a look` are gone from this panel: they named a colour rather
+  than a fact, and the colour is already the swatch beside the row. The standing
+  band above every route still prints them beside its own squares, from its own
+  producer. A square's own label carries
+  the whole run - `Run 3 on 20 Aug 2026: 0 of 5 succeeded, under 70%, 5 failed,
+  the run failed`.
+- **Each figure keeps its own empty state, and the panel never disappears.** A
+  window nothing was planned in says so where the chart would be; a window with no
+  run says so where the squares would be, in a different sentence from the one an
+  empty record gets. Picking a day on the figure that has data still works.
+- **The panel states its span in its own accessible label**, `Run health, over N
+  days`, the way `Failure rate against volume` does. A sighted reader has the
+  window control at the top of the route and the chart's date row.
+- **The squares read left to right in time**, like every other time series on
   the console. Right to left makes the newest day's position depend on how much
   history exists.
 - **A scheduled run that wrote no manifest draws no square.** An empty square
   claims evidence the payload does not carry; missed runs need a persisted
   schedule or attempt contract before they can be drawn.
-- **No date under every column.** At 16px a track and 10px a label the dates
-  overlap from about the fourth day, and an axis that cannot be read is
-  decoration.
-- **The strip is a native scroll region** - it pans with the arrow keys, costs no
-  bytes and needs no focus management of its own. It never re-centres itself on
-  the newest run after a data or layout change: the operator scrolled there on
+- **The phone strip is a native scroll region** - it pans with the arrow keys,
+  costs no bytes and needs no focus management of its own. It opens on the newest
+  day once and never re-centres itself after that: the operator scrolled there on
   purpose, and a view that snaps back cannot be read.
+- **No date under every column.** Under the chart the squares have no date row at
+  all - the chart's date row is directly above them. The phone strip prints a
+  sparse one: at 16px a track and 10px a label the dates overlap from about the
+  fourth day, and an axis that cannot be read is decoration.
 - **One threshold decides the red square, and CI owns it.** CI already reads a
   success floor to decide whether to open an issue. Two numbers answering one
   question drift, and then a red square and an open issue disagree.
 - **A skipped item is not counted against a run's health.** An already-published
   article is skipped by design, and counting it would paint a healthy day amber
   for doing its job.
+
+The figures are
+[../../../frontend/src/lib/components/RunYield.svelte](../../../frontend/src/lib/components/RunYield.svelte)
+and
+[../../../frontend/src/lib/components/RunSquares.svelte](../../../frontend/src/lib/components/RunSquares.svelte);
+the panel that joins them and prints the readout is
+[../../../frontend/src/routes/console/RunHealthPanel.svelte](../../../frontend/src/routes/console/RunHealthPanel.svelte),
+and what one run's square says is
+[../../../frontend/src/lib/console/run-square.ts](../../../frontend/src/lib/console/run-square.ts).
+[../../../frontend/tests/console-run-health.spec.ts](../../../frontend/tests/console-run-health.spec.ts)
+holds every square to its day's bars at 1440, 1024 and 768 px over 30 and 90
+days, and drives the one picked day from both figures.
 
 ## What is failing, by stage
 
@@ -329,6 +398,35 @@ it serves, a title that asks a trend question draws a time axis, two series shar
 one axis under twenty times with the ratio printed, and a value domain is fixed
 only where a ceiling is the comparison - are in
 [../../concepts/console-design/the-rules-every-console-chart-obeys.md](../../concepts/console-design/the-rules-every-console-chart-obeys.md#thirteen-rules-hold-for-every-chart-on-this-console).
+
+## Design rationale
+
+### The per-day chart and the run squares became one panel (2026-09-27)
+
+They were two panels - `Items published against items planned` under the glance
+cards, and `Run health` below it - answering one question, and they could
+disagree with nothing on the page saying why. On 3 September the chart read 86
+percent published, an ordinary day, while one of that day's five runs was red.
+On 22 September it read 66 percent while all four runs were amber. Over 30 days
+the squares were 124 runs: none green, 115 amber, 9 red. And the two figures'
+columns did not line up, so reading down from a bar landed on the previous day.
+Jony, Susan and Reader converged on one panel, chart first and squares under it,
+on one geometry.
+
+| Option | What the reader loses |
+| --- | --- |
+| Keep the two panels as shipped | Two panels answer one question and disagree with nothing saying why. |
+| **One panel, chart first, squares under it** (chosen) | The chart's own note, and the verdict words beside each run; the caption and the counts carry both. |
+| The chart replaces the squares | Which run failed. |
+| The squares replace the chart | Delivered against planned, per day. |
+
+Three smaller rulings came with it. The panel's span moved into its own
+accessible label because it has no note to carry it (Jony, Susan, Reader). A
+sparse window's coverage sentence closes the chart's caption, above the tint it
+explains, as `Failure rate against volume` places its own (Jony, Reader). And
+the 8 px under the chart is measured from the chart's own edge - the date row is
+the bottom of the drawing - so about 15 px of air sits between the date text and
+the tallest stack (Jony, Susan).
 
 ## See also
 
