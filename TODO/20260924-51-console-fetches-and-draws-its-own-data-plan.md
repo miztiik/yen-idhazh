@@ -51,7 +51,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | The Hardware route stops counting every job twice | - | A | IN-FLIGHT | p51r1 | - | p51-r1-worker |
+| 1 | The Hardware route stops counting every job twice | - | A | DONE | p51r1 | #1138 | p51-r1-worker |
 | 2 | The console shell: a stuck tab strip, the span control on it, jump links, a completeness sentence | - | A | IN-FLIGHT | p51r2 | - | p51-r2-worker |
 | 3 | The three ledgers the console reads are published | plan 50's rows titled "One compaction task a ledger, two compact periods, and the diagrams move into the page" and "The three ledgers the console's routes read become parquet" | B | PENDING | - | - | - |
 | 4 | The chart vocabulary and the house style, with no panel moved | - | B | IN-FLIGHT | p51r4 | - | p51-r4-worker |
@@ -511,6 +511,7 @@ Susan ruled all fifty-one panels on 2026-09-26 - each KEEP, REDRAW, REPLACE, DEL
   | 8 | **A key whose rows fill one cell two different ways is left as it was, and no count field is returned.** That is a retry on a second runner or a writer fault; merged, the run would be read off whichever machine came first, and `mergeHost` could never refuse it. The test counts the rows that come back. Carmack preferred a named warning at build time; the contract's own words say the test counts, and the page already names the refusal | Fowler and Carmack, 2026-09-27 |
   | 9 | **The colour ramp's own `Other machines` group never takes one of the four named slots.** It always joins the last bar, keeps the ramp's colour, and `outsideTop` keeps its meaning, so the page's two figures are two derivations again. On the committed record the bars become 149, 25, 18, 14 and a last bar of 54, where the ramp's group had ranked second at 68 | Jony, 2026-09-27, breaking a tie between Fowler (for) and Susan (against, as more than the row asked) |
   | 10 | The fold sentence names the kinds too rare for a bar of their own and the machines the page has no colour left for, apart, each once, off the open span's own placements; `another` where the name also has a bar; the count is the number of names listed | Susan, 2026-09-27 |
+  | 11 | **Two cyan bars side by side ship, and the colour is defect 37.** With the ramp's group last, AMD EPYC 7763 (stop 3) and AMD EPYC 9V74 (stop 6) stand next to each other in 8 of 11 day groups, and on the dark theme those stops are 2.3 apart on the CIEDE2000 scale, so the panel fails the two-second check there. The fault is the ramp the whole site shares, so it takes its own change; the Hardware drawing page says so in its design rationale | Susan, 2026-09-27 |
 
 - **Rejected alternatives:**
 

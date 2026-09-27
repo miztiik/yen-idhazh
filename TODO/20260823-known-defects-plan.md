@@ -2,7 +2,7 @@
 
 **Last Updated**: 2026-09-27
 
-**Twelve defects are open.** Two of them need evidence or a ruling before any code
+**Thirteen defects are open.** Two of them need evidence or a ruling before any code
 is worth writing; the rest are known fixes with named blast radiuses.
 Defect 2 needed three repairs before a person could label anything, and all three
 shipped. The owner settled the counting rule on 2026-08-27, which took the
@@ -14,7 +14,9 @@ filed on 2026-09-21 by the plan that rebuilt the Hardware route; each is a known
 fix with a named blast radius rather than an open question. Defect 36 was filed on
 2026-09-27 by the row that closed defect 33: the band above every console route
 reads the same machine ledger raw, and calls every run written in two halves
-unreadable. **This file cannot
+unreadable. Defect 37 came from the same row's browser check: in the dark theme
+two of the chart colours look the same, and that row put them side by side.
+**This file cannot
 be deleted by writing more of it.**
 
 Defects 15, 16 and 17 closed on 2026-08-27. Defects 19 and 20 were filed later,
@@ -58,6 +60,42 @@ decision. Current project behaviour belongs in `docs/` (Guardrail #4).
 | 34 | `donut_thickness_px` is a knob nothing reads | 1 | CLOSED 2026-09-27 |
 | 35 | The chart loading flag flips at import, so the waiting sentence goes while the box is still empty | 2 | CLOSED 2026-09-27 |
 | 36 | The band above every console route calls every run written in two halves unreadable | 2 | **OPEN - merge or settle is the one ruling it needs** |
+| 37 | Two colours of the dark chart ramp look the same, so two machines read as one | 2 | **OPEN - one colour to pick, then every pair measured again** |
+
+## 37 - Two colours of the dark chart ramp look the same, so two machines read as one (OPEN)
+
+**The chart ramp is meant to tell eight series apart, and in the dark theme it
+tells six.** Its third and sixth colours - stops 3 and 6 in
+`frontend/src/styles/tokens.css`, `#4fc7dd` and `#3fc3e0` - are 2.3 apart on the
+CIEDE2000 scale. That scale measures how different two colours look: about 2 is
+the smallest difference most people can see with the colours touching, and about
+10 reads as clearly different. Every other pair of the first seven dark stops is
+9.3 or more apart, and the same pair in the light theme is 9.2 apart. Measured
+2026-09-27.
+
+**A reader meets it first on the Hardware route's machine-kinds chart.** The
+colour ramp hands out its stops by sorting on each machine's key, which is
+arbitrary on purpose, and AMD EPYC 7763 and AMD EPYC 9V74 landed on stops 3
+and 6. Plan 51's row 1 moved the ramp's own `Other machines` group from second
+place to last, and that put those two bars next to each other: over the 30-day
+window both draw in 8 of the 11 day groups, and at a glance the second reads as
+part of the first. The readout under the plot names every bar and the order is the same
+on every day, so a reader who looks can tell them apart. A reader who glances
+cannot, so the panel fails the two-second check on the dark theme, which is the
+default. Any chart that draws both stops has the same fault, wherever they land.
+
+**The fix is one colour, then every pair measured again.** Pick a new dark
+`--chart-6` that is at least 10 from every other stop and from `--chart-change`,
+is not green, amber or red, and reaches at least 3:1 on `--color-surface`
+(`#141922`). Then measure every pair in both themes again: dark stops 1 and 5
+(9.3) and light stops 3 and 6 (9.2) are also under 10. Level 2 - every chart that
+draws stop 6 changes colour, so each one is checked by name, in both themes.
+Susan rules the colour.
+
+Found on 2026-09-27 by plan 51's row 1, in its browser check. Susan ruled it out
+of that row: the fault is in the colours the whole site shares, so it takes its
+own change and its own browser check, and it is the next thing to fix on that
+chart.
 
 ## 36 - The band above every console route calls every run written in two halves unreadable (OPEN)
 

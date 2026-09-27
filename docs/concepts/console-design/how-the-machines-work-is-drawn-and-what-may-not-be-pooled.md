@@ -352,6 +352,18 @@ thing. What would settle it is a seventh machine kind arriving - every share
 drops, the rarest gets rarer and the bar rises - so the number is re-derived
 from the committed rows rather than argued with.
 
+**On the dark theme the machine-kinds chart fails the two-second check, and
+ships.** Its first two bars, AMD EPYC 7763 and AMD EPYC 9V74, hold chart stops 3
+and 6, and in the dark theme those two look the same: 2.3 apart on the CIEDE2000
+scale, where about 2 is the smallest difference most people can see and every
+other pair of the first seven stops is 9.3 or more. Since the ramp's own
+`Other machines` group moved to the last bar, the two stand side by side in 8 of
+the 11 day groups over 30 days, measured 2026-09-27, and a glance reads them as
+one kind. The readout names every bar and the order never changes, so a reader
+who looks loses nothing. The fault is in the ramp the whole site shares, so it
+is fixed there, in its own change, and not in this panel: it is defect 37 in the
+known-defects plan. Susan, 2026-09-27.
+
 **The machine card's two readings are lengths rather than sentences, and that is
 what carries the two-second check.** `32 MiB` beside `260 MiB` on two cards is a
 division the reader performs; two bars on one track is not. The twelve flag chips
