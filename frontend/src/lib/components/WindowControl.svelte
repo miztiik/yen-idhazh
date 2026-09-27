@@ -24,7 +24,7 @@
 		onChange
 	}: {
 		days: number;
-		presets: number[];
+		presets: readonly number[];
 		/** Month files a preset would fetch that are not already in hand. */
 		monthsFor: (days: number) => number;
 		busy?: boolean;

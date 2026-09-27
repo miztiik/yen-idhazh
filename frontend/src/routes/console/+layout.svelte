@@ -11,8 +11,12 @@
 	 * The order is title, strip, band, control, content, and it is held by an
 	 * oracle in `console-band.spec.ts`. Chrome above content is the one ordering
 	 * a reader never has to learn, and the band's worst fact links down into the
-	 * strip. The control stays on the route because it governs that route's
-	 * panels and nothing above them.
+	 * strip.
+	 *
+	 * The control is drawn here and held by the route. It governs that route's
+	 * panels and nothing above them, so the window stays in the route - its span,
+	 * its fetches, its price per preset - and the route hands it up through
+	 * `window-slot.ts`. Until it has, the control holds the configured window.
 	 *
 	 * Each route renders the rest inside this section, so `[data-surface]`
 	 * still holds the whole operator surface.
@@ -20,6 +24,9 @@
 	import { page } from '$app/state';
 	import ConsoleBand from '$lib/components/ConsoleBand.svelte';
 	import ConsoleNav from '$lib/components/ConsoleNav.svelte';
+	import WindowControl from '$lib/components/WindowControl.svelte';
+	import { provideWindowSlot, type WindowSource } from '$lib/console/window-slot';
+	import type { ConsoleConfig } from '$lib/server/config';
 
 	let { data, children } = $props();
 
@@ -28,6 +35,34 @@
 	// carry the address they answer at.
 	const active = $derived(
 		data.routes.find((route) => route.href.replace(/\/$/, '') === page.route.id)?.id ?? 'pipelines'
+	);
+
+	// Raw, because a source is an object of getters and a deep proxy of it would
+	// be a copy of the route's state rather than the route's state.
+	let handed = $state.raw<WindowSource | null>(null);
+	provideWindowSlot({
+		fill: (source) => (handed = source),
+		clear: (source) => {
+			if (handed === source) handed = null;
+		}
+	});
+
+	// Every console route loads the console knobs, so the configured window is on
+	// the page before any route script runs. A route that failed to load has none,
+	// and then there is no window to hold and no control to draw.
+	const configured = $derived((page.data as { console?: ConsoleConfig }).console);
+	const windowSource = $derived<WindowSource | null>(
+		handed ??
+			(configured === undefined
+				? null
+				: {
+						days: configured.default_window_days,
+						presets: configured.window_presets,
+						busy: false,
+						ready: false,
+						monthsFor: () => 0,
+						onChange: () => {}
+					})
 	);
 </script>
 
@@ -49,6 +84,17 @@
 			their shape and stay empty.
 		</p>
 	</noscript>
+
+	{#if windowSource !== null}
+		<WindowControl
+			days={windowSource.days}
+			presets={windowSource.presets}
+			monthsFor={windowSource.monthsFor}
+			busy={windowSource.busy}
+			ready={windowSource.ready}
+			onChange={windowSource.onChange}
+		/>
+	{/if}
 
 	{@render children()}
 </section>
