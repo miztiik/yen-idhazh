@@ -1,20 +1,19 @@
 # What sits above every console route
 
-**Last Updated**: 2026-09-23
+**Last Updated**: 2026-09-27
 
-Two surfaces stand on all five console routes: the tab strip, and the standing
-band under it. The window control is the third and it has its own page
+Three surfaces stand on every console route: the strip - the route tabs and the
+days control on one row - the sentence under it that says how complete the
+record is, and the standing band. A route whose panels sit under named headings
+adds a row of jump links. Which surfaces follow the days control has its own page
 ([which-console-surfaces-follow-the-window-and-which-say-why-not.md](which-console-surfaces-follow-the-window-and-which-say-why-not.md)),
-because which surfaces follow it is a question asked far more often than how it
-is drawn.
+because that is asked far more often than how the control is drawn.
 
-The order down the page is title, strip, band, window control, content. Chrome
-above content is the one ordering a reader never has to learn, and the band's
-worst fact links into the strip - which on a phone would otherwise sit 337px
-BELOW it, where a reader has already scrolled past. The control comes last of the
-three because a control read before any fact asks the operator to configure a
-page he has been told nothing about, and because it governs everything under it
-and nothing over it.
+The order down the page is title, strip, completeness sentence, band, the
+sentence about the span, the jump links, content. Chrome above content is the one
+ordering a reader never has to learn, and the band's worst fact names a tab in
+the strip - which on a phone would otherwise sit 337px BELOW it, where a reader
+has already scrolled past. `console-band.spec.ts` holds the order.
 
 Which panel sits on which route is [console.md](console.md); how any figure is
 allowed to read is
@@ -86,6 +85,115 @@ radius, elevation, frame width, both ramps. The shapes they share live in
 rather than in three scoped `<style>` blocks, because three copies are three
 identities that happen to agree today.
 
+## From the wide breakpoint up the strip sticks, and it is one row
+
+A long route - Hardware is four groups and fifteen panels - put the days control
+and every other route a screen or more behind a reader nine panels down. **From
+`frame.breakpoints_px[1]` up (1024px, inclusive) the strip sticks to the top of
+the screen**, so the span and the other routes stay in reach. Below that width it
+scrolls away with the title, because there the tabs stand on up to three rows and
+a stuck strip that tall would cover a phone.
+
+**Where it sticks it is one row, at any count of tabs.** Each tab keeps the width
+its label and its worst state need and shares whatever the row has left; when the
+row runs out, the tab list scrolls sideways inside the strip and the days control
+stays pinned at the trailing end. The strip never wraps to a second row and no
+label is shortened. Adding a route is an entry in the route list in
+[band.ts](../../../frontend/src/lib/console/band.ts) and a page, never a layout
+change, and `console-shell.spec.ts` holds the row with one tab more than the
+console has.
+
+**The days control is on the strip at every width.** It is one number per
+`console.window_presets` value, with the months that preset would fetch under
+it; the words `Days shown` stand once beside the tiles, and each tile still says
+`30 days` to a screen reader. Below the breakpoint it takes its own row under the
+tabs and does not stick. The sentence about what the span is showing stays under
+the band, above the panels it describes - on the strip it would make two rows.
+
+**While stuck, the tab descriptions leave.** Each is still its tab's `title`, and
+they return when the strip is back in its place. Two things follow, and
+[strip.ts](../../../frontend/src/lib/console/strip.ts) owns both:
+
+- **The page does not move.** The strip gives up the descriptions' height and an
+  empty box directly under it takes that height in the same frame, so nothing
+  below shifts when it sticks or unsticks. A margin on the strip cannot do it: it
+  collapses into the margin of the element after it, and the page moves by the
+  smaller of the two - 12px on Hardware at 1440 when it was tried.
+- **Anything the page scrolls to lands below the strip, not behind it.** The
+  document's scroll padding is the stuck strip's height, so a jump link, a `Top`
+  link and a focused control all clear it.
+
+It sticks only once a script has run. With no script there is nothing to shorten
+it or to keep a jump link clear of it, so it stays in the flow like the title.
+
+**The band's worst route says so on its own tab**, in a word: `Worst:` before the
+fragment the tab already carries, in the main text colour and never a verdict
+colour, at the top of the page as well as when stuck, so nothing reflows when the
+strip sticks. When the tab list scrolls, it opens with that tab in view. That is
+the one fact on the strip the band cannot give once the band has scrolled away.
+
+**The strip's surface is the page ground with a rule under it**, the same hairline
+that edges a reading-page item: the stronger rule on the dark ground and the
+plain one on the light. A raised strip with a shadow draws nothing on the dark
+ground, where height reads as a lighter surface, so "raised once stuck" would be
+a colour change at the moment it sticks.
+
+## The sentence under the strip dates the record
+
+Every chart on the console draws the newest days that exist rather than the last
+N days, so when the record stops a chart gains no gap at its right edge - it
+slides back in time and looks as full as it did the day before. The sentence
+under the strip is what tells a stopped pipeline from a quiet one:
+
+```
+Complete to 18:23 UTC on Sunday 27 September. A run still going is not on this page yet.
+Nothing has been recorded since 18:23 UTC on Sunday 27 September. 2 days are missing.
+```
+
+- **The instant is the band's own `generated_at`**, the moment the run that wrote
+  the record finished, in UTC and printed with `UTC` beside it. The day is always
+  spelled out - weekday and date, never `today` - because the page's day is the
+  UTC day and a reader's own day can be a different one.
+- **The prerendered page says the first sentence and claims nothing else.** It has
+  no reader's clock to judge age against, so with no script the sentence dates the
+  record and stops. A browser adds only the count.
+- **The second sentence fires on the reader's clock**: when the record's UTC day
+  trails the reader's UTC day by more than `console.completeness_grace_days` (1).
+  The grace decides only when the count is said. The count is the whole UTC days
+  between the record's day and today - today is still being recorded, and the
+  record's own day is not missing - so it is always at least one, and `1 day is
+  missing` is singular. The page looks again at the next 00:00 UTC and whenever it
+  is shown again.
+- **No record is a named absence**: `This page cannot say when the last run
+  finished - its record did not load.`
+- It is a sentence, not a badge. Quiet type in the secondary colour, and the late
+  form in the main text colour rather than a warning colour: the words carry it.
+
+The record's other two fields cannot say it stopped. `covers_through` is the day
+the run assembled, the same UTC day as `generated_at` on every run, and
+`compaction_lag_days` is always 0 - and a record that stopped being written is not
+rewritten to say so. Only the reader's clock can see that it is old. **When the
+panels start drawing compacted periods, the newest day a panel can draw will trail
+`generated_at`, and this sentence has to date that day instead** - otherwise it
+promises figures up to an instant the charts cannot reach.
+
+The words live in
+[completeness.ts](../../../frontend/src/lib/console/completeness.ts), which reads
+no clock of its own; the layout hands it the reader's.
+
+## A long route carries jump links
+
+A route whose `console.panel_groups` entry names its groups gets an `On this page`
+row under the band and the sentence about the span: one link per titled group, to
+that group's heading. Each titled heading carries a `Top` link back to the
+console's title. A route with no groups, or one untitled group, draws no row -
+Pipelines is one untitled group, because what it needed was an order rather than
+headings.
+
+They are plain named anchors, so they work with no script at every width, and a
+route with several groups gets one destination per group - which a single
+floating back-to-top arrow could not give, and it would have needed a script.
+
 ## Every label carries its own worst state
 
 `Machine - 4 shards read 4.31x apart`, not `Machine`. It is computed at build
@@ -147,9 +255,13 @@ instead.
 
 ## The standing band carries three things
 
-The band's three facts: yesterday's verdict as a sentence with one square per run
-of that day, the one worst thing and what it costs, and site size against the 1
-GB limit with the articles the headroom buys. The pipeline derives it once and
+The band's three facts: the latest day's verdict as a sentence with one square per
+run of that day, the one worst thing and what it costs, and site size against the
+1 GB limit with the articles the headroom buys. **The first fact is labelled
+`Latest day`, not `Yesterday`**: the verdict is the newest day the record holds,
+which is today once today's first run has finished, and a fixed name needs no
+clock, so it stays true on a page read a week later. The sentence above the band
+is what dates it. The pipeline derives it once and
 publishes it as `console/band.json`; the console fetches it once in
 [../../../frontend/src/routes/console/+layout.ts](../../../frontend/src/routes/console/+layout.ts)
 and draws it once in
@@ -219,10 +331,55 @@ and the per-article cost panel on Pipelines. The band stands on every route, so 
 figure that moved when a control on one route moved would read as three different
 sites. The runway is taken over every published day on record.
 
+## Design rationale
+
+**The days control rides the strip at every width, not only where the strip
+sticks.** One control in one place keeps the keyboard order, the screen-reader
+order and the reading order the same at every width, and the span a reader sets
+is the one thing on the page that has to be in reach from anywhere on a long
+route. Moving it under the band below the breakpoint with CSS was rejected: the
+keyboard would jump from the tabs past the band to the control and back up.
+Drawing two copies and hiding one per width was rejected: it is two radio groups
+to hold in step, and every check that finds the control by its attribute would
+find two. Putting the band above the strip was rejected: the completeness
+sentence could no longer sit both under the strip and above the band. **What
+it costs:** on a phone the band starts one control row lower, and the tiles
+carry the number alone - the word `days` is said once, beside them.
+
+**The worst route is marked on its own tab rather than repeated in a pinned
+line.** The tab already carries the fragment, so a pinned `Worst now:` line would
+print the same words twice in one row and take about 200px from the tabs, and
+hiding the other routes' fragments while stuck to make room would shorten the
+labels the one-row rule protects. **What it costs:** when the tab list scrolls,
+the worst tab can be scrolled out of view - the list opens with it in view.
+
+**`Complete to`, and never `today`.** The console's subject is the pipeline's own
+record, and the last run finished writing it at that instant, so `complete` is a
+promise about the left side and an admission about the right. `Today` beside a
+UTC time names the wrong day for a reader far from UTC for part of every day, and
+a prerendered page is read for a day or more after it was built. **What it
+costs:** the glance a reader got from `today`.
+
+**The layout draws the control; the route holds the window.** The strip belongs
+to the shell, and the window - span, fetches, the price per preset - belongs to
+the route, so the route hands it up through
+[window-slot.ts](../../../frontend/src/lib/console/window-slot.ts). The shell is
+written before the route's script runs, so the prerendered control holds the
+configured window and no price; it is disabled then in any case. A route that
+prices its presets says so in its data (`windowPriced`), so every tile holds the
+room of its price from the first paint and nothing moves when the prices land or
+clear.
+
+**A media query cannot read the knob.** The stylesheets repeat
+`frame.breakpoints_px[1]` as a literal, the one duplication a media query forces,
+and `console-shell.spec.ts` reads the knob and checks the strip sticks at it and
+not a pixel below it - so a moved knob with an unmoved stylesheet fails there.
+
 ## See also
 
 - [console.md](console.md) - which panel is on which route, and which question it answers.
-- [which-console-surfaces-follow-the-window-and-which-say-why-not.md](which-console-surfaces-follow-the-window-and-which-say-why-not.md) - the third shared surface.
+- [which-console-surfaces-follow-the-window-and-which-say-why-not.md](which-console-surfaces-follow-the-window-and-which-say-why-not.md) - the days control on the strip, and which surfaces follow it.
+- [../../concepts/config/appearance.md](../../concepts/config/appearance.md) - `console.completeness_grace_days` and every other console knob.
 - [console-site-size.md](console-site-size.md) - the site-size fact at full length.
 - [console-payloads.md](console-payloads.md) - why the band is derived once in the pipeline and never in a browser.
 - [../sources/health.md](../sources/health.md) - the quarantine rule the worst-thing sentence mirrors.

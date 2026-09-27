@@ -90,6 +90,7 @@ The console knobs are:
 - `console.failure_list_max`
 - `console.source_rows`
 - `console.feed_rows`
+- `console.completeness_grace_days`
 
 The 30-day setting is a viewport. It never deletes rows. `failure_list_max` is
 the same idea one level down: the failed-item list shows a page at a time and
@@ -125,6 +126,16 @@ step to the next preset instead of scaling the span, because a free span is the
 thing the presets exist to prevent. The knob is still in the contract, and
 retiring it is a removal with a read-side migration behind it
 ([../config.md](../config.md#removing-a-config-field-is-breaking-and-its-migration-is-the-file)).
+
+`completeness_grace_days` (1) is how many whole UTC days the day the console's
+record was written may trail the reader's own UTC day before the sentence under
+the tab strip stops saying how complete the record is and says how many days are
+missing. One, because a run finishes at least once a day: a record from yesterday
+is what a morning before the first run looks like, and one from the day before
+that means a whole day passed with nothing recorded. It decides only when the
+count is said, never what it counts - the count is the whole days between the
+record's day and today, so zero is refused
+([../../architecture/publishing/what-sits-above-every-console-route.md](../../architecture/publishing/what-sits-above-every-console-route.md#the-sentence-under-the-strip-dates-the-record)).
 
 ## Reader surface
 
