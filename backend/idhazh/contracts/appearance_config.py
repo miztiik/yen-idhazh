@@ -435,15 +435,6 @@ class ChartConfig(Model):
             "validator would, and a validator that cannot fire is worse than none."
         ),
     )
-    donut_thickness_px: int = Field(
-        default=10,
-        ge=4,
-        le=40,
-        description=(
-            "The stroke of a donut gauge. Thin enough that the hole carries the "
-            "number, thick enough that the arc is the thing the eye lands on."
-        ),
-    )
 
 
 class IconsConfig(Model):
