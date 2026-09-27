@@ -56,7 +56,7 @@ from datetime import timedelta
 from pathlib import Path
 from typing import Final
 
-from idhazh import day_partition, ledger
+from idhazh import day_partition, ledger, month_partition
 from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.seen import SeenRow
@@ -155,7 +155,7 @@ def _read_by_month(state: Path, *, today: str, within_days: int) -> dict[str, st
     """
     first_seen: dict[str, str] = {}
     root = ledger.tree_root(state, LedgerName.SEEN)
-    for stem in ledger.shards_in_window(today, within_days):
+    for stem in month_partition.shards_in_window(today, within_days):
         path = root / f"{stem}.csv"
         if not path.exists():
             continue
@@ -169,7 +169,7 @@ def _read_by_month(state: Path, *, today: str, within_days: int) -> dict[str, st
 
 def _month_paths(state: Path, today: str, within_days: int) -> list[Path]:
     root = ledger.tree_root(state, LedgerName.SEEN)
-    named = (root / f"{stem}.csv" for stem in ledger.shards_in_window(today, within_days))
+    named = (root / f"{stem}.csv" for stem in month_partition.shards_in_window(today, within_days))
     return [path for path in named if path.exists()]
 
 

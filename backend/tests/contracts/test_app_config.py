@@ -1110,7 +1110,7 @@ def test_a_month_may_not_be_deleted_before_it_has_been_downsampled() -> None:
 def test_every_cleanup_age_outlives_the_shards_a_console_read_selects() -> None:
     """The check the old `keep_months` never made, and the reason 13 was wrong.
 
-    `console.max_window_days` is 366, and `ledger.shards_in_window` walks 367
+    `console.max_window_days` is 366, and `month_partition.shards_in_window` walks 367
     inclusive days - so a window ending on the first of a month can start on the
     last day of another and open **14** month files. The retired check compared
     `months * 30` against the window, which passed 13 while a reader could still

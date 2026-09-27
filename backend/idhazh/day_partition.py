@@ -183,7 +183,7 @@ def days_in_window(today: str, within_days: int) -> list[str]:
     """The dates a cover of `within_days` names, newest first.
 
     **Both ends are named, so a cover of `n` returns `n + 1` dates.** That is
-    the same arithmetic `ledger.shards_in_window` uses at month grain, and the
+    the same arithmetic `month_partition.shards_in_window` uses at month grain, and the
     two agree on purpose: a window of 90 days reaches back to the day 90 days
     ago and reads it, rather than stopping one short of it.
 

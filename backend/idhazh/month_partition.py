@@ -38,7 +38,7 @@ to hold things that are not the partitioned tree at all.
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Final
 
@@ -95,3 +95,30 @@ def oldest_month_kept(today: date, months: int) -> str:
         raise ValueError("keeping fewer than one month would delete the month being written")
     total = today.year * 12 + (today.month - 1) - (months - 1)
     return f"{total // 12:04d}-{total % 12 + 1:02d}"
+
+
+def shards_in_window(today: str, within_days: int) -> list[str]:
+    """The month stems a window of days can touch, newest first.
+
+    **No ledger is read with this any more.** Every windowed read in this
+    repository files by day and takes `day_partition.days_in_window` -
+    `drift.read_windows` was the last month-grained one and moved on 2026-09-13
+    with `state/scores/`.
+
+    What it still answers is the question the `keep_months` knobs are sized
+    against: how many month-shaped buckets a day-counted window reaches. That is
+    why `observability.item_health_full_grain_months` is 14 and not 13 against a
+    366-day `console.max_window_days`, and `contracts.app_config` states the
+    rule while `tests/contracts/` and `tests/retention/` drive it. A grain change
+    does not touch it, because both knobs are still counted in months.
+
+    Walking days rather than subtracting months keeps the arithmetic honest
+    across a year boundary and needs no calendar table.
+    """
+    end = date.fromisoformat(today)
+    stems: list[str] = []
+    for offset in range(within_days + 1):
+        stem = (end - timedelta(days=offset)).isoformat()[:7]
+        if stem not in stems:
+            stems.append(stem)
+    return stems

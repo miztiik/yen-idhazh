@@ -66,7 +66,7 @@ function minus(date: string, days: number): string {
  * can call the writer - so this is the reader's half of the promise and never
  * the authority on it. The writer's half is
  * `backend/tests/retention/test_retention_oracle.py::test_the_oracle_fifteen_months_leave_fourteen_of_each_and_one_verified_summary`,
- * which sweeps the same property through `ledger.shards_in_window`.
+ * which sweeps the same property through `month_partition.shards_in_window`.
  */
 function monthsKept(today: string, months: number): string[] {
 	const [year, month] = today.split('-').map(Number);

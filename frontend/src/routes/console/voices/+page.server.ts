@@ -103,10 +103,10 @@ export interface Standing {
 
 /** The ranking factor per feed, from the view the pipeline published.
  *
- * Read and never re-derived. `ledger.feed_reliability` reduced these rows when
- * the run happened; reducing them again in a page would be a second answer to
- * one question, and the day the two disagreed neither would be worth drawing
- * (`docs/architecture/sources/health.md`).
+ * Read and never re-derived. `telemetry.source_health.feed_reliability` reduced
+ * these rows when the run happened; reducing them again in a page would be a
+ * second answer to one question, and the day the two disagreed neither would be
+ * worth drawing (`docs/architecture/sources/health.md`).
  *
  * Retired addresses are left out. Their factor is whatever the window still
  * holds from before we stopped asking, so drawing it would put a bar on a feed

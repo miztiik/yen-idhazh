@@ -66,7 +66,7 @@ One row is one pull request. **Seven: six that change code, and one that distill
 | 3 | One `LedgerName` for one ledger | 2 | C | DONE | p53r3 | - | one worker |
 | 4 | `paths.py` becomes `path_classes.py` | 3 | P | DONE | p53r4 | - | owner |
 | 5 | The ledger registry moves to `config/ledgers.json` | 3, 4 | D | DONE | p53r5 | - | one worker |
-| 6 | The rest of the module splits, and the facade becomes provably empty | 5 | E | PENDING | - | - | - |
+| 6 | The rest of the module splits, and the facade becomes provably empty | 5 | E | DONE | p53r6 | - | one worker |
 | 7 | The diagram and the vocabulary land in docs, and the plan-doc goes | 6 | F | PENDING | - | - | - |
 
 **Every row wears one hat and it is the structural one.** No signature, default or return-type changes, and no byte on disk moves. A row that finds itself wanting a behaviour change has found a defect, and the defect gets its own pull request (ESCALATE trigger 1).

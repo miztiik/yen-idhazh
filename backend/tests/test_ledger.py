@@ -22,7 +22,7 @@ from conftest import (
     seed_item_health,
 )
 
-from idhazh import config, day_shards, ledger
+from idhazh import config, day_shards, ledger, month_partition
 from idhazh.contracts.base import ServerJob, derive_url_key
 from idhazh.contracts.call_cost import COST_FIELDS, CallKind
 from idhazh.contracts.council_shard_outcome import CouncilShardOutcome
@@ -45,8 +45,11 @@ from idhazh.contracts.seen import PublishedRow, SeenRow
 from idhazh.contracts.span_rollup import RollupSpan, SpanRollupRow
 from idhazh.contracts.story_similarity_pair import StorySimilarityPair
 from idhazh.contracts.visual_prune import VisualPruneRow
+from idhazh.ledger import csv_file
+from idhazh.ledger import rows as ledger_rows
 from idhazh.stages import compact as compact_stage
 from idhazh.telemetry import silicon
+from idhazh.telemetry.source_health import feed_reliability, reliability
 from utilities import split_published_ledger as split_ledger
 from utilities import split_visual_prunes as split_prunes
 from utilities.migrate_published_ledger import narrow
@@ -650,15 +653,19 @@ def _opened(monkeypatch: pytest.MonkeyPatch, state: Path) -> list[str]:
     gets (Guardrail #7). Counting the opens is the only way to tell the two paths
     apart - both answer the same over a fixture the cover covers, and a wall
     clock would measure the box rather than the read.
+
+    Read from the module that declares it and patched on the module that calls
+    it: `ledger.rows` imports the name, so a patch on `ledger.csv_file` alone
+    would leave the reader calling the original.
     """
-    real = ledger._stream_rows
+    real = csv_file._stream_rows
     asked: list[str] = []
 
     def record(path: Path) -> Iterator[dict[str, str]]:
         asked.append(path.relative_to(state.parent).as_posix())
         return real(path)
 
-    monkeypatch.setattr(ledger, "_stream_rows", record)
+    monkeypatch.setattr(ledger_rows, "_stream_rows", record)
     return asked
 
 
@@ -2107,7 +2114,7 @@ def month_grain_read(root: Path, *, today: str, within_days: int) -> list[FeedHe
     one written down somewhere.
     """
     rows: list[FeedHealthRow] = []
-    for stem in ledger.shards_in_window(today, within_days):
+    for stem in month_partition.shards_in_window(today, within_days):
         path = root / f"{stem}.csv"
         if not path.is_file():
             continue
@@ -2181,13 +2188,13 @@ def test_the_day_grain_answers_what_the_month_grain_answered_over_the_same_rows(
 
     floor = 0.05
     over_the_same_rows = {
-        feed_id: ledger.feed_reliability(
+        feed_id: feed_reliability(
             [row for row in from_months if row.feed_id == feed_id and row.date in named],
             floor=floor,
         )
         for feed_id in PARITY_FEEDS
     }
-    measured = ledger.reliability(day_tree, today=DATE, within_days=window, floor=floor)
+    measured = reliability(day_tree, today=DATE, within_days=window, floor=floor)
 
     assert measured == over_the_same_rows
     assert 0.0 < measured["steady"] < 1.0, "the fixture has to separate the three feeds"

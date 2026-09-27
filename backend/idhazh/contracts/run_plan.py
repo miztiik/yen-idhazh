@@ -165,7 +165,7 @@ class PlannedItem(Model):
         ge=0.0,
         description=(
             "That feed's factor from the trailing feed-health window, built once per "
-            "run by ledger.reliability. 1.0 means no recent evidence against it."
+            "run by telemetry.source_health.reliability. 1.0 means no recent evidence against it."
         ),
     )
     carriage_step: float | None = Field(
