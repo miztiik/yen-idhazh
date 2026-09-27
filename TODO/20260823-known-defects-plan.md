@@ -1,6 +1,6 @@
 # Known defects
 
-**Last Updated**: 2026-09-24
+**Last Updated**: 2026-09-27
 
 **Twelve defects are open.** Two of them need evidence or a ruling before any code
 is worth writing; the rest are known fixes with named blast radiuses.
@@ -54,7 +54,7 @@ decision. Current project behaviour belongs in `docs/` (Guardrail #4).
 | 31 | The council's selection artifact is named for one date and carries several | 1 | **OPEN - cosmetic today, wrong the day somebody reads the name** |
 | 32 | The console reads the score ledger raw, so the newest day counts twice | 2 | CLOSED 2026-09-23 |
 | 33 | The console reads the machine ledger raw, so every job counts twice and one copy has no machine | 3 | **OPEN - defect 32 again, one ledger over** |
-| 34 | `donut_thickness_px` is a knob nothing reads | 1 | **OPEN - five spellings that have to go together** |
+| 34 | `donut_thickness_px` is a knob nothing reads | 1 | CLOSED 2026-09-27 |
 | 35 | The chart loading flag flips at import, so the waiting sentence goes while the box is still empty | 2 | **OPEN - the moment of truth is already published** |
 
 ## 35 - The chart loading flag flips at import, so the waiting sentence goes while the box is still empty (OPEN)
@@ -94,33 +94,6 @@ redraw lands in plan 51's row 4, which mints the module that owns each waiting s
 this row is what keeps the page honest until then.
 
 Found on 2026-09-27 during plan 54's closure.
-
-## 34 - `donut_thickness_px` is a knob nothing reads (OPEN)
-
-The console's run-health donut was replaced by the run-yield panel on 2026-09-27
-(PR #1117), and its one geometry knob outlived it. Nothing draws with it.
-
-Five spellings have to go together: `backend/idhazh/contracts/appearance_config.py`,
-`config/appearance.json`, the type and the default in
-`frontend/src/lib/server/config.ts`, and
-`tests/fixtures/contracts/appearance-config/knobs-set-away-from-the-defaults.json`.
-[`docs/concepts/config/appearance.md`](../docs/concepts/config/appearance.md) still
-lists "the sparkline and donut geometry" as what the `chart` group covers, so it moves
-in the same commit.
-
-**It is not a schema change.** CLAUDE.md section 11 excludes a config file this project
-authors (owner ruling 2026-09-21), so there is no version stamp, no changelog entry and
-no migration. It is Level 1 for one reason: the base model is `extra="forbid"`, so
-dropping the field while leaving the committed JSON key turns the config test red - a
-half-done deletion cannot ship green.
-
-**What it costs while it is open.** `config/appearance.json` carries a knob an operator
-can set and then watch do nothing.
-
-Ruled a row rather than a closure aside by Fowler: five files across two languages,
-owing the backend suite and `svelte-check`, is work with a gate.
-
-Found on 2026-09-27, reported by plan 54's row D3 and filed at its closure.
 
 ## 33 - The Hardware route counts every job twice, and one copy has no machine (OPEN)
 

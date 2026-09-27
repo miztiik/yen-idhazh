@@ -6,7 +6,6 @@
     "similarity_floor": 0.35
   },
   "chart": {
-    "donut_thickness_px": 10,
     "height_px": 220,
     "hover_readout": true,
     "palette": "categorical",
