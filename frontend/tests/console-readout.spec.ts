@@ -346,10 +346,11 @@ test.describe('the readout is the default', () => {
 				// `/console/model/` and pass nothing.
 				if ((await owner.getAttribute('data-chart-drawn')) === 'no') {
 					// It may be drawing right now - the scroll above is what the
-					// engine was waiting for. Give it a moment before walking past.
+					// engine was waiting for. `data-chart-drawn` turns `yes` when the
+					// first mark lands, so it is the thing to wait on before walking
+					// past.
 					await owner
-						.filter({ has: page.locator('svg') })
-						.first()
+						.and(page.locator('[data-chart-drawn="yes"]'))
 						.waitFor({ timeout: 6000 })
 						.catch(() => {});
 					if ((await owner.getAttribute('data-chart-drawn')) === 'no') continue;
