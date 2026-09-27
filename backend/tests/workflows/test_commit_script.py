@@ -15,7 +15,6 @@ from conftest import read_text
 from idhazh import ledger
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.evals import writer as score_writer
 from utilities import commit_and_push
 
 from ._harness import (
@@ -656,9 +655,11 @@ def test_the_day_publishes_when_origin_moved_under_it(tmp_path: Path) -> None:
     manifest = json.loads(_git(origin, env, "show", f"main:{SUBSTITUTED_DAY_DIR}/run.json"))
     assert manifest["runs"] == day["runs"]
 
-    published = _rows(_git(origin, env, "show", f"main:{ledger.published_relpath(date)}"))
-    scores = _committed_day(origin, env, score_writer.ledger_relpath(date))
-    health = _committed_day(origin, env, ledger.item_health_relpath(date))
+    published = _rows(
+        _git(origin, env, "show", f"main:{ledger.relpath(LedgerName.PUBLISHED, date)}")
+    )
+    scores = _committed_day(origin, env, ledger.relpath(LedgerName.SCORES, date))
+    health = _committed_day(origin, env, ledger.relpath(LedgerName.ITEM_HEALTH, date))
     every_item = ["item-a", "item-b", "item-c", "item-d", "item-e"]
     # Exactly once each in the two day trees. Each run writes the one file its
     # own run, attempt, job and shard name, so a rebuild cannot add to what a

@@ -34,6 +34,7 @@ import pytest
 from idhazh import day_partition, ledger
 from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.seen import PublishedRow
 from idhazh.contracts.visual_prune import VisualPruneRow
 
@@ -111,7 +112,7 @@ def _days_pruned(state: Path) -> list[str]:
 
 
 def _days_walked(state: Path) -> list[str]:
-    root = state / ledger.PUBLISHED_DIRNAME
+    root = ledger.tree_root(state, LedgerName.PUBLISHED)
     return sorted(day_partition.date_of(path) for path in day_partition.day_files(root))
 
 
@@ -124,9 +125,9 @@ Reader = Callable[[Path], list[str]]
 #: A row is added here when a reader is added, and that is the point - a reader
 #: this table does not drive is the reader that starts disagreeing.
 READERS: Final[tuple[tuple[str, str, Writer, Reader], ...]] = (
-    ("day_partition.day_files", ledger.PUBLISHED_DIRNAME, _write_published, _days_walked),
-    ("ledger.load_published", ledger.PUBLISHED_DIRNAME, _write_published, _days_published),
-    ("ledger.load_visual_prunes", ledger.VISUAL_PRUNES_DIRNAME, _write_prune, _days_pruned),
+    ("day_partition.day_files", LedgerName.PUBLISHED, _write_published, _days_walked),
+    ("ledger.load_published", LedgerName.PUBLISHED, _write_published, _days_published),
+    ("ledger.load_visual_prunes", LedgerName.VISUAL_PRUNES, _write_prune, _days_pruned),
 )
 
 READER_IDS: Final = tuple(name for name, *_ in READERS)
@@ -219,7 +220,7 @@ def test_the_refusal_names_the_tree_and_the_entry_in_posix_form(tmp_path: Path) 
     handed rather than from a constant, so a reader pointed at the wrong
     directory says which one it was really reading.
     """
-    state = _tree(tmp_path, ledger.PUBLISHED_DIRNAME, _write_published, ("notes.txt",))
+    state = _tree(tmp_path, LedgerName.PUBLISHED, _write_published, ("notes.txt",))
 
     with pytest.raises(ValueError) as raised:
         _days_published(state)
@@ -230,7 +231,7 @@ def test_the_refusal_names_the_tree_and_the_entry_in_posix_form(tmp_path: Path) 
 
 def test_a_fresh_clone_reads_no_days_and_is_not_a_fault(tmp_path: Path) -> None:
     """No history is what a new checkout has, and every reader answers it empty."""
-    assert list(day_partition.day_files(tmp_path / "state" / ledger.PUBLISHED_DIRNAME)) == []
+    assert list(day_partition.day_files(ledger.tree_root(tmp_path / "state", LedgerName.PUBLISHED))) == []
 
 
 def test_the_path_says_which_day_and_which_month_a_file_holds(tmp_path: Path) -> None:
@@ -242,8 +243,8 @@ def test_the_path_says_which_day_and_which_month_a_file_holds(tmp_path: Path) ->
     tree the walk returns rather than over a path the test spelled, so a layout
     change breaks this before it breaks a pruner.
     """
-    state = _tree(tmp_path, ledger.PUBLISHED_DIRNAME, _write_published, ())
-    day = next(iter(day_partition.day_files(state / ledger.PUBLISHED_DIRNAME)))
+    state = _tree(tmp_path, LedgerName.PUBLISHED, _write_published, ())
+    day = next(iter(day_partition.day_files(ledger.tree_root(state, LedgerName.PUBLISHED))))
 
     assert day_partition.date_of(day) == DAY
     assert day_partition.month_of(day) == DAY[:7]

@@ -552,7 +552,7 @@ def test_the_day_the_console_reads_is_handed_back_and_the_published_rows_are_not
     """
     refreshed = _commit_call("assemble")[1]["REFRESH_PATHS"].split()
     rebuilt = day_metrics.day_metrics_relpath(SUBSTITUTED_DATE)
-    unioned = ledger.published_relpath(SUBSTITUTED_DATE)
+    unioned = ledger.relpath(LedgerName.PUBLISHED, SUBSTITUTED_DATE)
 
     assert any(_under(rebuilt, path) for path in refreshed), (
         f"{rebuilt} is rewritten whole by this job and no entry of {refreshed} hands it back"

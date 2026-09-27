@@ -31,6 +31,7 @@ from conftest import CONTRACT_FIXTURES_DIR, read_text, seed_item_health, seed_sp
 from idhazh import assemble, cli, ledger
 from idhazh.contracts.digest_day import DigestDay
 from idhazh.contracts.item_health import ItemHealthRow
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.run_manifest import RunManifest
 from idhazh.contracts.span_rollup import SpanRollupRow
 from idhazh.telemetry import cli as telemetry_cli
@@ -139,7 +140,7 @@ def test_every_telemetry_subcommand_runs_against_a_day(
     """
     state_root, digest_root, date = _a_published_day(tmp_path)
     extra = {
-        "prune": ["--target", ledger.ITEM_HEALTH_DIRNAME, "--since", date, "--until", date]
+        "prune": ["--target", LedgerName.ITEM_HEALTH, "--since", date, "--until", date]
     }
 
     exit_code = cli.main(
@@ -185,7 +186,7 @@ def test_a_prune_the_router_refuses_names_the_store_and_changes_nothing(
                 "--digest-root",
                 str(digest_root),
                 "--target",
-                ledger.PUBLISHED_DIRNAME,
+                LedgerName.PUBLISHED,
                 "--since",
                 date,
                 "--until",
@@ -194,7 +195,7 @@ def test_a_prune_the_router_refuses_names_the_store_and_changes_nothing(
         )
 
     assert exit_code.value.code == 2
-    assert ledger.PUBLISHED_DIRNAME in capsys.readouterr().err
+    assert LedgerName.PUBLISHED in capsys.readouterr().err
     assert (
         sorted(path.relative_to(state_root).as_posix() for path in state_root.rglob("*.csv"))
         == before
@@ -214,9 +215,9 @@ def test_show_names_the_day_shard_and_the_month_shard(tmp_path: Path) -> None:
 
     report = "\n".join(inventory.files(state_root, date=date))
 
-    day_shard = ledger.item_health_path(state_root, date).relative_to(state_root).as_posix()
+    day_shard = ledger.path(state_root, LedgerName.ITEM_HEALTH, date).relative_to(state_root).as_posix()
     month_shard = (
-        ledger.span_rollup_path(state_root, assemble.month_of(date))
+        ledger.path(state_root, LedgerName.SPAN_ROLLUP, assemble.month_of(date))
         .relative_to(state_root)
         .as_posix()
     )

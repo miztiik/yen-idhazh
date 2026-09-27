@@ -20,6 +20,7 @@ from pathlib import Path
 
 from idhazh import config, ledger
 from idhazh.contracts.knobs.placement import HOLDOUT_TWO_STORY_MAX
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.merge_line_holdout_score import MergeLineHoldoutScore
 from idhazh.contracts.similarity_holdout_pair import SimilarityHoldoutPair
 from idhazh.similarity import applied, holdout
@@ -47,7 +48,7 @@ def _append(state_dir: Path, date: str, row: MergeLineHoldoutScore) -> int:
     under `set -euo pipefail`, and a path missing from the working tree aborts
     the step and costs the ledgers staged with it.
     """
-    path = ledger.merge_line_holdout_scores_path(state_dir, date)
+    path = ledger.path(state_dir, LedgerName.MERGE_LINE_HOLDOUT_SCORES, date)
     columns = MergeLineHoldoutScore.csv_columns()
     if not path.exists():
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -126,7 +127,7 @@ def stage_score_merge_line_holdout(
         LOG.warning(
             "score-merge-line-holdout found no marked pairs in %s, so there is "
             "nothing to score the line against",
-            ledger.similarity_holdout_relpath(),
+            ledger.relpath(LedgerName.SIMILARITY_HOLDOUT),
         )
         return None
     _warn_on_an_unseen_labeller(marks, labeller)

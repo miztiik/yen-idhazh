@@ -84,7 +84,6 @@ from idhazh.contracts.visual_data import (
 from idhazh.contracts.visual_decision import VisualDecision, VisualKind, VisualState
 from idhazh.embed import Embedder
 from idhazh.evals import metrics, score, writer
-from idhazh.ledger import similarity_holdout_path
 from idhazh.render import asset_relpath, render_planned_visual
 from idhazh.render.write import write_bytes_atomic
 from idhazh.telemetry.publish import (
@@ -1169,7 +1168,7 @@ def holdout(state: Path, day: DigestDay) -> int:
         )
     )
 
-    path = similarity_holdout_path(state)
+    path = ledger.path(state, LedgerName.SIMILARITY_HOLDOUT)
     path.parent.mkdir(parents=True, exist_ok=True)
     columns = SimilarityHoldoutPair.csv_columns()
     lines = [",".join(columns)]
@@ -1588,7 +1587,10 @@ def main() -> int:
     print(f"wrote {(day_dir(args.out, DATE) / 'run.json').as_posix()}: {len(runs.runs)} runs")
     print(f"wrote {len(quiet)} quiet days, {quiet[0]} to {quiet[-1]}")
     print(f"wrote {args.state.as_posix()}/feed-health: {checks} feed results")
-    print(f"wrote {similarity_holdout_path(args.state).as_posix()}: {marks} hand-marked pairs")
+    print(
+        f"wrote {ledger.path(args.state, LedgerName.SIMILARITY_HOLDOUT).as_posix()}: "
+        f"{marks} hand-marked pairs"
+    )
     print(
         f"wrote {(args.out.parent / source_health.PUBLIC_FILENAME).as_posix()}: "
         f"{census} sources"

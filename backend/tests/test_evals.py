@@ -1303,7 +1303,7 @@ def test_the_writers_read_does_not_grow_with_the_rows_the_day_holds(
     thin = _opened_bytes(monkeypatch, lean, lambda: writer.recorded_observations(lean))
     thick = _opened_bytes(monkeypatch, fat, lambda: writer.recorded_observations(fat))
 
-    day = writer.ledger_path(fat, rows[0].date).relative_to(fat).as_posix()
+    day = ledger.path(fat, LedgerName.SCORES, rows[0].date).relative_to(fat).as_posix()
     opened_there = [name for name in thick if name.startswith(f"{day}/") or name == f"{day}.csv"]
     assert not opened_there, f"the writer opened {opened_there}, which is what this row removes"
     assert thin == thick, (
@@ -1394,7 +1394,8 @@ def test_an_append_leaves_the_index_holding_every_observation_its_day_holds(
     assert days == ["2026-01-09", "2026-02-03"], f"both days were not written: {days}"
     for date in days:
         assert _indexed(state, date) == _day_digests(state, date), (
-            f"{writer.index_relpath(date)} does not hold what the rows beside it hold"
+            f"{ledger.relpath(LedgerName.SCORE_INDEX, date)} does not hold what the rows "
+            "beside it hold"
         )
 
 

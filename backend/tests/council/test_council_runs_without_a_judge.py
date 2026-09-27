@@ -43,6 +43,7 @@ from idhazh.contracts.council_shard_outcome import (
     ShardOutcome,
 )
 from idhazh.contracts.knobs.council import CouncilConfig
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.council import night_plan, registry, run_identity, session
 
 from ._tenants import a_belated_venue, a_venue, forget, written
@@ -320,7 +321,7 @@ def _council(*slugs: str, repair_dates: int = 1) -> CouncilConfig:
 def _the_nights_record(state_root: Path, date: str) -> list[CouncilShardOutcome]:
     """The council's own day file, read back through the contract that wrote it."""
     lines = (
-        ledger.council_shard_outcomes_path(state_root, date)
+        ledger.path(state_root, LedgerName.SHARD_OUTCOMES, date)
         .read_text(encoding="utf-8")
         .splitlines()
     )
@@ -353,7 +354,7 @@ def test_a_whole_night_runs_with_nobody_registered(venue: Path) -> None:
     assert planned == (TONIGHT,), "a night with nobody registered plans tonight and no more"
     assert prepared == ()
     assert settled == ()
-    assert not ledger.council_shard_outcomes_path(state_root, TONIGHT).exists()
+    assert not ledger.path(state_root, LedgerName.SHARD_OUTCOMES, TONIGHT).exists()
 
 
 def test_two_tenants_union_their_nights_and_keep_their_own_width(venue: Path) -> None:

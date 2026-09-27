@@ -17,6 +17,7 @@ from idhazh.contracts.base import ITEM_ID_PATTERN
 from idhazh.contracts.knobs.collect import CollectConfig
 from idhazh.contracts.knobs.observability import ObservabilityConfig
 from idhazh.contracts.knobs.retention import RetentionConfig
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.visual_prune import VisualPruneRow
 from idhazh.retention import SiteSize, measure, oldest_visual, prune, prune_row, visuals_older_than
 from idhazh.stages.prune_state import stage_prune_state
@@ -581,7 +582,7 @@ def test_the_step_commits_one_row_a_run_and_names_what_it_left(
             == 0
         )
 
-    written = ledger.visual_prunes_path(state, "2026-08-21")
+    written = ledger.path(state, LedgerName.VISUAL_PRUNES, "2026-08-21")
     assert ledger.read_header(written) == VisualPruneRow.csv_columns()
     rows = ledger.load_visual_prunes(state)
     assert len(rows) == 1
@@ -622,7 +623,7 @@ def test_the_step_leaves_the_pictures_alone_when_no_tree_is_named(tmp_path: Path
         )
         == 0
     )
-    assert not ledger.visual_prunes_path(state, "2026-08-21").exists()
+    assert not ledger.path(state, LedgerName.VISUAL_PRUNES, "2026-08-21").exists()
 
 
 def test_a_directory_that_is_not_a_date_is_left_alone(tmp_path: Path) -> None:

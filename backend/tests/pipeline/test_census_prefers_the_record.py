@@ -33,6 +33,7 @@ from idhazh import config, day_shards, ledger, telemetry
 from idhazh.contracts.article import Article
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.item_health import ItemHealthRow
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.run_plan import PlannedItem, RunPlan
 from idhazh.contracts.summary import Summary
 from idhazh.stages.assemble import stage_assemble
@@ -81,7 +82,7 @@ def sealed(items_dir: Path) -> dict[str, ItemHealthRow]:
 def committed(state_dir: Path, date: str) -> dict[str, ItemHealthRow]:
     """The row the day's ledger kept for each item, settled across its files."""
     settled = day_shards.settled_day(
-        state_dir / ledger.ITEM_HEALTH_DIRNAME, date, ledger.ITEM_HEALTH_KEY, ItemHealthRow
+        ledger.tree_root(state_dir, LedgerName.ITEM_HEALTH), date, ledger.ITEM_HEALTH_KEY, ItemHealthRow
     )
     rows = [ItemHealthRow.from_csv_row(record) for record in settled]
     return {row.item_id: row for row in rows}
@@ -195,7 +196,7 @@ def test_which_writer_reaches_the_ledger_first_does_not_change_the_row(
     fold(state, run_plan.date)
     after_the_worker = committed(state, run_plan.date)
 
-    shutil.rmtree(ledger.item_health_path(state, run_plan.date))
+    shutil.rmtree(ledger.path(state, LedgerName.ITEM_HEALTH, run_plan.date))
     stage_assemble(run_plan, settings=settings, commit_sha="a" * 40, runner="fixture")
     after_assemble = committed(state, run_plan.date)
 
@@ -270,7 +271,7 @@ def test_work_then_assemble_leaves_one_settled_head_and_no_waiting_segments(
     state = tmp_path / "state"
 
     stage_record(run_plan, settings=settings)
-    health_root = state / ledger.ITEM_HEALTH_DIRNAME
+    health_root = ledger.tree_root(state, LedgerName.ITEM_HEALTH)
     assert day_shards.one_day(health_root, run_plan.date), (
         "the work stage wrote no file, so the rest of this proves nothing"
     )
@@ -279,7 +280,7 @@ def test_work_then_assemble_leaves_one_settled_head_and_no_waiting_segments(
     # day a shard could still be writing is not one to fold.
     fold(state, run_plan.date)
 
-    settled = ledger.item_health_path(state, run_plan.date) / day_shards.SETTLED_NAME
+    settled = ledger.path(state, LedgerName.ITEM_HEALTH, run_plan.date) / day_shards.SETTLED_NAME
     lines = settled.read_text(encoding="utf-8").splitlines()
     header = list(ItemHealthRow.csv_columns())
     assert [line for line in lines if line.split(",")[:3] == header[:3]] == [",".join(header)], (

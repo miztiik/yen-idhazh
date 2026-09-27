@@ -22,7 +22,7 @@ emptied exactly, and a delete that fails on the third file of four.
 from __future__ import annotations
 
 import hashlib
-from collections.abc import Callable, Iterable
+from collections.abc import Iterable
 from datetime import date as date_type
 from datetime import timedelta
 from pathlib import Path
@@ -37,7 +37,6 @@ from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.item_health import ItemStage
 from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.evals import writer as score_writer
 from idhazh.telemetry import prune
 
 from ._trees import feed_health_history, health_row
@@ -45,40 +44,29 @@ from ._trees import feed_health_history, health_row
 pytestmark = pytest.mark.contract
 
 
-#: Where one day of each ledger this prunes lands, asked of the module that owns
-#: the ledger. The test below holds this against `prune.TARGETS`, so a target
-#: added to the vocabulary without a ledger that files by day fails here rather
-#: than by quietly selecting nothing.
+#: Where one day of each ledger this prunes lands. The test below holds this
+#: against `prune.TARGETS`, so a target added to the vocabulary without a ledger
+#: that files by day fails here rather than by quietly selecting nothing.
 #:
-#: The two nested keys are spelled the way an operator types them - two directory
-#: names joined by a hyphen - and the value is the two-segment path the same
-#: module files at. That pairing is the whole of what makes a nested ledger
-#: prunable, so it is the pairing this file holds.
-DAY_PATHS: Final[dict[str, Callable[[Path, str], Path]]] = {
-    ledger.COUNTERFACTUAL_SCORES_DIRNAME: ledger.counterfactual_scores_path,
-    ledger.HEALTH_DIRNAME: ledger.health_path,
-    ledger.HOST_FINGERPRINT_DIRNAME: ledger.host_fingerprint_path,
-    ledger.ITEM_HEALTH_DIRNAME: ledger.item_health_path,
-    ledger.VISUAL_PRUNES_DIRNAME: ledger.visual_prunes_path,
-    score_writer.INDEX_DIRNAME: score_writer.index_path,
-    score_writer.LEDGER_DIRNAME: score_writer.ledger_path,
-    f"{ledger.COUNCIL_DIRNAME}-{ledger.SHARD_OUTCOMES_DIRNAME}": (
-        ledger.council_shard_outcomes_path
-    ),
-    f"{ledger.CONTENT_SIMILARITY_JUDGE_DIRNAME}-{ledger.JUDGE_METRICS_DIRNAME}": (
-        ledger.content_similarity_judge_metrics_path
-    ),
-    (
-        f"{ledger.CONTENT_SIMILARITY_JUDGE_DIRNAME}-"
-        f"{ledger.MERGE_LINE_HOLDOUT_SCORES_DIRNAME}"
-    ): ledger.merge_line_holdout_scores_path,
-    f"{ledger.CONTENT_SIMILARITY_JUDGE_DIRNAME}-{ledger.SCORED_PAIRS_DIRNAME}": (
-        ledger.scored_pairs_path
-    ),
-    (
-        f"{ledger.CONTENT_SIMILARITY_JUDGE_DIRNAME}-"
-        f"{ledger.FITTED_THRESHOLDS_DIRNAME}"
-    ): ledger.fitted_thresholds_path,
+#: Keyed the way an operator types it - the registry prefix joined by hyphens -
+#: and valued with the typed name the builder takes. That pairing is the whole of
+#: what makes a nested ledger prunable, so it is the pairing this file holds.
+DAY_PATHS: Final[dict[str, LedgerName]] = {
+    "-".join(ledger.entry(name).prefix): name
+    for name in (
+        LedgerName.COUNTERFACTUAL_SCORES,
+        LedgerName.FITTED_THRESHOLDS,
+        LedgerName.HEALTH,
+        LedgerName.HOST_FINGERPRINT,
+        LedgerName.ITEM_HEALTH,
+        LedgerName.JUDGE_METRICS,
+        LedgerName.MERGE_LINE_HOLDOUT_SCORES,
+        LedgerName.SCORED_PAIRS,
+        LedgerName.SCORES,
+        LedgerName.SCORE_INDEX,
+        LedgerName.SHARD_OUTCOMES,
+        LedgerName.VISUAL_PRUNES,
+    )
 }
 
 
@@ -113,13 +101,13 @@ def the_census_file(day: str) -> str:
     A day is a directory of writer-owned files and the prune removes files, so a
     test that named the directory would name something the prune never reports.
     """
-    return f"{ledger.item_health_relpath(day)}/{day_shards.SETTLED_NAME}"
+    return f"{ledger.relpath(LedgerName.ITEM_HEALTH, day)}/{day_shards.SETTLED_NAME}"
 
 
 def the_machine_file(state_root: Path, day: str) -> Path:
     """The one file `_write_host_day` leaves in a day directory."""
     name = ledger.segment_name(run_id=f"{day}-1", attempt=1, job=ServerJob.PLAN, shard=0)
-    return ledger.host_fingerprint_path(state_root, day) / name
+    return ledger.path(state_root, LedgerName.HOST_FINGERPRINT, day) / name
 
 
 def _write_host_day(state_root: Path, day: str) -> None:
@@ -157,14 +145,14 @@ def fingerprints(root: Path) -> dict[str, str]:
     }
 
 
-def a_day_on_disk(day_path: Callable[[Path, str], Path], state_root: Path, day: str) -> Path:
-    """Put one file where a ledger's own helper says the day goes, and name it.
+def a_day_on_disk(name: LedgerName, state_root: Path, day: str) -> Path:
+    """Put one file where the registry says the day goes, and name it.
 
-    A helper that answers with a `<DD>.csv` names the file itself. A helper that
-    answers with a directory names a day whose files each carry a writer's name,
-    so the file goes inside it under the identity grammar.
+    A ledger that files a `<DD>.csv` names the file itself. A ledger that files a
+    day directory names a day whose files each carry a writer's name, so the file
+    goes inside it under the identity grammar.
     """
-    where = day_path(state_root, day)
+    where = ledger.path(state_root, name, day)
     if where.suffix == day_shards.SUFFIX:
         where.parent.mkdir(parents=True, exist_ok=True)
         where.write_text("version\n", encoding="utf-8", newline="\n")
@@ -204,7 +192,7 @@ def test_both_ends_of_the_range_are_named(tmp_path: Path) -> None:
 
     outcome = prune.prune_range(
         state,
-        target=ledger.ITEM_HEALTH_DIRNAME,
+        target=LedgerName.ITEM_HEALTH,
         since=since,
         until=until,
         dry_run=False,
@@ -216,7 +204,7 @@ def test_both_ends_of_the_range_are_named(tmp_path: Path) -> None:
         "the removed list is not exactly the three days the range names: "
         f"{outcome.removed}"
     )
-    assert dates_on_disk(state, ledger.ITEM_HEALTH_DIRNAME) == [
+    assert dates_on_disk(state, LedgerName.ITEM_HEALTH) == [
         DAYS[0],
         DAYS[1],
         DAYS[5],
@@ -231,15 +219,15 @@ def test_one_day_is_a_range_of_itself(tmp_path: Path) -> None:
 
     outcome = prune.prune_range(
         state,
-        target=ledger.ITEM_HEALTH_DIRNAME,
+        target=LedgerName.ITEM_HEALTH,
         since=DAYS[3],
         until=DAYS[3],
         dry_run=False,
     )
 
     assert outcome.removed == (the_census_file(DAYS[3]),)
-    assert DAYS[3] not in dates_on_disk(state, ledger.ITEM_HEALTH_DIRNAME)
-    assert len(dates_on_disk(state, ledger.ITEM_HEALTH_DIRNAME)) == len(DAYS) - 1
+    assert DAYS[3] not in dates_on_disk(state, LedgerName.ITEM_HEALTH)
+    assert len(dates_on_disk(state, LedgerName.ITEM_HEALTH)) == len(DAYS) - 1
 
 
 def test_every_sibling_outside_the_range_is_byte_identical(tmp_path: Path) -> None:
@@ -254,7 +242,7 @@ def test_every_sibling_outside_the_range_is_byte_identical(tmp_path: Path) -> No
     before = fingerprints(state)
     outcome = prune.prune_range(
         state,
-        target=ledger.ITEM_HEALTH_DIRNAME,
+        target=LedgerName.ITEM_HEALTH,
         since=DAYS[1],
         until=DAYS[2],
         dry_run=False,
@@ -274,13 +262,13 @@ def test_a_backwards_range_names_no_day(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="is after --until"):
         prune.prune_range(
             state,
-            target=ledger.ITEM_HEALTH_DIRNAME,
+            target=LedgerName.ITEM_HEALTH,
             since=DAYS[4],
             until=DAYS[1],
             dry_run=False,
         )
 
-    assert dates_on_disk(state, ledger.ITEM_HEALTH_DIRNAME) == list(DAYS)
+    assert dates_on_disk(state, LedgerName.ITEM_HEALTH) == list(DAYS)
 
 
 @pytest.mark.parametrize("value", ["2026-8-4", "20260804", "yesterday", "2026-13-01"])
@@ -295,10 +283,10 @@ def test_a_day_that_is_not_a_day_is_refused(tmp_path: Path, value: str) -> None:
 
     with pytest.raises(ValueError, match="YYYY-MM-DD"):
         prune.prune_range(
-            state, target=ledger.ITEM_HEALTH_DIRNAME, since=value, until=DAYS[4], dry_run=False
+            state, target=LedgerName.ITEM_HEALTH, since=value, until=DAYS[4], dry_run=False
         )
 
-    assert dates_on_disk(state, ledger.ITEM_HEALTH_DIRNAME) == list(DAYS)
+    assert dates_on_disk(state, LedgerName.ITEM_HEALTH) == list(DAYS)
 
 
 def test_the_month_and_year_a_prune_empties_go_with_it(tmp_path: Path) -> None:
@@ -310,10 +298,10 @@ def test_the_month_and_year_a_prune_empties_go_with_it(tmp_path: Path) -> None:
     state = a_census(tmp_path / "state")
 
     prune.prune_range(
-        state, target=ledger.ITEM_HEALTH_DIRNAME, since=DAYS[0], until=DAYS[2], dry_run=False
+        state, target=LedgerName.ITEM_HEALTH, since=DAYS[0], until=DAYS[2], dry_run=False
     )
 
-    ledger_root = state / ledger.ITEM_HEALTH_DIRNAME
+    ledger_root = ledger.tree_root(state, LedgerName.ITEM_HEALTH)
     assert not (ledger_root / "2026" / "07").exists(), "an emptied month directory was left behind"
     assert (ledger_root / "2026" / "08").is_dir(), "the month that still holds days was removed"
 
@@ -332,9 +320,9 @@ def test_every_target_names_a_store_that_files_by_day(tmp_path: Path) -> None:
         f"{sorted(set(prune.TARGETS) ^ set(DAY_PATHS))}"
     )
 
-    for target, day_path in DAY_PATHS.items():
+    for target, name in DAY_PATHS.items():
         state = tmp_path / target
-        path = a_day_on_disk(day_path, state, DAYS[3])
+        path = a_day_on_disk(name, state, DAYS[3])
 
         outcome = prune.prune_range(
             state, target=target, since=DAYS[3], until=DAYS[3], dry_run=False
@@ -366,7 +354,7 @@ def test_a_day_taken_back_loses_the_machine_rows_that_produced_it(tmp_path: Path
 
     outcome = prune.prune_range(
         state,
-        target=ledger.HOST_FINGERPRINT_DIRNAME,
+        target=LedgerName.HOST_FINGERPRINT,
         since=DAYS[3],
         until=DAYS[3],
         dry_run=False,
@@ -376,15 +364,15 @@ def test_a_day_taken_back_loses_the_machine_rows_that_produced_it(tmp_path: Path
         f"{ledger.STATE_DIRNAME}/"
         f"{the_machine_file(state, DAYS[3]).relative_to(state).as_posix()}",
     )
-    assert not ledger.host_fingerprint_path(state, DAYS[3]).exists()
+    assert not ledger.path(state, LedgerName.HOST_FINGERPRINT, DAYS[3]).exists()
     assert the_machine_file(state, DAYS[4]).read_bytes() == kept
-    assert dates_on_disk(state, ledger.HOST_FINGERPRINT_DIRNAME) == [
+    assert dates_on_disk(state, LedgerName.HOST_FINGERPRINT) == [
         day for day in DAYS if day != DAYS[3]
     ]
     # The census the machine rows join to is a separate target and is untouched
     # by this pass, which is what makes the pairing an operator obligation rather
     # than a side effect.
-    assert dates_on_disk(state, ledger.ITEM_HEALTH_DIRNAME) == list(DAYS)
+    assert dates_on_disk(state, LedgerName.ITEM_HEALTH) == list(DAYS)
 
 
 @pytest.mark.parametrize("target", sorted(prune.REFUSED))
@@ -450,14 +438,14 @@ def test_a_dry_run_names_every_file_and_removes_none(tmp_path: Path) -> None:
     before = fingerprints(state)
 
     reported = prune.prune_range(
-        state, target=ledger.ITEM_HEALTH_DIRNAME, since=DAYS[1], until=DAYS[3]
+        state, target=LedgerName.ITEM_HEALTH, since=DAYS[1], until=DAYS[3]
     )
 
     assert reported.dry_run is True
     assert fingerprints(state) == before, "a dry run moved a file"
 
     removed = prune.prune_range(
-        state, target=ledger.ITEM_HEALTH_DIRNAME, since=DAYS[1], until=DAYS[3], dry_run=False
+        state, target=LedgerName.ITEM_HEALTH, since=DAYS[1], until=DAYS[3], dry_run=False
     )
     assert removed.removed == reported.removed
     assert removed.bytes_freed == reported.bytes_freed
@@ -500,7 +488,7 @@ def test_a_delete_that_fails_part_way_keeps_what_it_already_removed(
     with pytest.raises(prune.PruneInterruptedError) as stop:
         prune.prune_range(
             state,
-            target=ledger.ITEM_HEALTH_DIRNAME,
+            target=LedgerName.ITEM_HEALTH,
             since=DAYS[1],
             until=DAYS[4],
             dry_run=False,
@@ -514,7 +502,7 @@ def test_a_delete_that_fails_part_way_keeps_what_it_already_removed(
     assert stop.value.so_far.resume_from == the_census_file(DAYS[3]), (
         "the next pass has to retry the day that failed"
     )
-    assert dates_on_disk(state, ledger.ITEM_HEALTH_DIRNAME) == [
+    assert dates_on_disk(state, LedgerName.ITEM_HEALTH) == [
         DAYS[0],
         DAYS[3],
         DAYS[4],
@@ -534,7 +522,7 @@ def test_a_ceiling_stops_a_pass_and_names_the_day_to_resume_at(tmp_path: Path) -
 
     outcome = prune.prune_range(
         state,
-        target=ledger.ITEM_HEALTH_DIRNAME,
+        target=LedgerName.ITEM_HEALTH,
         since=DAYS[0],
         until=DAYS[4],
         dry_run=False,
@@ -547,7 +535,7 @@ def test_a_ceiling_stops_a_pass_and_names_the_day_to_resume_at(tmp_path: Path) -
     )
     assert outcome.more_to_do
     assert outcome.resume_from == the_census_file(DAYS[2])
-    assert dates_on_disk(state, ledger.ITEM_HEALTH_DIRNAME) == list(DAYS[2:])
+    assert dates_on_disk(state, LedgerName.ITEM_HEALTH) == list(DAYS[2:])
     assert any("run it again" in line for line in prune.report(outcome))
 
 
@@ -560,12 +548,12 @@ def test_the_range_an_operator_typed_is_its_own_ceiling(tmp_path: Path) -> None:
     state = a_census(tmp_path / "state")
 
     outcome = prune.prune_range(
-        state, target=ledger.ITEM_HEALTH_DIRNAME, since=DAYS[0], until=DAYS[6], dry_run=False
+        state, target=LedgerName.ITEM_HEALTH, since=DAYS[0], until=DAYS[6], dry_run=False
     )
 
     assert len(outcome.removed) == len(DAYS)
     assert outcome.resume_from is None, "the range was taken whole, so nothing is left"
-    assert dates_on_disk(state, ledger.ITEM_HEALTH_DIRNAME) == []
+    assert dates_on_disk(state, LedgerName.ITEM_HEALTH) == []
 
 
 def test_nothing_is_left_under_state_for_a_commit_to_pick_up(tmp_path: Path) -> None:
@@ -573,10 +561,10 @@ def test_nothing_is_left_under_state_for_a_commit_to_pick_up(tmp_path: Path) -> 
     state = a_census(tmp_path / "state")
 
     prune.prune_range(
-        state, target=ledger.ITEM_HEALTH_DIRNAME, since=DAYS[0], until=DAYS[1], dry_run=False
+        state, target=LedgerName.ITEM_HEALTH, since=DAYS[0], until=DAYS[1], dry_run=False
     )
 
-    assert [entry.name for entry in state.iterdir()] == [ledger.ITEM_HEALTH_DIRNAME]
+    assert [entry.name for entry in state.iterdir()] == [LedgerName.ITEM_HEALTH]
     assert not list(state.glob(".prune-*")), "a scratch directory appeared from somewhere"
 
 
@@ -585,7 +573,7 @@ def test_a_range_with_no_day_in_it_says_so(tmp_path: Path) -> None:
     state = a_census(tmp_path / "state")
 
     outcome = prune.prune_range(
-        state, target=ledger.ITEM_HEALTH_DIRNAME, since="2025-01-01", until="2025-01-31"
+        state, target=LedgerName.ITEM_HEALTH, since="2025-01-01", until="2025-01-31"
     )
 
     assert outcome.removed == ()
@@ -597,7 +585,7 @@ def test_a_store_that_has_never_been_written_prunes_nothing(tmp_path: Path) -> N
     """A fresh clone has no history, which is not a fault."""
     outcome = prune.prune_range(
         tmp_path / "state",
-        target=ledger.ITEM_HEALTH_DIRNAME,
+        target=LedgerName.ITEM_HEALTH,
         since=DAYS[0],
         until=DAYS[6],
         dry_run=False,

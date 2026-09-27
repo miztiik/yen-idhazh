@@ -17,6 +17,7 @@ from conftest import REPO_ROOT, read_text
 from idhazh import cli, config, day_shards, ledger
 from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.base import ServerJob
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.run_plan import RunPlan
 from idhazh.stages import compact as compact_stage
 from idhazh.stages.common import CAPTURES_DIRNAME
@@ -393,17 +394,17 @@ def test_a_bench_machine_row_cannot_land_where_the_console_reads(tmp_path: Path)
     written = {
         path.relative_to(tmp_path).as_posix()
         for path in tmp_path.rglob("*.csv")
-        if ledger.HOST_FINGERPRINT_DIRNAME in path.parts
+        if LedgerName.HOST_FINGERPRINT in path.parts
     }
-    bench_day = f"{BENCH_LEDGER_ROOT}/{ledger.HOST_FINGERPRINT_DIRNAME}/2026/09/17"
-    production_day = f"{ledger.STATE_DIRNAME}/{ledger.HOST_FINGERPRINT_DIRNAME}/2026/09/17"
+    bench_day = f"{BENCH_LEDGER_ROOT}/{LedgerName.HOST_FINGERPRINT}/2026/09/17"
+    production_day = f"{ledger.STATE_DIRNAME}/{LedgerName.HOST_FINGERPRINT}/2026/09/17"
     assert written == {
         f"{bench_day}/{day_shards.SETTLED_NAME}",
         f"{production_day}/{day_shards.SETTLED_NAME}",
     }, "one fold reached the other root, or a probe row landed off its own day"
 
     staged = COMMIT_STAGED_PATHS["bench"]
-    assert staged == [f"{BENCH_LEDGER_ROOT}/{ledger.HOST_FINGERPRINT_DIRNAME}"]
+    assert staged == [f"{BENCH_LEDGER_ROOT}/{LedgerName.HOST_FINGERPRINT}"]
     for path in COMMIT_STAGED_PATHS["plan"] + COMMIT_STAGED_PATHS["work"]:
         assert not path.startswith(f"{BENCH_LEDGER_ROOT}/"), (
             f"a production job stages {path}, which is under the bench's own tree"

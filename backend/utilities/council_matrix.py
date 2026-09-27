@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Final
 
 from idhazh import config, ledger
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.council.registry import tenants
 from idhazh.council.session import shard_width
 
@@ -30,10 +31,10 @@ from idhazh.council.session import shard_width
 PLATFORM_JOB_CEILING: Final = 20
 
 #: The venue's own ledger, staged by the collecting job alongside whatever the
-#: tenants named. Built from the constants the ledger is addressed by rather than
-#: spelled, so a move of the tree moves this with it.
-COUNCIL_LEDGER: Final = (
-    f"{ledger.STATE_DIRNAME}/{ledger.COUNCIL_DIRNAME}/{ledger.SHARD_OUTCOMES_DIRNAME}"
+#: tenants named. Built from the ledger's registry prefix rather than spelled, so
+#: a move of the tree moves this with it.
+COUNCIL_LEDGER: Final = "/".join(
+    (ledger.STATE_DIRNAME, *ledger.entry(LedgerName.SHARD_OUTCOMES).prefix)
 )
 
 

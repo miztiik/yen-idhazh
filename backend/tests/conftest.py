@@ -76,7 +76,7 @@ def seed_item_health(state_dir: Path, date: str, rows: Iterable[ItemHealthRow]) 
     Returns the rows the file gained, so a caller that asserted on the old
     writer's count asserts on the same number.
     """
-    path = ledger.item_health_path(state_dir, date) / day_shards.SETTLED_NAME
+    path = ledger.path(state_dir, LedgerName.ITEM_HEALTH, date) / day_shards.SETTLED_NAME
     columns = ItemHealthRow.csv_columns()
     ledger.migrate_header(
         path, columns, ledger.refiler(ItemHealthRow), carried=ledger.ITEM_HEALTH_CARRIED
@@ -119,7 +119,7 @@ def seed_span_rollup(state_dir: Path, date: str, rows: Iterable[SpanRollupRow]) 
     Returns the rows the file gained, so a caller that asserted on the old
     writer's count asserts on the same number.
     """
-    path = ledger.span_rollup_path(state_dir, date) / day_shards.SETTLED_NAME
+    path = ledger.path(state_dir, LedgerName.SPAN_ROLLUP, date) / day_shards.SETTLED_NAME
     columns = SpanRollupRow.csv_columns()
     ledger.migrate_header(path, columns, ledger.refiler(SpanRollupRow))
     held = ledger.recorded_span_rollup(path)

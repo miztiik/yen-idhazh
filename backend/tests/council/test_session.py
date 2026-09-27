@@ -27,6 +27,7 @@ from idhazh.contracts.council_shard_outcome import (
     CouncilShardOutcome,
     ShardOutcome,
 )
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.council import registry, session
 from idhazh.council.deadline import SECONDS_A_MINUTE
 
@@ -89,7 +90,7 @@ def _config_registering(root: Path, *slugs: str) -> Path:
 def _the_councils_record(state_root: Path) -> list[CouncilShardOutcome]:
     """The night's own day file, read back through the contract that wrote it."""
     lines = (
-        ledger.council_shard_outcomes_path(state_root, A_DATE)
+        ledger.path(state_root, LedgerName.SHARD_OUTCOMES, A_DATE)
         .read_text(encoding="utf-8")
         .splitlines()
     )
@@ -458,9 +459,11 @@ def test_a_night_that_hosts_nobody_leaves_no_day_file_behind(tmp_path: Path) -> 
         == 0
     )
 
-    assert not ledger.council_shard_outcomes_path(state_root, A_DATE).exists()
-    assert (REPO_ROOT / ledger.STATE_DIRNAME / ledger.COUNCIL_DIRNAME
-            / ledger.SHARD_OUTCOMES_DIRNAME / ".gitkeep").exists()
+    assert not ledger.path(state_root, LedgerName.SHARD_OUTCOMES, A_DATE).exists()
+    assert (
+        ledger.tree_root(REPO_ROOT / ledger.STATE_DIRNAME, LedgerName.SHARD_OUTCOMES)
+        / ".gitkeep"
+    ).exists()
 
 
 def test_no_judge_module_is_in_the_import_closure_of_a_council_verb() -> None:

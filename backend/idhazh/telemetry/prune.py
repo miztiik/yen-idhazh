@@ -61,8 +61,7 @@ from typing import Final
 
 from idhazh import day_partition, day_shards, ledger
 from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
-from idhazh.contracts.ledger_name import DAY_TREES
-from idhazh.evals import writer as score_writer
+from idhazh.contracts.ledger_name import DAY_TREES, LedgerName
 from idhazh.prune import one_at_a_time
 
 #: The core's own interruption, named here so a caller of this module imports
@@ -73,13 +72,13 @@ PruneInterruptedError = one_at_a_time.PruneInterruptedError
 #: Every ledger this command may delete from, and where each one lives under
 #: `state/`, alphabetically.
 #:
-#: The word an operator types is built from the directory names the module that
-#: owns the ledger declares, never spelled again here - so a ledger that is renamed
-#: renames its target with it, and neither can drift from the other (Guardrail
-#: #6). A flat ledger's word IS its directory. A NESTED ledger's word joins its two
-#: segments with a hyphen, because a slash in a word turns a closed vocabulary
-#: into something that looks like a path - and a deletion primitive that resolved
-#: its argument against the file system is the one accident nobody can undo.
+#: The word an operator types is built from the ledger's registry prefix, never
+#: spelled again here - so a ledger that moves moves its target with it, and
+#: neither can drift from the other (Guardrail #6). A flat ledger's word IS its
+#: directory. A NESTED ledger's word joins its two segments with a hyphen,
+#: because a slash in a word turns a closed vocabulary into something that looks
+#: like a path - and a deletion primitive that resolved its argument against the
+#: file system is the one accident nobody can undo.
 #:
 #: The rule that decides membership is one line: a ledger files
 #: `<YYYY>/<MM>/<DD>.csv` day files, and is not one of the two ledgers below.
@@ -87,7 +86,10 @@ PruneInterruptedError = one_at_a_time.PruneInterruptedError
 #: absent - they file `.json` and `.jsonl`, which
 #: `day_shards.shard_files` refuses, and a second walker here would be a second
 #: answer to what a day file is. Bringing either in means teaching that one
-#: walker its suffix, which is where the question belongs.
+#: walker its suffix, which is where the question belongs. `state/validation/`,
+#: `state/span-rollup/` and `state/day-validations/` are absent too: nobody has
+#: asked to take a range out of one, and joining this list is a decision rather
+#: than a consequence of the shape.
 #:
 #: **`host-fingerprint` is what a day taken off the site owes its machine rows.**
 #: It filed by day from 2026-09-16 and was missing from this list until
@@ -118,45 +120,29 @@ PruneInterruptedError = one_at_a_time.PruneInterruptedError
 #: `content-similarity-judge` ledgers are here for the same reason, and they are
 #: the judge's rather than the council's: what a reading is about decides where
 #: it is filed, never what executed it.
+_TARGET_LEDGERS: Final[tuple[LedgerName, ...]] = (
+    LedgerName.COUNTERFACTUAL_SCORES,
+    LedgerName.FITTED_THRESHOLDS,
+    LedgerName.HEALTH,
+    LedgerName.HOST_FINGERPRINT,
+    LedgerName.ITEM_HEALTH,
+    LedgerName.JUDGE_METRICS,
+    LedgerName.MERGE_LINE_HOLDOUT_SCORES,
+    LedgerName.SCORED_PAIRS,
+    LedgerName.SCORES,
+    LedgerName.SCORE_INDEX,
+    LedgerName.SHARD_OUTCOMES,
+    LedgerName.VISUAL_PRUNES,
+)
+
 TARGETS: Final[Mapping[str, str]] = MappingProxyType(
     dict(
         sorted(
-            {
-                ledger.COUNTERFACTUAL_SCORES_DIRNAME: ledger.COUNTERFACTUAL_SCORES_DIRNAME,
-                ledger.HEALTH_DIRNAME: ledger.HEALTH_DIRNAME,
-                ledger.HOST_FINGERPRINT_DIRNAME: ledger.HOST_FINGERPRINT_DIRNAME,
-                ledger.ITEM_HEALTH_DIRNAME: ledger.ITEM_HEALTH_DIRNAME,
-                ledger.VISUAL_PRUNES_DIRNAME: ledger.VISUAL_PRUNES_DIRNAME,
-                score_writer.INDEX_DIRNAME: score_writer.INDEX_DIRNAME,
-                score_writer.LEDGER_DIRNAME: score_writer.LEDGER_DIRNAME,
-                f"{ledger.COUNCIL_DIRNAME}-{ledger.SHARD_OUTCOMES_DIRNAME}": (
-                    f"{ledger.COUNCIL_DIRNAME}/{ledger.SHARD_OUTCOMES_DIRNAME}"
-                ),
-                (
-                    f"{ledger.CONTENT_SIMILARITY_JUDGE_DIRNAME}-"
-                    f"{ledger.JUDGE_METRICS_DIRNAME}"
-                ): (
-                    f"{ledger.CONTENT_SIMILARITY_JUDGE_DIRNAME}/"
-                    f"{ledger.JUDGE_METRICS_DIRNAME}"
-                ),
-                (
-                    f"{ledger.CONTENT_SIMILARITY_JUDGE_DIRNAME}-"
-                    f"{ledger.MERGE_LINE_HOLDOUT_SCORES_DIRNAME}"
-                ): (
-                    f"{ledger.CONTENT_SIMILARITY_JUDGE_DIRNAME}/"
-                    f"{ledger.MERGE_LINE_HOLDOUT_SCORES_DIRNAME}"
-                ),
-                f"{ledger.CONTENT_SIMILARITY_JUDGE_DIRNAME}-{ledger.SCORED_PAIRS_DIRNAME}": (
-                    f"{ledger.CONTENT_SIMILARITY_JUDGE_DIRNAME}/{ledger.SCORED_PAIRS_DIRNAME}"
-                ),
-                (
-                    f"{ledger.CONTENT_SIMILARITY_JUDGE_DIRNAME}-"
-                    f"{ledger.FITTED_THRESHOLDS_DIRNAME}"
-                ): (
-                    f"{ledger.CONTENT_SIMILARITY_JUDGE_DIRNAME}/"
-                    f"{ledger.FITTED_THRESHOLDS_DIRNAME}"
-                ),
-            }.items()
+            (
+                "-".join(ledger.entry(name).prefix),
+                "/".join(ledger.entry(name).prefix),
+            )
+            for name in _TARGET_LEDGERS
         )
     )
 )
@@ -169,12 +155,12 @@ TARGETS: Final[Mapping[str, str]] = MappingProxyType(
 #: a decision. Somebody who types one of these is holding a real question, and
 #: the answer they need is why the answer is no.
 REFUSED: Final[Mapping[str, str]] = {
-    ledger.PUBLISHED_DIRNAME: (
+    LedgerName.PUBLISHED: (
         "it is the guard against publishing one story twice and it has no window "
         "at all - collect.published_window_days is -1, so every row in it is a row "
         "that must never be deleted. A ledger that forgets cannot be that guard"
     ),
-    ledger.SEEN_DIRNAME: (
+    LedgerName.SEEN: (
         "it is what the planner remembers having already seen, so removing a day "
         "from it lets the next run rediscover every address it holds - one "
         "operator command becomes a loop"

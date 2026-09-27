@@ -135,7 +135,7 @@ def stage_plan(
                 row.feed_id,
                 row.cause.value,
                 len(row.evidence_run_ids),
-                ledger.feed_retirements_relpath(),
+                ledger.relpath(LedgerName.FEED_RETIREMENTS),
             )
     retired = source_health.retired(settings.sources.feeds, gone)
     read = failed = skipped = 0
@@ -410,13 +410,13 @@ def stage_plan(
         "counterfactual scores recorded rows=%s of %s scored file=%s",
         recorded,
         scored,
-        ledger.counterfactual_scores_relpath(date),
+        ledger.relpath(LedgerName.COUNTERFACTUAL_SCORES, date),
     )
     counts = Counter(item.vertical for item in items)
     verticals = [
         summary.model_copy(update={"planned": counts.get(summary.id, 0)}) for summary in verticals
     ]
-    LOG.info("first sights recorded new=%s file=%s", landed, ledger.seen_relpath(date))
+    LOG.info("first sights recorded new=%s file=%s", landed, ledger.relpath(LedgerName.SEEN, date))
 
     return RunPlan(
         version=RunPlan.schema_version(),

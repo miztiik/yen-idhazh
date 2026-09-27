@@ -25,6 +25,7 @@ from idhazh.contracts.fitted_similarity_threshold import (
     FittedSimilarityThreshold,
     HeldReason,
 )
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.story_similarity_distribution import StorySimilarityDistribution
 from idhazh.contracts.story_similarity_pair import SameStoryVerdict, ScorerModelId
 from idhazh.similarity import counting, fit
@@ -101,7 +102,7 @@ def stage_set_merge_line(
         LOG.warning("set-merge-line found no published day to fit for date=%s", date)
         return None
 
-    record_path = ledger.score_distribution_path(state)
+    record_path = ledger.path(state, LedgerName.SCORE_DISTRIBUTION)
     scorer, judge = scorer_inputs(settings), judge_inputs(settings)
     record = (
         StorySimilarityDistribution.from_json(record_path.read_text(encoding="utf-8"))

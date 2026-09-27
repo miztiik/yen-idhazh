@@ -171,7 +171,7 @@ VALIDATE_SHARD: Final = 0
 
 def _receipts_root(state_dir: Path) -> Path:
     """`state/day-validations/`: which days have passed, and against what."""
-    return state_dir / ledger.DAY_VALIDATIONS_DIRNAME
+    return ledger.tree_root(state_dir, LedgerName.DAY_VALIDATIONS)
 
 
 def _validator_identity() -> str:

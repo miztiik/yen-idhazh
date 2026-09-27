@@ -156,6 +156,7 @@ from idhazh.contracts.item_health import ItemHealthRow, ItemOutcome, ItemStage
 from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
 from idhazh.contracts.knobs.observability import ObservabilityConfig
 from idhazh.contracts.knobs.retention import PAGES_HARD_CAP_MB, RetentionConfig
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.telemetry_aggregate import TelemetryAggregateRow, percentile
 from idhazh.contracts.visual_decision import VisualState
 from idhazh.contracts.visual_prune import VisualPruneRow
@@ -906,7 +907,7 @@ def prune_telemetry(
     aggregate_rows = 0
 
     by_month = day_shards.shards_by_month(
-        state_dir / ledger.ITEM_HEALTH_DIRNAME, days=UNBOUNDED_WINDOW
+        ledger.tree_root(state_dir, LedgerName.ITEM_HEALTH), days=UNBOUNDED_WINDOW
     )
     for month in sorted(by_month):
         if month >= keep_from:
@@ -916,7 +917,7 @@ def prune_telemetry(
             ItemHealthRow.from_csv_row(cells)
             for date in sorted({day_shards.date_of(day) for day in days})
             for cells in day_shards.settled_day(
-                state_dir / ledger.ITEM_HEALTH_DIRNAME,
+                ledger.tree_root(state_dir, LedgerName.ITEM_HEALTH),
                 date,
                 ledger.ITEM_HEALTH_KEY,
                 ItemHealthRow,
@@ -933,13 +934,13 @@ def prune_telemetry(
         aggregate_rows += len(summary)
         if dry_run:
             continue
-        target = ledger.telemetry_aggregate_path(state_dir, month)
+        target = ledger.path(state_dir, LedgerName.TELEMETRY_AGGREGATE, month)
         ledger.write_telemetry_aggregate(target, summary)
         # Read back before the days go. A fold nobody verified is a deletion
         # nobody can undo.
         if ledger.load_telemetry_aggregate(target) != summary:
             raise ValueError(
-                f"{ledger.telemetry_aggregate_relpath(month)} did not read back as it "
+                f"{ledger.relpath(LedgerName.TELEMETRY_AGGREGATE, month)} did not read back as it "
                 f"was written, so the {len(days)} day files of {month} stay"
             )
         for day in days:
@@ -961,7 +962,7 @@ def prune_telemetry(
     hard_deleted: list[str] = []
     if config.item_health_aggregate_keep_months is not None:
         delete_from = oldest_month_kept(today, config.item_health_aggregate_keep_months)
-        for aggregate in month_shards(state_dir / ledger.TELEMETRY_AGGREGATE_DIRNAME):
+        for aggregate in month_shards(state_dir / LedgerName.TELEMETRY_AGGREGATE):
             if aggregate.stem >= delete_from:
                 continue
             hard_deleted.append(aggregate.stem)
@@ -1170,7 +1171,7 @@ def prune_feed_health(
     kept: list[str] = []
     freed = 0
 
-    root = state_dir / ledger.HEALTH_DIRNAME
+    root = ledger.tree_root(state_dir, LedgerName.HEALTH)
     by_month = day_shards.shards_by_month(root, days=UNBOUNDED_WINDOW)
     for month in sorted(by_month):
         if month >= boundary:
@@ -1246,7 +1247,7 @@ def prune_host_fingerprint(
     freed = 0
 
     by_month = day_shards.shards_by_month(
-        state_dir / ledger.HOST_FINGERPRINT_DIRNAME, days=UNBOUNDED_WINDOW
+        ledger.tree_root(state_dir, LedgerName.HOST_FINGERPRINT), days=UNBOUNDED_WINDOW
     )
     for month in sorted(by_month):
         if month >= boundary:
@@ -1347,14 +1348,14 @@ def prune_seen(
     kept: list[str] = []
     freed = 0
 
-    for day in day_partition.day_files(state_dir / ledger.SEEN_DIRNAME):
+    for day in day_partition.day_files(ledger.tree_root(state_dir, LedgerName.SEEN)):
         on = day_partition.date_of(day)
         if on >= oldest_read:
-            kept.append(ledger.seen_relpath(on))
+            kept.append(ledger.relpath(LedgerName.SEEN, on))
             continue
         # Named and weighed before anything is unlinked, so the dry run prints
         # the same list the live run removes.
-        deleted.append(ledger.seen_relpath(on))
+        deleted.append(ledger.relpath(LedgerName.SEEN, on))
         freed += day.stat().st_size
         if not dry_run:
             day.unlink()
@@ -1430,7 +1431,7 @@ def prune_counterfactual_scores(
     kept: list[str] = []
     freed = 0
 
-    root = state_dir / ledger.COUNTERFACTUAL_SCORES_DIRNAME
+    root = ledger.tree_root(state_dir, LedgerName.COUNTERFACTUAL_SCORES)
     for path in day_shards.shard_files(root, days=UNBOUNDED_WINDOW):
         relpath = f"{ledger.STATE_DIRNAME}/{path.relative_to(state_dir).as_posix()}"
         if day_shards.date_of(path) >= oldest_read:
@@ -1482,7 +1483,7 @@ def prune_day_validations(
     in it, and a walk that read one file would delete one and leave the rest.
     """
     boundary = oldest_month_kept(today, config.day_validation_keep_months)
-    root = state_dir / ledger.DAY_VALIDATIONS_DIRNAME
+    root = ledger.tree_root(state_dir, LedgerName.DAY_VALIDATIONS)
     by_month = day_shards.shards_by_month(root, days=UNBOUNDED_WINDOW)
 
     deleted: list[str] = []

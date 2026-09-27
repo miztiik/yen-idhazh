@@ -40,6 +40,7 @@ from idhazh import assemble, ledger
 from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.digest_day import DigestDay
 from idhazh.contracts.knobs.placement import HOLDOUT_RESOLVED_SHARE_MIN
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.similarity_holdout_pair import SimilarityHoldoutPair
 
 
@@ -109,7 +110,7 @@ def marked_pairs(state_dir: Path) -> list[SimilarityHoldoutPair]:
     the evidence a floor is set from, and a silently short count reads as a
     smaller holdout rather than as a broken one.
     """
-    path = ledger.similarity_holdout_path(state_dir)
+    path = ledger.path(state_dir, LedgerName.SIMILARITY_HOLDOUT)
     if not path.exists():
         return []
     with path.open("r", encoding="utf-8", newline="") as handle:

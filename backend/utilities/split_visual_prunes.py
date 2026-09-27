@@ -45,6 +45,7 @@ from typing import Final
 
 from idhazh import ledger
 from idhazh.assemble import write_atomic
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.visual_prune import VisualPruneRow
 
 #: The file this cutover empties and removes. Spelled here rather than asked of
@@ -218,7 +219,7 @@ def run(state_dir: Path) -> Report:
     before = ledger.load_visual_prunes(state_dir) + _flat_rows(report)
 
     for on in sorted(report.lines):
-        _write_day(ledger.visual_prunes_path(state_dir, on), report.lines[on])
+        _write_day(ledger.path(state_dir, LedgerName.VISUAL_PRUNES, on), report.lines[on])
 
     both = ledger.load_visual_prunes(state_dir)
     if both != before:
@@ -242,7 +243,7 @@ def run(state_dir: Path) -> Report:
         days=report.days,
         passes=len(after),
         digest=digest(after),
-        paths=[ledger.visual_prunes_relpath(on) for on in sorted(report.lines)],
+        paths=[ledger.relpath(LedgerName.VISUAL_PRUNES, on) for on in sorted(report.lines)],
     )
 
 

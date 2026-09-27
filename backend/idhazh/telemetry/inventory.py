@@ -23,6 +23,7 @@ from pathlib import Path
 from idhazh import day_shards, ledger
 from idhazh.assemble import month_of
 from idhazh.contracts.item_health import ItemHealthRow
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.span_rollup import SpanRollupRow
 
 
@@ -99,7 +100,7 @@ def outcomes(state_root: Path, *, date: str) -> list[str]:
     rows = [
         ItemHealthRow.from_csv_row(cells)
         for cells in day_shards.settled_day(
-            state_root / ledger.ITEM_HEALTH_DIRNAME,
+            ledger.tree_root(state_root, LedgerName.ITEM_HEALTH),
             date,
             ledger.ITEM_HEALTH_KEY,
             ItemHealthRow,
@@ -131,7 +132,7 @@ def spans(state_root: Path, *, date: str) -> list[str]:
     rows = [
         SpanRollupRow.from_csv_row(cells)
         for cells in day_shards.settled_day(
-            state_root / ledger.SPAN_ROLLUP_DIRNAME,
+            ledger.tree_root(state_root, LedgerName.SPAN_ROLLUP),
             date,
             ledger.SPAN_ROLLUP_KEY,
             SpanRollupRow,
