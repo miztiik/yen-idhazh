@@ -55,45 +55,7 @@ decision. Current project behaviour belongs in `docs/` (Guardrail #4).
 | 32 | The console reads the score ledger raw, so the newest day counts twice | 2 | CLOSED 2026-09-23 |
 | 33 | The console reads the machine ledger raw, so every job counts twice and one copy has no machine | 3 | **OPEN - defect 32 again, one ledger over** |
 | 34 | `donut_thickness_px` is a knob nothing reads | 1 | CLOSED 2026-09-27 |
-| 35 | The chart loading flag flips at import, so the waiting sentence goes while the box is still empty | 2 | **OPEN - the moment of truth is already published** |
-
-## 35 - The chart loading flag flips at import, so the waiting sentence goes while the box is still empty (OPEN)
-
-`frontend/src/lib/charts/Chart.svelte` sets `data-chart-drawn={drawn ? 'yes' : 'no'}`
-and hides its `pending` line on that same `drawn`. The flag flips when the charting
-engine module resolves, not when a mark reaches the host, so it reads `yes` while the
-host element still says `data-chart="waiting"` and nothing is on screen.
-
-**What a reader sees.** Five charts on `/console/` are handed `svg=""` and have no
-prerendered picture under them, so the pending sentence is not decoration over a
-fallback - it is the fallback. When it goes one step early the reader is left with a
-blank region about 220px tall and a screen-reader-only list, and cannot tell whether a
-chart is still coming or whether there was nothing to draw. On a failed engine load the
-box stays blank for the rest of the session, because `drawn` is already `yes`.
-
-[`docs/architecture/publishing/console-payloads.md`](../docs/architecture/publishing/console-payloads.md)
-already states the commitment the component stops honouring: `Chart` takes a `pending`
-line "because a box that is simply empty says nothing about which of the two nothings
-happened". The rule is written; the fix is what is missing.
-
-**What a test sees.** A browser test waiting on `data-chart-drawn="yes"` is waiting on
-the module, not the mark. `frontend/tests/console-readout.spec.ts` reads the attribute,
-which is what makes this Level 2 rather than Level 1.
-
-**The fix.** `engine.ts` already publishes the moment of truth - it sets
-`data-chart="live"` at the draw - so the component needs that moment fed back, not a
-second state machine. The sentence then has to name both nothings, because once it
-survives a permanent engine failure "it is still loading" is a promise the page cannot
-keep.
-
-Ruled in scope by Jony, who owns the condition - the sentence stays until something is
-drawn - and by Susan, who owns the wording and failed the surface on four of four
-sufficiency checks. Carmack had ruled it out as a test-attribute defect; that ruling
-named no reader loss and priced a state machine the fix does not need. The permanent
-redraw lands in plan 51's row 4, which mints the module that owns each waiting state;
-this row is what keeps the page honest until then.
-
-Found on 2026-09-27 during plan 54's closure.
+| 35 | The chart loading flag flips at import, so the waiting sentence goes while the box is still empty | 2 | CLOSED 2026-09-27 |
 
 ## 33 - The Hardware route counts every job twice, and one copy has no machine (OPEN)
 

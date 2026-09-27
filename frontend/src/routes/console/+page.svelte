@@ -936,7 +936,6 @@
 					grid={COST_GRID}
 					restingNote=", the newest published day"
 					hint="Point at a day to read what its articles cost. Left and Right step through them, Escape returns to the newest."
-					pending="The day-by-day shape is drawn once the engine loads. Every value is in the list below it."
 				/>
 				<!-- The values, as text. It is what a chart owes anybody who cannot
 				     see it, and it is also the only honest way to check the flags:
@@ -998,7 +997,6 @@
 					readoutMaxShare={data.chart.readout_max_share}
 					restingNote=", the newest day"
 					hint="Point at a day to read every stage at once. Left and Right step through the days, Escape returns to the newest."
-					pending="The stage mix is drawn once the engine loads. Every count is in the strip below it."
 					fetched
 				/>
 				<!-- Stacked answers what the mix is and how big the day got; lines answer
@@ -1049,7 +1047,6 @@
 					readoutMaxShare={data.chart.readout_max_share}
 					restingNote=", the newest day"
 					hint="Point at a day to read every step at once. Left and Right step through the days, Escape returns to the newest."
-					pending="The split is drawn once the engine loads. Every step's milliseconds and share are in the strip below it."
 					fetched
 				/>
 				<!-- Stacked answers what the split is and whether the item got slower;
@@ -1523,9 +1520,9 @@
 				     stacking breakpoint the same numbers are a stepped list, which is a
 				     shape a 360px column can hold. Both are built from one `chartFlow`
 				     call, so they cannot report two different flows.
-				     The list is the one that always draws: it is markup over the same
-				     steps, so an operator with no engine still reads every stage and
-				     every drop. -->
+				     The list is markup over the same steps, but it shows only below the
+				     breakpoint - so above it, where the diagram is the one shape, an
+				     empty box points at the day-by-day table further down instead. -->
 				<div class="panel mt-4" data-flow="chart">
 					<Chart
 						svg=""
@@ -1534,7 +1531,7 @@
 						height={FLOW_HEIGHT}
 						label="Where items go between the visual planner reaching one and a visual being published, across the window. Every drop leaves the flow as its own branch, and a branch is as wide as the number of items in it."
 						noReadout="a flow between stages, so there is no column two branches share"
-						pending="The diagram is drawn once the engine loads. Every stage and every drop is in the list below it."
+						numbersNote={`Open "Show these figures day by day" below for each stage's count on every day.`}
 					/>
 				</div>
 				<ol class="panel flow-steps mt-4" data-flow-steps={flow.steps.length}>
@@ -1725,7 +1722,6 @@
 							grid={YIELD_GRID}
 							restingNote=", the newest measured day"
 							hint="Point at a day to read both counts. Left and Right step through them, Escape returns to the newest."
-							pending="The day-by-day shape is drawn once the engine loads. Every count is in the list below it."
 						/>
 						<!-- The counts as text, so nothing here needs a pointer. -->
 						<ul class="sr-only" data-extraction-trend-days-list>

@@ -11,6 +11,13 @@
 	 * the axis did not already say - which is the whole reason the readout is
 	 * allowed to exist (design-system.md).
 	 *
+	 * Where the server hands no picture - `svg` is empty - the box holds one
+	 * sentence until the first mark lands: the chart is loading, it did not load,
+	 * or, with no script, it needs JavaScript. Then it says where the chart's
+	 * numbers are in words. The engine says which of the first two it is, through
+	 * `hydrate`, at the moment it writes the same word on the host, so the
+	 * component keeps no guess of its own about whether anything has drawn.
+	 *
 	 * Where the chart draws more than one series, `columns` turns on the same
 	 * fixed strip a hand-written chart prints: every series at one column, below
 	 * the plot, capped at a share of it, with a guide line down the column and
@@ -33,7 +40,17 @@
 		type PlotGrid
 	} from './frame';
 	import ChartReadout from '../components/ChartReadout.svelte';
-	import type { LiveChart } from './engine';
+	import type { ChartState, LiveChart } from './engine';
+
+	/** What an empty box says. Each is one fact about one download, true of
+	 * every chart at once, so every chart says it the same way. */
+	const LOADING_WORDS = 'This chart is loading.';
+	const FAILED_WORDS = 'This chart did not load. Check your connection, then reload the page.';
+	const NO_SCRIPT_WORDS = 'This chart needs JavaScript.';
+	/** Where a chart with a readout strip keeps its numbers while its box is
+	 * empty. Every such chart that only a browser draws has a column per day, and
+	 * the strip rests on the newest one. */
+	const STRIP_NUMBERS = "The newest day's numbers are below.";
 
 	let {
 		svg,
@@ -48,12 +65,12 @@
 		restingNote = ', the newest column',
 		hint = 'Point at a column to read it. Left and Right step through them, Escape returns to the newest.',
 		grid = { left: 48, right: 12 },
-		pending = 'This chart is drawn from rows the page fetches, so it appears once they arrive.',
+		numbersNote,
 		fetched = false
 	}: {
 		/** Prerendered by `$lib/server/chart-render`, or empty where the chart is
-		 * drawn from rows only a browser has. An empty one shows `pending` until
-		 * the engine draws over it. */
+		 * drawn from rows only a browser has. An empty one holds a sentence until
+		 * the engine's first mark lands. */
 		svg: string;
 		option: EChartsOption;
 		width: number;
@@ -75,10 +92,12 @@
 		/** The engine's own plot insets, in pixels. They decide where a column
 		 * centre falls, and they are not the same for every option this wraps. */
 		grid?: PlotGrid;
-		/** What stands in the plot's place while nothing has been drawn there.
-		 * A box that is simply empty says nothing about which of the two
-		 * nothings happened - no rows yet, or no engine ever. */
-		pending?: string;
+		/** Where this chart's numbers can be read while its box is empty, said
+		 * after the box's own sentence. A chart with a readout strip leaves it
+		 * out: the strip is the answer, and the component says so itself. A chart
+		 * with no strip names the text that carries its numbers, so a reader
+		 * facing an empty box still has somewhere to go. */
+		numbersNote?: string;
 		/** True where the rows behind this chart arrive by fetch rather than in
 		 * the document. It changes what the chart owes a reader with no script:
 		 * a chart over inlined data owes its resting column in the prerendered
@@ -89,10 +108,14 @@
 	// Bound in one of two branches, so it is state rather than a plain binding.
 	let host = $state<HTMLDivElement | null>(null);
 	let live: LiveChart | null = null;
-	/** True once something has been drawn in the host - either the server's SVG
-	 * or the engine's. It is what decides whether `pending` is on the page. */
-	// svelte-ignore state_referenced_locally
-	let drawn = $state(svg !== '');
+	/** What the engine has said about this chart, in the word it writes on the
+	 * host as `data-chart`. It is `failed` here as well when the engine module
+	 * itself never downloads, which is a failure no host hears about. */
+	let chartState = $state<ChartState>('waiting');
+	/** True once a mark is on screen - the server's SVG, or the engine's first
+	 * draw. Until then the box holds a sentence saying which nothing it is. */
+	const drawn = $derived(svg !== '' || chartState === 'live');
+	const note = $derived(numbersNote ?? (columns.length > 0 ? STRIP_NUMBERS : ''));
 	/** The option the live chart is holding, so an unchanged one is not handed
 	 * over again the first time the effect runs. */
 	let handed: EChartsOption | null = null;
@@ -138,10 +161,11 @@
 		// already complete and this only adds the readout.
 		void (async () => {
 			// The engine is a network fetch and it can fail - an offline reader, a
-			// dropped connection. The server already drew this chart, so a failure
-			// costs the tooltip and nothing else. It is said once, in the console,
-			// rather than thrown: an unhandled rejection per chart is noise a
-			// reader cannot act on and a real fault cannot be seen through.
+			// dropped connection. Where the server drew this chart, a failure costs
+			// the tooltip and nothing else; where it did not, the box says the chart
+			// did not load. It is said once, in the console, rather than thrown: an
+			// unhandled rejection per chart is noise a reader cannot act on and a
+			// real fault cannot be seen through.
 			const engine = await import('./engine').catch((reason: unknown) => {
 				console.warn(`chart "${label}": the engine did not load, so it stays as drawn`, reason);
 				return null;
@@ -149,10 +173,15 @@
 			// The import is a network fetch, so the component can be gone by now.
 			// `hydrate` hands back a handle in the same turn, so past this check
 			// there is no window where an instance exists and nothing holds it.
-			if (engine === null || cancelled) return;
+			if (cancelled) return;
+			if (engine === null) {
+				chartState = 'failed';
+				return;
+			}
 			handed = option;
-			live = engine.hydrate(node, option, { width: measured, height });
-			drawn = true;
+			live = engine.hydrate(node, option, { width: measured, height }, (state) => {
+				chartState = state;
+			});
 		})();
 
 		return () => {
@@ -174,6 +203,36 @@
 		live.update(next);
 	});
 </script>
+
+<!-- What stands where the plot will be until a mark lands. With no script the
+     promise that the chart is coming is false for the whole visit, so the
+     `<noscript>` rule hides it and says what is true instead. It reaches the
+     promise by attribute, for the reason `FilterBar` records: a `<noscript>`
+     rule cannot outrank a scoped class, so that element carries no class and
+     no display of its own. -->
+{#snippet emptyBox()}
+	<p
+		class="chart-pending text-[0.8125rem] text-text-tertiary"
+		data-chart-pending={chartState === 'failed' ? 'failed' : 'waiting'}
+	>
+		<span>
+			{#if chartState === 'failed'}
+				{FAILED_WORDS}
+			{:else}
+				<span data-chart-scripted>{LOADING_WORDS}</span>
+				<noscript>
+					<style>
+						[data-chart-scripted] {
+							display: none;
+						}
+					</style>
+					{NO_SCRIPT_WORDS}
+				</noscript>
+			{/if}
+			{note}
+		</span>
+	</p>
+{/snippet}
 
 <figure
 	class="chart"
@@ -201,12 +260,7 @@
 				<!-- eslint-disable-next-line svelte/no-at-html-tags -->
 				{@html svg}
 				{#if !drawn}
-					<p
-						class="chart-pending text-[0.8125rem] text-text-tertiary"
-						data-chart-pending={readoutName || undefined}
-					>
-						{pending}
-					</p>
+					{@render emptyBox()}
 				{/if}
 			</div>
 			{#if guide !== null}
@@ -231,7 +285,7 @@
 			<!-- eslint-disable-next-line svelte/no-at-html-tags -->
 			{@html svg}
 			{#if !drawn}
-				<p class="chart-pending text-[0.8125rem] text-text-tertiary">{pending}</p>
+				{@render emptyBox()}
 			{/if}
 		</div>
 	{/if}
@@ -272,7 +326,9 @@
 	   the reserved height so the panel does not change size when the engine
 	   arrives, and quiet enough that a chart which draws immediately never reads
 	   as having flashed a warning. Its colour and size are classes rather than
-	   custom properties, so it takes the same two the readout strip takes. */
+	   custom properties, so it takes the same two the readout strip takes. Its
+	   words sit in one span: centred as flex items, each sentence would be laid
+	   out as a column of its own. */
 	.chart-pending {
 		display: flex;
 		align-items: center;

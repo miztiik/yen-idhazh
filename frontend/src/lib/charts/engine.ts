@@ -21,11 +21,14 @@
  * we hand it.
  *
  * The state a test needs is published on the page rather than kept private:
- * `data-chart` on the host says `waiting` or `live`, `data-chart-options`
- * counts full option applications and `data-chart-colours` counts the
- * colour-only ones, and `data-charts-live` on the document element says how
- * many instances the engine holds right now. A test that cannot see which path
- * ran cannot tell a cheap repaint from an expensive one.
+ * `data-chart` on the host says `waiting`, `live` or `failed`,
+ * `data-chart-options` counts full option applications and
+ * `data-chart-colours` counts the colour-only ones, and `data-charts-live` on
+ * the document element says how many instances the engine holds right now. A
+ * test that cannot see which path ran cannot tell a cheap repaint from an
+ * expensive one. The component that called `hydrate` is told each host state
+ * at the moment it is written, so the words it puts in an empty box follow
+ * the same fact a test reads.
  */
 
 import type { EChartsOption } from 'echarts';
@@ -45,6 +48,12 @@ export interface LiveChart {
 	resize(size: ChartSize): void;
 	destroy(): void;
 }
+
+/** What a host says about itself in `data-chart`: `waiting` until the engine
+ * has drawn the chart, `live` from the moment it has, and `failed` once the
+ * chart library did not download - after which nothing draws there for the
+ * rest of the visit. */
+export type ChartState = 'waiting' | 'live' | 'failed';
 
 /** How close a chart has to be before it is worth drawing: one screen ahead,
  * the same reach `ItemVisual.svelte` gives a drawing. A chart nine screens down
@@ -184,7 +193,12 @@ function countHeld(step: number): void {
 	document.documentElement.setAttribute('data-charts-live', String(held));
 }
 
-export function hydrate(node: HTMLElement, option: EChartsOption, size: ChartSize): LiveChart {
+export function hydrate(
+	node: HTMLElement,
+	option: EChartsOption,
+	size: ChartSize,
+	told?: (state: ChartState) => void
+): LiveChart {
 	let current = option;
 	let template = (paintedParts(option, false).part ?? {}) as EChartsOption;
 	let at: ChartSize = { ...size };
@@ -196,7 +210,14 @@ export function hydrate(node: HTMLElement, option: EChartsOption, size: ChartSiz
 	let options = 0;
 	let colours = 0;
 
-	node.setAttribute('data-chart', 'waiting');
+	/** The one writer of a host's state. The attribute and the caller are told
+	 * together, so the page and a test cannot read two different answers. */
+	const settle = (state: ChartState): void => {
+		node.setAttribute('data-chart', state);
+		told?.(state);
+	};
+
+	settle('waiting');
 
 	const publish = (): void => {
 		node.setAttribute('data-chart-options', String(options));
@@ -224,18 +245,24 @@ export function hydrate(node: HTMLElement, option: EChartsOption, size: ChartSiz
 		if (gone || started) return;
 		started = true;
 		void (async () => {
-			// The library is a network fetch of its own and it can fail. The server
-			// already drew this chart, so a failure costs the tooltip and nothing
-			// else - said once in the console rather than thrown at a reader who
-			// can do nothing with it.
+			// The library is a network fetch of its own and it can fail. Where the
+			// server drew this chart, a failure costs the tooltip and nothing else;
+			// where it did not, the host says `failed` so the box can say the chart
+			// did not load. Either way it is said once in the console rather than
+			// thrown at a reader who can do nothing with it.
 			const loaded = await import('./core').catch((reason: unknown) => {
 				console.warn('a chart engine did not load, so the chart stays as drawn', reason);
 				return null;
 			});
 			// The chunk is a network fetch, so a chart can be unmounted while it is
 			// in flight. Drawing into a detached node then leaks an instance nothing
-			// is left holding to dispose.
-			if (loaded === null || gone || !node.isConnected) return;
+			// is left holding to dispose, and a component that is gone has nobody to
+			// tell.
+			if (gone || !node.isConnected) return;
+			if (loaded === null) {
+				settle('failed');
+				return;
+			}
 			node.replaceChildren();
 			chart = loaded.echarts.init(node, null, {
 				renderer: 'svg',
@@ -246,7 +273,7 @@ export function hydrate(node: HTMLElement, option: EChartsOption, size: ChartSiz
 				height: at.height
 			});
 			countHeld(1);
-			node.setAttribute('data-chart', 'live');
+			settle('live');
 			applyOption();
 			unwatch = watchTheme(repaint);
 		})();
