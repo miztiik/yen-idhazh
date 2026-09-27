@@ -1,6 +1,6 @@
 # Console Payloads
 
-**Last Updated**: 2026-09-23
+**Last Updated**: 2026-09-27
 The operator console reads ten datasets. Nine of them come from `state/`,
 which is never served, so each one crosses a trust boundary and each crossing
 needs a contract (Guardrail #11). This page is the list. The machine-readable copy is
@@ -408,18 +408,18 @@ allowed in front of it is that one named file. Anything else of ours in front
 turns the test red, and so does one more request of any kind. When the server
 loads go the band becomes index 0 and both lines still hold.
 
-**Three charts on `/console/` are drawn in the browser** - the per-article cost,
-the failure mix and the flow diagram. There were four when this was measured:
-the run donut was the fourth, and it has since been replaced by the run-yield
-panel, which is server-drawn inline SVG rather than a browser chart. The four
-were 143 KB of finished SVG, which is what stood between the document and the
-bar after the rows left; the three that remain are less than that, and the
-figure has not been re-measured because nothing turns on it. Each keeps a text
-form beside it, so a reader with no script loses the picture and none of the
-numbers: the cost days are a list, the flow is a stepped list with every count
-and share, and the mix is its strip. `Chart` takes a `pending` line for the gap
-before anything draws, because a box that is simply empty says nothing about
-which of the two nothings happened.
+**Five charts on `/console/` are drawn in the browser** - the per-article cost,
+the failure mix, the item time split, the flow diagram and the extraction yield.
+There were four when this was measured: the run donut was the fourth, and it has
+since been replaced by the run-yield panel, which is server-drawn inline SVG
+rather than a browser chart. The four were 143 KB of finished SVG, which is what
+stood between the document and the bar after the rows left; the figure has not
+been re-measured because nothing turns on it. Each keeps its numbers in words
+beside it: a readout strip under the four with a column per day, and for the
+flow a stepped list below the page's stacking breakpoint and the day-by-day
+table above it. What an empty box says until a chart draws, and after a download
+that failed, is
+[console-charts.md](console-charts.md#an-empty-chart-box-says-which-nothing-it-holds).
 
 **The band's months list is the union across all five fetched series**, not the
 run-day months alone. The field promised "every month a payload shard exists

@@ -1,10 +1,11 @@
 # Console Charts
 
-**Last Updated**: 2026-09-22
+**Last Updated**: 2026-09-27
 What a chart on the operator console has to conform to: the one coordinate
 frame every chart draws through, the pointer readout every chart with a shared
-column carries, how a missing number is marked rather than drawn as a zero, and
-where the model-change rule may appear.
+column carries, what an empty chart box says until a mark lands in it, how a
+missing number is marked rather than drawn as a zero, and where the model-change
+rule may appear.
 
 **This page is for somebody adding or changing a console chart.** It says
 nothing about which panel is on which route - that is
@@ -18,7 +19,7 @@ The modules it governs are
 [frame.ts](../../../frontend/src/lib/charts/frame.ts), which owns the width, the
 margin box and the two domain rules;
 [Chart.svelte](../../../frontend/src/lib/charts/Chart.svelte), which owns a live
-chart's lifetime; and
+chart's lifetime and what its box says before it draws; and
 [core.ts](../../../frontend/src/lib/charts/core.ts), the registration list that
 decides what the lazy engine chunk weighs.
 
@@ -310,6 +311,56 @@ one rule, on 2026-08-27, measured 2026-08-30 on a production build. The canary's
 throughput days are older than the ledger's first row, so no day there names a
 model and the rule cannot draw in the browser gate; the test says where it stops
 rather than passing quietly on an absence.
+
+## An empty chart box says which nothing it holds
+
+Five charts on `/console/` have no picture from the server: the per-article
+cost, the failure mix, the item time split, the chart-drawing flow and the
+extraction yield. Their box is empty until the browser draws them, and the
+browser draws a chart only once it comes within one screen of the viewport. So
+for most of them "not drawn yet" is the normal state, and a box that is simply
+empty cannot say whether a chart is coming or never will.
+
+So the box holds one sentence until the first mark lands, and
+[Chart.svelte](../../../frontend/src/lib/charts/Chart.svelte) owns it:
+
+| The box is empty because | It says |
+| --- | --- |
+| the chart has not drawn yet: it is more than one screen down, or its chart library is still downloading | This chart is loading. |
+| the engine module or the chart library did not download, so nothing will draw there this visit | This chart did not load. Check your connection, then reload the page. |
+| JavaScript is off | This chart needs JavaScript. |
+
+Then it says where the chart's numbers are in words. A chart with a readout
+strip gets "The newest day's numbers are below." from the component, because the
+strip rests on the newest day. A chart without one passes `numbersNote`. The
+flow diagram's points at the day-by-day table further down: its stepped list
+shows only below the page's stacking breakpoint, and so never beside the
+diagram's box. The three sentences are one fact about one download, true of
+every chart at once, so no page passes its own.
+
+**The sentence goes when a mark lands, and not one step before.** `hydrate` in
+[engine.ts](../../../frontend/src/lib/charts/engine.ts) is the one writer of
+`data-chart` on the host - `waiting`, `live` or `failed` - and it tells the
+component in the same call. `data-chart-drawn` on the figure says `yes` exactly
+when the server drew the chart or its host says `live`, so a test can wait on
+either and get one answer. A flag set when the engine module arrives is the trap
+this replaced: it says `yes` over an empty box, and when the chart library then
+fails it says `yes` for the whole visit.
+
+**A server picture always wins.** Where the server drew the chart, a failed
+download costs the tooltip and nothing else: the marks stay, the figure says
+`yes`, and no sentence is laid over them.
+
+With no script, the loading words sit in their own element that a `<noscript>`
+rule hides by attribute, and the scripts-off words stand in their place. The
+pattern, and the specificity trap that decides why it reaches the element by
+attribute, are in
+[../../concepts/design-system.md](../../concepts/design-system.md#a-control-that-needs-a-script-is-not-left-on-the-page-without-one).
+
+[frontend/tests/console-chart-pending.spec.ts](../../../frontend/tests/console-chart-pending.spec.ts)
+is the memory. A chart below the draw line keeps its sentence until it draws;
+both downloads fail into one failure sentence; a server picture survives a
+failed library; and with no script the box makes no promise.
 
 ## Stage timings are one trend chart, and its axis is decades
 
