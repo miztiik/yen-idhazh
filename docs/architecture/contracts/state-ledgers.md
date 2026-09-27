@@ -129,7 +129,7 @@ The first row is what the registry is for. The claim used to be a hand-written P
 **The write path does not read the status yet.** Every writer writes where the registry says, whatever the family's status. So a test holds every family at `active`, and it refuses a paused or retired family until the write path honours the field. When it does, two rules hold, and both are the owner's:
 
 - A write into a paused or retired family is skipped with one warning, and the run carries on. A status is a decision about one folder, and a run that stopped on it would cost every other family its rows.
-- The passes that compact closed days and age out old rows keep running over a paused family. To freeze its old rows as well, pause the pass that deletes them: a status says whether new rows are written, never how long old ones are kept.
+- The passes that compact closed days and age out old rows keep running over a paused or retired family. To freeze its old rows as well, pause the pass that deletes them: a status says whether new rows are written, never how long old ones are kept.
 
 ### Onboarding and offboarding
 

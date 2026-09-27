@@ -1,6 +1,6 @@
 # Agent Notes - Shell and Tools
 
-**Last Updated**: 2026-09-24
+**Last Updated**: 2026-09-27
 Traps in PowerShell, MSYS, the editor's own file and search tools, the Python
 environment, npm and the libraries that lie about what they returned. Index and
 scope: [../agent-notes.md](../agent-notes.md).
@@ -33,7 +33,7 @@ $p = Start-Process -FilePath pwsh -ArgumentList '-NoProfile','-File','x.ps1' -Wa
 
 **A long command PIPED into a filter prints nothing until it finishes**, and the tool backgrounds it first, so a working command and a hung one look identical. `Select-String` and `Select-Object` read their input to the end before writing anything. Three common victims are `pytest | Select-String`, `npm run test:browser | Select-Object -Last 45 | Out-File`, which can leave a zero-byte log beside exit 0 after a nine-minute run, and `pip install | Select-Object` on a fresh venv, where it looks exactly like a resolver stall. Redirect the whole stream to a file, then filter the file.
 
-**A double-quoted string carrying a backtick escape can leave the shell on a `>>` continuation prompt**, after which every later command is swallowed as more input - so a later failure gets blamed on the wrong command. No output appears at all, which is how it differs from the idle kill. Prefer single quotes; where a literal control character is needed, `[char]13` and `[Environment]::NewLine` have no escape grammar to survive the trip.
+**A double-quoted string carrying a backtick escape can leave the shell on a `>>` continuation prompt**, after which every later command is swallowed as more input - so a later failure gets blamed on the wrong command. No output appears at all, which is how it differs from the idle kill. **`\"` does the same**: PowerShell does not read a backslash as an escape, so `\"` ends the string and the next `"` opens another. Prefer single quotes, and match a literal quote in a regex with `.`; where a literal control character is needed, `[char]13` and `[Environment]::NewLine` have no escape grammar to survive the trip. To leave the prompt without running anything, send a line that closes the open quote and adds a stray `)`: the parser rejects the whole input, so nothing in it runs.
 
 **`-like '??*'` treats `?` as a wildcard**, so a filter meant to find untracked lines in `git status --porcelain` matches every line of two or more characters and returns the whole status. Ask git instead (`git ls-files --others --exclude-standard`), or use `.StartsWith('??')`.
 
@@ -97,6 +97,12 @@ $t='<abs>'; Set-Location -LiteralPath $t; if ($PWD.Path -ne $t) { exit 9 }; <com
 **The launch itself can silently not happen.** `Start-Process` returns, no child appears, and no log file is ever created, so the missing gate reads as a slow one. `Test-Path <log>` immediately afterwards is the check; false means send the launch again rather than keep polling.
 
 **A sleeping poll loop is sometimes detached rather than killed**, and re-reading that terminal returns the command line followed by empty lines - so the sentinel arrives on time and the poll cannot say so. Print one line per iteration, which keeps the call in the foreground and shows the log growing.
+
+**Ending a turn to wait for a detached run reads as waiting, and is actually stopping.** The tool reports the end of a command it started; a child launched with `Start-Process` is not one, so its exit sends nothing. On 2026-09-27 a 49-minute gate finished with no notice, and the agent sat idle until a person asked whether it was stuck. The tell is a log that already ends in its result line while nothing has reported it. Before ending a turn on a detached run, block on it from the terminal tool, so the tool's own notice fires when the wait returns:
+
+```powershell
+Wait-Process -Id ([int](Get-Content "$t\gate.pid")); Get-Content "$t\gate.out" -Tail 5
+```
 
 **`pwsh -NoProfile -File <script>.ps1` can exit 1 having done nothing**, with no error text. Call the absolute path instead: `& 'C:\...\script.ps1'`.
 
