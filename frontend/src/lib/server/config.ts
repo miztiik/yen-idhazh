@@ -229,6 +229,11 @@ export interface ConsoleConfig {
 	 * one of them - the contract refuses a config where it is not. */
 	window_presets: number[];
 	today_anchor: 'right' | 'centre';
+	/** Whole UTC days the record's day may trail the reader's before the
+	 * sentence under the strip stops saying how complete the record is and says
+	 * how many days are missing. It decides when the count is said, never what
+	 * it counts. */
+	completeness_grace_days: number;
 	pan_days: number;
 	zoom_factor: number;
 	min_window_days: number;
@@ -513,6 +518,7 @@ const CONSOLE_DEFAULTS: ConsoleConfig = {
 	default_window_days: 30,
 	window_presets: [1, 7, 14, 30, 90],
 	today_anchor: 'right',
+	completeness_grace_days: 1,
 	pan_days: 7,
 	zoom_factor: 1.5,
 	min_window_days: 1,
