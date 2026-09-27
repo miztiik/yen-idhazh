@@ -32,7 +32,7 @@ they work on a collection nobody has invented yet.
 **1. Does a run append to it?** Not "is it big", and not "is it in `state/`".
 Source a person writes grows at review speed and is not this. A collection a
 scheduled job adds to is - published days, ledger rows, shards, pictures,
-vectors, receipts, corpus rows, and the one nobody has created yet.
+vectors, corpus rows, and the one nobody has created yet.
 
 **2. Does the read's cost follow what was appended?** Open the read and ask what
 it would do tomorrow if today's run wrote and nobody touched the code. If the
@@ -148,31 +148,6 @@ gives. `fingerprint.append_new` is the same shape one size down: it
 carries digests rather than built rows, and the set stops growing when the inputs
 stop changing.
 
-**A receipt, where the thing read cannot change.** `stages.validate_days.stage_validate_days`
-opened every committed day on every publication. A published day is frozen - the
-only thing that can happen to it is deletion - so what invalidates a pass is a
-move in the rules, not the passage of time. `state/day-validations.csv` records
-the day, the payload's length and digest, and the validator's identity. A later
-run skips a day whose receipt names this validator and whose recorded length
-still matches `os.stat`, and never opens the payload. Change the validator and
-every receipt stops matching, so the archive is re-validated **once**, not on a
-window. Measured 2026-09-08 on a developer machine over 18 committed days and
-19,867,266 bytes: 0.45 s median over three runs against 0.02 s with every receipt
-current. **What is left is honest and small**: the pass still lists the days and
-stats each one, so it still costs one `stat` a day, for ever. It says so.
-
-**The saving is paid for by the length, so the ledger travels with the tree.**
-Settling a day on the length a receipt recorded is what makes the skip free, and
-it is also the whole of the skip's evidence - so a receipt earned over one tree
-will settle a same-length day in another without opening it. Measured
-2026-09-13: a copy of the newest committed day with `"items"` overwritten by
-`"itemz"`, one byte for one byte, passed against the committed receipt ledger and
-reported `0 of them opened`; against an empty ledger the same file was refused.
-`validate-days` therefore refuses a `--digest-root` that is not the committed
-tree unless `--state-root` is named as well, rather than leaving the pairing to
-each caller to remember. One caller had already forgotten it
-([defect 20](../../TODO/20260823-known-defects-plan.md)).
-
 ### 3. Unbounded, on purpose, and it says so
 
 This is Guardrail #12's escape hatch taken in writing. Each of these reads opens
@@ -199,6 +174,18 @@ read**, and where it is, the read needs nothing.
 **A validator cannot skip what it has not read.** `contracts.base.Contract.read`
 opens one file, never a collection, and half a payload validated is a payload
 reported good on the half that happened to be first.
+
+**A read that got its growth back, on purpose.** `stages.validate_days.stage_validate_days`
+opens every committed day on every publication and on every CI run. A receipt
+ledger used to skip a day whose recorded payload length still matched `os.stat`,
+and it was decommissioned on 2026-09-27 because the saving was paid for by that
+length: a receipt earned over one tree settles a same-length day in another tree
+without opening it, so the record that made the read cheap also made a wrong
+answer reachable. Measured 2026-09-08 on a developer machine: 18 committed days
+and 19,867,266 bytes at 0.45 s median over three runs, which is 44 MB/s. The
+sweep therefore grows one day a day, and the growth is declared rather than
+removed - at the 727-day horizon the 1 GB Pages cap sets, about 645 MB reads in
+roughly 15 s on a laptop and 30-60 s on the 4-vCPU runner, against a 6 h job.
 
 **And three whole-tree walks that stayed.** `assemble.site_size` and
 `retention.measure` read the size of every file in the tree;
@@ -251,7 +238,6 @@ reads are here and not how many. These are `backend/`'s;
 | Read | What it opens | Its cover |
 | --- | --- | --- |
 | `evals.writer.recorded_observations` | `state/score-index/` and `state/score-archive/` | every observation identity, as 76-byte digests |
-| `stages.validate_days.stage_validate_days` | one `stat` a day, plus `state/day-validations.csv` | a receipt on payload length, digest and validator identity |
 | `ledger.write_segment` on `LedgerName.COUNTERFACTUAL_SCORES` | one writer file of `state/counterfactual-scores/` | one date, and inside it the run's own bounded pool - every item the run took plus `lens_weights.counterfactual_refused_per_desk` refused candidates a desk. A run's write costs the same on a five-year archive as on a fresh clone |
 | `ledger.load_settled_failures` | one item-health day file | one date |
 | `ledger.load_story_similarity_pairs` | one day file of `state/content-similarity-judge/scored-pairs/` | one date. The fold counts a date into `score-distribution.json` once and the fit then reads only that record, so the day tree is opened by name and never walked. It costs the same on the thousandth day as on the third |
@@ -269,6 +255,7 @@ reads are here and not how many. These are `backend/`'s;
 | `ledger.load_visual_prunes` | `state/visual-prunes.csv` | the report is about the whole series |
 | `corpus.read_rows` | `corpus/corpus.jsonl` | already rolling, capped at `finetune.corpus_rows` |
 | `contracts.base.Contract.read` | one payload | a validator cannot skip what it has not read |
+| `stages.validate_days.stage_validate_days` | every committed `digest.json` under `frontend/public/digest/` | a published day is frozen, but the contracts it is read through are not, so any day can stop matching on a commit that changes a shape. The receipt that used to skip an unchanged day was decommissioned on 2026-09-27: it settled a day on a recorded payload LENGTH, which let a receipt earned over one tree pass a same-length day in another. Measured 44 MB/s (2026-09-08), so the 727-day horizon reads in 30-60 s on the runner |
 | `assemble.site_size` | every file under `frontend/public/digest/` | three jobs write the tree, so no one process can carry the total |
 | `retention.measure` | every file under the built tree | it is the independent audit a maintained total is checked against |
 | `retention.count_published_items` | every staged day payload | bytes and items have to come from one corpus |
@@ -840,7 +827,7 @@ them apart.
 | `0` or `null` as the unbounded sentinel | `0` is a legitimate finite cover and `null` is indistinguishable from a knob nobody set. Neither says a person chose. |
 | A very large number instead of `-1` | A cover that silently becomes finite the day the archive outgrows it, with no diff and no error at the moment it starts forgetting. |
 | A clock on the eval writer's dedupe | It would let a January observation back in February, turning a count of measurements into a count of times the pipeline looked. The cheaper representation keeps the answer and drops 90.7 percent of the bytes. |
-| Re-validating published days on a window | A frozen day cannot stop matching a contract on its own, so a window would re-read the same bytes to reach the same verdict, on a schedule. What a rule change needs is one full sweep, which is what the receipt gives. |
+| Re-validating published days on a window | A frozen day cannot stop matching a contract on its own, so a window would re-read the same bytes to reach the same verdict, on a schedule. What a rule change needs is one full sweep, and a sweep is what the gate does anyway - the skip that made it cheap was decommissioned on 2026-09-27 for settling a day on a recorded payload length. |
 | Windowing the retirement, corpus and contract reads for consistency | Each would lose something real - a dead endpoint woken again, a census computed off part of its own window, a payload passed on the half that was read first. Consistency is not a reason to make a read wrong. |
 
 ## See also

@@ -167,14 +167,6 @@
       "prefix": ["llm-council", "shard-outcomes"],
       "stem": null,
       "suffix": ".csv"
-    },
-    {
-      "name": "day-validations",
-      "state": "live",
-      "grain": "tree",
-      "prefix": ["day-validations"],
-      "stem": null,
-      "suffix": null
     }
   ]
 }

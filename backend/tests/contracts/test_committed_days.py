@@ -16,12 +16,9 @@ from typing import Any, Final
 import pytest
 from conftest import CONTRACT_FIXTURES_DIR, REPO_ROOT, read_text
 
-from idhazh import day_shards, ledger
 from idhazh.cli import main
 from idhazh.contracts.digest_day import DigestDay, DigestVerticalRef
-from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
 from idhazh.contracts.knobs.ui import UiConfig
-from idhazh.contracts.ledger_name import LedgerName
 from idhazh.stages import common
 from idhazh.stages.validate_days import stage_validate_days
 
@@ -40,10 +37,6 @@ DESK_SHORTFALL = ("considered", "too_old", "below_feed_floor")
 #: constant for both, because a payload whose date and path disagree is a day no
 #: run could have written.
 BUILT_DATE: Final = "2026-08-30"
-
-#: The run the gate files its receipt under. These cases ask what the gate says
-#: about a day, never who ran it, so one identity serves them all.
-A_RUN: Final = f"{BUILT_DATE}-1"
 
 
 def a_day_longer_than_the_seed(seed: int) -> dict[str, Any]:
@@ -129,12 +122,12 @@ def test_a_story_past_the_seed_is_the_one_this_gate_exists_for(
     day = a_day_longer_than_the_seed(seed)
     assert len(day["items"]) > seed, "a day no longer than the seed proves nothing here"
 
-    assert stage_validate_days(a_tree_holding(tmp_path / "whole", day), run_id=A_RUN) == 0
+    assert stage_validate_days(a_tree_holding(tmp_path / "whole", day)) == 0
 
     day["items"][-1]["summary"] = ""
     root = a_tree_holding(tmp_path / "past-the-seed", day)
     with caplog.at_level(logging.ERROR):
-        assert stage_validate_days(root, run_id=A_RUN) == 1
+        assert stage_validate_days(root) == 1
     assert BUILT_DATE in caplog.text, "the failing day has to be named"
     assert "digest-view.schema.json" in caplog.text, "which contract refused it"
 
@@ -146,14 +139,14 @@ def test_a_day_that_is_not_json_at_all_is_named_rather_than_thrown(tmp_path: Pat
     broken.mkdir(parents=True)
     (broken / "digest.json").write_text("{ not json", encoding="utf-8")
 
-    assert stage_validate_days(root, run_id=A_RUN) == 1
+    assert stage_validate_days(root) == 1
 
 
 def test_a_tree_with_no_committed_day_fails_rather_than_passes(tmp_path: Path) -> None:
     """A run over nothing prints the same line as a run over every day."""
     empty = tmp_path / "digest"
     empty.mkdir()
-    assert stage_validate_days(empty, run_id=A_RUN) == 1
+    assert stage_validate_days(empty) == 1
 
 
 def test_the_gate_defaults_to_the_one_committed_tree(
@@ -171,10 +164,6 @@ def test_the_gate_defaults_to_the_one_committed_tree(
     checkout that no commit caused (`CLAUDE.md` section 13). Two things a code
     change CAN break are read instead: that `common.PUBLIC_ROOT` names the
     committed tree, and that the flag follows it when nobody passes one.
-
-    The receipts go to a directory this test owns: the state root defaults to the
-    committed one, and a test that appended to it would leave the repository
-    dirty for whoever ran it.
     """
     assert common.PUBLIC_ROOT == REPO_ROOT / "frontend" / "public" / "digest"
 
@@ -182,53 +171,6 @@ def test_the_gate_defaults_to_the_one_committed_tree(
     monkeypatch.setattr(common, "PUBLIC_ROOT", root)
 
     assert main(["validate-days", "--day", BUILT_DATE, "--state-root", str(tmp_path)]) == 0
-
-
-def test_a_tree_that_is_not_the_committed_one_has_to_name_its_own_receipts(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
-    """The pairing is enforced rather than remembered, because forgetting it lies.
-
-    A receipt records a payload's LENGTH and `_proved` settles a day on that
-    length, never on a re-read. So the committed receipts will settle a
-    same-length day in any other tree without opening it. Measured 2026-09-13: a
-    copy of the newest committed day with `"items"` overwritten by `"itemz"`,
-    one byte for one byte, passed against the committed receipt ledger and
-    reported `0 of them opened`; against an empty ledger the same file was
-    refused. `frontend/tests/malformed-day.spec.ts` was making exactly that
-    call, so the control case that exists because a guard which only ever refuses
-    proves nothing was passing on a receipt about a different file - and the
-    receipts it filed about its scratch trees landed in the tracked receipt
-    ledger, which `frontend/scripts/build-state.ts` fingerprints, so the
-    `publishing` group changed one of its own build's inputs while it ran. That
-    was defect 20, and this is what stops the next caller repeating it.
-
-    Bounded by construction: one fabricated day under `tmp_path`, no archive
-    walk, and nothing here can age out.
-    """
-    day = a_day_that_validates()
-    # The pictures stay on the committed tree, so a copy that still named them
-    # would fail on the missing files and say nothing about the receipts.
-    for item in day["items"]:
-        item.pop("visual", None)
-    copy = a_tree_holding(tmp_path / "copy", day)
-
-    with pytest.raises(SystemExit) as refused:
-        main(["validate-days", "--digest-root", str(copy)])
-
-    assert refused.value.code == 2, "a forgotten pair is a wrong answer, not a warning"
-    said = capsys.readouterr().err
-    assert "--state-root" in said, "the refusal has to name the flag that settles it"
-    assert "--digest-root" in said, "and the flag that caused it"
-
-    receipts = tmp_path / "receipts"
-    assert main(["validate-days", "--digest-root", str(copy), "--state-root", str(receipts)]) == 0
-    filed = list(
-        day_shards.shard_files(
-            ledger.tree_root(receipts, LedgerName.DAY_VALIDATIONS), days=UNBOUNDED_WINDOW
-        )
-    )
-    assert filed, "the receipt belongs beside the tree it is about"
 
 
 def test_a_committed_day_reads_an_absent_ranking_field_as_unknown() -> None:

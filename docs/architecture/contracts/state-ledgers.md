@@ -210,7 +210,7 @@ One module outside may ask, and none may carry a copy. `backend/idhazh/path_clas
 
 **The set of ledgers is a config file, not a Python set and not a glob.** Owner decision, 2026-09-26.
 
-A frozen set in Python was what this replaced, and it is the defect rather than the alternative. `prune-state` subtracts the set from the children of `state/` and treats the remainder as a trial run's tree, so a ledger left out of the set is a production directory it empties. `state/day-validations/` was exactly that: a real ledger, written by the `validate_days` stage, absent from the set. Nothing in the old design could catch it, because a missing name reads as a name that was never meant to be there.
+A frozen set in Python was what this replaced, and it is the defect rather than the alternative. `prune-state` subtracts the set from the children of `state/` and treats the remainder as a trial run's tree, so a ledger left out of the set is a production directory it empties. One ledger was exactly that: a real ledger, written by a stage, absent from the set - and its 90-day trial sweep emptied it well before the 14-month window its own retention knob promised. Nothing in the old design could catch it, because a missing name reads as a name that was never meant to be there.
 
 A glob over `state/` was the other candidate and it fails twice. Its cost rises with the data (CLAUDE.md Guardrail #12), and it cannot tell a retired ledger from one that has never run - a ledger whose first write failed is simply invisible to a walk, which is the opposite of what a protected set needs.
 

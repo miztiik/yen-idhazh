@@ -132,12 +132,10 @@ AT_THE_BASE: Final[dict[str, tuple[str | None, str | None, str | None]]] = {
         "state/llm-council/shard-outcomes/2026/09/18.csv",
         "state/llm-council/shard-outcomes",
     ),
-    "DAY_VALIDATIONS": (None, None, "state/day-validations"),
 }
 
 #: Which directories `prune-state` protected before the registry claimed them,
-#: from the same commit. `day-validations` is deliberately absent and the test
-#: below names it as the one difference.
+#: from the same commit.
 CLAIMED_AT_THE_BASE: Final[frozenset[str]] = frozenset(
     {
         "content-similarity-judge",
@@ -274,22 +272,6 @@ def test_a_flat_ledger_handed_a_period_refuses() -> None:
         paths.path(STATE, LedgerName.FEED_RETIREMENTS, A_DAY)
 
 
-def test_the_registry_claims_what_the_old_set_claimed_and_day_validations() -> None:
-    """Known-set parity: exact, except `state/day-validations/`.
-
-    `day-validations` is a real child of `state/`, written by the `validate_days`
-    stage, and it was absent from the hand-coded set - so the trial sweep read it
-    as a trial tree and deleted files in a production ledger. The registry claims
-    every ledger it knows, so it is now protected. `validate_days` and this
-    ledger are being decommissioned, which is what erases the difference; it is
-    asserted by name here rather than waived.
-    """
-    claimed = ledger.claimed_roots()
-
-    assert claimed - CLAIMED_AT_THE_BASE == {"day-validations"}
-    assert CLAIMED_AT_THE_BASE - claimed == set()
-
-
 def test_every_directory_under_state_is_claimed_or_owned_elsewhere() -> None:
     """The census behind the parity check, driven from a fixed list rather than a walk.
 
@@ -305,7 +287,6 @@ def test_every_directory_under_state_is_claimed_or_owned_elsewhere() -> None:
         "content-similarity-judge",
         "counterfactual-scores",
         "day-metrics",
-        "day-validations",
         "digest-fragments",
         "feed-health",
         "host-fingerprint",

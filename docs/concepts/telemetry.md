@@ -59,7 +59,7 @@ flowchart TD
     sr
     tr
     fh
-    other["day-metrics/ and scores/ and published/ and seen/<br/>day-validations.csv"]
+    other["day-metrics/ and scores/ and published/ and seen/"]
   end
 
   state --> inventory
@@ -443,7 +443,7 @@ Thirteen ledgers under `state/` is not thirteen designs. It is six grains, and t
 | address | url key | `seen`, `published`, `counterfactual-scores` |
 | feed | run, feed | `feed-health`, `feed-retirements.csv` |
 | shard and run | date, run, shard | `host-fingerprint`, `span-rollup`, `visual-prunes` |
-| day | date | `day-metrics`, `day-validations.csv` |
+| day | date | `day-metrics` |
 
 **An item-grain ledger cannot hold a fact about a thing that was never an item.** A feed that returned nothing has no items, so its failure has no item row to sit on - and a feed returning nothing is the case `feed-health` exists for. `seen` holds 76,834 addresses against 12,217 planned items, six times the population, because most addresses were never planned. A candidate the ranker refused is the whole point of `counterfactual-scores` and is never planned either. Those are not sprawl; they are the questions an item row cannot answer.
 
@@ -499,7 +499,6 @@ Read this table before proposing a merge. A ledger folds only when it fails **ev
 | `item-health` | an item | 14 months | **the census.** Whatever folds, folds here |
 | `visual-prunes` | a run | with the pictures | **FOLD** into a run-grain ledger. 41 rows, and a run is not an item |
 | `<trial>/validation` | a model | never | **MOVED 2026-09-18** to `state/<run.trial_state_dirname>/validation/<YYYY>/<MM>/<DD>/`, where it was `state/validation-<date>.csv` at the root of `state/`. A date in a filename is not a partition, and a hardcoded path let a trial dispatch write production state |
-| `day-validations.csv` | a day | with the day | **KEEP**, move to day files. A receipt is not an item |
 | `scores` | an observation | 14 months | **KEEP.** One item holds several rows - re-measurement is the point, and an item key allows only one |
 | `score-index` | a digest | with the scores | **KEEP.** 76 bytes an observation against 819 for a census row. Reading the wide ledger to answer a narrow question costs 10.8 times more |
 | `seen` | an address | 90 days | **KEEP.** 76,834 addresses against 12,217 planned items. Most were never planned, so most can never have a row |
