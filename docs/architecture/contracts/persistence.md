@@ -2,7 +2,7 @@
 
 **Last Updated**: 2026-09-27
 
-How a contract payload reaches disk under `state/raw/` and `state/compact/`, how it comes back, and how the parquet engine is swapped. The door is `backend/idhazh/ledger/persist.py`; everything a producer needs is two calls, `ledger.persist` and `ledger.load`. The registry, the CSV trees and the lifecycle statuses are [state-ledgers.md](state-ledgers.md); the shape of a contract is [schemas.md](schemas.md).
+How a contract payload reaches disk under `state/raw/` and `state/compact/`, how it comes back, and how the parquet engine is swapped. The door is `backend/idhazh/ledger/persist.py`; everything a producer needs is two calls, `ledger.persist` and `ledger.load`. The registry and the lifecycle statuses are [ledger-registry.md](ledger-registry.md), the CSV trees are [state-ledgers.md](state-ledgers.md), and the shape of a contract is [schemas.md](schemas.md).
 
 ## The two roots
 
@@ -46,7 +46,7 @@ A producer hands over its rows, the ledger, the period and its writer identity. 
 
 The paths come back ascending by the period each file covers, never by path string. An empty call writes nothing and returns an empty list.
 
-**A raw write into a paused or retired family from a pipeline job writes nothing**, returns an empty list and logs one warning, through `ledger.accepts_new_rows` ([state-ledgers.md](state-ledgers.md)). A compact-tier write and a write from `migrate`, `run-tasks` or `history` - the members of `MAINTENANCE_JOBS` beside `ServerJob` - are never skipped, because each files rows again that were already recorded.
+**A raw write into a paused or retired family from a pipeline job writes nothing**, returns an empty list and logs one warning, through `ledger.accepts_new_rows` ([ledger-registry.md](ledger-registry.md)). A compact-tier write and a write from `migrate`, `run-tasks` or `history` - the members of `MAINTENANCE_JOBS` beside `ServerJob` - are never skipped, because each files rows again that were already recorded.
 
 **`load` is the inverse of `persist` and nothing else.** It reads each file's container from the file's own first bytes, never from its suffix, and refuses a file whose envelope names a different writer. It refuses a file written under a newer shape of the contract than this build declares, naming the file, the stamp it holds and the stamp this build reads. It does not remove duplicates.
 
@@ -126,7 +126,8 @@ pyarrow is the largest thing the project installs, so it is the `parquet` option
 
 ## See also
 
-- [state-ledgers.md](state-ledgers.md) - the registry, the CSV trees, the lifecycle statuses and the check every writer asks.
+- [ledger-registry.md](ledger-registry.md) - the registry, the lifecycle statuses and the check every writer asks.
+- [state-ledgers.md](state-ledgers.md) - the CSV trees: what each ledger answers, and why it files at the grain it does.
 - [schemas.md](schemas.md) - how a contract is declared, versioned and read back.
 - [../../concepts/telemetry-intent.md](../../concepts/telemetry-intent.md) - why `state/` moves to parquet under two roots.
 - [../../../CLAUDE.md](../../../CLAUDE.md) - Guardrail #3, Guardrail #8, Guardrail #11, sections 2 and 11.
