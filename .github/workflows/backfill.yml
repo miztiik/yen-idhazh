@@ -87,11 +87,11 @@ jobs:
       # that find one run BEFORE the commit and stop them. The weight ratchet
       # runs after. See ../../docs/architecture/publishing/layout.md.
       #
-      # `validate-days` is the one that opens every story. A reading document
+      # `check-publication` is the one that opens every story. A reading document
       # carries a seed since 2026-09-01, so the build below never reads the
       # stories past it and cannot fail on one.
       - name: Every committed day still matches its contracts
-        run: python -m idhazh validate-days
+        run: python -m idhazh check-publication
 
       - name: Build the site
         working-directory: frontend

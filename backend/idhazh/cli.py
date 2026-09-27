@@ -68,6 +68,8 @@ from idhazh.fingerprint import (
     file_digest,
     runtime_build,
 )
+from idhazh.publication_checks import PublicationCheckError
+from idhazh.publication_checks import runner as publication_runner
 from idhazh.stages import (
     assemble as assemble_stage,
 )
@@ -87,7 +89,6 @@ from idhazh.stages import (
     score_merge_line_holdout,
     site_weight,
     validate,
-    validate_days,
     work,
 )
 from idhazh.stages import (
@@ -149,7 +150,7 @@ STAGES: Final[tuple[str, ...]] = (
     "backfill-vectors",
     "derived-paths",
     "site-weight",
-    "validate-days",
+    "check-publication",
     "score-merge-line-holdout",
     "council-prepare",
     "council-settle",
@@ -443,7 +444,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         default=[],
         metavar="YYYY-MM-DD",
         help=(
-            "A day for `validate-days` to open, repeatable. Every committed day when "
+            "A day for `check-publication` to open, repeatable. Every committed day when "
             "this is not given, which is what a contract change needs and nothing else "
             "does - a published day is frozen, so only the shape it is read through can "
             "invalidate it. A run that wrote one day names that day."
@@ -465,7 +466,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         type=Path,
         default=common.PUBLIC_ROOT,
         help=(
-            "The committed day payloads `validate-days` reads. It defaults to the "
+            "The committed day payloads `check-publication` reads. It defaults to the "
             "real tree, unlike --site-tree, because there is exactly one committed "
             "tree and a run against the wrong one cannot silently pass."
         ),
@@ -570,16 +571,29 @@ def main(argv: Sequence[str] | None = None) -> int:
             items_per_day=settings.app.run.safety_ceiling_per_run,
         )
 
-    if args.stage == "validate-days":
+    if args.stage == "check-publication":
         # Above the fetcher for the same reason site-weight is: reading committed
         # files decides nothing about the open web, and starting a fetcher to do
         # it would read every host's robots.txt for nothing.
-        return validate_days.stage_validate_days(args.digest_root, args.day)
+        #
+        # A wiring fault in the check package is not a broken day, so it exits on
+        # its own code: 1 says a day is wrong, 2 says the thing that checks days
+        # is wrong, and an operator reading a workflow log can tell them apart.
+        try:
+            return publication_runner.run_publication_checks(
+                args.digest_root,
+                args.day,
+                state_dir=common.STATE_ROOT if args.state_root is None else args.state_root,
+                run_id=args.run_id,
+            )
+        except PublicationCheckError as error:
+            logging.getLogger(__name__).error("check-publication is mis-wired: %s", error)
+            return 2
 
     if args.stage == "score-merge-line-holdout":
-        # Above the fetcher for the reason validate-days is: it reads the marked
-        # file and the published days that file names, and starting a fetcher to
-        # do it would read every host's robots.txt for nothing.
+        # Above the fetcher for the reason check-publication is: it reads the
+        # marked file and the published days that file names, and starting a
+        # fetcher to do it would read every host's robots.txt for nothing.
         #
         # A person types this verb. Nothing schedules it, because the marked file
         # changes when somebody labels more pairs and not when a day publishes.

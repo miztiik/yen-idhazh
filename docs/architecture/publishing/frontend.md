@@ -37,7 +37,7 @@ Three consequences, and the third one changed shape again when the dated routes 
 
 - **The reading path makes at most one request, and a dated page now needs it.** `/` is one document with the newest day in it and it is done. A dated URL is a cold load of the fallback, the bundle and then the day payload - and only a typed link, a bookmark or a shared link pays that, because in-app navigation never asks the host for a dated address (owner decision, 2026-09-09). What a dated page does not do is wait: the fetch is started by the page component rather than awaited in its `load`, so the chrome and the date are on screen while a payload that runs to 1.9 MB comes down. Awaiting it in the `load` was the simpler code and a blank page.
 - **There is one loading state and it is a sentence**, not a spinner and not a skeleton. Past `ui.payload_slow_ms` a dated page says the day is still loading, and a fetch that fails says so and offers a retry ([../../../frontend/src/lib/components/PayloadState.svelte](../../../frontend/src/lib/components/PayloadState.svelte)). The build-time payload loader is still exactly one module under `frontend/src/lib/server/`; the browser's is a second one under `$lib/assist/`, and it reads the served projection rather than the committed day.
-- **A day that fails its contract cannot be merged, and since 2026-09-01 it could not be caught by building either.** `python -m idhazh validate-days` opens every story of every committed day instead - in `ci.yml`, and immediately before the commit in both publishing jobs, because `ci.yml` never starts from a push the pipeline made. **The guarantee is weaker than the one prerendering gave and that is stated rather than hidden.**
+- **A day that fails its contract cannot be merged, and since 2026-09-01 it could not be caught by building either.** `python -m idhazh check-publication` opens every story of every committed day instead - in `ci.yml`, and immediately before the commit in both publishing jobs, because `ci.yml` never starts from a push the pipeline made. What that verb checks and how a rule is added to it is [what-stops-a-broken-day-being-published.md](what-stops-a-broken-day-being-published.md). **The guarantee is weaker than the one prerendering gave and that is stated rather than hidden.**
 
 **What a cold dated load costs the reader, priced here because the ruling that allowed it did not.** Owner decision D11 accepted the cold-load path on 2026-09-08 and settled the two losses it named - the link preview card, and search-engine indexing of dated URLs. It said nothing about the frame. Until 2026-09-09 a dated URL was a prerendered document, so the chrome, the date, the topic row, the leading block and a seed of stories were in the first bytes and painted with no script at all. Now **a cold dated load paints nothing until the bundle has booted**, because the fallback's body is a boot script; then the chrome and the date; then the stories when the payload lands. Two waits where there was none, and only the second one has a sentence. In-app navigation is unaffected. **The first wait is what the 116 documents were paying for**, and it lands on exactly the reader who arrived on a typed address, a bookmark or a shared link.
 
@@ -92,7 +92,7 @@ the server sends the drawing and the numbers, never a drawing instruction.
 | Waiting | A dated page has asked for its day and it has not arrived | Nothing at all until `ui.payload_slow_ms`, then one sentence. Never a spinner, a skeleton or a bar |
 | Unreachable | A dated page's fetch failed for any reason that is not the host saying it has no such day | One sentence naming the day, a retry, and the days this device still holds |
 | Unpublished | No day published at all - a fresh clone | The build succeeds. `/` says "No digest has been published yet" and `/archive/` says "Nothing has been published yet". There is no dated page to link to, so neither offers one |
-| Invalid | Payload breaks its contract | `idhazh validate-days` fails, in CI and before the publish |
+| Invalid | Payload breaks its contract | `idhazh check-publication` fails, in CI and before the publish |
 | Degraded | Low band, source-limit sentence, no visual | The common case, rendered inline. Not an error |
 
 **Empty is a real state and two different days land in it.** A day that planned
@@ -101,10 +101,10 @@ amber. A day where every story failed publishes empty and says `partial`,
 because a run that publishes nothing on a bad day is a run whose bad days are
 invisible - 2026-09-14 is that day, 80 planned and 80 failed, and refusing it
 would delete the only record that the day went wrong. So Empty is not a fault
-and `validate-days` does not refuse it.
+and `check-publication` does not refuse it.
 
 **The third empty day is refused, and it is the one that cannot be told apart
-from the first.** `idhazh.stages.validate_days._census_faults` stops a day that
+from the first.** `idhazh.publication_checks._census_faults` stops a day that
 planned stories, failed none and published none. `ItemOutcome` has two members,
 so every story the pipeline touched is `ok` or `failed`; a day holding neither
 has lost its whole plan with nothing recording where it went, and the reader is
@@ -158,7 +158,7 @@ Every path in the manifest is relative, which is what makes the project path a n
 
 Prerendering everything was the decision the rest hangs off. It was chosen over a runtime fetch of `digest.json` because it collapsed four problems into zero: the loading state stopped existing, the request budget stopped being a budget, a contract-invalid payload became a build failure instead of a reader-facing error, and the page kept working with JavaScript off. The cost is one framework dependency and a build step that enumerates committed directories. Authority: Jony ([../../../.github/agents/jony.agent.md](../../../.github/agents/jony.agent.md)).
 
-**Two of those four came back on 2026-09-01, and they were sold rather than lost.** A reading document carries a seed and the browser fetches the rest, so a reading page has a loading state - one sentence past `ui.payload_slow_ms` - and an invalid story past the seed reaches the browser rather than the build, which is why `idhazh validate-days` exists. What was bought is the cap date: the dated route trees were 39.5 percent of the published site, and the site went 168.6 MB to 88.1 MB with the runway from 130 published days to 279 ([layout.md](layout.md)). The other two hold unchanged - the request budget is still one file, and every page still renders with JavaScript off, a reading page down to its seed. Authority: Fowler, 2026-09-01.
+**Two of those four came back on 2026-09-01, and they were sold rather than lost.** A reading document carries a seed and the browser fetches the rest, so a reading page has a loading state - one sentence past `ui.payload_slow_ms` - and an invalid story past the seed reaches the browser rather than the build, which is why `idhazh check-publication` exists. What was bought is the cap date: the dated route trees were 39.5 percent of the published site, and the site went 168.6 MB to 88.1 MB with the runway from 130 published days to 279 ([layout.md](layout.md)). The other two hold unchanged - the request budget is still one file, and every page still renders with JavaScript off, a reading page down to its seed. Authority: Fowler, 2026-09-01.
 
 **A third cost was paid at the same time and no reader can see it.** A crawler that does not run scripts now reads a dated page down to its seed and no further, so whatever those pages were worth to a search engine falls to what the seed carries. `/` stays complete and crawlable down to its seed, which is the one page a stranger is most likely to arrive on. This is the least reversible part of the migration: prerendering the dated pages again would be a build change, and an index that has dropped those stories does not come back on the same schedule.
 

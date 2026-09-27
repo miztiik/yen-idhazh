@@ -1,9 +1,9 @@
 """Does every day already committed still read, and does the gate that checks them fail loudly?
 
 Every day these tests open is built here. What the published tree happens to
-hold is the producer's question - `idhazh validate-days` reads every committed
-day on every publish - and asking it from pytest made a short or shallow
-checkout look like a code defect (`CLAUDE.md` section 13).
+hold is the producer's question - `idhazh check-publication` reads every
+committed day on every publish - and asking it from pytest made a short or
+shallow checkout look like a code defect (`CLAUDE.md` section 13).
 """
 
 from __future__ import annotations
@@ -19,8 +19,8 @@ from conftest import CONTRACT_FIXTURES_DIR, REPO_ROOT, read_text
 from idhazh.cli import main
 from idhazh.contracts.digest_day import DigestDay, DigestVerticalRef
 from idhazh.contracts.knobs.ui import UiConfig
+from idhazh.publication_checks import run_publication_checks
 from idhazh.stages import common
-from idhazh.stages.validate_days import stage_validate_days
 
 from ._fixtures import (
     RANKING_SIGNAL,
@@ -122,12 +122,12 @@ def test_a_story_past_the_seed_is_the_one_this_gate_exists_for(
     day = a_day_longer_than_the_seed(seed)
     assert len(day["items"]) > seed, "a day no longer than the seed proves nothing here"
 
-    assert stage_validate_days(a_tree_holding(tmp_path / "whole", day)) == 0
+    assert run_publication_checks(a_tree_holding(tmp_path / "whole", day), run_id="r") == 0
 
     day["items"][-1]["summary"] = ""
     root = a_tree_holding(tmp_path / "past-the-seed", day)
     with caplog.at_level(logging.ERROR):
-        assert stage_validate_days(root) == 1
+        assert run_publication_checks(root, run_id="r") == 1
     assert BUILT_DATE in caplog.text, "the failing day has to be named"
     assert "digest-view.schema.json" in caplog.text, "which contract refused it"
 
@@ -139,14 +139,14 @@ def test_a_day_that_is_not_json_at_all_is_named_rather_than_thrown(tmp_path: Pat
     broken.mkdir(parents=True)
     (broken / "digest.json").write_text("{ not json", encoding="utf-8")
 
-    assert stage_validate_days(root) == 1
+    assert run_publication_checks(root, run_id="r") == 1
 
 
 def test_a_tree_with_no_committed_day_fails_rather_than_passes(tmp_path: Path) -> None:
     """A run over nothing prints the same line as a run over every day."""
     empty = tmp_path / "digest"
     empty.mkdir()
-    assert stage_validate_days(empty) == 1
+    assert run_publication_checks(empty, run_id="r") == 1
 
 
 def test_the_gate_defaults_to_the_one_committed_tree(
@@ -170,7 +170,7 @@ def test_the_gate_defaults_to_the_one_committed_tree(
     root = a_tree_holding(tmp_path / "tree", a_day_that_validates())
     monkeypatch.setattr(common, "PUBLIC_ROOT", root)
 
-    assert main(["validate-days", "--day", BUILT_DATE, "--state-root", str(tmp_path)]) == 0
+    assert main(["check-publication", "--day", BUILT_DATE, "--state-root", str(tmp_path)]) == 0
 
 
 def test_a_committed_day_reads_an_absent_ranking_field_as_unknown() -> None:

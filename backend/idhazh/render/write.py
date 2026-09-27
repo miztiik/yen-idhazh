@@ -73,7 +73,7 @@ def assets_in_day(public_root: Path, date: str) -> set[str]:
     this one asks what is actually on disk. Reading the directory is no longer
     allowed to decide a *name* - that is what raced two runs onto one path - but
     a caller that needs to compare the directory against a payload has to read
-    it. `idhazh validate-days` is that caller: a file no item names is weight the
+    it. `idhazh check-publication` is that caller: a file no item names is weight the
     reader pays for and will never see.
 
     **What makes a file one of these is that it is named for an item**, which is

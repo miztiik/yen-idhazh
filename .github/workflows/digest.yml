@@ -1084,7 +1084,7 @@ jobs:
       # find one run BEFORE the commit and stop it. The weight ratchet runs
       # after. See ../../docs/architecture/publishing/layout.md.
       #
-      # `validate-days` is the first of the two and it is the one that opens
+      # `check-publication` is the first of the two and it is the one that opens
       # every story. Since the reading routes split on 2026-09-01 a document
       # carries a seed and a browser fetches the rest, so the build below never
       # looks at the stories past the seed and cannot fail on one.
@@ -1095,7 +1095,7 @@ jobs:
       # five times a day, forever (Guardrail #12). `ci.yml` re-reads the whole tree
       # on the change that can actually invalidate it: one that moves a contract.
       - name: The day this run wrote still matches its contracts
-        run: python -m idhazh validate-days --day "${{ needs.plan.outputs.date }}"
+        run: python -m idhazh check-publication --day "${{ needs.plan.outputs.date }}"
 
       - name: Build the site
         working-directory: frontend

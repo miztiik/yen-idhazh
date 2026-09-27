@@ -49,7 +49,7 @@ def stage_rebuild_score_index(
 
     A month with no committed rows exits non-zero rather than reporting a clean
     pass over nothing, and so does a tree with no rows at all - the rule
-    `validate-days` and `site-weight` already hold.
+    `check-publication` and `site-weight` already hold.
     """
     state = state_dir if state_dir is not None else common.STATE_ROOT
     # Unbounded because the operator names a month and the answer has to be

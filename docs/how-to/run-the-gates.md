@@ -140,7 +140,7 @@ account's twenty concurrent jobs (`CLAUDE.md` Guardrail #2).
 workflow token does not trigger another workflow, which is GitHub's loop guard
 rather than a filter this repository wrote. So the daily digest, visuals and
 state commits cost nothing here, and `digest.yml` and `backfill.yml` run
-`validate-days` before their own commit because `ci.yml` never sees it.
+`check-publication` before their own commit because `ci.yml` never sees it.
 
 A contract change selects both languages and re-reads every committed day,
 because the shape a day is read through is the only thing that can invalidate a
@@ -395,16 +395,17 @@ among the six.** They render in the browser, so a failure to render there
 reaches a reader rather than the build. **The build does not answer for every
 story.** A reading document carries `ui.shell_seed_items` stories and
 the browser fetches the rest, so the build never opens the stories past the
-seed. `python -m idhazh validate-days` opens all of them, against the committed
+seed. `python -m idhazh check-publication` opens all of them, against the committed
 shape the build reads and the served shape a browser fetches, and it runs in
 `ci.yml` and before every publish. A run that finds no day at all fails rather
-than passes.
+than passes. What it checks, and how a rule is added to it, is
+[what-stops-a-broken-day-being-published.md](../architecture/publishing/what-stops-a-broken-day-being-published.md).
 
 **It takes `--day` and the flag repeats**, so a pull request that touched no
 committed day checks nothing and a publish checks the day it just wrote:
 
 ```powershell
-python -m idhazh validate-days --day 2026-08-30 --day 2026-08-31
+python -m idhazh check-publication --day 2026-08-30 --day 2026-08-31
 ```
 
 Naming no day checks every committed day, which is what a push to `main` does.

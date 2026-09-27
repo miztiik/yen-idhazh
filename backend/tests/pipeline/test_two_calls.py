@@ -214,7 +214,7 @@ class TestTheWorkStageDispatchesBothCalls:
         So this reads the drawn bytes off disk at the path the payload names. It
         fails if the compiler stops compiling, if the renderer stops writing, or
         if the decision starts naming a path nothing wrote - which is the fault
-        `stages.validate_days._picture_faults` catches a whole job later, on a
+        `publication_checks.checks.pictures` catches a whole job later, on a
         day that has already published.
         """
         run_plan, items, _served = worked(

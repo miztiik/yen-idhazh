@@ -208,7 +208,7 @@ jobs:
       # (Guardrail #12).
       - name: Every committed day still matches its contracts
         if: needs.scope.outputs.validate_all == 'true'
-        run: python -m idhazh validate-days
+        run: python -m idhazh check-publication
 
   # The one gate `gates` cannot be: it runs on ONE interpreter, and the thing
   # under test here is whether two of them agree. `robots.txt` is a permission,
@@ -290,7 +290,7 @@ jobs:
       # Every route still has to render. What the build no longer proves is that
       # every STORY does: a reading document carries a seed and the browser
       # fetches the rest, so the stories past the seed are never serialised here.
-      # The `gates` job runs `idhazh validate-days` for those.
+      # The `gates` job runs `idhazh check-publication` for those.
       - name: Build the site
         working-directory: frontend
         run: npm run build

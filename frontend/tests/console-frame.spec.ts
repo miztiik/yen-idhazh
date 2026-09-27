@@ -371,3 +371,59 @@ test.describe('the console frame', () => {
 		expect(measured.square).toBeGreaterThan(16);
 	});
 });
+
+/**
+ * The console as a browser lays it out before any of its JavaScript has run.
+ *
+ * `chartWidth` returns the `console.chart_width` fallback until `observeWidth`
+ * reports, so every prerendered chart is 760px wide in the HTML that arrives
+ * first. A chart that does not cap that at its container IS the document's
+ * width until the page hydrates - 800px inside a 360px phone. Ten chart SVGs
+ * carry `max-w-full` or `w-full` by hand and one shipped without it, which is
+ * a convention no gate could see.
+ *
+ * It is reader-facing despite the console's own scope: `/evals/` is a signpost
+ * carrying a `meta refresh` here, so an old link drops a reader on this page.
+ *
+ * Scripts off rather than a timed sample. The overflow lasts until hydration,
+ * so a sample races it and reports a layout fact as a flake - which is exactly
+ * how this arrived, as one red `layout-overflow.spec.ts` in a job whose other
+ * theme passed.
+ */
+test.describe('the console before its JavaScript runs', () => {
+	test.use({ javaScriptEnabled: false });
+
+	test('a phone-width document has nothing past its edge', async ({ page }) => {
+		await page.setViewportSize({ width: 360, height: 900 });
+		await page.goto('/console/');
+
+		const measured = await page.evaluate(() => {
+			const root = document.documentElement;
+			const limit = root.clientWidth;
+			const over = Array.from(document.querySelectorAll('*'))
+				.map((el) => ({ el, box: el.getBoundingClientRect() }))
+				.filter(({ box }) => box.right + window.scrollX > limit + 0.5)
+				.map(
+					({ el, box }) =>
+						`${el.tagName.toLowerCase()}${el.getAttribute('data-run-yield-chart') === null ? '' : '[data-run-yield-chart]'} ends at ${Math.round(box.right + window.scrollX)}`
+				);
+			return {
+				scrollWidth: root.scrollWidth,
+				clientWidth: limit,
+				// A page that rendered nothing passes the oracle for free.
+				rendered: document.querySelectorAll('.frame *').length,
+				over: over.slice(0, 4)
+			};
+		});
+
+		expect(
+			measured.rendered,
+			'the server-rendered console drew nothing, so the check below proves nothing'
+		).toBeGreaterThan(10);
+		expect(
+			measured.scrollWidth,
+			`the server-rendered console is ${measured.scrollWidth - measured.clientWidth}px ` +
+				`wider than a 360px screen: ${measured.over.join('; ')}`
+		).toBeLessThanOrEqual(measured.clientWidth);
+	});
+});

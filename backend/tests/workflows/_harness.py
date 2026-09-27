@@ -2332,13 +2332,13 @@ PUBLISHING_SITE_JOBS: Final = (
 
 #: The step that opens every story in every committed day. Prerendering used to
 #: do it for free.
-VALIDATE_DAYS_CALL: Final = ("python", "-m", "idhazh", "validate-days")
+CHECK_PUBLICATION_CALL: Final = ("python", "-m", "idhazh", "check-publication")
 
 
 #: Every job the command has to run in, and what each one buys. The publishing
 #: jobs stop a broken day being pushed; `ci.yml` stops one being merged. The
 #: pipeline's own pushes never start `ci.yml`, so neither job covers the other.
-VALIDATE_DAYS_JOBS: Final = (
+CHECK_PUBLICATION_JOBS: Final = (
     ("ci.yml", "gates"),
     ("digest.yml", "assemble"),
     ("backfill.yml", "backfill"),

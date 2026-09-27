@@ -35,7 +35,7 @@ the exact commit CI verified - not the branch tip, which may have moved - and
 only when that commit touches `frontend/**`, `config/idhazh.json` or `state/**`.
 
 The daily path is not gated on a conclusion, and that is deliberate. The job
-that writes a day runs `validate-days` before its own commit, so the day is
+that writes a day runs `check-publication` before its own commit, so the day is
 verified by its producer; a sibling job failing afterwards does not unvalidate
 it, and refusing to publish would leave a good day unread for up to four hours.
 That path publishes the branch tip rather than the triggering commit, because a
@@ -506,7 +506,7 @@ pages after.** The vectors ride inside the day payloads, and `/archive/` inlines
 every committed day, so this is the one job that can write a payload no reader
 can read or push that page past the ceiling in `config/idhazh.json`. Those are
 two severities. An invalid payload means the day is broken, so `idhazh
-validate-days` and then `npm run build` run first and stop the commit; a page
+check-publication` and then `npm run build` run first and stop the commit; a page
 over its recorded weight still reads correctly, so `npm run bundle-gate` runs
 after the commit and fails the job without costing the repair
 ([../architecture/publishing/what-the-site-weighs-and-when-it-stops-fitting.md](../architecture/publishing/what-the-site-weighs-and-when-it-stops-fitting.md#a-bad-day-is-stopped-before-the-commit-the-weight-ratchet-is-not)).

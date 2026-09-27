@@ -20,7 +20,7 @@ from pathlib import Path
 import pytest
 from conftest import CONTRACT_FIXTURES_DIR, read_text
 
-from idhazh.stages.validate_days import stage_validate_days
+from idhazh.publication_checks import run_publication_checks
 
 A_COMMITTED_DAY = CONTRACT_FIXTURES_DIR / "digest-day" / "two-runs.json"
 
@@ -28,9 +28,9 @@ A_COMMITTED_DAY = CONTRACT_FIXTURES_DIR / "digest-day" / "two-runs.json"
 def a_published_day(public_root: Path) -> Path:
     """One published day on disk, in the layout `published_days` globs for.
 
-    The marks the payload names are written as well, because `_picture_faults`
-    compares the two and a day naming a file that is not there is a fault rather
-    than the clean day this test needs.
+    The marks the payload names are written as well, because the `pictures`
+    check compares the two and a day naming a file that is not there is a fault
+    rather than the clean day this test needs.
     """
     payload = json.loads(read_text(A_COMMITTED_DAY))
     year, month, dom = str(payload["date"]).split("-")
@@ -53,13 +53,13 @@ def test_a_telemetry_shard_the_contract_refuses_is_named_by_the_gate(
     public = tmp_path / "public"
     a_published_day(public)
     root = public / "digest"
-    assert stage_validate_days(root) == 0, "the day itself has to be clean"
+    assert run_publication_checks(root, run_id="2026-08-21-1") == 0, "the day itself has to be clean"
 
     shard = public / "telemetry" / "2026-08.csv"
     shard.parent.mkdir(parents=True)
     shard.write_text("date,not_the_contract\n2026-08-21,1\n", encoding="utf-8")
 
     with caplog.at_level(logging.ERROR):
-        assert stage_validate_days(root) == 1
+        assert run_publication_checks(root, run_id="2026-08-21-1") == 1
     assert "frontend/public/telemetry/2026-08.csv" in caplog.text, "name the file"
     assert "header is" in caplog.text, "and say what the contract wanted instead"

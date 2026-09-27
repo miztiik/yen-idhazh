@@ -1,7 +1,7 @@
 """When is a measurement new, and what does the ledger do with one it already holds?
 
 Every case here is driven from a ledger built in the test. What the committed
-ledger happens to hold is the producer's question - `idhazh validate-days` reads
+ledger happens to hold is the producer's question - `idhazh check-publication` reads
 it back through this contract - and asking it here timed a red build to the day
 retention rolled a day file out (`CLAUDE.md` section 13).
 """

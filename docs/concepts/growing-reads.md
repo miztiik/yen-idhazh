@@ -175,7 +175,7 @@ read**, and where it is, the read needs nothing.
 opens one file, never a collection, and half a payload validated is a payload
 reported good on the half that happened to be first.
 
-**A read that got its growth back, on purpose.** `stages.validate_days.stage_validate_days`
+**A read that got its growth back, on purpose.** `publication_checks.run_publication_checks`
 opens every committed day on every publication and on every CI run. A receipt
 ledger used to skip a day whose recorded payload length still matched `os.stat`,
 and it was decommissioned on 2026-09-27 because the saving was paid for by that
@@ -255,7 +255,7 @@ reads are here and not how many. These are `backend/`'s;
 | `ledger.load_visual_prunes` | `state/visual-prunes.csv` | the report is about the whole series |
 | `corpus.read_rows` | `corpus/corpus.jsonl` | already rolling, capped at `finetune.corpus_rows` |
 | `contracts.base.Contract.read` | one payload | a validator cannot skip what it has not read |
-| `stages.validate_days.stage_validate_days` | every committed `digest.json` under `frontend/public/digest/` | a published day is frozen, but the contracts it is read through are not, so any day can stop matching on a commit that changes a shape. The receipt that used to skip an unchanged day was decommissioned on 2026-09-27: it settled a day on a recorded payload LENGTH, which let a receipt earned over one tree pass a same-length day in another. Measured 44 MB/s (2026-09-08), so the 727-day horizon reads in 30-60 s on the runner |
+| `publication_checks.run_publication_checks` | every committed `digest.json` under `frontend/public/digest/` | a published day is frozen, but the contracts it is read through are not, so any day can stop matching on a commit that changes a shape. The receipt that used to skip an unchanged day was decommissioned on 2026-09-27: it settled a day on a recorded payload LENGTH, which let a receipt earned over one tree pass a same-length day in another. Measured 44 MB/s (2026-09-08), so the 727-day horizon reads in 30-60 s on the runner |
 | `assemble.site_size` | every file under `frontend/public/digest/` | three jobs write the tree, so no one process can carry the total |
 | `retention.measure` | every file under the built tree | it is the independent audit a maintained total is checked against |
 | `retention.count_published_items` | every staged day payload | bytes and items have to come from one corpus |
@@ -300,7 +300,7 @@ publishers reach `series.publish_series`, which calls `prune_months`.
 `public_telemetry_keep_months` is 14 and the directory holds every month it has
 ever published - 2 files on 2026-09-13, gaining one a month. Every listing of it
 grows with it, including the one
-`stages.validate_days._console_payload_faults` takes on its contract sweep. What closes it is
+`publication_checks.checks.console` takes on its contract sweep. What closes it is
 switching that prune on, which is a decision about the whole repository rather
 than about this read ([run-the-pipeline.md](../how-to/run-the-pipeline.md#turning-state-cleanup-on)).
 
@@ -765,7 +765,7 @@ day carries eight stories against a seed of fifteen, so the spec stopped being
 able to demonstrate that the broken story sat past the seed. It is a real loss
 and nothing on the canary tree replaces it: there is one hostile article per
 file under `tests/fixtures/canaries` and the day is as long as that list. What
-survived is what was always load-bearing - that `validate-days` opens every
+survived is what was always load-bearing - that `check-publication` opens every
 story and names the contract that refused one.
 
 **The same day broke a second spec the same way, and that one lost nothing.**

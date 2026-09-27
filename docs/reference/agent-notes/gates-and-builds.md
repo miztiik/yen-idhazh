@@ -19,7 +19,7 @@ $env:IDHAZH_PYTHON = '<abs path to python.exe>'
 npm --prefix frontend run test:changed -- --fresh --python '<abs path to python.exe>'
 ```
 
-The same variable is needed for any Playwright spec that runs a backend command. `malformed-day.spec.ts` shells out to `idhazh validate-days` and resolves `$IDHAZH_PYTHON`, then a `.venv` at the repository root, then bare `python` - so a borrowing worktree misses the last two and the suite returns `1 failed, 1008 passed` with `No module named idhazh`, which reads as a broken validator rather than a `PATH` problem.
+The same variable is needed for any Playwright spec that runs a backend command. `malformed-day.spec.ts` shells out to `idhazh check-publication` and resolves `$IDHAZH_PYTHON`, then a `.venv` at the repository root, then bare `python` - so a borrowing worktree misses the last two and the suite returns `1 failed, 1008 passed` with `No module named idhazh`, which reads as a broken validator rather than a `PATH` problem.
 
 **A half-finished `npm ci` reports itself as a missing dependency.** `npm ci` deletes `node_modules` before it installs, so an `EPERM: operation not permitted, unlink` on a native `.node` file - `lightningcss` and `@tailwindcss/oxide` are the two that bite, both held open by any live vite or Playwright process on the box - leaves the tree part-deleted and exits `-4048`. The next `test:changed` then stops with `Missing @huggingface/transformers; run npm ci in frontend before checking`, which names a package nobody removed on purpose and reads as a broken checkout. **`npm install` is the repair, not another `npm ci`**: it is incremental, so it never unlinks the locked file. Check the lockfile afterwards, because `install` may move it and `ci` never does.
 

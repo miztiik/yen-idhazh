@@ -84,7 +84,7 @@ npm run test:browser
 **`GATE-DAYS`** - every row that changes a published payload shape:
 
 ```powershell
-python -m idhazh validate-days --day 2026-08-30 --day 2026-08-31
+python -m idhazh check-publication --day 2026-08-30 --day 2026-08-31
 ```
 
 **Not a gate, in this plan or anywhere in this repository: `ruff format`.** It rewrites dozens of files nobody in this plan authored - 73 on one 2026-09-08 run. Format the files you wrote, or leave formatting alone.

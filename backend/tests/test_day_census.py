@@ -1,9 +1,10 @@
 """A published day accounts for every story it planned.
 
-Contract tier (CLAUDE.md section 13). The rule is
-`idhazh.stages.validate_days._census_faults`, and it runs inside
-`idhazh validate-days`, which `ci.yml` runs on every change and `digest.yml`
-runs before every publish.
+Contract tier (CLAUDE.md section 13). The rule is the
+`planned-items-reconciliation` check under
+`idhazh.publication_checks.checks.reconciliation`, and it runs inside
+`idhazh check-publication`, which `ci.yml` runs on every change and
+`digest.yml` runs before every publish.
 
 **An empty day is not the fault, which is the whole difficulty.** Two empty days
 are normal and this refuses neither: a day that planned nothing found no new
@@ -16,18 +17,23 @@ nothing can write honestly, and it is the only one refused here.
 Every case is built rather than read off a committed day. The committed archive
 holds one of the three shapes and has never held the refused one, so a test over
 it would prove the rule fires on nothing (Guardrail #12, section 13).
+
+The gate is asked through its own entry point rather than through the check's
+internals, because what a reader is protected by is the exit code a workflow
+step reads - not a list a test could assemble differently.
 """
 
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 from typing import Any
 
 import pytest
 from conftest import CONTRACT_FIXTURES_DIR, read_text
 
-from idhazh.stages.validate_days import _day_faults, stage_validate_days
+from idhazh.publication_checks import run_publication_checks
 
 pytestmark = [pytest.mark.contract]
 
@@ -65,12 +71,18 @@ def written(public_root: Path, payload: dict[str, Any]) -> Path:
     return file
 
 
-def faults_for(public_root: Path, payload: dict[str, Any]) -> list[str]:
-    return _day_faults(written(public_root, payload), public_root)
+def faults_for(
+    public_root: Path, payload: dict[str, Any], caplog: pytest.LogCaptureFixture
+) -> list[str]:
+    """Every sentence the gate says about a tree holding that one day."""
+    written(public_root, payload)
+    with caplog.at_level(logging.ERROR):
+        run_publication_checks(public_root / "digest", run_id="2026-08-21-1")
+    return [record.getMessage() for record in caplog.records]
 
 
 def test_a_day_that_planned_nothing_and_published_nothing_reports_nothing(
-    tmp_path: Path,
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
     """A quiet day: the pipeline found no new article.
 
@@ -78,10 +90,12 @@ def test_a_day_that_planned_nothing_and_published_nothing_reports_nothing(
     and the console paints them amber, which is the correct reading. A rule that
     refused an empty day would refuse all nineteen.
     """
-    assert faults_for(tmp_path, a_day_publishing_nothing(planned=0, failed=0)) == []
+    assert faults_for(tmp_path, a_day_publishing_nothing(planned=0, failed=0), caplog) == []
 
 
-def test_a_day_where_everything_failed_stays_publishable(tmp_path: Path) -> None:
+def test_a_day_where_everything_failed_stays_publishable(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
     """2026-09-14's shape. Refusing it would delete the record of a bad day.
 
     `digest.yml` gives the assemble job `if: always()` on purpose, so the day
@@ -90,10 +104,12 @@ def test_a_day_where_everything_failed_stays_publishable(tmp_path: Path) -> None
     and the run summary carries the `::error::` annotation `stage_assemble`
     prints.
     """
-    assert faults_for(tmp_path, a_day_publishing_nothing(planned=80, failed=80)) == []
+    assert faults_for(tmp_path, a_day_publishing_nothing(planned=80, failed=80), caplog) == []
 
 
-def test_a_day_that_accounts_for_none_of_its_plan_is_refused(tmp_path: Path) -> None:
+def test_a_day_that_accounts_for_none_of_its_plan_is_refused(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
     """The case nothing can write honestly, and the archive has never held it.
 
     `ItemOutcome` has two members, so a story the pipeline touched is `ok` or
@@ -101,13 +117,15 @@ def test_a_day_that_accounts_for_none_of_its_plan_is_refused(tmp_path: Path) -> 
     recording where it went - and on the page and on the console it looks
     exactly like a quiet day, which is what makes it worth stopping.
     """
-    faults = faults_for(tmp_path, a_day_publishing_nothing(planned=80, failed=0))
+    faults = faults_for(tmp_path, a_day_publishing_nothing(planned=80, failed=0), caplog)
 
     assert any("accounts for none of them" in fault for fault in faults), faults
     assert any("80" in fault for fault in faults), faults
 
 
-def test_a_day_that_published_its_stories_reports_nothing(tmp_path: Path) -> None:
+def test_a_day_that_published_its_stories_reports_nothing(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
     """The denominator.
 
     A checker that passes everything reads exactly like one that passes a
@@ -118,11 +136,11 @@ def test_a_day_that_published_its_stories_reports_nothing(tmp_path: Path) -> Non
     for item in payload["items"]:
         item["visual"] = None
 
-    assert faults_for(tmp_path, payload) == []
+    assert faults_for(tmp_path, payload, caplog) == []
 
 
 def test_the_stage_stops_the_publish_rather_than_logging_and_passing(tmp_path: Path) -> None:
     """A rule that only writes a log line is not a gate."""
     written(tmp_path, a_day_publishing_nothing(planned=80, failed=0))
 
-    assert stage_validate_days(tmp_path / "digest") == 1
+    assert run_publication_checks(tmp_path / "digest", run_id="2026-08-21-1") == 1

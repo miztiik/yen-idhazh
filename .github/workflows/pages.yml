@@ -36,7 +36,7 @@ jobs:
   # cannot filter a `workflow_run` trigger by conclusion, so the filter lives
   # here - and it applies to CI only. A failed CI run has judged the commit and
   # said no. A failed daily run has not: the job that writes a day runs
-  # `validate-days` before its own commit, so the day is verified by its
+  # `check-publication` before its own commit, so the day is verified by its
   # producer, and a sibling job failing afterwards does not unvalidate it.
   # Holding it back would leave a good day unpublished for up to four hours.
   decide:

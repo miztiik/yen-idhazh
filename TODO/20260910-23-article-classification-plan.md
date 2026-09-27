@@ -65,7 +65,7 @@ Execute per [`../docs/how-to/execute-a-plan.md`](../docs/how-to/execute-a-plan.m
 
 **Budgets are guardrails, not rules.** The posture is to consume and process more when we can. The levers, with their real names and today's values, are in section 0.3. A row moves one **when it binds**, never pre-emptively, and says in its pull request which number bound.
 
-**Every oracle is driven from a fixture, never from the committed archive.** `CLAUDE.md` Guardrail #12 and section 13. A per-item rule is proved on `backend/var/canary/` or on `tests/fixtures/`, which are fixed in size and can carry a case the archive has never produced. A question genuinely about the whole tree is asked once, on the total, by the producer that writes the tree - `idhazh validate-days` - and not by pytest.
+**Every oracle is driven from a fixture, never from the committed archive.** `CLAUDE.md` Guardrail #12 and section 13. A per-item rule is proved on `backend/var/canary/` or on `tests/fixtures/`, which are fixed in size and can carry a case the archive has never produced. A question genuinely about the whole tree is asked once, on the total, by the producer that writes the tree - `idhazh check-publication` - and not by pytest.
 
 **Additive contract fields are stamped in the commit that adds them.** Every row that adds a field to a persisted model names its `version` date-stamp and its `changelog` entry in its own acceptance gate, per `CLAUDE.md` section 11. A field added without them is a release blocker, not a follow-up.
 
@@ -121,7 +121,7 @@ npm run test:browser
 **`GATE-DAYS`** - every row that changes a published payload shape:
 
 ```powershell
-python -m idhazh validate-days --day 2026-08-30 --day 2026-08-31
+python -m idhazh check-publication --day 2026-08-30 --day 2026-08-31
 ```
 
 **Not a gate, in this plan or anywhere in this repository: `ruff format`.** It rewrites dozens of files nobody in this plan authored. Format the files you wrote, or leave formatting alone.
