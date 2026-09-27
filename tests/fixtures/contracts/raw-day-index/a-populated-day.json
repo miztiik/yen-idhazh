@@ -1,0 +1,15 @@
+{
+  "content_sha256": "9b5c285871509ca89bca27690aabddc4ea455d549ecbb387e48ba1dc9b33cede",
+  "date": "2026-09-24",
+  "files": [
+    "01a0d140-9ba7-8ea9-bdd5-7b9344b4ce8c.parquet",
+    "01a0d140-9ca8-8733-ad3a-ed18a16e34e6.parquet",
+    "01a0d140-9de4-83e8-8c70-7a05105620c9.parquet",
+    "01a0d14c-afba-80a3-8ee1-e2b9b8c6d823.parquet",
+    "01a0d14c-b02e-81ab-953d-a30e9d7b505e.parquet",
+    "01a0d2ab-d8c0-829b-ac38-cea80ffde2ed.parquet"
+  ],
+  "ledger": "item-health",
+  "listed_at": "2026-09-25T00:40:12Z",
+  "version": "2026-09-27"
+}
