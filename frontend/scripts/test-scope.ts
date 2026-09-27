@@ -1,6 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { CONSOLE_MODEL_LABELS_PAGE } from './doc-test-inputs.ts';
 import { FRONTEND_GROUPS, groupForSpec } from './test-groups.ts';
 import type { FrontendGroup } from './test-groups.ts';
 
@@ -34,10 +35,11 @@ const CONSOLE_OWNED =
  *
  * `frontend/tests/console-model.spec.ts` asserts the console's label set
  * against this page, so an edit to it can redden a suite the documentation
- * branch below would otherwise have answered for.
+ * branch below would otherwise have answered for. The key is the constant the
+ * spec reads its page from, so the two cannot name different pages.
  */
 const DOC_TEST_INPUTS: Record<string, TestGroup[]> = {
-	'docs/concepts/console-design.md': ['console']
+	[CONSOLE_MODEL_LABELS_PAGE]: ['console']
 };
 
 function consoleIsTheSubject(paths: readonly string[]): boolean {

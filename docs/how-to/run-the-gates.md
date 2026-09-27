@@ -1,6 +1,6 @@
 # Run the Gates
 
-**Last Updated**: 2026-09-22
+**Last Updated**: 2026-09-27
 Set up a machine, then run every check `CLAUDE.md` section 9 asks for before a
 merge. This page owns the project's actual gate commands; the neutral PR
 lifecycle that calls for them is
@@ -121,7 +121,10 @@ not** - a changed sentence cannot break an application check, on a branch or on
 a merge. That branch is a closed list of prefixes rather than a guess, so a path
 nobody classified falls to full coverage instead; and a document that a test
 reads is that test's input rather than documentation, which is why an edit to
-`docs/concepts/console-design.md` buys the console specs. `validate_all` decides
+the page ruling the console's model labels buys the console specs. Such a page
+is named once, in `frontend/scripts/doc-test-inputs.ts`: the spec reads its
+path from there and the selector keys on the same constant, so a page that
+moves takes the selector with it. `validate_all` decides
 whether the `gates` job opens every committed day or none of them: a `main` push
 carrying code, and any change to the contracts, the tooling or a committed
 payload under `frontend/public/`, open all of them; every other change opens
