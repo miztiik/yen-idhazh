@@ -258,8 +258,8 @@ payloads, not a permanent URL list.
 
 `validate` writes one result file per model under `backend/var/validation/`.
 `decide` applies the arithmetic and writes a segment into
-`state/<run.trial_state_dirname>/validation/<YYYY>/<MM>/<DD>/` - or into
-`state/validation/...` when the config names no trial directory, which the
+`state/<run.trial_state_dirname>/candidate-models/<YYYY>/<MM>/<DD>/` - or into
+`state/candidate-models/...` when the config names no trial directory, which the
 committed one does not.
 
 The legacy HHEM screen, in full:

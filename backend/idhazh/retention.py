@@ -150,7 +150,7 @@ from datetime import date, timedelta
 from pathlib import Path
 from typing import Final, NamedTuple, NoReturn
 
-from idhazh import assemble, day_partition, day_shards, ledger, month_partition, telemetry
+from idhazh import day_partition, day_shards, ledger, month_partition, telemetry
 from idhazh.contracts.base import ITEM_ID_PATTERN
 from idhazh.contracts.item_health import ItemHealthRow, ItemOutcome, ItemStage
 from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
@@ -694,7 +694,7 @@ def prune_digest_fragments(
     never opened - the cost follows the backlog this pass has to clear and
     shrinks as it clears it.
     """
-    root = state_dir / assemble.FRAGMENTS_DIRNAME
+    root = ledger.tree_root(state_dir, LedgerName.DIGEST_FRAGMENTS)
     limit = cutoff(today, config.image_months)
     if limit is None or not root.is_dir():
         return FragmentPruneResult((), 0, dry_run or config.dry_run)
@@ -934,13 +934,13 @@ def prune_telemetry(
         aggregate_rows += len(summary)
         if dry_run:
             continue
-        target = ledger.path(state_dir, LedgerName.TELEMETRY_AGGREGATE, month)
-        ledger.write_telemetry_aggregate(target, summary)
+        target = ledger.path(state_dir, LedgerName.ITEM_HEALTH_SUMMARY, month)
+        ledger.write_item_health_summary(target, summary)
         # Read back before the days go. A fold nobody verified is a deletion
         # nobody can undo.
-        if ledger.load_telemetry_aggregate(target) != summary:
+        if ledger.load_item_health_summary(target) != summary:
             raise ValueError(
-                f"{ledger.relpath(LedgerName.TELEMETRY_AGGREGATE, month)} did not read back as it "
+                f"{ledger.relpath(LedgerName.ITEM_HEALTH_SUMMARY, month)} did not read back as it "
                 f"was written, so the {len(days)} day files of {month} stay"
             )
         for day in days:
@@ -962,7 +962,7 @@ def prune_telemetry(
     hard_deleted: list[str] = []
     if config.item_health_aggregate_keep_months is not None:
         delete_from = oldest_month_kept(today, config.item_health_aggregate_keep_months)
-        for aggregate in month_shards(state_dir / LedgerName.TELEMETRY_AGGREGATE):
+        for aggregate in month_shards(state_dir / LedgerName.ITEM_HEALTH_SUMMARY):
             if aggregate.stem >= delete_from:
                 continue
             hard_deleted.append(aggregate.stem)
@@ -1171,7 +1171,7 @@ def prune_feed_health(
     kept: list[str] = []
     freed = 0
 
-    root = ledger.tree_root(state_dir, LedgerName.HEALTH)
+    root = ledger.tree_root(state_dir, LedgerName.FEED_HEALTH)
     by_month = day_shards.shards_by_month(root, days=UNBOUNDED_WINDOW)
     for month in sorted(by_month):
         if month >= boundary:
@@ -1502,7 +1502,7 @@ def prune_traces(
     name what a live run would remove (section 2); `kept` is a count, because a
     full window is many files and naming them all is noise.
     """
-    root = state_dir / telemetry.TRACES_DIRNAME
+    root = ledger.tree_root(state_dir, LedgerName.TRACES)
     if not root.is_dir():
         return TracePruneResult((), 0, 0, dry_run)
 

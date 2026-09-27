@@ -113,7 +113,7 @@ def stage_count_verdicts(
     metrics = _collect_metrics(date, state=state, shipped_root=shipped_root, judge_id=judge_id)
 
     scorer, judge = scorer_inputs(settings), judge_inputs(settings)
-    record_path = ledger.path(state, LedgerName.SCORE_DISTRIBUTION)
+    record_path = ledger.path(state, LedgerName.CONTENT_SIMILARITY_JUDGE_SCORE_DISTRIBUTION)
     record = (
         StorySimilarityDistribution.from_json(record_path.read_text(encoding="utf-8"))
         if record_path.exists()
@@ -125,7 +125,7 @@ def stage_count_verdicts(
     if moved is not None:
         stem = counting.archive_stem(record)
         assemble.write_atomic(
-            ledger.path(state, LedgerName.SCORE_ARCHIVE, stem), record.to_json()
+            ledger.path(state, LedgerName.CONTENT_SIMILARITY_JUDGE_ARCHIVE, stem), record.to_json()
         )
         archived = stem
         record = counting.empty_record(
@@ -190,5 +190,5 @@ def _collect_metrics(date: str, *, state: Path, shipped_root: Path, judge_id: st
         shipped_root,
         judge_id=judge_id,
         contract=ContentSimilarityJudgeMetrics,
-        into=ledger.path(state, LedgerName.JUDGE_METRICS, date),
+        into=ledger.path(state, LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS, date),
     )

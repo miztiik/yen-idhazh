@@ -110,7 +110,7 @@ def marked_pairs(state_dir: Path) -> list[SimilarityHoldoutPair]:
     the evidence a floor is set from, and a silently short count reads as a
     smaller holdout rather than as a broken one.
     """
-    path = ledger.path(state_dir, LedgerName.SIMILARITY_HOLDOUT)
+    path = ledger.path(state_dir, LedgerName.CONTENT_SIMILARITY_JUDGE_HOLDOUT_PAIRS)
     if not path.exists():
         return []
     with path.open("r", encoding="utf-8", newline="") as handle:

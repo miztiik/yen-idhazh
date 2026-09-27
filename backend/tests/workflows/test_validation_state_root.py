@@ -9,8 +9,9 @@ from pathlib import Path
 import pytest
 from conftest import REPO_ROOT, read_text
 
-from idhazh import config
+from idhazh import config, ledger
 from idhazh.contracts.app_config import AppConfig
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.evals.golden import GoldenResult
 from idhazh.stages import common, decide
 from utilities import candidate_pointer
@@ -55,7 +56,7 @@ VALIDATION_GATES_STEP = "Run the gates"
 
 VALIDATION_COMPACT_STEP = "Fold the verdict into its day"
 
-VALIDATION_COMMIT_STEP = "Commit the validation ledger"
+VALIDATION_COMMIT_STEP = "Commit the candidate-models ledger"
 
 #: Every stage this dispatch runs, and the job that runs it.
 VALIDATION_STAGES = (
@@ -219,6 +220,6 @@ def test_a_decide_run_on_a_trial_config_writes_nothing_outside_its_own_tree(
     assert [path for path in written if not path.startswith(trial_tree)] == [], (
         f"a stage on a trial config wrote outside {trial_tree}: {written}"
     )
-    assert not (production_root / "validation").exists(), (
-        "the production tree gained a validation ledger"
+    assert not ledger.tree_root(production_root, LedgerName.CANDIDATE_MODELS).exists(), (
+        "the production tree gained a candidate-models ledger"
     )

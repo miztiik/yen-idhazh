@@ -66,7 +66,7 @@ def stage_decide(
     # trial run leaves nothing in the tree a published day is built from.
     ledger.write_segment(
         common.STATE_ROOT,
-        LedgerName.VALIDATION,
+        LedgerName.CANDIDATE_MODELS,
         rows,
         run_id=run_id,
         attempt=run_context.run_attempt(),

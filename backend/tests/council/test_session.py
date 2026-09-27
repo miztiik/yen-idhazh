@@ -90,7 +90,7 @@ def _config_registering(root: Path, *slugs: str) -> Path:
 def _the_councils_record(state_root: Path) -> list[CouncilShardOutcome]:
     """The night's own day file, read back through the contract that wrote it."""
     lines = (
-        ledger.path(state_root, LedgerName.SHARD_OUTCOMES, A_DATE)
+        ledger.path(state_root, LedgerName.LLM_COUNCIL_SHARD_OUTCOMES, A_DATE)
         .read_text(encoding="utf-8")
         .splitlines()
     )
@@ -459,9 +459,9 @@ def test_a_night_that_hosts_nobody_leaves_no_day_file_behind(tmp_path: Path) -> 
         == 0
     )
 
-    assert not ledger.path(state_root, LedgerName.SHARD_OUTCOMES, A_DATE).exists()
+    assert not ledger.path(state_root, LedgerName.LLM_COUNCIL_SHARD_OUTCOMES, A_DATE).exists()
     assert (
-        ledger.tree_root(REPO_ROOT / ledger.STATE_DIRNAME, LedgerName.SHARD_OUTCOMES)
+        ledger.tree_root(REPO_ROOT / ledger.STATE_DIRNAME, LedgerName.LLM_COUNCIL_SHARD_OUTCOMES)
         / ".gitkeep"
     ).exists()
 

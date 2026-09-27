@@ -493,16 +493,16 @@ jobs:
       # redirected here by the config step above, so everything under this path
       # that is dirty on this runner was written by this runner.
       #
-      # The trial root rather than `state/pipeline-tests/validation`, and that is
+      # The trial root rather than `state/pipeline-tests/candidate-models`, and that is
       # the same trade the telemetry fold records: `git add` on a path the
       # checkout does not hold aborts the whole step under `set -e`, and a
-      # dispatch whose gates wrote no verdict has no validation directory at all.
+      # dispatch whose gates wrote no verdict has no candidate-models directory at all.
       # The trial root is in every checkout.
-      - name: Commit the validation ledger
+      - name: Commit the candidate-models ledger
         env:
           COMMIT_MESSAGE: "qualify: ${{ needs.plan.outputs.candidate_id }} ${{ needs.plan.outputs.date }}"
           NOTHING_STAGED_MESSAGE: "the gates wrote no ledger row"
-          PUSH_FAILED_MESSAGE: "could not push the validation ledger"
+          PUSH_FAILED_MESSAGE: "could not push the candidate-models ledger"
         run: python backend/utilities/commit_and_push.py state/pipeline-tests
 
       - uses: actions/upload-artifact@v7

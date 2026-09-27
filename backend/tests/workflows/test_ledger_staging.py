@@ -14,9 +14,10 @@ staged but missing from the settlement registry.
 Nothing here names a ledger. Both sides are derived - the ledger side from the
 registry every ledger is declared in, the job side from the CLI's own dispatch and
 the workflow's own `run:` bodies - because a hand-written list of ledger names is
-the thing that went missing in the first place. A ledger that sits outside the
-registry declares itself the way every ledger once did, by exporting a `*_relpath`
-helper of its own, and `state/traces` is the one that does.
+the thing that went missing in the first place. Every ledger under `state/` is in
+the registry. The trace tree's module stays in the derivation for its sink: a sink
+is opened on a path helper, and the `*_relpath` helper beside it is how the sink
+half names the ledger it fills.
 
 A ledger is filled two ways and both count here. A ledger takes an `append_*` or a
 `write_*` call; the trace tree takes a file sink opened on its own path helper, and
@@ -82,12 +83,12 @@ TRIAL_WORKFLOW: Final = "measure.yml"
 # a year or a month.
 OTHER_DATE: Final = "2027-01-02"
 
-# Every module that declares a ledger the registry does not, each by exporting a
-# `*_relpath` helper for one. `idhazh.telemetry.traces` holds the trace tree beside
-# the registered ledgers, which a sink writes rather than a writer function - which
-# is why every guard that looked for a writer missed it. `idhazh.ledger` is here for
-# its writers rather than for a helper of its own: every address it builds now comes
-# from the registry.
+# Every module this derivation reads a ledger's writers and path helpers from.
+# `idhazh.telemetry.traces` is here for its path helper rather than for an
+# address of its own: the trace tree is registered, and a sink rather than a
+# writer function fills it, so the sink half keys it by the `*_relpath` helper
+# beside the path the sink is opened on. `idhazh.ledger` is here for its writers:
+# every address it builds comes from the registry.
 LEDGER_MODULES: Final = (ledger, traces)
 
 # A ledger whose entry ships ahead of the thing that fills it, and what will fill
@@ -144,10 +145,38 @@ LEDGERS_NO_RUN_FILLS: Final[Mapping[str, str]] = MappingProxyType(
     }
 )
 
-# Both lists excuse a ledger from needing a writer this derivation can follow, so
-# every assertion that subtracts one subtracts the other.
-LEDGERS_NO_JOB_WRITES: Final = frozenset(LEDGERS_NOTHING_FILLS_YET) | frozenset(
-    LEDGERS_NO_RUN_FILLS
+# A ledger whose files the module that owns it writes straight to the registry's
+# address, with no `append_*` or `write_*` in the ledger package and no sink for
+# this derivation to follow. The registry says where each one lives; the module
+# named here is who writes it, and the job that runs that module stages `state`
+# whole, which is the only reason nothing here checks it more closely.
+#
+# It is a list rather than a rule for the reason the two above are: a fourth such
+# ledger fails this file instead of joining it unnoticed, and an entry that gains a
+# writer this derivation can follow fails too.
+LEDGERS_AN_OWNER_WRITES: Final[Mapping[str, str]] = MappingProxyType(
+    {
+        "state/day-metrics": (
+            "idhazh.telemetry.publish.day_metrics, one JSON record per published day, "
+            "written by `python -m idhazh assemble`"
+        ),
+        "state/digest-fragments": (
+            "idhazh.stages.assemble through idhazh.assemble.fragment_path, one JSON "
+            "block per run of a date, written by `python -m idhazh assemble`"
+        ),
+        "state/score-archive": (
+            "idhazh.evals.archive, called by retention.prune_scores from "
+            "`python -m idhazh prune-state` the first time a month of scores ages out"
+        ),
+    }
+)
+
+# The three lists excuse a ledger from needing a writer this derivation can follow,
+# so every assertion that subtracts one subtracts all three.
+LEDGERS_NO_JOB_WRITES: Final = (
+    frozenset(LEDGERS_NOTHING_FILLS_YET)
+    | frozenset(LEDGERS_NO_RUN_FILLS)
+    | frozenset(LEDGERS_AN_OWNER_WRITES)
 )
 
 # A module a verb used to reach and now reaches only through a tenant the council
@@ -692,14 +721,15 @@ def test_every_store_is_filled_by_a_writer_this_test_can_follow() -> None:
     unknown = sorted(LEDGERS_NO_JOB_WRITES - set(ledgers.values()))
     assert not unknown, (
         f"{', '.join(unknown)} is excused from needing a writer and nothing declares it, "
-        "so the excuse covers nothing. Delete the entry from LEDGERS_NOTHING_FILLS_YET "
-        "or LEDGERS_NO_RUN_FILLS."
+        "so the excuse covers nothing. Delete the entry from LEDGERS_NOTHING_FILLS_YET, "
+        "LEDGERS_NO_RUN_FILLS or LEDGERS_AN_OWNER_WRITES."
     )
     landed = sorted(LEDGERS_NO_JOB_WRITES & written)
     assert not landed, (
         f"{', '.join(landed)} now has a public writer and is still excused from having "
-        "one. Delete the entry from LEDGERS_NOTHING_FILLS_YET or LEDGERS_NO_RUN_FILLS, so "
-        "the ledger is held to the staging and settlement checks below from its first row."
+        "one. Delete the entry from LEDGERS_NOTHING_FILLS_YET, LEDGERS_NO_RUN_FILLS or "
+        "LEDGERS_AN_OWNER_WRITES, so the ledger is held to the staging and settlement "
+        "checks below from its first row."
     )
     unwritten = sorted(set(ledgers.values()) - written - LEDGERS_NO_JOB_WRITES)
     assert not unwritten, (
@@ -708,7 +738,9 @@ def test_every_store_is_filled_by_a_writer_this_test_can_follow() -> None:
         "ledger is dead and a commit step is staging a directory nothing fills. A ledger "
         "that is deliberately ahead of its writer (Guardrail #3) goes in "
         "LEDGERS_NOTHING_FILLS_YET, named with what will fill it; a ledger only a person "
-        "ever fills goes in LEDGERS_NO_RUN_FILLS, named with who fills it."
+        "ever fills goes in LEDGERS_NO_RUN_FILLS, named with who fills it; a ledger its "
+        "owning module writes straight to its address goes in LEDGERS_AN_OWNER_WRITES, "
+        "named with that module."
     )
 
     called = {

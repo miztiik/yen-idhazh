@@ -31,6 +31,7 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Final, Literal
 
+from idhazh import ledger
 from idhazh.contracts.article import Article
 from idhazh.contracts.base import canonical_json
 from idhazh.contracts.digest_day import (
@@ -50,6 +51,7 @@ from idhazh.contracts.fingerprint import PipelineInputs
 from idhazh.contracts.item_health import ItemHealthRow, ItemOutcome, TimeSource
 from idhazh.contracts.knobs.placement import AssembleConfig, PlacementConfig, SameStoryConfig
 from idhazh.contracts.knobs.ui import UiConfig
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.run_manifest import (
     ConfigDigest,
     ModelUse,
@@ -84,11 +86,6 @@ LOG: Final = logging.getLogger("idhazh")
 
 PUBLIC_ROOT: Final = Path("frontend/public/digest")
 INDEX_ROOT: Final = Path("frontend/public/assist/index")
-#: Where a run files its own block of a day, under `state/` and never under
-#: `frontend/public/`: everything there is copied into the deploy, so a fragment
-#: filed there would be a second full copy of every story on a site Pages
-#: refuses over 1 GB. What keeps a reader off it is that it has no address.
-FRAGMENTS_DIRNAME: Final = "digest-fragments"
 #: The committed label vectors, relative to the repository root. `config/`
 #: rather than `state/`: a person builds this file and commits it, exactly like
 #: the `config/taxonomy.json` it is derived from, and `state/` is what a run
@@ -2095,8 +2092,15 @@ def build_day(
 
 
 def fragment_dir(state_dir: Path, date: str) -> Path:
-    """Every block committed for one date, and nothing from any other date."""
-    return day_dir(state_dir / FRAGMENTS_DIRNAME, date)
+    """Every block committed for one date, and nothing from any other date.
+
+    Under `state/` and never under `frontend/public/`: everything there is
+    copied into the deploy, so a block filed there would be a second full copy
+    of every story on a site Pages refuses over 1 GB. What keeps a reader off it
+    is that it has no address. The registry's `digest-fragments` entry is where
+    the day directory is written down.
+    """
+    return ledger.path(state_dir, LedgerName.DIGEST_FRAGMENTS, date)
 
 
 def fragment_path(state_dir: Path, *, date: str, run_id: str) -> Path:
@@ -2104,9 +2108,10 @@ def fragment_path(state_dir: Path, *, date: str, run_id: str) -> Path:
 
     The name is the run's own id, so no two runs of a date reach for the same
     path. That is the whole reason the fragment exists: a file with one writer
-    has nothing for git to merge, and a day file had two writers.
+    has nothing for git to merge, and a day file had two writers. The ledger
+    mints the name, as it does every name under `state/`.
     """
-    return fragment_dir(state_dir, date) / f"{run_id}.json"
+    return fragment_dir(state_dir, date) / ledger.fragment_name(run_id)
 
 
 def _landing_order(fragment: DigestRunFragment) -> tuple[str, ...]:

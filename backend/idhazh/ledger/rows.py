@@ -341,7 +341,7 @@ def append_story_similarity_pairs(
 
     Returns how many rows the file gained, so a caller can log the count.
     """
-    file = paths.path(state_dir, LedgerName.SCORED_PAIRS, date)
+    file = paths.path(state_dir, LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS, date)
     columns = StorySimilarityPair.csv_columns()
     if not file.exists():
         file.parent.mkdir(parents=True, exist_ok=True)
@@ -364,10 +364,8 @@ def load_story_similarity_pairs(state_dir: Path, date: str) -> list[StorySimilar
     record that is rewritten whole, and a silently short count is a record that
     cannot be told from a quiet day.
     """
-    return [
-        StorySimilarityPair.from_csv_row(raw)
-        for raw in _read_rows(paths.path(state_dir, LedgerName.SCORED_PAIRS, date))
-    ]
+    pairs = paths.path(state_dir, LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS, date)
+    return [StorySimilarityPair.from_csv_row(raw) for raw in _read_rows(pairs)]
 
 
 def append_fitted_thresholds(
@@ -389,7 +387,7 @@ def append_fitted_thresholds(
 
     Returns how many rows the file gained, so a caller can log the count.
     """
-    file = paths.path(state_dir, LedgerName.FITTED_THRESHOLDS, date)
+    file = paths.path(state_dir, LedgerName.CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS, date)
     columns = FittedSimilarityThreshold.csv_columns()
     if not file.exists():
         file.parent.mkdir(parents=True, exist_ok=True)
@@ -420,7 +418,7 @@ def append_council_shard_outcomes(
     recorded = list(rows)
     if not recorded:
         return 0
-    file = paths.path(state_dir, LedgerName.SHARD_OUTCOMES, date)
+    file = paths.path(state_dir, LedgerName.LLM_COUNCIL_SHARD_OUTCOMES, date)
     landed = extend_ledger_file(file, CouncilShardOutcome.csv_columns(), recorded)
     return landed - drop_repeated_rows(file, COUNCIL_SHARD_OUTCOME_KEY)
 
@@ -449,10 +447,8 @@ def load_fitted_thresholds(
     """
     rows: list[FittedSimilarityThreshold] = []
     for day in reversed(day_partition.days_in_window(today, within_days)):
-        rows.extend(
-            FittedSimilarityThreshold.from_csv_row(raw)
-            for raw in _read_rows(paths.path(state_dir, LedgerName.FITTED_THRESHOLDS, day))
-        )
+        fitted = paths.path(state_dir, LedgerName.CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS, day)
+        rows.extend(FittedSimilarityThreshold.from_csv_row(raw) for raw in _read_rows(fitted))
     return rows
 
 
@@ -688,7 +684,7 @@ def load_item_health(state_dir: Path, *, today: str, within_days: int) -> list[I
     ]
 
 
-def write_telemetry_aggregate(path: Path, rows: list[TelemetryAggregateRow]) -> int:
+def write_item_health_summary(path: Path, rows: list[TelemetryAggregateRow]) -> int:
     """Write one month's folded summary whole, replacing whatever was there.
 
     The only writer here that rewrites rather than appends, and the reason is
@@ -708,7 +704,7 @@ def write_telemetry_aggregate(path: Path, rows: list[TelemetryAggregateRow]) -> 
     return len(rows)
 
 
-def load_telemetry_aggregate(path: Path) -> list[TelemetryAggregateRow]:
+def load_item_health_summary(path: Path) -> list[TelemetryAggregateRow]:
     """Every folded row of one month. Empty for a month never folded."""
     return [TelemetryAggregateRow.from_csv_row(row) for row in _read_rows(path)]
 
@@ -736,7 +732,7 @@ def load_health(state_dir: Path, *, today: str, within_days: int) -> list[FeedHe
     rows = [
         FeedHealthRow.from_csv_row(raw)
         for raw in day_shards.settled_rows(
-            paths.tree_root(state_dir, LedgerName.HEALTH),
+            paths.tree_root(state_dir, LedgerName.FEED_HEALTH),
             FEED_HEALTH_KEY,
             FeedHealthRow,
             days=within_days,

@@ -6,7 +6,7 @@
 
 Two neighbours own the other halves of the question. [schemas.md](schemas.md) owns the shape of a row and the rule that decides a grain. [../../concepts/partitions.md](../../concepts/partitions.md) owns what counts as a day file and a month name. This page is the per-ledger answer: this ledger, this grain, this reason.
 
-Every ledger here is append-only except `state/telemetry-aggregate/`, which is rewritten. The section on it says why.
+Every ledger here is append-only except three that rewrite a whole file: `state/item-health-summary/` and `state/score-archive/` rewrite a month's summary, and `state/day-metrics/` rewrites one day's record when that day is corrected. The section on the first says why.
 
 ## A ledger partitions only when its read carries a time window
 
@@ -17,6 +17,8 @@ A window lets the reader name the files it wants and skip the rest. Without one 
 ## One typed name for one ledger
 
 Every ledger here has exactly one name in code: a member of `LedgerName` in `backend/idhazh/contracts/ledger_name.py`. The value is the ledger's own name - the directory for a ledger that is a directory, the stem with no extension for a ledger that is a single file - so the directory a writer fills, the directory a reader walks and the word an operator types are one string rather than three. Two members may not share a value: an enum takes a repeat as an alias and says nothing, so the repeat is refused when the module loads.
+
+**The Python name is spelled from the value and the family, and from nothing else.** A ledger that is its own family is its value in upper snake case: `feed-health` is `FEED_HEALTH`. A ledger inside a family puts the family first: `metrics` under `content-similarity-judge` is `CONTENT_SIMILARITY_JUDGE_METRICS`. The registry refuses a member that breaks the rule when it loads, so a reader who knows the folder knows the name.
 
 It sits at the bottom of the contract graph rather than inside `backend/idhazh/ledger/`, because a contract may not import another part of `idhazh` (CLAUDE.md section 4) and a persisted shape is typed by it.
 
@@ -30,7 +32,7 @@ It sits at the bottom of the contract graph rather than inside `backend/idhazh/l
 | `state/published/<YYYY>/<MM>/<DD>.csv` | Have we already run this? | day file | `collect.published_window_days` |
 | `state/feed-health/<YYYY>/<MM>/<DD>.csv` | Is this source still working? One row per feed per run | day file | `HEALTH_WINDOW_DAYS` |
 | `state/item-health/<YYYY>/<MM>/<DD>.csv` | What did every planned item do? One row per planned item per run | day file | the published projection, a month at a time |
-| `state/telemetry-aggregate/<YYYY-MM>.csv` | What is left of an item-health month | month file | the whole file |
+| `state/item-health-summary/<YYYY-MM>.csv` | What is left of an item-health month | month file | the whole file |
 | `state/feed-retirements.csv` | Is this address gone for good? | one file | the whole file |
 | `state/visual-prunes/<YYYY>/<MM>/<DD>.csv` | Is the picture backlog shrinking? | day file | the whole tree |
 
@@ -61,9 +63,9 @@ Measured 2026-09-08 on an Intel Core i7-1265U over the 7,600 committed rows, hea
 
 That last row is the number to remember before reading any wall clock here as a property of the file. The 16 committed days average 475 rows a day, which is above the ceiling arithmetic because they were written under three different ceilings - 200 until 2026-08-26, 160 until 2026-09-07, 80 since - and the newest full day wrote 357. See [../../reference/pipeline-cost.md](../../reference/pipeline-cost.md).
 
-## The aggregate files by month because it summarises a month
+## The item-health summary files by month because it summarises a month
 
-`state/telemetry-aggregate/<YYYY-MM>.csv` is what is left of an item-health month once `observability.item_health_full_grain_months` has passed: one row per date and stage, folded by `retention.compact_month`.
+`state/item-health-summary/<YYYY-MM>.csv` is what is left of an item-health month once `observability.item_health_full_grain_months` has passed: one row per date and stage, folded by `retention.compact_month`.
 
 A day file of a month's totals is a shape nothing consumes, so it files by month. It is also the one ledger here that is rewritten rather than appended, because every row in it is derived from the days it summarises.
 
@@ -81,11 +83,13 @@ No reader fails on a missing file. A fresh clone has no history, and a run with 
 
 Callers pass the state directory and never the file name. The layout is one fact, and it lives in `config/ledgers.json`.
 
-## The registry: one entry per ledger, and a build that stops without it
+## The registry: families and ledgers, and a build that stops without them
 
-`config/ledgers.json` says which ledgers exist, what state each one is in, and where each one sits. `backend/idhazh/contracts/ledgers.py` is its shape and `backend/idhazh/ledger/paths.py` loads it once, when the module loads.
+`config/ledgers.json` says which families and ledgers exist, what lifecycle status each family is in, and where each ledger sits. `backend/idhazh/contracts/ledgers.py` is its shape and `backend/idhazh/ledger/paths.py` loads it once, when the module loads. `python backend/utilities/ledger_families.py` prints it, family by family, with the number of files each ledger holds.
 
-Each entry carries five things: the ledger's `name`, its `state`, its `grain`, the `prefix` of directories it sits under inside `state/`, and - for a ledger that is a single file - the `stem` and `suffix` that name it. A dated ledger carries no stem, because its period names it. A day directory carries no suffix, because it is a directory.
+A **family** is one top-level folder under `state/`. `content-similarity-judge` is one family holding seven ledgers; most families hold one ledger of the same name. A family carries what is decided for the folder as a whole: its `name`, its `lifecycle_status`, a one-line `description` of what it holds, the UTC day it was `onboarded`, and its `ledgers`.
+
+A **ledger** is one row shape, filed one way, at one address. Each carries five things: its `name`, its `grain`, the `prefix` of directories it sits under inside `state/`, and - for a ledger that is a single file - the `stem` and `suffix` that name it. A dated ledger carries no stem, because its period names it. A day directory carries no suffix, because it is a directory. The prefix keeps the whole nest, the family's folder included, so an address is read off the ledger alone.
 
 Three builders read the registry and nothing else builds a path under `state/`:
 
@@ -99,36 +103,51 @@ Three builders read the registry and nothing else builds a path under `state/`:
 
 Because the extension is data on the entry, a builder cannot emit the wrong one.
 
-### The entries and the typed names are exactly each other
+### What the registry refuses when it loads
 
-Every `LedgerName` member has one entry and every entry names one member. The check runs when the config loads, so a ledger with no entry - or an entry naming a member twice - stops the build with the ledger's name in the message.
+The check runs when the config loads, so each of these stops the build with the offender's name in the message:
 
-That refusal is what the registry is for. `prune-state` empties every directory under `state/` the registry does not claim, and the claim used to be a hand-written Python set. A ledger somebody forgot to add to that set was a production directory the trial sweep quietly emptied. It is now a build that will not start.
+| The registry | Why it is refused |
+| --- | --- |
+| leaves a `LedgerName` member out of every family | `prune-state` empties every directory under `state/` the registry does not claim, so a missing ledger is a production folder the trial sweep would empty |
+| lists one ledger twice in a family, or in two families | two entries are two answers about one ledger, and two families are two statuses for it |
+| lists one family twice | one folder with two lists would have two statuses |
+| lists a ledger whose prefix does not start with its family's name | the ledger would sit in one folder and take another folder's status. A file at the top of `state/` has no folder, so `feed-retirements` is named for its stem |
+| holds a member whose Python name is not spelled from its family and its value | a Python name that says something the value does not is a second name a reader has to learn - the rule is in the section on typed names above |
 
-### The three states, and what each one changes
+The first row is what the registry is for. The claim used to be a hand-written Python set, and a ledger somebody forgot to add to it was a production directory the trial sweep quietly emptied. It is now a build that will not start.
 
-`live` is written and read. `paused` is not written now and will resume. `retired` is no longer written and is not coming back.
+### The three lifecycle statuses, and what each one changes
 
-**All three are claimed, so all three are protected.** The state says what a writer may do, never whether the rows survive. Deleting a ledger's data for good is something a person does on purpose, never a side effect of changing a state.
+`active` is written and read. `paused` is not written now and will resume. `retired` is no longer written and is not coming back.
 
-### Onboarding a ledger, and retiring one
+**All three are claimed, so all three are protected.** The status says what a writer may do, never whether the rows survive. Deleting a family's data for good is something a person does on purpose, never a side effect of a status change.
 
-Adding one is two edits and no logic: one entry in `config/ledgers.json` at `state: live`, and its `LedgerName` member. A settled day tree needs a third - its key and preference, which stay in code because a preference is a callable and a callable is not JSON.
+**The write path does not read the status yet.** Every writer writes where the registry says, whatever the family's status. So a test holds every family at `active`, and it refuses a paused or retired family until the write path honours the field. When it does, two rules hold, and both are the owner's:
 
-Pausing or retiring one is a single field. Nothing is discovered, and nothing is a hand-list somebody can forget.
+- A write into a paused or retired family is skipped with one warning, and the run carries on. A status is a decision about one folder, and a run that stopped on it would cost every other family its rows.
+- The passes that compact closed days and age out old rows keep running over a paused family. To freeze its old rows as well, pause the pass that deletes them: a status says whether new rows are written, never how long old ones are kept.
+
+### Onboarding and offboarding
+
+**Add a family.** Two edits and no logic. One family in `config/ledgers.json` at `lifecycle_status: active`, with a one-line description, today's UTC date as `onboarded`, and one ledger; and that ledger's `LedgerName` member, spelled from its value. A settled day tree needs a third edit - its key and preference, which stay in code because a preference is a callable and a callable is not JSON.
+
+**Add a ledger to a family.** One more entry in that family's `ledgers`, with a prefix that opens on the family's name, and its member, spelled with the family's name in front. The family's status covers it from its first row.
+
+**Pause or retire a family.** Change its `lifecycle_status`, and nothing else. Nothing is discovered, and nothing is a hand-list somebody can forget. Until the write path reads the field, the test above refuses the edit rather than let the registry say something the writers do not do.
 
 ```mermaid
 %%{init: {"theme": "base", "themeVariables": {"background": "#0f1117", "primaryColor": "#222834", "primaryTextColor": "#e6e9f0", "primaryBorderColor": "#4b5468", "lineColor": "#8b93a7", "textColor": "#e6e9f0", "clusterBkg": "#1a1e27", "clusterBorder": "#3a4254", "titleColor": "#e6e9f0", "edgeLabelBackground": "#1a1e27", "fontSize": "14px"}}}%%
 flowchart TB
-  subgraph ONBOARD["Onboarding a ledger - two edits, no logic"]
-    ENTRY["add one entry to config/ledgers.json<br/>name, state, grain, prefix, stem, suffix"]
-    MEMBER["add its LedgerName member"]
+  subgraph ONBOARD["Onboarding a family - two edits, no logic"]
+    ENTRY["add one family to config/ledgers.json<br/>name, lifecycle_status, description, onboarded<br/>and each ledger: name, grain, prefix, stem, suffix"]
+    MEMBER["add each ledger's LedgerName member"]
   end
 
   subgraph LOAD["Load time - idhazh/ledger/paths.py"]
     READ["read and validate the config"]
-    BIJ{"entries and LedgerName<br/>exactly each other?"}
-    REFUSE["build stops, naming the ledger"]
+    BIJ{"families, ledgers and LedgerName<br/>agree?"}
+    REFUSE["build stops, naming the offender"]
     REG[("the registry, in memory")]
   end
 
@@ -140,8 +159,8 @@ flowchart TB
   end
 
   TREE[("the committed files under state/")]
-  PRUNE{"directory in the registry?"}
-  KEEP["kept, whatever its state"]
+  PRUNE{"directory a family in the registry?"}
+  KEEP["kept, whatever its lifecycle_status"]
   EMPTY["treated as a trial tree, emptied"]
 
   ENTRY --> READ
@@ -177,7 +196,7 @@ flowchart TB
   class ONBOARD,LOAD,DOOR sysOps;
 ```
 
-In one line: a ledger exists because an entry says so; the entry and the typed name must agree or the build stops; everything that touches `state/` goes through the door the registry feeds; and `prune-state` empties only what the registry does not claim.
+In one line: a ledger exists because a family lists it; the families, the ledgers and the typed names must agree or the build stops; everything that touches `state/` goes through the door the registry feeds; and `prune-state` empties only what the registry does not claim.
 
 The four drawn are the ones a row moves through. The other three - `csv_file`, `filenames` and `headers` - are read and written by those four and reach neither the registry nor `state/` on their own; the table below lists all eight.
 
@@ -214,7 +233,15 @@ A frozen set in Python was what this replaced, and it is the defect rather than 
 
 A glob over `state/` was the other candidate and it fails twice. Its cost rises with the data (CLAUDE.md Guardrail #12), and it cannot tell a retired ledger from one that has never run - a ledger whose first write failed is simply invisible to a walk, which is the opposite of what a protected set needs.
 
-The config carries where a ledger lives and its lifecycle. It does not carry how the ledger's rows settle: a dedup key is a tuple and a preference is a callable, and a callable is not JSON. Merging the two into one table was considered and rejected - it re-couples two questions that change for different reasons, which is why `paths.py` imports nothing that answers the second one.
+The config carries where each ledger lives and each family's lifecycle status. It does not carry how the ledger's rows settle: a dedup key is a tuple and a preference is a callable, and a callable is not JSON. Merging the two into one table was considered and rejected - it re-couples two questions that change for different reasons, which is why `paths.py` imports nothing that answers the second one.
+
+**A lifecycle status belongs to a family, and an address to a ledger.** Owner decision, 2026-09-27. A status is a decision about a whole folder: pausing the similarity judge means none of its seven ledgers is written, and a status stored on each ledger made that seven edits that could disagree with each other. An address is a fact about one row shape - which folder, which grain, which file name - and two ledgers in one family still file differently. So the status is written once per folder, and the prefix keeps the whole nest so no builder has to ask the family anything.
+
+**The last four folders joined the registry rather than keep their own names.** `traces`, `day-metrics`, `digest-fragments` and `score-archive` were built by their owning modules from directory constants, and `prune-state` protected them from a list typed into the sweep beside the registry. That list was a second place to forget a folder, and each constant was a second spelling of where a ledger lives - the two defects the registry exists to remove. Each is now a one-ledger family, its owner composes its paths from the registry, and the one file name an owner minted, a digest fragment's, is minted inside the package like every other name under `state/`. None of them moved: each builder lands on the bytes it built before, and a test holds it.
+
+**Retention stays with the pass that deletes.** A family's status says whether new rows are written. How long old rows are kept is answered by the retention passes, each from its own knob, and a window written here would be a second place to set it. So pausing a family does not freeze its old rows; pausing the pass that deletes them does.
+
+**The field is `lifecycle_status`, not `state`.** `state` is already the name of the folder every ledger sits in, so `state: paused` in a file that describes `state/` reads as a claim about the folder. `lifecycle_status` says what it is - where in its life the family is - and no key in the file is named `state`. The Python enum is `LifecycleStatus`, which shares its name, and not its values, with the one `contracts/taxonomy.py` uses for desks, lenses and feeds.
 
 **A root that tells one copy of a ledger from another is an argument to a builder, never a field on an entry.** The registry is one entry per name and the check above refuses a second, so a ledger that ends up sitting under two roots at once cannot express that as two entries - it would break the check on the first load. `prefix` is the nest a ledger sits in, and a builder that has to choose between two roots takes the choice from its caller and composes it with the same entry.
 

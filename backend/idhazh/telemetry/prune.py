@@ -86,7 +86,7 @@ PruneInterruptedError = one_at_a_time.PruneInterruptedError
 #: absent - they file `.json` and `.jsonl`, which
 #: `day_shards.shard_files` refuses, and a second walker here would be a second
 #: answer to what a day file is. Bringing either in means teaching that one
-#: walker its suffix, which is where the question belongs. `state/validation/`
+#: walker its suffix, which is where the question belongs. `state/candidate-models/`
 #: and `state/span-rollup/` are absent too: nobody has asked to take a range out
 #: of one, and joining this list is a decision rather than a consequence of the
 #: shape.
@@ -122,16 +122,16 @@ PruneInterruptedError = one_at_a_time.PruneInterruptedError
 #: it is filed, never what executed it.
 _TARGET_LEDGERS: Final[tuple[LedgerName, ...]] = (
     LedgerName.COUNTERFACTUAL_SCORES,
-    LedgerName.FITTED_THRESHOLDS,
-    LedgerName.HEALTH,
+    LedgerName.CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS,
+    LedgerName.FEED_HEALTH,
     LedgerName.HOST_FINGERPRINT,
     LedgerName.ITEM_HEALTH,
-    LedgerName.JUDGE_METRICS,
-    LedgerName.MERGE_LINE_HOLDOUT_SCORES,
-    LedgerName.SCORED_PAIRS,
+    LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS,
+    LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES,
+    LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS,
     LedgerName.SCORES,
     LedgerName.SCORE_INDEX,
-    LedgerName.SHARD_OUTCOMES,
+    LedgerName.LLM_COUNCIL_SHARD_OUTCOMES,
     LedgerName.VISUAL_PRUNES,
 )
 

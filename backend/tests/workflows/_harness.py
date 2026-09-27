@@ -712,7 +712,7 @@ COMMIT_STAGED_PATHS: Final = {
         "corpus",
     ],
     # `state` whole, and deliberately not the directories the fold touches:
-    # `state/telemetry-aggregate/` does not exist in a fresh checkout, and
+    # `state/item-health-summary/` does not exist in a fresh checkout, and
     # `git add` on a path that is not there aborts the whole step.
     # `frontend/public/telemetry` is named beside it because the fold deletes the
     # browser's copy of a folded month, and `git add` records a removal only for

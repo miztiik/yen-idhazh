@@ -53,7 +53,7 @@ land with them.
 The ledger is append-only: a writer adds a file to the day and nothing edits a
 file that is already there. It is not kept for ever: a month
 older than `observability.item_health_full_grain_months` (14) is folded to one
-row per `(date, stage)` in `state/telemetry-aggregate/<YYYY-MM>.csv` and that
+row per `(date, stage)` in `state/item-health-summary/<YYYY-MM>.csv` and that
 month's day directories are deleted, by `idhazh prune-state` after the day is
 committed. The browser's copy of that same month under
 `frontend/public/telemetry/` goes in the same step.
