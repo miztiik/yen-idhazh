@@ -8,10 +8,10 @@ from typing import Final, cast
 import pytest
 
 from ._harness import (
+    CHECK_PUBLICATION_CALL,
+    CHECK_PUBLICATION_JOBS,
     COMMIT_PROGRAM_CALL,
     PUBLISHING_SITE_JOBS,
-    VALIDATE_DAYS_CALL,
-    VALIDATE_DAYS_JOBS,
     _job,
     _load_workflows,
     _mapping,
@@ -62,7 +62,7 @@ def test_the_plan_a_day_is_built_from_cannot_go_missing_quietly() -> None:
     assert settings["if-no-files-found"] == "error"
 
 
-@pytest.mark.parametrize(("filename", "job_name"), VALIDATE_DAYS_JOBS)
+@pytest.mark.parametrize(("filename", "job_name"), CHECK_PUBLICATION_JOBS)
 def test_every_committed_day_is_validated_where_the_build_stopped_doing_it(
     filename: str, job_name: str
 ) -> None:
@@ -81,7 +81,7 @@ def test_every_committed_day_is_validated_where_the_build_stopped_doing_it(
     calls = [
         index
         for index, step in enumerate(steps)
-        if tuple(shlex.split(str(step.get("run", "")))[:4]) == VALIDATE_DAYS_CALL
+        if tuple(shlex.split(str(step.get("run", "")))[:4]) == CHECK_PUBLICATION_CALL
     ]
     assert calls, f"{filename}/{job_name} never validates the committed days"
     assert "continue-on-error" not in steps[calls[0]], (
@@ -105,7 +105,7 @@ def test_the_daily_publish_validates_the_day_it_wrote_and_not_every_other_one() 
     call = next(
         shlex.split(str(step.get("run", "")))
         for step in steps
-        if tuple(shlex.split(str(step.get("run", "")))[:4]) == VALIDATE_DAYS_CALL
+        if tuple(shlex.split(str(step.get("run", "")))[:4]) == CHECK_PUBLICATION_CALL
     )
     assert "--day" in call, "the daily publish still opens every committed day"
     named = call[call.index("--day") + 1]
@@ -135,7 +135,7 @@ def test_the_whole_tree_is_re_read_only_when_the_shape_it_is_read_through_moves(
     step = next(
         step
         for step in _steps(workflow, "gates")
-        if tuple(shlex.split(str(step.get("run", "")))[:4]) == VALIDATE_DAYS_CALL
+        if tuple(shlex.split(str(step.get("run", "")))[:4]) == CHECK_PUBLICATION_CALL
     )
     assert "validate_all" in str(step.get("if", "")), (
         "the full pass over the archive runs on every change, whatever moved"
@@ -156,7 +156,7 @@ def test_the_day_is_validated_before_it_is_published(
     validated = next(
         index
         for index, step in enumerate(steps)
-        if tuple(shlex.split(str(step.get("run", "")))[:4]) == VALIDATE_DAYS_CALL
+        if tuple(shlex.split(str(step.get("run", "")))[:4]) == CHECK_PUBLICATION_CALL
     )
     assert validated < names.index(commit_step), (
         "a day the contract refuses must never reach a reader"
@@ -173,7 +173,7 @@ def test_the_build_gates_the_publish_and_the_weight_gate_runs_after_it(
     that cannot build, and one of those six that cannot render, fails here
     instead of in a reader's browser. That day is broken and must not publish,
     so the build runs before the commit. The two dated reading routes render in
-    the browser and the build no longer answers for them; `idhazh validate-days`
+    the browser and the build no longer answers for them; `idhazh check-publication`
     sits beside it at the same severity and for the same reason - it is what
     opens the stories a seeded document never serialises.
 

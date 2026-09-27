@@ -228,7 +228,7 @@ tree for each one.
 
 ### What checks them
 
-`idhazh validate-days` reads every payload back through the shape that wrote it,
+`idhazh check-publication` reads every payload back through the shape that wrote it,
 for the months the run touched - and for every month on disk when it is asked
 for the whole tree, which is the sweep `ci.yml` takes on a change that can move
 a contract. Data hygiene belongs there and not in pytest (`CLAUDE.md`

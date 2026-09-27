@@ -120,6 +120,8 @@ UNMARKED_MODULES: Final = frozenset(
         "test_plan_status",
         "test_policy_defaults",
         "test_prompt_loop",
+        "test_publication_hook",
+        "test_publication_registry",
         "test_publish_source_health",
         "test_publish_telemetry",
         "test_qualify",

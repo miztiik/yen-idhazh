@@ -211,7 +211,7 @@ function hold(date: string, entry: HeldDay): void {
  *
  * It is deliberately not a schema. A browser validating every field a served
  * item carries would need a validator on the reading path (Guardrail #1, Guardrail #8), and the
- * contract is checked where it can be checked properly: `idhazh validate-days`
+ * contract is checked where it can be checked properly: `idhazh check-publication`
  * opens every story of every committed day in CI and before every publish.
  */
 function renderable(item: DigestItem): boolean {

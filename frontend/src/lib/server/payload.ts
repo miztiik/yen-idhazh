@@ -9,7 +9,7 @@
  *
  * It stopped proving something else at the same time, and that is the larger
  * change: a story past the seed is never read here, so it is never checked
- * here. `idhazh validate-days` opens every story of every committed day, in CI
+ * here. `idhazh check-publication` opens every story of every committed day, in CI
  * and before every publish.
  */
 

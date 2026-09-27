@@ -21,7 +21,7 @@ import { Intercepted, loaderSource, servedDayUrl, type Loader } from './support/
  * nobody. A reading document has carried a seed since 2026-09-01 and the browser
  * fetches the rest, so the build never opens the stories past it. Two things
  * replaced that one guarantee and they only mean anything together: `idhazh
- * validate-days` stops the day, and the loader survives one that got past it. A
+ * check-publication` stops the day, and the loader survives one that got past it. A
  * test proving either alone would leave the other free to rot.
  *
  * Case one runs the real command as a process and reads its exit code, over a
@@ -51,7 +51,7 @@ import { Intercepted, loaderSource, servedDayUrl, type Loader } from './support/
  * demonstration is gone and nothing on the canary tree can replace it - there is
  * one hostile article per file under `tests/fixtures/canaries` and the day is as
  * long as that list. What case one still proves, and what was always the
- * load-bearing half, is that `validate-days` projects EVERY story through the
+ * load-bearing half, is that `check-publication` projects EVERY story through the
  * served contract and names that contract when one fails.
  */
 
@@ -170,7 +170,7 @@ function python(): string {
 
 /** One day on disk, in the layout the command globs for.
  *
- * The day's pictures come with it. `validate-days` holds a payload against the
+ * The day's pictures come with it. `check-publication` holds a payload against the
  * directory it sits in - two stories on one chart, a chart the payload names
  * and cannot find, a file no story claims - so a tree carrying the JSON and
  * none of the visual data is not a healthy day with parts missing, it is a
@@ -198,13 +198,13 @@ function treeHolding(day: Day, name: string, payload: string): string {
  * ledger under `state/`, and the run ended on stale inputs with every test green
  * (defect 20).
  */
-function validateDays(root: string): { code: number; said: string } {
+function checkPublication(root: string): { code: number; said: string } {
 	const state = path.join(path.dirname(root), 'state');
 	mkdirSync(state, { recursive: true });
 	try {
 		execFileSync(
 			python(),
-			['-m', 'idhazh', 'validate-days', '--digest-root', root, '--state-root', state],
+			['-m', 'idhazh', 'check-publication', '--digest-root', root, '--state-root', state],
 			{
 				cwd: REPO,
 				encoding: 'utf8',
@@ -254,12 +254,12 @@ test('a malformed day is refused before it merges, and survived if it arrives', 
 	const shapes = brokenShapes(day);
 	const refused: Record<string, { code: number; said: string }> = {};
 	for (const [shape, payload] of Object.entries(shapes)) {
-		refused[shape] = validateDays(treeHolding(day, shape, payload));
+		refused[shape] = checkPublication(treeHolding(day, shape, payload));
 	}
-	const healthy = validateDays(treeHolding(day, 'healthy', day.text));
+	const healthy = checkPublication(treeHolding(day, 'healthy', day.text));
 
 	console.log(
-		`[malformed-day] validate-days over canary ${day.date}: ` +
+		`[malformed-day] check-publication over canary ${day.date}: ` +
 			Object.entries(refused)
 				.map(([shape, result]) => `${shape} exit ${result.code}`)
 				.join(', ') +

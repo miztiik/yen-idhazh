@@ -55,7 +55,7 @@ One PR-group is one pull request. **Four: two backend, one frontend, one close.*
 | # | Row (PR group) | Depends-on (intra) | Depends-on (cross-plan, by title) | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | The day-validation receipt is decommissioned end to end | - | none - plan 53 closed, so the ordering bound expired (ESCALATE #2) | A | DONE | p54d1 | - | worker subagent |
-| 2 | The `check-publication` framework, the rename, and the live hook | 1 | after "One `LedgerName` for one ledger" | B | PENDING | - | - | - |
+| 2 | The `check-publication` framework, the rename, and the live hook | 1 | after "One `LedgerName` for one ledger" | B | DONE | p54d2 | - | worker subagent |
 | 3 | The run-yield chart replaces the donut | - | none | A | DONE | p54d3 | - | one worker |
 | 4 | Closure and distillation | 1, 2, 3 | - | C | PENDING | - | - | - |
 

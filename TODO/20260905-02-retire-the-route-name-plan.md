@@ -169,7 +169,7 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
   - `tests/fixtures/contracts/**` carrying the deleted keys
   - `backend/tests/test_render.py`, `backend/tests/test_route.py`
   - `docs/architecture/publishing/**`
-- **Acceptance gates:** `ruff`; `mypy --strict`; export + drift; the full suite; `idhazh validate-days`.
+- **Acceptance gates:** `ruff`; `mypy --strict`; export + drift; the full suite; `idhazh check-publication`.
 - **Oracle:** **Before deleting `VisualKind.IMAGE`, a scan over every committed `digest.json` returns zero items carrying it** - printed as a count, with the count of days scanned beside it, so a zero cannot come from scanning nothing. Deletion proceeds only on that evidence.
 
 ### Decisions

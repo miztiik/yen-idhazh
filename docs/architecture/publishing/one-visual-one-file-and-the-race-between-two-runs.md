@@ -67,12 +67,12 @@ bytes, three quarters of that day's picture weight, dead against the 1 GB Pages 
 reader-facing string was added: no picture is the common and correct answer and the page says nothing
 about it, so a repaired item reads exactly like the 699 that never had one.
 
-## `validate-days` is what would have caught it
+## `check-publication` is what would have caught it
 
 It holds the three ways a payload and its
 directory can disagree: no two items share a path, every declared path is a file that is there, and
 every file in a day directory named for an item is named by an item. It runs inside
-`idhazh validate-days` rather than as a test per committed day, because a day already published is
+`idhazh check-publication` rather than as a test per committed day, because a day already published is
 frozen and re-checking every one of them costs more every day the pipeline runs (Guardrail #12). The
 trees it is driven against are built in `backend/tests/test_published_assets.py` - one correct, and
 one for each way a payload and its directory can disagree - and a built tree can also carry a fault

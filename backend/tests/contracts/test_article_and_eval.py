@@ -65,7 +65,7 @@ def test_a_day_still_carrying_the_retired_drawing_path_reads() -> None:
     Every one of the 24 committed days names a `.svg` on every rendered visual,
     and none of them is ever rewritten. `Model` forbids a key it does not
     declare, so without the named pop those days stop parsing the day this
-    lands - `validate-days` red, the build red, the release blocked. Driven by
+    lands - `check-publication` red, the build red, the release blocked. Driven by
     adding the key to a fixture rather than by counting how many committed days
     still carry it, because a count of a growing collection is a check timed to
     go red on a date nobody chose (`CLAUDE.md` section 13).
