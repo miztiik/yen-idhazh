@@ -20,6 +20,7 @@ from pydantic import Field
 
 from idhazh.contracts.base import ChangelogEntry, Contract, DateStamp, RunId
 from idhazh.contracts.council_shard_outcome import ShardOutcome
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.council.metrics_sink import collect_judge_metrics, ship_judge_metrics
 from idhazh.council.tenancy import ShardResult, Tenant
 
@@ -27,6 +28,10 @@ COUNCIL_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "llm-council.yml"
 
 #: What the capability writes into on a runner. One directory a night.
 METRICS_DIRNAME = "metrics"
+
+#: The ledger whose lifecycle status the collecting write asks about. The
+#: council's own, so nothing here names a judge, and its family is active.
+WHICH = LedgerName.LLM_COUNCIL_SHARD_OUTCOMES
 
 
 class PaperMetrics(Contract):
@@ -213,7 +218,7 @@ def test_the_collecting_job_appends_every_shipped_row_to_the_store_the_tenant_na
 
     into = tmp_path / tenant.committed_paths[0] / "2026" / "09" / "20.csv"
     landed = collect_judge_metrics(
-        shipped, judge_id=tenant.judge_id, contract=PaperMetrics, into=into
+        shipped, judge_id=tenant.judge_id, contract=PaperMetrics, which=WHICH, into=into
     )
 
     assert landed == 2
@@ -233,7 +238,11 @@ def test_a_second_tenants_columns_travel_the_same_path_unchanged(tmp_path: Path)
 
     into = tmp_path / "state" / "other-paper-tenant" / "metrics" / "20.csv"
     landed = collect_judge_metrics(
-        shipped, judge_id="other-paper-tenant", contract=OtherPaperMetrics, into=into
+        shipped,
+        judge_id="other-paper-tenant",
+        contract=OtherPaperMetrics,
+        which=WHICH,
+        into=into,
     )
 
     assert landed == 1
@@ -248,7 +257,9 @@ def test_a_truncated_upload_fails_before_it_reaches_the_store(tmp_path: Path) ->
 
     into = tmp_path / "state" / "paper-tenant" / "metrics" / "20.csv"
     with pytest.raises(ValueError):
-        collect_judge_metrics(shipped, judge_id="paper-tenant", contract=PaperMetrics, into=into)
+        collect_judge_metrics(
+            shipped, judge_id="paper-tenant", contract=PaperMetrics, which=WHICH, into=into
+        )
     assert not into.exists(), "a ledger never gains a row the contract refused"
 
 

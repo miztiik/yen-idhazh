@@ -8,6 +8,12 @@ cell reaches a committed file without a model having read it.
 deliberate. It imports names back out of this package at its own module top, so
 a module-scope import here would close a load-time cycle: importing the package
 runs `__init__`, which imports this module, which re-enters a half-built package.
+
+Every writer here that records new rows asks `lifecycle.accepts_new_rows` first,
+and writes nothing into a paused or retired family. `append_visual_prunes` and
+`write_item_health_summary` do not ask: one is the prune's own log and the other
+folds rows already recorded, and the ageing step reads that fold back before it
+deletes anything.
 """
 
 from __future__ import annotations
@@ -33,7 +39,7 @@ from idhazh.contracts.seen import PublishedRow, SeenRow
 from idhazh.contracts.span_rollup import SpanRollupRow
 from idhazh.contracts.story_similarity_pair import StorySimilarityPair
 from idhazh.contracts.visual_prune import VisualPruneRow
-from idhazh.ledger import paths
+from idhazh.ledger import lifecycle, paths
 from idhazh.ledger.csv_file import (
     CsvRecord,
     _read_rows,
@@ -65,8 +71,11 @@ HEALTH_WINDOW_DAYS: Final = 31
 
 def append_seen(state_dir: Path, date: str, rows: Iterable[SeenRow]) -> int:
     """Append first sights. Returns how many landed, so a caller can log the count."""
+    recorded = list(rows)
+    if recorded and not lifecycle.accepts_new_rows(LedgerName.SEEN, len(recorded)):
+        return 0
     return extend_ledger_file(
-        paths.path(state_dir, LedgerName.SEEN, date), SeenRow.csv_columns(), list(rows)
+        paths.path(state_dir, LedgerName.SEEN, date), SeenRow.csv_columns(), recorded
     )
 
 
@@ -78,8 +87,11 @@ def append_published(state_dir: Path, date: str, rows: Iterable[PublishedRow]) -
     rewrite the freeze rule permits and the same choice `append_seen` gives its
     caller. See `docs/concepts/partitions.md`.
     """
+    recorded = list(rows)
+    if recorded and not lifecycle.accepts_new_rows(LedgerName.PUBLISHED, len(recorded)):
+        return 0
     return extend_ledger_file(
-        paths.path(state_dir, LedgerName.PUBLISHED, date), PublishedRow.csv_columns(), list(rows)
+        paths.path(state_dir, LedgerName.PUBLISHED, date), PublishedRow.csv_columns(), recorded
     )
 
 
@@ -264,8 +276,11 @@ def append_retirements(state_dir: Path, rows: Iterable[FeedRetirementRow]) -> in
     Returns how many rows the file gained, so a caller can log the count. A row
     that only repeated one already on record is not a gain.
     """
+    recorded = list(rows)
+    if recorded and not lifecycle.accepts_new_rows(LedgerName.FEED_RETIREMENTS, len(recorded)):
+        return 0
     file = paths.path(state_dir, LedgerName.FEED_RETIREMENTS)
-    landed = extend_ledger_file(file, FeedRetirementRow.csv_columns(), list(rows))
+    landed = extend_ledger_file(file, FeedRetirementRow.csv_columns(), recorded)
     return landed - drop_repeated_rows(file, FEED_RETIREMENT_KEY)
 
 
@@ -341,12 +356,16 @@ def append_story_similarity_pairs(
 
     Returns how many rows the file gained, so a caller can log the count.
     """
-    file = paths.path(state_dir, LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS, date)
+    recorded = list(rows)
+    which = LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS
+    if not lifecycle.accepts_new_rows(which, len(recorded)):
+        return 0
+    file = paths.path(state_dir, which, date)
     columns = StorySimilarityPair.csv_columns()
     if not file.exists():
         file.parent.mkdir(parents=True, exist_ok=True)
         file.write_text(",".join(columns) + "\n", encoding="utf-8", newline="")
-    landed = extend_ledger_file(file, columns, list(rows))
+    landed = extend_ledger_file(file, columns, recorded)
     return landed - drop_repeated_rows(file, STORY_SIMILARITY_PAIR_KEY)
 
 
@@ -387,12 +406,16 @@ def append_fitted_thresholds(
 
     Returns how many rows the file gained, so a caller can log the count.
     """
-    file = paths.path(state_dir, LedgerName.CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS, date)
+    recorded = list(rows)
+    which = LedgerName.CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS
+    if not lifecycle.accepts_new_rows(which, len(recorded)):
+        return 0
+    file = paths.path(state_dir, which, date)
     columns = FittedSimilarityThreshold.csv_columns()
     if not file.exists():
         file.parent.mkdir(parents=True, exist_ok=True)
         file.write_text(",".join(columns) + "\n", encoding="utf-8", newline="")
-    landed = extend_ledger_file(file, columns, list(rows))
+    landed = extend_ledger_file(file, columns, recorded)
     return landed - drop_repeated_rows(file, STORY_SIMILARITY_THRESHOLD_KEY)
 
 
@@ -417,6 +440,8 @@ def append_council_shard_outcomes(
     """
     recorded = list(rows)
     if not recorded:
+        return 0
+    if not lifecycle.accepts_new_rows(LedgerName.LLM_COUNCIL_SHARD_OUTCOMES, len(recorded)):
         return 0
     file = paths.path(state_dir, LedgerName.LLM_COUNCIL_SHARD_OUTCOMES, date)
     landed = extend_ledger_file(file, CouncilShardOutcome.csv_columns(), recorded)
@@ -571,6 +596,8 @@ def write_segment(
     _refuse_outside_day_trees(ledger)
     if not rows:
         return 0
+    if not lifecycle.accepts_new_rows(ledger, len(rows)):
+        return 0
     columns = _TREE_SHAPES[ledger].model.csv_columns()
     written = 0
     for day, cells in _dated_rows(ledger, rows, date).items():
@@ -614,6 +641,8 @@ def extend_segment(
     """
     _refuse_outside_day_trees(ledger)
     if not rows:
+        return 0
+    if not lifecycle.accepts_new_rows(ledger, len(rows)):
         return 0
     columns = _TREE_SHAPES[ledger].model.csv_columns()
     added = 0

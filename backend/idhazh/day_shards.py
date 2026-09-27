@@ -11,6 +11,10 @@ behind.
 that way, so a `<DD>.csv` beside a month's day directories is a name no writer
 spells and the walk refuses it with every other stray.
 
+**This reader is CSV-only.** A parquet or JSON-lines file under `state/raw/` or
+`state/compact/` is read through `ledger.load`, never here: one reader taught two
+formats is how a tree ends up with two grammars.
+
 **The fold is the compaction's, moved rather than copied.** `settle` runs the
 identical three cases `stages.compact` ran into a head - join, supersede, repeat
 - and `stages.compact` calls this one now. Six ledgers with six read-side folds

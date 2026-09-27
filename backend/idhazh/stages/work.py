@@ -93,8 +93,13 @@ def trace_sink(
 
     The file carries this writer's identity, so two shards and two attempts at
     one shard never open one path.
+
+    Into a paused or retired family the shard traces nowhere. The check is asked
+    once, here, before any span exists, so its warning counts no rows.
     """
     if not settings.app.observability.tracing_enabled:
+        return telemetry.NullSink()
+    if not ledger.accepts_new_rows(LedgerName.TRACES, 0):
         return telemetry.NullSink()
     return telemetry.FileSink(
         telemetry.committed_trace_path(

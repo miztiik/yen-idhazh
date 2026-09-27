@@ -300,24 +300,25 @@ def stage_assemble(
         if fragment_file.exists()
         else generated_at
     )
-    atomic_write.write_atomic(
-        fragment_file,
-        DigestRunFragment(
-            version=DigestRunFragment.schema_version(),
-            date=plan.date,
-            run_id=run_id,
-            completed_at=landed_at,
-            items=digest_items,
-            verticals=list(plan.verticals),
-            items_planned=len(plan.items),
-            failed_item_ids=[
-                row.item_id for row in item_health_rows if row.outcome is ItemOutcome.FAILED
-            ],
-            embeddings=assemble.build_embeddings(
-                digest_items, Embedder(config.REPO_ROOT, settings.app.assist)
-            ),
-        ).to_json(),
-    )
+    if ledger.accepts_new_rows(LedgerName.DIGEST_FRAGMENTS, len(digest_items)):
+        atomic_write.write_atomic(
+            fragment_file,
+            DigestRunFragment(
+                version=DigestRunFragment.schema_version(),
+                date=plan.date,
+                run_id=run_id,
+                completed_at=landed_at,
+                items=digest_items,
+                verticals=list(plan.verticals),
+                items_planned=len(plan.items),
+                failed_item_ids=[
+                    row.item_id for row in item_health_rows if row.outcome is ItemOutcome.FAILED
+                ],
+                embeddings=assemble.build_embeddings(
+                    digest_items, Embedder(config.REPO_ROOT, settings.app.assist)
+                ),
+            ).to_json(),
+        )
 
     if previous_day is not None and assemble.predates_fragments(previous_day):
         # This date was published before runs filed their own blocks, so the

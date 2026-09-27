@@ -28,11 +28,13 @@ from idhazh.ledger.filenames import (
     SEGMENT_NAME,
     SEGMENT_SUFFIX,
     SegmentName,
+    file_id,
     fragment_name,
     is_repair,
     parse_segment_name,
     repair_name,
     segment_name,
+    unit_id,
 )
 from idhazh.ledger.headers import migrate_header, refiler
 from idhazh.ledger.keys import (
@@ -63,15 +65,22 @@ from idhazh.ledger.keys import (
     segment_contract,
     segment_key,
 )
+from idhazh.ledger.lifecycle import accepts_new_rows
 from idhazh.ledger.paths import (
     STATE_DIRNAME,
     claimed_roots,
+    compact_index_path,
+    compact_path,
     entry,
     path,
+    raw_index_path,
+    raw_path,
     relpath,
     tree_relpath,
     tree_root,
+    watermark_path,
 )
+from idhazh.ledger.persist import load, persist, read_envelope
 from idhazh.ledger.rows import (
     HEALTH_WINDOW_DAYS,
     append_council_shard_outcomes,
@@ -113,15 +122,27 @@ from idhazh.ledger.settle import KeyedLedger, drop_repeated_rows, keyed_paths, r
 # the only thing the list is here to say, so the grouping is kept and the rule is
 # refused on this line alone. Each group is sorted inside itself.
 __all__ = [  # noqa: RUF022
-    # paths.py: where a ledger's file lives, read from config/ledgers.json.
+    # paths.py: where a ledger's file lives, read from config/ledgers.json or built
+    # under the two roots the door files into.
     "STATE_DIRNAME",
     "claimed_roots",
+    "compact_index_path",
+    "compact_path",
     "entry",
     "path",
     "paths",
+    "raw_index_path",
+    "raw_path",
     "relpath",
     "tree_relpath",
     "tree_root",
+    "watermark_path",
+    # persist.py: the one door a contract payload takes to disk, and back.
+    "load",
+    "persist",
+    "read_envelope",
+    # lifecycle.py: whether a ledger takes new rows now.
+    "accepts_new_rows",
     # keys.py: what makes two rows one record, and the day-tree shapes.
     "COUNCIL_SHARD_OUTCOME_KEY",
     "COUNTERFACTUAL_SCORE_KEY",
@@ -157,11 +178,13 @@ __all__ = [  # noqa: RUF022
     "SEGMENT_NAME",
     "SEGMENT_SUFFIX",
     "SegmentName",
+    "file_id",
     "fragment_name",
     "is_repair",
     "parse_segment_name",
     "repair_name",
     "segment_name",
+    "unit_id",
     # csv_file.py: how rows are read out of and written into a CSV.
     "CsvContract",
     "CsvRecord",
