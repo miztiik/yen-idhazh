@@ -443,7 +443,7 @@ the last day there was.
 | `similarity-holdout.holdoutReading` | `state/content-similarity-judge/holdout-pairs.csv`, then one published day payload for each distinct date that file names | the length of the holdout file, and nothing else |
 | `similarity-holdout.mergeLineHoldoutScore` | through `readDayShards`, over `state/content-similarity-judge/merge-line-holdout-scores/` | its caller's `days`. The Judgement route hands it the widest window preset, worked out before the first file is opened |
 | `span-rollup.loadSpanRollup` | `state/span-rollup/` at both grains: through `readShards` over the month files, and through `readDayShards` over the day tree | the same 5 months for the month files, and the same 91 days for the day tree. Only one of the two shapes is ever on disk, so the sum is what is there |
-| `machine-counters.loadMachineCounters` | `state/host-fingerprint/` and `state/item-health/`, both through `readDayShards` | the day cover, for both |
+| `machine-counters.loadMachineCounters` | `state/host-fingerprint/` through `mergedDayShards` and `state/item-health/` through `settledDayShards`, both over the one `dayShardFiles` walk | the day cover, for both |
 | `payload.dayMetrics` | one record a date | the dates handed in |
 | `payload.telemetryMonths`, `payload.indexMonths` | one directory listing, sliced to the newest months | `LEDGER_WINDOW_MONTHS`, where the caller takes it |
 

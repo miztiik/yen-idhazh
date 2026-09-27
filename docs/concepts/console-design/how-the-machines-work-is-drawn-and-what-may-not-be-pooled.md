@@ -1,6 +1,6 @@
 # How the machine's work is drawn, and what may not be pooled
 
-**Last Updated**: 2026-09-23
+**Last Updated**: 2026-09-27
 
 The Hardware route and the run timeline draw one machine's work. One measurement
 shapes all of it: **a run does not get one machine.** Measured 2026-09-17 over
@@ -127,6 +127,19 @@ The chart rules these panels obey are
  largest set that clears a pixel there. **The fold bar equals the kinds it
  folded, in the window and on every day of it**, and the page carries both
  figures so it can be held to them agreeing.
+- **The colour ramp's own `Other machines` group never takes one of those named
+ slots.** It is the machines the page ran out of colours for - the ramp folds by
+ key order, not by rarity - so it is not a kind of machine, and it always joins
+ the last bar and keeps the ramp's colour there. Given a slot, it ranked second on
+ the committed record on 2026-09-27 and took the three rarest kinds into itself:
+ one bar of 66 of 255 placements, drawn as the second most common machine. **The
+ sentence above the plot says what the last bar holds, in two parts**, because
+ only one of them is rare: the kinds too rare for a bar of their own, and the
+ machines the page has no colour left for. Each is named once, off the open span's
+ own placements, and a machine whose name also has a bar is called another one.
+ The count it prints is the number of names it lists. Ruled 2026-09-27: Jony on
+ the bar, breaking a tie between Fowler for it and Susan against; Susan on the
+ words.
 - **None of the empty states is tinted and none gets the reserved box.** The
  route is prerendered and reads `state/` at build time, so there is no fetch,
  no waiting state and no unreachable state. Every nothing here is settled at

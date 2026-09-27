@@ -512,6 +512,22 @@ bears out the reason: all 204 repeated keys of the publishing day agreed cell
 for cell. Only `ITEM_HEALTH_KEY` needs a rule here, because its two writers
 genuinely differ - assemble cannot name the job that ran the item.
 
+**`state/host-fingerprint/` settles by merging, because two of its rows under one
+key are halves rather than repeats.** A job writes its machine before its heaviest
+step and its clock after its last item, into the one file it owns, and neither
+half repeats a cell of the other - so choosing one row, which is all a preference
+can do, loses the other half. `hostFingerprints` and `machine-counters.hostRows`
+both read the ledger through `mergedDayShards` with `HOST_FINGERPRINT_KEY`, which
+unions the cells, per day. **A key whose rows fill one cell two different ways is
+left as it was**: that is a second attempt on a second runner, or a writer fault,
+and no union can say which value was the job's. The fleet then counts two runners,
+because two were drawn, and `machine-counters.ts` refuses the run by name. Neither
+the key nor `version` is compared. Measured 2026-09-27 over the committed ledger:
+117 of its 372 rows were a job's second half and no cell disagreed. The merge moved
+no placement count - the fleet already skipped a row with no fingerprint, and
+`mergeHost` already joined a shard's halves - and it put the job's own clock beside
+its machine on 181 of 255 placements, against 64 before.
+
 **Row 10 measured before it moved anything, and the measurement changed the
 order of the work.** The plan read the 32 inline SVGs as "139 KB of 3,726 KB, so
 this is not where the bytes are". That is true of the total and wrong about the

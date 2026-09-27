@@ -48,6 +48,30 @@ export interface FleetSeries {
 	placements: number;
 }
 
+/** A machine the fold bar holds, by the name a reader reads. */
+export interface FoldedMachine {
+	name: string;
+	/** A machine of the same name has a bar of its own, so the sentence calls
+	 * this one another rather than seem to count one machine twice. */
+	another: boolean;
+}
+
+/** The one bar everything past the top K is drawn as, and what it holds.
+ *
+ * Named by the trend that built it, never found by position, because the
+ * reader that guessed it was the last series printed an empty list.
+ */
+export interface FleetFold {
+	/** The bar itself, which is the last entry of `FleetTrend.series`. */
+	series: FleetSeries;
+	/** Kinds with a colour of their own that ranked past the top K, most first. */
+	rare: FoldedMachine[];
+	/** Machines the page's colour ramp had no stop left for that drew a
+	 * placement in this span, most first. They are here because the colours ran
+	 * out, not because they are rare. */
+	uncoloured: FoldedMachine[];
+}
+
 /** The count as a trend: one group a day, one bar a kind, folded past top K.
  *
  * **The day grain is derived here and declared nowhere.** Every fingerprint row
@@ -64,9 +88,11 @@ export interface FleetTrend {
 	days: string[];
 	/** Kept kinds, biggest first, then the fold row last where one exists. */
 	series: FleetSeries[];
-	/** Kinds folded into that last row. Zero where nothing folded. */
+	/** The fold row and what it holds. Null where nothing folded. */
+	fold: FleetFold | null;
+	/** How many names the fold row holds. Zero where nothing folded. */
 	folded: number;
-	/** The fold bar's own window total, read off the series that is drawn. */
+	/** The fold bar's own window total, read off the day counts that are drawn. */
 	other: number;
 	/** The same figure summed off the kinds that fell outside the top K. Two
 	 * derivations of one quantity, so the page can be held to them agreeing. */
@@ -152,7 +178,8 @@ export function fleetOverWindow(
 		trend: trendOf(
 			inWindow.map((row, index) => ({
 				date: row.date,
-				identity: ramp.at.get(keys[index].key) ?? null
+				identity: ramp.at.get(keys[index].key) ?? null,
+				machine: keys[index]
 			})),
 			kinds,
 			options.topKinds,
@@ -187,9 +214,16 @@ function freeStop(taken: readonly number[]): number {
  * The fold is taken on the window total and never per day, so a kind keeps the
  * same colour in every group. Folding per day would let one machine be its own
  * bar on Monday and part of `other` on Tuesday.
+ *
+ * **The colour ramp's own fold never takes one of the K named slots.** It is the
+ * machines the page ran out of colours for, not a kind of machine, so it always
+ * joins the last bar whatever it holds - and keeps the ramp's colour there, so
+ * one name has one colour across the page. Given a slot, it ranked second on
+ * the committed record measured 2026-09-27, took the rarest kinds into itself,
+ * and the page drew a leftover group as the second most common machine.
  */
 function trendOf(
-	placements: readonly { date: string; identity: MachineIdentity | null }[],
+	placements: readonly { date: string; identity: MachineIdentity | null; machine: MachineKey }[],
 	kinds: readonly { identity: MachineIdentity; placements: number }[],
 	topKinds: number,
 	windowDays: number
@@ -204,49 +238,112 @@ function trendOf(
 		perDay.set(one.identity.key, counts);
 	}
 
-	const keep = kinds.slice(0, Math.max(1, topKinds));
-	const rest = kinds.slice(keep.length);
+	const ranked = kinds.filter((kind) => kind.identity.key !== FOLDED_KEY);
+	const outOfColours = kinds.find((kind) => kind.identity.key === FOLDED_KEY);
+	const keep = ranked.slice(0, Math.max(1, topKinds));
+	const pastTop = ranked.slice(keep.length);
+	const rest = outOfColours === undefined ? pastTop : [...pastTop, outOfColours];
 	const series: FleetSeries[] = keep.map((kind) => ({
 		identity: kind.identity,
 		counts: perDay.get(kind.identity.key) ?? days.map(() => 0),
 		placements: kind.placements
 	}));
+	let fold: FleetFold | null = null;
 	if (rest.length > 0) {
-		const counts = days.map((_, index) =>
-			rest.reduce((carry, kind) => carry + (perDay.get(kind.identity.key)?.[index] ?? 0), 0)
-		);
-		const total = rest.reduce((carry, kind) => carry + kind.placements, 0);
-		const names = rest.map((kind) => kind.identity.name);
-		// The ramp may already have folded, and its row can be one of the kept.
-		// Two rows both called `Other machines` is the one shape that cannot ship.
-		const already = series.find((one) => one.identity.key === FOLDED_KEY);
-		if (already === undefined) {
-			series.push({
-				identity: {
-					key: FOLDED_KEY,
-					name: FOLDED_NAME,
-					colourStop: freeStop(keep.map((kind) => kind.identity.colourStop)),
-					folded: names
-				},
-				counts,
-				placements: total
-			});
-		} else {
-			already.identity = { ...already.identity, folded: [...already.identity.folded, ...names] };
-			already.counts = already.counts.map((count, index) => count + counts[index]);
-			already.placements += total;
-		}
+		const drawn = new Set(keep.map((kind) => kind.identity.name));
+		const named = (names: readonly string[]): FoldedMachine[] =>
+			[...new Set(names)].map((name) => ({ name, another: drawn.has(name) }));
+		const rare = named(pastTop.map((kind) => kind.identity.name));
+		const uncoloured = named(uncolouredNames(placements));
+		const base: MachineIdentity = outOfColours?.identity ?? {
+			key: FOLDED_KEY,
+			name: FOLDED_NAME,
+			colourStop: freeStop(keep.map((kind) => kind.identity.colourStop)),
+			folded: []
+		};
+		const bar: FleetSeries = {
+			identity: { ...base, folded: [...rare, ...uncoloured].map((one) => one.name) },
+			counts: days.map((_, index) =>
+				rest.reduce((carry, kind) => carry + (perDay.get(kind.identity.key)?.[index] ?? 0), 0)
+			),
+			placements: rest.reduce((carry, kind) => carry + kind.placements, 0)
+		};
+		series.push(bar);
+		fold = { series: bar, rare, uncoloured };
 	}
 
 	return {
 		days,
 		series,
-		folded: rest.length,
-		other: series.find((one) => one.identity.key === FOLDED_KEY)?.placements ?? 0,
+		fold,
+		folded: fold === null ? 0 : fold.rare.length + fold.uncoloured.length,
+		other: fold === null ? 0 : fold.series.counts.reduce((carry, count) => carry + count, 0),
 		outsideTop: rest.reduce((carry, kind) => carry + kind.placements, 0),
 		topKinds,
 		daysWithout: Math.max(0, windowDays - days.length)
 	};
+}
+
+/** The machines behind the ramp's own fold that drew a placement, most first.
+ *
+ * Read off the placements rather than off the ramp's list, because the ramp is
+ * assigned over every machine the page can show at any span and names machines
+ * this span never drew.
+ */
+function uncolouredNames(
+	placements: readonly { identity: MachineIdentity | null; machine: MachineKey }[]
+): string[] {
+	const counted = new Map<string, number>();
+	for (const one of placements) {
+		if (one.identity?.key !== FOLDED_KEY) continue;
+		counted.set(one.machine.name, (counted.get(one.machine.name) ?? 0) + 1);
+	}
+	return [...counted]
+		.sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+		.map(([name]) => name);
+}
+
+/** What the fold bar holds, in the words the panel prints above the plot.
+ *
+ * Null where no fold bar is drawn. The count is the number of names listed, so
+ * the words and the bar cannot drift apart. The bar's two parts are named apart,
+ * because only one of them is rare: the kinds too rare for a bar of their own,
+ * and the machines the page had no colour left for.
+ */
+export function foldSentence(fold: FleetFold | null): string | null {
+	if (fold === null) return null;
+	const bar = `The ${fold.series.identity.name} bar`;
+	const rare = fold.rare.map(spoken);
+	const uncoloured = fold.uncoloured.map(spoken);
+	const holds = `${bar} holds ${kindCount(rare.length + uncoloured.length)}`;
+	if (uncoloured.length === 0) return `${holds} ${tooRare(rare.length)}: ${listed(rare)}.`;
+	if (rare.length === 0) return `${holds} the page has no colour left for: ${listed(uncoloured)}.`;
+	const others = uncoloured.length === 1 ? 'one' : String(uncoloured.length);
+	return (
+		`${holds}. ${capitalised(listed(rare))} ${rare.length === 1 ? 'is' : 'are'} ${tooRare(rare.length)}. ` +
+		`The page has no colour left for the other ${others}: ${listed(uncoloured)}.`
+	);
+}
+
+function spoken(one: FoldedMachine): string {
+	return one.another ? `another ${one.name}` : one.name;
+}
+
+function kindCount(count: number): string {
+	return `${count} ${count === 1 ? 'kind' : 'kinds'}`;
+}
+
+function tooRare(count: number): string {
+	return `too rare for a bar of ${count === 1 ? 'its' : 'their'} own`;
+}
+
+function listed(names: readonly string[]): string {
+	if (names.length < 2) return names.join('');
+	return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+}
+
+function capitalised(text: string): string {
+	return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
 /** One strip column a day, one row a kind: every count the tooltip carries.
