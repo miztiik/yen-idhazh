@@ -58,6 +58,12 @@ It keeps a tree unless the pull request is `MERGED`, the branch is gone from the
 Get-ChildItem -LiteralPath <folder> -Recurse -File | Where-Object { git -C <repo> cat-file -e (git -C <repo> hash-object -- $_.FullName) 2>$null; $LASTEXITCODE -ne 0 } # no output: all in git
 ```
 
+**That check lists ignored build output as though it were unsaved work.** A folder that a failed remove left behind still holds what the build generated - data under `frontend/static/` and build caches, which `.gitignore` covers and git never stores - and the check cannot tell those files from unsaved work. Two such folders on 2026-09-27 held more than 2,000 files each that git already had. Outside the build caches the check still flagged 31 and 37 files, every one a data file under `frontend/static/`, so two folders that held nobody's work read as folders that would lose it. Treat a flagged file as work only when `git check-ignore` does not claim it. A tracked file is never reported as ignored, so an edited source file still counts as work. Pass each path as an argument, not on standard input ([shell-and-tools.md](shell-and-tools.md#powershell) says why):
+
+```powershell
+git -C <repo> check-ignore -q -- <path relative to the repo>; $LASTEXITCODE # 0: ignored, the build writes it again
+```
+
 **Two process classes hold a dead tree's files and only one is safe to kill.** An `esbuild` service whose executable is inside the tree keeps running after the row ends - stop it. The editor's **Svelte language server** loads `rollup`, `lightningcss` and `tailwindcss-oxide` `.node` out of every worktree it has indexed (many dead trees at once); it runs as `Code.exe`, so match on the command line (`svelte-language-server/bin/server.js`), never on the name. Stopping it released all 42 files and the editor respawned it untouched. Find any holder by loaded module:
 
 ```powershell
