@@ -88,6 +88,9 @@ def stage_backfill_vectors(
     Rewriting a day makes its month's search index stale, so every month this
     touched is rebuilt before it returns. That is the same obligation assemble
     carries, and this is the only other writer of a committed day payload.
+    `model_copy` copies the fields across without re-checking them, so this
+    write is not validated here; `check-publication` reads the day back at
+    publication, which is where a committed day is proved.
 
     This one fails rather than degrades. `build_embeddings` returns nothing
     when the encoder is missing because a day that cannot be searched still

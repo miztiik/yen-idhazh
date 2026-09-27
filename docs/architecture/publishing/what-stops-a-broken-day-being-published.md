@@ -58,6 +58,11 @@ exactly once and parses it through `DigestDay`. That parse is not a
 convenience. It is the one guarantee no producer can give itself: the day is
 read back by the gate rather than by the stage that wrote it, so a producer
 that quietly stopped matching its own contract is caught by a different reader.
+Two stages write a committed day and only one of them checks what it wrote:
+`assemble.py` builds the day through the model, and `backfill_vectors.py`
+rewrites it with `model_copy(update=...)`, which copies the fields across
+without re-checking them. That second writer is why the guarantee has to be a
+read.
 
 Four things can go wrong before a rule looks at a day, and each names which:
 the file will not read, the bytes are not JSON, the JSON is not an object, or
