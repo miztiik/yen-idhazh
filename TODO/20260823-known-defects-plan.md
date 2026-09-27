@@ -73,8 +73,8 @@ Measured 2026-09-27 over the 90 days the band reads: **24 of 47 runs are refused
 and they are exactly the runs written in two halves** - every run filed from
 2026-09-23 on, when each job's halves began landing in one file. None of the 23 it
 keeps has a clock-only half. The committed `frontend/public/console/band.json`,
-written at 18:23 UTC that day, names the Hardware route's worst line as
-`23 runs cannot be read`, and its sentence says no figure on that route counts
+written at 21:31 UTC that day, names the Hardware route's worst line as
+`24 runs cannot be read`, and its sentence says no figure on that route counts
 them. That is not true: the route merges the halves and counts every one. The
 band's newest-run figures come from the newest run it did not refuse, which is a
 run from 2026-09-22.

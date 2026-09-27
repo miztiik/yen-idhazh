@@ -132,7 +132,7 @@ The chart rules these panels obey are
  key order, not by rarity - so it is not a kind of machine, and it always joins
  the last bar and keeps the ramp's colour there. Given a slot, it ranked second on
  the committed record on 2026-09-27 and took the three rarest kinds into itself:
- one bar of 66 of 255 placements, drawn as the second most common machine. **The
+ one bar of 68 of 260 placements, drawn as the second most common machine. **The
  sentence above the plot says what the last bar holds, in two parts**, because
  only one of them is rare: the kinds too rare for a bar of their own, and the
  machines the page has no colour left for. Each is named once, off the open span's

@@ -523,10 +523,10 @@ left as it was**: that is a second attempt on a second runner, or a writer fault
 and no union can say which value was the job's. The fleet then counts two runners,
 because two were drawn, and `machine-counters.ts` refuses the run by name. Neither
 the key nor `version` is compared. Measured 2026-09-27 over the committed ledger:
-117 of its 372 rows were a job's second half and no cell disagreed. The merge moved
+121 of its 381 rows were a job's second half and no cell disagreed. The merge moved
 no placement count - the fleet already skipped a row with no fingerprint, and
 `mergeHost` already joined a shard's halves - and it put the job's own clock beside
-its machine on 181 of 255 placements, against 64 before.
+its machine on 185 of 260 placements, against 64 before.
 
 **Row 10 measured before it moved anything, and the measurement changed the
 order of the work.** The plan read the 32 inline SVGs as "139 KB of 3,726 KB, so
