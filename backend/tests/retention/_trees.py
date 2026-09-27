@@ -23,11 +23,11 @@ from idhazh.contracts.item_health import (
     ItemOutcome,
     ItemStage,
 )
+from idhazh.contracts.item_health_summary import ItemHealthSummaryRow
 from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
 from idhazh.contracts.knobs.console import ConsoleConfig
 from idhazh.contracts.knobs.retention import PAGES_HARD_CAP_MB
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.contracts.telemetry_aggregate import TelemetryAggregateRow
 from idhazh.measured import SITE_GROWTH_KB_A_DAY
 from idhazh.measured import WARNING_DAYS_REQUIRED as WARNING_DAYS
 
@@ -236,7 +236,7 @@ def census_of(state_dir: Path, date: str) -> list[ItemHealthRow]:
 
 
 def totals_from_aggregate(
-    rows: list[TelemetryAggregateRow],
+    rows: list[ItemHealthSummaryRow],
 ) -> dict[tuple[str, str], tuple[int, int, int]]:
     return {(row.date, row.stage.value): (row.items, row.failed, row.sum_ms or 0) for row in rows}
 

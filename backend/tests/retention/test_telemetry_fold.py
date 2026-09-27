@@ -12,9 +12,9 @@ from conftest import seed_item_health
 
 from idhazh import ledger
 from idhazh.contracts.item_health import ItemStage
+from idhazh.contracts.item_health_summary import percentile
 from idhazh.contracts.knobs.observability import ObservabilityConfig
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.contracts.telemetry_aggregate import percentile
 from idhazh.evals import archive as score_archive
 from idhazh.retention import compact_month, month_shards, oldest_month_kept, prune_telemetry
 from idhazh.telemetry.publish import public_telemetry
