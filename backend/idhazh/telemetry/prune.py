@@ -28,7 +28,7 @@ three days, and `--since X --until X` is one. That is the arithmetic
 `n + 1` dates, and the two agree on purpose.
 
 **Atomic per day file, one delete at a time.** Every selected file is removed on
-its own, oldest first, through `idhazh.prune.one_at_a_time` - the same core the
+its own, oldest first, through `idhazh.gardener.one_at_a_time` - the same core the
 GitHub collections are pruned with. A pass interrupted after the third file
 leaves three files gone and the rest exactly as they were. Nothing is half-done,
 because one `unlink` is the unit and a file is either there or it is not.
@@ -62,11 +62,11 @@ from typing import Final
 from idhazh import day_partition, day_shards, ledger
 from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
 from idhazh.contracts.ledger_name import DAY_TREES, LedgerName
-from idhazh.prune import one_at_a_time
+from idhazh.gardener import one_at_a_time
 
 #: The core's own interruption, named here so a caller of this module imports
-#: one thing. A delete that failed raises it, and the record it carries says
-#: which day files had already gone.
+#: one thing. A pass that failed part way - a delete, or the walk itself -
+#: raises it, and the record it carries says which day files had already gone.
 PruneInterruptedError = one_at_a_time.PruneInterruptedError
 
 #: Every ledger this command may delete from, and where each one lives under

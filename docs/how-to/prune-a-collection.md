@@ -1,6 +1,6 @@
 # Prune a collection
 
-**Last Updated**: 2026-09-17
+**Last Updated**: 2026-09-27
 
 How do I delete the old members of a collection, safely, without taking the
 whole backlog in one go?
@@ -41,7 +41,8 @@ The age comes from `prune.collections.workflow-artifacts.retain_days` in
 | --- | --- | --- |
 | `the collection is exhausted` | nothing else is inside the window | one live pass finishes the job |
 | `the ceiling of N stopped this pass at <id>` | there is more | run it again after the live pass, until the line changes |
-| `a delete failed at <id>` | the members above it are gone | fix the cause, then run it again - it retries that member |
+| `the pass failed at <id>` | the members above it are gone | fix the cause, then run it again - it retries that member |
+| `the pass failed after N members, before it could name the next one` | the listing itself failed, or a member could not be read | fix the cause, then run it again - it starts from the oldest member the window holds |
 
 ### 3. Delete
 
@@ -53,23 +54,17 @@ Repeat until the last line says the collection is exhausted. Each run is the
 same shape and the same cost whatever the backlog is - that is what the ceiling
 is for.
 
-### 4. Keep the record, if something else needs it
-
-```
-python backend/utilities/prune_artifacts.py --collection workflow-runs --no-dry-run \
-  --record backend/var/prune/workflow-runs.json
-```
-
-`--record` writes the pass as a `collection-prune-row` payload
-(`CollectionPruneRow`). Nothing reads it by default; it is
-there for a workflow that wants to upload or commit what a pass did.
+**A hand-run pass writes no record.** A record names the run, attempt, job and
+shard that made it, and a pass a person runs by hand is none of those. The
+gardener's own collection tasks write one, into the record of the shard that ran
+them ([../architecture/publishing/idhazh-gardener.md](../architecture/publishing/idhazh-gardener.md)).
 
 ### Exit codes
 
 | Code | Meaning |
 | --- | --- |
 | 0 | the pass ended cleanly, whether it exhausted the collection or stopped at its ceiling |
-| 1 | a delete failed. The members before it are gone and the report names the one to retry |
+| 1 | the pass failed part way. The members before the failure are gone and the report says where the next pass starts |
 | 2 | an argument was refused - an unknown collection, a bad day, a repository that is not `owner/name` |
 
 ## Prune day files out of a ledger

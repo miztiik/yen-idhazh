@@ -1,6 +1,6 @@
 # How a run's rows reach the repository
 
-**Last Updated**: 2026-09-23
+**Last Updated**: 2026-09-27
 
 Ten jobs of one run commit to one branch, and every one of them can lose the
 push race. This page owns what they run to win it: the rebase loop and the clock
@@ -454,8 +454,21 @@ take is the live pair: two runs dispatched to overlap both reaching a green
 on the schedule, and the attempt line the push loop prints is where the cost of
 it is collected over time.
 
+## The gardener lands its own commits, and never through this loop
+
+The gardener's shards do not use `backend/utilities/commit_and_push.py`. A shard
+knows every path it wrote and deleted, so `backend/utilities/gardener_publish.py`
+stages exactly those files against a fresh fetch of `main` rather than rebasing a
+commit, and it retries on the new tip when another shard pushed first. What it
+shares with this page is the identity every commit carries,
+`miztiik <miztiik@users.noreply.github.com>`, which a test holds equal to
+`commit_and_push.py`'s own two constants. How its loop decides that a shard has
+already landed, and the three checks it runs over what it staged, are
+[idhazh-gardener.md](idhazh-gardener.md#landing-the-commit).
+
 ## See also
 
+- [idhazh-gardener.md](idhazh-gardener.md) - the one program that deletes and rewrites what the repository keeps, and how it lands a shard.
 - [a-losing-push-rebuilds-rather-than-rebases.md](a-losing-push-rebuilds-rather-than-rebases.md) - why the rebase this page describes does no work, what should replace it, and the one guardrail exception that needs.
 - [../../reference/github-actions.md](../../reference/github-actions.md) - which workflows exist, when each runs, and what each does.
 - [../../concepts/partitions.md](../../concepts/partitions.md) - the three classes every committed path is one of, and the layout each one obliges its writer to keep.

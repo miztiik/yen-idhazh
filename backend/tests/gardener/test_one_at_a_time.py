@@ -23,8 +23,8 @@ from pathlib import Path
 import pytest
 
 from idhazh.contracts.collection_prune import StopReason
-from idhazh.prune import one_at_a_time
-from idhazh.prune.one_at_a_time import Collection, Member, PruneInterruptedError, Window
+from idhazh.gardener import one_at_a_time
+from idhazh.gardener.one_at_a_time import Collection, Member, PruneInterruptedError, Window
 
 pytestmark = pytest.mark.contract
 
@@ -260,6 +260,54 @@ def test_an_interrupted_pass_keeps_what_it_already_deleted(tmp_path: Path) -> No
         "a member after the failure was deleted, so the pass did not stop"
     )
     assert isinstance(stop.value.__cause__, OSError), "the file system's own refusal was lost"
+
+
+def test_a_member_the_pass_cannot_read_still_carries_what_went(tmp_path: Path) -> None:
+    """Two members are gone before the third cannot be read, and the record says so.
+
+    This collection reads each member's bytes to size it, and the third member is
+    a folder, so the read fails for real on the file system. Raised bare, that
+    failure would reach the runner with no record, and the row it wrote would say
+    nothing was deleted. A failure in the listing itself takes the same path.
+    """
+    root = tmp_path / "files"
+    collection = a_collection(root)
+    (root / f"{DAYS[2]}.txt").unlink()
+    (root / f"{DAYS[2]}.txt").mkdir()
+
+    reading = Collection(
+        name=collection.name,
+        listing=lambda: iter(sorted(root.glob("*.txt"))),
+        describe=lambda path: Member(
+            id=path.stem, day=path.stem, size_bytes=len(path.read_bytes()), label=path.name
+        ),
+        delete=collection.delete,
+    )
+
+    with pytest.raises(PruneInterruptedError) as stop:
+        one_at_a_time.take(reading, window=Window(until=DAYS[6]), ceiling=None, dry_run=False)
+
+    so_far = stop.value.so_far
+    assert so_far.taken == (DAYS[0], DAYS[1])
+    assert so_far.stopped_because is StopReason.FAILED
+    assert so_far.resume_from is None, "the pass failed before it could name the member"
+    assert so_far.more_to_do, "a failed pass has more to do even with no resume point"
+    assert "starts again from the oldest member" in str(stop.value)
+    assert isinstance(stop.value.__cause__, OSError), "the file system's own refusal was lost"
+
+
+def test_no_ceiling_takes_every_member_the_window_holds(tmp_path: Path) -> None:
+    """None is no ceiling at all, recorded as none rather than as a number nobody chose."""
+    root = tmp_path / "files"
+
+    taken = one_at_a_time.take(
+        a_collection(root), window=Window(until=DAYS[4]), ceiling=None, dry_run=False
+    )
+
+    assert taken.ceiling is None
+    assert taken.taken == DAYS[:5]
+    assert taken.stopped_because is StopReason.EXHAUSTED
+    assert on_disk(root) == [DAYS[5], DAYS[6]]
 
 
 def test_a_dry_run_names_every_member_and_deletes_none(tmp_path: Path) -> None:

@@ -37,8 +37,8 @@ import urllib.request
 from collections.abc import Iterator
 from typing import Any, Final, Protocol
 
-from idhazh.contracts.knobs.prune import PrunableCollection
-from idhazh.prune.one_at_a_time import Collection, Member
+from idhazh.contracts.knobs.gardener import PrunableCollection
+from idhazh.gardener.one_at_a_time import Collection, Member
 
 #: The environment variable the token arrives in. Actions sets it; an operator
 #: running this by hand exports it. Named as a constant so the failure message

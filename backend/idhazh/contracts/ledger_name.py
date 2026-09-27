@@ -67,6 +67,7 @@ class LedgerName(StrEnum):
     DAY_METRICS = "day-metrics"
     DIGEST_FRAGMENTS = "digest-fragments"
     SCORE_ARCHIVE = "score-archive"
+    GARDENER = "gardener"
 
 
 #: The ledgers a writer files its own segment into, one file per writer under

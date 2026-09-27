@@ -1,0 +1,14 @@
+{
+  "dry_run": true,
+  "every_days": 30,
+  "kind": "history",
+  "lifecycle_status": "active",
+  "max_deletes_per_run": null,
+  "owns": [
+    "corpus"
+  ],
+  "window": {
+    "unit": "days",
+    "value": 30
+  }
+}

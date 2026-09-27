@@ -1,0 +1,258 @@
+"""How does one gardener shard land its one commit on main, however many shards race it?
+
+This is the entry point a wake's shard runs: it reads the commit this checkout
+is at, runs the shard through `idhazh.gardener.runner`, and lands what the
+runner hands back. It sits here rather than in the package because landing runs
+git, and nothing under `backend/idhazh/` may start a process
+(`backend/tests/test_canaries.py`): the package that reads the open web holds no
+machinery an injected instruction could use to act.
+
+    python backend/utilities/gardener_publish.py NAME | --shard N --run-id R --attempt A
+
+The work happens once, before `publish` is called. What is left is to stage
+exactly what the shard wrote and deleted, commit it, and push - and to do that
+again against a newer tip when another shard pushed first. Each try starts from
+`origin/main` as it is now, so a lost race costs one fetch and one commit rather
+than a merge.
+
+**The record decides whether the shard has already landed.** Every shard writes
+one record under the gardener's own ledger, and its bytes are unique to the
+shard. If `origin/main` already holds that path with those bytes, an earlier try
+landed and this one stops with success; the same path with other bytes is two
+runs claiming one identity, and that is exit 2.
+
+**Three checks run over what was staged, before every commit.** Nothing outside
+the shard's writes and deletions is staged. Every write is staged, unless its
+bytes already equal `origin/main`'s, which is a write that already landed. And
+a deletion that staged nothing is an error only while the path still exists on
+`origin/main`, because a path already gone is a deletion somebody finished.
+
+The exit codes, and the order that picks the worst, are
+`idhazh.gardener.outcome`'s.
+"""
+
+from __future__ import annotations
+
+import argparse
+import dataclasses
+import random
+import subprocess
+import sys
+import time
+from collections.abc import Callable, Sequence
+from datetime import datetime
+from pathlib import Path
+from types import ModuleType
+from typing import Final
+
+from idhazh.config import GardenerSettings
+from idhazh.gardener import cli as gardener_cli
+from idhazh.gardener import runner
+from idhazh.gardener import tasks as shipped_tasks
+from idhazh.gardener.outcome import (
+    EXIT_INTEGRITY,
+    EXIT_OK,
+    EXIT_PUSH_KEPT_LOSING,
+    Outcome,
+    Shard,
+    worst,
+)
+
+#: The one identity every commit in this repository carries. The same two values
+#: `backend/utilities/commit_and_push.py` sets, which a test holds in step.
+COMMITTER_NAME: Final = "miztiik"
+COMMITTER_EMAIL: Final = "miztiik@users.noreply.github.com"
+
+#: The branch every shard lands on, and the remote it is fetched from.
+REMOTE: Final = "origin"
+BRANCH: Final = "main"
+
+#: The longest one wait between two tries, in seconds.
+MAX_BACKOFF_SECONDS: Final = 8
+
+
+class Checkout:
+    """The git commands the loop runs, all of them in one checkout."""
+
+    def __init__(self, repo: Path) -> None:
+        self._repo = repo
+
+    def _run(self, *args: str) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            ["git", *args], cwd=self._repo, capture_output=True, text=True, check=False
+        )
+
+    def git(self, *args: str) -> str:
+        """Run one command and hand back what it printed, or raise with what it said."""
+        done = self._run(*args)
+        if done.returncode != 0:
+            raise RuntimeError(f"git {' '.join(args)} failed: {done.stderr.strip()}")
+        return done.stdout
+
+    def git_ok(self, *args: str) -> bool:
+        """Run one command and say whether it worked, for the ones that may fail."""
+        return self._run(*args).returncode == 0
+
+    def head(self) -> str | None:
+        """The commit this checkout is at, or None when it is not a git checkout."""
+        done = self._run("rev-parse", "--verify", "--quiet", "HEAD")
+        return done.stdout.strip() if done.returncode == 0 else None
+
+    def remote_blob(self, path: str) -> str | None:
+        """The object `origin/main` holds at this path, or None when it holds nothing there."""
+        done = self._run("rev-parse", "--verify", "--quiet", f"{REMOTE}/{BRANCH}:{path}")
+        return done.stdout.strip() if done.returncode == 0 else None
+
+    def local_blob(self, path: str) -> str | None:
+        """The object this checkout's file at this path would be, or None when there is none."""
+        if not (self._repo / path).is_file():
+            return None
+        return self.git("hash-object", "--", path).strip()
+
+    def staged_names(self) -> set[str]:
+        """Every path the next commit would change."""
+        return set(self.git("diff", "--cached", "--name-only", "-z").split("\0")) - {""}
+
+
+def sleep_with_jitter(attempt: int, *, sleep: Callable[[float], None] = time.sleep) -> None:
+    """Wait a random time before try `attempt + 1`, longer after each loss, never past the cap."""
+    sleep(random.uniform(0, min(2 ** (attempt - 1), MAX_BACKOFF_SECONDS)))
+
+
+def _refuse_a_directory(shard: Shard, repo: Path) -> str | None:
+    """A deletion names one file. A folder here would stage everything under it."""
+    for path in sorted(shard.deleted_paths):
+        if (repo / path).is_dir():
+            return f"{path} is a folder, and a shard deletes files one at a time"
+    return None
+
+
+def _what_staging_missed(shard: Shard, checkout: Checkout) -> str | None:
+    """The three checks over what was staged, or None when the index is exactly the shard."""
+    staged = checkout.staged_names()
+    stray = sorted(staged - shard.written_paths - shard.deleted_paths)
+    if stray:
+        return f"{', '.join(stray)} staged, and this shard neither wrote nor deleted it"
+    for path in sorted(shard.written_paths - staged):
+        mine = checkout.local_blob(path)
+        if mine is None or mine != checkout.remote_blob(path):
+            return f"{path} was written and did not stage"
+    for path in sorted(shard.deleted_paths - staged):
+        if checkout.remote_blob(path) is not None:
+            return f"{path} was deleted, did not stage, and {REMOTE}/{BRANCH} still holds it"
+    return None
+
+
+def publish(
+    shard: Shard,
+    *,
+    attempts: int,
+    repo: Path,
+    say: Callable[[str], None] = print,
+) -> int:
+    """Stage, commit and push this shard, trying again on a newer tip, `attempts` times at most."""
+    refused = _refuse_a_directory(shard, repo)
+    if refused is not None:
+        say(f"shard {shard.index}: {refused}")
+        return EXIT_INTEGRITY
+    checkout = Checkout(repo)
+    for attempt in range(1, attempts + 1):
+        checkout.git("fetch", "--quiet", REMOTE, BRANCH, "--depth=1")
+        landed = checkout.remote_blob(shard.record_path)
+        if landed is not None:
+            if landed == checkout.local_blob(shard.record_path):
+                say(f"shard {shard.index}: already on {BRANCH}, try {attempt}")
+                return EXIT_OK
+            say(
+                f"shard {shard.index}: {shard.record_path} is on {BRANCH} with other bytes, "
+                "so two runs claimed one record"
+            )
+            return EXIT_INTEGRITY
+        checkout.git("reset", "--quiet", "--mixed", f"{REMOTE}/{BRANCH}")
+        for path in sorted(shard.written_paths):
+            checkout.git_ok("add", "--sparse", "--", path)
+        for path in sorted(shard.deleted_paths):
+            checkout.git_ok("rm", "--quiet", "--cached", "--sparse", "--ignore-unmatch", "--", path)
+        missed = _what_staging_missed(shard, checkout)
+        if missed is not None:
+            say(f"shard {shard.index}: {missed}")
+            return EXIT_INTEGRITY
+        checkout.git(
+            "-c",
+            f"user.name={COMMITTER_NAME}",
+            "-c",
+            f"user.email={COMMITTER_EMAIL}",
+            "commit",
+            "--quiet",
+            "-m",
+            shard.message,
+        )
+        if checkout.git_ok("push", "--quiet", REMOTE, f"HEAD:refs/heads/{BRANCH}"):
+            say(f"shard {shard.index}: landed on {BRANCH}, try {attempt} of {attempts}")
+            return EXIT_OK
+        say(f"shard {shard.index}: try {attempt} of {attempts} lost the push")
+        if attempt < attempts:
+            sleep_with_jitter(attempt)
+    return EXIT_PUSH_KEPT_LOSING
+
+
+def run_and_land(
+    names: Sequence[str],
+    *,
+    settings: GardenerSettings,
+    repo_root: Path,
+    run_id: str,
+    attempt: int,
+    shard: int,
+    package: ModuleType = shipped_tasks,
+    clock: Callable[[], datetime] = runner.utc_now,
+    say: Callable[[str], None] = print,
+) -> Outcome:
+    """Read the commit, run the shard, and land what it hands back; the worst code wins."""
+    sha = Checkout(repo_root).head()
+    if sha is None:
+        say(f"shard {shard}: {repo_root.name} is not a git checkout, so no record can name it")
+        return Outcome(exit_code=EXIT_INTEGRITY, record=None, landing=None)
+    ran = runner.run(
+        names,
+        settings=settings,
+        repo_root=repo_root,
+        run_id=run_id,
+        attempt=attempt,
+        shard=shard,
+        git_sha=sha,
+        package=package,
+        clock=clock,
+        say=say,
+    )
+    if ran.landing is None:
+        return ran
+    pushed = publish(ran.landing, attempts=settings.config.attempts, repo=repo_root, say=say)
+    return dataclasses.replace(ran, exit_code=worst(ran.exit_code, pushed))
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(
+        prog="gardener_publish.py",
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    gardener_cli.add_the_run(parser)
+    args = parser.parse_args(argv)
+    settings = gardener_cli.settings_or_none(args.config)
+    if settings is None:
+        return EXIT_INTEGRITY
+    names, shard = gardener_cli.chosen(settings, args, parser)
+    outcome = run_and_land(
+        names,
+        settings=settings,
+        repo_root=args.repo_root,
+        run_id=args.run_id,
+        attempt=args.attempt,
+        shard=shard,
+    )
+    return outcome.exit_code
+
+
+if __name__ == "__main__":
+    sys.exit(main())

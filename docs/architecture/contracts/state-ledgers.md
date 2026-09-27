@@ -25,6 +25,7 @@ A window lets the reader name the files it wants and skip the rest. Without one 
 | `state/item-health-summary/<YYYY-MM>.csv` | What is left of an item-health month | month file | the whole file |
 | `state/feed-retirements.csv` | Is this address gone for good? | one file | the whole file |
 | `state/visual-prunes/<YYYY>/<MM>/<DD>.csv` | Is the picture backlog shrinking? | day file | the whole tree |
+| `state/raw/gardener/<YYYY>/<MM>/<DD>/<file_id>.parquet` | What did each gardener task see, take and leave at one wake? One file per shard | raw and compact | none yet |
 
 `state/seen/` has no published mirror at all, so unlike the two health ledgers there is no second grain anywhere near it.
 
@@ -33,6 +34,12 @@ A window lets the reader name the files it wants and skip the rest. Without one 
 `state/item-health/` is the fastest-growing of the four day-filed ledgers. The console reads it a month at a time through the published projection, which stays monthly: `public_telemetry.publish` folds a month from that month's day files.
 
 `state/feed-retirements.csv` is read whole because a retirement has no time bound, so it is one file. It is also the smallest: a row is written only when a server has reported one address permanently gone on five distinct runs.
+
+## The gardener
+
+`state/raw/gardener/` is the first ledger born under the two roots the ledger door files into. Each gardener shard writes one file a wake through `ledger.persist`, holding one `CollectionPruneRow` per task it ran - a dry run included - and lands it itself ([../publishing/idhazh-gardener.md](../publishing/idhazh-gardener.md)). A row names the task, the run, the attempt, the job and the shard that wrote it, what the pass saw and took, why it stopped, the task's own wall clock and the instant the shard finished working.
+
+Nothing reads it yet, so it has no read window. It files at the `raw-and-compact` grain; what `prefix` means for that grain, and which builders refuse it, is [ledger-registry.md](ledger-registry.md#a-ledger-under-the-two-roots).
 
 ## The published ledger sizes from the ceiling, not from today
 

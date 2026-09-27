@@ -89,3 +89,21 @@ def test_each_ledger_counts_the_files_under_its_own_address(tmp_path: Path) -> N
     assert "  - scored-pairs: 1 file" in lines
     assert "  - traces: 0 files" in lines
     assert "  - score-archive: 0 files" in lines
+
+
+def test_a_ledger_under_the_two_roots_counts_each_root_on_its_own_line(tmp_path: Path) -> None:
+    """Its prefix is the path inside each root, so a count of `state/<prefix>` would read zero."""
+    state = a_state_tree(
+        tmp_path / "state",
+        (
+            "raw/gardener/2026/09/27/01a0d03c-2e00-8461-98e0-a67898e9a802.parquet",
+            "raw/gardener/2026/09/28/01a0d03c-2e00-8461-98e0-a67898e9a803.parquet",
+            "raw/gardener/index/2026-09-27.json",
+            "compact/gardener/daily/2026/09/27.parquet",
+        ),
+    )
+
+    lines = ledger_families.listing(a_registry(tmp_path / "config"), state)
+
+    assert "  - gardener under raw/: 3 files" in lines
+    assert "  - gardener under compact/: 1 file" in lines
