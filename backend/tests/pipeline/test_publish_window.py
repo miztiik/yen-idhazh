@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 import json
+import logging
 from pathlib import Path
 
 import pytest
@@ -11,7 +12,7 @@ from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR, REPO_ROOT,
 from pydantic import ValidationError
 from pytest import MonkeyPatch
 
-from idhazh import assemble, config, day_shards, ledger, rank, telemetry
+from idhazh import assemble, atomic_write, config, day_shards, ledger, rank, telemetry
 from idhazh.contracts.article import Article
 from idhazh.contracts.base import StalePayloadError
 from idhazh.contracts.digest_day import DigestDay
@@ -19,6 +20,7 @@ from idhazh.contracts.feed_health import FetchOutcome
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.item_health import FailureCode, ItemHealthRow, ItemOutcome, TimeSource
 from idhazh.contracts.ledger_name import LedgerName
+from idhazh.contracts.ledgers import LedgersConfig
 from idhazh.contracts.run_manifest import RunManifest
 from idhazh.contracts.run_plan import RunPlan, VerticalPlan
 from idhazh.contracts.sources import FeedDef, SourceForm
@@ -103,6 +105,54 @@ def test_a_crash_before_the_published_ledger_costs_the_replay_nothing(
     replayed = DigestDay.from_json(read_text(day_path))
     assert [item.item_id for item in replayed.items] == [item.item_id for item in published.items]
     assert {item.introduced_by_run for item in replayed.items} == {1}
+
+
+def test_a_paused_fragment_family_files_no_block_and_the_day_still_assembles(
+    tmp_path: Path, monkeypatch: MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """The digest fragment asks the lifecycle check, and a pause costs only that block.
+
+    Run 1 files its block. With `digest-fragments` paused, run 2 files none and
+    logs one warning, and the day is assembled from the block already on disk -
+    so the run carries on rather than failing on a status.
+    """
+    run_plan = plan()
+    settings = config.load(CONFIG_DIR)
+    isolate_ledgers(tmp_path, monkeypatch)
+    items_dir = tmp_path / "run" / run_plan.date / "items"
+    with a_server_that_refuses_every_completion() as server:
+        stage_work(
+            run_plan,
+            settings=settings,
+            scorer=None,
+            fetcher=captured_article_fetch,
+            model_endpoint=server.endpoint,
+        )
+    score_one_item(items_dir, run_plan)
+    stage_assemble(run_plan, settings=settings, commit_sha="a" * 40, runner="fixture")
+    blocks = assemble.fragment_dir(common.STATE_ROOT, run_plan.date)
+    before = sorted(path.name for path in blocks.glob("*.json"))
+    registry = json.loads(read_text(CONFIG_DIR / ledger.paths.REGISTRY_FILENAME))
+    for family in registry["families"]:
+        if family["name"] == "digest-fragments":
+            family["lifecycle_status"] = "paused"
+    monkeypatch.setattr(ledger.paths, "_CONFIG", LedgersConfig.model_validate(registry))
+
+    with caplog.at_level(logging.WARNING, logger="idhazh"):
+        stage_assemble(
+            run_plan.model_copy(update={"run_id": f"{run_plan.date}-2"}),
+            settings=settings,
+            commit_sha="a" * 40,
+            runner="fixture",
+        )
+    skipped = [r.getMessage() for r in caplog.records if "ledger write skipped" in r.getMessage()]
+
+    assert before, "run 1 filed no block, so there is nothing to assemble from"
+    assert sorted(path.name for path in blocks.glob("*.json")) == before
+    assert len(skipped) == 1
+    assert skipped[0].startswith(
+        "ledger write skipped ledger=digest-fragments family=digest-fragments status=paused"
+    )
 
 
 def stage_visual_payloads(run_plan: RunPlan, items_dir: Path, *, text: str) -> None:
@@ -567,8 +617,8 @@ def test_two_runs_that_start_before_either_publishes_cannot_share_a_run_id(
         generated_at="2026-08-21T07:00:00Z",
         retention_window_months=-1,
     )
-    assemble.write_atomic(frozen / "digest.json", day.to_json())
-    assemble.write_atomic(
+    atomic_write.write_atomic(frozen / "digest.json", day.to_json())
+    atomic_write.write_atomic(
         frozen / "run.json",
         assemble.build_manifest(
             plan=plan(),
@@ -1100,7 +1150,7 @@ def test_the_published_path_carries_no_digest() -> None:
 def test_a_write_is_atomic(tmp_path: Path) -> None:
     """A file either exists complete or does not exist. There is no half-written item."""
     target = tmp_path / "deep" / "digest.json"
-    assemble.write_atomic(target, '{"a": 1}\n')
+    atomic_write.write_atomic(target, '{"a": 1}\n')
     assert target.read_bytes() == b'{"a": 1}\n'
 
 

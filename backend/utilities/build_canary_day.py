@@ -49,8 +49,8 @@ from idhazh.assemble import (
     reader_note,
     rebuild_search_index,
     to_digest_visual,
-    write_atomic,
 )
+from idhazh.atomic_write import write_atomic
 from idhazh.contracts.article import Article, ArticleStatus
 from idhazh.contracts.base import ServerJob, derive_url_key, normalize_prose
 from idhazh.contracts.digest_day import DigestDay, DigestItem, DigestRunRef, DigestVerticalRef

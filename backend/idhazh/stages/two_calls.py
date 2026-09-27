@@ -26,6 +26,7 @@ from pydantic import ValidationError
 
 from idhazh import (
     assemble,
+    atomic_write,
     capture,
     config,
     elements,
@@ -410,7 +411,7 @@ def _kept_call(
         reply="" if reply is None else reply.content,
         keep_prompt=recorder.flags.capture_prompts,
         keep_reply=recorder.flags.capture_replies and reply is not None,
-        write=assemble.write_atomic,
+        write=atomic_write.write_atomic,
         cost=None if reply is None else _cost(kind, reply),
         decode_split=None if split is None else split._asdict(),
         finish_reason="" if reply is None else reply.finish_reason or "",

@@ -13,6 +13,7 @@ from typing import Any, NamedTuple
 
 from idhazh import (
     assemble,
+    atomic_write,
     config,
     extract,
     summarize,
@@ -450,11 +451,11 @@ def stage_qualify(
 
     root = common.QUALIFICATION_ROOT / date / f"shard-{shard}"
     for entry in frozen:
-        assemble.write_atomic(
+        atomic_write.write_atomic(
             root / "items" / f"{entry.row.item_id}.article.json", entry.article.to_json()
         )
     registered_at = assemble.utc_now()
-    assemble.write_atomic(
+    atomic_write.write_atomic(
         root / "corpus.json",
         canonical_json([entry.row.model_dump(mode="json") for entry in frozen]),
     )
@@ -553,15 +554,15 @@ def stage_qualify(
         canaries=canaries,
         elapsed_seconds=time.monotonic() - started,
     )
-    assemble.write_atomic(common.QUALIFICATION_ROOT / f"shard-{shard}.json", result.to_json())
-    assemble.write_atomic(
+    atomic_write.write_atomic(common.QUALIFICATION_ROOT / f"shard-{shard}.json", result.to_json())
+    atomic_write.write_atomic(
         common.QUALIFICATION_ROOT / f"shard-{shard}.md",
         qualification_summary.render_shard(result),
     )
     # Worst faithfulness first, because that is the order a reviewer reads in.
     # Its own file and its own artifact: a gate that learned to read this would
     # be a gate reading text it also scored.
-    assemble.write_atomic(
+    atomic_write.write_atomic(
         common.QUALIFICATION_ROOT / f"samples-{shard}.json",
         QualificationSamples(
             version=QualificationSamples.schema_version(),

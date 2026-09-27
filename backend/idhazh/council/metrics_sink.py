@@ -22,6 +22,7 @@ from typing import Final, cast
 
 from idhazh import ledger
 from idhazh.contracts.base import SLUG_PATTERN
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.council.tenancy import JudgeRow
 
 _SLUG: Final = re.compile(SLUG_PATTERN)
@@ -107,14 +108,22 @@ def shipped_rows[Row: JudgeRow](
 
 
 def collect_judge_metrics(
-    shipped_root: Path, *, judge_id: str, contract: type[JudgeRow], into: Path
+    shipped_root: Path,
+    *,
+    judge_id: str,
+    contract: type[JudgeRow],
+    which: LedgerName,
+    into: Path,
 ) -> int:
     """Append every shipped row to the ledger the tenant named. Returns how many landed.
 
     `into` is handed in by the tenant, so the council spells no judge's ledger
-    path and a second tenant needs no change here.
+    path and a second tenant needs no change here. `which` is the ledger `into`
+    belongs to, so a paused or retired family writes nothing and says so once.
     """
     rows = shipped_rows(shipped_root, judge_id=judge_id, contract=contract)
+    if rows and not ledger.accepts_new_rows(which, len(rows)):
+        return 0
     return ledger.extend_ledger_file(into, contract.csv_columns(), rows)
 
 

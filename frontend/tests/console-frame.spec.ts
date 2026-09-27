@@ -343,34 +343,48 @@ test.describe('the console frame', () => {
 		}
 	});
 
-	test('the run strip actually grows in a browser, not just in the arithmetic', async ({
+	test('the run squares take the width the browser measured, not the arithmetic', async ({
 		page
 	}) => {
-		// `cellFor` is tested as a pure function above. This is the other half:
-		// that the measured width reaches it at all. A resize observer that never
-		// fires leaves the strip at its floor and every arithmetic test still
-		// passes.
+		// `slotCellFor` and `cellFor` are tested as pure functions. This is the other
+		// half: that the measured width reaches them at all. A resize observer that
+		// never fires leaves the chart at the width the server drew it and the
+		// squares with it, and every arithmetic test still passes.
 		await page.setViewportSize(DESKTOP);
 		await page.goto('/console/');
 		await page.waitForTimeout(800);
 
 		const measured = await page.evaluate(() => {
 			const square = document.querySelector('[data-health]');
-			const strip = document.querySelector('[data-run-history]');
+			const squares = document.querySelector('[data-run-history]');
+			const chart = document.querySelector('svg[data-run-yield-chart]');
 			return {
 				square: square ? Math.round(square.getBoundingClientRect().width) : null,
-				room: strip ? Math.round(strip.getBoundingClientRect().width) : null,
+				room: squares ? Math.round(squares.getBoundingClientRect().width) : null,
+				chart: chart ? Math.round(chart.getBoundingClientRect().width) : null,
 				days: document.querySelectorAll('[data-day]').length
 			};
 		});
 
 		expect(measured.square, 'no run square on the page').not.toBeNull();
-		expect(measured.room ?? 0).toBeGreaterThan(600);
-		// The floor is 16. Anything above it proves the observer reported and the
-		// derived value was applied.
-		expect(measured.square).toBeGreaterThan(16);
+		// The server draws at `console.chart_width`. Anything wider proves the
+		// observer reported, and the squares span exactly what the chart does.
+		expect(measured.room ?? 0).toBeGreaterThan(consoleChartWidth());
+		expect(measured.room).toBe(measured.chart);
+		expect(measured.square).toBeGreaterThan(0);
 	});
 });
+
+/** The width the server draws a console chart at, before anything has measured
+ * it - read from the knob rather than written here. */
+function consoleChartWidth(): number {
+	const parsed = JSON.parse(readFileSync(join(REPO, 'config', 'appearance.json'), 'utf8')) as {
+		console?: { chart_width?: number };
+	};
+	const width = parsed.console?.chart_width;
+	expect(width, 'config/appearance.json names no console.chart_width').toBeDefined();
+	return width as number;
+}
 
 /**
  * The console as a browser lays it out before any of its JavaScript has run.

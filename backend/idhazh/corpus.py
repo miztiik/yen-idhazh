@@ -53,7 +53,7 @@ from typing import Final, NamedTuple
 
 from pydantic import ValidationError
 
-from idhazh import assemble, summarize
+from idhazh import atomic_write, summarize
 from idhazh.contracts.article import Article, ArticleStatus
 from idhazh.contracts.base import compact_json, derive_output_digest, derive_text_digest
 from idhazh.contracts.corpus import ChatRole, ChatTurn, CorpusMeta, CorpusRow
@@ -509,8 +509,8 @@ def write(corpus_dir: Path, rows: Sequence[CorpusRow], meta: CorpusMeta) -> None
     CI.
     """
     corpus_dir.mkdir(parents=True, exist_ok=True)
-    assemble.write_atomic(rows_path(corpus_dir), "".join(to_line(row) for row in rows))
-    assemble.write_atomic(meta_path(corpus_dir), meta.to_json())
+    atomic_write.write_atomic(rows_path(corpus_dir), "".join(to_line(row) for row in rows))
+    atomic_write.write_atomic(meta_path(corpus_dir), meta.to_json())
 
 
 def harvest(
@@ -557,5 +557,5 @@ def stamp_prune(corpus_dir: Path, *, date: str) -> CorpusMeta:
         update={"version": CorpusMeta.schema_version(), "pruned_date": date}
     )
     corpus_dir.mkdir(parents=True, exist_ok=True)
-    assemble.write_atomic(meta_path(corpus_dir), meta.to_json())
+    atomic_write.write_atomic(meta_path(corpus_dir), meta.to_json())
     return meta

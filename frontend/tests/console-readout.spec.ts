@@ -101,6 +101,11 @@ async function chartsOn(page: Page): Promise<DeclaredChart[]> {
 				const legend = [...owner.querySelectorAll('span, i, em')]
 					.filter((el) => el.closest('[data-readout]') === null)
 					.filter((el) => (el.textContent ?? '').trim() === '')
+					// A mark that names itself is data, not a key. The run squares under
+					// the chart of articles published against planned are spans in the
+					// colours the readout's run rows print, and each carries its own
+					// accessible name; a key swatch carries none.
+					.filter((el) => !(el.getAttribute('role') === 'img' && el.hasAttribute('aria-label')))
 					.filter((el) => {
 						const box = el.getBoundingClientRect();
 						return box.width > 0 && box.width <= 28 && box.height > 0 && box.height <= 28;

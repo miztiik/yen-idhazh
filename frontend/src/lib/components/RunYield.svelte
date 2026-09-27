@@ -1,5 +1,5 @@
 <script lang="ts">
-	/** Items published against items planned, one group a day.
+	/** Articles published against planned, one group a day.
 	 *
 	 * The shape this replaced was a two-slice donut over the whole manifest set:
 	 * one ratio, no window, no days. It could say 92 percent finished and it
@@ -14,71 +14,83 @@
 	 * published once. An item a run skipped belongs to none of the three. That is
 	 * why they sit side by side rather than stacked, and why the yield line is
 	 * not bounded above by 100 percent - a day over the ceiling draws at the
-	 * ceiling and prints its true figure in the strip, never clamped in the
+	 * ceiling and prints its true figure in the readout, never clamped in the
 	 * number.
+	 *
+	 * **It hands its days to whatever stands under it.** `below` is drawn inside
+	 * this figure with the very slots the bars were placed by, so a figure under
+	 * the chart lands on the chart's days by construction rather than by a second
+	 * calculation that happens to agree today. The readout that prints a picked
+	 * day is its caller's: `Run health` prints one readout for this chart and the
+	 * run squares together.
 	 *
 	 * The counts come from the committed day-metrics records the page already
 	 * opens, so drawing this costs no file the console was not reading.
 	 */
+	import type { Snippet } from 'svelte';
+	import { daySlots, type DaySlots } from '$lib/charts/day-slots';
 	import {
 		chartWidth,
 		coverage,
 		coverageRegions,
 		coverageRegionTitle,
-		coverageSentence,
 		dayTicks,
 		frame,
 		linearAxis,
-		notMeasuredRow,
 		observeWidth,
-		pointerReadout,
-		readoutMarks,
-		type DayReadout
+		pointerReadout
 	} from '$lib/charts/frame';
-	import ChartReadout from './ChartReadout.svelte';
 	import {
 		placeOnYieldAxis,
 		plannedDays,
-		runYield,
+		yieldCount,
+		yieldPercent,
 		yieldRuns,
 		YIELD_AXIS_TICKS,
+		YIELD_LINE_TOKEN,
+		YIELD_SERIES,
 		type RunYieldDay,
-		type RunYieldSource
+		type RunYieldLoad
 	} from '$lib/charts/run-yield';
 	import { grouped } from '$lib/charts/series';
-	import { daysBetween, type TimeWindow } from '$lib/charts/viewport';
 
 	let {
-		days,
-		window,
+		load,
 		height,
 		width,
 		tickDensity,
-		readoutMaxShare = 0.33
+		selected = $bindable(null),
+		onPick,
+		below
 	}: {
-		days: RunYieldSource[];
-		window: TimeWindow;
+		/** One column a day of the window, from `runYield`. */
+		load: RunYieldLoad;
 		/** The whole SVG, margins included. */
 		height: number;
 		/** The column, until the element has been measured. */
 		width: number;
 		/** The most date labels the day axis may carry - `chart.tick_density`. */
 		tickDensity: number;
-		/** `chart.readout_max_share`. */
-		readoutMaxShare?: number;
+		/** The day picked on this chart or on a figure beside it, or null for none. */
+		selected?: number | null;
+		/** A deliberate pick on this chart - a step key or a tap, never a hover. */
+		onPick?: (index: number) => void;
+		/** What stands under the chart's date row, handed the chart's own day slots
+		 * and whether the chart is drawing its narrow shape. */
+		below?: Snippet<[DaySlots, boolean]>;
 	} = $props();
 
-	/** Room on the right for the yield axis, on the left for an item count that
-	 * reaches four digits, and above for the two axis titles - a chart with two y
-	 * scales has to say which is which. Same frame as the failure chart, which is
-	 * the same shape with the same two scales. */
+	/** Room on the right for the yield axis, on the left for an article count
+	 * that reaches four digits, and above for the two axis titles - a chart with
+	 * two y scales has to say which is which. Same frame as the failure chart,
+	 * which is the same shape with the same two scales. */
 	const CHART_MARGIN = { top: 26, right: 46, bottom: 26, left: 42 };
 
 	/** Below this the three bars of a day are under two pixels each at a
 	 * thirty-day window, which is a colour rather than a length. Measured on the
 	 * built console at a 390px viewport: the panel draws 326px wide, leaving
 	 * 242px of plot and a 8.1px slot. The narrow shape keeps the planned bar and
-	 * the line, and the strip still prints all four numbers. */
+	 * the line, and the readout still prints all four numbers. */
 	const NARROW_PX = 480;
 
 	/** The widest a grouped set may be drawn, and the narrowest. A day with the
@@ -86,54 +98,35 @@
 	const GROUP_MAX = 30;
 	const GROUP_MIN = 3;
 
-	/** Three categorical fills, and none of them `--chart-axis`.
-	 *
-	 * The donut this replaced painted its larger slice with the axis token, which
-	 * an arc gap held apart from its neighbour. Three bars two pixels apart have
-	 * no such gap, and this chart draws its own three axis rules in that same
-	 * colour - so the quantity everything else is measured against would have
-	 * been painted as the frame it sits in. */
-	const SERIES = [
-		{ key: 'planned', label: 'Planned', token: '--chart-1' },
-		{ key: 'published', label: 'Published', token: '--chart-2' },
-		{ key: 'failed', label: 'Failed', token: '--chart-8' }
-	] as const;
-
-	/** The line's own colour, so it reads as the one mark on the other axis. */
-	const YIELD_TOKEN = '--chart-marker';
-
 	let measured = $state<number | null>(null);
 
-	const windowDays = $derived(daysBetween(window.start, window.end));
-	const load = $derived(runYield(days, window));
+	const windowDays = $derived(load.columns.length);
 
 	const box = $derived(frame(chartWidth(measured, width), height, CHART_MARGIN));
+	/** Every day's slot, computed once and used by every mark on this chart and by
+	 * whatever stands under it. */
+	const slots = $derived(daySlots(box.width, load.columns.length, CHART_MARGIN));
 	const volume = $derived(linearAxis([0, load.peak], [box.bottom, box.top]));
 	// A count of items has no half. A domain of two draws ticks at 0.5, and a
 	// console cell never prints a decimal.
 	const volumeTicks = $derived(volume.ticks.filter((tick) => Number.isInteger(tick)));
-	const slot = $derived(box.innerWidth / Math.max(1, load.columns.length));
 	const narrow = $derived(box.width < NARROW_PX);
 	/** The whole group, three bars wide, or one bar where the group will not fit. */
-	const group = $derived(Math.max(GROUP_MIN, Math.min(GROUP_MAX, slot - 2)));
-	const barWidth = $derived(narrow ? group : group / SERIES.length);
+	const group = $derived(Math.max(GROUP_MIN, Math.min(GROUP_MAX, slots.slot - 2)));
+	const barWidth = $derived(narrow ? group : group / YIELD_SERIES.length);
 	/** Which series are drawn as bars. On a phone the published bar leaves the
-	 * plot and stays in the strip: the line already carries it as a share, and
+	 * plot and stays in the readout: the line already carries it as a share, and
 	 * three 2px bars carry nothing. */
-	const bars = $derived(narrow ? SERIES.slice(0, 1) : SERIES);
+	const bars = $derived(narrow ? YIELD_SERIES.slice(0, 1) : YIELD_SERIES);
 
 	function centre(index: number): number {
-		return box.left + index * slot + slot / 2;
+		return slots.centres[index] ?? slots.left;
 	}
 
 	function barX(index: number, position: number): number {
 		return narrow
 			? centre(index) - group / 2
-			: centre(index) - group / 2 + position * (group / SERIES.length);
-	}
-
-	function count(column: RunYieldDay, key: (typeof SERIES)[number]['key']): number {
-		return key === 'planned' ? column.planned : key === 'published' ? column.published : column.failed;
+			: centre(index) - group / 2 + position * (group / YIELD_SERIES.length);
 	}
 
 	function barTop(value: number): number {
@@ -144,8 +137,8 @@
 		return Math.max(value > 0 ? 1 : 0, volume.scale(0) - volume.scale(value));
 	}
 
-	function barTitle(column: RunYieldDay, entry: (typeof SERIES)[number]): string {
-		const value = count(column, entry.key);
+	function barTitle(column: RunYieldDay, entry: (typeof YIELD_SERIES)[number]): string {
+		const value = yieldCount(column, entry.key);
 		return `${column.date}: ${grouped(value)} ${entry.label.toLowerCase()}`;
 	}
 
@@ -155,21 +148,17 @@
 		coverageRegions(
 			covered,
 			load.columns.map((column) => column.date),
-			load.columns.map((_, index) => centre(index)),
+			slots.centres,
 			box
 		)
 	);
-	const coverageNote = $derived(coverageSentence(covered, 'The pipeline planned items on'));
 
 	/** Which columns carry a date. The columns are evenly spaced but the slot is
 	 * not the plot, so the centres go to the helper rather than a width. */
 	const dateAxis = $derived(
 		dayTicks(
 			load.columns.map((column) => column.date),
-			{
-				density: tickDensity,
-				columns: load.columns.map((_, index) => centre(index))
-			}
+			{ density: tickDensity, columns: slots.centres }
 		)
 	);
 
@@ -179,23 +168,14 @@
 		return box.bottom - placeOnYieldAxis(rate) * box.innerHeight;
 	}
 
-	/** Whole percent, and `<1%` where a real measurement rounds away. A `0%`
-	 * there would say the day published nothing. */
-	function percent(rate: number | null): string {
-		if (rate === null) return '-';
-		const pct = rate * 100;
-		if (pct > 0 && pct < 1) return '<1%';
-		return `${Math.round(pct)}%`;
-	}
-
 	/** The day in one sentence: the share, and what it is a share of. Never a
 	 * bare percentage - a share with no denominator invites a trend that is not
 	 * there. */
 	function sentence(column: RunYieldDay): string {
 		if (column.yield === null) {
-			return `${column.date}: no item was planned`;
+			return `${column.date}: no article was planned`;
 		}
-		return `${column.date}: ${grouped(column.published)} published of the ${grouped(column.planned)} planned, ${grouped(column.failed)} failed, share published ${percent(column.yield)}`;
+		return `${column.date}: ${grouped(column.published)} published of the ${grouped(column.planned)} planned, ${grouped(column.failed)} failed, share published ${yieldPercent(column.yield)}`;
 	}
 
 	/** Each unbroken run of the line, placed in this frame's pixels. Where the
@@ -217,55 +197,24 @@
 	);
 
 	const headline = $derived(
-		load.empty
-			? `Nothing was planned in these ${windowDays} days.`
-			: `Items published against items planned, ${windowDays} days. ${grouped(totals.published)} published of the ${grouped(totals.planned)} planned.`
+		`Articles published against planned over ${windowDays} days: ${grouped(totals.published)} published of the ${grouped(totals.planned)} planned. The line is the share published, on the right axis.`
 	);
 
-	/** The column a pointer or an arrow key has picked. */
-	let selected = $state<number | null>(null);
-
-	/** Three counts and the share they make, at one column. The share and its
-	 * two counts sit on two axes, which is the shape where reading them together
-	 * by eye is hardest, and it is the whole reason both are drawn. */
-	const columns = $derived<DayReadout[]>(
-		load.columns.map((column, index) => ({
-			x: centre(index),
-			date: column.date,
-			rows:
-				column.planned > 0
-					? [
-							...SERIES.map((entry) => ({
-								label: entry.label,
-								value: grouped(count(column, entry.key)),
-								colour: `var(${entry.token})`
-							})),
-							{
-								label: 'Share published',
-								value: percent(column.yield),
-								colour: `var(${YIELD_TOKEN})`
-							}
-						]
-					: [notMeasuredRow('No item was planned on this day')]
-		}))
-	);
-	const marks = $derived(readoutMarks(columns));
-	const at = $derived(selected ?? (columns.length === 0 ? null : columns.length - 1));
-	const readout = $derived(at === null ? null : (columns[at] ?? null));
-	const guide = $derived(selected === null ? null : (columns[selected]?.x ?? null));
+	/** Where a pointer can land: one mark a day, on the day's own centre. */
+	const marks = $derived(slots.centres.map((x) => ({ x })));
+	const guide = $derived(selected === null ? null : (slots.centres[selected] ?? null));
 </script>
 
-{#if load.empty}
-	<p class="mt-4 text-[0.9375rem] text-text-secondary" data-run-yield-empty>
-		Nothing was planned in these {windowDays} days, so there is nothing to show.
-	</p>
-{:else}
-	<figure
-		class="mt-4"
-		data-readout-columns={columns.length}
-		data-run-yield-days={load.columns.length}
-		use:observeWidth={(value) => (measured = value)}
-	>
+<figure
+	class="mt-4"
+	data-run-yield-days={load.columns.length}
+	use:observeWidth={(value) => (measured = value)}
+>
+	{#if load.empty}
+		<p class="text-[0.9375rem] text-text-secondary" data-run-yield-empty>
+			No run planned an article in these {windowDays} days.
+		</p>
+	{:else}
 		<!-- `max-w-full` because the server renders this before anything has measured
 		     the column, so `width` is the `console.chart_width` fallback. Uncapped,
 		     that fallback is the document's width until the page hydrates - 800px
@@ -283,7 +232,9 @@
 			use:pointerReadout={{
 				marks,
 				width: box.width,
-				onSelect: (index) => (selected = index)
+				onSelect: (index) => (selected = index),
+				selected,
+				onPick
 			}}
 		>
 			<!-- The span nothing was planned on, drawn before the grid so the tint sits
@@ -312,10 +263,10 @@
 					data-run-yield-chart="guide"
 				/>
 			{/if}
-			<text x="0" y="11" fill="var(--color-text-tertiary)" font-size="11">Items</text>
+			<text x="0" y="11" fill="var(--color-text-tertiary)" font-size="11">Articles</text>
 			<!-- Not `Share` on its own. The eye is on this axis at the moment it asks
 			     "75 percent of what?", so the answer has to be here rather than in the
-			     strip below. -->
+			     readout below. -->
 			<text x={box.width} y="11" text-anchor="end" fill="var(--color-text-tertiary)" font-size="11"
 				>Published, % of planned</text
 			>
@@ -354,12 +305,12 @@
 
 			{#each load.columns as column, index (column.date)}
 				{#each bars as entry, position (entry.key)}
-					{#if count(column, entry.key) > 0}
+					{#if yieldCount(column, entry.key) > 0}
 						<rect
 							x={barX(index, position)}
-							y={barTop(count(column, entry.key))}
+							y={barTop(yieldCount(column, entry.key))}
 							width={barWidth}
-							height={barHeight(count(column, entry.key))}
+							height={barHeight(yieldCount(column, entry.key))}
 							fill="var({entry.token})"
 							data-run-bar={entry.key}
 						>
@@ -396,7 +347,7 @@
 				<polyline
 					{points}
 					fill="none"
-					stroke="var({YIELD_TOKEN})"
+					stroke="var({YIELD_LINE_TOKEN})"
 					stroke-width="1.75"
 					data-yield-line
 				/>
@@ -407,7 +358,7 @@
 						cx={centre(index)}
 						cy={rateY(column.yield)}
 						r="2.5"
-						fill="var({YIELD_TOKEN})"
+						fill="var({YIELD_LINE_TOKEN})"
 						data-yield-mark={column.date}
 					>
 						<title>{sentence(column)}</title>
@@ -415,35 +366,13 @@
 				{/if}
 			{/each}
 		</svg>
-		<!-- Below the plot, never over it, and the same strip every chart on this
-		     console prints - see `ChartReadout.svelte` for the rules. It is also
-		     the key: the three counts and the share each carry their own colour
-		     here, so the plot needs no legend of its own. -->
-		<ChartReadout
-			{readout}
-			name="run-yield"
-			maxShare={readoutMaxShare}
-			resting={selected === null}
-			restingNote=", the newest day"
-			hint="Point at a day to read its three counts and the share it published. Left and Right step through the days, Escape returns to the newest."
-		/>
-		{#if coverageNote}
-			<!-- The window is not narrowed to the days that ran: a day nothing was
-			     planned on is a fact about the record, and hiding it would report a
-			     fuller one than exists. -->
-			<figcaption
-				class="mt-2 text-[0.75rem] text-text-tertiary"
-				data-coverage-note="run-yield"
-				data-coverage-days={covered.days}
-				data-coverage-measured={covered.measured}
-			>
-				{coverageNote}
-			</figcaption>
-		{/if}
-	</figure>
+	{/if}
+	{#if below}{@render below(slots, narrow)}{/if}
+</figure>
 
-	<!-- Every day in words, for a reader who cannot point at a column. The strip
-	     above holds one day at a time and a pointer is how it changes. -->
+{#if !load.empty}
+	<!-- Every day in words, for a reader who cannot point at a column. The readout
+	     under the figures holds one day at a time and a pointer is how it changes. -->
 	<ul class="sr-only" data-run-yield-values>
 		{#each load.columns as column (column.date)}
 			<li>{sentence(column)}</li>

@@ -24,7 +24,7 @@ from pydantic import ValidationError
 from idhazh import assemble, ledger, telemetry
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.ledger_name import DAY_TREES, LedgerName
-from idhazh.contracts.ledgers import Grain, LedgerLifecycleStatus, LedgersConfig
+from idhazh.contracts.ledgers import Grain, LedgersConfig
 from idhazh.evals import archive as score_archive
 from idhazh.ledger import paths
 from idhazh.telemetry.publish import day_metrics
@@ -465,9 +465,11 @@ def test_the_claimed_roots_differ_from_the_base_only_by_the_names_given() -> Non
     A claim is a family name now, so every folder claimed before is still
     claimed under the name it has today. One addition is a file's stem, which
     the sweep never meets because it only looks at directories. Two are the
-    renamed empty ledgers, which leave their old names behind. The last four
-    are the folders other modules used to own, protected before by a list typed
-    into the sweep itself and now by the registry.
+    renamed empty ledgers, which leave their old names behind. Four are the
+    folders other modules used to own, protected before by a list typed into the
+    sweep itself and now by the registry. The last two are not families at all:
+    they are the roots the ledger door files under, claimed so the sweep never
+    reads them as a trial run's trees.
     """
     assert ledger.claimed_roots() - CLAIMED_AT_THE_BASE == {
         "feed-retirements",
@@ -477,6 +479,8 @@ def test_the_claimed_roots_differ_from_the_base_only_by_the_names_given() -> Non
         "day-metrics",
         "digest-fragments",
         "score-archive",
+        "raw",
+        "compact",
     }
     assert CLAIMED_AT_THE_BASE - ledger.claimed_roots() == {"validation", "telemetry-aggregate"}
 
@@ -531,28 +535,6 @@ def test_every_day_tree_files_as_a_day_directory() -> None:
 
     assert day_directories - set(DAY_TREES) == {LedgerName.TRACES, LedgerName.DIGEST_FRAGMENTS}
     assert set(DAY_TREES) <= day_directories
-
-
-def test_every_family_is_active_until_the_write_path_reads_the_status() -> None:
-    """Nothing may be paused or retired yet, because nothing would stop the writes.
-
-    The status is read by no writer today, so a paused family would still be
-    written on the next run while the registry said otherwise. All three
-    statuses are claimed, so this is about what the pipeline does rather than
-    what survives: a retired family keeps its rows either way.
-    """
-    families = LedgersConfig.from_json(REGISTRY.read_text(encoding="utf-8")).families
-    not_active = sorted(
-        f"{family.name} ({family.lifecycle_status.value})"
-        for family in families
-        if family.lifecycle_status is not LedgerLifecycleStatus.ACTIVE
-    )
-
-    assert not not_active, (
-        f"{', '.join(not_active)} is not active. A family cannot be paused or retired "
-        "until the write path honours lifecycle_status: today every writer ignores it, "
-        "so the family would go on being written."
-    )
 
 
 def test_an_entry_that_walks_out_of_state_is_refused() -> None:
