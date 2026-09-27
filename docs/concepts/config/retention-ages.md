@@ -222,7 +222,7 @@ folded; the contract refuses the pair otherwise.
 
 **What `item_health_full_grain_months` governs is `state/item-health/`, and
 nothing else.** Past the window a month is folded to one row per `(date, stage)`
-in `state/telemetry-aggregate/<YYYY-MM>.csv` and the full-grain shard is deleted,
+in `state/item-health-summary/<YYYY-MM>.csv` and the full-grain shard is deleted,
 by `idhazh prune-state` in the assemble job - after the day is committed, never
 before it. What survives is every count and every timing total; what goes is the
 per-item detail, which is what the console's failure list offers and no rate

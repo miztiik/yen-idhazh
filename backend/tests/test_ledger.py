@@ -1544,10 +1544,10 @@ def test_the_hand_marked_holdout_is_named_where_the_commit_step_stages_it() -> N
     handed.
     """
     assert (
-        ledger.relpath(LedgerName.SIMILARITY_HOLDOUT)
+        ledger.relpath(LedgerName.CONTENT_SIMILARITY_JUDGE_HOLDOUT_PAIRS)
         == "state/content-similarity-judge/holdout-pairs.csv"
     )
-    assert ledger.path(Path("state"), LedgerName.SIMILARITY_HOLDOUT) == Path(
+    assert ledger.path(Path("state"), LedgerName.CONTENT_SIMILARITY_JUDGE_HOLDOUT_PAIRS) == Path(
         "state/content-similarity-judge/holdout-pairs.csv"
     )
 
@@ -1565,10 +1565,10 @@ def test_the_judged_pairs_are_filed_under_the_day_they_were_drawn_from() -> None
     state = Path("state")
 
     assert (
-        ledger.relpath(LedgerName.SCORED_PAIRS, date)
+        ledger.relpath(LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS, date)
         == "state/content-similarity-judge/scored-pairs/2026/09/18.csv"
     )
-    assert ledger.path(state, LedgerName.SCORED_PAIRS, date) == Path(
+    assert ledger.path(state, LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS, date) == Path(
         "state/content-similarity-judge/scored-pairs/2026/09/18.csv"
     )
 
@@ -1584,10 +1584,10 @@ def test_the_fitted_line_is_filed_under_the_day_it_was_fitted_for() -> None:
     state = Path("state")
 
     assert (
-        ledger.relpath(LedgerName.FITTED_THRESHOLDS, date)
+        ledger.relpath(LedgerName.CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS, date)
         == "state/content-similarity-judge/fitted-thresholds/2026/09/18.csv"
     )
-    assert ledger.path(state, LedgerName.FITTED_THRESHOLDS, date) == Path(
+    assert ledger.path(state, LedgerName.CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS, date) == Path(
         "state/content-similarity-judge/fitted-thresholds/2026/09/18.csv"
     )
 
@@ -1599,7 +1599,7 @@ def test_the_score_record_is_one_file_that_never_grows_with_the_archive() -> Non
     (Guardrail #12), so the path carries no date and there is nothing here for a
     partition to place.
     """
-    assert ledger.path(Path("state"), LedgerName.SCORE_DISTRIBUTION) == Path(
+    assert ledger.path(Path("state"), LedgerName.CONTENT_SIMILARITY_JUDGE_SCORE_DISTRIBUTION) == Path(
         "state/content-similarity-judge/score-distribution.json"
     )
 
@@ -1907,7 +1907,7 @@ def test_the_keyed_set_names_every_ledger_that_declares_one(tmp_path: Path) -> N
     ledger.append_visual_prunes(tmp_path, DATE, [prune_row(on=DATE)])
     ledger.append_story_similarity_pairs(tmp_path, DATE, [pair_row()])
     ledger.append_council_shard_outcomes(tmp_path, DATE, [council_row()])
-    fitted = ledger.path(tmp_path, LedgerName.FITTED_THRESHOLDS, DATE)
+    fitted = ledger.path(tmp_path, LedgerName.CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS, DATE)
     fitted.parent.mkdir(parents=True, exist_ok=True)
     fitted.write_text(
         ",".join(FittedSimilarityThreshold.csv_columns()) + "\n", encoding="utf-8"
@@ -2161,7 +2161,7 @@ def test_the_day_grain_answers_what_the_month_grain_answered_over_the_same_rows(
         a_day.setdefault(row.date, []).append(row)
     for date_read, day_rows in a_day.items():
         seed_feed_health(day_tree, date_read, day_rows)
-    month_root = ledger.tree_root(tmp_path / "month" / "state", LedgerName.HEALTH)
+    month_root = ledger.tree_root(tmp_path / "month" / "state", LedgerName.FEED_HEALTH)
     month_grain_tree(month_root, rows)
 
     window = ledger.HEALTH_WINDOW_DAYS
@@ -2169,7 +2169,7 @@ def test_the_day_grain_answers_what_the_month_grain_answered_over_the_same_rows(
         {
             day_shards.date_of(shard)
             for shard in day_shards.shard_files(
-                ledger.tree_root(day_tree, LedgerName.HEALTH), days=UNBOUNDED_WINDOW
+                ledger.tree_root(day_tree, LedgerName.FEED_HEALTH), days=UNBOUNDED_WINDOW
             )
         }
     )

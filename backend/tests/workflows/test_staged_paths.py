@@ -182,7 +182,7 @@ def test_the_fold_stages_the_browser_copy_it_deletes() -> None:
 
 
 def test_the_fold_stages_state_whole_because_two_of_its_stores_appear_late() -> None:
-    """`state/telemetry-aggregate/` and `state/score-archive/` are written, never seeded.
+    """`state/item-health-summary/` and `state/score-archive/` are written, never seeded.
 
     Neither exists in a fresh checkout: one appears the first time a month is
     folded and the other the first time a month is archived. Naming either in
@@ -209,7 +209,7 @@ def test_the_fold_stages_state_whole_because_two_of_its_stores_appear_late() -> 
 
     assert "state" in staged
     assert ledger.relpath(LedgerName.VISUAL_PRUNES, SUBSTITUTED_DATE).split("/")[0] in staged
-    for late in ("telemetry-aggregate", "score-archive"):
+    for late in ("item-health-summary", "score-archive"):
         assert f"state/{late}" not in staged, (
             f"state/{late} appears only once production writes it, so naming it here "
             "aborts git add on every run before that day"

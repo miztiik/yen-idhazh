@@ -9,7 +9,7 @@ import pytest
 from conftest import CONFIG_DIR, read_text
 from pytest import MonkeyPatch
 
-from idhazh import config, ledger, run_context, telemetry
+from idhazh import config, ledger, run_context
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.run_manifest import RunManifest
@@ -227,5 +227,5 @@ def test_a_traced_work_shard_writes_a_reconciling_span_rollup(
         rides_on_item = name is RollupSpan.ITEM
         assert (row.unattributed_ms is not None) is rides_on_item
 
-    traces = list((common.STATE_ROOT / telemetry.TRACES_DIRNAME).rglob("*.jsonl"))
+    traces = list(ledger.tree_root(common.STATE_ROOT, LedgerName.TRACES).rglob("*.jsonl"))
     assert traces, "no committed trace was written under state/traces/"

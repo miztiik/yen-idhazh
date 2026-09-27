@@ -19,6 +19,7 @@ from idhazh.contracts.eval_row import ConfidenceBand, EvalRow
 from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW, CollectConfig
 from idhazh.contracts.knobs.observability import ObservabilityConfig
 from idhazh.contracts.knobs.retention import RetentionConfig
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.evals import archive as score_archive
 from idhazh.evals import writer as score_writer
 from idhazh.retention import oldest_month_kept, prune_scores
@@ -182,7 +183,7 @@ def test_a_score_dry_run_writes_nothing_and_still_counts_both_sides(tmp_path: Pa
     assert result.archive_bytes > 0
     assert score_bytes(state) == held
     assert score_archive.archived_months(state) == []
-    assert not (state / score_archive.ARCHIVE_DIRNAME).exists()
+    assert not (state / LedgerName.SCORE_ARCHIVE).exists()
 
 
 def test_a_month_with_real_volume_summarises_to_a_fraction_of_its_shard(tmp_path: Path) -> None:
@@ -303,7 +304,7 @@ def test_a_month_shaped_name_beside_the_day_tree_is_refused_rather_than_archived
         prune_scores(state, ObservabilityConfig(), TODAY)
 
     assert {path: path.read_text(encoding="utf-8") for path in strays} == strays
-    assert not (state / score_archive.ARCHIVE_DIRNAME).exists(), (
+    assert not (state / LedgerName.SCORE_ARCHIVE).exists(), (
         "a ledger the reader cannot walk produced a summary anyway"
     )
 

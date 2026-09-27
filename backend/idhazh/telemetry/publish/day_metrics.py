@@ -63,8 +63,6 @@ from idhazh.telemetry.publish import series
 
 LOG: Final = logging.getLogger("idhazh")
 
-DIRNAME: Final = "day-metrics"
-
 #: The item-health timing column each stage records. Only these three stages
 #: carry a wall-clock; plan and publish record none, so they never draw a bar.
 _STAGE_TIMING_COLUMNS: Final[tuple[tuple[ItemStage, str], ...]] = (
@@ -93,8 +91,7 @@ _DOUBTED: Final[frozenset[ConfidenceBand]] = frozenset(
 
 def day_metrics_relpath(date: str) -> str:
     """`state/day-metrics/<YYYY>/<MM>/<DD>.json` - the POSIX form, for a log line."""
-    year, month, day = date[:4], date[5:7], date[8:10]
-    return f"{ledger.STATE_DIRNAME}/{DIRNAME}/{year}/{month}/{day}.json"
+    return ledger.relpath(LedgerName.DAY_METRICS, date)
 
 
 def day_metrics_path(state_root: Path, date: str) -> Path:
@@ -102,9 +99,10 @@ def day_metrics_path(state_root: Path, date: str) -> Path:
 
     Nested by year and month to mirror `frontend/public/digest/<YYYY>/<MM>/<DD>/`,
     so one month's folder holds about 31 files rather than a single directory
-    that grows with every published day.
+    that grows with every published day. The registry's `day-metrics` entry is
+    where that layout is written down.
     """
-    return state_root / DIRNAME / date[:4] / date[5:7] / f"{date[8:10]}.json"
+    return ledger.path(state_root, LedgerName.DAY_METRICS, date)
 
 
 # --- reading one day's committed slice ---------------------------------------
@@ -750,7 +748,7 @@ def records_in_month(state_root: Path, month: str) -> list[DayMetrics]:
     survives once a day's items are folded, and a month quietly published short
     would report work that happened as work that did not.
     """
-    root = state_root / DIRNAME / month[:4] / month[5:7]
+    root = ledger.tree_root(state_root, LedgerName.DAY_METRICS) / month[:4] / month[5:7]
     if not root.is_dir():
         return []
     return [DayMetrics.read(path) for path in sorted(root.glob("*.json"))]
@@ -763,7 +761,7 @@ def months_recorded(state_root: Path) -> list[str]:
     entry a month for ever, and there is no cheaper way to answer which months
     exist than to look.
     """
-    root = state_root / DIRNAME
+    root = ledger.tree_root(state_root, LedgerName.DAY_METRICS)
     found: list[str] = []
     if not root.is_dir():
         return found

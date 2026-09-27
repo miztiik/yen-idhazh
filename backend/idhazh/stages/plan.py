@@ -187,7 +187,7 @@ def stage_plan(
     # day, so it is shard 0 of one.
     ledger.write_segment(
         state,
-        LedgerName.HEALTH,
+        LedgerName.FEED_HEALTH,
         health,
         run_id=run_id,
         attempt=run_context.run_attempt(),

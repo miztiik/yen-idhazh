@@ -64,7 +64,6 @@ from idhazh.telemetry.spans import (
     summary_attributes,
 )
 from idhazh.telemetry.traces import (
-    TRACES_DIRNAME,
     committed_trace_path,
     committed_trace_relpath,
     trace_date,
@@ -75,7 +74,6 @@ __all__ = [
     "ENVELOPE_VERSION",
     "MAX_ATTRIBUTE_CHARS",
     "RECORD_CELLS",
-    "TRACES_DIRNAME",
     "AttrKey",
     "CollectingSink",
     "EventLevel",

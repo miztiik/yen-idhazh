@@ -102,7 +102,7 @@ def stage_set_merge_line(
         LOG.warning("set-merge-line found no published day to fit for date=%s", date)
         return None
 
-    record_path = ledger.path(state, LedgerName.SCORE_DISTRIBUTION)
+    record_path = ledger.path(state, LedgerName.CONTENT_SIMILARITY_JUDGE_SCORE_DISTRIBUTION)
     scorer, judge = scorer_inputs(settings), judge_inputs(settings)
     record = (
         StorySimilarityDistribution.from_json(record_path.read_text(encoding="utf-8"))

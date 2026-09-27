@@ -144,3 +144,13 @@ def parse_segment_name(path: Path, *, suffix: str = SEGMENT_SUFFIX) -> SegmentNa
         job=ServerJob(match["job"]),
         shard=int(match["shard"]),
     )
+
+
+def fragment_name(run_id: str) -> str:
+    """What one run's block of a published day is called: the run's own id.
+
+    No two runs of a date share an id, so no two runs reach for one file and git
+    has nothing to merge - which is the reason a day is filed as blocks at all.
+    The id already opens on the date, so the name needs nothing else.
+    """
+    return f"{run_id}.json"

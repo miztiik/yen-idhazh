@@ -1286,7 +1286,7 @@ def test_the_same_run_planned_twice_still_leaves_one_row_per_feed() -> None:
     rows = health_after(state)
     assert len(rows) == 3
     assert sorted(row.feed_id for row in rows) == ["community", "lab-blog", "trade-press"]
-    for path in day_shards.one_day(ledger.tree_root(state, LedgerName.HEALTH), DATE):
+    for path in day_shards.one_day(ledger.tree_root(state, LedgerName.FEED_HEALTH), DATE):
         assert ledger.repeated_keys(path, ledger.FEED_HEALTH_KEY) == {}, (
             f"{path.name} holds one feed's verdict twice"
         )
@@ -1326,7 +1326,7 @@ def seed_failures(state: Path, feed_id: str, runs: int) -> None:
         already = [
             FeedHealthRow.from_csv_row(cells)
             for cells in day_shards.settled_day(
-                ledger.tree_root(state, LedgerName.HEALTH), DATE, ledger.FEED_HEALTH_KEY, FeedHealthRow
+                ledger.tree_root(state, LedgerName.FEED_HEALTH), DATE, ledger.FEED_HEALTH_KEY, FeedHealthRow
             )
             if cells["run_id"] == run_id
         ]

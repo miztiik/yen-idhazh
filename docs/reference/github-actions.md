@@ -874,7 +874,7 @@ production happened to publish that week. The count does not move - 3 shards of
 to leave, and `evals.golden.ledger_relpath` returned `state/validation-<date>.csv`
 for both callers to join to the repository root - so that row landed in production
 `state/` whatever `run.trial_state_dirname` said. The verdict now goes to
-`state/pipeline-tests/validation/<YYYY>/<MM>/<DD>/`, its `decide` job builds the
+`state/pipeline-tests/candidate-models/<YYYY>/<MM>/<DD>/`, its `decide` job builds the
 scratch copy like the two jobs before it, and the segment it writes there is the
 verdict rather than a copy waiting to be folded.
 `backend/tests/workflows/test_validation_state_root.py` holds the assertions;

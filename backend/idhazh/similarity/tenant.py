@@ -114,7 +114,7 @@ class ContentSimilarityJudge:
         and the writer cannot drift apart.
         """
         state = state_dir if state_dir is not None else config.REPO_ROOT / ledger.STATE_DIRNAME
-        record_path = ledger.path(state, LedgerName.SCORE_DISTRIBUTION)
+        record_path = ledger.path(state, LedgerName.CONTENT_SIMILARITY_JUDGE_SCORE_DISTRIBUTION)
         if not record_path.exists():
             return ()
         record = StorySimilarityDistribution.from_json(

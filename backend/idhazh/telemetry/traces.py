@@ -14,19 +14,17 @@ from datetime import date
 from pathlib import Path
 from typing import Final
 
+from idhazh import ledger
 from idhazh.contracts.base import ServerJob
-from idhazh.ledger import STATE_DIRNAME, segment_name
-
-#: The committed trace tree, a child of `state/`.
-TRACES_DIRNAME: Final = "traces"
+from idhazh.contracts.ledger_name import LedgerName
 
 #: A trace is JSON lines rather than CSV, and that is the whole of what this
 #: tree does differently from a ledger day tree.
 TRACE_SUFFIX: Final = ".jsonl"
 
 
-def _trace_day(run_id: str) -> tuple[str, str, str]:
-    """The three path segments a run id names: `2026-08-21-1` -> (2026, 08, 21).
+def _trace_day(run_id: str) -> str:
+    """The day a run id names: `2026-08-21-1` -> `2026-08-21`.
 
     A `RunId` is `<YYYY>-<MM>-<DD>-<ordinal>` and the ordinal carries no dash, so
     a plain split gives exactly four parts. A trace carries no date cell of its
@@ -35,8 +33,7 @@ def _trace_day(run_id: str) -> tuple[str, str, str]:
     parts = run_id.split("-")
     if len(parts) != 4:
         raise ValueError(f"run id {run_id!r} is not <YYYY>-<MM>-<DD>-<ordinal>")
-    year, month, day, _ = parts
-    return year, month, day
+    return "-".join(parts[:3])
 
 
 def committed_trace_relpath(
@@ -48,24 +45,23 @@ def committed_trace_relpath(
     (section 2: relative, POSIX, minimal). The day is a directory and the file
     carries the four elements that make it this writer's own, which is the
     grammar every day tree under `state/` uses - `ledger.segment_name` spells
-    it, so a trace and a ledger row cannot name one writer two ways.
+    it, so a trace and a ledger row cannot name one writer two ways. The day
+    directory is the registry's `traces` entry.
     """
-    year, month, day = _trace_day(run_id)
-    name = segment_name(
+    name = ledger.segment_name(
         run_id=run_id, attempt=attempt, job=job, shard=shard, suffix=TRACE_SUFFIX
     )
-    return f"{STATE_DIRNAME}/{TRACES_DIRNAME}/{year}/{month}/{day}/{name}"
+    return f"{ledger.relpath(LedgerName.TRACES, _trace_day(run_id))}/{name}"
 
 
 def committed_trace_path(
     state_dir: Path, *, run_id: str, attempt: int, job: ServerJob, shard: int
 ) -> Path:
     """The file one writer's committed trace is written to and pruned from."""
-    year, month, day = _trace_day(run_id)
-    name = segment_name(
+    name = ledger.segment_name(
         run_id=run_id, attempt=attempt, job=job, shard=shard, suffix=TRACE_SUFFIX
     )
-    return state_dir / TRACES_DIRNAME / year / month / day / name
+    return ledger.path(state_dir, LedgerName.TRACES, _trace_day(run_id)) / name
 
 
 def trace_date(path: Path, traces_root: Path) -> date | None:

@@ -42,9 +42,10 @@ from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Final
 
-from idhazh import month_partition
+from idhazh import ledger, month_partition
 from idhazh.contracts.base import canonical_json, derive_text_digest
 from idhazh.contracts.eval_row import ConfidenceBand
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.score_archive import (
     DECILES,
     Moment,
@@ -52,10 +53,6 @@ from idhazh.contracts.score_archive import (
     ScoreCohort,
     decile_of,
 )
-from idhazh.ledger import STATE_DIRNAME
-
-ARCHIVE_DIRNAME: Final = "score-archive"
-ARCHIVE_RELDIR: Final = f"{STATE_DIRNAME}/{ARCHIVE_DIRNAME}"
 
 #: What a cohort is one of. Every field changes what a number over the group
 #: means, which is the test for belonging here.
@@ -111,7 +108,7 @@ RAW_WINDOW_NOTE: Final = (
 
 def archive_relpath(month: str) -> str:
     """`state/score-archive/<YYYY-MM>.json` - the POSIX form, for a log line."""
-    return f"{ARCHIVE_RELDIR}/{month}.json"
+    return ledger.relpath(LedgerName.SCORE_ARCHIVE, month)
 
 
 def archive_path(state_dir: Path, month: str) -> Path:
@@ -119,9 +116,9 @@ def archive_path(state_dir: Path, month: str) -> Path:
 
     A caller passes the directory and the month and never the file name, so a
     second writer cannot spell the layout differently from the prune and have
-    both be right.
+    both be right. The registry's `score-archive` entry is that layout.
     """
-    return state_dir / ARCHIVE_DIRNAME / f"{month}.json"
+    return ledger.path(state_dir, LedgerName.SCORE_ARCHIVE, month)
 
 
 def archive_files(state_dir: Path) -> list[Path]:
@@ -132,8 +129,12 @@ def archive_files(state_dir: Path) -> list[Path]:
     recognises is `month_partition.is_month_stem`. The ledger directory beside it
     files by day and walks through `day_partition` instead; this one keeps the
     month rule because a summary of a month is what it holds.
+
+    The directory is the ledger's own name under the state root, the way the
+    item-health summary's reader finds its months: the registry has no builder
+    for a folder of month files.
     """
-    return month_partition.month_files(state_dir / ARCHIVE_DIRNAME, ".json")
+    return month_partition.month_files(state_dir / LedgerName.SCORE_ARCHIVE, ".json")
 
 
 def archived_months(state_dir: Path) -> list[str]:

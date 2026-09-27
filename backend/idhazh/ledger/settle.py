@@ -128,19 +128,19 @@ def keyed_paths(state_dir: Path, *, date: str | None) -> list[KeyedLedger]:
                 VisualPruneRow,
             ),
             KeyedLedger(
-                paths.path(state_dir, LedgerName.FITTED_THRESHOLDS, date),
+                paths.path(state_dir, LedgerName.CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS, date),
                 STORY_SIMILARITY_THRESHOLD_KEY,
                 FittedSimilarityThreshold,
                 FITTED_SIMILARITY_THRESHOLD_CARRIED,
             ),
             KeyedLedger(
-                paths.path(state_dir, LedgerName.SCORED_PAIRS, date),
+                paths.path(state_dir, LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS, date),
                 STORY_SIMILARITY_PAIR_KEY,
                 StorySimilarityPair,
                 STORY_SIMILARITY_PAIR_CARRIED,
             ),
             KeyedLedger(
-                paths.path(state_dir, LedgerName.SHARD_OUTCOMES, date),
+                paths.path(state_dir, LedgerName.LLM_COUNCIL_SHARD_OUTCOMES, date),
                 COUNCIL_SHARD_OUTCOME_KEY,
                 CouncilShardOutcome,
             ),
@@ -161,7 +161,7 @@ def keyed_paths(state_dir: Path, *, date: str | None) -> list[KeyedLedger]:
                 FITTED_SIMILARITY_THRESHOLD_CARRIED,
             )
             for file in day_partition.day_files(
-                paths.tree_root(state_dir, LedgerName.FITTED_THRESHOLDS)
+                paths.tree_root(state_dir, LedgerName.CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS)
             )
         ),
         *(
@@ -172,13 +172,13 @@ def keyed_paths(state_dir: Path, *, date: str | None) -> list[KeyedLedger]:
                 STORY_SIMILARITY_PAIR_CARRIED,
             )
             for file in day_partition.day_files(
-                paths.tree_root(state_dir, LedgerName.SCORED_PAIRS)
+                paths.tree_root(state_dir, LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS)
             )
         ),
         *(
             KeyedLedger(file, COUNCIL_SHARD_OUTCOME_KEY, CouncilShardOutcome)
             for file in day_partition.day_files(
-                paths.tree_root(state_dir, LedgerName.SHARD_OUTCOMES)
+                paths.tree_root(state_dir, LedgerName.LLM_COUNCIL_SHARD_OUTCOMES)
             )
         ),
     ]

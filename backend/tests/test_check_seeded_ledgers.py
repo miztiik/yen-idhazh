@@ -48,7 +48,7 @@ def test_the_audit_names_every_store_whose_header_ships_with_the_contract() -> N
 
     assert declared == {
         ledger.relpath(LedgerName.FEED_RETIREMENTS): FeedRetirementRow.csv_columns(),
-        ledger.relpath(LedgerName.SIMILARITY_HOLDOUT): SimilarityHoldoutPair.csv_columns(),
+        ledger.relpath(LedgerName.CONTENT_SIMILARITY_JUDGE_HOLDOUT_PAIRS): SimilarityHoldoutPair.csv_columns(),
     }
 
 
@@ -88,12 +88,12 @@ def test_a_store_under_an_older_header_is_a_fault_and_not_a_pass(tmp_path: Path)
     """
     a_seeded_checkout(tmp_path)
     narrow = SimilarityHoldoutPair.csv_columns()[:-1]
-    write_header(tmp_path / ledger.relpath(LedgerName.SIMILARITY_HOLDOUT), narrow)
+    write_header(tmp_path / ledger.relpath(LedgerName.CONTENT_SIMILARITY_JUDGE_HOLDOUT_PAIRS), narrow)
 
     findings = audit(tmp_path)
 
     broken = [finding for finding in findings if not finding.ok]
-    assert [finding.ledger.relpath for finding in broken] == [ledger.relpath(LedgerName.SIMILARITY_HOLDOUT)]
+    assert [finding.ledger.relpath for finding in broken] == [ledger.relpath(LedgerName.CONTENT_SIMILARITY_JUDGE_HOLDOUT_PAIRS)]
     assert broken[0].fault is not None
     assert str(len(narrow)) in broken[0].fault
 
@@ -102,6 +102,6 @@ def test_the_exit_code_is_what_a_shell_gates_on(tmp_path: Path) -> None:
     """Zero on a whole checkout, one on a broken one."""
     assert main(["--repo-root", str(a_seeded_checkout(tmp_path))]) == 0
 
-    (tmp_path / ledger.relpath(LedgerName.SIMILARITY_HOLDOUT)).unlink()
+    (tmp_path / ledger.relpath(LedgerName.CONTENT_SIMILARITY_JUDGE_HOLDOUT_PAIRS)).unlink()
 
     assert main(["--repo-root", str(tmp_path)]) == 1

@@ -1,4 +1,4 @@
-"""One row of the model validation ledger, filed on the day the run measured.
+"""One row of the candidate-models ledger, filed on the day the run measured.
 
 The leaderboard's ranking is a better prior than a guess. It is not evidence
 about this pipeline, because three variables sit between their number and ours:

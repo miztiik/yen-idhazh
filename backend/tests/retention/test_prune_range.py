@@ -55,16 +55,16 @@ DAY_PATHS: Final[dict[str, LedgerName]] = {
     "-".join(ledger.entry(name).prefix): name
     for name in (
         LedgerName.COUNTERFACTUAL_SCORES,
-        LedgerName.FITTED_THRESHOLDS,
-        LedgerName.HEALTH,
+        LedgerName.CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS,
+        LedgerName.FEED_HEALTH,
         LedgerName.HOST_FINGERPRINT,
         LedgerName.ITEM_HEALTH,
-        LedgerName.JUDGE_METRICS,
-        LedgerName.MERGE_LINE_HOLDOUT_SCORES,
-        LedgerName.SCORED_PAIRS,
+        LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS,
+        LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES,
+        LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS,
         LedgerName.SCORES,
         LedgerName.SCORE_INDEX,
-        LedgerName.SHARD_OUTCOMES,
+        LedgerName.LLM_COUNCIL_SHARD_OUTCOMES,
         LedgerName.VISUAL_PRUNES,
     )
 }

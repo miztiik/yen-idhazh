@@ -1,6 +1,6 @@
 # Growing Reads
 
-**Last Updated**: 2026-09-23
+**Last Updated**: 2026-09-27
 One question, asked of every read:
 
 > **Does this read cost more when a run appended more?**
@@ -265,6 +265,7 @@ reads are here and not how many. These are `backend/`'s;
 | `empty_column_census.census` | every shard of every day of `state/item-health/` and of `state/host-fingerprint/` | same question as the row above, asked of every published ledger rather than one, and crossed with the reader map on each contract so that a column with neither a reader nor a writer exits non-zero. A window cannot answer it for the same reason, and a test cannot hold it for a second one: an assertion that a column is empty goes red the day it first fills, which is a date rather than an edit. It is a verb a person types, off the daily path. Measured 2026-09-21: 29 day files and 14,026 item rows, 6 day files and 76 host rows |
 | `sample_sheet.index` | every committed `digest.json` under `frontend/public/digest/` | a drawn pair can straddle midnight, so its two articles are not always on the draw's own date - resolving against that date alone lost 2,035 of the 2,804 pairs drawn over 29 days. It is a verb a person types when labelling the holdout ([../how-to/label-the-similarity-holdout.md](../how-to/label-the-similarity-holdout.md)), off the daily path, and nothing in the pipeline reads what it writes |
 | `measure_retrieval.report` | every published day and every committed month shard | it asks whether the index names every published item. A window would compare the days inside it and say nothing about the ones outside, which is the only place a dropped item can hide. It is a verb a person types, off the daily path, and it was a gated test until 2026-09-22 |
+| `ledger_families.listing` | every file under every ledger's folder in `state/` | the question is how many files each ledger holds, and only a listing answers it. It is a verb a person types, off the daily path, and its test drives it from a registry and a state tree the test writes (2026-09-27) |
 
 **Two reads on this table are scheduled by nothing, and that is the whole of
 their cover.** `plan` is one of four verbs on

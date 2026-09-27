@@ -141,7 +141,7 @@ def mark(
 
 
 def write_marks(state: Path, marks: list[SimilarityHoldoutPair]) -> Path:
-    path = ledger.path(state, LedgerName.SIMILARITY_HOLDOUT)
+    path = ledger.path(state, LedgerName.CONTENT_SIMILARITY_JUDGE_HOLDOUT_PAIRS)
     path.parent.mkdir(parents=True, exist_ok=True)
     columns = SimilarityHoldoutPair.csv_columns()
     with path.open("w", encoding="utf-8", newline="") as handle:
@@ -154,7 +154,7 @@ def write_marks(state: Path, marks: list[SimilarityHoldoutPair]) -> Path:
 
 def committed_rows(state: Path, date: str) -> list[MergeLineHoldoutScore]:
     """The rows one day file holds, read back through the contract that wrote them."""
-    path = ledger.path(state, LedgerName.MERGE_LINE_HOLDOUT_SCORES, date)
+    path = ledger.path(state, LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES, date)
     with path.open("r", encoding="utf-8", newline="") as handle:
         return [MergeLineHoldoutScore.from_csv_row(row) for row in csv.DictReader(handle)]
 
@@ -332,7 +332,7 @@ def test_the_row_is_written_where_the_ledger_says_and_reads_back(tmp_path: Path)
     assert row is not None
     written = committed_rows(state, SCORED_ON)
     assert written == [row]
-    assert ledger.path(state, LedgerName.MERGE_LINE_HOLDOUT_SCORES, SCORED_ON).is_file()
+    assert ledger.path(state, LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES, SCORED_ON).is_file()
 
 
 def test_a_second_attempt_at_one_run_leaves_one_row(tmp_path: Path) -> None:
@@ -401,7 +401,7 @@ def test_a_reading_below_the_floor_writes_no_row_at_all(tmp_path: Path) -> None:
     )
 
     assert row is None
-    assert not ledger.path(state, LedgerName.MERGE_LINE_HOLDOUT_SCORES, SCORED_ON).exists()
+    assert not ledger.path(state, LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES, SCORED_ON).exists()
 
 
 def test_a_marked_file_that_is_not_there_writes_no_row(tmp_path: Path) -> None:

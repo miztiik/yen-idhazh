@@ -164,7 +164,7 @@ def seed_feed_health(
     """
     return ledger.write_segment(
         state_dir,
-        LedgerName.HEALTH,
+        LedgerName.FEED_HEALTH,
         list(rows),
         run_id=run_id if run_id is not None else f"{date}-1",
         attempt=attempt,

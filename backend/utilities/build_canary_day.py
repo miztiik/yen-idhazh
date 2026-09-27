@@ -1073,7 +1073,7 @@ def health(state: Path) -> int:
     for date in (YESTERDAY, DATE):
         ledger.write_segment(
             state,
-            LedgerName.HEALTH,
+            LedgerName.FEED_HEALTH,
             [row for row in rows if row.date == date],
             run_id=f"{date}-1",
             attempt=1,
@@ -1168,7 +1168,7 @@ def holdout(state: Path, day: DigestDay) -> int:
         )
     )
 
-    path = ledger.path(state, LedgerName.SIMILARITY_HOLDOUT)
+    path = ledger.path(state, LedgerName.CONTENT_SIMILARITY_JUDGE_HOLDOUT_PAIRS)
     path.parent.mkdir(parents=True, exist_ok=True)
     columns = SimilarityHoldoutPair.csv_columns()
     lines = [",".join(columns)]
@@ -1587,10 +1587,8 @@ def main() -> int:
     print(f"wrote {(day_dir(args.out, DATE) / 'run.json').as_posix()}: {len(runs.runs)} runs")
     print(f"wrote {len(quiet)} quiet days, {quiet[0]} to {quiet[-1]}")
     print(f"wrote {args.state.as_posix()}/feed-health: {checks} feed results")
-    print(
-        f"wrote {ledger.path(args.state, LedgerName.SIMILARITY_HOLDOUT).as_posix()}: "
-        f"{marks} hand-marked pairs"
-    )
+    marked = ledger.path(args.state, LedgerName.CONTENT_SIMILARITY_JUDGE_HOLDOUT_PAIRS)
+    print(f"wrote {marked.as_posix()}: {marks} hand-marked pairs")
     print(
         f"wrote {(args.out.parent / source_health.PUBLIC_FILENAME).as_posix()}: "
         f"{census} sources"

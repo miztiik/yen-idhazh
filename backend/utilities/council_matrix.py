@@ -34,7 +34,7 @@ PLATFORM_JOB_CEILING: Final = 20
 #: tenants named. Built from the ledger's registry prefix rather than spelled, so
 #: a move of the tree moves this with it.
 COUNCIL_LEDGER: Final = "/".join(
-    (ledger.STATE_DIRNAME, *ledger.entry(LedgerName.SHARD_OUTCOMES).prefix)
+    (ledger.STATE_DIRNAME, *ledger.entry(LedgerName.LLM_COUNCIL_SHARD_OUTCOMES).prefix)
 )
 
 

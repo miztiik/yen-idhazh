@@ -266,7 +266,7 @@ def feed_health_history(state_dir: Path, months: list[str], *, day_of_month: int
         day = f"{month}-{day_of_month:02d}"
         ledger.write_segment(
             state_dir,
-            LedgerName.HEALTH,
+            LedgerName.FEED_HEALTH,
             [
                 FeedHealthRow(
                     version=FeedHealthRow.schema_version(),
@@ -294,7 +294,7 @@ def feed_health_months(state_dir: Path) -> list[str]:
     days, so a test about what the prune kept asks in months.
     """
     return sorted(
-        day_shards.shards_by_month(ledger.tree_root(state_dir, LedgerName.HEALTH), days=UNBOUNDED_WINDOW)
+        day_shards.shards_by_month(ledger.tree_root(state_dir, LedgerName.FEED_HEALTH), days=UNBOUNDED_WINDOW)
     )
 
 

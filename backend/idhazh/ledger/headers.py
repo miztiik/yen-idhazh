@@ -12,7 +12,6 @@ import csv
 from collections.abc import Callable, Collection
 from pathlib import Path
 
-from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.ledger.csv_file import CsvContract, _csv_line, read_header
 
 
@@ -172,8 +171,3 @@ def migrate_header(
     if kept != lines:
         path.write_text("".join(kept), encoding="utf-8", newline="")
     return moved
-
-
-def _as_item_health_row(raw: dict[str, str]) -> dict[str, str]:
-    """The contract's own reader, used as a row-to-row migration."""
-    return refiler(ItemHealthRow)(raw)

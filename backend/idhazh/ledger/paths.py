@@ -46,37 +46,43 @@ _PERIOD: Final[dict[Grain, str]] = {
 _DAY_GRAINS: Final[frozenset[Grain]] = frozenset({Grain.DAY_FILE, Grain.DAY_TREE})
 
 
-def _load(config_dir: Path) -> dict[LedgerName, LedgerEntry]:
+def _load(config_dir: Path) -> LedgersConfig:
     """Read the registry, or refuse naming the file an operator has to edit."""
     text = (config_dir / REGISTRY_FILENAME).read_text(encoding="utf-8")
     try:
-        registry = LedgersConfig.from_json(text)
+        return LedgersConfig.from_json(text)
     except ValidationError as error:
         raise ValueError(f"config/{REGISTRY_FILENAME} is refused: {error}") from error
-    return {entry.name: entry for entry in registry.ledgers}
 
 
-_REGISTRY: Final[dict[LedgerName, LedgerEntry]] = _load(config.DEFAULT_CONFIG_DIR)
+_CONFIG: Final[LedgersConfig] = _load(config.DEFAULT_CONFIG_DIR)
+
+#: Every ledger in one table, whichever family lists it. An address is a fact
+#: about one ledger, so no builder here needs to know the family.
+_REGISTRY: Final[dict[LedgerName, LedgerEntry]] = {
+    held.name: held for family in _CONFIG.families for held in family.ledgers
+}
 
 
 def entry(ledger: LedgerName) -> LedgerEntry:
-    """One ledger's registry row: its state, its grain and where it sits."""
+    """One ledger's registry row: its grain and where it sits."""
     return _REGISTRY[ledger]
 
 
 def claimed_roots() -> frozenset[str]:
-    """Every child of `state/` the registry claims, whatever state the ledger is in.
+    """Every family the registry names, whatever its lifecycle status.
 
     What `prune-state` subtracts from the children of `state/` before treating
-    what is left as a trial run's tree. A live ledger, a paused one and a retired
-    one are all claimed: the state says what a writer may do, never whether the
-    rows survive.
+    what is left as a trial run's tree. An active family, a paused one and a
+    retired one are all claimed: the status says what a writer may do, never
+    whether the rows survive.
 
-    A ledger whose prefix is empty is a file at the top of `state/` and claims no
-    directory, which is the right answer - the sweep only ever looks at
-    directories.
+    A family is named for its top-level folder, so each name here is a child of
+    `state/`. `feed-retirements` is the one name that is a file's stem rather
+    than a folder - its only ledger is `state/feed-retirements.csv` - and
+    carrying it is harmless, because the sweep only ever looks at directories.
     """
-    return frozenset(held.prefix[0] for held in _REGISTRY.values() if held.prefix)
+    return frozenset(family.name for family in _CONFIG.families)
 
 
 def _segments(held: LedgerEntry, covers: str | None) -> tuple[str, ...]:

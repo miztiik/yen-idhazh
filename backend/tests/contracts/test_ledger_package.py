@@ -45,18 +45,15 @@ WRITTEN_INTO: Final[tuple[LedgerName, ...]] = tuple(
     sorted(DAY_TREES, key=lambda member: member.value)
 )
 
-#: The two modules outside the package that mint a file name out of writer
-#: identity, and why each one is not the ledger's to name.
+#: The one module outside the package that mints a file name out of writer
+#: identity, and why it is not the ledger's to name.
 #:
-#: `state/digest-fragments/` is a `state/` tree the registry does not own -
-#: `prune-state` protects it by asking `assemble` for the directory name - so its
-#: file name is minted beside the tree that owns it. `backend/var/qualification/`
-#: is not under `state/` at all; it is a build artefact a reviewer reads.
+#: `backend/var/qualification/` is not under `state/` at all; it is a build
+#: artefact a reviewer reads. Every name under `state/` is minted inside the
+#: package, the digest fragment's included.
 #:
-#: Written out so a THIRD one fails here rather than joining them unnoticed.
-MINTS_ITS_OWN_NAME: Final[frozenset[str]] = frozenset(
-    {"backend/idhazh/assemble.py", "backend/idhazh/stages/qualify.py"}
-)
+#: Written out so a SECOND one fails here rather than joining it unnoticed.
+MINTS_ITS_OWN_NAME: Final[frozenset[str]] = frozenset({"backend/idhazh/stages/qualify.py"})
 
 #: Names whose whole point is that one module outside the package asks for them
 #: rather than carrying a copy. `path_classes` answers whether a committed path
@@ -380,8 +377,8 @@ def test_nothing_outside_the_package_mints_a_name_under_state() -> None:
     """A producer hands the ledger its rows and its writer identity, not a name.
 
     A literal file suffix joined to a cell of writer identity is a file name
-    being assembled. The two places outside the package that do it are named
-    above with the reason; a third fails here rather than arriving unnoticed.
+    being assembled. The one place outside the package that does it is named
+    above with the reason; a second fails here rather than arriving unnoticed.
     """
     minting: dict[str, list[str]] = {}
     for relpath, tree in _backend_modules().items():

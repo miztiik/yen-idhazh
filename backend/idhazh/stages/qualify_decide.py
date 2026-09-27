@@ -116,7 +116,7 @@ def stage_qualify_decide(
     # is built from.
     ledger.write_segment(
         common.STATE_ROOT,
-        LedgerName.VALIDATION,
+        LedgerName.CANDIDATE_MODELS,
         [
             ValidationRow(
                 version=ValidationRow.schema_version(),

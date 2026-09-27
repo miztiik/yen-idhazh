@@ -1,6 +1,6 @@
 # Glossary
 
-**Last Updated**: 2026-09-26
+**Last Updated**: 2026-09-27
 
 The words this project uses for its own machinery, and where each one is defined.
 
@@ -41,10 +41,11 @@ a doc is a fine change to make; moving it into *this* page is not.
 | **council** | The nightly workflow where models judge borderline same-story pairs and fit the merge line | [../architecture/publishing/llm-council.md](../architecture/publishing/llm-council.md) |
 | **dispatch** | A workflow run somebody started by hand, rather than one the schedule started | [../reference/github-actions.md](../reference/github-actions.md) |
 | **drift gate** | Retired on 2026-09-23 with the generated layer it checked. What binds the frontend's hand copies now is three tests in `backend/tests/contracts/` | [../architecture/contracts/schemas.md](../architecture/contracts/schemas.md) |
+| **family** | One top-level folder under `state/` and the ledgers inside it. It carries what is decided for the folder as a whole: its lifecycle status (`active`, `paused` or `retired`), one plain line saying what it holds, and the UTC day it was onboarded. `content-similarity-judge` is one family of seven ledgers; most families hold one | [../architecture/contracts/state-ledgers.md](../architecture/contracts/state-ledgers.md); the list is `config/ledgers.json`, and `backend/utilities/ledger_families.py` prints it |
 | **fold** | One of the four retention policies: keep the durable total, drop the per-item grain. Compaction uses the same word for what it does to a closed day | [adaptive-pruning.md](adaptive-pruning.md) |
 | **holdout** | Labelled pairs kept out of fitting, so a fitted threshold is scored against something it has never seen | [../how-to/label-the-similarity-holdout.md](../how-to/label-the-similarity-holdout.md) |
 | **item** | One source URL and everything derived from it. The atom of the whole system | [pipeline-loop.md](pipeline-loop.md) |
-| **ledger** | A committed file under `state/` that one run writes so a later run can read a fact it found. **The directory is a ledger too**: `state/seen/` is the seen ledger and `state/item-health/` is the item-health ledger. The pipeline has no memory of its own: every run starts on a fresh machine with a fresh checkout | [../architecture/contracts/state-ledgers.md](../architecture/contracts/state-ledgers.md); which ones exist is `config/ledgers.json` and the code is `backend/idhazh/ledger/` |
+| **ledger** | A committed file under `state/` that one run writes so a later run can read a fact it found: one row shape, filed one way, at one address. **The directory is a ledger too**: `state/seen/` is the seen ledger and `state/item-health/` is the item-health ledger. Every ledger sits in exactly one **family**. The pipeline has no memory of its own: every run starts on a fresh machine with a fresh checkout | [../architecture/contracts/state-ledgers.md](../architecture/contracts/state-ledgers.md); which ones exist is `config/ledgers.json` and the code is `backend/idhazh/ledger/` |
 | **partition** | One file holding one period of a collection that grows. The directory is the collection and the filename says the period | [partitions.md](partitions.md) |
 | **qualification** | The gates a candidate model must clear before it may be adopted, and what clearing them proves | [qualification.md](qualification.md) |
 | **run** | One turn of the pipeline. The schedule turns it five times a day | [pipeline-loop.md](pipeline-loop.md) |

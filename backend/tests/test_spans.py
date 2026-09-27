@@ -43,8 +43,9 @@ from conftest import (
 )
 from pytest import MonkeyPatch
 
-from idhazh import config, telemetry
+from idhazh import config, ledger, telemetry
 from idhazh.contracts.feed_health import FetchOutcome
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.run_plan import RunPlan
 from idhazh.fetch import FetchResult
 from idhazh.stages import common
@@ -246,7 +247,7 @@ def trace_a_run(
             fetcher=lambda _url: FetchResult(FetchOutcome.OK, status=200, body=page),
             model_endpoint=server.endpoint,
         )
-    return spans_of(common.STATE_ROOT / telemetry.TRACES_DIRNAME)
+    return spans_of(ledger.tree_root(common.STATE_ROOT, LedgerName.TRACES))
 
 
 def assert_nothing_leaked(spans: list[dict[str, Any]], planted: tuple[str, ...]) -> None:
@@ -368,7 +369,7 @@ def test_tracing_off_writes_nothing_at_all(tmp_path: Path, monkeypatch: MonkeyPa
             model_endpoint=server.endpoint,
         )
 
-    assert not (common.STATE_ROOT / telemetry.TRACES_DIRNAME).exists()
+    assert not ledger.tree_root(common.STATE_ROOT, LedgerName.TRACES).exists()
     assert not (common.STATE_ROOT / "span-rollup").exists()
 
 

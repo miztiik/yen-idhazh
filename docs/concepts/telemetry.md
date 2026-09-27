@@ -498,7 +498,7 @@ Read this table before proposing a merge. A ledger folds only when it fails **ev
 | --- | --- | --- | --- |
 | `item-health` | an item | 14 months | **the census.** Whatever folds, folds here |
 | `visual-prunes` | a run | with the pictures | **FOLD** into a run-grain ledger. 41 rows, and a run is not an item |
-| `<trial>/validation` | a model | never | **MOVED 2026-09-18** to `state/<run.trial_state_dirname>/validation/<YYYY>/<MM>/<DD>/`, where it was `state/validation-<date>.csv` at the root of `state/`. A date in a filename is not a partition, and a hardcoded path let a trial dispatch write production state |
+| `<trial>/candidate-models` | a model | never | **MOVED 2026-09-18** to `state/<run.trial_state_dirname>/candidate-models/<YYYY>/<MM>/<DD>/`, where it was `state/validation-<date>.csv` at the root of `state/`. A date in a filename is not a partition, and a hardcoded path let a trial dispatch write production state |
 | `scores` | an observation | 14 months | **KEEP.** One item holds several rows - re-measurement is the point, and an item key allows only one |
 | `score-index` | a digest | with the scores | **KEEP.** 76 bytes an observation against 819 for a census row. Reading the wide ledger to answer a narrow question costs 10.8 times more |
 | `seen` | an address | 90 days | **KEEP.** 76,834 addresses against 12,217 planned items. Most were never planned, so most can never have a row |
