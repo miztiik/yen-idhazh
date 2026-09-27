@@ -24,6 +24,13 @@ import { modelWork } from '../src/lib/server/model-work';
 
 function recordText(scored: number, drift = 0, suspect = 0): string {
 	return JSON.stringify({
+		// The producer declares these three as required non-null ints on every
+		// record it writes, so the reader treats an absent one as a malformed
+		// record rather than as an older shape. A helper that left them out would
+		// be asserting a shape production has never written.
+		items_planned: scored + 2,
+		items_published: scored + 1,
+		items_failed: 1,
 		summaries_scored: scored,
 		determinism_violations: drift,
 		extraction_suspect: suspect
@@ -49,10 +56,13 @@ test('dayMetrics opens only the dates asked for, whatever else is in the tree', 
 		expect([...one.keys()]).toEqual(['2026-08-21']);
 		expect(one.get('2026-08-21')).toEqual({
 			date: '2026-08-21',
+			itemsPlanned: 7,
+			itemsPublished: 6,
+			itemsFailed: 1,
 			summariesScored: 5,
 			determinismViolations: 1,
 			extractionSuspect: 2,
-			// This fixture carries only the strict triple, so the band's two extra
+			// This fixture carries only the required cells, so the band's two extra
 			// counts read null (they are proven present further down).
 			notSure: null,
 			itemsTruncated: null,
@@ -134,6 +144,35 @@ test('dayMetrics degrades a malformed record instead of failing the build', () =
 		// the ledger for those two days. The good day is read.
 		expect([...found.keys()]).toEqual(['2026-08-22']);
 		expect(found.get('2026-08-22')?.summariesScored).toBe(4);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+test('an item count missing is a malformed record, not an older shape', () => {
+	// Every one of the 36 committed records carries all three, and the producer
+	// declares them as required non-null ints, so an absent one means the file is
+	// wrong rather than old. It drops the day to the ledger, exactly as a missing
+	// `summaries_scored` does. The band's two counts below are the other case -
+	// they really do predate their field, so they read null instead.
+	const root = mkdtempSync(join(tmpdir(), 'day-metrics-'));
+	try {
+		const whole = JSON.parse(recordText(4)) as Record<string, unknown>;
+		for (const [index, cell] of ['items_planned', 'items_published', 'items_failed'].entries()) {
+			const { [cell]: _dropped, ...short } = whole;
+			writeRecord(root, `2026-08-0${index + 1}`, JSON.stringify(short));
+		}
+		writeRecord(root, '2026-08-04', JSON.stringify({ ...whole, items_planned: 'ten' }));
+		writeRecord(root, '2026-08-05', recordText(4));
+
+		const found = dayMetrics(
+			['2026-08-01', '2026-08-02', '2026-08-03', '2026-08-04', '2026-08-05'],
+			root
+		);
+		expect([...found.keys()]).toEqual(['2026-08-05']);
+		expect(found.get('2026-08-05')?.itemsPlanned).toBe(6);
+		expect(found.get('2026-08-05')?.itemsPublished).toBe(5);
+		expect(found.get('2026-08-05')?.itemsFailed).toBe(1);
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}
@@ -222,6 +261,9 @@ test('dayMetrics reads the band counts from bands.low and items_truncated', () =
 			root,
 			'2026-08-21',
 			JSON.stringify({
+				items_planned: 8,
+				items_published: 7,
+				items_failed: 1,
 				summaries_scored: 5,
 				determinism_violations: 1,
 				extraction_suspect: 2,
@@ -240,7 +282,7 @@ test('dayMetrics reads the band counts from bands.low and items_truncated', () =
 test('dayMetrics leaves the band counts null on a record without them', () => {
 	const root = mkdtempSync(join(tmpdir(), 'day-metrics-'));
 	try {
-		// A record carrying only the strict triple still reads, so the model route
+		// A record carrying only the required cells still reads, so the model route
 		// keeps its correction; the band's two extra counts fall to null for that day
 		// rather than dropping the whole record.
 		writeRecord(root, '2026-08-21', recordText(5, 1, 2));

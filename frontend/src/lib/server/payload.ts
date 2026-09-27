@@ -776,11 +776,12 @@ export function itemHealthRows(days: number = LEDGER_WINDOW_DAYS): CsvTable {
 	return settledDayShards(join(STATE_ROOT, 'item-health'), ITEM_HEALTH_KEY, ITEM_HEALTH_RULE, days);
 }
 
-/** The published-set counts a run settled about one day.
+/** The counts a run settled about one day.
  *
  * Read back from the committed day-metrics record so the console does not
- * re-count them by walking the whole score ledger. All three count the day's
- * *distinct published* items, never score-ledger rows: the ledger dedupes by
+ * re-count them by walking the whole score ledger. The three checker counts -
+ * scored, drift, suspect - count the day's *distinct published* items, never
+ * score-ledger rows: the ledger dedupes by
  * measurement, so one item re-scored under a new stamp keeps both rows, and a
  * run may score an item it then drops (`backend/idhazh/telemetry/publish/day_metrics.py`).
  * The measurement distributions the console draws still read every row - only
@@ -790,6 +791,14 @@ export function itemHealthRows(days: number = LEDGER_WINDOW_DAYS): CsvTable {
  */
 export interface DayMetrics {
 	date: string;
+	/** Items the day's runs set out to write, summed across the runs. */
+	itemsPlanned: number;
+	/** The day's distinct published set. Not a share of `itemsPlanned`: a run
+	 * skips an item the day already carries, so the three counts overlap and
+	 * leave a remainder nobody names. */
+	itemsPublished: number;
+	/** Items that failed, summed across the runs. */
+	itemsFailed: number;
 	/** Distinct published items the checker gave a faithfulness score. */
 	summariesScored: number;
 	/** Of those, the ones whose identical inputs produced different words. */
@@ -883,12 +892,24 @@ export function dayMetrics(
 			const scored = parsed.summaries_scored;
 			const drift = parsed.determinism_violations;
 			const suspect = parsed.extraction_suspect;
+			const planned = parsed.items_planned;
+			const published = parsed.items_published;
+			const failed = parsed.items_failed;
 			if (
 				typeof scored !== 'number' ||
 				typeof drift !== 'number' ||
 				typeof suspect !== 'number'
 			) {
 				throw new TypeError('a day-metrics count is missing or not a number');
+			}
+			// The producer declares all three as required non-null ints, so an
+			// absent one is a malformed record rather than an older shape.
+			if (
+				typeof planned !== 'number' ||
+				typeof published !== 'number' ||
+				typeof failed !== 'number'
+			) {
+				throw new TypeError('a day-metrics item count is missing or not a number');
 			}
 			// The band's two counts are read leniently: a record predating either
 			// field drops to null for that count rather than dropping the whole day,
@@ -899,6 +920,9 @@ export function dayMetrics(
 			const truncated = parsed.items_truncated;
 			found.set(date, {
 				date,
+				itemsPlanned: planned,
+				itemsPublished: published,
+				itemsFailed: failed,
 				summariesScored: scored,
 				determinismViolations: drift,
 				extractionSuspect: suspect,

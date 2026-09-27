@@ -16,7 +16,7 @@ const FILES: Record<Exclude<FrontendGroup, 'console'>, readonly string[]> = {
 		'one-pass-reductions',
 		'preview-port',
 		'processor-lost', 'prompt-reuse',
-		'run-axis',
+		'run-axis', 'run-yield',
 		'settings-moved',
 		'telemetry-header', 'telemetry-hold', 'throughput-window', 'time-split',
 		'verdict-split', 'vocabulary',

@@ -138,6 +138,10 @@ form. A question title asks the reader to hold it while he reads the panel; a
 noun phrase names what is in front of him. `What`, `Which` and `How` stay legal
 openings, because they head a free relative rather than a question.
 
+The first of those four has since moved again: the two-slice donut it captioned
+was replaced by a per-day chart, and its title is now `Items published against
+items planned`. The rule is the same and the check follows the new title.
+
 **On Hardware the rule goes further: a title states the question the panel
 answers and borrows no word from how the thing is built.** The grammar above is
 necessary and is not sufficient - `Prompt cache` and `Context headroom` both pass

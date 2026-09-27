@@ -408,15 +408,18 @@ allowed in front of it is that one named file. Anything else of ours in front
 turns the test red, and so does one more request of any kind. When the server
 loads go the band becomes index 0 and both lines still hold.
 
-**Four charts on `/console/` moved to the browser** - the run donut, the
-per-article cost, the failure mix and the flow diagram. They were 143 KB of
-finished SVG, which is what stood between the document and the bar after the
-rows left. Each keeps a text form beside it, so a reader with no script loses
-the picture and none of the numbers: the cost days are a list, the flow is a
-stepped list with every count and share, the mix is its strip, and the donut is
-its own sentence. `Chart` takes a `pending` line for the gap before anything
-draws, because a box that is simply empty says nothing about which of the two
-nothings happened.
+**Three charts on `/console/` are drawn in the browser** - the per-article cost,
+the failure mix and the flow diagram. There were four when this was measured:
+the run donut was the fourth, and it has since been replaced by the run-yield
+panel, which is server-drawn inline SVG rather than a browser chart. The four
+were 143 KB of finished SVG, which is what stood between the document and the
+bar after the rows left; the three that remain are less than that, and the
+figure has not been re-measured because nothing turns on it. Each keeps a text
+form beside it, so a reader with no script loses the picture and none of the
+numbers: the cost days are a list, the flow is a stepped list with every count
+and share, and the mix is its strip. `Chart` takes a `pending` line for the gap
+before anything draws, because a box that is simply empty says nothing about
+which of the two nothings happened.
 
 **The band's months list is the union across all five fetched series**, not the
 run-day months alone. The field promised "every month a payload shard exists
