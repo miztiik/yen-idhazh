@@ -88,7 +88,7 @@ def test_the_oracle_fifteen_months_leave_fourteen_of_each_and_one_verified_summa
     # The expired month survives as one summary, and the summary is checked
     # against the file it replaced rather than against the code that wrote it.
     aggregate = ledger.path(state, LedgerName.ITEM_HEALTH_SUMMARY, expired)
-    assert [path.stem for path in month_shards(state / LedgerName.ITEM_HEALTH_SUMMARY)] == [
+    assert [path.stem for path in month_shards(ledger.tree_root(state, LedgerName.ITEM_HEALTH_SUMMARY))] == [
         expired
     ]
     assert totals_from_aggregate(ledger.load_item_health_summary(aggregate)) == totals_from_shard(

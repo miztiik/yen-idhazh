@@ -1,6 +1,6 @@
 # Plan 50 - Idhazh Gardener: one utility tends every ledger
 
-**Last Updated**: 2026-09-26
+**Last Updated**: 2026-09-27
 
 **Level**: 5 (CLAUDE.md section 6). It changes a persisted contract, the project's persistence format, and the one workflow that force-pushes `main`. The owner's rulings recorded in section 0 and in each row ARE the design consultation; the ESCALATE triggers name what still stops a worker.
 
@@ -15,7 +15,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | **Blocked by** | **Nothing. Row 5's only blocker was plan 54's row D1, which landed; plan 54 closed on 2026-09-27 and its plan-doc is deleted.** **Plan 54 decommissioned `state/day-validations/` end to end** - the contract, the `LedgerName` member, the `config/ledgers.json` entry, the retention pass, the knob and the committed tree - so three statements in this plan about that ledger are written against a tree that no longer exists; each is marked below. **The work that made `backend/idhazh/ledger/` a package has landed** (pull requests #1107 to #1115, merged 2026-09-26 and 2026-09-27), so row 2 of this plan already has the package to live in, `LedgerName` in `backend/idhazh/contracts/ledger_name.py` to type its first argument, `backend/idhazh/ledger/paths.py` to add its builders to, and `backend/idhazh/ledger/filenames.py` to add `unit_id`, `file_id` and `_pack_v8` to. What that work left behind is [`../docs/architecture/contracts/state-ledgers.md`](../docs/architecture/contracts/state-ledgers.md): the registry, the seven modules behind the door, and the rule that `ledger/__init__.py` holds imports and nothing else.<br><br>That same work renamed `ledger.py` to `ledger/__init__.py` and `paths.py` to `path_classes.py`, and this file was swept against what it shipped on 2026-09-27. A worker who finds a stale module name in this plan and cannot find the file should stop and say so, never substitute the name it guesses - that guess is how a row silently builds against the wrong module. |
 | **Verify before row 5** | **Plan 54 deletes the `day-validations` ledger. This plan checks that it landed and stops if it did not.** Three reads, before row 5 starts, all of which must come back empty: `git ls-files state/day-validations` (the committed tree); `git grep -n -e day-validations -e day_validation -- config` (the registry entry and the knob); `git grep -n -e DAY_VALIDATION -e prune_day_validation -- backend/idhazh` (the `LedgerName` member, its key and rule, and the pass). **Any one of the three finding something is a stop.** Say what was found and wait for a person. **Rows 1 to 4 do not wait**: none of them touches anything plan 54 deletes, checked 2026-09-27. The failure this prevents is row 5's: it turns every pass in `backend/idhazh/stages/prune_state.py` into a task, and while `_prune_day_validation_shards` is still in that module a worker following the rule writes a task, a declaration and a module for a ledger plan 54 is about to delete - three files plan 54 then has to find, and a declaration ESCALATE trigger 6 guards from the day it lands. **The ledger is no longer claimed twice**: `config/ledgers.json` gave it an entry, so the trial sweep has not treated it as a stray since 2026-09-27. |
 | Why this plan exists | Four programs delete things on four unrelated schedules, one `--dry-run` flag covers eleven independent decisions, every ledger writes its own format by hand, and two schedulers disagree about when a day is closed. This makes one utility with one verb per task, one config, one persistence door, one record and one safe way to commit. |
-| Hard scope - in | - `backend/idhazh/ledger/` is the one door a payload takes to disk, parquet or JSON, with exactly one module importing the parquet engine.<br>- `state/raw/<ledger>/<YYYY>/<MM>/<DD>/<file_id>.parquet` is where a new writer files; `state/compact/<ledger>/<period>/...` is what compaction leaves, named for the period it covers - `daily/2026/09/23.parquet`, `monthly/2026/08.parquet`.<br>- `backend/idhazh/gardener/` holds the registry, the schedule, the record and the commit loop.<br>- **Ten of the eleven passes** in `backend/idhazh/stages/prune_state.py` become tasks, each with its own window and its own `dry_run`; plan 54 deletes the eleventh before row 5 runs.<br>- The corpus squash leaves inline shell for a tested Python module.<br>- `backend/utilities/prune_artifacts.py` is deleted and its work becomes two tasks; a utility that is also a task is two places to look.<br>- `.github/workflows/prune.yml` names no task: a standard-library `plan` job splits the tasks into shards, a sharded `run-tasks` job runs them, a `history` job reads its own dueness and rewrites the corpus last.<br>- `digest.yml`'s compaction step moves to the gardener, so one scheduler decides when a day is closed.<br>- **Three of the ten ledgers a console route reads move to parquet here**: `item-health`, `scores` and `host-fingerprint`, plus the two small ledgers that prove the door. **The fourth, `span-rollup`, is deleted rather than migrated**, so row 10 is collapsed and the deletion goes to plan 52's first row beside the projection that row already removes. That is three producers in two modules, and it is what lets a later plan delete the six projections under `frontend/public/` that exist only because the build had to do the work in advance. |
+| Hard scope - in | - `backend/idhazh/ledger/` is the one door a payload takes to disk, parquet or JSON, with exactly one module importing the parquet engine.<br>- `state/raw/<ledger>/<YYYY>/<MM>/<DD>/<file_id>.parquet` is where a new writer files; `state/compact/<ledger>/<period>/...` is what compaction leaves, named for the period it covers - `daily/2026/09/23.parquet`, `monthly/2026/08.parquet`.<br>- `backend/idhazh/gardener/` holds the registry, the schedule, the record and the commit loop.<br>- **Ten of the eleven passes** in `backend/idhazh/stages/prune_state.py` become tasks, each with its own window and its own `dry_run`; plan 54 deletes the eleventh before row 5 runs.<br>- The corpus squash leaves inline shell for a tested Python module.<br>- `backend/utilities/prune_artifacts.py` is deleted and its work becomes two tasks; a utility that is also a task is two places to look.<br>- `.github/workflows/prune.yml` names no task: a standard-library `plan` job splits the tasks into shards, a sharded `run-tasks` job runs them, a `history` job reads its own dueness and rewrites the corpus last.<br>- `digest.yml`'s compaction step moves to the gardener, so one scheduler decides when a day is closed.<br>- **Three of the ten ledgers a console route reads move to parquet here**: `item-health`, `scores` and `host-fingerprint`, plus the two small ledgers that prove the door. **The fourth, `span-rollup`, is deleted rather than migrated**, so row 10 is collapsed and the deletion goes to plan 52's row for the last console route to move, beside the `span-rollup` projection that row already removes. That is three producers in two modules, and it is what lets a later plan delete the six projections under `frontend/public/` that exist only because the build had to do the work in advance. |
 | Hard scope - out | see the table below |
 | ESCALATE triggers | 1. Removing the `pruned_date` read-side alias - stop before the commit that removes it, not before the commit that adds it. **The alias has two homes**: `CorpusMeta`'s validator and the standard-library reader the `history` job runs, which cannot import the contract. Row 8 removes both or neither.<br>2. Any behaviour change to the tip-moved refusal in `backend/utilities/push_rewritten_history.py`, including its exit code.<br>3. Migrating any CSV tree to `state/raw/` or to parquet beyond the six named in section 5.8 as moved by rows 3, 9 and 10.<br>4. A measured figure that contradicts section 4, **or** a measured chain in front of the force push that does not fit the gap it must sit in - the remedy for the second is a cron change, which moves when the site publishes.<br>5. **Moving a ledger that any build-time reader under `frontend/src/lib/server/` opens, before that reader's answer is settled.** Row 9 fires it. Three answers, each with its price: a build-time parquet reader (a second engine importer in `frontend/`, which row 7 decision 11 forbids, plus a Node parquet dependency); a dual write for one release (two writers of one fact, and somebody must remember to stop); or holding each reader until its route moves to the browser (blocks row 9 on route rows that do not exist yet).<br><br>**Four earlier triggers became controls instead**, because a control that fires is a red test and a test is a better stop than a note: a window including today is refused by name at config load (section 5.2); a second parquet importer is caught by row 2's oracle; a writer outside the two roots raises in `paths` (section 5.4); and a declaration no module serves fails the two-way refusal (section 5.2).<br><br>6. **Changing any task's `window`, or any compaction's `monthly_window`, from `{unit: forever}` to a bounded window, or any task's `dry_run` from `true` to `false`.** Both are the first deletion that tree has ever seen. Neither is reversible past the corpus squash, and no test can see that the number is wrong. Stop before the commit that makes the change, not before the commit that adds the member. |
 | Chosen strategy | Register the two new roots, lay the persistence door, then move tasks in one PR per outcome, reader before writer, behaviour unchanged until the row that changes it. Ruled by Fowler (CLAUDE.md section 14). |
@@ -28,7 +28,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | Migrating the rest of `state/` to `state/raw/` | Two layouts coexist: the gardener's own ledgers and the two row 3 takes sit under `state/raw/`, the rest stay where they are. Row 2 registers both roots so nothing reads them as strays. Section 5.8 lists what is left, with its producer and its consumer, so the later plan starts from a map rather than a survey | Its own plan. The owner's direction on 2026-09-24 is that `state/raw/` is where every writer lands **in future**; that is a rule for new writers, and moving committed data is a separate change with its own fixtures |
 | Migrating the remaining CSV day trees to parquet | They stay CSV, and `backend/idhazh/day_shards.py` stays CSV-only and says so in one docstring line. Section 5.8 shows the write side is two functions and the read side is two more, so the later plan is bounded work rather than a ledger-by-ledger slog | Its own plan, now that the ledger door has two producers rather than none |
 | The other six console ledgers, and the other fifteen ECharts importers | One panel on `/console/machine` reads parquet and draws in d3; every other panel keeps its CSV reader and its ECharts option builder, and `echarts` stays installed. Two grammars coexist on one route until plan 52 closes it | [`20260926-52-fifty-panels-move-and-six-projections-go-plan.md`](20260926-52-fifty-panels-move-and-six-projections-go-plan.md), which starts from the chart vocabulary, the readout strip and the ten gates written by `TODO/20260924-51-console-fetches-and-draws-its-own-data-plan.md`'s rows titled **The chart vocabulary and the house style, with no panel moved**, **One readout strip, every chart, and hover a keyboard can reach** and **The ten sufficiency gates and the panel capture group** |
-| Everything the console does: one panel reading parquet in the browser, the d3 house style, the console shell, and the Hardware route's double count | Telemetry-intent N2, N3 and N5 get no stone in this plan, and `/console/machine` keeps a count that is wrong by about a fifth until that plan lands | Nothing. It is `TODO/20260924-51-console-fetches-and-draws-its-own-data-plan.md`, whose row titled **One panel end to end: the browser fetches the ledger and draws it in d3** waits on this plan's rows titled **The index task, two compact periods, and the diagram moves into the page**, **The three ledgers the console's routes read become parquet** and **`span-rollup` becomes parquet**. They were split because they share no consumer, no risk class and no escalation surface: these ten rows change what is deleted from `main` and what force-pushes it, and nothing in that plan can lose data |
+| Everything the console does: one panel reading parquet in the browser, the d3 house style, the console shell, and the Hardware route's double count | Telemetry-intent N2, N3 and N5 get no stone in this plan, and `/console/machine` keeps a count that is wrong by about a fifth until that plan lands | Nothing. It is `TODO/20260924-51-console-fetches-and-draws-its-own-data-plan.md`, whose row titled **One panel end to end: the browser fetches the ledger and draws it in d3** waits on this plan's rows titled **One compaction task a ledger, two compact periods, and the diagrams move into the page**, **The three ledgers the console's routes read become parquet** and **`span-rollup` becomes parquet**. They were split because they share no consumer, no risk class and no escalation surface: these ten rows change what is deleted from `main` and what force-pushes it, and nothing in that plan can lose data |
 | Switching the visuals deletion on | The published tree keeps SVGs no day page links to | Plan `20260905-13-switch-on-deletion-plan.md`, row titled "The fuse comes out, and one run is watched". Row 5 moves that row's subject from a CLI flag to `config/gardener/visual-prune.json`'s `dry_run` |
 | Evicting `corpus/corpus.jsonl` rows as a task | The row cap stays with the harvest | It is a count bound, not an age bound, and `corpus.roll()` at harvest time is its only reader |
 | An `enabled` flag per task | Nothing. **`state: paused` is the off-switch**, and it does more than an `enabled: false` would: a paused task keeps its declaration and its `owns` claim, so its paths stay reserved and no sibling can quietly take them | Nothing. It would be a second spelling of `state: paused`, and two spellings mean two places to look when a task did not run. **`dry_run` is not the off-switch** - a dry run still runs, still costs a task slot and still writes a record (section 5.2) |
@@ -53,7 +53,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | N10 | `state/` splits into `state/raw/` and `state/compact/` | **Delivered** by section 2 and section 5.4, as a refusal rather than a convention |
 | N11 | One shard pattern for every tree, keyed on `covers` | **Delivered for what this plan writes**, mapped for the rest in section 5.8 |
 
-**Five of the eleven are about the console and none of them is here.** They are `TODO/20260924-51-console-fetches-and-draws-its-own-data-plan.md`, whose row titled **The three ledgers the console reads are published** waits on this plan's rows titled **The index task, two compact periods, and the diagram moves into the page** and **The three ledgers the console's routes read become parquet**. What this plan owes that one is a door, two roots and three migrated ledgers that already work.
+**Five of the eleven are about the console and none of them is here.** They are `TODO/20260924-51-console-fetches-and-draws-its-own-data-plan.md`, whose row titled **The three ledgers the console reads are published** waits on this plan's rows titled **One compaction task a ledger, two compact periods, and the diagrams move into the page** and **The three ledgers the console's routes read become parquet**. What this plan owes that one is a door, two roots and three migrated ledgers that already work.
 
 ## 1. Status Reckoner
 
@@ -67,7 +67,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | 4 | The gardener: registry, config, schedule, record, commit loop | 2 | C | PENDING | - | - | - |
 | 5 | Every prune pass becomes a gardener task | 3, 4 | D | PENDING | - | - | - |
 | 6 | The corpus squash becomes Python | 4 | E | PENDING | - | - | - |
-| 7 | The index task, two compact periods, and the diagram moves into the page | 5 | F | PENDING | - | - | - |
+| 7 | One compaction task a ledger, two compact periods, and the diagrams move into the page | 5 | F | PENDING | - | - | - |
 | 8 | `prune.yml` becomes `idhazh-gardener.yml`, and the whole garden is scheduled | 6, 7 | G | PENDING | - | - | - |
 | 9 | The three ledgers the console's routes read become parquet | 7, and plan 51's row titled **The query door module and its two entry points** | H | PENDING | - | - | - |
 | 10 | `span-rollup` becomes parquet | - | - | **COLLAPSED** | - | - | - |
@@ -76,7 +76,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 
 **Dispatch row 6 ahead of row 5 when both are ready.** Row 6's acceptance is a named observation at the next scheduled wake rather than a gate, so its clock starts as early as its dependency allows and the largest row in the plan does not wait behind it. The dispatcher takes any ready row, so this is an ordering preference and not a dependency.
 
-**Row 10 is collapsed, not pending.** Its subject is a ledger that is being deleted rather than migrated, so the migration has no beneficiary. The deletion is one outcome with its own risk class - a one-way removal of a ledger with five live readers and one published projection - and it goes to [`20260926-52-fifty-panels-move-and-six-projections-go-plan.md`](20260926-52-fifty-panels-move-and-six-projections-go-plan.md)'s first row, beside the `span-rollup` projection that row already deletes. **Nothing in this plan or in plan 51 depends on the removal**; leaving it costs one duplicated ledger being written, which is what happens today.
+**Row 10 is collapsed, not pending.** Its subject is a ledger that is being deleted rather than migrated, so the migration has no beneficiary. The deletion is one outcome with its own risk class - a one-way removal of a ledger with five live readers and one published projection - and it goes to [`20260926-52-fifty-panels-move-and-six-projections-go-plan.md`](20260926-52-fifty-panels-move-and-six-projections-go-plan.md)'s row for the last console route to move, beside the `span-rollup` projection that row already deletes (that plan's section titled **The shape this plan is expected to take**). **Nothing in this plan or in plan 51 depends on the removal**; leaving it costs one duplicated ledger being written, which is what happens today.
 
 **Why the order is 5 before 6.** Row 5's acceptance is a gate; row 6's is an observation at the next scheduled wake. Numbering is an id, not a sequence - the dispatcher takes any ready row - so the preference is written above rather than encoded in the numbers, and a pointer from another plan cites a row by TITLE for the same reason.
 
@@ -179,7 +179,7 @@ flowchart TB
     IDLE["no run-tasks job runs"]
     TEND["run-tasks<br/>5 shards, every active task in exactly one<br/>fail-fast false, max-parallel 5"]
     RUN["for each task in the shard:<br/>select, report, delete"]
-    OWNED{"every staged path<br/>inside the task's owns?"}
+    OWNED{"every path a task wrote or deleted<br/>inside that task's owns?"}
     OUTSIDE["exit 2<br/>the ownership claim is wrong"]
     LANDED{"this job's record<br/>already on origin/main?"}
     REAPPLY["reset --mixed origin/main<br/>re-stage the same files<br/>written_paths and deleted_paths"]
@@ -363,17 +363,18 @@ Three readings drove a decision. Everything else was noise and is not kept. A fi
 | `stopped_because` | `StopReason` - `exhausted`, `ceiling` or `failed` | Why the pass ended. `failed` is how one task's failure reaches the record without taking its shard siblings down |
 | `resume_from` | `MemberId \| None` | Where the next pass begins. Empty exactly when `stopped_because` is `exhausted` |
 | `duration_ms` | `int`, `ge=0` | **new.** Wall clock for this task alone, never the job |
-| `staged_at` | `Timestamp` | **new.** The UTC instant this shard finished its work and entered the commit loop. **The push's own cost is the landed commit's timestamp minus this**, which is why the field is an instant rather than a `push_wait_ms` |
+| `work_ended_at` | `Timestamp` | **new.** The UTC instant this shard finished its work and entered the commit loop. **The push's own cost is the landed commit's timestamp minus this**, which is why the field is an instant rather than a `push_wait_ms` |
+| `cone_mb` | `float`, `ge=0` | **new, in row 8.** This shard's working tree after checkout, in megabytes, measured once a shard and written on every row it writes (section 5.2's `max_cone_mb`) |
 
 Cross-field validators, existing ones kept and one amended: `selected <= candidates_seen`; `deleted <= selected`; `deleted <= max_deletes_per_run` when it is neither null nor 0; `(stopped_because is exhausted) == (resume_from is None)`; `since <= until` when both are set.
 
-**There is no `push_attempts` column and no `push_wait_ms` column, and `staged_at` is what stands in for them.** The record is one of the files the push lands, so it is written before the first push attempt and cannot describe what that attempt did. Rewriting it between turns of the loop is not available either: section 5.6 makes "same path, different bytes" exit 2, and that check is what catches two writers minting one identifier - relaxing it so a retry may edit its own record would cost the check its meaning. A second commit after the push succeeds would double the pushes, ten a wake at five shards, and could itself lose a race.
+**There is no `push_attempts` column and no `push_wait_ms` column, and `work_ended_at` is what stands in for them.** The record is one of the files the push lands, so it is written before the first push attempt and cannot describe what that attempt did. Rewriting it between turns of the loop is not available either: section 5.6 makes "same path, different bytes" exit 2, and that check is what catches two writers minting one identifier - relaxing it so a retry may edit its own record would cost the check its meaning. A second commit after the push succeeds would double the pushes, ten a wake at five shards, and could itself lose a race.
 
-**So the record carries the instant the work stopped, and git carries the instant it landed.** The push's cost for one shard is `git log -1 --format=%cI -- <record_path>` minus that row's `staged_at`: one bounded read per commit, no second push, and durable for as long as the history holds - 60 to 90 days, which the corpus squash bounds (CLAUDE.md section 8). **That is what turns `attempts` and `push_deadline_seconds` from estimates into knobs a reading can move** (Guardrail #10); row 8 decision 11 is where the estimate is stated today.
+**So the record carries the instant the work stopped, and git carries the instant it landed.** The push's cost for one shard is `git log -1 --format=%cI -- <record_path>` minus that row's `work_ended_at`: one bounded read per commit, no second push, and durable for as long as the history holds - 60 to 90 days, which the corpus squash bounds (CLAUDE.md section 8). **That is what turns `attempts` and `push_deadline_seconds` from estimates into knobs a reading can move** (Guardrail #10); row 8 decision 11 is where the estimate is stated today.
 
 ### 5.2 `config/idhazh_gardener.json`, and one declaration a task under `config/gardener/`
 
-`GardenerConfig` in `backend/idhazh/contracts/knobs/gardener.py` holds `version`, `attempts` and `shards` and nothing else. **Every task declares itself in its own file, `config/gardener/<task-name>.json`**, validated by `TaskPolicy` in the same module. The filename stem is the task name; there is no `name` field inside, because a name written twice can disagree with itself - and because `json.loads` keeps the last value of a duplicate key silently, so two rows adding a block of one name to one file after a botched merge produce one block, no error, and a task that quietly stopped running. A directory refuses that at the filesystem.
+`GardenerConfig` in `backend/idhazh/contracts/knobs/gardener.py` holds `version`, `attempts`, `shards` and `max_cone_mb` and nothing else. **Every task declares itself in its own file, `config/gardener/<task-name>.json`**, validated by `TaskPolicy` in the same module. The filename stem is the task name; there is no `name` field inside, because a name written twice can disagree with itself - and because `json.loads` keeps the last value of a duplicate key silently, so two rows adding a block of one name to one file after a botched merge produce one block, no error, and a task that quietly stopped running. A directory refuses that at the filesystem.
 
 **The task list is open and there is no index.** The directory is the list (owner ruling, 2026-09-26). An index would be a file every row appends to - the join this shape exists to remove - and a second statement of a fact that can then disagree with the directory. **Nothing but a task declaration is ever placed in `config/gardener/`.**
 
@@ -391,7 +392,8 @@ Cross-field validators, existing ones kept and one amended: `selected <= candida
 {
   "version": "2026-09-24",
   "attempts": 5,
-  "shards": 5
+  "shards": 5,
+  "max_cone_mb": 64
 }
 ```
 
@@ -410,19 +412,20 @@ Cross-field validators, existing ones kept and one amended: `selected <= candida
 
 `config/gardener/trials.json` has the same shape, with `"owns_everything_else_under": ["state"]` in place of `owns`. Both ship `dry_run: true`, as all ten retention declarations do (section 5.2.1).
 
-The first three keys below belong to `config/idhazh_gardener.json`; every key after them belongs to a task declaration.
+The first four keys below belong to `config/idhazh_gardener.json`; every key after them belongs to a task declaration.
 
 | Key | Type | Meaning |
 | --- | --- | --- |
 | `version` | `DateStamp` | The config shape's date stamp |
 | `attempts` | `int`, `ge=1` | How many times the commit loop re-fetches, recomputes and pushes before exit 3 |
 | `shards` | `int`, `ge=1` | How many `run-tasks` jobs the `plan` job splits the active tasks into. A workflow test asserts `idhazh-gardener.yml`'s `max-parallel` is not below it |
+| `max_cone_mb` | `int`, `ge=1`, default `64` | **The ceiling on one `run-tasks` shard's working tree after checkout.** The shard sums its own bytes right after the checkout and before any task lists anything, and **exits 1 naming the shard, the size it measured, the ceiling and its three heaviest prefixes** when it is over. It writes the size on every record row as `cone_mb`, so where tasks land is answered by data at the next wake. The default sits above the heaviest shard measured on 2026-09-26, 53.6 MB, and below twice it, so it fires on growth rather than on how the tasks happen to be placed |
 | `state` | `active`, `paused` or `retired`. **Required, no default** | The task's place in the garden, and the whole of its lifecycle. **`active`** runs at every wake. **`paused`** does not run at all: it keeps its declaration and its `owns` claim, so its paths stay reserved and no other task can take them. **`retired`** means the task never runs again but its declaration stays, so a reader of a committed record can still see the policy that produced it; deleting the declaration instead would orphan every record naming the task. **There is no fourth state and `dry_run` is not one of these three**: a dry run still runs, still costs a task slot and still writes a record, which is what onboarding needs and exactly what a broken task must not do |
 | `kind` | the `TaskPolicy` member, **required** | Which member validates the rest of the file (section 5.9.5) |
 | `window` | `{unit: days\|months, value: int ge=1}` or `{unit: forever}`, discriminated on `unit` | What the task keeps. Two bounded units so a ledger counted in months keeps a month window, and **`forever` for a tree this project has chosen not to age-bound**. `forever` carries no `value`, and `extra="forbid"` refuses one for free. **Three committed windows are null today** - `observability.item_health_aggregate_keep_months`, `observability.score_archive_keep_months` and `observability.visual_aggregate_keep_months`, read from `config/idhazh.json` on 2026-09-26 - and null there means never delete. **They transcribe to `{unit: forever}` and to nothing else.** A third union member rather than a nullable `value`, because `null` is also what an absent key looks like, and this contract makes `state` and `dry_run` required with no default precisely so that an omission cannot be read as an intent |
 | `dry_run` | `bool`, **required, no default** | Run and report, change nothing |
 | `max_deletes_per_run` | `int \| null`, `ge=0` | `null` no ceiling, `0` survey. Same meaning as the record column |
-| `owns` | list of POSIX path prefixes, repository-relative | Every path this task may delete under. One declaration yields four things: the disjointness proof, the sparse-checkout cone, the permitted delete set and the staging list |
+| `owns` | list of POSIX path prefixes, repository-relative | Every path this task may delete under. One declaration yields three things: the disjointness proof, the sparse-checkout cone, and **the permitted set for both verbs - what this task may delete and what it may write**. It is never the staging list; `Shard.written_paths` and `Shard.deleted_paths` are (section 5.6) |
 | `owns_everything_else_under` | list of POSIX path prefixes | The complement form, for the `trials` task only. The set is `under` minus every other task's `owns` minus the registered ledger names |
 
 **Load-time refusals, each naming the offender:** an `active` or `paused` declaration no module serves, or a module no `active` or `paused` declaration uses; a window that would include today; two tasks whose owned sets intersect or where one is a prefix of the other; more than one task using the complement form; `config/gardener/seen.json`'s `window.value` shorter than `collect.seen_window_days`; `config/gardener/counterfactual-scores.json`'s `window.value` shorter than `lens_weights.window_days`; `config/gardener/telemetry-aggregate.json` carrying a series window shorter than the `observability` key that series covers; a `deleted_paths` entry naming a directory rather than a file; an `owns` entry that is not a directory prefix, because the checkout's cone mode matches directories and a file-valued entry would silently match nothing; **`attempts` at or below `shards`**, naming both knobs and their values, because the last-placed shard needs an attempt left after every other shard has landed and at `attempts == shards` it has none; **a ledger in `LedgerConfig.published` whose compaction declares `monthly_window: {unit: forever}`**, naming the ledger and the knob; and **a `daily_keep_days` that does not leave at least one whole month before `monthly_window` begins**, which would open a gap no tier covers.
@@ -491,7 +494,7 @@ Three more refusals ride with it, each naming both knobs it read:
 
 **A watermark is not that, and the difference is what it records.** A stamp says *when a job ran*; a watermark says *what the data covers*. Re-running a task against an unchanged stamp does nothing, so a lost stamp write silently skips work. Re-running a compaction against an unchanged watermark redoes exactly the periods that are genuinely not done, so a lost watermark write costs one repeat and loses nothing. That is why one is refused and the other is the mechanism.
 
-**The `plan` job asks no task whether it is due.** Every task in the matrix runs at every wake, so the plan job reads `config/idhazh_gardener.json` and the declarations in `config/gardener/` (section 5.2), splits the active tasks into shards and stops. The question splits three ways and all three answers are the same one.
+**The `plan` job asks no task whether it is due.** Every task in the matrix runs at every wake, so the plan job reads `config/idhazh_gardener.json` and the declarations in `config/gardener/` (section 5.2), splits the active tasks into shards - every kind but `history`, which the `history` job runs itself (row 6) - and stops. The question splits three ways and all three answers are the same one.
 
 | Task kind | Which tasks | What the `plan` job has to know |
 | --- | --- | --- |
@@ -647,13 +650,31 @@ class TaskContext:
     shard: int
 ```
 
-`run` returns the `Pass` that `backend/idhazh/gardener/one_at_a_time.py` defines - moved there from `backend/idhazh/prune/` in row 4, because a module answering "how do I delete a collection's members one at a time" is the gardener's core and not a neighbour's - and `backend/idhazh/gardener/report.py` turns a `Pass` into the record row, filling the four new identity columns from the `TaskContext`.
+`run` returns the `Pass` that `backend/idhazh/gardener/one_at_a_time.py` defines - moved there from `backend/idhazh/prune/` in row 4, because a module answering "how do I delete a collection's members one at a time" is the gardener's core and not a neighbour's - and `backend/idhazh/gardener/report.py` turns a `Pass` into the record row, filling the four new identity columns from the `TaskContext`. **`Pass` gains one field in that move: `written: tuple[str, ...]` beside `taken`**, filled on both sides of `dry_run`. `taken` holds what the task deleted or would delete and `written` what it wrote or would write; for a gardener task both are repository-relative POSIX paths.
 
-**The invariant the runner asserts on every task before staging: the delete set is a subset of the read set, and every deleted path sits under that task's `owns`.** A violation is exit 2. This is what stops the telemetry aggregation deleting a derived path its own producer rebuilds.
+**The invariant the runner asserts after every task and before anything is staged: every path in `Pass.taken` and every path in `Pass.written` sits under one of that task's `owns` prefixes**, matched as a POSIX directory prefix. A task using `owns_everything_else_under` is checked against the complement the config computed at load. A violation is exit 2, naming the path and the task. This is what stops the telemetry aggregation deleting a derived path its own producer rebuilds.
+
+**It reads the selection, not the staging lists, so it fires the same way at `dry_run: true`.** `Pass.taken` is already the same list on both sides of `dry_run`, by its own docstring, and `Pass.written` is its twin. Every retention task ships report-only, so a check that ran only live would be a check nobody exercises until the first irreversible day.
+
+**`owns` governs both verbs.** The write side is not exempt: a permission that covers deleting and not writing has a hole in exactly the direction a compaction can do damage. The one write no task owns is the shard's own record under `state/raw/gardener/`, which the shard writes rather than a task, and which carries its own one-line check (section 5.9.6).
 
 ### 5.6 The checkout, the commit loop and the exit codes
 
-**The checkout is partial and sparse, and that is what keeps the job's cost flat as the repository grows** (Guardrail #12). A `run-tasks` runner never downloads historical parquet:
+**The checkout is partial and sparse, and that is what keeps the job's cost flat as the repository grows** (Guardrail #12). **The workflow has three checkouts, one a job, and each is labelled here so none is copied into the wrong job.**
+
+**The `plan` job's checkout** has no cone expression, because this job runs before any install and opens nothing outside `config/` and `backend/utilities/`:
+
+```yaml
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          filter: blob:none
+          sparse-checkout: |
+            config
+            backend/utilities
+```
+
+**The `run-tasks` checkout.** A `run-tasks` runner never downloads historical parquet:
 
 ```yaml
       # The cone is this shard's tasks' `owns` prefixes, emitted by the `plan`
@@ -673,9 +694,11 @@ class TaskContext:
 
 `filter: blob:none` omits file contents until git needs one; `sparse-checkout` keeps the rest out of the working tree.
 
+**The `history` job's checkout is not sparse, and that is deliberate.** It takes `fetch-depth: 1` over the whole tree so its standard-library reader can open `corpus/corpus.meta.json` and `config/gardener/corpus-squash.json`, then on a due day a second `actions/checkout@v6` at `fetch-depth: 0`, which takes everything anyway. A cone here would buy nothing and would be one more cone to keep in step.
+
 **`matrix.cone` is a field of the section 5.9 plan payload, never an expression invented in YAML.** `gardener_shards.py` computes it from the same config that declares `owns`.
 
-**The cone does not grow with the archive, and that is Guardrail #12's answer rather than its escape hatch.** Every prefix in it is a ledger some task prunes to a window, so the cone grows to that window and stops. The one prefix that is not a ledger is the `trials` task's `state`, and that task reads **directory names at depth one** - `git ls-tree HEAD state/`, no `-r` - because it is looking for a directory nobody claims and the contents of a claimed one are not its business. One tree read at constant cost, and it replaces a sweep over every file under `state/`.
+**The cone stops growing only once its tasks run live, and until then `max_cone_mb` is what stops it growing unseen.** Every prefix in it is a ledger some task prunes to a window, so a live task holds its prefix to that window. But every retention task ships `dry_run: true` (section 5.2.1), so on the first wake no prefix is held by anything, and each stays unbounded until a person turns its task's `dry_run` off, which is ESCALATE trigger 6. That makes the cone a declared growing read under Guardrail #12, recorded in `docs/concepts/growing-reads.md` by row 8, rather than a bounded one. The shard planner does not weigh bytes, so the two heaviest prefixes can land in one shard; the ceiling in section 5.2 turns that into a red job instead of a slow one. The one prefix that is not a ledger is the `trials` task's `state`, and that task reads **directory names at depth one** - `git ls-tree HEAD state/`, no `-r` - because it is looking for a directory nobody claims and the contents of a claimed one are not its business. One tree read at constant cost, and it replaces a sweep over every file under `state/`.
 
 **Before a task lists anything, it asserts its `owns` prefixes exist in the working tree and exits 1 naming the prefix if one does not.** A silent zero is what a wrong cone produces, and an assertion is the only thing that turns it into a red job. **A task using `owns_everything_else_under` asserts nothing about the working tree**: it emits an empty cone by design and reads `git ls-tree HEAD state/` out of the object database, so `state/` is legitimately absent from its checkout and the assertion would fail on every wake. One harness test: every `owns` prefix in the committed config appears in exactly one shard's cone, computed by the function the `plan` job calls, and a complement task contributes none.
 
@@ -724,17 +747,19 @@ def publish(shard: Shard, message: str, *, attempts: int) -> int:
 - **`git config index.sparse true` immediately after checkout.** `git reset --mixed` expands the index to the whole repository unless the index is sparse, and `actions/checkout` does not set it - so without this the worktree cost is flat and the index cost is not.
 - **The index read-back is exit 2, beside the ownership assertion.** It is what stops this class of error returning later as a different prefix.
 
-**The work happens once, before the loop. The loop only stages and pushes.** That is what keeps a job's cost flat however many times it loses a race, and it is why nothing here has to be recomputed against the new tip: every path this job touches is one the registry proves no other task owns, so a moved tip cannot have changed them. **`staged_at` is stamped at that boundary** - the last instant before `publish()` is called, once per shard, onto every record row the shard writes (section 5.1).
+**The work happens once, before the loop. The loop only stages and pushes.** That is what keeps a job's cost flat however many times it loses a race, and it is why nothing here has to be recomputed against the new tip: every path this job touches is one the registry proves no other task owns, so a moved tip cannot have changed them. **`work_ended_at` is stamped at that boundary** - the last instant before `publish()` is called, once per shard, onto every record row the shard writes (section 5.1).
 
 **Same path and same bytes is a successful retry. Same path and different bytes is a data-integrity error.** The invariant holds as written, with no second tier, because **the file is written once and its name is minted once**. A retry re-stages the same bytes; it does not re-produce them. Two different contents at one path would mean two writers minted one identifier, which the identifier's construction (section 5.7) makes impossible - so exit 2 is an assertion that should never fire, which is exactly what it is for.
 
 **Every task is one kind: add its record, always; then delete its selected paths, possibly none, in one commit.** Three writer kinds were three ways to get this wrong - the worst being that a dry run selects nothing, so a "nothing left to delete" verdict would report success and publish no record at all.
 
+**What a `dry_run: true` task contributes, stated once because it is the normal case and not the edge case.** Every retention task and both collection tasks ship report-only (section 5.2.1), so on the first wake this is nearly the whole garden. A dry-run task **runs**, computes its full selection, and fills `Pass.taken` and `Pass.written` exactly as a live task would - that list is what a dry run delivers, and the reason a count would not do. It adds **nothing** to `Shard.written_paths` and **nothing** to `Shard.deleted_paths`, and its record row carries `selected`, `taken` and `bytes_freed` saying what it would have taken. **The ownership check still runs, over the selection** (section 5.5), so a report-only task whose selection reaches outside its `owns` is exit 2 on the wake it is added, not on the day somebody flips the flag. **A shard of nothing but dry-run tasks still stages exactly one file - its record - and still pushes**, which is what makes the onboarding record readable the next morning, and why the commit loop has no "nothing to do" branch.
+
 | Code | Meaning | Retryable |
 | --- | --- | --- |
 | 0 | Every task in this job landed, or was already landed | - |
 | 1 | A task failed. Its row carries `stopped_because: failed` and `resume_from`; its shard siblings still ran and still have rows | Yes, next wake |
-| 2 | Either this job staged a path outside the declared `owns` of the task that produced it, or one record path holds two identities. The registry's ownership claim is wrong | **No** |
+| 2 | A task's selection - a path it wrote or deleted, or would have at `dry_run: true` - sits outside its `owns`; or the shard's record sits outside `state/raw/gardener/`; or one record path holds two identities. The ownership claim is wrong | **No** |
 | 3 | The push kept losing after `attempts`. Nothing landed, so a windowed task simply runs again at the next wake and a periodic one is still due | Yes, next wake |
 
 **Why reset-and-reapply rather than rebase, stated once.** The writer has exactly one local change - the files it just produced - so there is nothing to merge. Reset to the new tip, re-add the same artefacts, commit, push. **The amount of local work does not grow with the size of the repository**: no historical parquet is downloaded, nothing accumulated is rebased, no other directory is reconciled by hand. A rebase would also carry a real hazard: a deletion rebased onto an append to the same union-merged file keeps both sides and the deleted rows come back at exit zero.
@@ -779,7 +804,27 @@ def file_id(*, unit: uuid.UUID, attempt: int, written_at_ms: int) -> uuid.UUID:
         int.from_bytes(digest[0:2], "big") & 0xFFF,
         int.from_bytes(digest[2:10], "big") & ((1 << 62) - 1),
     )
+
+def _pack_v8(unix_ms: int, rand_a: int, rand_b: int) -> uuid.UUID:
+    """Pack RFC 9562 version 8: 48 bits of clock, 12 free bits, 62 free bits."""
+    return uuid.UUID(
+        int=(unix_ms & 0xFFFFFFFFFFFF) << 80
+        | 0x8 << 76
+        | (rand_a & 0xFFF) << 64
+        | 0b10 << 62
+        | rand_b & ((1 << 62) - 1)
+    )
 ```
+
+| Bits | Holds |
+| --- | --- |
+| 80-127 | `unix_ms`, 48 bits, most significant - what makes the name sort by time |
+| 76-79 | `0x8`, the version, fixed by the RFC |
+| 64-75 | `rand_a`, 12 bits |
+| 62-63 | `0b10`, the variant, fixed by the RFC |
+| 0-61 | `rand_b`, 62 bits |
+
+**The test vector is the worked example's own name:** `_pack_v8(0x01A0D03C2E00, 0x461, 0x18E0A67898E9A802)` returns `01a0d03c-2e00-8461-98e0-a67898e9a802`, with `version == 8` and the RFC 4122 variant. The test asserts all three.
 
 Measured 2026-09-24 against `uuid.uuid8`: version 8, variant RFC 4122, files written in the same millisecond share the 13-character clock prefix, and sort order equals time order across milliseconds.
 
@@ -887,7 +932,7 @@ Read back without touching a row: `pq.read_metadata(path).metadata[b"unit_id"]`,
 | `content-similarity-judge/merge-line-holdout-scores` | `stages/score_merge_line_holdout.py` | `lib/server/similarity-holdout.ts` | `/console/judgement` | a console plan |
 | `content-similarity-judge/score-distribution.json` | `stages/count_verdicts.py` | `lib/server/similarity-ledger.ts` | `/console/judgement` | a console plan |
 | `content-similarity-judge/holdout-pairs.csv` | hand-labelled, read by `similarity/holdout.py` | `lib/server/similarity-holdout.ts` | `/console/judgement` | a console plan |
-| `span-rollup` | `stages/work.py` | `lib/server/span-rollup.ts`, `run-timeline.ts` | `/console` | **Deleted, not migrated** - plan 52's first row |
+| `span-rollup` | `stages/work.py` | `lib/server/span-rollup.ts`, `run-timeline.ts` | `/console` | **Deleted, not migrated** - plan 52's row for the last console route |
 | `host-fingerprint` | `telemetry/silicon.py` | `lib/server/host-fingerprint.ts`, `machine-counters.ts` | `/console/machine` | **Row 9** |
 | `day-metrics` | `stages/assemble.py` | `lib/server/payload.ts`, `model-work.ts` | `/console/model` | a console plan |
 | `feed-health` | `stages/plan.py` | `lib/server/payload.ts`, `lib/feed-health.ts` | `/console/voices` | a console plan |
@@ -1032,18 +1077,21 @@ The browser never reads this list; one backend test asserts that every ledger a 
 
 ```python
 class Shard(Model):
-    """One matrix leg: the tasks it ran, the file it must land, and what it changed."""
+    """One matrix leg as the runner finished it: what it ran and what it changed."""
     index: int                      # ge=0
     task_names: tuple[str, ...]     # what this leg ran, in order
-    cone: tuple[RelPath, ...]       # the sparse-checkout prefixes, from section 5.6
     record_path: RelPath            # the one file this leg writes
     written_paths: frozenset[RelPath]
     deleted_paths: frozenset[RelPath]
 ```
 
-**`owned_paths` is not a field.** Ownership is a permission checked against config; it is not the staging list, and one field answering both questions is how committed data gets deleted.
+**`cone` is not a field of `Shard`.** It belongs to the plan payload's `ShardPlan` (section 5.9.7): the `plan` job computes it and `actions/checkout` consumes it, and the runner never reads it or works it out again. One model across a boundary where one side cannot import it is two producers of one value, and they disagree the first time the cone rule changes.
+
+**`owned_paths` is not a field of either.** Ownership is a permission checked against config; it is not the staging list, and one field answering both questions is how committed data gets deleted.
 
 **`record_path` is exactly one file, and the commit loop's whole integrity check rests on that.** `persist()` returns `list[Path]`, because it routes every row under the day that row's own `covers` names, so one call can write several files (row 2). A shard's record cannot: every row in it is this job's own work on this wake, so every row carries the same `date` and the call returns one path. **The runner asserts that and exits 2 if it is ever handed more**, because the `remote_blob` lookup, its comparison against `local_blob` and the already-landed branch each name one path - a second record file would land unchecked and the already-landed test would pass on the first of two.
+
+**`record_path` is always a member of `written_paths`.** It is named on its own because the commit loop's already-landed branch tests that one path, not because it is staged separately: the staged set is `written_paths` and `deleted_paths` together, and the record is in it. **The runner asserts the record sits under `state/raw/gardener/` and exits 2 if it does not** - it is the one write no task owns, and this one-line check is what keeps it out of the per-task ownership rule (section 5.5).
 
 #### 5.9.7 The plan payload - `backend/idhazh/contracts/gardener_plan.py`
 
@@ -1060,11 +1108,21 @@ A standard-library script writes it and a YAML matrix expression reads it, so it
 }
 ```
 
+Each entry of `shards` is a `ShardPlan`, declared in the same module:
+
+```python
+class ShardPlan(Model):
+    """One matrix leg as the `plan` job describes it, before anything runs."""
+    index: int                      # ge=0
+    task_names: tuple[str, ...]     # what this leg must run, in order
+    cone: tuple[RelPath, ...]       # the sparse-checkout prefixes, from section 5.6
+```
+
 **Three fields the workflow reads and each is read differently.** `any_active_task` gates the `run-tasks` job and is named for what it checks: the config holds at least one task in `state: active`. **It is not called `due`.** Every task in the matrix runs at every wake (section 5.3), so there is no per-task dueness left for this payload to carry, and a field named for a question nothing asks sends the next reader looking for the answer - the same move that took `find-due` to `plan-shards` (CLAUDE.md section 0b). `shard_count` is a **number**, because `max-parallel` given a JSON array is invalid and GitHub fails the workflow at parse. `matrix` carries `include`, because `cone` must be a matrix member rather than a sibling field - an expression naming a missing context property evaluates to the empty string with no error, so a missed `cone` checks out nothing and every deletion silently finds nothing.
 
 **`history_due` is not a field.** The `history` job reads `corpus/corpus.meta.json` out of its own checkout (section 5.3). Owner ruling, 2026-09-26, overturning the 2026-09-24 design: a flag the `plan` job could not compute is a flag that force-pushes `main` every day.
 
-**`cone` crosses the boundary as one newline-joined string and is a tuple on both sides of it.** `Shard.cone` is `tuple[RelPath, ...]`; the payload's `cone` is `"\n".join(shard.cone)`, because `sparse-checkout` takes a block scalar. The join and the split each live in one named function and the field-set test asserts a round trip.
+**`cone` crosses the boundary as one newline-joined string and is a tuple on both sides of it.** `ShardPlan.cone` is `tuple[RelPath, ...]`; the payload's `cone` is `"\n".join(shard_plan.cone)`, because `sparse-checkout` takes a block scalar. The join and the split each live in one named function and the field-set test asserts a round trip.
 
 **A task using `owns_everything_else_under` emits an empty `cone`.** Cone-mode sparse checkout matches directories and has no depth-one form, so a cone of `state` would materialise every file under `state/` - 909 files and 59,319,788 bytes, every day, to read the eighteen entries at depth one. The `trials` task asks `git ls-tree HEAD state/` with no `-r`, which reads tree objects a `blob:none` clone already holds and needs no working tree at all; **the listing yields blobs as well as trees and the task ignores a blob by name.** An empty cone emits the three code prefixes alone - `config`, `backend`, `.github`. **A cone of a bare ledger root is Guardrail #12 broken rather than answered**, and one harness test asserts no shard's cone contains one.
 
@@ -1098,6 +1156,7 @@ A shard runs several tasks and exits with the **worst** code, and worst is not n
 | `persist-credentials` | left at the default `true` | It is the only thing that writes the credential header the later push uses |
 | `runs-on` | `ubuntu-latest`, all three jobs | Guardrail #2 |
 | python | `actions/setup-python@v7`, `3.12`, on `run-tasks` and `history` only | The `plan` job installs nothing and uses the runner's `python3`, as `prune.yml`'s due step does. **The history job's own dueness step runs on the runner's `python3` too**, before its `setup-python` and before its full clone |
+| `history` checkout | **not sparse, on purpose** | Section 5.6 says why: its second checkout takes the whole tree anyway |
 | the install step | `pip install -e .[parquet]` on every `run-tasks` shard | **Every shard writes its own record through the ledger door** (section 5.6: "add its record, always"), so every shard needs the engine. An earlier draft made the extra a matrix field for the four tasks that read parquet, which was wrong - the record is parquet too |
 | pip cache | `cache: pip`, `cache-dependency-path: pyproject.toml`, **`cache-suffix: parquet`** | `setup-python` keys on the OS, the interpreter and the dependency file - **never on the extras** - so without a suffix this workflow and `digest.yml` share one entry whose contents depend on which ran first. A cache key that does not name the resolved set it holds reports a hit and delivers a miss |
 | `max-parallel` | `${{ fromJSON(needs.plan.outputs.shard_count) }}` | A **number**, not the shard array: `max-parallel` given a JSON array is invalid and GitHub fails the workflow at parse. **The workflow test asserting `max-parallel` is not below the shard count is deleted**: it cannot fail |
@@ -1377,19 +1436,31 @@ def persist(
     built_from: int | None = None, fmt: Format | None = None,
 ) -> list[Path]:
     """Write these rows and return where they went, one path per period they cover."""
+
+
+C = TypeVar("C", bound=Contract)
+
+
+def load(paths: Sequence[Path], *, model: type[C]) -> list[C]:
+    """Read these files back as rows of one contract, in the order the paths give."""
 ```
+
+**`load()` is the inverse of `persist()` and nothing else.** It does not remove duplicates - a union over several attempts at one work unit is settled by `ledger/settle.py` (row 7). It reads the format from each file's own envelope, never from its suffix, and a file whose envelope's `schema_version` the model does not accept raises, naming the path, the stamp it found and the stamp it wanted.
+
+**`persist()` returns its paths ascending by `covers`**, the day or month each file is filed under - never by path string, because a path string sorts a ledger name before a date and a caller wants the periods in order. **The write is `atomic_write.write_atomic_bytes(path, payload)` and nothing else**: a temp file in the destination's own directory, written whole, then moved onto the target. The door carries no second spelling of the one rule that decides whether a half-written parquet file can be seen.
 
 **`period` is required when `tier` is `COMPACT` and refused when it is `RAW`**, because `compact_path` needs it and `raw_path` has no use for it. `covers` is a `PeriodStamp`, not a `DateStamp`: a monthly file covers `2026-08`.
 
 **`persist` returns a list, and this is the correction that nearly did not get made.** `write_segment` does not write one file per call: `_dated_rows` routes every row under the day **its own `date` cell** names, so a call carrying three days of rows writes three files. Its docstring spells the reason once - "rows a run left behind three days ago land under that day rather than under today" - and that is CLAUDE.md section 2 applied, a day being the UTC day the row records and never the day the job woke. **A `persist` returning a single `Path` cannot replace `write_segment` without deleting that rule**, and the alternative is twenty producers each learning to group their own rows by date, which is one rule written twenty times. So `persist` keeps the routing, `covers` is the period a row is routed **to** rather than a promise about the batch, and the return type is `list[Path]`, ascending. Found by Fowler, 2026-09-26, against plan 53.
 
-It mints `unit_id` and then `file_id` through `naming` (section 5.7), builds the path through `paths.raw_path` or `paths.compact_path`, assembles the envelope, writes through a temp file and renames. **A producer never builds a path, never invents a filename and never assembles an envelope** - which is what makes the next producer's migration a change of call site rather than a change of design. **`identity.producer` is the one field a call site must get right**, because it is the field that keeps two producers of one dataset apart inside `unit_id`.
+It mints `unit_id` and then `file_id` through `filenames` (section 5.7), builds the path through `paths.raw_path` or `paths.compact_path`, assembles the envelope, writes through a temp file and renames. **A producer never builds a path, never invents a filename and never assembles an envelope** - which is what makes the next producer's migration a change of call site rather than a change of design. **`identity.producer` is the one field a call site must get right**, because it is the field that keeps two producers of one dataset apart inside `unit_id`.
   - `backend/idhazh/contracts/file_envelope.py` (new: `Tier`, `Period`, `Format`, `WriterIdentity`, `FileEnvelope`, per section 5.9.1. **`LedgerName` already exists** in `backend/idhazh/contracts/ledger_name.py`)
   - `backend/idhazh/contracts/__init__.py` (`FileEnvelope` joins `CONTRACTS` and `__all__`. **Nothing is generated** - `schemas/` and `idhazh.contracts.export` were deleted on 2026-09-23 and `backend/tests/contracts/test_no_generated_layer.py` refuses their return)
-  - `backend/idhazh/contracts/base.py` (`FileIdName` and `PeriodStamp`, per section 5.9.13)
+  - `backend/idhazh/contracts/base.py` (`FileIdName` and `PeriodStamp`, per section 5.9.13, and **`ServerJob` gains `MIGRATE`, `RUN_TASKS` and `HISTORY` here rather than in row 4**, because row 3's migration needs a job name and rows 3 and 4 must not share a file), `frontend/src/lib/server/host-fingerprint.ts` (its copy `SERVER_JOB` takes the same three in the same commit; `test_frontend_vocabularies.py` asserts the two hold the same members in order)
   - `backend/idhazh/contracts/knobs/ledger.py` (`LedgerConfig`: `format`, `compression_raw`, `compression_compact`, `published` - **four fields**, per section 5.9.4), `backend/idhazh/contracts/app_config.py` (`AppConfig` gains the `ledger` block - without this line nothing can reach the knob), `config/idhazh.json` (the `ledger` block literal), `tests/fixtures/contracts/app-config/every-knob-differs-from-the-committed-config.json`
   - `backend/idhazh/ledger/paths.py` and `backend/idhazh/stages/prune_state.py` (the two tier roots `state/raw` and `state/compact` have to be claimed alongside `ledger.claimed_roots()`, which `_trial_roots` reads and which lives in the second file, not in `retention.py`. **`day-validations` needs no work**: it already has a `config/ledgers.json` entry, and plan 54 deletes the tree and that entry before row 5 runs), `backend/tests/retention/test_trial_state.py`
   - `backend/idhazh/day_shards.py` (one docstring line: this reader is CSV-only and parquet goes through `ledger/`)
+  - `backend/idhazh/atomic_write.py` (new: `write_atomic` and `write_atomic_bytes` **move here unchanged from `backend/idhazh/assemble.py`**, every caller repointed, in their own structural commit. `assemble` imports the embedding, placement, ranking and tagging stages at module top, so `ledger/` importing it would charge all of that to every `run-tasks` shard on every wake)
   - `pyproject.toml` (`[project.optional-dependencies] parquet = ["pyarrow>=21"]`, and `dev` depends on it)
   - `.gitattributes` (the five lines in section 5.4)
   - `backend/tests/ledger/test_persist.py`, `test_arrow_schema.py`, `test_single_engine_import.py`, `test_trial_roots.py`; `tests/fixtures/parquet/`
@@ -1443,6 +1514,31 @@ It mints `unit_id` and then `file_id` through `naming` (section 5.7), builds the
 `state/visual-prunes/` **proves the layout, and it is in scope by owner direction, 2026-09-24.** Row 5 turns its pass into a gardener task; leaving the format for a later plan would mean the gardener's record and the gardener's own pass disagreed about how a ledger is written, in the same release. One writer (`stages/prune_state.py`), fifteen columns, eighteen committed files of 11 KB, no reader outside the backend. It moves onto `state/raw/visual-prunes/<YYYY>/<MM>/<DD>/<file_id>.parquet`, one file per writer - `file_id` and not `unit_id`, because `unit_id` is identical across attempts and a retry named by it would overwrite the attempt before it (section 5.7).
 
 **The migration is one-shot and it ships in this row's own commit.** `backend/utilities/migrate_csv.py` reads the committed CSV tree, writes the parquet, deletes the CSV, and **is deleted by row 8**; its removal condition is written on the line that declares it (Guardrail #6). Without it, every committed `state/visual-prunes/<YYYY>/<MM>/<DD>.csv` and `state/feed-retirements.csv` becomes unreadable at its old path, which CLAUDE.md section 11 calls a release blocker.
+
+**Its command line, so no worker invents one:**
+
+```
+python backend/utilities/migrate_csv.py --state-dir state --run-id <YYYY-MM-DD-NNNN>
+       --git-sha <sha> [--ledger feed-retirements|visual-prunes] [--check]
+```
+
+| Argument | Rule |
+| --- | --- |
+| `--state-dir` | Required. The tree to migrate |
+| `--run-id` | Required, `RUN_ID_PATTERN`. A person runs this once, so there is no run to read it from |
+| `--git-sha` | Required, `COMMIT_SHA_PATTERN`. The envelope's `git_sha` |
+| `--ledger` | Optional. Both ledgers when absent |
+| `--check` | Writes nothing. Exit 1 if any source CSV remains |
+
+Every file it writes carries `WriterIdentity(run_id=..., attempt=1, job=ServerJob.MIGRATE, shard=0, producer="utilities.migrate_csv", git_sha=...)`, with `run_id` and `git_sha` taken from the two arguments of those names. Neither has a default, so neither is invented here.
+
+| Exit | Meaning |
+| --- | --- |
+| 0 | Every source CSV migrated, or there was none. **A second run exits 0 and writes nothing** |
+| 1 | A row did not round-trip, or `--check` found a remaining CSV. Nothing was deleted |
+| 2 | A file for the same work unit exists and its envelope's `content_sha256` differs from what this run would write. **Two migrations disagree, and neither is discarded**: a person resolves it, because overwriting committed bytes is a one-way write |
+
+**Running it twice is safe by construction.** `unit_id` comes from `(ledger, covers, run_id, job, shard, producer)`, and every term is fixed by the arguments, so a second run mints the same `unit_id` and the same `content_sha256`. A file for that unit that already exists and matches is left alone, and its source CSV is deleted if it is still there. That makes a partial failure re-runnable, which matters most here, because this program rewrites committed data.
 - **Files touched:**
   - `backend/utilities/migrate_csv.py` (new, one-shot, deleted by row 8)
   - `backend/idhazh/telemetry/source_health.py` (grows `file_retirements`), `backend/idhazh/stages/plan.py`, `backend/idhazh/stages/assemble.py` (the two `ledger.append_retirements` call sites), `backend/tests/test_source_health.py`
@@ -1499,7 +1595,6 @@ It mints `unit_id` and then `file_id` through `naming` (section 5.7), builds the
   - `backend/idhazh/contracts/knobs/gardener.py` (section 5.2), `config/idhazh_gardener.json`, `backend/idhazh/config.py` (load, and every refusal in section 5.2)
   - `backend/idhazh/contracts/collection_prune.py` (widened per section 5.1, with its `version` stamp and one `changelog` line), `backend/idhazh/contracts/knobs/prune.py` (merges into `knobs/gardener.py`)
   - `backend/idhazh/prune/` (deleted: `one_at_a_time.py` and `report.py` move to `gardener/`, `github_collections.py` to `gardener/tasks/`), `backend/idhazh/telemetry/prune.py` and `backend/utilities/prune_artifacts.py` (their imports follow), `backend/tests/prune/` (moves with them)
-  - `backend/idhazh/contracts/base.py` (`ServerJob` gains `RUN_TASKS` and `HISTORY`)
   - `backend/idhazh/contracts/ledger_name.py` (`LedgerName` gains `GARDENER = "gardener"`) and `config/ledgers.json` (one `gardener` entry, `state: live`, `prefix: ["gardener"]`, `grain: "raw-and-compact"`). **Both or neither**: `backend/tests/contracts/test_ledger_registry.py` refuses a member with no entry and an entry with no member, and the build stops at import either way.
   - `backend/idhazh/contracts/ledgers.py` (`Grain` gains `RAW_AND_COMPACT = "raw-and-compact"`, section 2) and `backend/idhazh/ledger/paths.py` (`path()`, `relpath()` and `tree_root()` refuse a `raw-and-compact` ledger by name and point at the builders section 5.4 declares), with a refusal case for each in `backend/tests/contracts/test_ledger_registry.py`, and `docs/architecture/contracts/state-ledgers.md` (the sixth grain, and the `gardener` row)
   - `backend/idhazh/cli.py` (the `gardener` verb joins the `choices` tuple)
@@ -1518,7 +1613,7 @@ It mints `unit_id` and then `file_id` through `naming` (section 5.7), builds the
   | 4 | **No last-run state is persisted anywhere, and the `plan` job reads no state at all.** A windowed task runs daily and its window decides. A compaction runs daily and its own watermark decides, inside `run-tasks`, where that ledger is already in the cone. The history squash reads the key the corpus already owns, inside the `history` job, which has `corpus/` in its checkout. A mutable per-task file would have been the one unsharded, overwritten path under `state/`, which is the race the whole design removes | Section 5.3. **Owner, 2026-09-26**, overturning the 2026-09-24 clause that had the plan job read "the newest month under its own output, with two directory listings" - a read outside its checkout, and one that also contradicted row 7's rejected alternative 8 |
   | 5 | The `plan` job's shard reader is standard library only, so it runs before `pip install` exactly as `prune_due.py` does today, **and it opens no file outside `config/`**. Both halves are hard constraints on the config shape | Carmack; the second half Owner, 2026-09-26 |
   | 6 | A task whose window would include today is refused at config load. That is what makes the gardener safe to run while `digest.yml` is live, and it turns an arrangement into a check | Fowler |
-  | 7 | `ServerJob` gains `RUN_TASKS` and `HISTORY` here, before row 8 spells them in the workflow. Precedent: `DECIDE` was added for `validate.yml`'s gate job on the same ground. **The frontend copy `SERVER_JOB` moves in the same commit** - `test_frontend_vocabularies.py` asserts the two hold the same members in order | `backend/idhazh/contracts/base.py` |
+  | 7 | `ServerJob` gained `MIGRATE`, `RUN_TASKS` and `HISTORY` in row 2, with its frontend copy `SERVER_JOB`. This row spends them and touches no frontend file. `MIGRATE` is a permanent member for a program a person runs once, and it is kept so a record can say a row came from the migration rather than from a scheduled wake | Fowler, 2026-09-26 |
   | 8 | **No `enabled` flag, because `state: paused` is the off-switch.** An `enabled: false` would be a second spelling of it. **`dry_run` is not the off-switch either**: a dry run still runs, still costs a task slot and still writes a record, which is what onboarding needs and exactly what a broken task must not do | Fowler, corrected against section 5.2's lifecycle, 2026-09-26 |
   | 9 | **No `cadence` key on the base.** A wake rate is a cron line, not a per-task value: `on.schedule.cron` is one line in the workflow and every matrix task is in that wake. The one schedule that is a real choice belongs to `corpus-squash`, which is not in the matrix, and it lands as `every_days` on `HistoryPolicy`. **This does not break Guardrail #6**, whose test is "change the config and behaviour changes": a per-task `cadence` fails that test the moment the `plan` job stops reading it, so deleting it removes a claim rather than a control. Every knob that does decide something survives - the cron, `window`, `compact_after_hours`, `max_periods_per_run`, `every_days` | Owner, 2026-09-26, on Fowler's reading |
 
@@ -1608,9 +1703,48 @@ It mints `unit_id` and then `file_id` through `naming` (section 5.7), builds the
 **An unsure read exits rather than answering "due", because the two errors are different sizes.** A false "due" rewrites `main` every day: every clone has to be re-fetched and `git blame` loses its range. A false "not due" delays a squash by one wake, which section 5.3 already prices at one day. So the reader leans not-due when it is unsure - and "unsure" has to be a state distinct from "absent" before that sentence can be said at all.
 
 **The `pruned_date` alias now has two homes, and ESCALATE trigger 1 covers both.** One is `CorpusMeta`'s `model_validator(mode="before")`. The other is this reader, which is standard-library-only and cannot import the contract - Guardrail #3's hand-copy case, so a named test holds the two in step. Row 8 removes both in one commit or it removes neither: an alias surviving in only one of them is a payload that one reader understands and the other does not.
+
+**`corpus_history.py` holds five functions, and `squash_history` is the only one anything outside it calls:**
+
+```python
+def boundary_commit(repo: Path, *, keep_days: int, now: datetime) -> str | None:
+    """The newest commit at or before the cut, or None when fewer than two are behind it.
+
+    The cut is `now` minus `keep_days`, in UTC. None means the squash is not worth
+    doing this wake, which is a success and not a failure.
+    """
+
+def squash_below(repo: Path, *, boundary: str, message: str) -> str:
+    """Collapse everything at or before `boundary` into one orphan root. Returns its sha."""
+
+def replay_above(repo: Path, *, boundary: str, onto: str) -> None:
+    """Rebase every commit after `boundary` onto `onto`, trees unchanged."""
+
+def push_rewritten(repo: Path, *, tip_before: str) -> int:
+    """Force-push the rewritten history, refusing if origin's tip moved.
+
+    The refusal and its exit code carry over unchanged from
+    `backend/utilities/push_rewritten_history.py`, which returns 1. Changing either
+    is ESCALATE trigger 2.
+    """
+
+def squash_history(repo: Path, *, keep_days: int, now: datetime, message: str) -> int:
+    """The whole squash, in order, and the `history` job's only entry point.
+
+    Resolve the boundary; if None, return 0 having written nothing. Otherwise squash,
+    replay, `corpus.record_run(meta_path, when=now.date())`, then push. A refused push
+    returns without recording the run, so the squash is due again at the next wake.
+    """
+```
+
+| Exit from `squash_history` | Meaning |
+| --- | --- |
+| 0 | Squashed and pushed, or nothing was worth doing |
+| 1 | The push was refused because the tip moved. No stamp written |
+| 2 | The repository is not in a state this can rewrite - a detached head, a dirty tree, a missing boundary sha |
 - **Files touched:**
-  - `backend/idhazh/gardener/corpus_history.py` (new: resolve the boundary commit, the orphan-root squash, the rebase, the record, the push)
-  - `backend/idhazh/gardener/cli.py` (the verb `idhazh gardener corpus-squash`), `config/gardener/corpus-squash.json` (its declaration)
+  - `backend/idhazh/gardener/corpus_history.py` (new; the five functions and the exit codes above)
+  - `backend/idhazh/gardener/cli.py` (the verb `idhazh gardener corpus-squash`), `config/gardener/corpus-squash.json` (`kind: history`, `owns: ["corpus"]`, and the squash's own `every_days`), `backend/idhazh/gardener/tasks/corpus_squash.py` (new: `KIND` set to the `history` kind, and a `run` that calls `corpus_history.squash_history`). **The verb binds that module through the same two lookups a shard uses (section 5.5) and calls its `run`**, so the two-way check holds with no exception and the verb is not a second way in
   - `backend/utilities/prune_due.py` **renamed to `backend/utilities/corpus_squash_due.py`**, standard library only, reading `corpus/corpus.meta.json:last_run` and the squash's own `every_days`, and telling the four cases above apart. `backend/utilities/push_rewritten_history.py` (the tip-moved refusal moves in, behaviour and exit code unchanged)
   - `backend/tests/workflows/test_staged_paths.py` (**the `prune_due.py` path only** - that test invokes the reader against the real committed config and the real `corpus/corpus.meta.json`, so a prune run changes its answer and it can only assert shape. Nothing else in it moves)
   - `backend/tests/workflows/test_corpus_squash_due.py` (new: **the assertion that protects the force push**, driven from a fixture repository as `backend/tests/workflows/test_prune_push.py` already builds one. One case per row of the four-case table, and the last of them asserts a non-zero exit with no `due` printed. There is no such assertion today)
@@ -1645,7 +1779,7 @@ It mints `unit_id` and then `file_id` through `naming` (section 5.7), builds the
 
 ---
 
-### Row #7 - The index task, two compact periods, and the diagram moves into the page
+### Row #7 - One compaction task a ledger, two compact periods, and the diagrams move into the page
 
 - **Scope:** one compaction task a ledger, which lists each eligible raw day and then runs the daily and monthly periods, each with its own window and watermark (section 5.3); `digest.yml`'s own compaction step moves in, so one config decides when a day is closed; the architecture page takes both diagrams.
 
@@ -1654,7 +1788,7 @@ It mints `unit_id` and then `file_id` through `naming` (section 5.7), builds the
 **The order inside a period is the part a worker must not rearrange**, and section 5.3 gives both sequences step by step. Read the index. Read exactly the files it names. Write the period's compact file. Rewrite that period's index. **Advance that period's watermark last.** A run that dies in the middle leaves the watermark behind the truth, so the next wake redoes that one period and nothing else. The opposite order leaves a period in no tier, in no index and past the watermark - gone, with no error, and no test able to see it.
 - **Files touched:**
   - `backend/idhazh/gardener/tasks/_index_day.py` (new; lists a raw day and writes `RawDayIndex`; the leading underscore keeps discovery from importing it as a task, section 5.5), `backend/idhazh/gardener/tasks/compaction.py` (new; absorbs `backend/idhazh/stages/compact.py`, one callable serving both periods), `backend/idhazh/ledger/settle.py` (the read-side settlement over a raw day tree)
-  - `backend/idhazh/contracts/store_index.py` (new; `RawDayIndex`, `CompactEntry`, `CompactIndex`, `Watermark` per section 5.9.13), `backend/idhazh/contracts/__init__.py` (the three new contracts join `CONTRACTS` and `__all__`)
+  - `backend/idhazh/contracts/ledger_index.py` (new; `RawDayIndex`, `CompactEntry`, `CompactIndex`, `Watermark` per section 5.9.13), `backend/idhazh/contracts/__init__.py` (the three new contracts join `CONTRACTS` and `__all__`)
   - `backend/idhazh/contracts/file_envelope.py` (`FileEnvelope` takes a `changelog` entry for `built_from` being filled for the first time. **Additive and back-compatible**: `built_from` is `int | None = None` from row 2, so a row-3-era envelope reads unchanged and needs no migration)
   - `backend/idhazh/ledger/paths.py` (`raw_index_path`, `compact_path` takes a `Period`, `compact_index_path`, `watermark_path`)
   - `config/gardener/compact-gardener.json`, `config/gardener/compact-visual-prunes.json` and `config/gardener/compact-feed-retirements.json` (**one compaction a ledger**, keys per section 5.9.5. No task ever limited these three ledgers, so section 5.2 gives them no floor. `gardener` and `visual-prunes` keep the default windows. **`feed-retirements` sets `monthly_window: {unit: months, value: 60}`**, because a retirement the window deletes is a feed the pipeline starts fetching again. These windows are the owner's, 2026-09-27, so writing them does not fire ESCALATE trigger 6). **No registry file is edited**: `compaction.py` holds `KIND` and `run`, and `bind()` finds it by kind, so a fourth ledger is one declaration and no Python
@@ -1726,11 +1860,12 @@ It mints `unit_id` and then `file_id` through `naming` (section 5.7), builds the
   - `.github/workflows/prune.yml` renamed to `.github/workflows/idhazh-gardener.yml` and rewritten
   - `backend/idhazh/gardener/tasks/github_collections.py` (new), `backend/utilities/prune_artifacts.py` (**deleted**; this module is its only home), `config/gardener/workflow-artifacts.json` and `config/gardener/workflow-runs.json` (both `dry_run: true`), `config/idhazh.json` (the `prune.collections` block leaves)
   - `backend/utilities/migrate_csv.py` (**deleted**; row 3 declared its removal condition on the line that created it), `backend/idhazh/contracts/corpus.py` **and `backend/utilities/corpus_squash_due.py`** (the `pruned_date` read-side alias is removed from **both homes in this one commit** - **ESCALATE trigger 1 fires here**)
-  - `backend/tests/workflows/test_gardener_workflow.py` (**including the gate this plan was missing: the `plan` job's sparse-checkout cone contains every directory its reader opens, computed from the committed workflow and the committed reader rather than from a hand-written list**), `backend/tests/contracts/test_gardener_plan_matrix.py` (new: the committed matrix expression reads only keys `GardenerPlan` declares), `backend/tests/gardener/tasks/test_github_collections.py` (driven from a recorded response, never the network - Guardrail #7)
+  - `backend/tests/workflows/test_gardener_workflow.py` (**including the gate this plan was missing: the `plan` job's sparse-checkout cone contains every directory its reader opens, computed from the committed workflow and the committed reader rather than from a hand-written list**), `backend/tests/contracts/test_gardener_plan_matrix.py` (new: the committed matrix expression reads only keys `GardenerPlan` declares, and `gardener_shards.py` writes exactly the keys `ShardPlan` declares), `backend/tests/gardener/tasks/test_github_collections.py` (driven from a recorded response, never the network - Guardrail #7)
   - `docs/reference/github-actions.md`, `docs/architecture/publishing/idhazh-gardener.md`, `docs/architecture/publishing/retention.md`
+  - `backend/idhazh/contracts/knobs/gardener.py` and `config/idhazh_gardener.json` (`max_cone_mb`, section 5.2), `backend/idhazh/gardener/runner.py` (the size check right after checkout, and `cone_mb` on every record row, section 5.1), `backend/tests/gardener/test_cone_ceiling.py` (a fixture tree at, just under and just over the ceiling), `docs/concepts/growing-reads.md` (one entry: the `run-tasks` cone, what it reads, how it grows while its tasks are report-only, and the ceiling that stops it growing unseen)
 - **Acceptance gates:** local `pytest backend/tests/workflows backend/tests/gardener backend/tests/contracts -q`, `ruff check .`, `mypy backend`, and the workflow file parses as YAML. CI runs the full suite.
   - **Not a gate:** dispatching the workflow. Split per author-a-plan.md - what is decidable from committed files is the harness test; what needs a live runner is the observation below.
-  - **Named observation, first scheduled run after merge:** read each `run-tasks` job's log for the tasks it ran and the record path it wrote; confirm one file per shard under `state/raw/gardener/<YYYY>/<MM>/<DD>/` and nothing written outside `state/raw/` or `state/compact/`; confirm no job reports exit 2 or exit 3; confirm the two GitHub tasks report `dry_run` true, `candidates_seen` above zero and `deleted` zero. **Read the five timings section 5.9.11 estimates and restate that row against them**, and compute each shard's push cost from its record's `staged_at` against the timestamp of the commit that carries it (section 5.1) - that is the reading decision 11's 4.7-minute estimate is waiting for. Exit 2 means two tasks claimed one path and the registry is wrong - stop and read the path it named. Exit 3 means the push rate is too high for `attempts`; raise `attempts` before lowering `max-parallel`.
+  - **Named observation, first scheduled run after merge:** read each `run-tasks` job's log for the tasks it ran and the record path it wrote; confirm one file per shard under `state/raw/gardener/<YYYY>/<MM>/<DD>/` and nothing written outside `state/raw/` or `state/compact/`; confirm no job reports exit 2 or exit 3; confirm the two GitHub tasks report `dry_run` true, `candidates_seen` above zero and `deleted` zero. **Read the five timings section 5.9.11 estimates and restate that row against them**, and compute each shard's push cost from its record's `work_ended_at` against the timestamp of the commit that carries it (section 5.1) - that is the reading decision 11's 4.7-minute estimate is waiting for. Exit 2 means two tasks claimed one path and the registry is wrong - stop and read the path it named. Exit 3 means the push rate is too high for `attempts`; raise `attempts` before lowering `max-parallel`.
 - **Oracle:** the set of shards the matrix can produce is exactly a partition of the registry - every task appears in exactly one shard and no shard is empty - and every job id the workflow spells is a `ServerJob` member, asserted over the committed workflow and the committed declarations. **There is no pairing clause here any more**: one compaction a ledger means there is no pair to place, which is what row 7 decision 13 bought by merging rather than by scheduling. **And the `plan` job's sparse-checkout cone contains every directory its reader opens**, both sides computed rather than listed by hand: the cone from the committed workflow, the directories from the committed reader. That last one is the gate this plan did not have, and its absence is what let a reader drift outside its own checkout with nothing going red. **And `fetch-depth: 0` appears in exactly one job of one workflow in this repository - the `history` job's second checkout - and nowhere else**, asserted over every committed workflow file. That job takes a full clone deliberately, because it rewrites every commit; any other job that commits and takes a full history is paying for a clone it does not use, and the rule only survives if something can see it broken. It cannot settle whether five runners pushing at once land; the named observation does that.
 - **Decisions:**
 
@@ -1774,7 +1909,7 @@ It mints `unit_id` and then `file_id` through `naming` (section 5.7), builds the
 - **Files touched:**
   - `backend/idhazh/stages/assemble.py` and `backend/idhazh/stages/record.py` (the two `item-health` call sites), `backend/idhazh/evals/writer.py` (the `scores` call site), `backend/idhazh/telemetry/silicon.py` (the two `host-fingerprint` call sites. The probe row written when a job starts and the clock row written when it ends become two files, told apart by `producer`: the module's dotted name with `:probe` and `:clock` after it (section 5.9.1). **One `producer` for both would make section 5.7 read the second file as a retry of the first** and drop one half before compaction sees it)
   - `backend/idhazh/ledger/keys.py` (**a cell-merge rule for `HOST_FINGERPRINT_KEY`**. The settle table holds only preferences today, and a preference keeps one whole row; `host-fingerprint` has no entry, so the first row is kept and the other half is dropped. The new rule takes every cell from both rows and reports a cell that both rows set to different values as a defect. `item-health` and `scores` keep the rule the table gives them today)
-  - `backend/utilities/migrate_to_parquet.py` (new, one-shot; **its declaring line reads "delete when every `state/item-health`, `state/scores` and `state/host-fingerprint` CSV is gone from `main`"**, and plan 52's first row names it in its scope line)
+  - `backend/utilities/migrate_to_parquet.py` (new, one-shot; **its declaring line reads "delete when every `state/item-health`, `state/scores` and `state/host-fingerprint` CSV is gone from `main`"**, and plan 52 carries its deletion in its section titled **What this plan inherits and must close**)
   - `backend/idhazh/contracts/item_health.py`, `backend/idhazh/contracts/eval_row.py`, `backend/idhazh/contracts/host_fingerprint.py` (**no `version` stamp** - no field moves, only the address - **and one `changelog` entry each**, `"Rows move to state/raw/<ledger>/ as parquet; the CSV path is gone"`, because CLAUDE.md section 11 requires an entry for every change and the read-side migration is the module above, shipping in the same commit)
 
 **Four naming corrections ride in this row, and they ride here because the row is already rewriting every one of these rows.** Renaming a column while a migration rewrites the file is free; doing it afterwards is a second migration with its own read-side alias. Owner decision, 2026-09-26.
@@ -1801,7 +1936,7 @@ It mints `unit_id` and then `file_id` through `naming` (section 5.7), builds the
 
   **What is needed is a second entry point, and plan 51 builds it.** The browser's entry point joins `visuals.asset_base_url` and fetches an address; a build-time read wants a local path under `state/`. Same engine, same query, different source. Plan 51's row titled **The query door module and its two entry points** builds both - `slice()` for the browser and `sliceFromDisk(stateDir, ledger, opts)` for a build-time reader - and the engine's Node set-up in `engine.ts`. This row only moves the three readers onto `sliceFromDisk()`, and the single-engine rule stays true with one importer. **`sliceFromDisk()` reads compacted files only**, so the pages these three readers feed show data up to the newest compacted day, not today (section 5.9.4).
 
-  **The cost is an ordering constraint and it is the only thing this settles.** `sliceFromDisk()` is built by plan 51's row titled **The query door module and its two entry points**, so **this row cannot merge before that module exists** - and that ordering is in this row's `Depends-on` cell rather than in prose, because the dispatcher reads the cell. That row depends on plan 51's row titled **The chart vocabulary and the house style, with no panel moved** and on this plan's row titled **The index task, two compact periods, and the diagram moves into the page**. **An earlier draft pointed at plan 51's row titled One panel end to end: the browser fetches the ledger and draws it in d3, which produced a cycle**: that row waits on plan 51's publishing row, which waited on this one. That is recorded in plan 51's dependent-plans section as well, because a constraint written on one side only is a constraint somebody discovers.
+  **The cost is an ordering constraint and it is the only thing this settles.** `sliceFromDisk()` is built by plan 51's row titled **The query door module and its two entry points**, so **this row cannot merge before that module exists** - and that ordering is in this row's `Depends-on` cell rather than in prose, because the dispatcher reads the cell. That row depends on plan 51's row titled **The chart vocabulary and the house style, with no panel moved** and on this plan's row titled **One compaction task a ledger, two compact periods, and the diagrams move into the page**. **An earlier draft pointed at plan 51's row titled One panel end to end: the browser fetches the ledger and draws it in d3, which produced a cycle**: that row waits on plan 51's publishing row, which waited on this one. That is recorded in plan 51's dependent-plans section as well, because a constraint written on one side only is a constraint somebody discovers.
 
   | # | Rejected | Why | What it would cost |
   | --- | --- | --- | --- |
@@ -1831,9 +1966,9 @@ It mints `unit_id` and then `file_id` through `naming` (section 5.7), builds the
 
 ### Row #10 - COLLAPSED - `span-rollup` becomes parquet
 
-**This row is collapsed and there is nothing here to execute.** `state/span-rollup/` is being deleted rather than migrated, so the migration has no beneficiary. The deletion is a different outcome with a different risk class - a one-way removal of a ledger with five live readers and one published projection - and it goes to [`20260926-52-fifty-panels-move-and-six-projections-go-plan.md`](20260926-52-fifty-panels-move-and-six-projections-go-plan.md)'s first row, beside the `span-rollup` projection that row already deletes. Nothing in this plan or in plan 51 waits on it; leaving the ledger in place costs one duplicated write, which is what happens today.
+**This row is collapsed and there is nothing here to execute.** `state/span-rollup/` is being deleted rather than migrated, so the migration has no beneficiary. The deletion is a different outcome with a different risk class - a one-way removal of a ledger with five live readers and one published projection - and it goes to [`20260926-52-fifty-panels-move-and-six-projections-go-plan.md`](20260926-52-fifty-panels-move-and-six-projections-go-plan.md)'s row for the last console route to move, beside the `span-rollup` projection that row already deletes (that plan's section titled **The shape this plan is expected to take**). Nothing in this plan or in plan 51 waits on it; leaving the ledger in place costs one duplicated write, which is what happens today.
 
-**Everything below this line is the evidence for that ruling, not an instruction.** The `Scope`, `Files touched`, `Acceptance gates` and `Oracle` blocks describe the migration that is not happening, and they are kept only until plan 52's first row carries the measurements across.
+**Everything below this line is the evidence for that ruling, not an instruction.** The `Scope`, `Files touched`, `Acceptance gates` and `Oracle` blocks describe the migration that is not happening, and they are kept only until the plan 52 row that deletes the ledger carries the measurements across.
 
 > **HELD, 2026-09-26. Do not start this row.** Susan was asked twice. The first brief was wrong - it offered her only the shard-grain fold and asked about a panel. The second gave her `state/traces/` and asked about a query surface. **Both rulings say delete, and the second says it for a better reason.**
 >
@@ -1866,7 +2001,7 @@ It mints `unit_id` and then `file_id` through `naming` (section 5.7), builds the
   - `backend/idhazh/stages/work.py` (the one `write_segment` call for `SPAN_ROLLUP` moves to `persist()`), `backend/idhazh/telemetry/publish/span_rollup.py` (the read side), `backend/idhazh/contracts/span_rollup.py` (**no `version` stamp**, one `changelog` entry)
   - `backend/idhazh/stages/validate_days.py`, `backend/idhazh/telemetry/inventory.py` (two more backend readers)
   - `frontend/src/lib/server/span-rollup.ts`, `frontend/src/lib/server/run-timeline.ts`
-  - `backend/utilities/migrate_span_rollup.py` (new, one-shot; **its declaring line reads "delete when every `state/span-rollup` CSV is gone from `main`"**, and plan 52's first row names it in its scope line)
+  - `backend/utilities/migrate_span_rollup.py` (new, one-shot; **its declaring line reads "delete when every `state/span-rollup` CSV is gone from `main`"**)
   - `backend/idhazh/contracts/ledger_name.py` (`LedgerName` gains nothing - `SPAN_ROLLUP` is already a member), `backend/idhazh/contracts/__init__.py`, `backend/idhazh/ledger/__init__.py` and `backend/idhazh/day_shards.py` (the write and read sides it leaves)
   - `config/gardener/compact-span-rollup.json`
   - `frontend/src/lib/server/span-rollup.ts`
@@ -1891,7 +2026,7 @@ It mints `unit_id` and then `file_id` through `naming` (section 5.7), builds the
 
 ## Dependent plans
 
-- `TODO/20260924-51-console-fetches-and-draws-its-own-data-plan.md`. Its row titled **The three ledgers the console reads are published** waits on this plan's rows titled **The index task, two compact periods, and the diagram moves into the page** and **The three ledgers the console's routes read become parquet**. Nothing else in this plan is a predecessor there.
+- `TODO/20260924-51-console-fetches-and-draws-its-own-data-plan.md`. Its row titled **The three ledgers the console reads are published** waits on this plan's rows titled **One compaction task a ledger, two compact periods, and the diagrams move into the page** and **The three ledgers the console's routes read become parquet**. Nothing else in this plan is a predecessor there.
 - **[`20260926-52-fifty-panels-move-and-six-projections-go-plan.md`](20260926-52-fifty-panels-move-and-six-projections-go-plan.md), a placeholder and not yet a plan.** One row per console route. Each row moves that route's panels to the query door, and **each row's scope line ends with the projection under `frontend/public/` it deletes**: `/console/machine` deletes `machine`, the model route deletes `telemetry`, and the last route out deletes `day-metrics`, `run-days`, `run-timeline` and `span-rollup`. About 4.1 MB leaves the published site and six directories go. `console/band.json` stays - it is the freshness header every route fetches first, not a projection. **A route is not done while the projection it fed survives.**
 - **Susan rules every chart on that plan again, from scratch** (CLAUDE.md section 14). The charts on those routes were drawn against what a build-time projection could carry - twenty columns in the machine projection's case, aggregated per shard before any page saw them. A browser that can query the ledger can ask questions the projection could not answer, so **the existing chart is evidence of an old limit rather than a decision to preserve**. Her mandate on each route is what the data now allows, not what it used to show.
 - `TODO/20260905-13-switch-on-deletion-plan.md`, row titled "The fuse comes out, and one run is watched": its subject moves from the `--dry-run` flag on `digest.yml`'s assemble step to `config/gardener/visual-prune.json`'s `dry_run`. That plan is updated after this one delivers, per the owner, 2026-09-24.

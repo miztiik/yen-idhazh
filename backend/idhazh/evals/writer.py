@@ -59,16 +59,6 @@ from idhazh.evals import archive
 from idhazh.ledger import read_header as _read_header
 from idhazh.ledger import require_matching_header
 
-#: The two ledgers this module fills, and the POSIX prefix of each. Both names
-#: are `idhazh.contracts.ledger_name`'s and where they sit is the registry's; the
-#: words below are this module's own vocabulary for them. A caller wanting one
-#: date's file asks `ledger.path` for it, so there is no third spelling here.
-LEDGER_DIRNAME: Final = LedgerName.SCORES
-LEDGER_RELDIR: Final = f"{ledger.STATE_DIRNAME}/{LEDGER_DIRNAME}"
-
-INDEX_DIRNAME: Final = LedgerName.SCORE_INDEX
-INDEX_RELDIR: Final = f"{ledger.STATE_DIRNAME}/{INDEX_DIRNAME}"
-
 #: What makes two rows the same measurement. `idhazh.ledger.OBSERVATION_KEY` is
 #: the definition and this is the name this module has always called it; the
 #: compaction settles a day's segments on the same tuple.
@@ -93,7 +83,9 @@ def ledger_days(state_dir: Path) -> list[Path]:
     unbounded because every one of its callers has to see the whole ledger.
     """
     return list(
-        day_shards.shard_files(state_dir / LEDGER_DIRNAME, days=UNBOUNDED_WINDOW)
+        day_shards.shard_files(
+            ledger.tree_root(state_dir, LedgerName.SCORES), days=UNBOUNDED_WINDOW
+        )
     )
 
 
@@ -167,7 +159,11 @@ def index_days(state_dir: Path) -> list[Path]:
     `day_shards.shard_files` for the reason `ledger_days` gives, and unbounded
     for the reason it gives: every caller here needs the whole index.
     """
-    return list(day_shards.shard_files(state_dir / INDEX_DIRNAME, days=UNBOUNDED_WINDOW))
+    return list(
+        day_shards.shard_files(
+            ledger.tree_root(state_dir, LedgerName.SCORE_INDEX), days=UNBOUNDED_WINDOW
+        )
+    )
 
 
 def index_columns() -> tuple[str, ...]:
@@ -254,7 +250,9 @@ def rebuild_index(state_dir: Path, days: Iterable[str]) -> dict[str, IndexDrift]
         raise ValueError("rebuild_index was given no day, and a pass over none repairs none")
     absent = [date for date in named if date not in live]
     if absent:
-        raise FileNotFoundError(f"{LEDGER_RELDIR} holds no rows for {absent}")
+        raise FileNotFoundError(
+            f"{ledger.tree_relpath(LedgerName.SCORES)} holds no rows for {absent}"
+        )
 
     # One stamp for the whole pass, so every day this command repaired carries
     # the same name and an operator can see one repair rather than twenty.
@@ -284,7 +282,7 @@ def _indexed_on(state_dir: Path, date: str) -> frozenset[str]:
     a measurement new because another writer's file already held it.
     """
     held: set[str] = set()
-    for path in day_shards.one_day(state_dir / INDEX_DIRNAME, date):
+    for path in day_shards.one_day(ledger.tree_root(state_dir, LedgerName.SCORE_INDEX), date):
         held.update(_digests_of_index(path))
     return frozenset(held)
 

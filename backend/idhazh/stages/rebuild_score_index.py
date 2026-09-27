@@ -56,13 +56,13 @@ def stage_rebuild_score_index(
     # whether that month is committed - a cover would make a real month read as
     # a typo (Guardrail #12).
     by_month = day_shards.shards_by_month(
-        state / writer.LEDGER_DIRNAME, days=UNBOUNDED_WINDOW
+        ledger.tree_root(state, LedgerName.SCORES), days=UNBOUNDED_WINDOW
     )
     named = sorted(by_month) if months is None else sorted({month[:7] for month in months})
     if not named:
         LOG.error(
             "rebuild-score-index found no rows under %s, so no index can be wrong about one",
-            writer.LEDGER_RELDIR,
+            ledger.tree_relpath(LedgerName.SCORES),
         )
         return 1
     absent = [month for month in named if month not in by_month]

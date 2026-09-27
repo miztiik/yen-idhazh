@@ -26,12 +26,12 @@ from idhazh.contracts.feed_retirement import FeedRetirementRow
 from idhazh.contracts.fitted_similarity_threshold import FittedSimilarityThreshold
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.item_health import ItemHealthRow, ItemOutcome
+from idhazh.contracts.item_health_summary import ItemHealthSummaryRow
 from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.seen import PublishedRow, SeenRow
 from idhazh.contracts.span_rollup import SpanRollupRow
 from idhazh.contracts.story_similarity_pair import StorySimilarityPair
-from idhazh.contracts.telemetry_aggregate import TelemetryAggregateRow
 from idhazh.contracts.visual_prune import VisualPruneRow
 from idhazh.ledger import paths
 from idhazh.ledger.csv_file import (
@@ -684,7 +684,7 @@ def load_item_health(state_dir: Path, *, today: str, within_days: int) -> list[I
     ]
 
 
-def write_item_health_summary(path: Path, rows: list[TelemetryAggregateRow]) -> int:
+def write_item_health_summary(path: Path, rows: list[ItemHealthSummaryRow]) -> int:
     """Write one month's folded summary whole, replacing whatever was there.
 
     The only writer here that rewrites rather than appends, and the reason is
@@ -695,7 +695,7 @@ def write_item_health_summary(path: Path, rows: list[TelemetryAggregateRow]) -> 
     Returns how many rows landed, so a caller can log the count.
     """
     path.parent.mkdir(parents=True, exist_ok=True)
-    columns = TelemetryAggregateRow.csv_columns()
+    columns = ItemHealthSummaryRow.csv_columns()
     with path.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=columns, lineterminator="\n")
         writer.writeheader()
@@ -704,9 +704,9 @@ def write_item_health_summary(path: Path, rows: list[TelemetryAggregateRow]) -> 
     return len(rows)
 
 
-def load_item_health_summary(path: Path) -> list[TelemetryAggregateRow]:
+def load_item_health_summary(path: Path) -> list[ItemHealthSummaryRow]:
     """Every folded row of one month. Empty for a month never folded."""
-    return [TelemetryAggregateRow.from_csv_row(row) for row in _read_rows(path)]
+    return [ItemHealthSummaryRow.from_csv_row(row) for row in _read_rows(path)]
 
 
 def load_health(state_dir: Path, *, today: str, within_days: int) -> list[FeedHealthRow]:

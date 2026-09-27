@@ -16,7 +16,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from idhazh import ledger
 from idhazh.contracts.item_health import ItemHealthRow
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.ledger import BEFORE_PARTITION_NAME
 from utilities import item_health_provenance as provenance
 
@@ -43,7 +45,8 @@ def module(root: Path, name: str, source: str) -> None:
 
 def day(root: Path, name: str, header: str, *rows: str) -> None:
     """One writer's file of the built ledger, at the path the walk expects."""
-    path = root / provenance.LEDGER_ROOT / "2026" / "09" / name / BEFORE_PARTITION_NAME
+    folder = ledger.tree_root(root / ledger.STATE_DIRNAME, LedgerName.ITEM_HEALTH)
+    path = folder / "2026" / "09" / name / BEFORE_PARTITION_NAME
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("\n".join([header, *rows]) + "\n", encoding="utf-8", newline="\n")
 

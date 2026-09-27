@@ -20,9 +20,11 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
+from idhazh import ledger
 from idhazh.config import load
 from idhazh.contracts.eval_row import ConfidenceBand
 from idhazh.contracts.knobs.evaluation import EvaluationConfig
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.evals import archive, writer
 from idhazh.evals.score import band
 
@@ -90,17 +92,15 @@ def read_ledger(state_dir: Path) -> list[dict[str, str]]:
     """
     days = writer.ledger_days(state_dir)
     if not days:
+        scores = ledger.tree_root(state_dir, LedgerName.SCORES).as_posix()
         summarised = archive.archived_months(state_dir)
         if summarised:
             raise ValueError(
-                f"every month of {(state_dir / writer.LEDGER_DIRNAME).as_posix()} has aged "
+                f"every month of {scores} has aged "
                 f"out of the full-grain window - {', '.join(summarised)} exist only as "
                 f"summaries, and a band is a function of one row. {archive.RAW_WINDOW_NOTE}"
             )
-        raise ValueError(
-            f"{(state_dir / writer.LEDGER_DIRNAME).as_posix()} holds no "
-            f"<YYYY>/<MM>/<DD>.csv day file"
-        )
+        raise ValueError(f"{scores} holds no <YYYY>/<MM>/<DD>.csv day file")
     return [row for day in days for row in read_rows(day)]
 
 
@@ -202,7 +202,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "\n".join(
             lines_for(
                 report,
-                args.state / writer.LEDGER_DIRNAME,
+                ledger.tree_root(args.state, LedgerName.SCORES),
                 archived=archive.archived_months(args.state),
             )
         )

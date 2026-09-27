@@ -4,11 +4,12 @@ The registry is loaded and validated once, when this module loads, so a config
 that does not describe every ledger stops the build rather than a run four
 hundred seconds in.
 
-Three builders and no fourth. `path` and `relpath` are the same address in the
-two forms this project uses - a `Path` for local I/O, a POSIX string for anything
-leaving the process (CLAUDE.md section 2) - and they are built from one segment
-list so they cannot disagree. `tree_root` is the whole-tree directory a reader
-walks.
+Four builders in two pairs, and no fifth. `path` and `relpath` are the same
+address in the two forms this project uses - a `Path` for local I/O, a POSIX
+string for anything leaving the process (CLAUDE.md section 2) - and they are
+built from one segment list so they cannot disagree. `tree_root` and
+`tree_relpath` are the same pair for the folder a reader walks: the one that
+holds every file of a ledger and nothing else.
 
 Nothing here globs `state/`. A walk would cost more every day, and it cannot tell
 a retired ledger from one that has never run (Guardrail #12).
@@ -40,10 +41,6 @@ _PERIOD: Final[dict[Grain, str]] = {
     Grain.MONTH_FILE: "the YYYY-MM month its rows describe",
     Grain.STAMPED: "the stamp its rows were taken under",
 }
-
-#: The grains that put their files in a `<YYYY>/<MM>/` tree, so a reader can walk
-#: one root and meet every day.
-_DAY_GRAINS: Final[frozenset[Grain]] = frozenset({Grain.DAY_FILE, Grain.DAY_TREE})
 
 
 def _load(config_dir: Path) -> LedgersConfig:
@@ -124,17 +121,33 @@ def relpath(ledger: LedgerName, covers: str | None = None) -> str:
     return "/".join((STATE_DIRNAME, *_segments(_REGISTRY[ledger], covers)))
 
 
-def tree_root(state_dir: Path, ledger: LedgerName) -> Path:
-    """The whole-tree directory a reader walks, for a ledger that files by day.
+def _folder(held: LedgerEntry) -> tuple[str, ...]:
+    """The folder a ledger has to itself under `state/`, one segment at a time.
 
-    What `day_shards.settled_rows` and `day_partition.day_files` are handed. It
-    is a builder of its own rather than `path` with no period, so `path` keeps
-    refusing a missing one.
+    A flat file has none. It shares its folder with other files -
+    `feed-retirements.csv` sits at the top of `state/` and `holdout-pairs.csv`
+    beside the similarity judge's other ledgers - so a walk handed that folder
+    would read files that are not this ledger's.
     """
-    held = _REGISTRY[ledger]
-    if held.grain not in _DAY_GRAINS:
+    if held.grain is Grain.FLAT:
         raise ValueError(
-            f"{held.name} files by {held.grain.value}, so it has no day tree to walk. "
-            "Only a ledger filing by day has one"
+            f"{held.name} is one file in a folder it shares with other files, so it has "
+            "no day tree to walk and no folder of its own. Ask `path` for the file"
         )
-    return state_dir.joinpath(*held.prefix)
+    return held.prefix
+
+
+def tree_root(state_dir: Path, ledger: LedgerName) -> Path:
+    """The folder that holds every file of this ledger and nothing else, under this state root.
+
+    What the `day_shards`, `day_partition` and `month_partition` readers are
+    handed: a walk that starts here meets every day, month or stamp the ledger
+    has filed. It is a builder of its own rather than `path` with no period, so
+    `path` keeps refusing a missing one.
+    """
+    return state_dir.joinpath(*_folder(_REGISTRY[ledger]))
+
+
+def tree_relpath(ledger: LedgerName) -> str:
+    """The same folder as `tree_root`, POSIX and relative, for a log line or a manifest."""
+    return "/".join((STATE_DIRNAME, *_folder(_REGISTRY[ledger])))
