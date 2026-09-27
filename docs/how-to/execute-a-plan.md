@@ -1,6 +1,6 @@
 # How to execute a plan-doc (the execution contract)
 
-**Last Updated**: 2026-09-24
+**Last Updated**: 2026-09-27
 The mechanics for running a `TODO/<YYYYMMDD>-<slug>-plan.md` that [author-a-plan.md](author-a-plan.md) produced. Authoring writes the plan; this doc runs it, and owns the autonomy policy it runs under (section "Escalation").
 
 ASCII only in agent/customization Markdown: "-", "->", ">=", "section".
@@ -107,7 +107,7 @@ AUTO is the default. PAUSE and surface only for: a Level-5 row (CLAUDE.md sectio
 
 ## Closure
 
-When every row is `DONE` / `COLLAPSED`: confirm the Status Reckoner is fully resolved, check that nothing durable is written only in the plan-doc ([distill-a-plan.md](distill-a-plan.md) says where anything left over goes), and delete the plan-doc (git history is the ledger, per [../reference/documentation-structure.md](../reference/documentation-structure.md)). Closing a plan does not invalidate an existing check, and a documentation-only closure uses documentation checks and CI rather than a fresh local application suite.
+When every row is `DONE` / `COLLAPSED`: confirm the Status Reckoner is fully resolved, check that nothing durable is written only in the plan-doc ([distill-a-plan.md](distill-a-plan.md) says where anything left over goes), and delete the plan-doc (git history is the ledger, per [../reference/documentation-structure.md](../reference/documentation-structure.md)). A decision the plan defers to another plan is closed only when the receiving plan names it in a row of its own; a deferral with no receiving row is a dropped decision. Closing a plan does not invalidate an existing check, and a documentation-only closure uses documentation checks and CI rather than a fresh local application suite.
 
 **Then sweep the worktrees the plan created.** Keep a checkout only when all three agree: its pull request is merged, its branch is gone from the remote, and its own tree is clean. Remove the checkout and keep the branch whenever the branch still holds a commit the trunk does not - the directory is the disk cost, and the branch is the only copy of an unmerged commit. Why all three are needed, and what a detached checkout changes, is in [git-and-github.md](../reference/agent-notes/git-and-github.md).
 
