@@ -7,7 +7,7 @@ import os
 from datetime import UTC, datetime
 from pathlib import Path
 
-from idhazh import assemble, config, discover, rank
+from idhazh import assemble, atomic_write, config, discover, rank
 from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.pipeline_tests import PipelineTestsConfig
 from idhazh.contracts.run_plan import PlannedItem, RunPlan, VerticalPlan
@@ -78,7 +78,7 @@ def plan(args: argparse.Namespace) -> int:
         items=items,
     )
     PLAN_FILE.parent.mkdir(parents=True, exist_ok=True)
-    assemble.write_atomic(PLAN_FILE, written.to_json())
+    atomic_write.write_atomic(PLAN_FILE, written.to_json())
     print(f"date={date}")
     print("item_ids=" + " ".join(item.item_id for item in written.items))
     return 0

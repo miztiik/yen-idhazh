@@ -49,6 +49,7 @@ from typing import Final
 
 from idhazh import (
     assemble,
+    atomic_write,
     config,
     path_classes,
 )
@@ -788,7 +789,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         plan = plan_stage.stage_plan(
             date, settings=settings, fetcher=read_url, cap=args.cap, execution=args.execution
         )
-        assemble.write_atomic(common._plan_path(date), plan.to_json())
+        atomic_write.write_atomic(common._plan_path(date), plan.to_json())
         common.LOG.info("planned date=%s items=%s feeds=%s", date, len(plan.items), plan.feeds_read)
 
     if args.stage in ("work", "run"):

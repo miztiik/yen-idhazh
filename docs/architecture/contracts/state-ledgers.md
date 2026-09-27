@@ -128,10 +128,14 @@ The first row is what the registry is for. The claim used to be a hand-written P
 
 **All three are claimed, so all three are protected.** The status says what a writer may do, never whether the rows survive. Deleting a family's data for good is something a person does on purpose, never a side effect of a status change.
 
-**The write path does not read the status yet.** Every writer writes where the registry says, whatever the family's status. So a test holds every family at `active`, and it refuses a paused or retired family until the write path honours the field. When it does, two rules hold, and both are the owner's:
+**The write path reads the status on every write.** One function decides: `accepts_new_rows` in `backend/idhazh/ledger/lifecycle.py`, which reads the family's status from the registry each time it is called. Every route that writes new rows asks it before it writes - `write_segment` and `extend_segment`, each `append_*` helper except the prune's own log, the similarity judge's record, archive and holdout score, the council's collecting write, the day record, the digest fragment, the trace sink once per shard, and the ledger door ([persistence.md](persistence.md)) for a raw write from a pipeline job. Two rules hold, and both are the owner's:
 
-- A write into a paused or retired family is skipped with one warning, and the run carries on. A status is a decision about one folder, and a run that stopped on it would cost every other family its rows.
-- The passes that compact closed days and age out old rows keep running over a paused or retired family. To freeze its old rows as well, pause the pass that deletes them: a status says whether new rows are written, never how long old ones are kept.
+- A write into a paused or retired family is skipped with one warning naming the ledger, its family, the status and the rows not written, and the run carries on. A status is a decision about one folder, and a run that stopped on it would cost every other family its rows.
+- The passes that compact closed days and age out old rows keep running over a paused or retired family. To freeze its old rows as well, pause the pass that deletes them: a status says whether new rows are written, never how long old ones are kept. Those passes never ask, and the ledger door exempts a compact-tier write and any write from `migrate`, `run-tasks` or `history`, because each of those files rows again that were already recorded - skipping one after its source was deleted would lose rows while the run reported success.
+
+**The check sits at the write, never in the path builders.** `path`, `tree_root` and `relpath` also serve readers, and a paused family is still read.
+
+**What pausing a family costs, beyond its own rows.** CI builds its canary day through the same writers, so pausing a family thins that fixture too. A paused `content-similarity-judge` re-judges the same nights at every council run until they leave the window, because what counts a night as outstanding reads the record the skip stops writing. And a paused `digest-fragments` stops the first run of a new day from publishing it at all: the day is assembled from the fragments on disk, and a day with none is refused.
 
 ### Onboarding and offboarding
 
@@ -139,7 +143,7 @@ The first row is what the registry is for. The claim used to be a hand-written P
 
 **Add a ledger to a family.** One more entry in that family's `ledgers`, with a prefix that opens on the family's name, and its member, spelled with the family's name in front. The family's status covers it from its first row.
 
-**Pause or retire a family.** Change its `lifecycle_status`, and nothing else. Nothing is discovered, and nothing is a hand-list somebody can forget. Until the write path reads the field, the test above refuses the edit rather than let the registry say something the writers do not do.
+**Pause or retire a family.** Change its `lifecycle_status`, and nothing else. Nothing is discovered, and nothing is a hand-list somebody can forget. The next write of new rows into it is skipped with one warning, and its old rows are read and aged as before.
 
 ```mermaid
 %%{init: {"theme": "base", "themeVariables": {"background": "#0f1117", "primaryColor": "#222834", "primaryTextColor": "#e6e9f0", "primaryBorderColor": "#4b5468", "lineColor": "#8b93a7", "textColor": "#e6e9f0", "clusterBkg": "#1a1e27", "clusterBorder": "#3a4254", "titleColor": "#e6e9f0", "edgeLabelBackground": "#1a1e27", "fontSize": "14px"}}}%%
@@ -203,22 +207,27 @@ flowchart TB
 
 In one line: a ledger exists because a family lists it; the families, the ledgers and the typed names must agree or the build stops; everything that touches `state/` goes through the door the registry feeds; and `prune-state` empties only what the registry does not claim.
 
-The four drawn are the ones a row moves through. The other three - `csv_file`, `filenames` and `headers` - are read and written by those four and reach neither the registry nor `state/` on their own; the table below lists all eight.
+The four drawn are the ones a CSV row moves through. The rest are read and written by those four or serve the ledger door, and reach neither the registry nor `state/` on their own; the table below lists them all.
 
-### The seven modules behind the door
+### The modules behind the door
 
 `backend/idhazh/ledger/__init__.py` is the door itself, and every caller reaches the ledger through it - `from idhazh import ledger`, then `ledger.X`. It holds imports and one `__all__` and nothing else, so a name can move between the modules below without a caller changing. The split is for whoever maintains the ledger; a caller never sees it.
 
 | Module | The one question it answers |
 | --- | --- |
 | `__init__.py` | which module holds the name a caller asked for |
-| `paths.py` | where a ledger's file lives, read from `config/ledgers.json` |
+| `paths.py` | where a ledger's file lives: read from `config/ledgers.json`, or built under `state/raw/` and `state/compact/` |
 | `keys.py` | what makes two rows of one ledger the same record |
 | `filenames.py` | what one writer's file is called, and how that name reads back |
 | `csv_file.py` | how rows are read out of a CSV file and written back into it |
 | `headers.py` | how a file written under an older header is read |
 | `rows.py` | how a caller puts rows into a ledger and gets them back out |
 | `settle.py` | which rows of a committed file repeat a key, and what dropping them costs |
+| `lifecycle.py` | whether a ledger takes new rows now |
+| `persist.py` | the one door a contract payload takes to disk as parquet or JSON lines, and back |
+| `arrow_schema.py` | which column type each field of a contract becomes |
+| `parquet.py` | how rows become a parquet file and back - the only module that imports pyarrow |
+| `json_lines.py` | how rows become a JSON-lines file and back |
 
 Two edges in that graph carry a reason rather than a preference. **`paths.py` imports nothing from `keys.py`**: where a ledger lives and how its rows settle are two questions that change for different reasons, and one module holding both is how a path edit starts moving a settlement rule. **`rows.py` imports `day_shards` inside the function bodies that need it, never at the top of the file**: `day_shards` imports names back out of this package at its own module top, so a module-scope import in `rows.py` would close a load-time cycle - importing the package runs `__init__`, which imports `rows`, which re-enters a package that is still being built.
 
@@ -260,6 +269,7 @@ CLAUDE.md section 11 does not apply to this file. It is a config file this proje
 
 ## See also
 
+- [persistence.md](persistence.md) - the ledger door: parquet and JSON lines under `state/raw/` and `state/compact/`, and how the engine is swapped.
 - [schemas.md](schemas.md) - the shape of a row, and the rule that decides whether a ledger partitions.
 - [../../concepts/partitions.md](../../concepts/partitions.md) - what counts as a day file and a month name, and how a collection changes grain.
 - [../../concepts/adaptive-pruning.md](../../concepts/adaptive-pruning.md) - what happens to these rows as they age.

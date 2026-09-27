@@ -1,0 +1,131 @@
+"""Does every field annotation the ledger door can meet map to one declared column type?
+
+The mapping is a literal table, so these tests read the table back through the
+public function and name what it refuses. A refusal is the point of half of
+them: a column inferred from the rows is how a nullable field whose first value
+is null becomes a column that refuses the second row.
+"""
+
+from __future__ import annotations
+
+from enum import IntEnum, StrEnum
+from typing import ClassVar, Literal, cast
+
+import pytest
+from pydantic import Field
+
+from idhazh.contracts.base import ChangelogEntry, Contract, DateStamp, RunId, Sha256
+from idhazh.contracts.feed_retirement import FeedRetirementRow
+from idhazh.contracts.visual_prune import VisualPruneRow
+from idhazh.ledger.arrow_schema import Column, ColumnType, columns_of
+
+pytestmark = pytest.mark.contract
+
+
+class Colour(StrEnum):
+    """A string enum, which is stored as its value."""
+
+    RED = "red"
+
+
+class Rank(IntEnum):
+    """An integer enum, which the table does not name yet."""
+
+    FIRST = 1
+
+
+def _one_field(annotation: object) -> type[Contract]:
+    """A contract declaring one field of this annotation, built for the table to read."""
+    return cast(
+        "type[Contract]",
+        type(
+            "OneField",
+            (Contract,),
+            {
+                "__annotations__": {"field": annotation},
+                "__schema_stem__": "one-field",
+                "__changelog__": (
+                    ChangelogEntry(
+                        version="2026-09-27",
+                        change="Initial shape: one field of the annotation under test.",
+                        why="The column table is read back one annotation at a time.",
+                    ),
+                ),
+                "__module__": __name__,
+            },
+        ),
+    )
+
+
+class EveryAnnotation(Contract):
+    """One field of every annotation the column table names.
+
+    **A fixture, not a mock** (Guardrail #7): it stands in for nobody and is
+    deliberately absent from `contracts.CONTRACTS`.
+    """
+
+    __schema_stem__: ClassVar[str] = "every-annotation"
+    __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-27",
+            change="Initial shape: one field of every annotation the column table names.",
+            why="The table is proven one row at a time, against a real contract.",
+        ),
+    )
+
+    date: DateStamp
+    digest: Sha256
+    words: str
+    maybe_words: str | None = None
+    count: int
+    maybe_count: int | None = None
+    share: float
+    maybe_share: float | None = None
+    flag: bool
+    maybe_flag: bool | None = None
+    colour: Colour
+    maybe_colour: Colour | None = None
+    run_ids: tuple[RunId, ...] = Field(default=())
+
+
+def test_every_row_of_the_table_maps_to_its_column_and_its_nullability() -> None:
+    columns = {column.name: column for column in columns_of(EveryAnnotation)}
+
+    assert columns == {
+        "version": Column("version", ColumnType.STRING, nullable=False),
+        "date": Column("date", ColumnType.STRING, nullable=False),
+        "digest": Column("digest", ColumnType.STRING, nullable=False),
+        "words": Column("words", ColumnType.STRING, nullable=False),
+        "maybe_words": Column("maybe_words", ColumnType.STRING, nullable=True),
+        "count": Column("count", ColumnType.INT64, nullable=False),
+        "maybe_count": Column("maybe_count", ColumnType.INT64, nullable=True),
+        "share": Column("share", ColumnType.FLOAT64, nullable=False),
+        "maybe_share": Column("maybe_share", ColumnType.FLOAT64, nullable=True),
+        "flag": Column("flag", ColumnType.BOOL, nullable=False),
+        "maybe_flag": Column("maybe_flag", ColumnType.BOOL, nullable=True),
+        "colour": Column("colour", ColumnType.STRING, nullable=False),
+        "maybe_colour": Column("maybe_colour", ColumnType.STRING, nullable=True),
+        "run_ids": Column("run_ids", ColumnType.STRING_LIST, nullable=False),
+    }
+
+
+def test_the_columns_come_in_the_contracts_own_field_order() -> None:
+    assert [column.name for column in columns_of(EveryAnnotation)] == list(
+        EveryAnnotation.model_fields
+    )
+
+
+@pytest.mark.parametrize(
+    "annotation",
+    [Rank, list[str], dict[str, str], Literal["a", "b"], tuple[int, ...], tuple[str, str]],
+    ids=["int-enum", "list", "dict", "literal", "tuple-of-int", "fixed-tuple"],
+)
+def test_an_annotation_the_table_does_not_name_is_refused_by_name(annotation: object) -> None:
+    with pytest.raises(TypeError, match=r"field is declared .* no column type"):
+        columns_of(_one_field(annotation))
+
+
+@pytest.mark.parametrize("model", [VisualPruneRow, FeedRetirementRow])
+def test_every_field_of_the_two_contracts_moving_first_maps(model: type[Contract]) -> None:
+    """The first two ledgers to move through the door must not stop at their first write."""
+    assert [column.name for column in columns_of(model)] == list(model.model_fields)

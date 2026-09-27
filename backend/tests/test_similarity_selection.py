@@ -29,7 +29,7 @@ import pytest
 from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, read_text
 from pydantic import TypeAdapter, ValidationError
 
-from idhazh import assemble, config
+from idhazh import assemble, atomic_write, config
 from idhazh.assemble import ScoredPair, cross_source_pairs
 from idhazh.contracts.base import Sha256, derive_url_key
 from idhazh.contracts.digest_day import (
@@ -350,8 +350,8 @@ def a_published_day(root: Path) -> None:
         embeddings=vectors,
     )
     target = assemble.day_dir(root, DATE)
-    assemble.write_atomic(target / "digest.json", day.to_json())
-    assemble.write_atomic(target / "run.json", manifest.to_json())
+    atomic_write.write_atomic(target / "digest.json", day.to_json())
+    atomic_write.write_atomic(target / "run.json", manifest.to_json())
 
 
 def test_the_draw_round_trips_through_the_contract(

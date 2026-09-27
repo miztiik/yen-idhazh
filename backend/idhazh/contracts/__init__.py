@@ -50,6 +50,7 @@ from idhazh.contracts.eval_row import ConfidenceBand, EvalRow
 from idhazh.contracts.evidence import EvidenceItem
 from idhazh.contracts.feed_health import FeedHealthRow
 from idhazh.contracts.feed_retirement import FeedRetirementRow
+from idhazh.contracts.file_envelope import FileEnvelope
 from idhazh.contracts.fingerprint import PipelineInputs
 from idhazh.contracts.fitted_similarity_threshold import FittedSimilarityThreshold
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
@@ -144,6 +145,7 @@ CONTRACTS: Final[tuple[type[Contract], ...]] = (
     EvidenceItem,
     FeedHealthRow,
     FeedRetirementRow,
+    FileEnvelope,
     FittedSimilarityThreshold,
     IconManifest,
     HostFingerprintRow,
@@ -217,6 +219,7 @@ __all__ = [
     "EvalRow",
     "EventDef",
     "FeedDef",
+    "FileEnvelope",
     "LedgerName",
     "LensDef",
     "LifecycleStatus",

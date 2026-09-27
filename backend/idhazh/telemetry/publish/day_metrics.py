@@ -36,7 +36,8 @@ from pathlib import Path
 from typing import Final
 
 from idhazh import day_shards, ledger
-from idhazh.assemble import TaxonomyVectors, nearest_label_cosines, write_atomic
+from idhazh.assemble import TaxonomyVectors, nearest_label_cosines
+from idhazh.atomic_write import write_atomic
 from idhazh.contracts.base import canonical_json
 from idhazh.contracts.day_metrics import (
     INSTRUMENT_COLUMNS,
@@ -608,10 +609,12 @@ def write(state_root: Path, metrics: DayMetrics) -> Path:
     """Write one record, whole, with a temp-file-plus-rename.
 
     A correction rewrites the file rather than patching it, so a reader never
-    sees a half-written day.
+    sees a half-written day. Into a paused or retired family nothing is written,
+    and the path it would have taken comes back all the same.
     """
     path = day_metrics_path(state_root, metrics.date)
-    write_atomic(path, metrics.to_json())
+    if ledger.accepts_new_rows(LedgerName.DAY_METRICS, 1):
+        write_atomic(path, metrics.to_json())
     return path
 
 

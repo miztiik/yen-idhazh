@@ -27,7 +27,17 @@ To change a persisted shape you edit the Pydantic model. Where the frontend copi
 **A closed vocabulary is copied as a frozen array, and the union its members form.**
 
 ```ts
-export const SERVER_JOB = ['plan', 'work', 'assemble', 'visuals', 'runtime', 'decide'] as const;
+export const SERVER_JOB = [
+	'plan',
+	'work',
+	'assemble',
+	'visuals',
+	'runtime',
+	'decide',
+	'migrate',
+	'run-tasks',
+	'history'
+] as const;
 
 export type ServerJob = (typeof SERVER_JOB)[number];
 ```

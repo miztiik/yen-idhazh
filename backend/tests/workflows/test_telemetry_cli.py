@@ -28,7 +28,7 @@ from typing import Final
 import pytest
 from conftest import CONTRACT_FIXTURES_DIR, read_text, seed_item_health, seed_span_rollup
 
-from idhazh import assemble, cli, ledger
+from idhazh import assemble, atomic_write, cli, ledger
 from idhazh.contracts.digest_day import DigestDay
 from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.ledger_name import LedgerName
@@ -106,8 +106,8 @@ def _a_published_day(tmp_path: Path) -> tuple[Path, Path, str]:
 
     digest_root = tmp_path / "digest"
     target = assemble.day_dir(digest_root, day.date)
-    assemble.write_atomic(target / "digest.json", day.to_json())
-    assemble.write_atomic(target / "run.json", manifest.to_json())
+    atomic_write.write_atomic(target / "digest.json", day.to_json())
+    atomic_write.write_atomic(target / "run.json", manifest.to_json())
 
     state_root = tmp_path / "state"
     item = ItemHealthRow.from_json(

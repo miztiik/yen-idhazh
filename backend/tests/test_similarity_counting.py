@@ -15,17 +15,19 @@ import csv
 import dataclasses
 import io
 import json
+import logging
 from pathlib import Path
 from typing import Final
 
 import pytest
 from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, read_text
 
-from idhazh import assemble, config, ledger
+from idhazh import atomic_write, config, ledger
 from idhazh.contracts.base import derive_text_digest, derive_url_key
 from idhazh.contracts.content_similarity_judge_metrics import ContentSimilarityJudgeMetrics
 from idhazh.contracts.knobs.placement import SimilarityThresholdConfig
 from idhazh.contracts.ledger_name import LedgerName
+from idhazh.contracts.ledgers import LedgersConfig
 from idhazh.contracts.story_similarity_distribution import StorySimilarityDistribution
 from idhazh.contracts.story_similarity_pair import SameStoryVerdict, StorySimilarityPair
 from idhazh.council import metrics_sink, session
@@ -352,7 +354,7 @@ def a_night(
     written = [a_metrics_row(shard=unit, date=date) for unit in range(units)]
     for unit, row in enumerate(written):
         metrics_sink.ship_judge_metrics(row, judge_id=JUDGE_ID, shard=unit, out_dir=shipped)
-        assemble.write_atomic(
+        atomic_write.write_atomic(
             verdicts
             / session.unit_file(
                 date, slot=VERDICTS_DIRNAME, judge_id=JUDGE_ID, shard=unit
@@ -555,6 +557,56 @@ def test_the_date_memory_survives_the_reset_that_empties_the_counts(tmp_path: Pa
     assert (
         tenant.TENANT.nights_outstanding(window=(AN_EARLIER_DATE, DATE), state_dir=state) == ()
     )
+
+
+def test_a_paused_judge_family_takes_no_verdict_reading_archive_or_count(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Each write the collecting job makes into this judge's family asks first.
+
+    One active night leaves a record under the old ruler. With the family paused,
+    a night under a moved ruler would append verdicts and readings, archive the
+    record and count the day - and each of the four is skipped with one warning
+    naming its own ledger, while the job reports the day as not counted rather
+    than failing.
+    """
+    settings = config.load(CONFIG_DIR)
+    state = tmp_path / "state"
+    shards = settings.app.council.shards
+    counted_by(DATE, root=tmp_path / "first", state=state, settings=settings, units=shards)
+    before = sorted(path.relative_to(state).as_posix() for path in state.rglob("*.*"))
+    registry = json.loads(read_text(CONFIG_DIR / ledger.paths.REGISTRY_FILENAME))
+    for family in registry["families"]:
+        if family["name"] == "content-similarity-judge":
+            family["lifecycle_status"] = "paused"
+    monkeypatch.setattr(ledger.paths, "_CONFIG", LedgersConfig.model_validate(registry))
+
+    with caplog.at_level(logging.WARNING, logger="idhazh"):
+        after = counted_by(
+            AN_EARLIER_DATE,
+            root=tmp_path / "second",
+            state=state,
+            settings=a_ruler_moved(settings),
+            units=shards,
+        )
+    skipped = sorted(
+        record.getMessage().split(" ")[3]
+        for record in caplog.records
+        if "ledger write skipped" in record.getMessage()
+    )
+
+    assert (after.counted, after.held_reason, after.archived) == (
+        False,
+        "family_not_active",
+        None,
+    )
+    assert sorted(path.relative_to(state).as_posix() for path in state.rglob("*.*")) == before
+    assert skipped == [
+        "ledger=archive",
+        "ledger=metrics",
+        "ledger=score-distribution",
+        "ledger=scored-pairs",
+    ]
 
 
 def test_a_judge_with_no_record_yet_names_no_night(tmp_path: Path) -> None:

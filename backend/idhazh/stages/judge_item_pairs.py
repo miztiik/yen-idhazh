@@ -26,7 +26,7 @@ from functools import partial
 from pathlib import Path
 from typing import Any
 
-from idhazh import assemble, config
+from idhazh import assemble, atomic_write, config
 from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.content_similarity_judge_metrics import ContentSimilarityJudgeMetrics
 from idhazh.contracts.council_shard_outcome import ShardOutcome
@@ -182,7 +182,7 @@ def stage_judge_item_pairs(
         readings.append(verdicts)
         judged.append(_with_the_verdict(row, verdicts, stamp=stamp, run_id=run_id))
         if len(judged) % flush_every == 0:
-            assemble.write_atomic(path, _as_csv(judged))
+            atomic_write.write_atomic(path, _as_csv(judged))
 
     if unreadable:
         LOG.warning(
@@ -212,7 +212,7 @@ def stage_judge_item_pairs(
     # Unconditional, and after the loop as well as inside it. It is what leaves a
     # header for a shard that judged nothing, and what catches the pairs of a group
     # the cadence had not closed.
-    assemble.write_atomic(path, _as_csv(judged))
+    atomic_write.write_atomic(path, _as_csv(judged))
     report = ShardReport(
         date=date,
         shard=shard,
