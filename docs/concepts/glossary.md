@@ -44,7 +44,7 @@ a doc is a fine change to make; moving it into *this* page is not.
 | **fold** | One of the four retention policies: keep the durable total, drop the per-item grain. Compaction uses the same word for what it does to a closed day | [adaptive-pruning.md](adaptive-pruning.md) |
 | **holdout** | Labelled pairs kept out of fitting, so a fitted threshold is scored against something it has never seen | [../how-to/label-the-similarity-holdout.md](../how-to/label-the-similarity-holdout.md) |
 | **item** | One source URL and everything derived from it. The atom of the whole system | [pipeline-loop.md](pipeline-loop.md) |
-| **ledger** | A committed file under `state/` that one run writes so a later run can read a fact it found. **The directory is a ledger too**: `state/seen/` is the seen ledger and `state/item-health/` is the item-health ledger. The pipeline has no memory of its own: every run starts on a fresh machine with a fresh checkout | [../architecture/contracts/state-ledgers.md](../architecture/contracts/state-ledgers.md); the code is `backend/idhazh/ledger/` |
+| **ledger** | A committed file under `state/` that one run writes so a later run can read a fact it found. **The directory is a ledger too**: `state/seen/` is the seen ledger and `state/item-health/` is the item-health ledger. The pipeline has no memory of its own: every run starts on a fresh machine with a fresh checkout | [../architecture/contracts/state-ledgers.md](../architecture/contracts/state-ledgers.md); which ones exist is `config/ledgers.json` and the code is `backend/idhazh/ledger/` |
 | **partition** | One file holding one period of a collection that grows. The directory is the collection and the filename says the period | [partitions.md](partitions.md) |
 | **qualification** | The gates a candidate model must clear before it may be adopted, and what clearing them proves | [qualification.md](qualification.md) |
 | **run** | One turn of the pipeline. The schedule turns it five times a day | [pipeline-loop.md](pipeline-loop.md) |
@@ -75,9 +75,9 @@ memory. Under `frontend/public/` it is a **collection**, because nothing does -
 not a fact one run left for the next. The two words are not interchangeable and
 the test is the reader, never the shape on disk.
 
-Owner decision, 2026-09-26. `TODO/20260926-53-one-door-into-state-plan.md` is
-the work that removes the word, and its row 1 is the one place the spelling
-survives.
+Owner decision, 2026-09-26. The word is gone from the repository and a test
+refuses it by name, because sweeping it out once was not enough - it was swept
+out of the plan-docs and came back with the next draft.
 
 **A glossary looks like the register Guardrail #4 forbids, and is not one.**
 That guardrail bans a standalone record of a *decision*, because a decision
