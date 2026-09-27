@@ -409,13 +409,13 @@ def _trial_roots(state: Path) -> list[str]:
     into the trial root. Nothing had ever pruned `state/pipeline-tests/`
     because of it.
 
-    A ledger is claimed because `config/ledgers.json` has an entry for it, and
-    every state is claimed - live, paused and retired alike. So a ledger joins
-    this set in the change that registers it, and a ledger with no entry stops
-    the build rather than becoming a directory this pass empties. The four below
-    are the ledgers `ledger` does not own; each is read from its owning module
-    rather than retyped, and they are imported here rather than into `ledger`
-    because two of those modules import `ledger` themselves.
+    A family is claimed because `config/ledgers.json` lists it, and every
+    lifecycle status is claimed - active, paused and retired alike. So a ledger
+    joins this set in the change that registers it, and a ledger with no entry
+    stops the build rather than becoming a directory this pass empties. The four
+    below are the ledgers `ledger` does not own; each is read from its owning
+    module rather than retyped, and they are imported here rather than into
+    `ledger` because two of those modules import `ledger` themselves.
     """
     if not state.is_dir():
         return []

@@ -4,6 +4,10 @@ Four checks, and each one catches what the others cannot. The bijection is the
 only one that is new - the other three exist so that replacing twenty-odd
 hand-written path functions with one config file moved no byte on disk.
 
+The family checks sit beside them. A family is one top-level folder under
+`state/` and carries the lifecycle status, so each refusal below is a registry
+that would give one folder two answers.
+
 The paths on the right of every row were computed from `backend/idhazh/ledger/
 __init__.py` as it stood before the registry landed, not typed from memory.
 """
@@ -19,7 +23,7 @@ from pydantic import ValidationError
 
 from idhazh import ledger
 from idhazh.contracts.ledger_name import DAY_TREES, LedgerName
-from idhazh.contracts.ledgers import Grain, LedgersConfig, LedgerState
+from idhazh.contracts.ledgers import Grain, LedgersConfig, LifecycleStatus
 from idhazh.ledger import paths
 
 pytestmark = pytest.mark.contract
@@ -165,23 +169,34 @@ COVERS: Final[dict[Grain, str | None]] = {
 }
 
 
-def a_registry(entries: list[dict[str, Any]] | None = None) -> dict[str, Any]:
-    """The committed registry as a payload, with its entry list optionally replaced."""
+def a_registry(families: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+    """The committed registry as a payload, with its family list optionally replaced."""
     held: dict[str, Any] = json.loads(REGISTRY.read_text(encoding="utf-8"))
-    if entries is not None:
-        held["ledgers"] = entries
+    if families is not None:
+        held["families"] = families
     return held
 
 
-def committed_entries() -> list[dict[str, Any]]:
-    """The entry list as the file holds it."""
-    entries: list[dict[str, Any]] = a_registry()["ledgers"]
-    return entries
+def committed_families() -> list[dict[str, Any]]:
+    """The family list as the file holds it."""
+    families: list[dict[str, Any]] = a_registry()["families"]
+    return families
+
+
+def a_family(name: str) -> dict[str, Any]:
+    """One committed family, as the file holds it."""
+    return next(family for family in committed_families() if family["name"] == name)
+
+
+def without(*names: str) -> list[dict[str, Any]]:
+    """The committed families, less the ones named."""
+    return [family for family in committed_families() if family["name"] not in names]
 
 
 def test_the_committed_registry_names_every_ledger_exactly_once() -> None:
     """The bijection, over the file the build really reads."""
-    entries = LedgersConfig.from_json(REGISTRY.read_text(encoding="utf-8")).ledgers
+    families = LedgersConfig.from_json(REGISTRY.read_text(encoding="utf-8")).families
+    entries = [held for family in families for held in family.ledgers]
 
     assert {held.name for held in entries} == set(LedgerName)
     assert len(entries) == len(LedgerName)
@@ -194,36 +209,104 @@ def test_a_ledger_with_no_entry_stops_the_build_naming_it() -> None:
     silently emptied. Here it is a payload that will not validate, and the
     message names the ledger an operator has to add.
     """
-    kept = [
-        held for held in committed_entries() if held["name"] != LedgerName.ITEM_HEALTH.value
-    ]
-
     with pytest.raises(ValidationError) as refusal:
-        LedgersConfig.model_validate(a_registry(kept))
+        LedgersConfig.model_validate(a_registry(without(LedgerName.ITEM_HEALTH.value)))
 
     assert "no entry for item-health" in str(refusal.value)
 
 
 def test_a_ledger_named_twice_stops_the_build_naming_it() -> None:
     """Two entries for one ledger are two answers, and nothing chooses between them."""
-    held = committed_entries()
+    seen = a_family(LedgerName.SEEN.value)
+    doubled = {**seen, "ledgers": [*seen["ledgers"], dict(seen["ledgers"][0])]}
 
     with pytest.raises(ValidationError) as refusal:
-        LedgersConfig.model_validate(a_registry([*held, dict(held[0])]))
+        LedgersConfig.model_validate(a_registry([doubled, *without(LedgerName.SEEN.value)]))
 
-    assert "has more than one entry" in str(refusal.value)
-    assert held[0]["name"] in str(refusal.value)
+    assert "seen has more than one entry" in str(refusal.value)
 
 
 def test_an_entry_for_no_ledger_is_refused_by_the_name_it_carries() -> None:
     """The other half of the bijection: a name nobody declared."""
-    held = committed_entries()
-    invented = [*held, {**held[0], "name": "a-ledger-nobody-declared"}]
+    seen = a_family(LedgerName.SEEN.value)
+    invented = {
+        **seen,
+        "ledgers": [*seen["ledgers"], {**seen["ledgers"][0], "name": "a-ledger-nobody-declared"}],
+    }
 
     with pytest.raises(ValidationError) as refusal:
-        LedgersConfig.model_validate(a_registry(invented))
+        LedgersConfig.model_validate(a_registry([invented, *without(LedgerName.SEEN.value)]))
 
     assert "a-ledger-nobody-declared" in str(refusal.value)
+
+
+def test_a_family_named_twice_stops_the_build_naming_it() -> None:
+    """Two lists for one folder would give that folder two statuses.
+
+    The judge's seven ledgers split across two families of one name, so every
+    ledger is still listed exactly once and only the family repeats.
+    """
+    judge = a_family("content-similarity-judge")
+    halves = [
+        {**judge, "ledgers": judge["ledgers"][:3]},
+        {**judge, "ledgers": judge["ledgers"][3:]},
+    ]
+
+    with pytest.raises(ValidationError) as refusal:
+        LedgersConfig.model_validate(a_registry([*halves, *without("content-similarity-judge")]))
+
+    assert "family content-similarity-judge is listed more than once" in str(refusal.value)
+
+
+def test_a_ledger_listed_in_two_families_stops_the_build_naming_both() -> None:
+    """A ledger in two families takes two statuses, and nothing chooses between them."""
+    health = a_family(LedgerName.HEALTH.value)
+    widened = {
+        **health,
+        "ledgers": [*health["ledgers"], dict(a_family(LedgerName.SEEN.value)["ledgers"][0])],
+    }
+
+    with pytest.raises(ValidationError) as refusal:
+        LedgersConfig.model_validate(a_registry([widened, *without(LedgerName.HEALTH.value)]))
+
+    assert "seen is listed in families feed-health and seen" in str(refusal.value)
+
+
+def test_a_ledger_outside_its_familys_folder_stops_the_build_naming_it() -> None:
+    """A family is the folder its ledgers sit in, so a ledger filed elsewhere is refused.
+
+    The council's one ledger moved into the judge's list: its prefix still says
+    `state/llm-council/`, so it would sit in one folder under another's status.
+    """
+    judge = a_family("content-similarity-judge")
+    council = a_family("llm-council")["ledgers"][0]
+    moved = {**judge, "ledgers": [*judge["ledgers"], dict(council)]}
+
+    with pytest.raises(ValidationError) as refusal:
+        LedgersConfig.model_validate(
+            a_registry([moved, *without("content-similarity-judge", "llm-council")])
+        )
+
+    assert (
+        "shard-outcomes sits at state/llm-council/ and is listed in family "
+        "content-similarity-judge"
+    ) in str(refusal.value)
+
+
+def test_a_file_at_the_top_of_state_names_its_family_by_its_stem() -> None:
+    """The one ledger with no folder is named for its file, and a rename is refused."""
+    retirements = a_family(LedgerName.FEED_RETIREMENTS.value)
+    renamed = {**retirements, "name": "retirements"}
+
+    with pytest.raises(ValidationError) as refusal:
+        LedgersConfig.model_validate(
+            a_registry([renamed, *without(LedgerName.FEED_RETIREMENTS.value)])
+        )
+
+    assert (
+        "feed-retirements sits at state/feed-retirements.csv and is listed in family "
+        "retirements"
+    ) in str(refusal.value)
 
 
 @pytest.mark.parametrize("member", list(LedgerName), ids=lambda m: m.value)
@@ -270,6 +353,17 @@ def test_a_flat_ledger_handed_a_period_refuses() -> None:
     """One file has no period, so a caller passing one has the wrong ledger."""
     with pytest.raises(ValueError, match="names no period"):
         paths.path(STATE, LedgerName.FEED_RETIREMENTS, A_DAY)
+
+
+def test_the_claimed_roots_differ_from_the_base_only_by_the_names_given() -> None:
+    """The protected set, compared by name with what the sweep protected before.
+
+    A claim is a family name now, so every folder claimed before is still
+    claimed. The one addition is a file's stem, which the sweep never meets
+    because it only looks at directories.
+    """
+    assert ledger.claimed_roots() - CLAIMED_AT_THE_BASE == {"feed-retirements"}
+    assert CLAIMED_AT_THE_BASE - ledger.claimed_roots() == set()
 
 
 def test_every_directory_under_state_is_claimed_or_owned_elsewhere() -> None:
@@ -321,19 +415,32 @@ def test_every_day_tree_files_as_a_day_directory() -> None:
     )
 
 
-def test_every_committed_ledger_is_live() -> None:
-    """Nothing is paused or retired today, and a change to that is a change to read.
+def test_every_family_is_active_until_the_write_path_reads_the_status() -> None:
+    """Nothing may be paused or retired yet, because nothing would stop the writes.
 
-    All three states are claimed, so this asserts what the pipeline does rather
-    than what survives: a retired ledger keeps its rows either way.
+    The status is read by no writer today, so a paused family would still be
+    written on the next run while the registry said otherwise. All three
+    statuses are claimed, so this is about what the pipeline does rather than
+    what survives: a retired family keeps its rows either way.
     """
-    assert {paths.entry(member).state for member in LedgerName} == {LedgerState.LIVE}
+    families = LedgersConfig.from_json(REGISTRY.read_text(encoding="utf-8")).families
+    not_active = sorted(
+        f"{family.name} ({family.lifecycle_status.value})"
+        for family in families
+        if family.lifecycle_status is not LifecycleStatus.ACTIVE
+    )
+
+    assert not not_active, (
+        f"{', '.join(not_active)} is not active. A family cannot be paused or retired "
+        "until the write path honours lifecycle_status: today every writer ignores it, "
+        "so the family would go on being written."
+    )
 
 
 def test_an_entry_that_walks_out_of_state_is_refused() -> None:
     """A prefix segment is one directory name, so a config cannot address a parent."""
-    held = committed_entries()
-    escaping = [{**held[0], "prefix": ["..", "elsewhere"]}, *held[1:]]
+    seen = a_family(LedgerName.SEEN.value)
+    escaping = {**seen, "ledgers": [{**seen["ledgers"][0], "prefix": ["..", "elsewhere"]}]}
 
     with pytest.raises(ValidationError, match="it never leaves state/"):
-        LedgersConfig.model_validate(a_registry(escaping))
+        LedgersConfig.model_validate(a_registry([escaping, *without(LedgerName.SEEN.value)]))
