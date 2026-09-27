@@ -48,7 +48,9 @@ def _append(state_dir: Path, date: str, row: MergeLineHoldoutScore) -> int:
     under `set -euo pipefail`, and a path missing from the working tree aborts
     the step and costs the ledgers staged with it.
     """
-    path = ledger.path(state_dir, LedgerName.MERGE_LINE_HOLDOUT_SCORES, date)
+    path = ledger.path(
+        state_dir, LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES, date
+    )
     columns = MergeLineHoldoutScore.csv_columns()
     if not path.exists():
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -127,7 +129,7 @@ def stage_score_merge_line_holdout(
         LOG.warning(
             "score-merge-line-holdout found no marked pairs in %s, so there is "
             "nothing to score the line against",
-            ledger.relpath(LedgerName.SIMILARITY_HOLDOUT),
+            ledger.relpath(LedgerName.CONTENT_SIMILARITY_JUDGE_HOLDOUT_PAIRS),
         )
         return None
     _warn_on_an_unseen_labeller(marks, labeller)

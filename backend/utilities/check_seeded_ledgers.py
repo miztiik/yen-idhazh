@@ -73,7 +73,7 @@ def seeded_ledgers() -> tuple[Ledger, ...]:
         ),
         Ledger(
             name="similarity holdout pairs",
-            relpath=ledger.relpath(LedgerName.SIMILARITY_HOLDOUT),
+            relpath=ledger.relpath(LedgerName.CONTENT_SIMILARITY_JUDGE_HOLDOUT_PAIRS),
             columns=SimilarityHoldoutPair.csv_columns(),
         ),
     )

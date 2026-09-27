@@ -25,7 +25,7 @@ from ._trees import (
 
 def feed_health_days(state_dir: Path) -> list[Path]:
     """Every feed-health file, oldest first, through the pipeline's own walk."""
-    return list(day_shards.shard_files(ledger.tree_root(state_dir, LedgerName.HEALTH), days=UNBOUNDED_WINDOW))
+    return list(day_shards.shard_files(ledger.tree_root(state_dir, LedgerName.FEED_HEALTH), days=UNBOUNDED_WINDOW))
 
 
 def the_file_the_fixture_wrote(date: str) -> str:
@@ -36,7 +36,7 @@ def the_file_the_fixture_wrote(date: str) -> str:
     string this test froze.
     """
     name = ledger.segment_name(run_id=f"{date}-1", attempt=1, job=ServerJob.PLAN, shard=0)
-    return f"{ledger.relpath(LedgerName.HEALTH, date)}/{name}"
+    return f"{ledger.relpath(LedgerName.FEED_HEALTH, date)}/{name}"
 
 
 def test_the_feed_health_prune_takes_the_expired_day_and_keeps_the_day_beside_it(
@@ -62,8 +62,8 @@ def test_the_feed_health_prune_takes_the_expired_day_and_keeps_the_day_beside_it
     kept_day = f"{boundary}-09"
     assert expired_day[:7] < boundary <= kept_day[:7], "the fixture must straddle the boundary"
     feed_health_history(state, [expired_day[:7], kept_day[:7]], day_of_month=9)
-    expired_path = ledger.path(state, LedgerName.HEALTH, expired_day)
-    kept_path = ledger.path(state, LedgerName.HEALTH, kept_day)
+    expired_path = ledger.path(state, LedgerName.FEED_HEALTH, expired_day)
+    kept_path = ledger.path(state, LedgerName.FEED_HEALTH, kept_day)
     assert expired_path.exists() and kept_path.exists()
 
     result = prune_feed_health(state, config, TODAY, dry_run=False)
@@ -136,12 +136,12 @@ def test_a_feed_health_name_the_walk_cannot_place_stops_the_prune(tmp_path: Path
     """
     state = tmp_path / "state"
     feed_health_history(state, ["2024-01"])
-    (ledger.tree_root(state, LedgerName.HEALTH) / "2024-01.csv").write_text("header\n", encoding="utf-8")
+    (ledger.tree_root(state, LedgerName.FEED_HEALTH) / "2024-01.csv").write_text("header\n", encoding="utf-8")
 
     with pytest.raises(ValueError, match="not a file inside a YYYY/MM/DD day directory"):
         prune_feed_health(state, ObservabilityConfig(), TODAY)
 
-    assert ledger.path(state, LedgerName.HEALTH, "2024-01-11").exists(), "a refused read deleted a day"
+    assert ledger.path(state, LedgerName.FEED_HEALTH, "2024-01-11").exists(), "a refused read deleted a day"
 
 
 def test_a_feed_health_dry_run_names_the_day_and_leaves_it(tmp_path: Path) -> None:
@@ -156,7 +156,7 @@ def test_a_feed_health_dry_run_names_the_day_and_leaves_it(tmp_path: Path) -> No
     # removes, file for file.
     assert result.days_removed == (the_file_the_fixture_wrote("2024-01-11"),)
     assert result.dry_run
-    assert ledger.path(state, LedgerName.HEALTH, "2024-01-11").exists()
+    assert ledger.path(state, LedgerName.FEED_HEALTH, "2024-01-11").exists()
 
 
 def test_a_feed_health_run_handed_an_older_date_keeps_the_live_shard(tmp_path: Path) -> None:
@@ -175,10 +175,10 @@ def test_a_feed_health_run_handed_an_older_date_keeps_the_live_shard(tmp_path: P
 
     assert result.deleted == ("2024-01",)
     assert result.kept == ("2026-08",)
-    assert ledger.path(state, LedgerName.HEALTH, "2026-08-11").exists(), (
+    assert ledger.path(state, LedgerName.FEED_HEALTH, "2026-08-11").exists(), (
         "the live shard was deleted by a run given an older date"
     )
-    assert not ledger.path(state, LedgerName.HEALTH, "2024-01-11").exists()
+    assert not ledger.path(state, LedgerName.FEED_HEALTH, "2024-01-11").exists()
 
 
 def test_an_empty_state_tree_deletes_no_feed_health_and_says_so(tmp_path: Path) -> None:

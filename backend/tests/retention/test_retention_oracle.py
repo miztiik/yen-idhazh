@@ -95,7 +95,7 @@ def test_the_oracle_fifteen_months_leave_fourteen_of_each_and_one_verified_summa
         doomed_texts
     )
     assert not public_telemetry.shard_path(public, expired).exists()
-    assert not ledger.path(state, LedgerName.HEALTH, f"{expired}-11").exists()
+    assert not ledger.path(state, LedgerName.FEED_HEALTH, f"{expired}-11").exists()
 
     # Every window a 366-day console read can select still names a file that is
     # there. `shards_in_window` is the reader's own helper, so this is the read
@@ -189,14 +189,14 @@ def test_the_stage_names_every_file_a_live_run_would_remove(
     assert named == sorted(
         [
             *expired_days,
-            f"{ledger.relpath(LedgerName.HEALTH, f'{expired}-11')}/{feed_health_file}",
+            f"{ledger.relpath(LedgerName.FEED_HEALTH, f'{expired}-11')}/{feed_health_file}",
             f"frontend/public/telemetry/{expired}.csv",
         ]
     )
     assert "\\" not in caplog.text, "a path leaving the process is POSIX (section 2)"
     assert all((state.parent / relpath).exists() for relpath in expired_days)
     assert public_telemetry.shard_path(public, expired).exists()
-    assert ledger.path(state, LedgerName.HEALTH, f"{expired}-11").exists()
+    assert ledger.path(state, LedgerName.FEED_HEALTH, f"{expired}-11").exists()
 
 
 def test_the_stage_says_so_when_there_is_nothing_to_remove(

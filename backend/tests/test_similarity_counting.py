@@ -389,7 +389,7 @@ def test_the_row_the_collecting_job_lands_is_the_row_the_unit_shipped(tmp_path: 
         state_dir=state,
     )
 
-    landed = read_text(ledger.path(state, LedgerName.JUDGE_METRICS, DATE)).splitlines()
+    landed = read_text(ledger.path(state, LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS, DATE)).splitlines()
     out_of_the_units = [
         read_text(shipped / JUDGE_ID / f"{unit}.csv").splitlines()
         for unit in range(len(written))
@@ -429,7 +429,7 @@ def test_the_readings_land_on_a_night_the_record_refused_to_count(tmp_path: Path
     assert settings.app.council.shards > len(written), "a night short of a unit"
     assert (report.counted, report.held_reason) == (False, "shards_missing")
     assert report.metrics_appended == 1
-    assert ledger.path(state, LedgerName.JUDGE_METRICS, DATE).exists()
+    assert ledger.path(state, LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS, DATE).exists()
 
 
 def test_a_night_whose_units_shipped_nothing_appends_nothing(tmp_path: Path) -> None:
@@ -448,7 +448,7 @@ def test_a_night_whose_units_shipped_nothing_appends_nothing(tmp_path: Path) -> 
     )
 
     assert report.metrics_appended == 0
-    assert not ledger.path(state, LedgerName.JUDGE_METRICS, DATE).exists()
+    assert not ledger.path(state, LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS, DATE).exists()
 
 
 def a_ruler_moved(settings: config.Settings) -> config.Settings:
@@ -546,7 +546,7 @@ def test_the_date_memory_survives_the_reset_that_empties_the_counts(tmp_path: Pa
         units=shards,
     )
     record = StorySimilarityDistribution.from_json(
-        read_text(ledger.path(state, LedgerName.SCORE_DISTRIBUTION))
+        read_text(ledger.path(state, LedgerName.CONTENT_SIMILARITY_JUDGE_SCORE_DISTRIBUTION))
     )
 
     assert after.archived is not None, "the weights moved, so the counts were archived"

@@ -288,7 +288,7 @@ _TREE_SHAPES: Final[dict[LedgerName, _TreeShape]] = {
     LedgerName.SCORES: _TreeShape(OBSERVATION_KEY, EvalRow, SCORES_CARRIED),
     LedgerName.SCORE_INDEX: _TreeShape(OBSERVATION_INDEX_KEY, ObservationIndexRow),
     LedgerName.VALIDATION: _TreeShape(VALIDATION_KEY, ValidationRow),
-    LedgerName.HEALTH: _TreeShape(FEED_HEALTH_KEY, FeedHealthRow),
+    LedgerName.FEED_HEALTH: _TreeShape(FEED_HEALTH_KEY, FeedHealthRow),
     LedgerName.COUNTERFACTUAL_SCORES: _TreeShape(
         COUNTERFACTUAL_SCORE_KEY, CounterfactualScoreRow
     ),

@@ -44,7 +44,7 @@ STATE: Final = Path("state")
 #: functions, so a row here is the old answer rather than a reading of it.
 AT_THE_BASE: Final[dict[str, tuple[str | None, str | None, str | None]]] = {
     "SEEN": ("state/seen/2026/09/18.csv", "state/seen/2026/09/18.csv", "state/seen"),
-    "HEALTH": (
+    "FEED_HEALTH": (
         "state/feed-health/2026/09/18",
         "state/feed-health/2026/09/18",
         "state/feed-health",
@@ -96,42 +96,42 @@ AT_THE_BASE: Final[dict[str, tuple[str | None, str | None, str | None]]] = {
         "state/counterfactual-scores/2026/09/18",
         "state/counterfactual-scores",
     ),
-    "SCORED_PAIRS": (
+    "CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS": (
         "state/content-similarity-judge/scored-pairs/2026/09/18.csv",
         "state/content-similarity-judge/scored-pairs/2026/09/18.csv",
         "state/content-similarity-judge/scored-pairs",
     ),
-    "FITTED_THRESHOLDS": (
+    "CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS": (
         "state/content-similarity-judge/fitted-thresholds/2026/09/18.csv",
         "state/content-similarity-judge/fitted-thresholds/2026/09/18.csv",
         "state/content-similarity-judge/fitted-thresholds",
     ),
-    "SIMILARITY_HOLDOUT": (
+    "CONTENT_SIMILARITY_JUDGE_HOLDOUT_PAIRS": (
         "state/content-similarity-judge/holdout-pairs.csv",
         "state/content-similarity-judge/holdout-pairs.csv",
         None,
     ),
-    "SCORE_DISTRIBUTION": (
+    "CONTENT_SIMILARITY_JUDGE_SCORE_DISTRIBUTION": (
         None,
         "state/content-similarity-judge/score-distribution.json",
         None,
     ),
-    "SCORE_ARCHIVE": (
+    "CONTENT_SIMILARITY_JUDGE_ARCHIVE": (
         "state/content-similarity-judge/archive/20260918T120000Z.json",
         "state/content-similarity-judge/archive/20260918T120000Z.json",
         None,
     ),
-    "JUDGE_METRICS": (
+    "CONTENT_SIMILARITY_JUDGE_METRICS": (
         "state/content-similarity-judge/metrics/2026/09/18.csv",
         "state/content-similarity-judge/metrics/2026/09/18.csv",
         "state/content-similarity-judge/metrics",
     ),
-    "MERGE_LINE_HOLDOUT_SCORES": (
+    "CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES": (
         "state/content-similarity-judge/merge-line-holdout-scores/2026/09/18.csv",
         "state/content-similarity-judge/merge-line-holdout-scores/2026/09/18.csv",
         "state/content-similarity-judge/merge-line-holdout-scores",
     ),
-    "SHARD_OUTCOMES": (
+    "LLM_COUNCIL_SHARD_OUTCOMES": (
         "state/llm-council/shard-outcomes/2026/09/18.csv",
         "state/llm-council/shard-outcomes/2026/09/18.csv",
         "state/llm-council/shard-outcomes",
@@ -260,14 +260,14 @@ def test_a_family_named_twice_stops_the_build_naming_it() -> None:
 
 def test_a_ledger_listed_in_two_families_stops_the_build_naming_both() -> None:
     """A ledger in two families takes two statuses, and nothing chooses between them."""
-    health = a_family(LedgerName.HEALTH.value)
+    health = a_family(LedgerName.FEED_HEALTH.value)
     widened = {
         **health,
         "ledgers": [*health["ledgers"], dict(a_family(LedgerName.SEEN.value)["ledgers"][0])],
     }
 
     with pytest.raises(ValidationError) as refusal:
-        LedgersConfig.model_validate(a_registry([widened, *without(LedgerName.HEALTH.value)]))
+        LedgersConfig.model_validate(a_registry([widened, *without(LedgerName.FEED_HEALTH.value)]))
 
     assert "seen is listed in families feed-health and seen" in str(refusal.value)
 
@@ -307,6 +307,25 @@ def test_a_file_at_the_top_of_state_names_its_family_by_its_stem() -> None:
         "feed-retirements sits at state/feed-retirements.csv and is listed in family "
         "retirements"
     ) in str(refusal.value)
+
+
+def test_a_member_named_for_the_wrong_place_stops_the_build_naming_it() -> None:
+    """The name rule, proved able to fire by filing one ledger inside another family.
+
+    `seen` moves under the judge's folder, so every other rule still holds and
+    `LedgerName.SEEN` becomes the one name that no longer says where it sits.
+    """
+    judge = a_family("content-similarity-judge")
+    seen = a_family(LedgerName.SEEN.value)["ledgers"][0]
+    nested = {**seen, "prefix": ["content-similarity-judge", LedgerName.SEEN.value]}
+    widened = {**judge, "ledgers": [*judge["ledgers"], nested]}
+
+    with pytest.raises(ValidationError) as refusal:
+        LedgersConfig.model_validate(
+            a_registry([widened, *without("content-similarity-judge", LedgerName.SEEN.value)])
+        )
+
+    assert "LedgerName.SEEN should be CONTENT_SIMILARITY_JUDGE_SEEN" in str(refusal.value)
 
 
 @pytest.mark.parametrize("member", list(LedgerName), ids=lambda m: m.value)

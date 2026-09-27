@@ -84,6 +84,11 @@ _NEEDS_A_SUFFIX: dict[Grain, bool] = {
 }
 
 
+def _upper_snake(name: str) -> str:
+    """`content-similarity-judge` -> `CONTENT_SIMILARITY_JUDGE`: a name as Python spells it."""
+    return name.replace("-", "_").upper()
+
+
 class LedgerEntry(Model):
     """One ledger: its typed name, how it files, and where it sits."""
 
@@ -219,6 +224,30 @@ class LedgersConfig(Model):
                 f"{'; '.join(sorted(misplaced))}. A family is named for the top-level "
                 "folder under state/ its ledgers sit in, or for the stem of a file at "
                 "the top of state/"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _every_member_is_named_for_its_place(self) -> Self:
+        """One spelling per ledger: the Python name is built from the family and the value.
+
+        A ledger that is its own family is its value in upper snake case. A
+        ledger inside a family puts the family's name first. Checked here rather
+        than beside the enum, because the family is a fact only this file holds.
+        """
+        misnamed: list[str] = []
+        for family in self.families:
+            for held in family.ledgers:
+                spelled = _upper_snake(held.name.value)
+                if held.name.value != family.name:
+                    spelled = f"{_upper_snake(family.name)}_{spelled}"
+                if held.name.name != spelled:
+                    misnamed.append(f"LedgerName.{held.name.name} should be {spelled}")
+        if misnamed:
+            raise ValueError(
+                f"{'; '.join(sorted(misnamed))}. A member's Python name is its value in "
+                "upper snake case, with its family's name in front when the ledger sits "
+                "inside a family"
             )
         return self
 

@@ -1171,7 +1171,7 @@ def prune_feed_health(
     kept: list[str] = []
     freed = 0
 
-    root = ledger.tree_root(state_dir, LedgerName.HEALTH)
+    root = ledger.tree_root(state_dir, LedgerName.FEED_HEALTH)
     by_month = day_shards.shards_by_month(root, days=UNBOUNDED_WINDOW)
     for month in sorted(by_month):
         if month >= boundary:

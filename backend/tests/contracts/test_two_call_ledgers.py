@@ -246,7 +246,7 @@ def test_the_canary_writes_every_column_the_feed_health_ledger_defines(tmp_path:
     """
     build_canary_day.health(tmp_path)
     days = list(
-        day_shards.shard_files(ledger.tree_root(tmp_path, LedgerName.HEALTH), days=UNBOUNDED_WINDOW)
+        day_shards.shard_files(ledger.tree_root(tmp_path, LedgerName.FEED_HEALTH), days=UNBOUNDED_WINDOW)
     )
     assert days, "the canary wrote no feed-health day file"
     rows: list[dict[str, str]] = []

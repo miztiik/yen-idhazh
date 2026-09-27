@@ -65,15 +65,15 @@ UNREGISTERED: Final = frozenset(
     {
         LedgerName.PUBLISHED,
         LedgerName.SEEN,
-        "-".join(ledger.entry(LedgerName.JUDGE_METRICS).prefix),
-        "-".join(ledger.entry(LedgerName.MERGE_LINE_HOLDOUT_SCORES).prefix),
+        "-".join(ledger.entry(LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS).prefix),
+        "-".join(ledger.entry(LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES).prefix),
     }
 )
 
 
 def a_narrow_day(state_dir: Path) -> Path:
     """One day file at the pre-widening header, where the ledger's own path helper puts it."""
-    path = ledger.path(state_dir, LedgerName.SCORED_PAIRS, DATE)
+    path = ledger.path(state_dir, LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS, DATE)
     path.parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(NARROW, path)
     return path
@@ -81,7 +81,7 @@ def a_narrow_day(state_dir: Path) -> Path:
 
 def a_wide_day(state_dir: Path) -> Path:
     """One day file still carrying the column this contract stopped naming."""
-    path = ledger.path(state_dir, LedgerName.SCORED_PAIRS, DATE)
+    path = ledger.path(state_dir, LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS, DATE)
     path.parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(WIDE, path)
     return path
