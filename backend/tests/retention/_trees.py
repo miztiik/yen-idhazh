@@ -26,10 +26,7 @@ from idhazh.contracts.item_health import (
 from idhazh.contracts.item_health_summary import ItemHealthSummaryRow
 from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
 from idhazh.contracts.knobs.console import ConsoleConfig
-from idhazh.contracts.knobs.retention import PAGES_HARD_CAP_MB
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.measured import SITE_GROWTH_KB_A_DAY
-from idhazh.measured import WARNING_DAYS_REQUIRED as WARNING_DAYS
 
 #: The widest span the console's control can select, from the config that owns
 #: it. The prune may never delete a shard a read that wide names.
@@ -55,18 +52,6 @@ def site(root: Path, days: dict[str, list[str]]) -> Path:
         for name in files:
             (folder / name).write_bytes(b"x" * 1000)
     return root
-
-
-#: Both records, and what to do when either bites, are in `idhazh.measured` -
-#: the one place a measured number and its provenance live together.
-FASTEST_MEASURED_KB_PER_DAY = int(SITE_GROWTH_KB_A_DAY.value)
-
-WARNING_DAYS_REQUIRED = int(WARNING_DAYS.value)
-
-
-def days_of_warning(budget_mb: int, kb_per_day: int) -> int:
-    """Whole days from the alarm to the wall. A partial day is not a day."""
-    return (PAGES_HARD_CAP_MB - budget_mb) * 1024 // kb_per_day
 
 
 #: The day the fold is run against in every test below, and the twenty months of

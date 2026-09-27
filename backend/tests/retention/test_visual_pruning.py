@@ -19,7 +19,8 @@ from idhazh.contracts.knobs.observability import ObservabilityConfig
 from idhazh.contracts.knobs.retention import RetentionConfig
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.visual_prune import VisualPruneRow
-from idhazh.retention import SiteSize, measure, oldest_visual, prune, prune_row, visuals_older_than
+from idhazh.retention import oldest_visual, prune, prune_row, visuals_older_than
+from idhazh.site_weight import SiteSize, measure
 from idhazh.stages.prune_state import stage_prune_state
 
 from ._trees import (
@@ -413,7 +414,7 @@ def test_a_prune_reaches_its_after_total_without_walking_the_tree_again(
     """
     root = site(tmp_path, {"2020-01-01": ["a-0000000001.webp", "b-0000000002.webp"], "2026-08-20": ["new-0000000004.webp"]})
     walked = 0
-    unpatched = retention.measure
+    unpatched = measure
 
     def counted(*args: Any, **kwargs: Any) -> SiteSize:
         nonlocal walked

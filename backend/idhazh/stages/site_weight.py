@@ -9,14 +9,14 @@ from __future__ import annotations
 from pathlib import Path
 
 from idhazh import (
-    retention,
+    site_weight,
 )
 from idhazh.contracts.knobs.retention import RetentionConfig
 from idhazh.stages.common import LOG
 
 
 def _report_site_growth(
-    size: retention.SiteSize,
+    size: site_weight.SiteSize,
     config: RetentionConfig,
     *,
     items_per_day: int,
@@ -31,11 +31,11 @@ def _report_site_growth(
     The runway is the point of the whole step. A megabyte figure and a headroom
     figure are both levels, and no level yields a date - only a rate does.
     """
-    named = retention.heaviest_directories(size, limit=6)
+    named = site_weight.heaviest_directories(size, limit=6)
     if named:
         LOG.info(
             "site-weight by directory: %s",
-            ", ".join(f"{name} {count / retention.BYTES_PER_MB:.1f} MB" for name, count in named),
+            ", ".join(f"{name} {count / site_weight.BYTES_PER_MB:.1f} MB" for name, count in named),
         )
 
     if size.published_items <= 0 or items_per_day <= 0:
@@ -52,15 +52,15 @@ def _report_site_growth(
         "published day at the %s item ceiling",
         size.bytes_per_published_item,
         size.published_items,
-        retention.daily_growth_bytes(size, items_per_day) / retention.BYTES_PER_MB,
+        site_weight.daily_growth_bytes(size, items_per_day) / site_weight.BYTES_PER_MB,
         items_per_day,
     )
     LOG.info(
         "site-weight runway: %.0f published days to the %s MB alarm point, %.0f to the "
         "%s MB Pages cap",
-        retention.days_to_alarm(size, config, items_per_day),
+        site_weight.days_to_alarm(size, config, items_per_day),
         config.site_budget_mb,
-        retention.days_to_cap(size, items_per_day, cap_mb=config.pages_hard_cap_mb),
+        site_weight.days_to_cap(size, items_per_day, cap_mb=config.pages_hard_cap_mb),
         config.pages_hard_cap_mb,
     )
 
@@ -95,7 +95,7 @@ def stage_site_weight(
     day anybody wanted to first learn the date.
     """
     cap_mb = config.pages_hard_cap_mb
-    size = retention.measure(tree, published_items=retention.count_published_items(tree))
+    size = site_weight.measure(tree, published_items=site_weight.count_published_items(tree))
     if size.files == 0:
         LOG.error(
             "site-weight measured 0 files under %s - build the site first. "
@@ -104,7 +104,7 @@ def stage_site_weight(
         )
         return 1
 
-    breach = retention.cap_breach(size, cap_mb=cap_mb)
+    breach = site_weight.cap_breach(size, cap_mb=cap_mb)
     if breach is not None:
         LOG.error("%s", breach)
         return 1
@@ -114,12 +114,12 @@ def stage_site_weight(
         tree.as_posix(),
         size.megabytes,
         size.files,
-        retention.headroom_mb(size, cap_mb=cap_mb),
+        site_weight.headroom_mb(size, cap_mb=cap_mb),
         cap_mb,
     )
     _report_site_growth(size, config, items_per_day=items_per_day)
 
-    alarm = retention.budget_alarm(size, config)
+    alarm = site_weight.budget_alarm(size, config)
     if alarm is not None:
         # An Actions workflow command, so the line lands on the run's summary
         # rather than three thousand lines into a log nobody opens. Outside
