@@ -46,7 +46,7 @@ The agent that runs a plan **owns** it. It carries a row itself, or delegates th
 Step 7 above verifies that update rather than performing it, and the project's plan-queue reader fails when a merged pull request names a row that never learned it landed.
 
 ### The worker subagent, when a row is delegated
-Dispatched with `runSubagent` (default agent). Its brief is the row verbatim (Scope, Files touched, Acceptance gates, Oracle, Decisions, Rejected alternatives) plus the standing instruction: read the page that owns the surface, honor CLAUDE.md, stay in scope, consult personas on ambiguity, return a report. The worker:
+Dispatched with `runSubagent` (default agent). Its brief is the row verbatim (Scope, Files touched, Acceptance gates, Oracle, Decisions, Rejected alternatives), every section of the plan the row points at, plus the standing instruction: read the page that owns the surface, honor CLAUDE.md, stay in scope, consult personas on ambiguity, return a report. The worker:
 1. Reads the row, and the page that owns each surface it touches ([../agents/bootstrap.md](../agents/bootstrap.md) routes).
 2. Implements the row end-to-end: code + tests at the tier that matches the surface (CLAUDE.md section 13) + the docs update.
 3. Resolves ambiguity by consulting personas (below), baking the ruling into the code.

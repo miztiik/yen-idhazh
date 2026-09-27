@@ -266,9 +266,13 @@
 		data-run-yield-days={load.columns.length}
 		use:observeWidth={(value) => (measured = value)}
 	>
+		<!-- `max-w-full` because the server renders this before anything has measured
+		     the column, so `width` is the `console.chart_width` fallback. Uncapped,
+		     that fallback is the document's width until the page hydrates - 800px
+		     inside a 360px phone, which is a sideways scrollbar on the first paint. -->
 		<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 		<svg
-			class="focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+			class="block max-w-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
 			width={box.width}
 			height={box.height}
 			viewBox={`0 0 ${box.width} ${box.height}`}
