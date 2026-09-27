@@ -1,9 +1,10 @@
 """How a feed's recent record scales its authority.
 
 The reliability factor is derived from the committed feed-health ledger and
-applied multiplicatively inside `authority`. These tests pin the two promises
-the factor makes: it never rises above 1.0, so it can only ever reduce a score,
-and it never falls below the configured floor, so it can never remove a feed.
+applied multiplicatively inside `authority`. These tests pin what the factor
+does to a score once it has been computed; what the factor itself is, and the
+two bounds it promises, is `test_source_health.py` beside the fold that mints
+it.
 
 Every health row here is built in memory. No test reads state/, so the archive
 is never the input and the cost of these tests does not grow with it (CLAUDE.md
@@ -25,7 +26,6 @@ from conftest import FIXTURES_DIR, read_text
 from idhazh.config import REPO_ROOT, load
 from idhazh.contracts.base import ITEM_ID_PATTERN, derive_url_key
 from idhazh.contracts.counterfactual_score import CounterfactualScoreRow
-from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome
 from idhazh.contracts.item_health import TimeSource
 from idhazh.contracts.knobs.assist import AssistConfig
 from idhazh.contracts.knobs.collect import CollectConfig
@@ -34,7 +34,6 @@ from idhazh.contracts.sources import SourceForm
 from idhazh.contracts.taxonomy import SourceTier, VerticalDef
 from idhazh.discover import Candidate
 from idhazh.embed import Embedder
-from idhazh.ledger import feed_reliability
 from idhazh.rank import (
     CROCKFORD_ALPHABET,
     ITEM_ID_BYTES,
@@ -61,19 +60,6 @@ STAMP = "2026-08-23T06:00:00Z"
 CONFIG = CollectConfig()
 
 
-def _row(outcome: FetchOutcome, *, items: int = 1, feed_id: str = "a-feed") -> FeedHealthRow:
-    """One health row, built in memory. `items` matters only for an ok outcome."""
-    return FeedHealthRow(
-        version=FeedHealthRow.schema_version(),
-        run_id=RUN,
-        date=DATE,
-        feed_id=feed_id,
-        checked_at=STAMP,
-        outcome=outcome,
-        items=items,
-    )
-
-
 def _candidate(
     *,
     source_id: str = "a-feed",
@@ -92,75 +78,6 @@ def _candidate(
         published_at=None,
         weight=weight,
     )
-
-
-# --- feed_reliability: the clamp bounds --------------------------------------
-
-
-def test_every_read_that_carried_entries_scores_one() -> None:
-    rows = [_row(FetchOutcome.OK, items=3) for _ in range(4)]
-    assert feed_reliability(rows, floor=0.5) == 1.0
-
-
-def test_no_read_carried_entries_falls_to_the_floor_and_no_lower() -> None:
-    """Four dead reads is a raw reliability of zero, clamped up to the floor.
-
-    The clamp is the factor's promise: it reduces a score, it never removes a
-    feed. At a floor of 0.5 the worst a record can do is a two-to-one cut.
-    """
-    rows = [_row(FetchOutcome.OK, items=0) for _ in range(4)]  # ok-with-zero is a bad read
-    assert feed_reliability(rows, floor=0.5) == 0.5
-
-
-def test_a_ratio_above_the_floor_is_that_ratio_unclamped() -> None:
-    """Three of four evidence-bearing reads carried entries: 0.75, left alone."""
-    rows = [_row(FetchOutcome.OK, items=1) for _ in range(3)] + [_row(FetchOutcome.OK, items=0)]
-    assert feed_reliability(rows, floor=0.5) == pytest.approx(0.75)
-
-
-def test_a_ratio_below_the_floor_clamps_up_to_the_floor() -> None:
-    """One of four carried entries: 0.25 raw, clamped up to the floor of 0.5."""
-    rows = [_row(FetchOutcome.OK, items=1)] + [_row(FetchOutcome.OK, items=0) for _ in range(3)]
-    assert feed_reliability(rows, floor=0.5) == 0.5
-
-
-def test_a_rest_and_a_robots_answer_carry_no_evidence_either_way() -> None:
-    """A skipped run and a robots refusal drop out of the denominator.
-
-    Neither asked the feed whether it works, so one good fetch beside them scores
-    the same 1.0 as one good fetch alone.
-    """
-    rows = [
-        _row(FetchOutcome.OK, items=2),
-        _row(FetchOutcome.SKIPPED, items=0),
-        _row(FetchOutcome.ROBOTS_DENIED, items=0),
-    ]
-    assert feed_reliability(rows, floor=0.5) == 1.0
-
-
-def test_a_feed_with_only_preserving_rows_is_unknown_not_bad() -> None:
-    """No evidence-bearing read at all scores 1.0, so an untested feed is unpunished."""
-    rows = [_row(FetchOutcome.SKIPPED, items=0), _row(FetchOutcome.ROBOTS_DENIED, items=0)]
-    assert feed_reliability(rows, floor=0.5) == 1.0
-
-
-def test_no_rows_at_all_scores_one() -> None:
-    assert feed_reliability([], floor=0.5) == 1.0
-
-
-def test_a_failed_read_is_evidence_and_counts_against_the_feed() -> None:
-    """A failed fetch did not preserve the streak, so it sits in the denominator.
-    Three good fetches and one failed read is 0.75, not the 1.0 it would be if the
-    failed read were set aside like a rest.
-    """
-    rows = [_row(FetchOutcome.OK, items=1) for _ in range(3)] + [_row(FetchOutcome.TRANSIENT, items=0)]
-    assert feed_reliability(rows, floor=0.5) == pytest.approx(0.75)
-
-
-def test_the_floor_comes_from_the_argument() -> None:
-    """A lower floor moves the clamp: at 0.2, four dead reads score 0.2."""
-    rows = [_row(FetchOutcome.OK, items=0) for _ in range(4)]
-    assert feed_reliability(rows, floor=0.2) == 0.2
 
 
 # --- authority: the factor is multiplicative ---------------------------------

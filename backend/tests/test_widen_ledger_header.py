@@ -7,7 +7,7 @@ Both directions are covered: a header narrower than the contract, and one wider.
 
 **Two kinds of ledger, because the utility has two registries to ask.** A ledger
 the post-merge settlement covers declares its reader in `ledger.keyed_paths`; a
-day tree declares it in `ledger._TREE_SHAPES`. Driving only the first is how
+day tree declares it in `ledger.keys._TREE_SHAPES`. Driving only the first is how
 nine of fourteen ledgers were refused for a day with every test green.
 
 Everything is driven from three small committed fixtures, read inside the test

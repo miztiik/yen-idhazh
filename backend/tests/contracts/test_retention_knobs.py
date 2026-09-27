@@ -11,7 +11,7 @@ import pytest
 from conftest import CONFIG_DIR, REPO_ROOT, read_text
 from pydantic import ValidationError
 
-from idhazh import cli, ledger
+from idhazh import cli, month_partition
 from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.knobs.collect import SUPERSEDED_COLLECT_NAMES, CollectConfig
 from idhazh.contracts.knobs.console import ConsoleConfig
@@ -210,7 +210,7 @@ def test_no_configured_age_deletes_a_shard_a_366_day_read_still_selects() -> Non
 
     for offset in range(1000):
         anchor = start + timedelta(days=offset)
-        walked = min(ledger.shards_in_window(anchor.isoformat(), window))
+        walked = min(month_partition.shards_in_window(anchor.isoformat(), window))
         assert walked == (anchor - span).isoformat()[:7]
 
     kept = ObservabilityConfig().item_health_full_grain_months

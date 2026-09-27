@@ -484,8 +484,9 @@ judge's funnel, its own rates and its own verdicts never appear on the council's
 row. Why the two are held apart, and the five conditions a change is failed on,
 are on the council's own page linked above.
 
-These three paths are spelled in
-[../../backend/idhazh/ledger/__init__.py](../../backend/idhazh/ledger/__init__.py) and hold no rows
+These three paths come from
+[../../config/ledgers.json](../../config/ledgers.json) through
+[../../backend/idhazh/ledger/paths.py](../../backend/idhazh/ledger/paths.py) and hold no rows
 yet, because each writer lands with the work that fills it. An empty tree here
 is the state of the build and not a lost reading.
 

@@ -7,8 +7,8 @@ import ast
 import pytest
 from conftest import REPO_ROOT
 
-from idhazh import ledger
 from idhazh.contracts.ledger_name import DAY_TREES, LedgerName
+from idhazh.ledger import keys
 
 pytestmark = pytest.mark.contract
 
@@ -49,7 +49,7 @@ def test_the_day_trees_are_exactly_the_ledgers_with_a_settlement_shape() -> None
     `state/`, so the set that says which of them a writer files into is the only
     thing left saying no.
     """
-    assert set(ledger._TREE_SHAPES) == DAY_TREES
+    assert set(keys._TREE_SHAPES) == DAY_TREES
 
 
 def test_every_path_under_state_is_built_from_a_name_this_vocabulary_declares() -> None:

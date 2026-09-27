@@ -888,14 +888,14 @@ def test_every_ledger_that_declares_a_key_is_registered_for_settlement() -> None
     assert not unregistered, (
         f"{', '.join(unregistered)} declares a key in idhazh.ledger and keyed_paths() "
         "does not yield it, so a retried job's repeat of a row is kept instead of "
-        "dropped. Add it to keyed_paths() in backend/idhazh/ledger/__init__.py."
+        "dropped. Add it to keyed_paths() in backend/idhazh/ledger/settle.py."
     )
 
     keyless = sorted(set(registered) - set(declared) - _rewritten_ledgers() - LEDGERS_NO_JOB_WRITES)
     assert not keyless, (
         f"{', '.join(keyless)} is registered for settlement, its writer appends rows, and "
         "that writer names no key - so the settler has a key the writer does not use. Name "
-        "the key in the writer in backend/idhazh/ledger/__init__.py, or take the ledger out of "
+        "the key in the writer in backend/idhazh/ledger/rows.py, or take the ledger out of "
         "keyed_paths()."
     )
 

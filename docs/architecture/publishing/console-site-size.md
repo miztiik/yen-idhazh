@@ -168,7 +168,7 @@ and its route description says so in both producers. Authority: Editor, row #13
 decision 2.
 
 **The reliability factor is read from the published view and never recomputed in
-the page.** `ledger.reliability` is the only self-adjusting number in this
+the page.** `telemetry.source_health.reliability` is the only self-adjusting number in this
 project and it was drawn nowhere until this row. Two derivations of one ranking
 factor is two verdicts, and the day they disagree neither is worth drawing - the
 same lesson the standing band learned when it moved to a producer. Authority:

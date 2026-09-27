@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 from conftest import seed_item_health
 
-from idhazh import ledger
+from idhazh import ledger, month_partition
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.item_health import ItemStage
 from idhazh.contracts.knobs.collect import CollectConfig
@@ -102,7 +102,7 @@ def test_the_oracle_fifteen_months_leave_fourteen_of_each_and_one_verified_summa
     # itself rather than a restatement of it.
     for offset in range(31):
         anchor = (TODAY - timedelta(days=offset)).isoformat()
-        for stem in ledger.shards_in_window(anchor, CONSOLE_MAX_WINDOW_DAYS):
+        for stem in month_partition.shards_in_window(anchor, CONSOLE_MAX_WINDOW_DAYS):
             if stem < months[0] or stem > months[-1]:
                 continue
             assert public_telemetry.shard_path(public, stem).exists(), (

@@ -280,7 +280,7 @@ def stage_plan(
     # reads that parsed to nothing - scores below a dependable feed of the same
     # tier. The factor is built once here off the committed health record and read
     # inside rank.authority; a feed with no evidence in the window reads 1.0.
-    reliability_by_feed = ledger.reliability(
+    reliability_by_feed = source_health.reliability(
         state,
         today=date,
         within_days=collect.reliability_window_days,

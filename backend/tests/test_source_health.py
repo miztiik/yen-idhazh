@@ -364,6 +364,78 @@ def test_another_desks_feed_is_not_counted() -> None:
     assert eligible_ids([energy, LAB], retired_keys=set(), records={}) == ["lab-blog"]
 
 
+# --- feed_reliability: the clamp bounds --------------------------------------
+
+
+def test_every_read_that_carried_entries_scores_one() -> None:
+    rows = [row(n, FetchOutcome.OK, items=3) for n in range(1, 5)]
+    assert source_health.feed_reliability(rows, floor=0.5) == 1.0
+
+
+def test_no_read_carried_entries_falls_to_the_floor_and_no_lower() -> None:
+    """Four dead reads is a raw reliability of zero, clamped up to the floor.
+
+    The clamp is the factor's promise: it reduces a score, it never removes a
+    feed. At a floor of 0.5 the worst a record can do is a two-to-one cut.
+    """
+    rows = [row(n, FetchOutcome.OK, items=0) for n in range(1, 5)]  # ok-with-zero is a bad read
+    assert source_health.feed_reliability(rows, floor=0.5) == 0.5
+
+
+def test_a_ratio_above_the_floor_is_that_ratio_unclamped() -> None:
+    """Three of four evidence-bearing reads carried entries: 0.75, left alone."""
+    rows = [row(n, FetchOutcome.OK, items=1) for n in range(1, 4)]
+    rows.append(row(4, FetchOutcome.OK, items=0))
+    assert source_health.feed_reliability(rows, floor=0.5) == pytest.approx(0.75)
+
+
+def test_a_ratio_below_the_floor_clamps_up_to_the_floor() -> None:
+    """One of four carried entries: 0.25 raw, clamped up to the floor of 0.5."""
+    rows = [row(1, FetchOutcome.OK, items=1)]
+    rows.extend(row(n, FetchOutcome.OK, items=0) for n in range(2, 5))
+    assert source_health.feed_reliability(rows, floor=0.5) == 0.5
+
+
+def test_a_rest_and_a_robots_answer_carry_no_evidence_either_way() -> None:
+    """A skipped run and a robots refusal drop out of the denominator.
+
+    Neither asked the feed whether it works, so one good fetch beside them scores
+    the same 1.0 as one good fetch alone.
+    """
+    rows = [
+        row(1, FetchOutcome.OK, items=2),
+        row(2, FetchOutcome.SKIPPED, items=0),
+        row(3, FetchOutcome.ROBOTS_DENIED, items=0),
+    ]
+    assert source_health.feed_reliability(rows, floor=0.5) == 1.0
+
+
+def test_a_feed_with_only_preserving_rows_is_unknown_not_bad() -> None:
+    """No evidence-bearing read at all scores 1.0, so an untested feed is unpunished."""
+    rows = [row(1, FetchOutcome.SKIPPED, items=0), row(2, FetchOutcome.ROBOTS_DENIED, items=0)]
+    assert source_health.feed_reliability(rows, floor=0.5) == 1.0
+
+
+def test_no_rows_at_all_scores_one() -> None:
+    assert source_health.feed_reliability([], floor=0.5) == 1.0
+
+
+def test_a_failed_read_is_evidence_and_counts_against_the_feed() -> None:
+    """A failed fetch did not preserve the streak, so it sits in the denominator.
+    Three good fetches and one failed read is 0.75, not the 1.0 it would be if the
+    failed read were set aside like a rest.
+    """
+    rows = [row(n, FetchOutcome.OK, items=1) for n in range(1, 4)]
+    rows.append(row(4, FetchOutcome.TRANSIENT, items=0))
+    assert source_health.feed_reliability(rows, floor=0.5) == pytest.approx(0.75)
+
+
+def test_the_floor_comes_from_the_argument() -> None:
+    """A lower floor moves the clamp: at 0.2, four dead reads score 0.2."""
+    rows = [row(n, FetchOutcome.OK, items=0) for n in range(1, 5)]
+    assert source_health.feed_reliability(rows, floor=0.2) == 0.2
+
+
 # --- two stale checkouts, one address ----------------------------------------
 
 

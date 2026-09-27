@@ -18,7 +18,7 @@ including the two words the prune verb refuses by name. Those two are refused
 there because a ledger that forgets cannot be the guard it exists to be, and
 re-filing a header forgets nothing. The contract that reads a row comes off the
 two registries that already pair a committed file with its reader -
-`ledger._TREE_SHAPES` through `segment_contract` for a day tree, and
+`ledger.keys._TREE_SHAPES` through `segment_contract` for a day tree, and
 `ledger.keyed_paths` for a ledger the post-merge settlement still covers. No list
 is restated here, so none can drift from this one. A word outside the vocabulary
 and a ledger neither registry names a reader for are two different refusals, and
@@ -158,7 +158,7 @@ def _reader_for(root: Path, state_dir: Path) -> tuple[type[CsvContract], frozens
     """The contract that reads one row of this ledger, and the headings it carries.
 
     **Two registries, asked in turn, and neither one restated here.** A day tree
-    declares its reader in `ledger._TREE_SHAPES`, reached through
+    declares its reader in `ledger.keys._TREE_SHAPES`, reached through
     `segment_contract` and `segment_carried`; every other ledger declares it in
     `ledger.keyed_paths`, where a committed file is paired with the contract the
     post-merge settlement reads it with. A ledger is in one or the other, so the

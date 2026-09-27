@@ -273,7 +273,7 @@ def test_a_row_the_contract_cannot_read_stops_the_read(tmp_path: Path) -> None:
 #: nobody checked, and it would grow with the repository (Guardrail #12).
 MOVED: Final = (
     (
-        "backend/idhazh/ledger/__init__.py",
+        "backend/idhazh/ledger/rows.py",
         "day_files(state_dir / ITEM_HEALTH_DIRNAME)",
         "settled_rows(",
     ),

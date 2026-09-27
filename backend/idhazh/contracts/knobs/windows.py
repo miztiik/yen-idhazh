@@ -12,7 +12,7 @@ def months_a_window_can_touch(within_days: int) -> int:
     """The most `<YYYY-MM>` shards one read of that window can open.
 
     A window of N days reads N+1 inclusive days - the way
-    `ledger.shards_in_window` walks them - and the answer is how many calendar
+    `month_partition.shards_in_window` walks them - and the answer is how many calendar
     months those days fall in. It is not `N / 30`. The extreme is a window that
     ends on the first of a month and starts on the last day of another, which is
     why the committed 366-day console window reaches **14** shards and a

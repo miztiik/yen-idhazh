@@ -168,7 +168,7 @@ number.
 Fourteen is not a year plus one. It is the number of month files a console read
 can open, and the old value was one short.
 
-`console.max_window_days` is 366 and `ledger.shards_in_window` walks **367
+`console.max_window_days` is 366 and `month_partition.shards_in_window` walks **367
 inclusive days** - so a window ending on the first of a month starts on the last
 day of another, and those days fall in **14 calendar months**. Anchor it on
 2026-01-01: the read reaches back to 2024-12-31, which is `2024-12`, and

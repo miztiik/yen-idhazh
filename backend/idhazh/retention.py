@@ -72,7 +72,7 @@ published day on 2026-08-30 with nothing bounding it.
 item by item: past it the month is folded to one row per (date, stage), the
 full-grain shard is deleted, and the browser's copy of that same month under
 `frontend/public/telemetry/` goes with it. It is fourteen months because
-`console.max_window_days` is 366, `ledger.shards_in_window` walks 367 inclusive
+`console.max_window_days` is 366, `month_partition.shards_in_window` walks 367 inclusive
 days, and those days can fall in fourteen calendar months - a window ending on
 the first of a month starts on the last day of another. The aggregate is kept
 forever by default, because a downsampled year costs kilobytes and deleting it

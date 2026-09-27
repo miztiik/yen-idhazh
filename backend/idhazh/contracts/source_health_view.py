@@ -26,7 +26,7 @@ something is wrong and nothing about what to do
 **The reliability factor is carried beside those four and is not a fifth
 judgement of the same kind.** The four say what the record holds; the factor
 says what the run already did about it - the multiplier the ranker applied to
-this feed's authority. It is copied from `ledger.feed_reliability` rather than
+this feed's authority. It is copied from `telemetry.source_health.feed_reliability` rather than
 reduced again here, because a console figure that re-derives a ranking factor is
 a second verdict on a question that already has one.
 
@@ -230,7 +230,7 @@ class SourceHealthRow(Model):
         le=1.0,
         description=(
             "The multiplier the ranker applied to this feed's authority on this run, "
-            "from `ledger.feed_reliability` over the trailing "
+            "from `telemetry.source_health.feed_reliability` over the trailing "
             "`collect.reliability_window_days`. Published rather than recomputed by a "
             "page: a console figure that is a second derivation of a ranking factor is "
             "two verdicts, and the day they disagree neither is trustworthy."
@@ -500,7 +500,7 @@ class SourceHealthView(Contract):
     def _every_factor_is_inside_the_floor_it_ships_with(self) -> Self:
         """A drawn factor sits between the floor and 1.0, and a bare 1.0 says so.
 
-        `ledger.feed_reliability` clamps into `[floor, 1.0]` and returns exactly
+        `telemetry.source_health.feed_reliability` clamps into `[floor, 1.0]` and returns exactly
         1.0 when it found no evidence, so both properties hold at the writer.
         Checking them here is what stops a later producer from publishing a
         factor the bar cannot draw - a value under the mark, or a full bar over

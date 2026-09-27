@@ -177,7 +177,22 @@ flowchart TB
 
 In one line: a ledger exists because an entry says so; the entry and the typed name must agree or the build stops; everything that touches `state/` goes through the door the registry feeds; and `prune-state` empties only what the registry does not claim.
 
-`keys.py`, `rows.py` and `settle.py` are drawn as the door's other panels. Today their bodies still sit in `backend/idhazh/ledger/__init__.py`; the diagram is the shape the package is being split into, and the panel names are the modules that will hold them.
+### The seven modules behind the door
+
+`backend/idhazh/ledger/__init__.py` is the door itself, and every caller reaches the ledger through it - `from idhazh import ledger`, then `ledger.X`. It holds imports and one `__all__` and nothing else, so a name can move between the modules below without a caller changing. The split is for whoever maintains the ledger; a caller never sees it.
+
+| Module | The one question it answers |
+| --- | --- |
+| `__init__.py` | which module holds the name a caller asked for |
+| `paths.py` | where a ledger's file lives, read from `config/ledgers.json` |
+| `keys.py` | what makes two rows of one ledger the same record |
+| `filenames.py` | what one writer's file is called, and how that name reads back |
+| `csv_file.py` | how rows are read out of a CSV file and written back into it |
+| `headers.py` | how a file written under an older header is read |
+| `rows.py` | how a caller puts rows into a ledger and gets them back out |
+| `settle.py` | which rows of a committed file repeat a key, and what dropping them costs |
+
+Two edges in that graph carry a reason rather than a preference. **`paths.py` imports nothing from `keys.py`**: where a ledger lives and how its rows settle are two questions that change for different reasons, and one module holding both is how a path edit starts moving a settlement rule. **`rows.py` imports `day_shards` inside the function bodies that need it, never at the top of the file**: `day_shards` imports names back out of this package at its own module top, so a module-scope import in `rows.py` would close a load-time cycle - importing the package runs `__init__`, which imports `rows`, which re-enters a package that is still being built.
 
 ### Design rationale
 

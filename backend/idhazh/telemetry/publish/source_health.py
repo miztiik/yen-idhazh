@@ -46,7 +46,7 @@ from idhazh.contracts.source_health_view import (
 from idhazh.contracts.sources import FeedDef, Sources
 from idhazh.contracts.taxonomy import Taxonomy
 from idhazh.discover import live, resting, settled, streak
-from idhazh.telemetry.source_health import endpoint_records
+from idhazh.telemetry.source_health import endpoint_records, feed_reliability
 
 #: Where the view sits under `frontend/public/`. Beside the day payloads rather
 #: than inside them: it is a projection of `state/`, not of a published day.
@@ -317,7 +317,7 @@ def build(
                 opportunities=opportunities,
                 publications=publications,
                 source_failures=lost,
-                reliability=ledger.feed_reliability(evidence, floor=collect.reliability_floor),
+                reliability=feed_reliability(evidence, floor=collect.reliability_floor),
                 reliability_reads=len(evidence),
                 recent_days=tuple(days),
                 days_under_the_mark=under,
@@ -366,7 +366,7 @@ def _reliability_evidence(
     """The evidence-bearing rows the ranker reduced, per feed, out of one read.
 
     Three things make this a filter rather than a second load. The rows are
-    **unsettled**, because `ledger.reliability` groups what `load_health`
+    **unsettled**, because `telemetry.source_health.reliability` groups what `load_health`
     returned and never calls `settled` - a row the settling loop would drop is a
     row the ranker counted, and dropping it here would publish a factor no run
     ever applied. The window is `collect.reliability_window_days` rather than
@@ -374,7 +374,7 @@ def _reliability_evidence(
     through the same `day_partition.days_in_window` the ranker's read walks, so
     the two select the same dates across a month boundary without either owning
     a calendar table. And a row that preserves the streak is dropped here rather
-    than inside `ledger.feed_reliability`, so the list that is reduced is the
+    than inside `telemetry.source_health.feed_reliability`, so the list that is reduced is the
     list that is counted: `reliability_reads` is the denominator of the factor
     beside it, and a second definition of evidence is how those two drift.
 
