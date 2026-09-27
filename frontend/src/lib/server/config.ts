@@ -99,7 +99,7 @@ export interface InferenceConfig {
 /** What the console needs to say how much room the site has left. */
 export interface RetentionConfig {
 	/** Where the build starts warning, below the platform's own ceiling.
-	 * `backend/idhazh/retention.py` reads the same number. */
+	 * `backend/idhazh/site_weight.py` reads the same number. */
 	site_budget_mb: number;
 }
 

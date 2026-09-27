@@ -2444,7 +2444,7 @@ def site_size(root: Path) -> tuple[int, int]:
     other two did, and it would miss it silently, in the number that feeds the
     site-size card. Carrying one between the three means writing it down
     somewhere, which is a persisted shape and a decision for a person to take
-    rather than for this function to assume. `retention.SiteSize.minus` is the
+    rather than for this function to assume. `site_weight.SiteSize.minus` is the
     carried total where one process both writes and deletes; there is no such
     process here.
 

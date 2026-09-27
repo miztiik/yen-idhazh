@@ -10,11 +10,14 @@ from typing import Any
 
 import pytest
 from conftest import CONFIG_DIR, read_text
+from retention._trees import site
 
 from idhazh.cli import main
 from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.knobs.retention import PAGES_HARD_CAP_MB, RetentionConfig
-from idhazh.retention import (
+from idhazh.measured import SITE_GROWTH_KB_A_DAY
+from idhazh.measured import WARNING_DAYS_REQUIRED as WARNING_DAYS
+from idhazh.site_weight import (
     BYTES_PER_MB,
     SiteSize,
     budget_alarm,
@@ -31,12 +34,16 @@ from idhazh.retention import (
 )
 from idhazh.stages.site_weight import stage_site_weight
 
-from ._trees import (
-    FASTEST_MEASURED_KB_PER_DAY,
-    WARNING_DAYS_REQUIRED,
-    days_of_warning,
-    site,
-)
+#: Both records, and what to do when either bites, are in `idhazh.measured` -
+#: the one place a measured number and its provenance live together.
+FASTEST_MEASURED_KB_PER_DAY = int(SITE_GROWTH_KB_A_DAY.value)
+
+WARNING_DAYS_REQUIRED = int(WARNING_DAYS.value)
+
+
+def days_of_warning(budget_mb: int, kb_per_day: int) -> int:
+    """Whole days from the alarm to the wall. A partial day is not a day."""
+    return (PAGES_HARD_CAP_MB - budget_mb) * 1024 // kb_per_day
 
 
 def test_an_absent_site_measures_as_nothing(tmp_path: Path) -> None:

@@ -148,7 +148,7 @@ UNMARKED_MODULES: Final = frozenset(
         "test_similarity_judge",
         "test_similarity_handoff",
         "test_similarity_tenant",
-        "test_site_alarm",
+        "test_site_weight",
         "test_slot_probe",
         "test_source_dwell",
         "test_source_health",

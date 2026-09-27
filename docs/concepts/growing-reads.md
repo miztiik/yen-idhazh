@@ -188,8 +188,8 @@ removed - at the 727-day horizon the 1 GB Pages cap sets, about 645 MB reads in
 roughly 15 s on a laptop and 30-60 s on the 4-vCPU runner, against a 6 h job.
 
 **And three whole-tree walks that stayed.** `assemble.site_size` and
-`retention.measure` read the size of every file in the tree;
-`retention.count_published_items` parses every staged day payload. Each says so
+`site_weight.measure` read the size of every file in the tree;
+`site_weight.count_published_items` parses every staged day payload. Each says so
 at the top of its own docstring with the measurement beside it: over
 `frontend/public/digest/` at 443 files and 25,070,521 bytes, 2026-09-07 on an
 a developer machine, `site_size` took 300.4 ms best and 563.4 ms worst over five
@@ -257,8 +257,8 @@ reads are here and not how many. These are `backend/`'s;
 | `contracts.base.Contract.read` | one payload | a validator cannot skip what it has not read |
 | `publication_checks.run_publication_checks` | every committed `digest.json` under `frontend/public/digest/` | a published day is frozen, but the contracts it is read through are not, so any day can stop matching on a commit that changes a shape. The receipt that used to skip an unchanged day was decommissioned on 2026-09-27: it settled a day on a recorded payload LENGTH, which let a receipt earned over one tree pass a same-length day in another. Measured 44 MB/s (2026-09-08), so the 727-day horizon reads in 30-60 s on the runner |
 | `assemble.site_size` | every file under `frontend/public/digest/` | three jobs write the tree, so no one process can carry the total |
-| `retention.measure` | every file under the built tree | it is the independent audit a maintained total is checked against |
-| `retention.count_published_items` | every staged day payload | bytes and items have to come from one corpus |
+| `site_weight.measure` | every file under the built tree | it is the independent audit a maintained total is checked against |
+| `site_weight.count_published_items` | every staged day payload | bytes and items have to come from one corpus |
 | `retention._dated_days` | the expired day directories only | it grows with the **backlog**, not with the archive, and shrinks as the prune works |
 | `build_reference_dataset.archive_candidates` | every committed `digest.json` under `frontend/public/digest/` | the candidate pool for the frozen reference set has to be every article the pipeline has published, because the set is drawn on **outlet diversity** and a window would hide the outlets that publish rarely. It is a verb a person types, off the daily path and run once a set (2026-09-13) |
 | `item_health_provenance.archive_columns` | every shard of every day of `state/item-health/` | the question is whether ANY run has ever written a column, and a window answers only for the days inside it - so it would report a column retired last year and a column nothing was ever wired to fill as the same thing. It is a verb a person types, off the daily path, and what it prints is pasted into [the column report](../architecture/sources/item-health-columns.md). No test repeats it (`CLAUDE.md` section 13) |
@@ -652,7 +652,7 @@ broken.
 
 ## Two rows did not land what was asked, and the page is more useful for saying so
 
-**The site-size total shipped its retraction half only.** `retention.SiteSize.minus`
+**The site-size total shipped its retraction half only.** `site_weight.SiteSize.minus`
 carries the total forward where one process both writes and deletes, so an
 ordinary deletion pass no longer re-reads the whole tree to learn a number it is
 already holding. The three walks above stayed, and the reason is structural
