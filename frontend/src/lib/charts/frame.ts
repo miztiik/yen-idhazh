@@ -1026,6 +1026,16 @@ export interface ReadoutOptions {
 	width: number;
 	/** Which mark is selected now, or null for none. */
 	onSelect: (index: number | null) => void;
+	/** The mark a second figure has picked, where two figures share one pick.
+	 * It is taken as this figure's own position without being reported back, so
+	 * an arrow key steps on from the day the reader is on rather than from the
+	 * day this figure last saw. Left out, the action keeps its own position. */
+	selected?: number | null;
+	/** Told of a deliberate pick - a step key, or a tap or click that finished -
+	 * and never of a hover or the start of a touch. A figure that scrolls another
+	 * into view does it here, so a page scroll that starts on the chart cannot
+	 * drag the other figure along with it. */
+	onPick?: (index: number) => void;
 }
 
 /** Report which mark the reader is pointing at, or has stepped to.
@@ -1047,7 +1057,7 @@ export function pointerReadout(
 	options: ReadoutOptions
 ): { update: (next: ReadoutOptions) => void; destroy: () => void } {
 	let current = options;
-	let at: number | null = null;
+	let at: number | null = options.selected ?? null;
 	let column = nearestColumn(options.marks);
 
 	const select = (next: number | null) => {
@@ -1081,6 +1091,16 @@ export function pointerReadout(
 
 	const away = () => select(null);
 
+	/** A press that lifted where it landed. A touch that turned into a page
+	 * scroll is cancelled and never gets here, which is the whole difference
+	 * between a tap and the start of a touch. */
+	const tap = (event: MouseEvent) => {
+		const index = nearest(event.clientX);
+		if (index === null) return;
+		select(index);
+		current.onPick?.(index);
+	};
+
 	const step = (event: KeyboardEvent) => {
 		const last = current.marks.length - 1;
 		if (last < 0) return;
@@ -1097,6 +1117,7 @@ export function pointerReadout(
 		// one step through the marks also moved the window under them and left
 		// the readout pointing at a mark that had gone.
 		event.stopPropagation();
+		if (at !== null) current.onPick?.(at);
 	};
 
 	// One list, attached and removed from the same entries, so the two halves
@@ -1111,7 +1132,8 @@ export function pointerReadout(
 		['pointerleave', leave as EventListener],
 		['focusin', enter],
 		['focusout', away],
-		['keydown', step as EventListener]
+		['keydown', step as EventListener],
+		['click', tap as EventListener]
 	];
 	for (const [type, handler] of bound) events.addEventListener(type, handler);
 
@@ -1121,6 +1143,9 @@ export function pointerReadout(
 			// move, which is the whole of what this action costs a dragging thumb.
 			if (next.marks !== current.marks) column = nearestColumn(next.marks);
 			current = next;
+			// Another figure moved the shared pick. Take it as this figure's own,
+			// silently: reporting it back would be the pick answering itself.
+			if (next.selected !== undefined) at = next.selected;
 			// The window moved, so the mark this index named may be gone. Holding
 			// the index would print one article's numbers under another's mark.
 			if (at !== null && at > next.marks.length - 1) select(null);

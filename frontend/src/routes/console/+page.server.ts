@@ -5,6 +5,7 @@ import type { ExtractionDay } from '$lib/charts/extraction-trend';
 import type { RunYieldSource } from '$lib/charts/run-yield';
 import { itemCost, type ItemCost } from '$lib/console/item-cost';
 import { extraction, type Extraction } from '$lib/console/extraction';
+import { health, runOutcome, squareLabel, type DayColumn } from '$lib/console/run-square';
 import { pipelineChanges, wasCut } from '$lib/server/model-work';
 import { loadRunTimeline, runTimelineView } from '$lib/server/run-timeline';
 import { loadSpanRollup, subStepReadout } from '$lib/server/span-rollup';
@@ -30,21 +31,6 @@ type TimingStats = StageTimingDay;
 
 export type { ItemCost } from '$lib/console/item-cost';
 export type { Extraction } from '$lib/console/extraction';
-
-/** Green: it worked. Amber: look at it. Red: it did not work. */
-export type Health = 'green' | 'amber' | 'red';
-
-export interface RunSquare {
-	runId: string;
-	n: number;
-	health: Health;
-	label: string;
-}
-
-export interface DayColumn {
-	date: string;
-	squares: RunSquare[];
-}
 
 /** What one day's chart drawing cost and what it produced.
  *
@@ -150,46 +136,6 @@ function byDate(rows: Record<string, string>[]): Map<string, Record<string, stri
 	return grouped;
 }
 
-/** One square's colour, from what the run wrote down about itself.
- *
- * Skipped items are not failures. An article already published, or one a feed
- * repeated, is skipped by design - counting it against the run would paint a
- * healthy day amber for doing its job. So the rate is over what was attempted.
- *
- * The floor is the same knob CI uses to decide whether a run opens an issue, so
- * a red square and an open issue can never disagree.
- */
-function health(run: RunRecord, floorPct: number): Health {
-	if (run.status === 'failed') return 'red';
-	const attempted = run.succeeded + run.failed;
-	// Nothing was attempted. Not a failure, but never what you expect to see.
-	if (attempted === 0) return 'amber';
-	if ((run.succeeded / attempted) * 100 < floorPct) return 'red';
-	if (run.failed > 0 || run.status !== 'completed' || run.sourceListStale) return 'amber';
-	return 'green';
-}
-
-/** What one run did, in the words the square carries for anyone without a mouse.
- *
- * The cut count rides here rather than on a figure of its own. Measured
- * 2026-08-29 over 19 committed runs it is 1 to 12 articles of 160 to 200, and
- * that swing is which articles the feeds carried that hour - so drawn as a
- * published number it would read as the cap moving when nothing moved. A run is
- * where run-level facts already live.
- */
-function describe(date: string, run: RunRecord, readInPart: number): string {
-	// `n` is which block of the day this was, in the order the blocks landed. It
-	// is not a count of the runs before it: two runs finish in parallel and the
-	// numbers may skip.
-	const parts = [`${date} block ${run.n}`, `${run.succeeded} of ${run.planned} succeeded`];
-	if (run.failed > 0) parts.push(`${run.failed} failed`);
-	if (run.skipped > 0) parts.push(`${run.skipped} skipped`);
-	if (readInPart > 0) parts.push(`${readInPart} read only in part`);
-	if (run.sourceListStale) parts.push('source list was stale');
-	if (run.status !== 'completed') parts.push(run.status);
-	return parts.join(', ');
-}
-
 /** Articles each run read only the start of, keyed by the run that read them.
  *
  * Counted per address, not per row: a run writes one row per planned item, and
@@ -287,7 +233,8 @@ export async function load() {
 			runId: run.runId,
 			n: run.n,
 			health: health(run, floorPct),
-			label: describe(day.date, run, readInPartByRun.get(run.runId) ?? 0)
+			label: squareLabel(day.date, run, floorPct, readInPartByRun.get(run.runId) ?? 0),
+			outcome: runOutcome(run, floorPct)
 		}))
 	}));
 

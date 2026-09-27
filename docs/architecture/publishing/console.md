@@ -1,6 +1,6 @@
 # Which console panel answers what
 
-**Last Updated**: 2026-09-23
+**Last Updated**: 2026-09-27
 
 The operator's surface: which panel is on which route, and which of the two
 questions it answers. `/console/` tells the owner what happened to the pipeline,
@@ -48,8 +48,8 @@ fits the screen it is on, and a page that can be scanned in one pass
 | Surface | Which question it answers |
 | --- | --- |
 | the standing band | is it working - one verdict across all five routes, at a size that does not grow with the pipeline |
-| `/console/` "At a glance" | is it working - for this route alone, and over the open window where the band's figures are whole-record |
-| `/console/` `Run health` | is it working - in the run, and it is the first panel on the route |
+| `/console/` "At a glance" | is it working - for this route alone, two cards over the open window where the band's figures are whole-record |
+| `/console/` `Run health` | is it working - day by day and run by run: articles published against planned, with every run's square under its own day; the first panel on the route |
 | the rest of `/console/` | what is broken in the run |
 | `/console/model/`, `/console/judgement/`, `/console/voices/` | what is broken in the writing, the labelling and the supply |
 | `/console/machine/` `Whether the speed numbers can be trusted` | is it working - can the day's rates be trusted at all, and it is the first panel on the route |
@@ -138,9 +138,10 @@ form. A question title asks the reader to hold it while he reads the panel; a
 noun phrase names what is in front of him. `What`, `Which` and `How` stay legal
 openings, because they head a free relative rather than a question.
 
-The first of those four has since moved again: the two-slice donut it captioned
-was replaced by a per-day chart, and its title is now `Items published against
-items planned`. The rule is the same and the check follows the new title.
+The first of those four has since moved twice: the two-slice donut it captioned
+was replaced by a per-day chart, and that chart now heads `Run health` under the
+title `Articles published against planned`, above the day's runs. The rule is the
+same and the check follows the new title.
 
 **On Hardware the rule goes further: a title states the question the panel
 answers and borrows no word from how the thing is built.** The grammar above is
