@@ -46,11 +46,16 @@ def percentile(sorted_values: list[int], quantile: float) -> int:
     return sorted_values[rank - 1]
 
 
-class TelemetryAggregateRow(Contract):
+class ItemHealthSummaryRow(Contract):
     """One `(date, stage)` pair, summarised from one month of item-health rows."""
 
-    __schema_stem__: ClassVar[str] = "telemetry-aggregate-row"
+    __schema_stem__: ClassVar[str] = "item-health-summary-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-27",
+            change="The stem was telemetry-aggregate-row, and the class is renamed with it.",
+            why="No field moved. The name now says it is one row of state/item-health-summary/.",
+        ),
         ChangelogEntry(
             version="2026-09-14T01:30",
             change="ItemStage gained visual.",

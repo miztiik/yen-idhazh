@@ -109,9 +109,7 @@ AUTO is the default. PAUSE and surface only for: a Level-5 row (CLAUDE.md sectio
 
 When every row is `DONE` / `COLLAPSED`: confirm the Status Reckoner is fully resolved, check that nothing durable is written only in the plan-doc ([distill-a-plan.md](distill-a-plan.md) says where anything left over goes), and delete the plan-doc (git history is the ledger, per [../reference/documentation-structure.md](../reference/documentation-structure.md)). A decision the plan defers to another plan is closed only when the receiving plan names it in a row of its own; a deferral with no receiving row is a dropped decision. Closing a plan does not invalidate an existing check, and a documentation-only closure uses documentation checks and CI rather than a fresh local application suite.
 
-**Then sweep the worktrees the plan created.** Keep a checkout only when all three agree: its pull request is merged, its branch is gone from the remote, and its own tree is clean. Remove the checkout and keep the branch whenever the branch still holds a commit the trunk does not - the directory is the disk cost, and the branch is the only copy of an unmerged commit. Why all three are needed, and what a detached checkout changes, is in [git-and-github.md](../reference/agent-notes/git-and-github.md).
-
-Remove the checkout and keep the branch whenever the branch still holds a commit the trunk does not. The directory is the disk cost; the branch is free and is the only copy of an unmerged commit.
+**Then sweep the worktrees the plan created.** Remove a checkout only when all three agree: its pull request is merged, its branch is gone from the remote, and its own tree is clean. A checkout whose tree is not clean is kept, because its edits exist nowhere else. When the branch still holds a commit the trunk does not, the checkout may go but the branch stays - the directory is the disk cost, and the branch is the only copy of an unmerged commit. Why all three are needed, and what a detached checkout changes, is in [git-and-github.md](../reference/agent-notes/git-and-github.md).
 
 ## See also
 

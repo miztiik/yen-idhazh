@@ -120,7 +120,7 @@ def stage_compact(state_dir: Path, *, date: str, after_days: int) -> CompactionR
     kept = 0
     open_from = _open_from(date, after_days)
     for tree in DAY_TREES:
-        root = state_dir / tree.value
+        root = ledger.tree_root(state_dir, tree)
         key = ledger.segment_key(tree)
         model = ledger.segment_contract(tree)
         touched = False

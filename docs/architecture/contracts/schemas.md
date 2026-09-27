@@ -1,6 +1,6 @@
 # Contracts and Schemas
 
-**Last Updated**: 2026-09-23
+**Last Updated**: 2026-09-27
 
 The persisted-shape subsystem: where the models live, how a schema is obtained from one, the small hand copy the frontend carries, and the tests that stop the two drifting apart. This is the operational home of Guardrail #3 (contracts before logic) and `CLAUDE.md` sections 1a and 11.
 
@@ -100,7 +100,7 @@ The shapes, and where each one lives once written:
 | `FeedRetirementRow` | `feed-retirement-row` | one appended row of `state/feed-retirements.csv` |
 | `ItemHealthRow` | `item-health-row` | one row of `state/item-health/<YYYY>/<MM>/<DD>/`, in the file its writer owns |
 | `PublicTelemetryRow` | `public-telemetry` | one row of `frontend/public/telemetry/<YYYY-MM>.csv`, the browser-safe projection of the row above |
-| `TelemetryAggregateRow` | `telemetry-aggregate-row` | one row of `state/item-health-summary/<YYYY-MM>.csv`, rewritten whole |
+| `ItemHealthSummaryRow` | `item-health-summary-row` | one row of `state/item-health-summary/<YYYY-MM>.csv`, rewritten whole |
 | `ScoreArchive` | `score-archive` | `state/score-archive/<YYYY-MM>.json`, one whole document per archived score month |
 | `DayMetrics` | `day-metrics` | `state/day-metrics/<YYYY>/<MM>/<DD>.json`, one whole document per published day, rewritten when that day is corrected |
 | `StorySimilarityPair` | `story-similarity-pair` | one appended row of `state/content-similarity-judge/scored-pairs/<YYYY>/<MM>/<DD>.csv` - one borderline pair, what it scored, what a judge said in both orders, and the instrument that said it. The same shape holds the day's draw under `backend/var/council/<date>/selection/<judge>/` before a judging unit reads it |
@@ -119,7 +119,7 @@ The shapes, and where each one lives once written:
 
 Everything under `state/` is a row contract rather than a file contract, because a file that is only ever appended to has no shape of its own - the row is the unit that has to hold. Which of those ledgers a later run reads back, and what each one answers, is [../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md).
 
-`TelemetryAggregateRow` is the one exception and says so in its own line above: its file is derived from the item-health shard it replaces, so every run of the fold writes the same bytes and the file is rewritten rather than appended to. Appending would double a month whenever the fold ran twice over a shard a lost race had restored. What decides when a month is folded is `observability.item_health_full_grain_months`, and what it costs is in [../publishing/retention.md](../publishing/retention.md#what-bounds-the-committed-state-tree).
+`ItemHealthSummaryRow` is the one exception and says so in its own line above: its file is derived from the item-health shard it replaces, so every run of the fold writes the same bytes and the file is rewritten rather than appended to. Appending would double a month whenever the fold ran twice over a shard a lost race had restored. What decides when a month is folded is `observability.item_health_full_grain_months`, and what it costs is in [../publishing/retention.md](../publishing/retention.md#what-bounds-the-committed-state-tree).
 
 `ScoreArchive` is the second exception and is a stronger one: it is not a row at all. A month of `state/scores/` past `observability.scores_full_grain_months` becomes one JSON document, and a document is the right shape here because two of the three things it holds are whole-month facts rather than per-row facts - the SHA-256 of that month's day files in day order, and the sorted index of every distinct measurement it held. A CSV would have had to spread both across rows that do not mean anything on their own. It is written temp-then-rename, read back through this contract, and reconciled field by field against a second reading of those day files before any of them is unlinked; `.github/workflows/prune.yml` force-pushes `main` on a schedule (`CLAUDE.md` section 8), so a file deleted on the strength of an unchecked summary does not come back. What it weighs is in [../publishing/retention.md](../publishing/retention.md#what-bounds-the-committed-state-tree).
 

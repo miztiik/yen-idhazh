@@ -100,7 +100,7 @@ def a_score_tree(tmp_path: Path) -> Path:
 def score_months(state: Path) -> list[str]:
     """The months the score ledger's day shards fall in, oldest first."""
     return sorted(
-        day_shards.shards_by_month(state / score_writer.LEDGER_DIRNAME, days=UNBOUNDED_WINDOW)
+        day_shards.shards_by_month(ledger.tree_root(state, LedgerName.SCORES), days=UNBOUNDED_WINDOW)
     )
 
 
@@ -136,7 +136,7 @@ def test_a_score_month_past_the_window_is_summarised_and_then_deleted(tmp_path: 
         month for month in months_back(TODAY, HISTORY_MONTHS) if month >= boundary
     ]
     for month in doomed:
-        emptied = state / score_writer.LEDGER_DIRNAME / month[:4] / month[5:7]
+        emptied = ledger.tree_root(state, LedgerName.SCORES) / month[:4] / month[5:7]
         assert not emptied.exists(), f"{month} left an empty month directory behind"
     assert score_archive.archived_months(state) == doomed
     # Every archived month reads back through its contract and still adds up.
@@ -183,7 +183,7 @@ def test_a_score_dry_run_writes_nothing_and_still_counts_both_sides(tmp_path: Pa
     assert result.archive_bytes > 0
     assert score_bytes(state) == held
     assert score_archive.archived_months(state) == []
-    assert not (state / LedgerName.SCORE_ARCHIVE).exists()
+    assert not (ledger.tree_root(state, LedgerName.SCORE_ARCHIVE)).exists()
 
 
 def test_a_month_with_real_volume_summarises_to_a_fraction_of_its_shard(tmp_path: Path) -> None:
@@ -254,7 +254,7 @@ def test_a_score_file_the_reader_cannot_place_stops_the_prune(tmp_path: Path) ->
     """
     state = tmp_path / "state"
     score_history(state, months_back(TODAY, HISTORY_MONTHS))
-    stray = state / score_writer.LEDGER_DIRNAME / "notes.csv"
+    stray = ledger.tree_root(state, LedgerName.SCORES) / "notes.csv"
     stray.write_text("nothing the contract knows\n", encoding="utf-8")
     before = {
         path.relative_to(state).as_posix(): path.read_bytes()
@@ -294,7 +294,7 @@ def test_a_month_shaped_name_beside_the_day_tree_is_refused_rather_than_archived
     state = tmp_path / "state"
     score_history(state, months_back(TODAY, HISTORY_MONTHS))
     strays = {
-        state / score_writer.LEDGER_DIRNAME / f"{stem}.csv": f"{stem} was never written\n"
+        ledger.tree_root(state, LedgerName.SCORES) / f"{stem}.csv": f"{stem} was never written\n"
         for stem in NOT_MONTHS
     }
     for path, text in strays.items():
@@ -304,7 +304,7 @@ def test_a_month_shaped_name_beside_the_day_tree_is_refused_rather_than_archived
         prune_scores(state, ObservabilityConfig(), TODAY)
 
     assert {path: path.read_text(encoding="utf-8") for path in strays} == strays
-    assert not (state / LedgerName.SCORE_ARCHIVE).exists(), (
+    assert not (ledger.tree_root(state, LedgerName.SCORE_ARCHIVE)).exists(), (
         "a ledger the reader cannot walk produced a summary anyway"
     )
 
@@ -322,7 +322,7 @@ def test_an_archive_that_does_not_reconcile_leaves_its_days(
     config = ObservabilityConfig()
     boundary = oldest_month_kept(TODAY, config.scores_full_grain_months)
     by_month = day_shards.shards_by_month(
-        state / score_writer.LEDGER_DIRNAME, days=UNBOUNDED_WINDOW
+        ledger.tree_root(state, LedgerName.SCORES), days=UNBOUNDED_WINDOW
     )
     doomed = [day for month, days in by_month.items() if month < boundary for day in days]
     assert doomed
@@ -399,7 +399,7 @@ def test_the_oracle_an_archived_month_reconciles_and_is_still_refused_as_a_repea
     config = ObservabilityConfig()
     boundary = oldest_month_kept(TODAY, config.scores_full_grain_months)
     by_month = day_shards.shards_by_month(
-        state / score_writer.LEDGER_DIRNAME, days=UNBOUNDED_WINDOW
+        ledger.tree_root(state, LedgerName.SCORES), days=UNBOUNDED_WINDOW
     )
     month = next(name for name in sorted(by_month) if name < boundary)
     days = sorted(by_month[month])
@@ -505,16 +505,16 @@ def test_an_index_day_no_archive_covers_is_left_alone(tmp_path: Path) -> None:
         job=ServerJob.ASSEMBLE,
         shard=0,
     )
-    for day in day_shards.one_day(state / score_writer.LEDGER_DIRNAME, orphan):
+    for day in day_shards.one_day(ledger.tree_root(state, LedgerName.SCORES), orphan):
         day.unlink()
         day_partition.drop_empty_day_dirs(day)
-    assert day_shards.one_day(state / score_writer.INDEX_DIRNAME, orphan), (
+    assert day_shards.one_day(ledger.tree_root(state, LedgerName.SCORE_INDEX), orphan), (
         "the index for the orphaned day was never written, so this proves nothing"
     )
 
     prune_scores(state, config, TODAY)
 
-    assert day_shards.one_day(state / score_writer.INDEX_DIRNAME, orphan), (
+    assert day_shards.one_day(ledger.tree_root(state, LedgerName.SCORE_INDEX), orphan), (
         "the last record of those measurements went, and no archive carries them"
     )
     assert score_writer.recorded_observations(state)
@@ -538,10 +538,10 @@ def test_the_stage_names_the_score_day_files_a_live_run_would_remove(
     score_history(state, months)
     expired = months[0]
     days = day_shards.shards_by_month(
-        state / score_writer.LEDGER_DIRNAME, days=UNBOUNDED_WINDOW
+        ledger.tree_root(state, LedgerName.SCORES), days=UNBOUNDED_WINDOW
     )[expired]
     index_days = day_shards.shards_by_month(
-        state / score_writer.INDEX_DIRNAME, days=UNBOUNDED_WINDOW
+        ledger.tree_root(state, LedgerName.SCORE_INDEX), days=UNBOUNDED_WINDOW
     )[expired]
     doomed = sorted(
         f"{ledger.STATE_DIRNAME}/{shard.relative_to(state).as_posix()}"

@@ -35,17 +35,15 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated, Final, NamedTuple, get_args, get_origin
 
-from idhazh import day_shards
+from idhazh import day_shards, ledger
 from idhazh.contracts.item_health import RETIRED_CELLS, ItemHealthRow
 from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.telemetry.record import ItemRecorder
 
 #: The tree a column's value can be computed in. `backend/utilities/` is not on
 #: it: a script that prints a number is not a producer of a census row.
 SOURCE_ROOT: Final = "backend/idhazh"
-
-#: The committed archive. Read whole, which is the growing read this file owns.
-LEDGER_ROOT: Final = "state/item-health"
 
 #: **The two doors a value uses to become a cell of this row**: the census row's
 #: own construction, and the record the work stage emits while it is still
@@ -549,7 +547,8 @@ def archive_columns(root: Path, columns: frozenset[str]) -> tuple[frozenset[str]
     seen: set[str] = set()
     rows = 0
     files = 0
-    for path in day_shards.shard_files(root / LEDGER_ROOT, days=UNBOUNDED_WINDOW):
+    folder = ledger.tree_root(root / ledger.STATE_DIRNAME, LedgerName.ITEM_HEALTH)
+    for path in day_shards.shard_files(folder, days=UNBOUNDED_WINDOW):
         files += 1
         with path.open(encoding="utf-8", newline="") as handle:
             for row in csv.DictReader(handle):

@@ -100,7 +100,7 @@ def test_a_feed_health_month_past_its_own_age_is_deleted_rather_than_folded(
     assert list(result.kept) == [stem for stem in months if stem >= boundary]
     assert result.bytes_freed > 0
     assert feed_health_months(state) == list(result.kept)
-    assert not (state / LedgerName.ITEM_HEALTH_SUMMARY).exists(), (
+    assert not (ledger.tree_root(state, LedgerName.ITEM_HEALTH_SUMMARY)).exists(), (
         "feed health is deleted rather than folded; an aggregate here has no reader"
     )
 

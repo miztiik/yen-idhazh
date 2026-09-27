@@ -29,7 +29,7 @@ from idhazh.contracts.ledger_name import LedgerName
 
 
 @verify(UNIQUE)
-class LifecycleStatus(StrEnum):
+class LedgerLifecycleStatus(StrEnum):
     """Whether a family's ledgers are written: active, paused or retired.
 
     `active` is written and read. `paused` is not written now and will resume.
@@ -39,9 +39,7 @@ class LifecycleStatus(StrEnum):
     good is something a person does on purpose.
 
     Nothing on the write path reads this yet, so a test holds every family at
-    `active` until something does. `contracts/taxonomy.py` has an enum of the
-    same name for desks, lenses and feeds; the two share the word and not the
-    values.
+    `active` until something does.
     """
 
     ACTIVE = "active"
@@ -136,7 +134,7 @@ class LedgerFamily(Model):
     """One top-level folder under `state/`: its status, what it holds, and its ledgers."""
 
     name: str = Field(min_length=1)
-    lifecycle_status: LifecycleStatus
+    lifecycle_status: LedgerLifecycleStatus
     description: str = Field(min_length=1, pattern=r"^[^\r\n]+$")
     onboarded: date
     ledgers: list[LedgerEntry] = Field(min_length=1)

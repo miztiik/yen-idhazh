@@ -72,10 +72,10 @@ from typing import Final
 REPO_ROOT: Final = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "backend"))
 
-from idhazh import config  # noqa: E402
+from idhazh import config, ledger  # noqa: E402
 from idhazh.contracts.label_row import LabelRow, LabelTag, LabelVerdict  # noqa: E402
+from idhazh.contracts.ledger_name import LedgerName  # noqa: E402
 from idhazh.evals import archive, evidence, labels  # noqa: E402
-from idhazh.evals.writer import LEDGER_RELDIR as SCORES_RELDIR  # noqa: E402
 from idhazh.evals.writer import records as _score_records  # noqa: E402
 from idhazh.ledger import STATE_DIRNAME  # noqa: E402
 from idhazh.sanitize import sanitize  # noqa: E402
@@ -110,12 +110,12 @@ def _ledger(state_dir: Path) -> list[dict[str, str]]:
         summarised = archive.archived_months(state_dir)
         if summarised:
             raise SystemExit(
-                f"every month of {(state_dir / SCORES_RELDIR).as_posix()} has aged out of "
+                f"every month of {ledger.tree_relpath(LedgerName.SCORES)} has aged out of "
                 f"the full-grain window - {', '.join(summarised)} exist only as summaries "
                 f"at {archive.archive_relpath('<YYYY-MM>')}, and a summary holds no row to "
                 f"label. {archive.RAW_WINDOW_NOTE}"
             )
-        raise SystemExit(f"no eval ledger under {(state_dir / SCORES_RELDIR).as_posix()}")
+        raise SystemExit(f"no eval ledger under {ledger.tree_relpath(LedgerName.SCORES)}")
     return rows
 
 
@@ -142,7 +142,10 @@ def refuse(records: Sequence[dict[str, str]], *, scorer: str, reason: str) -> in
     print(f"reason           {reason}")
     print(RULE)
     print()
-    print(f"{SCORES_RELDIR} holds these scorers. Only the scorer above can be drawn:")
+    print(
+        f"{ledger.tree_relpath(LedgerName.SCORES)} holds these scorers. "
+        "Only the scorer above can be drawn:"
+    )
     for pair in labels.pairs(records):
         here = "   <- this scorer" if pair.scorer_version == scorer else ""
         print()

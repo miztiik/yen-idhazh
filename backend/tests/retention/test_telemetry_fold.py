@@ -12,9 +12,9 @@ from conftest import seed_item_health
 
 from idhazh import ledger
 from idhazh.contracts.item_health import ItemStage
+from idhazh.contracts.item_health_summary import percentile
 from idhazh.contracts.knobs.observability import ObservabilityConfig
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.contracts.telemetry_aggregate import percentile
 from idhazh.evals import archive as score_archive
 from idhazh.retention import compact_month, month_shards, oldest_month_kept, prune_telemetry
 from idhazh.telemetry.publish import public_telemetry
@@ -169,7 +169,7 @@ def test_a_dry_run_changes_nothing_on_disk(tmp_path: Path) -> None:
     assert result.folded, "it still has to report what it would have done"
     assert result.rows_folded > 0
     assert after == before
-    assert not (state / LedgerName.ITEM_HEALTH_SUMMARY).exists()
+    assert not (ledger.tree_root(state, LedgerName.ITEM_HEALTH_SUMMARY)).exists()
 
 
 def test_the_aggregate_is_kept_forever_unless_somebody_asks_for_the_bytes_back(
@@ -185,14 +185,14 @@ def test_the_aggregate_is_kept_forever_unless_somebody_asks_for_the_bytes_back(
     assert config.item_health_aggregate_keep_months is None
 
     first = prune_telemetry(state, config, TODAY)
-    written = sorted(path.stem for path in month_shards(state / LedgerName.ITEM_HEALTH_SUMMARY))
+    written = sorted(path.stem for path in month_shards(ledger.tree_root(state, LedgerName.ITEM_HEALTH_SUMMARY)))
     again = prune_telemetry(state, config, TODAY)
 
     assert written == sorted(first.folded)
     assert again.folded == (), "the shards are gone, so a second fold has nothing to do"
     assert again.hard_deleted == ()
     assert (
-        sorted(path.stem for path in month_shards(state / LedgerName.ITEM_HEALTH_SUMMARY))
+        sorted(path.stem for path in month_shards(ledger.tree_root(state, LedgerName.ITEM_HEALTH_SUMMARY)))
         == written
     )
 
@@ -209,14 +209,14 @@ def test_a_hard_delete_takes_the_aggregate_only_after_the_fold_has_had_it(
     state = a_state_tree(tmp_path)
     config = ObservabilityConfig(item_health_aggregate_keep_months=16)
     prune_telemetry(state, ObservabilityConfig(), TODAY)
-    before = sorted(path.stem for path in month_shards(state / LedgerName.ITEM_HEALTH_SUMMARY))
+    before = sorted(path.stem for path in month_shards(ledger.tree_root(state, LedgerName.ITEM_HEALTH_SUMMARY)))
 
     result = prune_telemetry(state, config, TODAY)
 
     boundary = oldest_month_kept(TODAY, 16)
     assert sorted(result.hard_deleted) == [stem for stem in before if stem < boundary]
     assert result.hard_deleted, "a threshold inside the fixture has to remove something"
-    left = sorted(path.stem for path in month_shards(state / LedgerName.ITEM_HEALTH_SUMMARY))
+    left = sorted(path.stem for path in month_shards(ledger.tree_root(state, LedgerName.ITEM_HEALTH_SUMMARY)))
     assert left == [stem for stem in before if stem >= boundary]
 
 
@@ -296,12 +296,12 @@ def test_the_month_readers_all_agree_on_what_a_month_is(tmp_path: Path) -> None:
     state = tmp_path / "state"
     readers: dict[str, tuple[Path, str, Callable[[], list[Path]]]] = {
         "retention.month_shards": (
-            state / LedgerName.ITEM_HEALTH_SUMMARY,
+            ledger.tree_root(state, LedgerName.ITEM_HEALTH_SUMMARY),
             ".csv",
-            lambda: month_shards(state / LedgerName.ITEM_HEALTH_SUMMARY),
+            lambda: month_shards(ledger.tree_root(state, LedgerName.ITEM_HEALTH_SUMMARY)),
         ),
         "evals.archive.archive_files": (
-            state / LedgerName.SCORE_ARCHIVE,
+            ledger.tree_root(state, LedgerName.SCORE_ARCHIVE),
             ".json",
             lambda: score_archive.archive_files(state),
         ),
@@ -318,7 +318,7 @@ def test_the_month_readers_all_agree_on_what_a_month_is(tmp_path: Path) -> None:
 
 def test_a_file_that_is_not_a_month_shard_is_never_a_candidate(tmp_path: Path) -> None:
     """A directory this deletes from names what it recognises, never the rest."""
-    directory = tmp_path / "state" / LedgerName.ITEM_HEALTH_SUMMARY
+    directory = ledger.tree_root(tmp_path / "state", LedgerName.ITEM_HEALTH_SUMMARY)
     directory.mkdir(parents=True)
     for stem in ("2025-01", *NOT_MONTHS, *OTHER_STRAYS):
         (directory / f"{stem}.csv").write_text("header\n", encoding="utf-8")

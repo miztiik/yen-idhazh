@@ -107,7 +107,7 @@ def write(
         job=job,
         shard=shard,
     )
-    return state / tree.value / date[:4] / date[5:7] / date[8:10]
+    return ledger.path(state, tree, date)
 
 
 def names_in(day: Path) -> list[str]:
@@ -124,7 +124,7 @@ def rows_in(path: Path) -> list[dict[str, str]]:
 def settled_in(state: Path, tree: LedgerName, date: str) -> list[dict[str, str]]:
     """What a reader settles for one day, whichever files the day is holding."""
     return day_shards.settled_day(
-        state / tree.value,
+        ledger.tree_root(state, tree),
         date,
         ledger.segment_key(tree),
         ledger.segment_contract(tree),

@@ -153,11 +153,11 @@ from typing import Final, NamedTuple, NoReturn
 from idhazh import day_partition, day_shards, ledger, month_partition, telemetry
 from idhazh.contracts.base import ITEM_ID_PATTERN
 from idhazh.contracts.item_health import ItemHealthRow, ItemOutcome, ItemStage
+from idhazh.contracts.item_health_summary import ItemHealthSummaryRow, percentile
 from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
 from idhazh.contracts.knobs.observability import ObservabilityConfig
 from idhazh.contracts.knobs.retention import PAGES_HARD_CAP_MB, RetentionConfig
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.contracts.telemetry_aggregate import TelemetryAggregateRow, percentile
 from idhazh.contracts.visual_decision import VisualState
 from idhazh.contracts.visual_prune import VisualPruneRow
 from idhazh.contracts.visual_telemetry import VisualAggregateRow, VisualAttemptRow, band_of
@@ -785,7 +785,7 @@ def _elapsed_ms(row: ItemHealthRow) -> int | None:
     return sum(timed) if timed else None
 
 
-def compact_month(rows: list[ItemHealthRow]) -> list[TelemetryAggregateRow]:
+def compact_month(rows: list[ItemHealthRow]) -> list[ItemHealthSummaryRow]:
     """One month of full-grain rows, as one row per (date, stage).
 
     Ordered by date and then by the stage's own pipeline order, so the file a
@@ -796,15 +796,15 @@ def compact_month(rows: list[ItemHealthRow]) -> list[TelemetryAggregateRow]:
         grouped.setdefault((row.date, row.stage), []).append(row)
 
     order = list(ItemStage)
-    folded: list[TelemetryAggregateRow] = []
+    folded: list[ItemHealthSummaryRow] = []
     for day, stage in sorted(grouped, key=lambda key: (key[0], order.index(key[1]))):
         members = grouped[(day, stage)]
         elapsed = sorted(
             value for value in (_elapsed_ms(member) for member in members) if value is not None
         )
         folded.append(
-            TelemetryAggregateRow(
-                version=TelemetryAggregateRow.schema_version(),
+            ItemHealthSummaryRow(
+                version=ItemHealthSummaryRow.schema_version(),
                 date=day,
                 stage=stage,
                 items=len(members),
@@ -962,7 +962,7 @@ def prune_telemetry(
     hard_deleted: list[str] = []
     if config.item_health_aggregate_keep_months is not None:
         delete_from = oldest_month_kept(today, config.item_health_aggregate_keep_months)
-        for aggregate in month_shards(state_dir / LedgerName.ITEM_HEALTH_SUMMARY):
+        for aggregate in month_shards(ledger.tree_root(state_dir, LedgerName.ITEM_HEALTH_SUMMARY)):
             if aggregate.stem >= delete_from:
                 continue
             hard_deleted.append(aggregate.stem)
@@ -1743,7 +1743,7 @@ def prune_scores(
     archive_bytes = 0
 
     by_month = day_shards.shards_by_month(
-        state_dir / score_writer.LEDGER_DIRNAME, days=UNBOUNDED_WINDOW
+        ledger.tree_root(state_dir, LedgerName.SCORES), days=UNBOUNDED_WINDOW
     )
     for month in sorted(by_month):
         if month >= keep_from:
@@ -1784,7 +1784,7 @@ def prune_scores(
     covered = {path.stem for path in score_archive.archive_files(state_dir)} | set(archived)
     index_days_removed: list[str] = []
     for shard in day_shards.shard_files(
-        state_dir / score_writer.INDEX_DIRNAME, days=UNBOUNDED_WINDOW
+        ledger.tree_root(state_dir, LedgerName.SCORE_INDEX), days=UNBOUNDED_WINDOW
     ):
         month = day_shards.date_of(shard)[:7]
         if month >= keep_from or month not in covered:

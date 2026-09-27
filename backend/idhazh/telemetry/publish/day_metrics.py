@@ -57,7 +57,6 @@ from idhazh.contracts.item_health import ElementClass, ItemHealthRow, ItemStage
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.run_manifest import ModelRole, RunManifest
 from idhazh.contracts.visual_decision import VisualKind, VisualState
-from idhazh.evals import writer as eval_writer
 from idhazh.evals.metrics import extractable_but_unused_rate, span_integrity_rate
 from idhazh.telemetry.publish import series
 
@@ -121,7 +120,7 @@ def read_score_rows(state_root: Path, date: str) -> list[dict[str, str]]:
     report one measurement twice.
     """
     return day_shards.settled_day(
-        state_root / eval_writer.LEDGER_DIRNAME, date, ledger.OBSERVATION_KEY, EvalRow
+        ledger.tree_root(state_root, LedgerName.SCORES), date, ledger.OBSERVATION_KEY, EvalRow
     )
 
 

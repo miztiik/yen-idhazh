@@ -40,12 +40,13 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Final, NamedTuple
 
-from idhazh import assemble, config, corpus, extract, summarize, tag
+from idhazh import assemble, config, corpus, extract, ledger, summarize, tag
 from idhazh.contracts.article import ArticleStatus
 from idhazh.contracts.base import derive_text_digest, derive_url_key
 from idhazh.contracts.corpus import CorpusMeta, CorpusRow
 from idhazh.contracts.digest_day import DigestDay
 from idhazh.contracts.eval_row import EvalRow
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.run_plan import PlannedItem
 from idhazh.contracts.sources import SourceForm
 from idhazh.contracts.taxonomy import SourceTier
@@ -471,7 +472,7 @@ def refill(
     """
     summarised = archive.archived_months(state_dir)
     if not writer.ledger_days(state_dir):
-        where = (state_dir / writer.LEDGER_DIRNAME).as_posix()
+        where = ledger.tree_root(state_dir, LedgerName.SCORES).as_posix()
         if summarised:
             print(
                 f"{where} holds no day file - {', '.join(summarised)} have aged out of "

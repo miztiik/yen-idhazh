@@ -55,6 +55,7 @@ from idhazh.contracts.fitted_similarity_threshold import FittedSimilarityThresho
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.icon_manifest import IconManifest
 from idhazh.contracts.item_health import ItemHealthRow
+from idhazh.contracts.item_health_summary import ItemHealthSummaryRow
 from idhazh.contracts.label_row import LabelRow
 from idhazh.contracts.ledger_name import DAY_TREES, LedgerName
 from idhazh.contracts.machine_panels import MachinePanels
@@ -108,7 +109,6 @@ from idhazh.contracts.taxonomy import (
     Taxonomy,
     VerticalDef,
 )
-from idhazh.contracts.telemetry_aggregate import TelemetryAggregateRow
 from idhazh.contracts.validation_row import ValidationRow, ValidationVerdict
 from idhazh.contracts.visual import VisualPlan
 from idhazh.contracts.visual_data import VisualData
@@ -148,6 +148,7 @@ CONTRACTS: Final[tuple[type[Contract], ...]] = (
     IconManifest,
     HostFingerprintRow,
     ItemHealthRow,
+    ItemHealthSummaryRow,
     LabelRow,
     MachinePanels,
     MachineShardRow,
@@ -182,7 +183,6 @@ CONTRACTS: Final[tuple[type[Contract], ...]] = (
     StorySimilarityPair,
     Summary,
     Taxonomy,
-    TelemetryAggregateRow,
     ValidationRow,
     VisualAggregateRow,
     VisualAttemptRow,
