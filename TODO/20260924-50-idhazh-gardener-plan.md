@@ -77,6 +77,14 @@ Every place where the tree, or a ruling, departs from the text further down. A w
 | 11 | 7, 11 | Row 7 declares the four index shapes | Row 11 declares them now, so plan 51's query door does not wait for the compaction | Plan 51's owner asked, 2026-09-27; Fowler and Carmack ruled |
 | 12 | all | AUTO-merge on green (the line above section 0) | GitHub refuses auto-merge on this repository. Merge by hand on green | Found at merge |
 | 13 | all | A worker runs the test selector locally before merge | Only the row's named gates run locally. CI is the full run, and the local test lock is shared | Plan owner, CLAUDE.md section 9 |
+| 14 | 4, 8 | Row 4 moves `github_collections.py` to `gardener/tasks/`, and row 8 creates `gardener/tasks/github_collections.py` | Row 4 moves it to `backend/idhazh/gardener/github_collections.py`, beside `one_at_a_time.py`. Row 4 creates an empty task package (section 5.9.5), and discovery refuses a module there that has no `KIND` and `run` (section 5.5). Row 8 leaves the GitHub code where row 4 puts it and adds `tasks/collection.py`, holding only `KIND` and `run`: `bind()` looks for a module named for the task, then for its kind, so a task module named `github_collections` would never be found | Fowler and Carmack, 2026-09-27 |
+| 15 | 4, 8 | `config/idhazh_gardener.json` ships `attempts: 5` with `shards: 5` | It ships `attempts: 6`. Section 5.2 refuses `attempts` at or below `shards`, so the committed value failed its own check. The refusal stays, with its reason corrected: five shards alone need exactly five attempts, so `attempts` minus `shards` is how many outside or failed pushes one wave can absorb - one, at 6 and 5. The loop does not sleep after its last attempt, so its worst case is about 23 s of sleep and about 40 s in total, an estimate until row 8's observation times it. Every "near 30 seconds" in sections 5.6 and 5.9.11 and in row 8 decision 11 reads "near 40 seconds at `attempts: 6`". The 20-minute `run-tasks` timeout does not move | Fowler and Carmack, 2026-09-27 |
+| 16 | 4, 6 | Row 4's scope lists the `corpus-squash` verb | Row 6 adds that verb with its body (row 6's file list). Row 4 ships `list-tasks`, `plan-shards` and `run-task`, and no placeholder for the fourth | Plan owner; Fowler agreed, 2026-09-27 |
+| 17 | 4, 8 | Section 5.2's `GardenerConfig` holds `max_cone_mb` | Row 8 adds `max_cone_mb` with its only reader, the cone-size check, and `cone_mb` on the record (section 5.1). Row 4's `GardenerConfig` holds `version`, `attempts` and `shards`. Row 4 declares all four `TaskPolicy` members, and the `collection` member takes a class name other than `CollectionPolicy`: `knobs/prune.py` already holds a class of that name, and `AppConfig.prune` still reads it until row 8 | Fowler, 2026-09-27 |
+| 18 | 4 | Section 5.2's load-time refusals all run in `backend/idhazh/config.py` | The two that need discovery - a declaration no module serves, and a module no declaration uses - run in the shard pre-flight in `runner.py`, and the `deleted_paths` check runs in `publish.py`. Config loads before discovery (section 5.5) | Fowler, 2026-09-27 |
+| 19 | 4 | Section 5.6's `publish()` compares the staged set with one equality | Section 5.9.12's three checks apply instead. A write whose bytes already match `origin/main` stages nothing, and it counts as landed when `local_blob(p)` equals `remote_blob(p)`; without that, a harmless rewrite exits 2 | Fowler, 2026-09-27 |
+| 20 | 4 | Section 5.5 says row 2's AST walk checks that no task module imports pyarrow or an HTTP client at module scope | No check on main covers a task module. Row 4 adds one that runs `discover()` and then reads `sys.modules`, modelled on `test_the_facade_does_not_load_pyarrow`, so an import that arrives through a support module is caught too | Carmack, 2026-09-27 |
+| 21 | 4 | Row 4's file list | It also touches `backend/idhazh/contracts/app_config.py` (it imports `PruneConfig`), `docs/how-to/prune-a-collection.md` and `docs/concepts/atomic-deletes.md` (they link the moved module), the docstring of `backend/tests/retention/test_prune_range.py`, and the two samples in `tests/fixtures/contracts/collection-prune-row/`, written again through the widened model. Section 5.3's `is_eligible` oracle belongs to row 4 as well | Found at dispatch |
 
 ## 0. Operating contract
 
@@ -134,14 +142,14 @@ Every place where the tree, or a ruling, departs from the text further down. A w
 | 1 | The site-size instruments leave the prune module | - | A | DONE | p50r1 | #1127 | p50-r1-worker |
 | 2 | The payload ledger, the two roots, and the arrow mapping | 1 | B | DONE | p50r2 | #1131 | p50-r2-worker |
 | 3 | Two ledgers become parquet and their union drivers retire | 2, 4 | D | PENDING | - | - | - |
-| 4 | The gardener: registry, config, schedule, record, commit loop | 2 | C | PENDING | - | - | - |
+| 4 | The gardener: registry, config, schedule, record, commit loop | 2 | C | IN-FLIGHT | p50r4 | - | p50-r4-worker |
 | 5 | Every prune pass becomes a gardener task | 3, 4 | E | PENDING | - | - | - |
 | 6 | The corpus squash becomes Python | 4 | D | PENDING | - | - | - |
 | 7 | One compaction task a ledger, two compact periods, and the diagrams move into the page | 5, 11 | F | PENDING | - | - | - |
 | 8 | `prune.yml` becomes `idhazh-gardener.yml`, and the whole garden is scheduled | 6, 7 | G | PENDING | - | - | - |
 | 9 | The three ledgers the console's routes read become parquet | 7, and plan 51's row titled **The query door module and its two entry points** | H | PENDING | - | - | - |
 | 10 | `span-rollup` becomes parquet | - | - | **COLLAPSED** | - | - | - |
-| 11 | The index and watermark shapes are declared | 2 | C | PENDING | - | - | - |
+| 11 | The index and watermark shapes are declared | 2 | C | IN-FLIGHT | p50r11 | - | p50-r11-worker |
 
 **Row 5 now depends on row 3 as well as row 4.** Its `visual-prune` task calls the parquet writer row 3 creates; dispatched after row 4 alone it would write CSV through a door that does not exist.
 
