@@ -39,7 +39,7 @@ def _a_process(root: Path, pid: int, comm: str, status: str, cmdline: str = "") 
 
 
 def _a_proc_tree(tmp_path: Path) -> Path:
-    """A `/proc` holding a server, two python processes, and two that do not count."""
+    """A `/proc` holding a server, two python processes, and three that do not count."""
     root = tmp_path / "proc"
     root.mkdir()
     _a_process(root, 100, "llama-server", "VmRSS:\t5000000 kB\nVmHWM:\t6000000 kB\n")
@@ -57,6 +57,11 @@ def _a_proc_tree(tmp_path: Path) -> Path:
     _a_process(root, 400, "bash", "VmRSS:\t900 kB\nVmHWM:\t900 kB\n")
     # Gone between the walk and the read. It is the normal case on a busy host.
     _a_process(root, 500, "python3", "")
+    # The same race one beat later: the entry is still there and the READ of its
+    # status raises. A directory is the one way to hold that open from a real
+    # filesystem - `exists()` says yes and `read_text` raises `OSError`.
+    _a_process(root, 600, "python3", "")
+    (root / "600" / "status").mkdir()
     (root / "meminfo").write_text(
         "MemTotal:       16384000 kB\n"
         "MemFree:          100000 kB\n"
@@ -136,6 +141,36 @@ def test_a_reading_that_was_not_taken_is_null_rather_than_zero(tmp_path: Path) -
     assert record["mem_available_kb"] is None
     assert record["cgroup_current_bytes"] is None
     assert record["python_procs"] == 0
+
+
+def test_a_status_that_cannot_be_read_skips_the_process_rather_than_ending_the_walk(
+    tmp_path: Path,
+) -> None:
+    """A process that exits mid-walk used to raise and take the whole loop with it.
+
+    `/proc` is a live tree, so the listing is already stale when it is taken.
+    Asking whether a status file is there does not make the read safe: the
+    kernel can release the task in between, and the read then raises on a path
+    that was there a microsecond earlier. A short-lived python process is
+    completely ordinary on a busy runner, and one of them killed the sampler in
+    CI - in the arm below that starts the real program against the real `/proc`.
+    In a digest run the same death ends the sampling with hours of job left.
+
+    The fixture holds the condition open rather than the error number. Both are
+    one branch to a single `except OSError`, and a real filesystem can only be
+    made to take that branch this way - no process can be made to die between
+    the open and the read on demand.
+    """
+    root = _a_proc_tree(tmp_path)
+
+    record, rows = memory_sampler.sample_once(600, proc_root=root, cgroup_paths=(), now="ts")
+
+    assert 600 not in [row["pid"] for row in rows]
+    assert record["python_procs"] == len(rows) == 2, rows
+    # Sampling 600 as the server is the same read from the other caller, and a
+    # reading that was not taken is null.
+    assert record["llama_vmrss_kb"] is None
+    assert record["llama_vmhwm_kb"] is None
 
 
 def _wrote(tmp_path: Path, name: str, records: list[dict[str, Any]]) -> None:
