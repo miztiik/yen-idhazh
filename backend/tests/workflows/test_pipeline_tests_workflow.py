@@ -692,9 +692,7 @@ def test_every_declared_case_is_placed_whether_or_not_it_wrote_anything(tmp_path
     assert len(staged) == len(cases)
     for case in cases:
         assert (state / case.trial_state_dirname).is_dir()
-    assert (
-        state / cases[0].trial_state_dirname / LedgerName.SPAN_ROLLUP.value
-    ).is_dir()
+    assert ledger.tree_root(state / cases[0].trial_state_dirname, LedgerName.SPAN_ROLLUP).is_dir()
 
 
 def test_the_address_list_can_still_answer_a_draw() -> None:

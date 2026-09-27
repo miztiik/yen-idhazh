@@ -100,9 +100,10 @@ MEASUREMENT_COLUMNS: Final = (
 
 #: What a person reading a utility's refusal needs to know in one line.
 RAW_WINDOW_NOTE: Final = (
-    "state/scores/ keeps observability.scores_full_grain_months months of item-level "
-    "rows. An older month exists only as state/score-archive/<YYYY-MM>.json, which "
-    "carries totals, distributions, ranges, spread and the dedupe index, and no item."
+    f"{ledger.tree_relpath(LedgerName.SCORES)}/ keeps observability.scores_full_grain_months "
+    "months of item-level rows. An older month exists only as "
+    f"{ledger.tree_relpath(LedgerName.SCORE_ARCHIVE)}/<YYYY-MM>.json, which carries totals, "
+    "distributions, ranges, spread and the dedupe index, and no item."
 )
 
 
@@ -130,11 +131,12 @@ def archive_files(state_dir: Path) -> list[Path]:
     files by day and walks through `day_partition` instead; this one keeps the
     month rule because a summary of a month is what it holds.
 
-    The directory is the ledger's own name under the state root, the way the
-    item-health summary's reader finds its months: the registry has no builder
-    for a folder of month files.
+    The folder is the registry's, the same one the item-health summary's reader
+    walks for its months.
     """
-    return month_partition.month_files(state_dir / LedgerName.SCORE_ARCHIVE, ".json")
+    return month_partition.month_files(
+        ledger.tree_root(state_dir, LedgerName.SCORE_ARCHIVE), ".json"
+    )
 
 
 def archived_months(state_dir: Path) -> list[str]:

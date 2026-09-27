@@ -12,7 +12,6 @@ from conftest import REPO_ROOT
 from idhazh import ledger, path_classes, telemetry
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.ledger_name import DAY_TREES, LedgerName
-from idhazh.evals import writer as score_writer
 from idhazh.telemetry.publish import day_metrics
 
 from ._harness import (
@@ -372,7 +371,10 @@ def test_the_observation_index_travels_with_the_rows_it_describes() -> None:
     """
     staged = COMMIT_STAGED_PATHS["work"]
     refreshed = _commit_call("assemble")[1]["REFRESH_PATHS"].split()
-    for tree in (score_writer.LEDGER_RELDIR, score_writer.INDEX_RELDIR):
+    for tree in (
+        ledger.tree_relpath(LedgerName.SCORES),
+        ledger.tree_relpath(LedgerName.SCORE_INDEX),
+    ):
         assert any(_under(tree, path) for path in staged), (
             f"{tree} is written by this shard and no path in {staged} carries it"
         )

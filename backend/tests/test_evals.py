@@ -989,7 +989,7 @@ def test_the_day_grain_holds_the_measurements_the_month_grain_held(tmp_path: Pat
     for row in rows:
         by_month.setdefault(row.date[:7], []).append(row)
     for month, month_rows in by_month.items():
-        path = month_grain / writer.LEDGER_DIRNAME / f"{month}.csv"
+        path = ledger.tree_root(month_grain, LedgerName.SCORES) / f"{month}.csv"
         path.parent.mkdir(parents=True, exist_ok=True)
         _write_shard(path, month_rows)
 
@@ -997,7 +997,7 @@ def test_the_day_grain_holds_the_measurements_the_month_grain_held(tmp_path: Pat
     # code that wrote it by being computed from the row list twice.
     at_month = {
         writer.observation_digest(record)
-        for shard in sorted((month_grain / writer.LEDGER_DIRNAME).glob("*.csv"))
+        for shard in sorted((ledger.tree_root(month_grain, LedgerName.SCORES)).glob("*.csv"))
         for record in csv.DictReader(shard.open("r", encoding="utf-8", newline=""))
     }
     at_day = writer.recorded_observations(day_grain)
@@ -1242,7 +1242,7 @@ def _seeded(state: Path, rows: list[EvalRow], *, copies: int = 1) -> None:
 
 def _indexed(state: Path, date: str) -> set[str]:
     """The digests one day's index holds, read from that day rather than the union."""
-    day = day_shards.one_day(state / writer.INDEX_DIRNAME, date)
+    day = day_shards.one_day(ledger.tree_root(state, LedgerName.SCORE_INDEX), date)
     return {record["observation_digest"] for record in _cells_in(day)}
 
 
@@ -1252,19 +1252,19 @@ def _day_digests(state: Path, date: str) -> set[str]:
     The one read of the score rows in this section, and it is here so a test can
     say what the index is supposed to mirror without asking the index.
     """
-    day = day_shards.one_day(state / writer.LEDGER_DIRNAME, date)
+    day = day_shards.one_day(ledger.tree_root(state, LedgerName.SCORES), date)
     return {writer.observation_digest(record) for record in _cells_in(day)}
 
 
 def _index_bytes(state: Path, date: str) -> bytes:
     """Every byte one day's index holds, oldest file first."""
-    day = day_shards.one_day(state / writer.INDEX_DIRNAME, date)
+    day = day_shards.one_day(ledger.tree_root(state, LedgerName.SCORE_INDEX), date)
     return b"".join(path.read_bytes() for path in day)
 
 
 def _index_size(state: Path, date: str) -> int:
     """What one day's index costs on disk, across every file in it."""
-    day = day_shards.one_day(state / writer.INDEX_DIRNAME, date)
+    day = day_shards.one_day(ledger.tree_root(state, LedgerName.SCORE_INDEX), date)
     return sum(path.stat().st_size for path in day)
 
 
@@ -1433,7 +1433,7 @@ def test_an_index_left_behind_its_rows_is_put_right_by_dropping_it(tmp_path: Pat
     )
     written = list(writer.records(stale))
     settled = day_shards.settled_day(
-        stale / writer.LEDGER_DIRNAME, date, writer.OBSERVATION_KEY, EvalRow
+        ledger.tree_root(stale, LedgerName.SCORES), date, writer.OBSERVATION_KEY, EvalRow
     )
     assert len(written) == 8, f"the repeat did not land: {len(written)} rows on disk"
     assert len(settled) == len(_day_digests(stale, date)) == 6, (
@@ -1498,7 +1498,7 @@ ROLLED_BACK: Final = "f" * 64
 
 
 def _index_rows(state: Path, date: str) -> list[dict[str, str]]:
-    day = day_shards.one_day(state / writer.INDEX_DIRNAME, date)
+    day = day_shards.one_day(ledger.tree_root(state, LedgerName.SCORE_INDEX), date)
     return sorted(_cells_in(day), key=lambda row: row["observation_digest"])
 
 
@@ -1509,7 +1509,7 @@ def _write_index(state: Path, date: str, rows: Sequence[dict[str, str]]) -> None
     cannot produce is half of what this section is about. Whatever the day held
     goes first, because these rows are the day's index and not an addition to it.
     """
-    for path in day_shards.one_day(state / writer.INDEX_DIRNAME, date):
+    for path in day_shards.one_day(ledger.tree_root(state, LedgerName.SCORE_INDEX), date):
         path.unlink()
     target = _a_days_file(state, LedgerName.SCORE_INDEX, date)
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -1546,7 +1546,7 @@ def _rows_produce(state: Path, days: Sequence[str]) -> set[str]:
     """
     held: set[str] = set()
     for date in days:
-        day = day_shards.one_day(state / writer.LEDGER_DIRNAME, date)
+        day = day_shards.one_day(ledger.tree_root(state, LedgerName.SCORES), date)
         held |= {writer.observation_digest(row) for row in _cells_in(day)}
     return held
 

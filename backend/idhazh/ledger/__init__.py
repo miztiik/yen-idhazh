@@ -63,7 +63,15 @@ from idhazh.ledger.keys import (
     segment_contract,
     segment_key,
 )
-from idhazh.ledger.paths import STATE_DIRNAME, claimed_roots, entry, path, relpath, tree_root
+from idhazh.ledger.paths import (
+    STATE_DIRNAME,
+    claimed_roots,
+    entry,
+    path,
+    relpath,
+    tree_relpath,
+    tree_root,
+)
 from idhazh.ledger.rows import (
     HEALTH_WINDOW_DAYS,
     append_council_shard_outcomes,
@@ -112,6 +120,7 @@ __all__ = [  # noqa: RUF022
     "path",
     "paths",
     "relpath",
+    "tree_relpath",
     "tree_root",
     # keys.py: what makes two rows one record, and the day-tree shapes.
     "COUNCIL_SHARD_OUTCOME_KEY",

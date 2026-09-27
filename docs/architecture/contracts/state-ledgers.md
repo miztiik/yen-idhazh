@@ -91,15 +91,18 @@ A **family** is one top-level folder under `state/`. `content-similarity-judge` 
 
 A **ledger** is one row shape, filed one way, at one address. Each carries five things: its `name`, its `grain`, the `prefix` of directories it sits under inside `state/`, and - for a ledger that is a single file - the `stem` and `suffix` that name it. A dated ledger carries no stem, because its period names it. A day directory carries no suffix, because it is a directory. The prefix keeps the whole nest, the family's folder included, so an address is read off the ledger alone.
 
-Three builders read the registry and nothing else builds a path under `state/`:
+Four builders read the registry, in two pairs, and nothing else builds a path under `state/`:
 
 | Builder | Answers |
 | --- | --- |
 | `path(state_dir, ledger, covers)` | where the rows covering this period go, as a `Path` |
 | `relpath(ledger, covers)` | the same address, POSIX and relative, for a log line or a manifest |
-| `tree_root(state_dir, ledger)` | the whole-tree directory a reader walks, for a ledger that files by day |
+| `tree_root(state_dir, ledger)` | the folder that holds every file of this ledger and nothing else - what a reader walks, whether the ledger files by day, by month or by stamp |
+| `tree_relpath(ledger)` | the same folder, POSIX and relative, for a log line or a manifest |
 
 `covers` is the period the rows describe and never the day the job woke (CLAUDE.md section 2). A dated ledger handed nothing raises, and a flat one handed a period raises - `path` does not guess, because a guessed period files a row where nobody will look for it. `tree_root` is a builder of its own rather than `path` with no period, so `path` keeps that refusal.
+
+A flat file has no folder of its own: `feed-retirements.csv` sits at the top of `state/` and `holdout-pairs.csv` beside the similarity judge's other ledgers, so a walk handed either folder would read files that are not the ledger's. `tree_root` and `tree_relpath` refuse a flat ledger by name, and a caller asks `path` for the file.
 
 Because the extension is data on the entry, a builder cannot emit the wrong one.
 
@@ -126,7 +129,7 @@ The first row is what the registry is for. The claim used to be a hand-written P
 **The write path does not read the status yet.** Every writer writes where the registry says, whatever the family's status. So a test holds every family at `active`, and it refuses a paused or retired family until the write path honours the field. When it does, two rules hold, and both are the owner's:
 
 - A write into a paused or retired family is skipped with one warning, and the run carries on. A status is a decision about one folder, and a run that stopped on it would cost every other family its rows.
-- The passes that compact closed days and age out old rows keep running over a paused family. To freeze its old rows as well, pause the pass that deletes them: a status says whether new rows are written, never how long old ones are kept.
+- The passes that compact closed days and age out old rows keep running over a paused or retired family. To freeze its old rows as well, pause the pass that deletes them: a status says whether new rows are written, never how long old ones are kept.
 
 ### Onboarding and offboarding
 
@@ -152,7 +155,7 @@ flowchart TB
   end
 
   subgraph DOOR["idhazh/ledger/ - the four modules a row moves through"]
-    PATHS["paths: path, relpath, tree_root"]
+    PATHS["paths: path, relpath, tree_root, tree_relpath"]
     KEYS["keys: the dedup key and preference"]
     ROWS["rows: append, load, write_segment"]
     SETTLE["settle: drop repeated rows"]
@@ -239,9 +242,11 @@ The config carries where each ledger lives and each family's lifecycle status. I
 
 **The last four folders joined the registry rather than keep their own names.** `traces`, `day-metrics`, `digest-fragments` and `score-archive` were built by their owning modules from directory constants, and `prune-state` protected them from a list typed into the sweep beside the registry. That list was a second place to forget a folder, and each constant was a second spelling of where a ledger lives - the two defects the registry exists to remove. Each is now a one-ledger family, its owner composes its paths from the registry, and the one file name an owner minted, a digest fragment's, is minted inside the package like every other name under `state/`. None of them moved: each builder lands on the bytes it built before, and a test holds it.
 
+**No module outside the package joins a ledger's name onto a root.** A hand-joined folder is right only until the registry moves the ledger, and then it reads a folder that no longer holds anything - which reads as a ledger with no history rather than as a fault. So every folder comes from `tree_root` or `tree_relpath`. `backend/tests/contracts/test_ledger_package.py` refuses a join of a `LedgerName` member anywhere else under `backend/`, and a typed `state/<family>` string in any module that is not a test.
+
 **Retention stays with the pass that deletes.** A family's status says whether new rows are written. How long old rows are kept is answered by the retention passes, each from its own knob, and a window written here would be a second place to set it. So pausing a family does not freeze its old rows; pausing the pass that deletes them does.
 
-**The field is `lifecycle_status`, not `state`.** `state` is already the name of the folder every ledger sits in, so `state: paused` in a file that describes `state/` reads as a claim about the folder. `lifecycle_status` says what it is - where in its life the family is - and no key in the file is named `state`. The Python enum is `LifecycleStatus`, which shares its name, and not its values, with the one `contracts/taxonomy.py` uses for desks, lenses and feeds.
+**The field is `lifecycle_status`, not `state`.** `state` is already the name of the folder every ledger sits in, so `state: paused` in a file that describes `state/` reads as a claim about the folder. `lifecycle_status` says what it is - where in its life the family is - and no key in the file is named `state`. The Python enum is `LedgerLifecycleStatus`, so it cannot be mistaken for the `LifecycleStatus` that `contracts/taxonomy.py` uses for desks, lenses and feeds.
 
 **A root that tells one copy of a ledger from another is an argument to a builder, never a field on an entry.** The registry is one entry per name and the check above refuses a second, so a ledger that ends up sitting under two roots at once cannot express that as two entries - it would break the check on the first load. `prefix` is the nest a ledger sits in, and a builder that has to choose between two roots takes the choice from its caller and composes it with the same entry.
 
