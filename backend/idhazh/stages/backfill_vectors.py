@@ -10,6 +10,7 @@ from pathlib import Path
 
 from idhazh import (
     assemble,
+    atomic_write,
 )
 from idhazh.contracts.digest_day import DigestDay
 from idhazh.embed import DIMENSIONS, DTYPE, EMBEDDER_ID, ONNX_RELPATH, Embedder, text_for
@@ -126,7 +127,7 @@ def stage_backfill_vectors(
         repaired_day = day.model_copy(
             update={"version": DigestDay.schema_version(), "embeddings": fresh}
         )
-        assemble.write_atomic(path, repaired_day.to_json())
+        atomic_write.write_atomic(path, repaired_day.to_json())
         repaired += 1
         months.add(assemble.month_of(day.date))
         LOG.info(

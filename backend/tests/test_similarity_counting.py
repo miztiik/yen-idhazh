@@ -21,7 +21,7 @@ from typing import Final
 import pytest
 from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, read_text
 
-from idhazh import assemble, config, ledger
+from idhazh import atomic_write, config, ledger
 from idhazh.contracts.base import derive_text_digest, derive_url_key
 from idhazh.contracts.content_similarity_judge_metrics import ContentSimilarityJudgeMetrics
 from idhazh.contracts.knobs.placement import SimilarityThresholdConfig
@@ -352,7 +352,7 @@ def a_night(
     written = [a_metrics_row(shard=unit, date=date) for unit in range(units)]
     for unit, row in enumerate(written):
         metrics_sink.ship_judge_metrics(row, judge_id=JUDGE_ID, shard=unit, out_dir=shipped)
-        assemble.write_atomic(
+        atomic_write.write_atomic(
             verdicts
             / session.unit_file(
                 date, slot=VERDICTS_DIRNAME, judge_id=JUDGE_ID, shard=unit

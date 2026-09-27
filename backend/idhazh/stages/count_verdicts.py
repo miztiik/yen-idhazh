@@ -16,7 +16,7 @@ import io
 from dataclasses import dataclass
 from pathlib import Path
 
-from idhazh import assemble, config, ledger
+from idhazh import atomic_write, config, ledger
 from idhazh.contracts.content_similarity_judge_metrics import ContentSimilarityJudgeMetrics
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.story_similarity_distribution import StorySimilarityDistribution
@@ -124,7 +124,7 @@ def stage_count_verdicts(
     moved = counting.inputs_changed(record, knobs=knobs, scorer=scorer, judge=judge)
     if moved is not None:
         stem = counting.archive_stem(record)
-        assemble.write_atomic(
+        atomic_write.write_atomic(
             ledger.path(state, LedgerName.CONTENT_SIMILARITY_JUDGE_ARCHIVE, stem), record.to_json()
         )
         archived = stem
@@ -146,7 +146,9 @@ def stage_count_verdicts(
             archived=archived,
         )
     else:
-        assemble.write_atomic(record_path, counting.count_day(record, rows, date=date).to_json())
+        atomic_write.write_atomic(
+            record_path, counting.count_day(record, rows, date=date).to_json()
+        )
         report = CountReport(
             date=date,
             run_id=run_id,

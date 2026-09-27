@@ -11,7 +11,7 @@ from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR, REPO_ROOT,
 from pydantic import ValidationError
 from pytest import MonkeyPatch
 
-from idhazh import assemble, config, day_shards, ledger, rank, telemetry
+from idhazh import assemble, atomic_write, config, day_shards, ledger, rank, telemetry
 from idhazh.contracts.article import Article
 from idhazh.contracts.base import StalePayloadError
 from idhazh.contracts.digest_day import DigestDay
@@ -567,8 +567,8 @@ def test_two_runs_that_start_before_either_publishes_cannot_share_a_run_id(
         generated_at="2026-08-21T07:00:00Z",
         retention_window_months=-1,
     )
-    assemble.write_atomic(frozen / "digest.json", day.to_json())
-    assemble.write_atomic(
+    atomic_write.write_atomic(frozen / "digest.json", day.to_json())
+    atomic_write.write_atomic(
         frozen / "run.json",
         assemble.build_manifest(
             plan=plan(),
@@ -1100,7 +1100,7 @@ def test_the_published_path_carries_no_digest() -> None:
 def test_a_write_is_atomic(tmp_path: Path) -> None:
     """A file either exists complete or does not exist. There is no half-written item."""
     target = tmp_path / "deep" / "digest.json"
-    assemble.write_atomic(target, '{"a": 1}\n')
+    atomic_write.write_atomic(target, '{"a": 1}\n')
     assert target.read_bytes() == b'{"a": 1}\n'
 
 

@@ -36,7 +36,8 @@ from pathlib import Path
 from typing import Final
 
 from idhazh import day_shards, ledger
-from idhazh.assemble import TaxonomyVectors, nearest_label_cosines, write_atomic
+from idhazh.assemble import TaxonomyVectors, nearest_label_cosines
+from idhazh.atomic_write import write_atomic
 from idhazh.contracts.base import canonical_json
 from idhazh.contracts.day_metrics import (
     INSTRUMENT_COLUMNS,

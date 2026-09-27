@@ -71,7 +71,8 @@ from typing import Final
 REPO_ROOT: Final = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "backend"))
 
-from idhazh.assemble import PUBLIC_ROOT, day_dir, write_atomic  # noqa: E402
+from idhazh.assemble import PUBLIC_ROOT, day_dir  # noqa: E402
+from idhazh.atomic_write import write_atomic  # noqa: E402
 from idhazh.contracts.digest_day import DigestDay, DigestItem  # noqa: E402
 from idhazh.contracts.review_queue import (  # noqa: E402
     ReviewCensus,

@@ -13,6 +13,7 @@ from typing import Any, NamedTuple
 
 from idhazh import (
     assemble,
+    atomic_write,
     config,
     extract,
     ledger,
@@ -403,7 +404,7 @@ def stage_work(
         )
         recorder.stage_done(ItemStage.FETCH, fetch_ms)
         recorder.stage_done(ItemStage.EXTRACT, extract_ms)
-        assemble.write_atomic(items_dir / f"{item.item_id}.article.json", article.to_json())
+        atomic_write.write_atomic(items_dir / f"{item.item_id}.article.json", article.to_json())
         if article.status is not ArticleStatus.OK:
             LOG.info("item degraded id=%s reason=%s", item.item_id, article.failure_detail)
             # The census's own reading of this article rather than a second one
@@ -532,7 +533,7 @@ def stage_work(
                     "summarize_ms": summarize_ms,
                 }
             )
-            assemble.write_atomic(items_dir / f"{item.item_id}.summary.json", summary.to_json())
+            atomic_write.write_atomic(items_dir / f"{item.item_id}.summary.json", summary.to_json())
             published = summary.status is SummaryStatus.OK
             # A call that never returned is absent on both sides rather than
             # zero: the census row holds the flat five to the sum over the slots
@@ -558,7 +559,7 @@ def stage_work(
                 cached_tokens=summary.cached_tokens if spent else None,
             )
             if decision is not None:
-                assemble.write_atomic(
+                atomic_write.write_atomic(
                     items_dir / f"{item.item_id}{PAYLOAD_SUFFIX}", decision.to_json()
                 )
                 LOG.info(
@@ -611,7 +612,7 @@ def stage_work(
                 score_span.set(telemetry.AttrKey.BAND, row.band.value)
             recorder.note(faithfulness_ms=score_ms, stage=ItemStage.PUBLISH.value)
             recorder.stage_done(ItemStage.PUBLISH, score_ms)
-            assemble.write_atomic(items_dir / f"{item.item_id}.eval.json", row.to_json())
+            atomic_write.write_atomic(items_dir / f"{item.item_id}.eval.json", row.to_json())
             _write_evidence(row, premise=seen, summary=summary.summary or "")
             LOG.info(
                 "item scored id=%s band=%s fetch=%sms extract=%sms model=%sms score=%sms",
@@ -652,7 +653,7 @@ def stage_work(
                     "extract_ms": work.extract_ms,
                 }
             )
-            assemble.write_atomic(
+            atomic_write.write_atomic(
                 items_dir / f"{work.item.item_id}.summary.json", abandoned.to_json()
             )
             work.recorder.note(
@@ -719,7 +720,7 @@ def _write_evidence(row: EvalRow, *, premise: str, summary: str) -> Path:
     """
     item = evidence.of(row, premise=premise, summary=summary)
     path = evidence.path_for(_evidence_dir(row.date), item)
-    assemble.write_atomic(path, item.to_json())
+    atomic_write.write_atomic(path, item.to_json())
     return path
 
 
@@ -737,6 +738,6 @@ def _write_inputs(items_dir: Path, *, inputs: PipelineInputs) -> None:
     configuration and writes the same bytes, so the atomic rename settles it and
     there is nothing to reconcile.
     """
-    assemble.write_atomic(
+    atomic_write.write_atomic(
         items_dir / INPUTS_PAYLOAD, canonical_json(inputs.model_dump(mode="json"))
     )
