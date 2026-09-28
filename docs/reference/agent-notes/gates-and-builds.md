@@ -1,6 +1,6 @@
 # Agent Notes - Gates and Builds
 
-**Last Updated**: 2026-09-27
+**Last Updated**: 2026-09-28
 Traps in the commands that decide whether a change is done: the test selector,
 pytest, ruff, mypy, the build, the canary day, and the
 measurement recipes that run on top of them. Index and scope:
@@ -37,6 +37,10 @@ npm install --no-audit --no-fund; git status --porcelain -- package-lock.json
 
 
 **A test's `print` never reaches you on the default run.** `pyproject.toml` sets `addopts = -q -n auto`, so output is captured and xdist swallows it. Use `-n0 -s -k <name>`; `-p no:xdist` exits **4**, because `-n auto` is still in `addopts` and a usage error with no test output looks like a broken suite rather than a bad flag. That same committed `-q` also means your own `-q` gives `-qq`, which removes the summary line - and changes `--collect-only` from a list of ids to a bare count, so a search for a renamed parametrized id finds nothing and reads as broken collection. Drop `-q` to list ids. `-k` cannot select a hyphenated id at all, because it splits on Python-identifier rules; run the node by its full id.
+
+**A test that runs git with no identity passes on Windows and fails on the CI runner.** Git on a developer machine guesses an author from the user and host names; the Linux runner refuses to guess, so a bare `git merge` inside a test fails there before it writes `MERGE_HEAD`, and the test then fails one step later on something else - an empty commit message, in `test_corpus_history.py` on 2026-09-28. The tell: the failing line is the step after a git call whose output the test threw away. Give every git call in a test an identity (`_garden.SEED_IDENTITY`, `_harness._git`), and get the runner's answer locally by forbidding the guess before the run:
+
+    $env:GIT_CONFIG_COUNT='1'; $env:GIT_CONFIG_KEY_0='user.useConfigOnly'; $env:GIT_CONFIG_VALUE_0='true'
 
 **A length test written with two-letter words is graded by the character rail, not the length rule.** `summarize.output_schema` puts `minLength` and `maxLength` on the summary field, and Pydantic checks those while PARSING the reply - before anything counts a word. So `"y " * 100` is 100 words and 200 characters, the rail throws it out as `bad_shape`, the length rule never runs, and the failure claims the verdict is `None`, which sends you into the verdict function. Build the fixture from realistic words (`"deliberation " * 100` is 100 words and 1,300 characters); the schema assumes roughly 5 characters per word at the floor and 13 at the ceiling. An over-length fixture has to stay under the character ceiling for the same reason.
 

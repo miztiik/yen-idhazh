@@ -374,11 +374,27 @@ class CompactionPolicy(_Declared):
 
 
 class HistoryPolicy(_Declared):
-    """The one task that rewrites git history, run by its own job."""
+    """The one task that rewrites git history, run by its own job.
+
+    Its window is whole days and nothing else, because the squash cuts history
+    at 00:00 UTC on the day `window.value` days back, and a month has no fixed
+    number of days to count back by.
+    """
 
     kind: Literal[TaskKind.HISTORY]
+    window: DaysWindow = Field(
+        description=(
+            "How many days of history a squash keeps. At every_days 30 and 60 days the "
+            "history holds 60 to 90 days of commits, and the boundary commit and the tip "
+            "each hold a whole copy of the corpus."
+        )
+    )
     every_days: int = Field(
-        ge=1, description="How many whole days apart two rewrites of history may run."
+        ge=1,
+        description=(
+            "How many whole days apart two rewrites of history may run. Each one costs a "
+            "force-push of main, the one exception CLAUDE.md section 8 allows."
+        ),
     )
 
 

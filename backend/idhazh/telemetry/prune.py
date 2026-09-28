@@ -12,7 +12,8 @@ default and `--no-dry-run` is the second word. The reason is
 `.github/workflows/prune.yml`: it squashes and force-pushes `main` on a
 schedule, so a state file deleted here stops being recoverable from history once
 that prune passes over the range (CLAUDE.md section 8). `git revert` is not a
-recovery path for a file older than `finetune.prune_keep_days`. The precedent is
+recovery path for a file older than the squash's window in
+`config/gardener/corpus-squash.json`. The precedent is
 the fold step in `.github/workflows/digest.yml`, which ships `idhazh
 prune-state --dry-run` for exactly that reason and has never removed a file.
 

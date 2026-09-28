@@ -280,6 +280,21 @@ def test_a_config_still_spelling_a_retired_knob_is_refused_by_name(block: str, k
         AppConfig.model_validate(payload)
 
 
+@pytest.mark.parametrize("knob", ["prune_every_days", "prune_keep_days"])
+def test_a_prune_number_left_in_finetune_is_sent_to_the_squash_declaration(knob: str) -> None:
+    """Both numbers moved to `config/gardener/corpus-squash.json`, the one thing that reads them.
+
+    Refused rather than ignored, and by a message that says where the number
+    went: a number nothing reads is a number somebody believes.
+    """
+    payload = json.loads(read_text(CONFIG_DIR / "idhazh.json"))
+    assert knob not in payload["finetune"], "the committed file must not spell the moved knob"
+    payload["finetune"][knob] = 30
+
+    with pytest.raises(ValidationError, match=re.escape("config/gardener/corpus-squash.json")):
+        AppConfig.model_validate(payload)
+
+
 def test_a_retired_knob_is_not_offered_a_replacement_that_does_not_exist() -> None:
     """The refusal says the knob is gone, never that it moved somewhere.
 
