@@ -15,8 +15,8 @@
     "check:tooling": "tsc --noEmit --strict --skipLibCheck --target es2022 --module nodenext --allowImportingTsExtensions --types node scripts/run-checks.ts scripts/verified-preview.ts",
     "test:tooling": "npm run check:tooling && node --test scripts/tests/*.test.mjs",
     "test:changed": "node scripts/run-checks.ts",
-  "test:browser": "playwright test",
-  "test:whole-day": "playwright test --config playwright.whole-day.config.ts"
+    "test:browser": "playwright test",
+    "test:whole-day": "playwright test --config playwright.whole-day.config.ts"
   },
   "devDependencies": {
     "@huggingface/transformers": "^3.8.1",
@@ -27,9 +27,11 @@
     "@tailwindcss/vite": "^4.0.0",
     "@types/d3-array": "3.2.1",
     "@types/d3-scale": "4.0.9",
+    "@types/d3-shape": "3.2.0",
     "@types/node": "^22.20.1",
     "d3-array": "3.2.4",
     "d3-scale": "4.0.2",
+    "d3-shape": "3.2.0",
     "echarts": "^5.6.0",
     "svelte": "^5.1.0",
     "svelte-check": "^4.0.0",
