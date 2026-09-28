@@ -39,13 +39,15 @@ never on a merge. Two workers started together return together (deviation 94).
                      is queued or running. Then remove p50r8. Its named observation is
                      the first idhazh-gardener.yml run after the merge
   after row 7        row 9. It also needs plan 51's row 7, the query door, merged. That
-                     row was in flight on 2026-09-28 (#1154). Row 9 also fires
-                     ESCALATE trigger 5, which is a person's pick, and deviation 112 is a
-                     rename it owes before `scores` moves. If either is open when row 9 is
-                     next, surface it to the person (CLAUDE.md section 0c). Do not build
-                     sliceFromDisk() here
-  after rows 7, 8    row 12. Its design question is written in the row; settle it by
-                     debate at dispatch. It edits digest.yml, so it needs a merge window
+                     row was in flight on 2026-09-28 (#1154). Read deviations 112, 132
+                     and 133 first: 133 is a person's call on how packed files first
+                     reach main, asked by plan 51's owner. If it is still open when
+                     row 9 is next, surface it to the person (CLAUDE.md section 0c). Do
+                     not build sliceFromDisk() here
+  in flight          row 12, dispatched stacked on #1156 (deviation 134), with its design
+                     settled at dispatch (row 12 decisions 3 to 7). It merges after
+                     #1156, once its branch has taken main in, and it edits digest.yml,
+                     so it needs a merge window
 
 STEP 3 - GATES. A worker runs `npm --prefix frontend run test:changed -- --list`, then only
 its row's named acceptance gates, then pushes and reports. CI is the one full-suite run
@@ -216,6 +218,7 @@ Every place where the tree, or a ruling, departs from the text further down. A w
 | 131 | all | (not in the plan) | Plan 52's doc reached main with two lines using the word the ledger sweep refuses, so every pull request's test job failed. The plan owner changed both to "Keep" on main, the words #1154 also carries | Plan owner, 2026-09-28 |
 | 132 | 9 | The settled escalation: the build-time readers are `host-fingerprint.ts`, `machine-counters.ts` and `model-work.ts`, and `payload.ts` touches none of these ledgers | Measured on main at e5a0f8718: `model-work.ts` opens no `state/` path, because it computes from rows it is handed. `payload.ts` reads two of the three: `evalRows()` reads `state/scores` and `itemHealthRows()` reads `state/item-health`, and the loaders of `/console`, `/console/machine`, `/console/model` and `/console/voices` call them. `dayShardFiles()` returns no rows for a missing folder, so a row 9 that deletes the CSV and leaves these two in place ships four routes that draw nothing on a green build. Row 9 moves `evalRows()` and `itemHealthRows()` onto `sliceFromDisk()` with `host-fingerprint.ts` and `machine-counters.ts` | Plan 51's owner, 2026-09-28 |
 | 133 | 9 | (not in the plan) | `sliceFromDisk()` reads packed files only, and row 9's three packing declarations ship `dry_run: true` (deviation 98), so every reader row 9 moves returns "missing" until packed files exist. A live task also packs at most 8 days a pass from the first of the oldest month, so reaching the present from 1 August takes about eight wakes (estimate). How packed files first reach main is a person's call, asked by plan 51's owner on 2026-09-28: row 9's one-time migration packs every finished day with the packing code and the tasks stay report-only; or the three tasks go live in row 9's pull request with `max_periods_per_run` raised; or they onboard report-only and the four routes show "missing" until they go live. Plan 51's rows 3 and 8 wait on the answer | Plan 51's owner, 2026-09-28 |
+| 134 | 12 | Row 12 depends on row 8, and a row is ready when its dependencies are DONE | Row 12 was dispatched on 2026-09-28 stacked on #1156's green branch, because row 8 waited only for its merge condition (deviation 130) and every file row 12 shares with it is row 8's. Row 12's pull request shows row 8's changes until #1156 merges; then its branch takes main in, and it merges after #1156, inside a digest gap | Plan owner, 2026-09-28 |
 
 ## 0. Operating contract
 
@@ -2185,6 +2188,13 @@ def squash_history(repo: Path, *, keep_days: int, now: datetime, message: str) -
   | --- | --- | --- |
   | 1 | **The fold never pauses.** The step leaves `digest.yml` in the same change that makes a gardener task fold, and that task folds on its first wake. Stopping it leaves about 128 extra files a day (deviation 96) | Fowler and Carmack, 2026-09-28 |
   | 2 | **Not in row 7 and not in row 8.** Row 7 would roughly double and the fold would stop from its merge to row 8's; row 8 already carries the workflow rename and ESCALATE trigger 1 | Fowler and Carmack, 2026-09-28 |
+  | 3 | **The task that owns each tree folds it, and the fold has its own switch.** `RetentionPolicy` gains a `fold` block with its own whole-day `after_days` and its own `dry_run`. The window keeps `dry_run: true`; the fold ships `dry_run: false`, and `LIVE_BY_DECISION` names it because it copies a fold that already runs live. `span-rollup` gets a retention declaration whose window is forever and whose only live action is the fold. One job writes each tree per wake, no tree is checked out twice, and no flag records a deletion as a dry run | Fowler and Carmack, 2026-09-28, second round. Fowler had ruled a fifth task kind, which puts five of six folds in a different shard from their tree; Carmack had ruled the owner's task with one switch, which records a deletion as a dry run |
+  | 4 | **The fold's answer rides on the task's existing record row**, as new optional fields - the fold's own `dry_run` and its own counts - left empty when the task does not fold. `dry_run`, `deleted` and `bytes_freed` keep describing the window. Not a second row: the record keeps one row per day, run and task. The record contract takes a version stamp and a changelog entry | Fowler, 2026-09-28 |
+  | 5 | **The runner lands the fold's changes on the fold's own switch.** Today it stages a task's files only when that task's one `dry_run` is off, and `retention_files` reads the same switch, so a live fold inside a dry task would change the disk and stage nothing, at exit 0. The window runs first, and the fold skips any day the window deletes, because a shard refuses a path it both wrote and deleted. Test: one shard through `run_and_land` against a real git remote, window dry and fold live; main then holds the day's `settled.csv`, none of that day's writer files, and every file the window only reported | Carmack and Fowler, 2026-09-28 |
+  | 6 | **A day is closed one whole day after it ends**, read through `schedule.is_eligible`, the same rule and default as `compact_after_days`. Of 755 writer files filed from 2026-09-22 to 28, the latest landed 0.9 hours after its day ended and none after 24 hours; a later re-run costs one more fold of that day, never a row. The first wake folds about six days - about 770 files and 11 MB - at 1 to 2 seconds a day | Fowler and Carmack, 2026-09-28; the readings are Carmack's |
+  | 7 | **The `compact` verb and both trial-root fold steps go in this row**: `measure.yml`'s "Fold the machine record into its day" and `validate.yml`'s "Fold the verdict into its day". A fold changes no answer, and the trial root holds two files under 1 KB. Both workflows run only when a person starts them. `digest.yml`'s "Commit the folded telemetry" leaves with the fold step, and the rebuild step's `if:` drops `steps.commit_fold.outputs.rebased` | Fowler and Carmack, 2026-09-28 |
+
+**What the dispatch debate added to the file list.** `backend/idhazh/contracts/knobs/gardener.py`, `backend/idhazh/gardener/runner.py`, `backend/idhazh/gardener/retention_files.py`, the record contract (section 5.1), the five task modules and six declarations that fold, `.github/workflows/measure.yml`, `.github/workflows/validate.yml`, and the comments in `frontend/src/lib/server/payload.ts` that quote the old knob. Grep for `stages.compact`, `stage_compact`, `idhazh compact`, `CLOSED_DAY_FOLD`, `folded telemetry` and `settled_fold_after_days`: about nine test modules, four code comments and seven docs pages name one of them. **Keep the bench test that a fold of one state root never reaches the other**, because the trial root sits inside `state/`. No `candidate-models` tree is committed today.
 
 ---
 
