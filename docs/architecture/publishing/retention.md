@@ -433,7 +433,7 @@ callables - list, describe, delete - and everything else is shared.
 ### Design rationale: the pipeline test's prose stays an artifact (2026-09-23)
 
 A pipeline-test dispatch runs two models over the same articles across three
-cases and writes, per item, the model's summary, its score, the fetched article
+test cases and writes, per item, the model's summary, its score, the fetched article
 and a visual decision. All of it uploads as an artifact at 90 days. Only the CSV
 day-ledgers are committed, into `state/pipeline-tests/`. After day 90 the prose
 is gone and the numbers remain: the ledger says an item scored 0.62 and cannot
