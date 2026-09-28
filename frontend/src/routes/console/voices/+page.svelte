@@ -983,6 +983,7 @@
 					rows={cuts.rows}
 					caps={cuts.caps}
 					width={data.console.chart_width}
+					readoutMaxShare={data.chart.readout_max_share}
 				/>
 			</div>
 

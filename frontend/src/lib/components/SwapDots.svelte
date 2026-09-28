@@ -48,16 +48,24 @@
 		type Margin
 	} from '$lib/charts/frame';
 	import { swapScale } from '$lib/charts/series';
+	import { factsOf, markReadout, recordsOf } from '$lib/charts/readout';
 	import { movementVerdict } from '$lib/charts/theme';
+	import ChartReadout from './ChartReadout.svelte';
 	import type { ModelSwap, SwapMeasure } from '../../routes/console/model/+page.server';
 
 	let {
 		swap,
-		width
+		width,
+		readoutMaxShare
 	}: {
 		swap: ModelSwap;
 		width: number;
+		/** `chart.readout_max_share`. */
+		readoutMaxShare: number;
 	} = $props();
+
+	/** The row a pointer, a key or a tap has picked, or null for the first. */
+	let picked = $state<number | null>(null);
 
 	/** The row label, and the two values on the line under it. */
 	const NAME_PX = 11;
@@ -232,6 +240,35 @@
 				)
 				.join(' ')
 	);
+
+	/** Which way a measure went, and whether that is the way we want, in words:
+	 * the percent move and its verdict are drawn by the arrow and printed only
+	 * here. */
+	function said(measure: SwapMeasure): string {
+		const verdictSaid = verdict(measure);
+		if (verdictSaid === 'good') return `${moved(measure)}, the way we want`;
+		if (verdictSaid === 'bad') return `${moved(measure)}, the wrong way`;
+		if (measure.polarity === 'no-agreed-direction') {
+			return `${moved(measure)}. No direction is agreed for this one`;
+		}
+		return moved(measure);
+	}
+
+	const records = $derived(
+		recordsOf(
+			drawn.map((measure) =>
+				factsOf(
+					measure.label,
+					[
+						{ label: `On ${swap.before.model}`, value: reading(measure, measure.before) },
+						{ label: `On ${swap.after.model}`, value: reading(measure, measure.after) },
+						{ label: 'Moved', value: said(measure) }
+					],
+					'nothing recorded'
+				)
+			)
+		)
+	);
 </script>
 
 <div
@@ -240,16 +277,27 @@
 	data-swap-at={swap.at}
 	data-swap-rows={drawn.length}
 	data-swap-domain={swapExtent}
-	data-readout-none="one row per measure, each against its own baseline, so no column is shared"
+	data-readout-records={drawn.length > 0 ? drawn.length : undefined}
+	data-readout-none={drawn.length > 0
+		? undefined
+		: 'no measure was recorded on both sides of the change, so there is no row to read; agreed with Susan'}
 >
 	<div use:observeWidth={(next) => (measured = next)}>
+		<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 		<svg
-			class="block max-w-full"
+			class="block max-w-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
 			width={box.width}
 			height={box.height}
 			viewBox={`0 0 ${box.width} ${box.height}`}
-			role="img"
+			role="group"
+			tabindex="0"
 			aria-label={description}
+			use:markReadout={{
+				count: drawn.length,
+				walk: 'list',
+				onSelect: (index) => (picked = index),
+				selected: picked
+			}}
 			data-swap-layout={stacked ? 'stacked' : 'beside'}
 			data-swap-frame={box.width}
 			data-swap-plot={round(box.innerWidth)}
@@ -293,6 +341,10 @@
 				{@const top = box.top + index * pitch}
 				{@const y = trackY(top)}
 				<g
+					role="img"
+					aria-label={sentence(measure)}
+					data-readout-at={index}
+					data-readout-picked={picked === index ? 'yes' : undefined}
 					data-swap-row={measure.label}
 					data-swap-pct={pct(measure)}
 					data-swap-before={Math.round(measure.before as number)}
@@ -301,7 +353,6 @@
 					data-polarity={measure.polarity}
 					data-movement-verdict={verdict(measure)}
 				>
-					<title>{sentence(measure)}</title>
 					<text
 						x={stacked ? box.left : box.left - GUTTER_GAP}
 						y={stacked ? top + STACK_NAME_Y : y + 3}
@@ -350,6 +401,19 @@
 			{/each}
 		</svg>
 	</div>
+
+	{#if drawn.length > 0}
+		<!-- Under the plot: both readings, how far the measure moved and whether
+		     that is the way we want, for the row a reader is on. -->
+		<ChartReadout
+			readout={records[picked ?? 0] ?? null}
+			resting={picked === null}
+			name="model-swap"
+			maxShare={readoutMaxShare}
+			restingNote=", the first measure"
+			hint="Point at a measure to read it. Up and Down step through the measures, Escape returns to the first."
+		/>
+	{/if}
 
 	{#if unmeasured.length > 0}
 		<p class="mt-2 text-[0.75rem] text-text-tertiary" data-swap-unmeasured>

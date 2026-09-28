@@ -1119,7 +1119,11 @@
 				</p>
 
 				{#if data.modelSwap.enough}
-					<SwapDots swap={data.modelSwap} width={data.console.chart_width} />
+					<SwapDots
+					swap={data.modelSwap}
+					width={data.console.chart_width}
+					readoutMaxShare={data.chart.readout_max_share}
+				/>
 				{:else}
 					<p class="mt-2 text-[0.9375rem] text-text-secondary" data-model-swap="thin">
 						One side of the change holds fewer than {data.console.min_attempts_for_rate}
