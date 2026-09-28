@@ -75,21 +75,21 @@ from idhazh.ledger.paths import (
     path,
     raw_index_path,
     raw_path,
+    raw_root,
     relpath,
     tree_relpath,
     tree_root,
     watermark_path,
 )
 from idhazh.ledger.persist import load, persist, read_envelope
+from idhazh.ledger.raw_files import RawFile, list_raw_files, load_current_rows, pick_current_files
 from idhazh.ledger.rows import (
     HEALTH_WINDOW_DAYS,
     append_council_shard_outcomes,
     append_fitted_thresholds,
     append_published,
-    append_retirements,
     append_seen,
     append_story_similarity_pairs,
-    append_visual_prunes,
     day_shard_path,
     day_shard_relpath,
     extend_segment,
@@ -133,6 +133,7 @@ __all__ = [  # noqa: RUF022
     "paths",
     "raw_index_path",
     "raw_path",
+    "raw_root",
     "relpath",
     "tree_relpath",
     "tree_root",
@@ -141,6 +142,11 @@ __all__ = [  # noqa: RUF022
     "load",
     "persist",
     "read_envelope",
+    # raw_files.py: which raw files hold a ledger's current rows, and what they are.
+    "RawFile",
+    "list_raw_files",
+    "load_current_rows",
+    "pick_current_files",
     # lifecycle.py: whether a ledger takes new rows now.
     "accepts_new_rows",
     # keys.py: what makes two rows one record, and the day-tree shapes.
@@ -200,10 +206,8 @@ __all__ = [  # noqa: RUF022
     "append_council_shard_outcomes",
     "append_fitted_thresholds",
     "append_published",
-    "append_retirements",
     "append_seen",
     "append_story_similarity_pairs",
-    "append_visual_prunes",
     "day_shard_path",
     "day_shard_relpath",
     "extend_segment",

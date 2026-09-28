@@ -121,7 +121,7 @@ class LedgerEntry(Model):
                     f"{self.name} has {segment!r} in its prefix. A prefix is one directory "
                     "name per element, and it never leaves state/"
                 )
-        if self.grain is not Grain.FLAT and not self.prefix:
+        if not self.prefix:
             raise ValueError(
                 f"{self.name} files by {self.grain.value} and has no prefix, so its files "
                 "would sit loose at the top of state/. Give it a directory"
@@ -220,26 +220,23 @@ class LedgersConfig(Model):
     def _every_ledger_sits_in_its_family(self) -> Self:
         """A family is the folder its ledgers sit in, so the two names must agree.
 
-        The folder is the first segment of a ledger's prefix. A ledger that is one
-        file at the top of `state/` has no prefix, and its family is named by the
-        file's stem instead. A ledger filed under one folder and listed in another
-        family would take that family's status while sitting somewhere else.
+        The folder is the first segment of a ledger's prefix. A ledger filed
+        under one folder and listed in another family would take that family's
+        status while sitting somewhere else.
         """
         misplaced: list[str] = []
         for family in self.families:
             for held in family.ledgers:
-                top = held.prefix[0] if held.prefix else held.stem
+                top = held.prefix[0]
                 if top == family.name:
                     continue
-                where = f"state/{top}/" if held.prefix else f"state/{held.stem}{held.suffix}"
                 misplaced.append(
-                    f"{held.name} sits at {where} and is listed in family {family.name}"
+                    f"{held.name} sits at state/{top}/ and is listed in family {family.name}"
                 )
         if misplaced:
             raise ValueError(
                 f"{'; '.join(sorted(misplaced))}. A family is named for the top-level "
-                "folder under state/ its ledgers sit in, or for the stem of a file at "
-                "the top of state/"
+                "folder under state/ its ledgers sit in"
             )
         return self
 

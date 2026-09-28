@@ -1,6 +1,6 @@
 # How to run the pipeline
 
-**Last Updated**: 2026-09-20
+**Last Updated**: 2026-09-28
 
 Running a digest end to end on your own machine, and what each stage is allowed
 to do. Project-specific by nature: this describes *this* pipeline, not a process
@@ -69,7 +69,7 @@ starts its own server and probes it on loopback.
 | `state/seen/<YYYY>/<MM>/<DD>.csv` | First sight of every address, so an undated article still has an age | **yes** |
 | `state/published/<YYYY>/<MM>/<DD>.csv` | Every address that reached a digest, so nothing runs twice | **yes** |
 | `state/feed-health/<YYYY>/<MM>/<DD>/` | What every feed did on every run | **yes** |
-| `state/feed-retirements.csv` | Every endpoint the run stopped asking, and the evidence | **yes** |
+| `state/raw/feed-retirements/<YYYY>/<MM>/<DD>/` | Every endpoint the run stopped asking, and the evidence | **yes** |
 | `state/item-health/<YYYY>/<MM>/<DD>/` | What every planned item did on every run | **yes** |
 
 **The ledgers under `state/` are the pipeline's whole memory.** Plan reads them
@@ -119,7 +119,7 @@ Turning live deletion on is a separate one-line commit, and this is the order:
 
 **Dropping that flag does not switch the picture cleanup on**, and it is worth
 knowing why before step 5. The same step also cleans the rendered visuals and
-appends a row to `state/visual-prunes.csv` saying what it found. That pass has a
+files a row under `state/raw/visual-prunes/` saying what it found. That pass has a
 guard of its own: `retention.dry_run` is `true`, so with the flag gone it still
 reports and still deletes nothing. `retention.image_months` is `13` from
 2026-09-13, so the pass does name a cutoff - and nothing published is old enough
@@ -228,7 +228,7 @@ a feed to sleep, and the log says `feed resting id=...` rather than an error.
 The rest ends on its own after five skips. Nothing here ever edits
 `config/sources.json`, which stays curated by a person - but retirement is no
 longer a person's job: five HTTP 410 results across five distinct runs write one
-row to `state/feed-retirements.csv` and the run stops asking that address, for
+row under `state/raw/feed-retirements/` and the run stops asking that address, for
 good. Changing that feed's configured URL makes a new endpoint, with no inherited
 strikes and no inherited retirement
 ([../architecture/sources/health.md](../architecture/sources/health.md)).

@@ -10,9 +10,11 @@ than stopping a request. A single credibility score across the five was refused:
 they have different units and different remedies, and one number cannot say
 which of them fired (`docs/architecture/sources/health.md`).
 
-Everything here is a fold over rows an earlier run committed. Nothing opens a
-socket, nothing reads a clock and nothing edits `config/sources.json` - a run
-may write evidence about curation and may never write curation.
+Everything here but `file_retirements` is a fold over rows an earlier run
+committed, and `file_retirements` is the one writer of the retirement ledger.
+Nothing opens a socket, nothing reads a clock but the ledger door's own write
+stamp, and nothing edits `config/sources.json` - a run may write evidence about
+curation and may never write curation.
 
 **A row that cannot say which address it asked is invisible to this module.**
 `endpoint_key` was appended to the health row on 2026-09-02 and deliberately
@@ -30,17 +32,23 @@ agreeing.
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
 
+from idhazh import ledger
 from idhazh.contracts.feed_health import FeedHealthRow, RobotsOutcome, derive_endpoint_key
 from idhazh.contracts.feed_retirement import FeedRetirementRow, RetirementCause
+from idhazh.contracts.file_envelope import WriterIdentity
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.source_health_view import SourceHealthView
 from idhazh.contracts.sources import FeedDef
 from idhazh.discover import live, settled
 from idhazh.ledger import load_health
+
+logger = logging.getLogger(__name__)
 
 #: The one status that says an address is not coming back. A 403, a 404, a
 #: paywall, a transient failure and an empty feed all say something about today.
@@ -217,6 +225,55 @@ def low_yield_retirements(
                 evidence_dates=tuple(view.dwell_dates[-row.days_under_the_mark :]),
             )
         )
+    return filed
+
+
+def file_retirements(
+    state: Path, rows: Sequence[FeedRetirementRow], identity: WriterIdentity
+) -> list[FeedRetirementRow]:
+    """File the addresses a run found gone for good, once each, and say so in the log.
+
+    The one writer of the retirement ledger. The plan stage decides on five
+    `410 Gone` answers and the assemble stage on a yield held under the mark,
+    and those stay two decisions on two kinds of evidence - but both hand their
+    rows here, because a second way into one ledger is how the first stops
+    being true.
+
+    An address the ledger already holds is dropped, and so is a second row for
+    one address inside `rows`, so a run reading the same evidence tomorrow files
+    nothing new. The rest go through the ledger door, filed under the day each
+    was retired, and every row filed gets one warning line naming the feed, the
+    cause, how much evidence it carried and the file it went to.
+
+    Returns the rows that were filed. A paused or retired ledger family files
+    nothing, and the door says so in its own warning.
+    """
+    already = {row.endpoint_key for row in ledger.load_retirements(state)}
+    fresh: list[FeedRetirementRow] = []
+    for row in rows:
+        if row.endpoint_key in already:
+            continue
+        already.add(row.endpoint_key)
+        fresh.append(row)
+    filed: list[FeedRetirementRow] = []
+    for retired_on in sorted({row.retired_on for row in fresh}):
+        day = [row for row in fresh if row.retired_on == retired_on]
+        written = ledger.persist(
+            state, day, ledger=LedgerName.FEED_RETIREMENTS, covers=retired_on, identity=identity
+        )
+        if not written:
+            continue
+        shown = f"{ledger.STATE_DIRNAME}/{written[0].relative_to(state).as_posix()}"
+        for row in day:
+            logger.warning(
+                "feed endpoint retired id=%s cause=%s runs=%s days=%s file=%s",
+                row.feed_id,
+                row.cause.value,
+                len(row.evidence_run_ids),
+                len(row.evidence_dates),
+                shown,
+            )
+        filed += day
     return filed
 
 

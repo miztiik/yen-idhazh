@@ -20,6 +20,7 @@ from idhazh.contracts.feed_health import (
     FetchOutcome,
     derive_endpoint_key,
 )
+from idhazh.contracts.file_envelope import WriterIdentity
 from idhazh.contracts.knobs.collect import CollectConfig
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.run_plan import PlannedItem, PublishedAgeBand, RunPlan, VerticalPlan
@@ -39,6 +40,10 @@ RESTING_DETAIL: Final = "resting after repeated failures"
 #: A number rather than nothing, because the grammar every tree shares names a
 #: shard and a stage with one of them still has to say which.
 PLAN_SHARD: Final = 0
+
+#: The name a file this stage writes through the ledger door carries as its
+#: producer: this module's own dotted name, less the package.
+PRODUCER: Final = __name__.partition(".")[2]
 
 
 RETIRED_DETAIL: Final = "address retired after repeated 410 Gone"
@@ -64,6 +69,7 @@ def stage_plan(
     date: str,
     *,
     settings: config.Settings,
+    commit_sha: str,
     fetcher: Fetcher | None = None,
     now: Clock | None = None,
     execution: int | None = None,
@@ -98,6 +104,9 @@ def stage_plan(
     run that must not plan a whole day. It is a different knob from the crash
     guard: it works per vertical, before the day is deduplicated, and a run that
     does not ask for it plans exactly what it planned before.
+
+    `commit_sha` is the commit this run checked out. A retirement this run files
+    names it, so the file can be traced to the code that decided it.
     """
     read_url = fetcher or common.live_fetcher(settings)
     clock = now or assemble.utc_now
@@ -127,16 +136,19 @@ def stage_plan(
         run_id=run_id,
     )
     if filed:
-        ledger.append_retirements(state, filed)
+        source_health.file_retirements(
+            state,
+            filed,
+            WriterIdentity(
+                run_id=run_id,
+                attempt=run_context.run_attempt(),
+                job=ServerJob.PLAN,
+                shard=PLAN_SHARD,
+                producer=PRODUCER,
+                git_sha=commit_sha,
+            ),
+        )
         gone |= {row.endpoint_key for row in filed}
-        for row in filed:
-            LOG.warning(
-                "feed endpoint retired id=%s cause=%s runs=%s file=%s",
-                row.feed_id,
-                row.cause.value,
-                len(row.evidence_run_ids),
-                ledger.relpath(LedgerName.FEED_RETIREMENTS),
-            )
     retired = source_health.retired(settings.sources.feeds, gone)
     read = failed = skipped = 0
     for feed in settings.sources.feeds:

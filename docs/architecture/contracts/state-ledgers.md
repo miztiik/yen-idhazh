@@ -1,6 +1,6 @@
 # The ledgers under state/
 
-**Last Updated**: 2026-09-27
+**Last Updated**: 2026-09-28
 
 `state/` is the only memory this pipeline has. Every run starts on a fresh machine with a fresh checkout, so anything one run needs to tell the next is committed (CLAUDE.md Guardrail #1). This page says what each committed ledger answers and why it files at the grain it does.
 
@@ -10,7 +10,7 @@ Every ledger here is append-only except three that rewrite a whole file: `state/
 
 ## A ledger partitions only when its read carries a time window
 
-A window lets the reader name the files it wants and skip the rest. Without one every file is opened anyway, and splitting the ledger buys no read time at all. The rule is [schemas.md](schemas.md); `state/visual-prunes/` is the one declared exception, and it is named below with what it bought instead.
+A window lets the reader name the files it wants and skip the rest. Without one every file is opened anyway, and splitting the ledger buys no read time at all. The rule is [schemas.md](schemas.md); `state/raw/feed-retirements/` and `state/raw/visual-prunes/` are the declared exceptions, and they are named below with what they bought instead.
 
 **The day grain buys the same two things everywhere it appears.** A run writes one day, so two runs collide on a file only when they are the same day. And taking a day back off the record is one `rm` rather than an edit inside a shared file, which an append-only ledger cannot express.
 
@@ -23,8 +23,8 @@ A window lets the reader name the files it wants and skip the rest. Without one 
 | `state/feed-health/<YYYY>/<MM>/<DD>.csv` | Is this source still working? One row per feed per run | day file | `HEALTH_WINDOW_DAYS` |
 | `state/item-health/<YYYY>/<MM>/<DD>.csv` | What did every planned item do? One row per planned item per run | day file | the published projection, a month at a time |
 | `state/item-health-summary/<YYYY-MM>.csv` | What is left of an item-health month | month file | the whole file |
-| `state/feed-retirements.csv` | Is this address gone for good? | one file | the whole file |
-| `state/visual-prunes/<YYYY>/<MM>/<DD>.csv` | Is the picture backlog shrinking? | day file | the whole tree |
+| `state/raw/feed-retirements/<YYYY>/<MM>/<DD>/<file_id>.parquet` | Is this address gone for good? One file per writer, under the day the address was retired | raw and compact | the whole tree |
+| `state/raw/visual-prunes/<YYYY>/<MM>/<DD>/<file_id>.parquet` | Is the picture backlog shrinking? One file per run | raw and compact | the whole tree |
 | `state/raw/gardener/<YYYY>/<MM>/<DD>/<file_id>.parquet` | What did each gardener task see, take and leave at one wake? One file per shard | raw and compact | none yet |
 
 `state/seen/` has no published mirror at all, so unlike the two health ledgers there is no second grain anywhere near it.
@@ -33,7 +33,7 @@ A window lets the reader name the files it wants and skip the rest. Without one 
 
 `state/item-health/` is the fastest-growing of the four day-filed ledgers. The console reads it a month at a time through the published projection, which stays monthly: `public_telemetry.publish` folds a month from that month's day files.
 
-`state/feed-retirements.csv` is read whole because a retirement has no time bound, so it is one file. It is also the smallest: a row is written only when a server has reported one address permanently gone on five distinct runs.
+`state/raw/feed-retirements/` is read whole because a retirement has no time bound. It files by day anyway, for the reason the section on the two whole-read ledgers gives below. It is also the smallest: a row is written only when a server has reported one address permanently gone on five distinct runs, and none had been written when it moved under `state/raw/` on 2026-09-28.
 
 ## The gardener
 
@@ -66,13 +66,13 @@ That last row is the number to remember before reading any wall clock here as a 
 
 A day file of a month's totals is a shape nothing consumes, so it files by month. It is also the one ledger here that is rewritten rather than appended, because every row in it is derived from the days it summarises.
 
-## Why visual-prunes files by day anyway
+## Why the two whole-read ledgers file by day anyway
 
-`state/visual-prunes/` is the declared exception to the partition rule. Its read will never carry a window, so the layout buys it no read time at all.
+`state/raw/feed-retirements/` and `state/raw/visual-prunes/` are the declared exceptions to the partition rule. Neither read will ever carry a window, so the layout buys them no read time at all.
 
-What it buys is the two things the day grain buys `state/published/`: two runs collide on a file only when they are the same day, and taking a day back off the record is one `rm`. Five rows a day for ever is a collection that grows, and a collection that grows here takes the layout every other growing one has.
+What it buys is what the ledger door buys every ledger that goes through it ([persistence.md](persistence.md)): each writer files a file of its own, so two runs never write one file and neither tree needs a merge driver, and taking a day back off the record is one `rm` of that day's folder. Five cleanup rows a day for ever is a collection that grows, and a collection that grows here takes the layout every other growing one has.
 
-A row is written on every run, including the runs where the policy is switched off and there is nothing to clean. A report of "nothing to do" is what makes the day the policy starts working visible.
+A cleanup row is written on every run, including the runs where the policy is switched off and there is nothing to clean. A report of "nothing to do" is what makes the day the policy starts working visible.
 
 ## A missing file is an answer, not a failure
 

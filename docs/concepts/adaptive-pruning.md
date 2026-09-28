@@ -63,7 +63,7 @@ span in at once rather than a day at a time: taking `retention.image_months`
 from 13 to 6 would open about 5,400 candidates, which is six days of draining.
 
 **5. Every pass leaves a row, including the pass that deleted nothing.** The
-visual prune appends to `state/visual-prunes/` on every run, and the row carries
+visual prune files a row under `state/raw/visual-prunes/` on every run, and the row carries
 `skipped_by_fuse` beside `deleted`. The fuse caps `deleted`, so on its own that
 number reads the same on a run that cleared its backlog and on a runaway one.
 Only the pair says which, and the day the policy starts working is then visible
@@ -178,8 +178,8 @@ is the count of month shards a console read opens, and no read opens a visual
 | `state/published/` | Keep | none - the **read** carries the cover, `collect.published_window_days` | forgetting an address republishes it as new |
 | `state/day-metrics/` | Keep | none of its own | about 13 KB a day, measured 2026-09-12 over 23 committed days, and the only place a band count or an extraction census survives the fold above |
 | `state/span-rollup/` | Keep | none of its own | the committed record a trace is not. No committed instance yet |
-| `state/visual-prunes/` | Keep | none | it is property 5 - the record of what the prune did, including the runs it did nothing |
-| `state/feed-retirements.csv` | Keep | never | it carries no time window at all. A run that forgot a retired address would start asking a dead one again |
+| `state/raw/visual-prunes/` | Keep | none | it is property 5 - the record of what the prune did, including the runs it did nothing |
+| `state/raw/feed-retirements/` | Keep | never | it carries no time window at all. A run that forgot a retired address would start asking a dead one again |
 | `state/labels.csv` | **Keep, always** | never | the only ground truth here, and the one file in `state/` a person wrote rather than a machine. No committed instance yet |
 | `state/<run.trial_state_dirname>/candidate-models/` | Keep | none of its own | one verdict a dispatch, filed on the day tree. It lands under the trial root because only a qualification writes it, and `prune-state` already bounds that root |
 

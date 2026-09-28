@@ -9,6 +9,8 @@ import pytest
 
 from idhazh import day_shards, ledger
 from idhazh.contracts.base import ServerJob
+from idhazh.contracts.feed_retirement import FeedRetirementRow, RetirementCause
+from idhazh.contracts.file_envelope import WriterIdentity
 from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
 from idhazh.contracts.knobs.observability import ObservabilityConfig
 from idhazh.contracts.ledger_name import LedgerName
@@ -111,17 +113,40 @@ def test_the_retirement_ledger_is_never_a_candidate(tmp_path: Path) -> None:
     One row is one address a server reported permanently gone. A run that forgot
     it would start asking a dead address again, and the evidence that retired it
     lives in shards this prune is entitled to delete - so the record has to
-    outlive them.
+    outlive them. It is filed on the oldest day the history reaches, so a prune
+    that walked the retirements by age would reach it first.
     """
     state = tmp_path / "state"
-    feed_health_history(state, months_back(TODAY, HISTORY_MONTHS))
-    retirements = ledger.path(state, LedgerName.FEED_RETIREMENTS)
-    retirements.write_text("header\n", encoding="utf-8")
+    months = months_back(TODAY, HISTORY_MONTHS)
+    feed_health_history(state, months)
+    oldest_day = f"{months[0]}-01"
+    retired = FeedRetirementRow(
+        version=FeedRetirementRow.schema_version(),
+        feed_id="trade-press",
+        endpoint_key="a" * 64,
+        retired_on=oldest_day,
+        decided_by_run=f"{oldest_day}-1",
+        cause=RetirementCause.HTTP_410,
+        evidence_run_ids=(f"{oldest_day}-1",),
+    )
+    identity = WriterIdentity(
+        run_id=f"{oldest_day}-1",
+        attempt=1,
+        job=ServerJob.PLAN,
+        shard=0,
+        producer="stages.plan",
+        git_sha="a" * 40,
+    )
+    (written,) = ledger.persist(
+        state, [retired], ledger=LedgerName.FEED_RETIREMENTS, covers=oldest_day, identity=identity
+    )
+    before = written.read_bytes()
 
     result = prune_feed_health(state, ObservabilityConfig(), TODAY)
 
     assert result.deleted, "the fixture has to reach past the window or this proves nothing"
-    assert retirements.read_text(encoding="utf-8") == "header\n"
+    assert written.read_bytes() == before
+    assert ledger.load_retirements(state) == [retired]
 
 
 def test_a_feed_health_name_the_walk_cannot_place_stops_the_prune(tmp_path: Path) -> None:
