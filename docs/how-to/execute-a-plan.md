@@ -1,6 +1,6 @@
 # How to execute a plan-doc (the execution contract)
 
-**Last Updated**: 2026-09-27
+**Last Updated**: 2026-09-28
 The mechanics for running a `TODO/<YYYYMMDD>-<slug>-plan.md` that [author-a-plan.md](author-a-plan.md) produced. Authoring writes the plan; this doc runs it, and owns the autonomy policy it runs under (section "Escalation").
 
 ASCII only in agent/customization Markdown: "-", "->", ">=", "section".
@@ -90,6 +90,10 @@ Merging stays serialized - one at a time, re-checking the next branch against th
 **Check every dispatch against the rows already in flight by diffing their `Files touched` lists.** A plan asserting that its parallel rows are disjoint is making a claim, not stating a fact ([git-and-github.md](../reference/agent-notes/git-and-github.md)). Where a ready row shares a file with one in flight, hold it and write the new `Depends-on` into the Status Reckoner, so the next dispatch reads it instead of re-deriving it.
 
 **Rows that share one surface do not parallelise, and the pool width is what makes that expensive.** Measured on one plan whose whole second half drew the same page: every remaining row edited that route's server module and its chart module, four were kept in flight anyway, and every merge after the first needed a hand resolution. Several were semantic - each side had deleted what the other kept, and git called the file clean ([gates-and-builds.md](../reference/agent-notes/gates-and-builds.md)). **Holding a row costs one merge of waiting; dispatching it onto a file in flight costs a resolution nobody reviewed.** Where a whole group shares one surface, the group is serial whatever `Parallel N` says, and the refactor that splits the surface is the row that makes the rest of them parallel - so it runs first or the width is fiction.
+
+**One mechanical row can fan out too: by file, inside one checkout.** Where a row is one small edit repeated across many files - a retired word, a moved name - the owner lists every place it occurs, splits that list by file into one list per worker, writes one shared brief, and dispatches the workers into the same checkout. Each worker edits only the files on its own list and runs no git command that writes, so no two can collide; the owner then runs the real check over the whole tree and commits once. Measured on one such row: five workers changed about 190 lines in 54 files in one round, with no conflict and nothing left for the check to find.
+
+**When the owner's own turn ends mid-run, the work is still there.** The checkouts, each pull request's checks and the workers' report files are the state. Read them before dispatching anything again: on one row they showed one pull request already green and another half done, and nothing had to be redone.
 
 ### The workers are parallel; the machine is not
 
