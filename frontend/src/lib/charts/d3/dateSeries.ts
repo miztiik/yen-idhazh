@@ -1,0 +1,177 @@
+/** What is changing: one to five series over the days of a window, as lines or as stacked bars.
+ *
+ * Lines are for reading each series on its own; stacked bars are for the mix
+ * of one total, one bar a day. Both shapes come out of this one call over the
+ * same days and the same value axis, so switching between them re-draws the
+ * same numbers and derives nothing new.
+ *
+ * **A missing day is a gap, never a zero.** A line breaks across it and a stack
+ * draws no segment for it, because a zero says the reading was taken and came
+ * back nothing - a claim about a day nobody measured.
+ *
+ * **The dates on the axis come from `dayTicks`**, the one rule this console has
+ * for a date axis, and never from an axis generator.
+ */
+import { line, stack } from 'd3-shape';
+
+import { dayTicks, type DayTick, type Frame } from '../frame';
+import type { ChartToken } from '../theme';
+import { valueAxis, type ValueAxis } from './axis';
+import { bandScale } from './scale';
+
+/** One reading: a UTC day as `YYYY-MM-DD`, and its value or null where none
+ * was recorded. */
+export interface SeriesPoint {
+	date: string;
+	value: number | null;
+}
+
+export interface SeriesInput {
+	label: string;
+	token: ChartToken;
+	points: readonly SeriesPoint[];
+}
+
+export interface DateSeriesOptions {
+	frame: Frame;
+	stacked?: boolean;
+	/** `chart.tick_density` - the most dates the axis may carry. */
+	density: number;
+	/** How many ticks the value axis aims for. */
+	valueTicks: number;
+	/** The share of each day's column left empty beside its bar, 0 to 1. */
+	padding: number;
+}
+
+export interface PlacedPoint {
+	date: string;
+	value: number;
+	x: number;
+	y: number;
+	/** No reading on either side of it, so a line cannot draw it and the
+	 * component puts a dot there. */
+	alone: boolean;
+}
+
+export interface SeriesLine {
+	label: string;
+	token: ChartToken;
+	path: string;
+	points: PlacedPoint[];
+}
+
+export interface SeriesBar {
+	date: string;
+	label: string;
+	token: ChartToken;
+	value: number;
+	x: number;
+	y: number;
+	width: number;
+	height: number;
+}
+
+export interface SeriesGeometry {
+	frame: Frame;
+	dates: string[];
+	/** Where each day's column is centred, in the chart's own pixels. */
+	columns: number[];
+	ticks: DayTick[];
+	axis: ValueAxis;
+	stacked: boolean;
+	/** Empty when stacked. */
+	lines: SeriesLine[];
+	/** Empty when not stacked. */
+	bars: SeriesBar[];
+}
+
+const DAY = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Each series' readings keyed by day, refusing what cannot be one reading a day. */
+function byDay(series: readonly SeriesInput[]): Map<string, number | null>[] {
+	const labels = new Set<string>();
+	return series.map((entry) => {
+		if (labels.has(entry.label)) throw new Error(`Two series are both called "${entry.label}".`);
+		labels.add(entry.label);
+		const days = new Map<string, number | null>();
+		for (const point of entry.points) {
+			if (!DAY.test(point.date)) throw new Error(`"${point.date}" is not a UTC day written YYYY-MM-DD.`);
+			if (days.has(point.date)) throw new Error(`"${entry.label}" has two readings for ${point.date}.`);
+			days.set(point.date, point.value !== null && Number.isFinite(point.value) ? point.value : null);
+		}
+		return days;
+	});
+}
+
+/** The series over their days, or null where not one day holds a reading. */
+export function dateSeries(series: readonly SeriesInput[], opts: DateSeriesOptions): SeriesGeometry | null {
+	const box = opts.frame;
+	const stacked = opts.stacked ?? false;
+	const readings = byDay(series);
+	const dates = [...new Set(readings.flatMap((days) => [...days.keys()]))].sort();
+	const values = readings.flatMap((days) => [...days.values()].filter((value): value is number => value !== null));
+	if (values.length === 0) return null;
+	if (stacked && values.some((value) => value < 0)) {
+		throw new RangeError('A stacked bar adds its parts, and a negative part cannot be added to a total.');
+	}
+
+	const band = bandScale(dates, box, 'x', opts.padding);
+	const columns = dates.map((date) => (band(date) ?? 0) + band.bandwidth() / 2);
+	const ticks = dayTicks(dates, { density: opts.density, columns });
+
+	if (!stacked) {
+		const axis = valueAxis(values, box, { along: 'y', ticks: opts.valueTicks });
+		const lines = series.map((entry, index) => {
+			const row = dates.map((date) => readings[index].get(date) ?? null);
+			const draw = line<number | null>()
+				.defined((value) => value !== null)
+				.x((_, at) => columns[at])
+				.y((value) => axis.scale(value as number));
+			const points = row.flatMap((value, at) =>
+				value === null
+					? []
+					: [
+							{
+								date: dates[at],
+								value,
+								x: columns[at],
+								y: axis.scale(value),
+								alone: (row[at - 1] ?? null) === null && (row[at + 1] ?? null) === null
+							}
+						]
+			);
+			return { label: entry.label, token: entry.token, path: draw(row) ?? '', points };
+		});
+		return { frame: box, dates, columns, ticks, axis, stacked, lines, bars: [] };
+	}
+
+	const keys = series.map((entry) => entry.label);
+	const table = dates.map((date) =>
+		Object.fromEntries(readings.map((days, index) => [keys[index], days.get(date) ?? null]))
+	);
+	const layers = stack<Record<string, number | null>, string>()
+		.keys(keys)
+		.value((day, key) => day[key] ?? 0)(table);
+	const totals = layers.length === 0 ? [] : layers[layers.length - 1].map((span) => span[1]);
+	const axis = valueAxis(totals, box, { along: 'y', ticks: opts.valueTicks });
+	const bars = layers.flatMap((layer, index) =>
+		layer.flatMap((span, at) => {
+			const value = table[at][layer.key];
+			if (value === null || value === 0) return [];
+			const top = axis.scale(span[1]);
+			return [
+				{
+					date: dates[at],
+					label: layer.key,
+					token: series[index].token,
+					value,
+					x: band(dates[at]) ?? 0,
+					y: top,
+					width: band.bandwidth(),
+					height: axis.scale(span[0]) - top
+				}
+			];
+		})
+	);
+	return { frame: box, dates, columns, ticks, axis, stacked, lines: [], bars };
+}

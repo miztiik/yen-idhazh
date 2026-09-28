@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { CONSOLE_MODEL_LABELS_PAGE } from './doc-test-inputs.ts';
+import { CHART_VOCABULARY_PAGE, CONSOLE_MODEL_LABELS_PAGE } from './doc-test-inputs.ts';
 import { FRONTEND_GROUPS, groupForSpec } from './test-groups.ts';
 import type { FrontendGroup } from './test-groups.ts';
 
@@ -37,9 +37,12 @@ const CONSOLE_OWNED =
  * against this page, so an edit to it can redden a suite the documentation
  * branch below would otherwise have answered for. The key is the constant the
  * spec reads its page from, so the two cannot name different pages.
+ * `chart-vocabulary.spec.ts` reads the chart-type list the same way, and it is a
+ * logic spec, so an edit to that page buys the logic group and no browser.
  */
 const DOC_TEST_INPUTS: Record<string, TestGroup[]> = {
-	[CONSOLE_MODEL_LABELS_PAGE]: ['console']
+	[CONSOLE_MODEL_LABELS_PAGE]: ['console'],
+	[CHART_VOCABULARY_PAGE]: ['logic']
 };
 
 function consoleIsTheSubject(paths: readonly string[]): boolean {
