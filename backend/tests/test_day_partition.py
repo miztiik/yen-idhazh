@@ -11,7 +11,7 @@ tree and asked what it did.
 
 **The set is the readers of a `<YYYY>/<MM>/<DD>.csv` tree under `state/`.**
 There is one other day walk in the repository and it is deliberately not in
-here: `retention._dated_days` reads `frontend/public/digest/`, where a day is a
+here: `retention.dated_days` reads `frontend/public/digest/`, where a day is a
 DIRECTORY holding a payload rather than a CSV file, and at its root it skips a
 name it cannot read instead of refusing it. Driven over these trees it would
 refuse the good day file too, because `07.csv` is not a day directory. A

@@ -49,7 +49,7 @@ fault. These directories are the top of their own tree, and a root is allowed to
 hold something that is not the partitioned collection at all. The stricter rule -
 below a dated level an unreadable name raises - belongs to the published day tree,
 where everything under a year directory is written by `assemble.day_dir` and nothing
-else (`retention._dated_days`).
+else (`retention.dated_days`).
 
 **It is one function because it used to be three, and they disagreed.** Measured on
 this checkout on 2026-09-08, before the fix:

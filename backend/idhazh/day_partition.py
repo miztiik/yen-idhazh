@@ -38,7 +38,7 @@ named in another script's numerals. The old walk entered it, found nothing to
 refuse, and yielded nothing - a stray tolerated in a tree whose whole rule is
 that nothing is tolerated.
 
-`retention._dated_days` walks a different day tree and does not move here. Its
+`retention.dated_days` walks a different day tree and does not move here. Its
 days are DIRECTORIES under `frontend/public/digest/` rather than CSV files, and
 at its root it skips a name it cannot read instead of refusing it, because that
 root is shared with things that are not the day tree. One walk per shape, for

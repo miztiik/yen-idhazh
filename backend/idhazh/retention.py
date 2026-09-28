@@ -161,7 +161,7 @@ def visuals_older_than(root: Path, limit: date) -> list[Path]:
     which is what the archive does every day nobody writes any code (Guardrail #12).
     """
     found: list[Path] = []
-    for _, folder in _dated_days(root, before=limit):
+    for _, folder in dated_days(root, before=limit):
         found.extend(_visuals_in(folder))
     return found
 
@@ -185,7 +185,7 @@ def _refuse(entry: Path, root: Path, expected: str) -> NoReturn:
     )
 
 
-def _dated_days(root: Path, *, before: date | None = None) -> Iterator[tuple[date, Path]]:
+def dated_days(root: Path, *, before: date | None = None) -> Iterator[tuple[date, Path]]:
     """Published day directories, oldest first, read out of their names.
 
     The tree is `<YYYY>/<MM>/<DD>` (`assemble.day_dir`), so a day's date is in
@@ -286,7 +286,7 @@ def oldest_visual(root: Path) -> date | None:
     at that day: 4 directory listings on a built 400-day tree against 417 for the
     shape it replaced, 2026-09-07, Intel Core i7-1265U.
     """
-    for published, folder in _dated_days(root):
+    for published, folder in dated_days(root):
         if _visuals_in(folder):
             return published
     return None
@@ -440,7 +440,7 @@ def prune_digest_fragments(
     report-only. `deleted` carries the committed POSIX relpath of each file, so a
     dry run names what a live run would take (section 2).
 
-    Cover: the days already past the window, and not the archive. `_dated_days`
+    Cover: the days already past the window, and not the archive. `dated_days`
     prunes by name at the year and the month, so a date inside the window is
     never opened - the cost follows the backlog this pass has to clear and
     shrinks as it clears it.
@@ -453,7 +453,7 @@ def prune_digest_fragments(
     pretend = dry_run or config.dry_run
     deleted: list[str] = []
     freed = 0
-    for _published, folder in _dated_days(root, before=limit):
+    for _published, folder in dated_days(root, before=limit):
         for path in sorted(folder.iterdir()):
             if not path.is_file():
                 continue

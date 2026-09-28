@@ -32,7 +32,7 @@ asked for, and a detail is not a rule.
 **A name this does not recognise is left alone.** It is not deleted and it is
 not a fault. These directories are the top of their own ledger, and the stricter
 rule the published day tree uses - below a dated level an unreadable name raises
-(`retention._dated_days`) - stops at a root by design, because a root is allowed
+(`retention.dated_days`) - stops at a root by design, because a root is allowed
 to hold things that are not the partitioned tree at all.
 """
 

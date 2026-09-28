@@ -259,7 +259,7 @@ reads are here and not how many. These are `backend/`'s;
 | `assemble.site_size` | every file under `frontend/public/digest/` | three jobs write the tree, so no one process can carry the total |
 | `site_weight.measure` | every file under the built tree | it is the independent audit a maintained total is checked against |
 | `site_weight.count_published_items` | every staged day payload | bytes and items have to come from one corpus |
-| `retention._dated_days` | the expired day directories only | it grows with the **backlog**, not with the archive, and shrinks as the prune works |
+| `retention.dated_days` | the expired day directories only | it grows with the **backlog**, not with the archive, and shrinks as the prune works |
 | `build_reference_dataset.archive_candidates` | every committed `digest.json` under `frontend/public/digest/` | the candidate pool for the frozen reference set has to be every article the pipeline has published, because the set is drawn on **outlet diversity** and a window would hide the outlets that publish rarely. It is a verb a person types, off the daily path and run once a set (2026-09-13) |
 | `item_health_provenance.archive_columns` | every shard of every day of `state/item-health/` | the question is whether ANY run has ever written a column, and a window answers only for the days inside it - so it would report a column retired last year and a column nothing was ever wired to fill as the same thing. It is a verb a person types, off the daily path, and what it prints is pasted into [the column report](../architecture/sources/item-health-columns.md). No test repeats it (`CLAUDE.md` section 13) |
 | `empty_column_census.census` | every shard of every day of `state/item-health/` and of `state/host-fingerprint/` | same question as the row above, asked of every published ledger rather than one, and crossed with the reader map on each contract so that a column with neither a reader nor a writer exits non-zero. A window cannot answer it for the same reason, and a test cannot hold it for a second one: an assertion that a column is empty goes red the day it first fills, which is a date rather than an edit. It is a verb a person types, off the daily path. Measured 2026-09-21: 29 day files and 14,026 item rows, 6 day files and 76 host rows |
@@ -664,7 +664,7 @@ one between three jobs means writing it down, which is a new persisted contract
 and a person's decision. So the three walks declare their growth instead.
 
 **The state-prune row's premise was measured and refuted, so nothing was
-optimised.** The row asked for the dated walk that `retention._dated_days` gave
+optimised.** The row asked for the dated walk that `retention.dated_days` gave
 the visual tree to be given to the state prunes as well, on the premise that they
 list and sort every partition directory on every pass. Counted rather than timed
 on 2026-09-08, on a developer machine: a not-due pass makes **5 directory
