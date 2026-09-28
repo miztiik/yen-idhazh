@@ -996,10 +996,17 @@ export function summarizeConfig(): SummarizeConfig {
 
 export function consoleConfig(): ConsoleConfig {
 	const merged = mergeLayers(CONSOLE_DEFAULTS, raw().console, appearance().console);
-	// The running order shares the block and must not ride along - see the note
-	// on `ConsolePanelGroup`.
-	const { panel_groups: _order, ...knobs } = merged as ConsoleBlock;
-	return knobs as ConsoleConfig;
+	// Whatever this returns is inlined into all five prerendered console
+	// documents, so it keeps the declared interface and nothing else. The block
+	// also holds the running order, which each route reads for itself - see the
+	// note on `ConsolePanelGroup` - and a knob no page reads would otherwise ride
+	// to every one of them. `CONSOLE_DEFAULTS` names every field of the
+	// interface, so there is no second list here to forget to update.
+	const kept = {} as Record<keyof ConsoleConfig, unknown>;
+	for (const key of Object.keys(CONSOLE_DEFAULTS) as (keyof ConsoleConfig)[]) {
+		kept[key] = merged[key];
+	}
+	return kept as ConsoleConfig;
 }
 
 /** The groups one console route draws, in order, refusing a list it cannot draw.
