@@ -24,11 +24,9 @@
 		dayTicks,
 		frame,
 		linearAxis,
-		observeWidth,
-		pointerReadout,
-		readoutMarks,
-		type DayReadout
+		observeWidth
 	} from '$lib/charts/frame';
+	import { pointerReadout, readoutMarks, readoutOf } from '$lib/charts/readout';
 	import { daysBetween, type TimeWindow } from '$lib/charts/viewport';
 	import ChartReadout from '$lib/components/ChartReadout.svelte';
 	import Panel from '$lib/components/Panel.svelte';
@@ -131,45 +129,52 @@
 		}))
 	);
 
-	/** Both marks at one column, in the order they are drawn. Built here from
-	 * `columnsX` rather than by `columnStrip`, which leaves `x` at zero for a
-	 * chart an engine lays out - this one knows its own pixels.
+	/** Both marks at one column, in the order they are drawn, with the day's group
+	 * count between them.
 	 *
-	 * Both rows print at every column, including a column where the count is
-	 * zero. A row that disappears makes the reader compare a two-row strip with
-	 * a one-row strip. */
-	const columns = $derived<DayReadout[]>(
-		drawn.map((day, index) => ({
-			x: px(columnsX[index]),
-			date: dayMonth(day.date),
-			rows: [
+	 * Every entry prints at every column, including a column where the count is
+	 * zero. An entry that disappears makes the reader compare a three-entry strip
+	 * with a two-entry strip. */
+	const readout = $derived(
+		readoutOf({
+			type: 'dateSeries',
+			columns: drawn.map((day) => dayMonth(day.date)),
+			series: [
 				{
 					label: 'Merged',
-					// The denominator rides in the value. A third row carrying it would
+					swatch: 'var(--chart-1)',
+					// The denominator rides in the value. A third entry carrying it would
 					// be a key to something the picture does not draw.
-					value:
-						day.published === 0
-							? 'no story published'
-							: `${day.merges} of ${day.published} published`,
-					colour: 'var(--chart-1)'
+					values: drawn.map((day) => (day.published === 0 ? 'no story published' : day.merges)),
+					format: (merges: number, column: number) =>
+						`${merges} of ${drawn[column]?.published ?? 0} published`
+				},
+				{
+					label: 'Groups',
+					swatch: null,
+					values: drawn.map((day) => (day.groups === 0 ? 'none formed' : day.groups)),
+					format: (groups: number) => plural(groups, 'group', 'groups')
 				},
 				{
 					label: 'Biggest group',
-					value: day.largest === 0 ? 'none formed' : plural(day.largest, 'story', 'stories'),
-					colour: 'var(--chart-2)'
+					swatch: 'var(--chart-2)',
+					values: drawn.map((day) => (day.largest === 0 ? 'none formed' : day.largest)),
+					format: (largest: number) => plural(largest, 'story', 'stories')
 				}
-			]
-		}))
+			],
+			notMeasured: 'No story was published on this day',
+			resting: 'last'
+		})
 	);
-	const resting = $derived(selected === null);
-	const readout = $derived(columns.length === 0 ? null : columns[selected ?? columns.length - 1]);
+	const count = $derived(readout.columns.length);
 
+	/** A day's sentence, kept on its marks as their name. Every word of it is in
+	 * the strip at that day. */
 	function columnTitle(day: MergeDay): string {
-		if (day.published === 0) return `${dayMonth(day.date)} - no story was published.`;
-		if (day.merges === 0) {
-			return `${dayMonth(day.date)} - none of the ${day.published} stories published was grouped with another.`;
-		}
-		return `${dayMonth(day.date)} - ${plural(day.merges, 'story', 'stories')} folded into another, in ${plural(day.groups, 'group', 'groups')}. The biggest held ${day.largest}. ${day.published} stories were published.`;
+		const on = dayMonth(day.date);
+		if (day.published === 0) return `${on}: no story was published.`;
+		if (day.merges === 0) return `${on}: none of the ${day.published} published was merged.`;
+		return `${on}: ${day.merges} of ${day.published} published merged, in ${plural(day.groups, 'group', 'groups')}. The biggest group was ${plural(day.largest, 'story', 'stories')}.`;
 	}
 </script>
 
@@ -182,8 +187,8 @@
 		data-window-days={windowDays}
 		data-merge-state={panelState}
 		data-merge-days={drawn.length}
-		data-readout-columns={columns.length > 0 ? columns.length : undefined}
-		data-readout-none={columns.length > 0 ? undefined : NO_COLUMN}
+		data-readout-columns={count > 0 ? count : undefined}
+		data-readout-none={count > 0 ? undefined : `${NO_COLUMN}; agreed with Susan`}
 	>
 		<div use:observeWidth={(next) => (measured = next)}>
 			<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
@@ -196,7 +201,7 @@
 				tabindex="0"
 				aria-label="Stories folded into another a day, over {windowDays} days"
 				use:pointerReadout={{
-					marks: readoutMarks(columns),
+					marks: readoutMarks(bars.map((one) => one.dotX)),
 					width: box.width,
 					onSelect: (index) => (selected = index)
 				}}
@@ -253,11 +258,13 @@
 				{:else}
 					{#each bars as column (column.date)}
 						<g
+							role="img"
+							aria-label={columnTitle(column.day)}
 							data-merge-day={column.date}
 							data-merge-count={column.day.merges}
 							data-merge-largest={column.day.largest}
+							data-merge-published={column.day.published}
 						>
-							<title>{columnTitle(column.day)}</title>
 							{#if column.height > 0}
 								<rect
 									x={column.x}
@@ -322,14 +329,14 @@
 			</svg>
 		</div>
 
-		{#if columns.length === 0}
+		{#if count === 0}
 			<p class="no-column" data-merge-no-column>{NO_COLUMN}</p>
 		{:else}
 			<ChartReadout
 				{readout}
+				at={selected}
 				name="merged-stories"
 				maxShare={readoutMaxShare}
-				{resting}
 				restingNote=", the newest published day"
 			/>
 		{/if}

@@ -20,7 +20,8 @@
 import type { EChartsOption } from 'echarts';
 import type { MachineRun, ShardCounters } from '$lib/server/machine-counters';
 import { dayMonth } from '../format';
-import { AXIS_LABEL_GAP_PX, LABEL_ADVANCE_EM, labelWidth, type DayReadout } from './frame';
+import { AXIS_LABEL_GAP_PX, LABEL_ADVANCE_EM, labelWidth } from './frame';
+import { readoutOf, type Readout, type ReadoutInput } from './readout';
 import { percentOf } from './rank';
 import { grouped } from './series';
 import { stacked, type StackShape } from './stacked';
@@ -1010,26 +1011,35 @@ export function clocksChart(pairs: readonly ClockPair[]): {
  * The panel exists to compare two readings of one quantity, and reading two
  * bars off a shared axis by eye is the thing it was built to stop.
  */
-export function clockColumns(pairs: readonly ClockPair[]): DayReadout[] {
-	return pairs
-		.filter((pair) => pair.ledger !== null && pair.server !== null)
-		.map((pair) => ({
-			x: 0,
-			date: pair.label,
-			rows: [
-				{
-					label: 'Item ledger',
-					value: `${(pair.ledger ?? 0).toFixed(2)} tok/s`,
-					colour: 'var(--chart-1)'
-				},
-				{
-					label: 'Model server',
-					value: `${(pair.server ?? 0).toFixed(2)} tok/s`,
-					colour: 'var(--chart-4)'
-				},
-				{ label: 'Apart', value: `${(pair.gapPct ?? 0).toFixed(2)}%`, colour: '' }
-			]
-		}));
+export function clockColumns(pairs: readonly ClockPair[]): Readout {
+	const both = pairs.filter((pair) => pair.ledger !== null && pair.server !== null);
+	const rate = (value: number) => `${value.toFixed(2)} tok/s`;
+	return readoutOf({
+		type: 'dateSeries',
+		columns: both.map((pair) => pair.label),
+		series: [
+			{
+				label: 'Item ledger',
+				swatch: 'var(--chart-1)',
+				values: both.map((pair) => pair.ledger),
+				format: rate
+			},
+			{
+				label: 'Model server',
+				swatch: 'var(--chart-4)',
+				values: both.map((pair) => pair.server),
+				format: rate
+			},
+			{
+				label: 'Apart',
+				swatch: null,
+				values: both.map((pair) => pair.gapPct),
+				format: (value: number) => `${value.toFixed(2)}%`
+			}
+		],
+		notMeasured: 'Not measured by both clocks',
+		resting: 'last'
+	});
 }
 
 /** One run's whole distribution, as the small multiples draw it.
@@ -1110,19 +1120,31 @@ export function percentileHistory(
  * and are drawn in one colour, so a swatch would name a distinction that is not
  * on the plot.
  */
-export function latencyColumns(runs: readonly LatencyRun[]): DayReadout[] {
-	return runs.map((run) => ({
-		x: 0,
-		date: run.runId,
-		rows: [
+export function latencyColumns(
+	runs: readonly LatencyRun[],
+	events?: ReadoutInput['events']
+): Readout {
+	return readoutOf({
+		type: 'dateSeries',
+		columns: runs.map((run) => run.runId),
+		series: [
 			...PERCENTILES.map((percentile, at) => ({
 				label: `p${percentile}`,
-				value: seconds((run.ms[at] ?? 0) / 1000),
-				colour: ''
+				swatch: null,
+				values: runs.map((run) => run.ms[at] ?? 0),
+				format: (ms: number) => seconds(ms / 1000)
 			})),
-			{ label: 'Items timed', value: grouped(run.items), colour: '' }
-		]
-	}));
+			{
+				label: 'Items timed',
+				swatch: null,
+				values: runs.map((run) => run.items),
+				format: (value: number) => grouped(value)
+			}
+		],
+		...(events === undefined ? {} : { events }),
+		notMeasured: 'This run timed no item',
+		resting: 'last'
+	});
 }
 
 // ---------------------------------------------------------------------------

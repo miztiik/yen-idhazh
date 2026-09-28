@@ -24,7 +24,7 @@ import type { EChartsOption } from 'echarts';
 import type { HostFingerprint } from '$lib/server/host-fingerprint';
 import type { LostDay } from '$lib/console/recording';
 import { dayMonth, shortDate } from '$lib/format';
-import { columnStrip, type DayReadout } from './frame';
+import { readoutOf, type Readout } from './readout';
 import { valueGutter } from './machine';
 import {
 	machineKeys,
@@ -352,15 +352,19 @@ function capitalised(text: string): string {
  * dominant reading device has no hover. It is the legend too - every kind drawn
  * is named and swatched here, so no second key is drawn beside the plot.
  */
-export function fleetColumns(trend: FleetTrend): DayReadout[] {
-	return columnStrip(
-		trend.days.map(shortDate),
-		trend.series.map((one) => ({
+export function fleetColumns(trend: FleetTrend): Readout {
+	return readoutOf({
+		type: 'dateSeries',
+		columns: trend.days.map(shortDate),
+		series: trend.series.map((one) => ({
 			label: one.identity.name,
-			colour: `var(--chart-${one.identity.colourStop})`,
-			value: (index: number) => `${one.counts[index] ?? 0}`
-		}))
-	);
+			swatch: `var(--chart-${one.identity.colourStop})`,
+			values: trend.days.map((_, index) => one.counts[index] ?? 0),
+			format: (value: number) => `${value}`
+		})),
+		notMeasured: 'No machine was placed on this day',
+		resting: 'last'
+	});
 }
 
 /** One group a day, one bar a kind: what the platform handed us, over time.

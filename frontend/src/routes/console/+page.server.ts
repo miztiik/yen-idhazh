@@ -234,7 +234,7 @@ export async function load() {
 			n: run.n,
 			health: health(run, floorPct),
 			label: squareLabel(day.date, run, floorPct, readInPartByRun.get(run.runId) ?? 0),
-			outcome: runOutcome(run, floorPct)
+			outcome: runOutcome(run, floorPct, readInPartByRun.get(run.runId) ?? 0)
 		}))
 	}));
 

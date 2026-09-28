@@ -19,7 +19,7 @@
 
 import { expect, test } from '@playwright/test';
 
-import { sparklineMarks } from '../src/lib/charts/sparkline';
+import { sparklineShape } from '../src/lib/charts/sparkline';
 import { buildCardTrends } from '../src/lib/console/model-cards';
 
 /** A fabricated model window, oldest first the way the route holds it. Each
@@ -52,11 +52,15 @@ test.describe('a model card reads one selected view, in one pass', () => {
 		// Each is its own column's movement, computed by the same function the page
 		// draws the line with. A builder that returned one column for every key -
 		// the drift eleven separate passes invited - fails at the first mismatch.
-		expect(trends.get('steep')?.marks.movement).toBe(sparklineMarks([10, 20, 40]).movement);
-		expect(trends.get('falling')?.marks.movement).toBe(sparklineMarks([100, 50, 25]).movement);
-		expect(trends.get('gentle')?.marks.movement).toBe(sparklineMarks([10, 20, 30]).movement);
+		expect(trends.get('steep')?.marks.movement).toBe(sparklineShape([10, 20, 40]).movement);
+		expect(trends.get('falling')?.marks.movement).toBe(sparklineShape([100, 50, 25]).movement);
+		expect(trends.get('gentle')?.marks.movement).toBe(sparklineShape([10, 20, 30]).movement);
 		// `sparse` is null on the first day, so its line is the two days it drew.
-		expect(trends.get('sparse')?.marks.movement).toBe(sparklineMarks([9, 18]).movement);
+		expect(trends.get('sparse')?.marks.movement).toBe(sparklineShape([9, 18]).movement);
+		// And each drawn point keeps the day it was taken on, so the strip under the
+		// line heads every value with its own date.
+		expect(trends.get('sparse')?.marks.dates).toEqual(['2026-08-02', '2026-08-03']);
+		expect(trends.get('steep')?.marks.dates).toEqual(WINDOW.map((day) => day.date));
 
 		// And the four are genuinely four numbers, so the assertions above are not
 		// four ways of reading one column.
@@ -68,9 +72,10 @@ test.describe('a model card reads one selected view, in one pass', () => {
 		const swaps = [{ date: '2026-08-02', model: 'b' }];
 		const trends = buildCardTrends(KEYS, WINDOW, read, swaps);
 
-		// `steep` drew all three days, so 2026-08-02 is the middle of three, at 1/2.
+		// `steep` drew all three days, so 2026-08-02 is the middle of three, its
+		// second point. The sentence names the day the way the strip heads it.
 		expect(trends.get('steep')?.rules).toEqual([
-			{ at: 0.5, label: 'The model changed to b on 2026-08-02.' }
+			{ point: 1, label: 'The model changed to b on 2 Aug 2026.' }
 		]);
 		// `sparse` drew only 2026-08-02 and 2026-08-03, so the swap is its first
 		// drawn day. A rule across the left edge would say the ground moved before

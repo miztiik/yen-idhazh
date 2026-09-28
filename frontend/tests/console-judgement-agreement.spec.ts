@@ -186,9 +186,11 @@ test.describe('what the record still needs', () => {
 	}) => {
 		await open(page);
 
+		// The sentence is the square's accessible name, and the strip under the
+		// squares prints it for the square a reader is on.
 		const titles = await page
 			.locator(`${GATES} [data-counted-day]`)
-			.evaluateAll((nodes) => nodes.map((node) => node.getAttribute('title') ?? ''));
+			.evaluateAll((nodes) => nodes.map((node) => node.getAttribute('aria-label') ?? ''));
 
 		expect(titles.length).toBeGreaterThan(0);
 		for (const title of titles) {

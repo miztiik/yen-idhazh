@@ -23,13 +23,13 @@
 		modelRuleRow,
 		modelRuleTitle,
 		MODEL_RULE_LABEL,
+		MODEL_RULE_NOTE,
 		modelRules,
 		noModelRuleNote,
 		observeWidth,
-		pointerReadout,
-		readoutMarks,
 		type Frame
 	} from '$lib/charts/frame';
+	import { pointerReadout, readoutMarks } from '$lib/charts/readout';
 	import { shortDate } from '$lib/format';
 	import {
 		namesMoved,
@@ -84,7 +84,15 @@
 	// on its own panel does): the caption columns, the boundary set and the
 	// shared domain no longer rebuild on a drag.
 	const tailDates = $derived(firstOfDay(tailRuns));
-	const tailData = $derived(latencyColumns(tailRuns));
+	const tailData = $derived(
+		latencyColumns(tailRuns, {
+			lines: tailRuns.map((run) =>
+				tailBoundaries.has(run.date)
+					? [modelRuleRow(namesMovedShort(movedOn.get(run.date) ?? []))]
+					: []
+			)
+		})
+	);
 	const tailBoundaries = $derived(boundaryDates(modelChanges, tailDates));
 	const tailExtent = $derived(tailRuns.flatMap((run) => run.ms.map((ms) => ms / 1000)));
 	const tailW = $derived(chartWidth(tailWidth, chart.width_px));
@@ -120,15 +128,6 @@
 	const tailRules = $derived(modelRules(modelChanges, tailDates, tailX));
 	/** The words for one date, or none where the record could not name them. */
 	const movedOn = $derived(settingsByDate(moved));
-	const tailStrip = $derived(
-		tailData.map((column, index) => ({
-			...column,
-			x: tailX[index] ?? 0,
-			rows: tailBoundaries.has(tailRuns[index]?.date ?? '')
-				? [...column.rows, modelRuleRow(namesMovedShort(movedOn.get(tailRuns[index]?.date ?? '') ?? []))]
-				: column.rows
-		}))
-	);
 	/** Days this span covers, that a setting moved on, and that no run of this
 	 * chart timed enough items to draw. Decision 4 of Row #22: the rule and the
 	 * absence are both drawn, because the days nobody measured are exactly the
@@ -141,9 +140,7 @@
 				!tailRuns.some((run) => run.date === one.date)
 		)
 	);
-	const tailMarks = $derived(readoutMarks(tailStrip));
-	const tailResting = $derived(tailStrip.at(-1) ?? null);
-	const tailReadout = $derived(tailAt === null ? tailResting : (tailStrip[tailAt] ?? tailResting));
+	const tailMarks = $derived(readoutMarks(tailRuns.map((_, index) => tailX[index] ?? 0)));
 	function tailLine(at: number): string {
 		return tailRuns
 			.map((run, index) => `${tailX[index]},${tailAtY(at, (run.ms[at] ?? 0) / 1000)}`)
@@ -201,7 +198,7 @@
 				<p class="reads" data-model-rule-unread="machine-latency">{unreadRuleNote(tailUnread)}</p>
 			{/if}
 		{:else}
-			<div class="plot" data-readout-columns={tailStrip.length}>
+			<div class="plot" data-readout-columns={tailData.columns.length}>
 				<div use:observeWidth={(px) => (tailWidth = px)}>
 					<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 					<svg
@@ -288,10 +285,10 @@
 								stroke="var(--chart-change)"
 								stroke-width="1.5"
 								stroke-dasharray="3 3"
+								role="img"
+								aria-label={modelRuleTitle(rule.date, namesMoved(movedOn.get(rule.date) ?? []))}
 								data-model-rule-line={rule.date}
-							>
-								<title>{modelRuleTitle(rule.date, namesMoved(movedOn.get(rule.date) ?? []))}</title>
-							</line>
+							/>
 							<text
 								x={rule.x + 3}
 								y={tailBox(0).top + 9}
@@ -341,10 +338,10 @@
 					</svg>
 				</div>
 				<ChartReadout
-					readout={tailReadout}
+					readout={tailData}
+					at={tailAt}
 					name="latency"
 					maxShare={chart.readout_max_share}
-					resting={tailAt === null}
 					restingNote=", the last run"
 					hint="Point at a run to read every percentile of it at once. Left and Right step through the runs, Escape returns to the last."
 				/>
@@ -353,6 +350,10 @@
 			{#if tailRules.length === 0 && tailRuns.length > 1}
 				<p class="reads">
 					<span data-model-rule-empty="machine-latency">{noModelRuleNote(days)}</span>
+				</p>
+			{:else if tailRules.length > 0}
+				<p class="reads">
+					<span data-model-rule-note="machine-latency">{MODEL_RULE_NOTE}</span>
 				</p>
 			{/if}
 

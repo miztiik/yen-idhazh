@@ -11,6 +11,7 @@
 
 import { expect, test } from '@playwright/test';
 
+import { shortDate } from '../src/lib/format';
 import {
 	agreementCorridor,
 	clampEnvelope,
@@ -293,8 +294,9 @@ test.describe('the judge, and what the record still needs', () => {
 
 		expect(filling.map((square) => square.state)).toEqual(['silent', 'filling', 'silent']);
 		expect(settled.map((square) => square.state)).toEqual(['silent', 'held', 'silent']);
-		// And every square says what it is, so the hue is never the only signal.
-		for (const square of filling) expect(square.title).toContain(square.date);
+		// And every square says what it is, so the hue is never the only signal,
+		// with its day spelled the way the strip under the squares heads it.
+		for (const square of filling) expect(square.title).toContain(shortDate(square.date));
 	});
 
 	test('a fitted day is fitted whether or not the gates are met', () => {

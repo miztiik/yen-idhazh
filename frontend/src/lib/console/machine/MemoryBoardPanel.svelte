@@ -14,7 +14,8 @@
 		moved,
 		start,
 		end,
-		windowDays
+		windowDays,
+		readoutMaxShare
 	}: {
 		board: MemoryBoardView;
 		/** What the run record says moved, over the whole page's reach. The panel
@@ -24,6 +25,8 @@
 		start: string;
 		end: string;
 		windowDays: number;
+		/** `chart.readout_max_share`. */
+		readoutMaxShare: number;
 	} = $props();
 
 	const inSpan = $derived(moved.filter((one) => one.date >= start && one.date <= end));
@@ -36,5 +39,5 @@
 	note="One article can take the machine to its floor while the part of the run it sits in reads as normal, and how little the kernel had left is what decides whether a bigger model fits - one mark an item of the newest run."
 	wide
 >
-	<MemoryBoard {board} moved={inSpan} {windowDays} />
+	<MemoryBoard {board} moved={inSpan} {windowDays} {readoutMaxShare} />
 </Panel>

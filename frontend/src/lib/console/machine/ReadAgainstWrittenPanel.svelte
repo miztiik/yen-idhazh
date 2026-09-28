@@ -18,7 +18,7 @@
 		type RunWork,
 		type WorkUnit
 	} from '$lib/charts/machine';
-	import { columnStrip } from '$lib/charts/frame';
+	import { readoutOf } from '$lib/charts/readout';
 	import { grouped } from '$lib/charts/series';
 	import type { ChartConfig } from '$lib/server/config';
 
@@ -62,29 +62,35 @@
 		* because the bars do, and the open unit, because 19D7 forbids the tooltip
 		* being the only carrier of a fact the panel is about. */
 	const tokenRuns = $derived(runs.map((run) => run.runId));
-	const workNumber = (value: number | null) =>
-		value === null ? '-' : workUnit === 'tokens' ? grouped(value) : `${value.toFixed(1)}s`;
+	const workNumber = (value: number) =>
+		workUnit === 'tokens' ? grouped(value) : `${value.toFixed(1)}s`;
 	const workStrip = $derived(
-		columnStrip(tokenRuns, [
-			{
-				label: 'Read',
-				colour: 'var(--chart-1)',
-				value: (index) =>
-					workNumber(runs[index] === undefined ? null : workValues(runs[index], workUnit).read)
-			},
-			{
-				label: 'Written',
-				colour: 'var(--chart-4)',
-				value: (index) =>
-					workNumber(runs[index] === undefined ? null : workValues(runs[index], workUnit).written)
-			},
-			{
-				label: workUnit === 'tokens' ? 'Items counted' : 'Items timed',
-				colour: '',
-				value: (index) =>
-					grouped((workUnit === 'tokens' ? runs[index]?.items : runs[index]?.timed) ?? 0)
-			}
-		])
+		readoutOf({
+			type: 'dateSeries',
+			columns: tokenRuns,
+			series: [
+				{
+					label: 'Read',
+					swatch: 'var(--chart-1)',
+					values: runs.map((run) => workValues(run, workUnit).read),
+					format: workNumber
+				},
+				{
+					label: 'Written',
+					swatch: 'var(--chart-4)',
+					values: runs.map((run) => workValues(run, workUnit).written),
+					format: workNumber
+				},
+				{
+					label: workUnit === 'tokens' ? 'Items counted' : 'Items timed',
+					swatch: null,
+					values: runs.map((run) => (workUnit === 'tokens' ? run.items : run.timed) ?? 0),
+					format: (value: number) => grouped(value)
+				}
+			],
+			notMeasured: workUnit === 'tokens' ? 'This run counted no item' : 'This run timed no item',
+			resting: 'last'
+		})
 	);
 </script>
 
@@ -139,7 +145,7 @@
 						width={chart.width_px}
 						height={chart.height_px}
 						label="What each run read beside what it wrote, in {workUnit}, over {days} days. One group is one run."
-						columns={workStrip}
+						readout={workStrip}
 						readoutName="read-against-written"
 						readoutMaxShare={chart.readout_max_share}
 						{grid}

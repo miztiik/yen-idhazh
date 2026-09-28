@@ -1,4 +1,10 @@
-import { sparklineMarks, type SparklineMarks } from '../charts/sparkline';
+import { shortDate } from '../format';
+import {
+	sparklineMarks,
+	type SparkPoint,
+	type SparklineMarks,
+	type SparklineRule
+} from '../charts/sparkline';
 
 /** A model change, as a card's line and the table's divider both read it. */
 export interface CardSwap {
@@ -6,17 +12,10 @@ export interface CardSwap {
 	model: string;
 }
 
-/** One vertical rule on a card's line: where along it the rule lands, between 0
- * and 1, and the sentence it carries. */
-export interface SwapRule {
-	at: number;
-	label: string;
-}
-
 /** One card's drawn points and the swap rules that land on them. */
 export interface CardTrend {
 	marks: SparklineMarks;
-	rules: SwapRule[];
+	rules: SparklineRule[];
 }
 
 /** Every card's line and its swap rules, built in one pass over the open window.
@@ -29,11 +28,11 @@ export interface CardTrend {
  *
  * Each column keeps its own dates, because a day the ledger left null for one
  * column is a point that column never drew - so a swap can land on a different
- * fraction from one card to the next, and that is the reading, not a rounding.
+ * point from one card to the next, and that is the reading, not a rounding.
  * `read` returns a day's value for a column, or null where the ledger has no
  * answer, and the nulls are dropped the way the printed cells drop them. The
  * window is oldest first, so a line reads left to right in time and a swap's
- * index is the first drawn day at or after its date; a swap that lands on the
+ * point is the first drawn day at or after its date; a swap that lands on the
  * first drawn day draws no rule, because a rule across the left edge says the
  * ground moved before the line began.
  */
@@ -43,36 +42,23 @@ export function buildCardTrends<Day extends { date: string }>(
 	read: (day: Day, key: string) => number | null,
 	swaps: readonly CardSwap[]
 ): Map<string, CardTrend> {
-	const values: Record<string, number[]> = {};
-	const dates: Record<string, string[]> = {};
-	for (const key of keys) {
-		values[key] = [];
-		dates[key] = [];
-	}
+	const readings: Record<string, SparkPoint[]> = {};
+	for (const key of keys) readings[key] = [];
 	for (const day of window) {
-		for (const key of keys) {
-			const value = read(day, key);
-			if (value === null) continue;
-			values[key].push(value);
-			dates[key].push(day.date);
-		}
+		for (const key of keys) readings[key].push({ date: day.date, value: read(day, key) });
 	}
 	const trends = new Map<string, CardTrend>();
 	for (const key of keys) {
-		const marks = sparklineMarks(values[key]);
+		const marks = sparklineMarks(readings[key]);
 		if (marks.empty) {
 			trends.set(key, { marks, rules: [] });
 			continue;
 		}
-		const keyDates = dates[key];
 		const rules = swaps.flatMap((swap) => {
-			const at = keyDates.findIndex((date) => date >= swap.date);
-			if (at < 1) return [];
+			const point = marks.dates.findIndex((date) => date >= swap.date);
+			if (point < 1) return [];
 			return [
-				{
-					at: at / (keyDates.length - 1),
-					label: `The model changed to ${swap.model} on ${swap.date}.`
-				}
+				{ point, label: `The model changed to ${swap.model} on ${shortDate(swap.date)}.` }
 			];
 		});
 		trends.set(key, { marks, rules });

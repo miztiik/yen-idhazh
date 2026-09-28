@@ -25,11 +25,10 @@
 		frame,
 		linearAxis,
 		observeWidth,
-		pointerReadout,
-		readoutMarks,
-		type DayReadout,
 		type Margin
 	} from '$lib/charts/frame';
+	import { pointerReadout, readoutMarks, readoutOf } from '$lib/charts/readout';
+	import { shortDate } from '$lib/format';
 	import ChartReadout from './ChartReadout.svelte';
 	import type { RunLength } from '../../routes/console/model/+page.server';
 
@@ -38,7 +37,7 @@
 		width,
 		height,
 		tickDensity,
-		readoutMaxShare = 0.33
+		readoutMaxShare = 1
 	}: {
 		/** Oldest first. The chart reads left to right. */
 		runs: RunLength[];
@@ -165,12 +164,24 @@
 		}))
 	);
 
+	/** What a run with no article length says in place of an ask, in the strip and
+	 * in the run's own sentence alike. */
+	const NO_ASK = 'no article in it recorded a length';
+
+	/** One run's sentence, kept on its marks as their name. Every word of it is in
+	 * the strip at that run: the run id names the day, so the date is not said a
+	 * second time. */
 	function sentence(run: RunLength): string {
 		const asked =
 			run.askLow === null || run.askHigh === null
-				? 'No article in it recorded a length, so no ask can be read.'
+				? `${NO_ASK.charAt(0).toUpperCase()}${NO_ASK.slice(1)}.`
 				: `Asked for ${run.askLow} to ${run.askHigh} words.`;
-		return `Run ${run.runId} on ${run.date}${run.model === null ? '' : `, ${run.model}`}: ${run.items} summaries, shortest ${run.low} words, middle ${run.median}, longest ${run.high}. ${asked}`;
+		return `Run ${run.runId}${run.model === null ? '' : `, ${run.model}`}: ${run.items} summaries, shortest ${run.low} words, middle ${run.median}, longest ${run.high}. ${asked}`;
+	}
+
+	/** What a model rule says, on the rule and in the strip on the run it opens. */
+	function swapSentence(swap: { model: string; date: string }): string {
+		return `The model changed to ${swap.model} on ${shortDate(swap.date)}.`;
 	}
 
 	const description = $derived(
@@ -184,32 +195,48 @@
 
 	/** Three marks a run, printed together. The whole point of the shape is that
 	 * the ends move while the middle does not, and reading three marks off one
-	 * column by eye against a shared y axis is what the strip removes. */
-	const columns = $derived<DayReadout[]>(
-		placed.map(({ run, x: at }) => ({
-			x: at,
-			date: `${run.runId} - ${run.items} ${run.items === 1 ? 'summary' : 'summaries'}`,
-			rows: [
-				{ label: 'Shortest', value: `${run.low} words`, colour: 'var(--chart-8)' },
-				{ label: 'Middle', value: `${run.median} words`, colour: 'var(--chart-8)' },
-				{ label: 'Longest', value: `${run.high} words`, colour: 'var(--chart-8)' },
+	 * column by eye against a shared y axis is what the strip removes. It rests on
+	 * the newest run, which is the one an operator came for. */
+	const readout = $derived.by(() => {
+		const words = (value: number) => `${value} words`;
+		return readoutOf({
+			type: 'dateSeries',
+			columns: runs.map(
+				(run) => `${run.runId} - ${run.items} ${run.items === 1 ? 'summary' : 'summaries'}`
+			),
+			series: [
+				{ label: 'Shortest', swatch: 'var(--chart-8)', values: runs.map((run) => run.low), format: words },
+				{ label: 'Middle', swatch: 'var(--chart-8)', values: runs.map((run) => run.median), format: words },
+				{ label: 'Longest', swatch: 'var(--chart-8)', values: runs.map((run) => run.high), format: words },
 				{
 					label: 'Asked for',
-					value:
-						run.askLow === null || run.askHigh === null
-							? 'not recorded'
-							: `${run.askLow} to ${run.askHigh} words`,
-					colour: ''
+					swatch: null,
+					values: runs.map((run) =>
+						run.askLow === null || run.askHigh === null ? NO_ASK : run.askLow
+					),
+					format: (low: number, column: number) => `${low} to ${runs[column]?.askHigh} words`
+				},
+				{
+					label: 'Model',
+					swatch: null,
+					values: runs.map((run) => run.model),
+					format: String
 				}
-			]
-		}))
-	);
-	const marks = $derived(readoutMarks(columns));
-	/** The newest run, which is the one an operator came for. */
-	const resting = $derived(columns.length === 0 ? null : columns.length - 1);
-	const at = $derived(selected ?? resting);
-	const readout = $derived(at === null ? null : (columns[at] ?? null));
-	const guide = $derived(selected === null ? null : (columns[selected]?.x ?? null));
+			],
+			// The rule is drawn between two runs; its sentence prints on the run it
+			// opens, so stepping the runs with a key meets it without a pointer.
+			events: {
+				lines: runs.map((run) => {
+					const swap = swaps.find((one) => one.runId === run.runId);
+					return swap === undefined ? [] : [{ label: swapSentence(swap), value: '', swatch: null }];
+				})
+			},
+			notMeasured: 'not recorded',
+			resting: 'last'
+		});
+	});
+	const marks = $derived(readoutMarks(placed.map((mark) => mark.x)));
+	const guide = $derived(selected === null ? null : (placed[selected]?.x ?? null));
 </script>
 
 <div
@@ -217,7 +244,7 @@
 	data-run-lengths="chart"
 	data-run-lengths-runs={runs.length}
 	data-run-domain={runExtent}
-	data-readout-columns={columns.length}
+	data-readout-columns={readout.columns.length}
 >
 	<div use:observeWidth={(next) => (measured = next)}>
 		<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
@@ -279,10 +306,10 @@
 					y2={box.bottom}
 					stroke="var(--color-text-tertiary)"
 					stroke-dasharray="3 3"
+					role="img"
+					aria-label={swapSentence(swap)}
 					data-run-swap={swap.date}
-				>
-					<title>The model changed to {swap.model} on {swap.date}.</title>
-				</line>
+				/>
 			{/each}
 
 			{#if guide !== null}
@@ -299,13 +326,14 @@
 
 			{#each placed as column (column.run.runId)}
 				<g
+					role="img"
+					aria-label={sentence(column.run)}
 					data-run-length={column.run.runId}
 					data-run-low={column.run.low}
 					data-run-median={column.run.median}
 					data-run-high={column.run.high}
 					data-run-items={column.run.items}
 				>
-					<title>{sentence(column.run)}</title>
 					<line
 						x1={round(column.x)}
 						x2={round(column.x)}
@@ -371,9 +399,9 @@
 	     console prints - see `ChartReadout.svelte` for the rules it holds. -->
 	<ChartReadout
 		{readout}
+		at={selected}
 		name="run-lengths"
 		maxShare={readoutMaxShare}
-		resting={selected === null}
 		restingNote=", the newest run"
 		hint="Point at a run to read all three marks. Left and Right step through the runs, Escape returns to the newest."
 	/>

@@ -55,7 +55,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | 2 | The console shell: a stuck tab strip, the span control on it, jump links, a completeness sentence | - | A | DONE | p51r2 | #1140 | p51-r2-worker |
 | 3 | The three ledgers the console reads are published | plan 50's rows titled "One compaction task a ledger, two compact periods, and the diagrams move into the page" and "The three ledgers the console's routes read become parquet" | B | PENDING | - | - | - |
 | 4 | The chart vocabulary and the house style, with no panel moved | - | B | DONE | p51r4 | #1137 | p51-r4-worker |
-| 5 | One readout strip, every chart, and hover a keyboard can reach | 1, 4 | C | IN-FLIGHT | p51r5 | - | p51-r5-worker |
+| 5 | One readout strip, every chart, and hover a keyboard can reach | 1, 4 | C | DONE | p51r5 | #1143 | p51-r5-worker |
 | 6 | The ten sufficiency gates and the panel capture group | 4, 5 | C | DONE | p51r6 | #1144 | p51-r6-worker |
 | 7 | The query door module and its two entry points | 4; plan 50's row titled "The index and watermark shapes are declared" | C | PENDING | - | - | - |
 | 8 | One panel end to end: the browser fetches the ledger and draws it in d3 | 1, 2, 3, 4, 5, 6, 7 | D | PENDING | - | - | - |
@@ -356,56 +356,68 @@ Susan's starting set, 2026-09-26. **It is a starting set, not a closed one** (ow
 **`DayReadout` in `frontend/src/lib/charts/frame.ts` is replaced by `Readout`, and `readoutCapStyle` moves to `readout.ts` with it.** The pointer-nearest-column and keyboard-stepping machinery `frame.ts` holds for the old shape - `columnStrip`, `nearestColumn`, `pointerReadout`, `readoutMarks`, `notMeasuredRow` and their types `ReadoutMark`, `ReadoutRow`, `StripSeries`, `ReadoutOptions` - moves into `readout.ts` too, retyped onto `Readout`, so behaviours 3 and 4 have one home. **Every producer and consumer of `DayReadout` moves in row 5's single commit**, which is why that row cannot be split by panel - there is no intermediate commit where half the console is on the new shape and the tree compiles.
 
 ```ts
-/** What a chart hands the builder. Only the three column types call this; every
- *  other type calls `factsOf` below. */
-export type ReadoutInput = {
+/** One reading as a chart hands it over: a number its series formats, a word
+ *  printed as written, or null for a reading nobody took. */
+export type ReadoutValue = number | string | null;
+
+/** A line that belongs to one column only - a run of that day, a settings move. */
+export interface ReadoutLine { label: string; value: string; swatch: string | null; }
+
+/** `newest` is the newest column with a reading, `last` the last column drawn,
+ *  `first` the first; a number is the column the panel's own sentence names. */
+export type ReadoutResting = 'newest' | 'first' | 'last' | number;
+
+/** What a column chart hands the builder. */
+export interface ReadoutInput {
 	type: 'dateSeries' | 'distribution' | 'tileStrip';
-	columns: readonly string[];          // the label of each hoverable column, in draw order
+	columns: readonly string[];          // each hoverable column's label, in draw order and reader spelling
 	series: readonly {
-		label: string;
+		label: string;                     // at most 24 characters; a label that wraps turns one entry into two
 		swatch: string | null;
-		values: readonly (number | null)[];
-		format: (value: number) => string; // this series' own number-to-text, so a count and a share sit in one strip
-		note?: string;                     // one constant printed once for the series, e.g. a per-kind rate
+		values: readonly ReadoutValue[];
+		format: (value: number, column: number) => string; // told the column, so "3 of 12" can read its second number
+		note?: string;                     // one constant printed once for the series
 	}[];
-	notMeasured: string;                 // from the same vocabulary as the panel's empty state
-	resting: 'newest' | 'median' | 'first';
-};
+	events?: { lines: readonly (readonly ReadoutLine[])[]; none?: string };
+	notMeasured: string;                 // one string, from the panel's empty-state vocabulary
+	resting: ReadoutResting;
+}
 
-/** One row of the strip. A row with no swatch is a row with nothing on the plot. */
-export type ReadoutSeries = {
-	label: string;             // at most 24 characters; a label that wraps turns one row into two
-	swatch: string | null;
-	values: (string | null)[]; // one per column; null prints the not-measured word
-	note?: string;             // a constant printed once beside the label, never per column
-};
-
-/** The column-major shape, for a chart with a shared column across its series. */
-export type Readout = {
+/** The column shape `ChartReadout.svelte` prints. */
+export interface Readout {
 	columns: string[];
-	series: ReadoutSeries[];
+	series: { label: string; swatch: string | null; values: (string | null)[]; note?: string }[];
+	events: ReadoutLine[][];
+	eventsNone: string;
+	notMeasured: string;
 	resting: number;
 	empty: string | null;
-};
+}
 
-/** The record shape, for a chart whose hover describes one entity rather than one column. */
-export type ReadoutFacts = {
+/** The record shape, for a chart whose hover describes one thing at a time. */
+export interface ReadoutFacts {
 	subject: string;
-	facts: { label: string; value: string | null }[];
+	facts: { label: string; value: string | null; swatch: string | null; reserve?: number }[];
+	notMeasured: string;
 	empty: string | null;
-};
+}
 
 export function readoutOf(input: ReadoutInput): Readout;
-export function factsOf(subject: string, facts: readonly [string, number | null][],
-                        format: (v: number) => string, notMeasured: string): ReadoutFacts;
+export function factsOf(subject: string,
+                        facts: readonly { label: string; value: ReadoutValue;
+                                          format?: (value: number) => string; swatch?: string | null }[],
+                        notMeasured: string): ReadoutFacts;
+export function recordsOf(records: readonly ReadoutFacts[]): ReadoutFacts[]; // each fact reserves its widest reading
 ```
+
+**The builder refuses what would print a lie.** A series whose length is not the column count throws; a series with no reading in any column has no entry; an empty string or a bare dash as a value throws, because a blank entry reads as a zero. A number stays a number until its one `format` turns it into words. **A chart of records drawn in HTML takes `markReadout`**, the record twin of `pointerReadout`: one tab stop, arrow keys that follow the layout (`walk: 'row'`, `'list'`, or a grid's row length), a tap that selects and stays.
 
 **Two shapes, because most types have no shared column.** A column chart - `dateSeries`, `distribution`, `tileStrip` - has one column per day or bin, and its hover is that column across every series. Every other type describes one thing at a time - a row, a segment, a point, an item or a stage - so its hover is a record. `readoutOf` builds a `Readout` and is called only by the three column types; `factsOf` builds a `ReadoutFacts` and is called by every other type. `ChartReadout.svelte` selects its layout from the shape it is handed: the column strip for a `Readout`, the record for a `ReadoutFacts`. The table below says what each type shows.
 
 | Type | Returns | The strip shows | At rest |
 | --- | --- | --- | --- |
 | `dateSeries` | `Readout` | the date in reader spelling, then every series at that date with its swatch and value | the newest date |
-| `distribution` | `Readout`, two series | the bin's two bounds as the column, then two rows - the count in the bin and the cumulative share at it, each with its own `format` | the bin holding the median |
+| `distribution` | `Readout`, two series | the bin's two bounds as the column, then two rows - the count in the bin and the cumulative share at it, each with its own `format` | the slowest bin, because the tail is what the panel exists to find (Susan, 2026-09-28) |
 | `tileStrip` | `Readout` | the date, the state in words, and the reading where one was taken | the newest tile |
 | `rankedList` | `ReadoutFacts` | the hovered row: its label, its value, and each segment's value and share of the row | the first row |
 | `partsOfOne` | `ReadoutFacts` | the hovered part: its label, its value and its share of the whole | the largest part of the first row |
@@ -707,6 +719,29 @@ Ruled by Susan on 2026-09-24. The complaint: the Hardware route is fifteen panel
   | 4 | **The narrow-width cap is re-set here, on purpose.** It was written for a desktop and wraps the readout on a narrow plot. A guard moved as a side effect of something else is a guard nobody meant to move; this one is moved deliberately and the three assertions move with it | Susan |
   | 5 | **The strip is the legend, and it lies horizontal**: entries side by side, wrapping only when they run out of room. No chart draws a second key | Owner, 2026-09-27 |
   | 6 | **No hover text is dropped.** Every native tooltip's words move into the readout; changing how hover works must not shrink what a reader can see | Owner, 2026-09-27 |
+  | 7 | **The builder's shape, as section 2.7 now states it.** Numbers stay numbers until the one `format(value, column)`; `notMeasured` is one string; event lines carry their own `none`; `factsOf` takes a format per fact; `newest` means the newest column with a reading and `last` is a separate rule. `columnStrip`, `StripSeries` and `notMeasuredRow` are deleted, not kept beside the builder | Fowler, 2026-09-28 |
+  | 8 | **A moved tooltip's sentence stays on its mark as the accessible name** (`role="img"` and `aria-label`), and the oracle checks that every figure and every word of four letters or more in that name is printed in the strip. A one-time inventory of the titles before and after is taken, not committed | Fowler, 2026-09-28 |
+  | 9 | **The cap is 1, the whole plot**, and each value keeps the room its widest reading needs so the strip does not shift as the pointer moves | Susan, 2026-09-28 |
+  | 10 | **Arrow keys follow the layout the reader sees**: Left and Right along a row, Up and Down down a list, both across a grid. A record chart that already had its own key keeps it | Susan, 2026-09-28 |
+  | 11 | **A distribution rests on its slowest bin**, not its median bin: the tail is what the panel exists to find | Susan, 2026-09-28 |
+  | 12 | **Exceptions agreed**: one target bar, the machine cards, the machine split, the platform mix list, the verdict split, the shard board (its titles deleted, every figure already printed on its row), and the empty states of three judgement charts. **Refused**, so each gains a strip: the KPI card trend lines, the standalone sparklines, the source-cut range and the swap dots. HoldoutMargin becomes records for its dots, its off-scale chips and its one-story range | Susan, 2026-09-28 |
+  | 13 | **An SVG `<title>` is a mouse-only tooltip too**, so its words move into the strip as well - 25 of them in 13 files. The console band's run squares take one grouped line of verdict words. A failure-table row's `title` is not a chart mark and is untouched | Susan, 2026-09-28 |
+  | 14 | **Decision 9's reserve holds at every width, capped at the strip's own width.** The strip is a CSS container and a value's kept room is at most its width, so a phone keeps the room wherever it fits and never scrolls sideways - measured at 31 px sideways on `/evals/` and the console at 360 px before the cap. The first worker's proposal, the reserve from the small breakpoint up only, is not taken: it let entries jump on a phone | Susan, 2026-09-28 |
+  | 15 | **The visual-planner flow keeps its exception, reworded**: every stage and every branch prints its count and share beside its node. The one hover-only fact, what a share is of, is printed once under the flow at every width, and where the diagram cannot draw at all - no script, or an engine that never downloaded - the stepped list shows at every width. A record strip under it is refused: it would reprint what the reader is looking at | Susan, 2026-09-28 |
+  | 16 | **Three more exceptions agreed**: memory held (one bar a day, every part, bracket and swap printed under it), prompt reuse (one span per request and measure, its low, middle, high and item count printed under it), and the voices weight bar (one row per feed, its weight printed on the row, the floor the one figure in the sentence above) | Susan, 2026-09-28 |
+  | 17 | **A KPI card's strip prints no hint; the card grid's lead says it once**, in "line" on `/console/model/` and in "bars" on `/console/`'s `At a glance`, which gains a lead. A card keeps room for its model-change line on every day | Susan, 2026-09-28 |
+  | 18 | **The failure ledger's row lines read into one strip under the ledger** that prints the pointed row. One tab stop for every line: Up and Down step causes, Left and Right step days, Escape returns to the worst cause on the newest day. A strip under every row, and one printing every cause at a day, are refused | Susan, 2026-09-28 |
+  | 19 | **A sparkline builds its own strip** from its marks, a series label and one formatter told the day. `sparklineMarks` takes `{date, value}` points, so a dropped reading takes its date with it; a swap rule names the point it lands on; a card's figure and its strip print through one formatter. A line in a list reports every change to the list and takes the list's pick back, and the list prints one strip with the same builder | Fowler, 2026-09-28 |
+  | 20 | **The card's unused engine-backed trend is deleted**, with `sparkline()`, the comparison test that existed for it and the polarity spec's stub | Fowler, 2026-09-28 |
+  | 21 | **The four house-style components keep their `<title>`s until a row puts one on a route.** The tooltip test counts `<title>` elements, so that row cannot merge until it adds the strip. Row 8 is the first that draws one; its file list and plan 52's inherited list are where the four belong | Fowler, 2026-09-28 |
+  | 22 | **A strip heads a day in the reader's spelling** through `shortDate`, a mark whose name names the day spells it the same way, `dayMonth` strips stay, and one assertion refuses a heading in the ledger's spelling | Fowler, 2026-09-28 |
+  | 23 | **Where a moved `<title>` did not fit a column.** A tinted "nothing measured" span keeps no words of its own: the coverage note prints what the tint is and each day in it prints the not-measured sentence. The context-limit line and the merge line's holdout zone print their whole sentence once under the chart, true when the limit moved or a mark falls off the plot. The throughput strip prints every word of its candles, one entry a run, and holds room for its busiest day. A dashed model-change rule's meaning is one shared sentence beside the chart's "nothing changed" sentence, printed whenever a rule is drawn | Susan, 2026-09-28 |
+  | 24 | **The console band's run squares keep their words as their names and lose their `title`**; words after the squares, on their line, say every verdict at once, grouped - `2 runs ran clean, 1 run failed`. The squares sit in the middle of the words' line, and the words stand further from the last square than the squares from each other. A line of its own under the row is refused: it put the band at 134 px against its 130 px line at 1440, and on the same line the band grows about 6 px, not 20 | Susan, 2026-09-28 |
+  | 25 | **`At a glance`'s lead is one line at a phone's width: "Point at a card's bars to read a day."** The two-line lead put the first chart at 1,191 px at 390 px against its 1,200 px line on a developer machine, which the CI runner measures lower still. The keys are the ones every other console strip names. If the CI run still puts the first chart past 1,200 px at 390, that number comes back to Susan rather than the line moving on a guess | Susan, 2026-09-28 |
+  | 26 | **The readout test's key detector skips a fill drawn inside a mark that names itself** - the disk-read tiles paint each day's bar as an empty span inside the tile that names the day - counting only a mark with no named mark inside it, so a whole drawing that names itself cannot hide a key | Fowler, 2026-09-28 |
+  | 27 | **A count prints with its noun, spelt by one call for a column's name and its strip**: the length chart's count row is `Written that day`, `1 summary`, so every word a column's name says is in the strip at that column. A card's strip gets a browser check beside the card-figure test: it rests on the newest day and prints the card's figure exactly; only a card whose newest day is not measured is skipped, and the check fails if it compared no card | Fowler, 2026-09-28 |
+
+- **Landed at #1143:** every chart on the five console routes declares a column strip, a record strip or an exception Susan agreed; no chart carries a `title` or an SVG `<title>`; the KPI cards, the standalone sparklines, the failure ledger's lines and the holdout margin read into strips; seven strips head their days in the reader's spelling. The four house-style components under `$lib/charts/d3/` still draw a `<title>` and are on no route (decision 21).
 
 - **Rejected alternatives:**
 

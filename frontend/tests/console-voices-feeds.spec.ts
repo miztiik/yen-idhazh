@@ -662,15 +662,19 @@ test('the two counts still add up to the denominator beside them', async ({ page
 	);
 });
 
-test('the matrix says why it has no hover strip', async ({ page }) => {
+test('the matrix declares one strip for all its squares', async ({ page }) => {
 	await page.goto('/console/voices/');
 	const section = page.locator('[data-windowed="feed-outcomes"]');
 	test.skip((await section.count()) === 0, 'no feed has failed on the canary');
 
-	// The reason belongs to the matrix, not to each feed's own strip. Sixty
-	// copies of one sentence is the same sentence, and the console-wide scan
-	// reads every copy.
-	const reason = await section.getAttribute('data-readout-none');
-	expect(reason ?? '').not.toBe('');
-	expect(await page.locator('[data-feed-strip][data-readout-none]').count()).toBe(0);
+	// Every square is one feed on one day, read in the one strip under the
+	// matrix. The declaration belongs to the matrix, not to each feed's row:
+	// sixty strips saying the same thing is the same strip sixty times.
+	const records = Number(await section.getAttribute('data-readout-records'));
+	expect(records).toBeGreaterThan(0);
+	expect(
+		await page
+			.locator('[data-feed-strip][data-readout-records], [data-feed-strip][data-readout-none]')
+			.count()
+	).toBe(0);
 });

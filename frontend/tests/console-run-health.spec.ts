@@ -4,6 +4,7 @@ import { join, resolve } from 'node:path';
 import { daySlots } from '../src/lib/charts/day-slots';
 import { slotCellFor } from '../src/lib/charts/run-history';
 import { health, runOutcome, squareLabel, type RunFacts } from '../src/lib/console/run-square';
+import { shortDate } from '../src/lib/format';
 
 /**
  * The oracle for `Run health`: its squares are painted at fill weight, they
@@ -407,24 +408,35 @@ test('THE ORACLE: a run row says how many of the articles it tried succeeded', a
 
 	// The rule written out again here rather than imported, so the page is held
 	// to what the run wrote down and not to whatever the module happens to say.
+	// The count of articles read only in part comes from the item rows rather
+	// than the run's own record, so it is the one clause allowed in the middle.
+	const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 	const expected = canaryRuns(day).map((run) => {
 		const tried = run.succeeded + run.failed;
-		let head = `${run.succeeded} of ${tried} succeeded`;
-		if (run.status === 'failed') head = 'the run failed';
-		else if (tried === 0) head = 'nothing new to try';
-		else if ((run.succeeded / tried) * 100 < floor) head += `, under ${floor}%`;
+		const head = [tried === 0 ? 'nothing new to try' : `${run.succeeded} of ${tried} succeeded`];
+		if (tried > 0 && (run.succeeded / tried) * 100 < floor) head.push(`under ${floor}%`);
+		if (run.failed > 0) head.push(`${run.failed} failed`);
+		if (run.skipped > 0) head.push(`${run.skipped} skipped`);
 		const tail = [
 			...(run.sourceListStale ? ["reused yesterday's list of sources"] : []),
 			...(run.status === 'partial' && run.failed === 0
 				? ["another run's failed article was still missing"]
-				: [])
+				: []),
+			...(run.status === 'failed' ? ['the run failed'] : [])
 		];
-		return [`Run ${run.n}`, [head, ...tail].join(', ')];
+		return {
+			label: `Run ${run.n}`,
+			shape: new RegExp(
+				`^${escape(head.join(', '))}(, \\d+ read only in part)?${tail.map((one) => `, ${escape(one)}`).join('')}$`
+			)
+		};
 	});
 
 	// The readout rests on the newest day, which is the canary's own.
 	const readout = page.locator('[data-readout="run-health"]');
-	await expect(readout.locator('[data-readout-day]')).toHaveText(`${day}, the newest day`);
+	await expect(readout.locator('[data-readout-day]')).toHaveText(
+		`${shortDate(day)}, the newest day`
+	);
 	const rows = await readout
 		.locator('[data-readout-row^="Run "]')
 		.evaluateAll((nodes) =>
@@ -433,7 +445,10 @@ test('THE ORACLE: a run row says how many of the articles it tried succeeded', a
 				(node.querySelectorAll('dd')[1]?.textContent ?? '').trim()
 			])
 		);
-	expect(rows).toEqual(expected);
+	expect(rows.map(([label]) => label)).toEqual(expected.map((one) => one.label));
+	rows.forEach(([label, value], index) => {
+		expect(value, `${label} does not carry every clause of its run`).toMatch(expected[index].shape);
+	});
 	expect(
 		rows.some(([, value]) => /^\d+ of \d+ succeeded/.test(value)),
 		'no run on the canary day tried an article, so the count is untested'
@@ -470,8 +485,11 @@ test('THE ORACLE: a run row says how many of the articles it tried succeeded', a
 });
 
 test('a square carries the whole run in one sentence', () => {
-	// The hover sentence and the readout line are built from one set of facts, so
-	// they are checked together here, and against the colour the same facts give.
+	// The square's accessible name and the readout line are built from one set
+	// of facts, and the line carries every clause the name does - the strip is
+	// where a keyboard and a thumb read a run, so it may not be the shorter of
+	// the two. They are checked together here, and against the colour the same
+	// facts give.
 	const floor = 70;
 	const run = (facts: Partial<RunFacts>): RunFacts => ({
 		n: 1,
@@ -485,7 +503,7 @@ test('a square carries the whole run in one sentence', () => {
 
 	const clean = run({ succeeded: 8 });
 	expect(squareLabel('2026-08-20', clean, floor, 0)).toBe('Run 1 on 20 Aug 2026: 8 of 8 succeeded');
-	expect(runOutcome(clean, floor)).toBe('8 of 8 succeeded');
+	expect(runOutcome(clean, floor, 0)).toBe('8 of 8 succeeded');
 	expect(health(clean, floor)).toBe('green');
 
 	// Nothing tried: a run that skipped everything it planned.
@@ -493,7 +511,7 @@ test('a square carries the whole run in one sentence', () => {
 	expect(squareLabel('2026-08-20', idle, floor, 0)).toBe(
 		'Run 2 on 20 Aug 2026: nothing new to try, 4 skipped'
 	);
-	expect(runOutcome(idle, floor)).toBe('nothing new to try');
+	expect(runOutcome(idle, floor, 0)).toBe('nothing new to try, 4 skipped');
 	expect(health(idle, floor)).toBe('amber');
 
 	// A crash that took every article with it, in the order the clauses are read.
@@ -501,7 +519,7 @@ test('a square carries the whole run in one sentence', () => {
 	expect(squareLabel('2026-08-20', broke, floor, 0)).toBe(
 		'Run 3 on 20 Aug 2026: 0 of 5 succeeded, under 70%, 5 failed, the run failed'
 	);
-	expect(runOutcome(broke, floor)).toBe('the run failed');
+	expect(runOutcome(broke, floor, 0)).toBe('0 of 5 succeeded, under 70%, 5 failed, the run failed');
 	expect(health(broke, floor)).toBe('red');
 
 	// Under the floor without crashing, and cut short, and on yesterday's sources.
@@ -509,8 +527,8 @@ test('a square carries the whole run in one sentence', () => {
 	expect(squareLabel('2026-08-20', thin, floor, 2)).toBe(
 		"Run 4 on 20 Aug 2026: 6 of 10 succeeded, under 70%, 4 failed, 2 read only in part, reused yesterday's list of sources"
 	);
-	expect(runOutcome(thin, floor)).toBe(
-		"6 of 10 succeeded, under 70%, reused yesterday's list of sources"
+	expect(runOutcome(thin, floor, 2)).toBe(
+		"6 of 10 succeeded, under 70%, 4 failed, 2 read only in part, reused yesterday's list of sources"
 	);
 	expect(health(thin, floor)).toBe('red');
 
@@ -519,14 +537,14 @@ test('a square carries the whole run in one sentence', () => {
 	expect(squareLabel('2026-08-20', held, floor, 0)).toBe(
 		"Run 5 on 20 Aug 2026: 3 of 3 succeeded, another run's failed article was still missing"
 	);
-	expect(runOutcome(held, floor)).toBe(
+	expect(runOutcome(held, floor, 0)).toBe(
 		"3 of 3 succeeded, another run's failed article was still missing"
 	);
 	expect(health(held, floor)).toBe('amber');
 
 	// A partial run that failed something itself says so by its count, not twice.
 	const partial = run({ n: 6, succeeded: 9, failed: 1, status: 'partial' });
-	expect(runOutcome(partial, floor)).toBe('9 of 10 succeeded');
+	expect(runOutcome(partial, floor, 0)).toBe('9 of 10 succeeded, 1 failed');
 	expect(squareLabel('2026-08-20', partial, floor, 0)).toBe(
 		'Run 6 on 20 Aug 2026: 9 of 10 succeeded, 1 failed'
 	);
@@ -615,7 +633,7 @@ function readAlignment() {
 	const centre = new Map<string, number>();
 	const barArea = new Map<string, number>();
 	for (const bar of svg.querySelectorAll('rect[data-run-bar]')) {
-		const date = (bar.querySelector('title')?.textContent ?? '').slice(0, 10);
+		const date = bar.getAttribute('data-run-bar-day') ?? '';
 		const box = bar.getBoundingClientRect();
 		barArea.set(date, (barArea.get(date) ?? 0) + box.width * box.height);
 		if (bar.getAttribute('data-run-bar') === 'planned') centre.set(date, box.left + 1.5 * box.width);
@@ -734,7 +752,7 @@ test('THE ORACLE: one day is picked, and both figures show it', async ({ page })
 	const box = await plot.boundingBox();
 	expect(box, 'the chart has no box').not.toBeNull();
 	await page.mouse.move(onChart.x, (box?.y ?? 0) + (box?.height ?? 0) / 2);
-	await expect(day, 'the readout did not follow the chart').toHaveText(onChart.date);
+	await expect(day, 'the readout did not follow the chart').toHaveText(shortDate(onChart.date));
 	await expect(page.locator(`[data-day="${onChart.date}"][data-day-selected]`)).toHaveCount(1);
 
 	// Pointing at the squares picks the day on the chart: its guide moves there.
@@ -745,7 +763,7 @@ test('THE ORACLE: one day is picked, and both figures show it', async ({ page })
 		(target?.x ?? 0) + (target?.width ?? 0) / 2,
 		(target?.y ?? 0) + (target?.height ?? 0) / 2
 	);
-	await expect(day, 'the readout did not follow the squares').toHaveText(onSquares.date);
+	await expect(day, 'the readout did not follow the squares').toHaveText(shortDate(onSquares.date));
 	await expect(guide, 'the chart drew no guide for a day picked on the squares').toHaveCount(1);
 	const guideX = await guide.evaluate((line) => {
 		const svg = (line as SVGLineElement).ownerSVGElement as SVGSVGElement;

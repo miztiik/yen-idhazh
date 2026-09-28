@@ -1,6 +1,6 @@
 # The rules every console chart obeys
 
-**Last Updated**: 2026-09-23
+**Last Updated**: 2026-09-28
 
 Thirteen rules settled once so that no panel argues them again. Twelve are chart
 craft - what the drawing may do. The thirteenth is the question the panel
@@ -222,10 +222,18 @@ would clip it -
 
 ## A chart with a shared column prints every series together, in a fixed strip
 
-One contract, one implementation:
-[../../../frontend/src/lib/components/ChartReadout.svelte](../../../frontend/src/lib/components/ChartReadout.svelte).
-It binds every chart on the console whose marks sit on a shared column - four
-series or one - and the rules are not negotiable per chart:
+One contract, one builder, one implementation. A chart hands its numbers to
+`readoutOf` in
+[../../../frontend/src/lib/charts/readout.ts](../../../frontend/src/lib/charts/readout.ts),
+and
+[../../../frontend/src/lib/components/ChartReadout.svelte](../../../frontend/src/lib/components/ChartReadout.svelte)
+prints what comes back. The builder is where the rules below are enforced, so a
+chart cannot pass them by writing its own strip: it refuses a series whose length
+is not the column count, drops a series with no reading in any column, and
+refuses an empty string or a bare dash as a value, because a blank entry reads as
+a zero. A number stays a number until the one `format` each series carries turns
+it into words. It binds every chart on the console whose marks sit on a shared
+column - four series or one - and the rules are not negotiable per chart:
 
 - **A fixed strip below the plot, never a floating box over it.** A floating
  tooltip covers the mark it explains, and one that dodges the cursor moves the
@@ -234,8 +242,17 @@ series or one - and the rules are not negotiable per chart:
 - **Every series at the hovered column, at once.** Comparing four series must
  not cost four hovers. The strip is the legend as well, so the four numbers a
  reader compares are printed once rather than twice.
-- **Capped at `chart.readout_max_share`** - 0.33 today. A share of the plot and
- not a pixel count, so the cap holds at every window width.
+- **As wide as the plot, with its entries side by side.** `chart.readout_max_share`
+ is 1: the strip may take the whole width of the plot above it, and its entries
+ lie along one line and wrap only when the next one does not fit. Each value
+ keeps the room its widest reading needs, so an entry does not shift sideways as
+ the pointer moves from `9` to `1,204` - and never more room than the strip is
+ wide. The strip is a CSS container and the reserve is capped at its width, so on
+ a phone a value whose widest reading would not fit takes the strip's width
+ rather than pushing the page sideways, and every value that does fit keeps its
+ room at every width. Measured 2026-09-28: an uncapped reserve pushed `/evals/`
+ and the console 31 px sideways at 360 px. A share of the plot and not a pixel
+ count, so the rule holds at every window width. Susan, 2026-09-28.
 - **A vertical guide down the hovered column**, across every series.
 - **Reachable by keyboard.** Left and Right step, Home and End jump, Escape
  returns to rest. **A tooltip is never the only place a value appears**: a
@@ -268,52 +285,94 @@ weight the console is already close to, and the strip already prints every serie
 in its own colour and rests on the newest column without a hover, so a reader
 with no pointer still sees the key.
 
-**Short labels are not the whole of it, and this rule does not claim they are.**
-Measured 2026-09-25: at a 1152 px window all three faithfulness rows fit on one
-line each, and at 394 px none of them does - the strip is capped at
-`chart.readout_max_share` of the plot, which is 119 px there. So the cap was
-written for a desktop and has never been re-measured at the width where it bites.
-What a reader on a narrow window gives up today is a key that reads as a key:
-they get a 174 px block of wrapped words beside an empty half of the plot. Every
-number is still present, prerendered and keyboard-reachable, so nothing is hidden
-- the three series and their values just cannot be scanned at a glance. Between
-394 px and 1152 px it is unmeasured, so no crossover is claimed.
+**Short labels were not the whole of it.** Measured 2026-09-25: at a 1152 px
+window all three faithfulness rows fit on one line each, and at 394 px none of
+them did - the strip was capped at a third of the plot, which is 119 px there,
+so a reader on a narrow window got a 174 px block of wrapped words beside an
+empty half of the plot.
 
-**The fix belongs to the strip, not to any one chart, and it is not yet done.**
-Lay the rows along one line and wrap them across the full plot width, then
-re-measure the cap at the width where it bites. Laying them out inside the
-present cap does not work: rows set not to wrap overflow a 119 px container
-instead of wrapping inside it, so the layout and the cap are one change. It
-reaches every console chart, and it rewrites three checks that guard the cap
-today - `readoutCapStyle`'s exact string in
+**The fix was the strip's, not any one chart's, and it landed on 2026-09-28.**
+The entries lie along one line across the whole plot and wrap only when the next
+one does not fit, and `chart.readout_max_share` went from 0.33 to 1. The layout
+and the cap were one change: entries set not to wrap inside a 119 px strip
+overflow it instead. Measured the same day on the real build, on all five
+console routes in both themes, 32 strips a width: at 360 px 25 of them take more
+than one line, at 390 px 22 do, at 768 px 10 do, and at 1440 px 3 do - the run
+health, the run timeline and the time split, whose eight or nine entries need
+1,350 to 2,354 px on one line. No entry anywhere started a new line where it
+would have fit on the line before, and no page scrolled sideways. **What a
+narrow window still costs**: those long strips read as a short column of pairs
+on a phone rather than one line, and every number in them is still present,
+prerendered and keyboard-reachable. The two guards that pinned the cap
+moved with it on purpose, not as a side effect:
 [../../../frontend/tests/console-chrome.spec.ts](../../../frontend/tests/console-chrome.spec.ts)
-and
-[../../../frontend/tests/console-timings.spec.ts](../../../frontend/tests/console-timings.spec.ts),
-and the latter's measurement that every rendered strip stays inside
-`readout_max_share`. That last one refuses the change correctly, because the
-change is bigger than the chart row that found it: a guard rewritten as a side
-effect of something else is the shape of a guard nobody meant to move. Susan,
-2026-09-25.
+now holds each strip inside the configured share and refuses an entry that
+breaks early, and
+[../../../frontend/tests/console-timings.spec.ts](../../../frontend/tests/console-timings.spec.ts)
+holds that entries share a line at desktop width. Susan, 2026-09-28.
 
 **A row with no swatch is a row with nothing on the plot.** "Summaries checked"
-is the sample size, not a series, so it passes an empty colour exactly as
-`notMeasuredRow` does. A swatch there would be a key to a mark that was never
-drawn, which is the one failure this whole section exists to name.
+is the sample size, not a series, so it passes no colour, exactly as the
+builder's `notMeasured` word does. A swatch there would be a key to a mark that
+was never drawn, which is the one failure this whole section exists to name.
 
-A chart with no shared column gets no strip - a ranked list, one target bar, a
-flow, two shares of one total. A strip there would print the row the cursor is
-already on. **That is a decision, so it is written down where the chart is**:
-such a chart carries `data-readout-none` with the reason in words, and a chart
-with a column carries `data-readout-columns` with the count.
+**A chart of separate records reads one record at a time, in the same strip.** A
+square per run, a bar per shard, a tile per feed-day: these marks share no
+column, so there is no set of series to print together, but each mark still
+holds figures a reader needs. `factsOf` and `recordsOf` in the same builder turn
+each mark into a subject and its facts, and the strip prints the one the pointer
+or the keyboard is on. Arrow keys follow the layout the reader sees - Left and
+Right along a row, Up and Down down a list, both across a grid - and a chart
+that already had its own key for a record keeps it. The strip rests on the
+record the panel exists to find, the worst or the newest, so it is never blank
+and the panel never changes size. A tap selects a record and leaves it
+selected, because a thumb cannot hover. Such a chart carries
+`data-readout-records` with the count.
 
-The pair exists because of what the absence looks like otherwise. A chart
-somebody decided needs no hover and a chart where the readout was forgotten are
-the same chart on screen.
+**No chart mark carries a `title` attribute or an SVG `<title>`.** A native
+tooltip needs a mouse held still over the mark: a thumb cannot raise it, a
+keyboard cannot raise it, and on a 7 px square it covers the neighbours being
+compared. Every figure and every word such a tooltip held now sits in its
+chart's strip, and the sentence stays on the mark as its accessible name. On
+2026-09-28, before this rule, the canary console carried 121 of them inside
+charts across the five routes, and 28 SVG `<title>` elements in 14 files.
+
+**A trend line in a card or a list row reads into a strip too.** A KPI card's
+line prints its strip inside the card, with no hint of its own: the card grid's
+lead says once how to read a line, because eleven copies of one sentence push
+each card's figures away from the number they explain. A card keeps room for its
+model-change line on every day, so stepping onto the change does not push the
+grid down. The failure ledger's row lines read into one strip under the ledger,
+which prints the row the reader pointed at; the ledger is one tab stop for every
+line, Up and Down step causes, Left and Right step days, and Escape returns to
+the worst cause on the newest day. Susan, 2026-09-28.
+
+A chart with nothing to hover gets no strip - one target bar, a card per machine
+that prints its own readings, a split that prints both halves and its total, a
+chart with no rows in it yet, a flow whose every stage and branch prints its
+count and share beside its node, a bar a day whose every part is printed in the
+key under it, a span per request that prints its low, middle and high under it,
+and a weight bar a feed whose weight is printed on its row. A strip there would
+print what the reader is already looking at. **That is a decision, so it is
+written down where the chart is, and it is not the author's alone**: such a
+chart carries `data-readout-none` with the reason in words, closing
+`; agreed with Susan`. A reason the design review never saw is the old failure
+with an attribute on it.
+
+The three declarations exist because of what the absence looks like otherwise. A
+chart somebody decided needs no hover and a chart where the readout was forgotten
+are the same chart on screen.
 [../../../frontend/tests/console-readout.spec.ts](../../../frontend/tests/console-readout.spec.ts)
-enumerates every chart on the three console routes, fails on one that declares
-neither, fails on a declared column with no strip, and fails on a swatch drawn
-inside a chart that has one. It also holds the reason to five words, because
-`none` passes an attribute check and tells a reader nothing.
+enumerates every drawn chart on the five console routes - every `svg`, every
+`role="img"` and every mark a strip reads - and fails on one that declares none
+of the three. It fails on a declared chart with no strip, on a swatch drawn
+inside a chart that has one, on a `title` attribute or an SVG `<title>` anywhere
+inside a declared chart, and on a strip that heads a day in the ledger's
+spelling, `2026-09-27`, rather than the reader's, `27 Sep 2026`.
+It points at every named mark and fails when a figure or a word of four letters
+or more in that mark's name is missing from the strip. It holds a reason to five
+words and to Susan's agreement, because `none` passes an attribute check and
+tells a reader nothing.
 
 ## The holdout margin is drawn at the scale of the margin, not of the score
 

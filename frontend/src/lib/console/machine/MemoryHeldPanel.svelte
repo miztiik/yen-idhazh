@@ -50,7 +50,11 @@
 			{/if}
 		</p>
 	{:else}
-		<ul class="days" data-memory-days={view.days.length}>
+		<ul
+			class="days"
+			data-memory-days={view.days.length}
+			data-readout-none="one bar a day, and every part, bracket and swap it draws is printed in words under it; agreed with Susan"
+		>
 			{#each view.days as day (day.date)}
 				<li class="day" data-memory-day={day.date} data-memory-shape={day.shape}>
 					<p class="when">

@@ -40,12 +40,23 @@
 	 * Hand-written markup, not a chart: every mark is in the document before a
 	 * script runs and stays there if none ever does.
 	 */
+	import ChartReadout from '$lib/components/ChartReadout.svelte';
 	import ShapeSwitch from '$lib/components/ShapeSwitch.svelte';
 	import { seconds } from '$lib/charts/machine';
+	import { factsOf, markReadout, recordsOf } from '$lib/charts/readout';
 	import type { RunTimelineView, TimelineBar } from '$lib/server/run-timeline';
 	import type { SubStepReadout } from '$lib/server/span-rollup';
 
-	let { view, subSteps }: { view: RunTimelineView; subSteps: SubStepReadout } = $props();
+	let {
+		view,
+		subSteps,
+		readoutMaxShare
+	}: {
+		view: RunTimelineView;
+		subSteps: SubStepReadout;
+		/** `chart.readout_max_share`. */
+		readoutMaxShare: number;
+	} = $props();
 
 	/** The three rows this panel can draw, out of the one fold that built them. */
 	type Grain = 'item' | 'by-shard' | 'shard';
@@ -105,12 +116,51 @@
 		return `${words.slice(0, -1).join(', ')} and ${words.at(-1)}`;
 	};
 
-	/** What a bar says to a pointer. Never the only carrier of any of it: every
-	 * figure here is printed beside the bar or in the readout under it. */
+	/** What a bar is, in one sentence: the accessible name its track carries,
+	 * and every word of it is also in the strip under the bars. */
 	const hovered = (bar: TimelineBar): string =>
 		grain === 'shard'
 			? `${bar.label}: ${bar.itemCount} ${bar.itemCount === 1 ? 'item' : 'items'}, held a worker ${secs(bar.totalMs)} from ${secs(bar.startOffsetMs)} into the run, ${secs(bar.workMs)} of it inside items, ${signed(bar.residualMs)} in no named step.`
 			: `${bar.label} on shard ${bar.shard}: began ${secs(bar.startOffsetMs)} into the run, took ${secs(bar.totalMs)}, ${signed(bar.residualMs)} of it in no named step.`;
+
+	/** The bar a pointer, a key or a tap has picked, or null for the first. */
+	let picked = $state<number | null>(null);
+
+	/** One record a bar: where it sat on the run's clock, what it cost, and each
+	 * drawn step's own time. It rests on the first bar, the run's opening. */
+	const records = $derived(
+		recordsOf(
+			drawn.map((bar) =>
+				factsOf(
+					bar.label,
+					[
+						...(grain === 'shard'
+							? [
+									{ label: 'Items', value: String(bar.itemCount) },
+									{ label: 'Held a worker', value: secs(bar.totalMs) },
+									{ label: 'From', value: `${secs(bar.startOffsetMs)} into the run` },
+									{ label: 'Of it inside items', value: secs(bar.workMs) },
+									{ label: 'In no named step', value: signed(bar.residualMs) }
+								]
+							: [
+									{ label: 'On shard', value: String(bar.shard) },
+									{ label: 'Began', value: `${secs(bar.startOffsetMs)} into the run` },
+									{ label: 'Took', value: secs(bar.totalMs) },
+									{ label: 'Of it in no named step', value: signed(bar.residualMs) }
+								]),
+						...bar.segments.map((segment) => ({
+							label:
+								view.legend.find((step) => step.name === segment.name)?.label ??
+								plain(segment.name),
+							value: small(segment.ms),
+							swatch: `var(--chart-${segment.stop})`
+						}))
+					],
+					'not timed'
+				)
+			)
+		)
+	);
 </script>
 
 <div
@@ -130,7 +180,10 @@
 	data-timeline-overruns={view.overrunCount}
 	data-timeline-density={labelled ? 'labelled' : 'dense'}
 	data-panel-question="is it working"
-	data-readout-none="one bar a row, placed on the run's own clock, with every figure printed beside it"
+	data-readout-records={view.empty ? undefined : drawn.length}
+	data-readout-none={view.empty
+		? 'no run has published an item timeline yet, so there is no bar to read; agreed with Susan'
+		: undefined}
 >
 	{#if view.empty}
 		<p class="note" data-run-timeline-empty>
@@ -210,10 +263,24 @@
 			{/each}
 		</div>
 
-		<ol class="bars">
-			{#each drawn as bar (bar.id)}
+		<!-- One tab stop for the whole list of bars, never one a bar. -->
+		<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+		<ol
+			class="bars"
+			tabindex="0"
+			aria-label="The run's bars on its own clock. Up and Down read a bar, Escape returns to the first."
+			use:markReadout={{
+				count: drawn.length,
+				walk: 'list',
+				onSelect: (index) => (picked = index),
+				selected: picked
+			}}
+		>
+			{#each drawn as bar, index (bar.id)}
 				<li
 					class="bar"
+					data-readout-at={index}
+					data-readout-picked={picked === index ? 'yes' : undefined}
 					data-timeline-bar={bar.id}
 					data-timeline-shard={bar.shard}
 					data-timeline-start-ms={bar.startOffsetMs}
@@ -227,7 +294,7 @@
 						<span class="shard">{bar.shard}</span>
 						{#if labelled && grain !== 'shard'}<span class="item">{bar.label}</span>{/if}
 					</span>
-					<span class="track" role="img" title={hovered(bar)} aria-label={hovered(bar)}>
+					<span class="track" role="img" aria-label={hovered(bar)}>
 						<span class="lead" style="inline-size: {bar.offset}"></span>
 						{#each bar.segments as segment (segment.name)}
 							<span
@@ -258,6 +325,17 @@
 				</li>
 			{/each}
 		</ol>
+
+		<!-- Under the bars, never over them: the record of the bar a reader is on,
+		     including the steps too thin to read off the bar itself. -->
+		<ChartReadout
+			readout={records[picked ?? 0] ?? null}
+			resting={picked === null}
+			name="run-timeline"
+			maxShare={readoutMaxShare}
+			restingNote=", the first bar"
+			hint="Point at a bar to read it. Up and Down step through the bars, Escape returns to the first."
+		/>
 
 		<p class="note residual-note" data-timeline-residual-note>
 			<strong>{signed(residualTotal)}</strong>
@@ -642,5 +720,16 @@
 		.gutter .item {
 			display: none;
 		}
+	}
+	/* The bar the strip is reading, so a reader stepping with a key sees where
+	   they are. An outline and never a fill: the fills are the steps. */
+	.bar[data-readout-picked] .track {
+		outline: 1px solid var(--color-focus);
+		outline-offset: 1px;
+	}
+
+	.bars:focus-visible {
+		outline: 2px solid var(--color-focus);
+		outline-offset: 2px;
 	}
 </style>

@@ -1129,21 +1129,23 @@ test.describe('Row #21 - the context panel says what the limit already costs', (
 
 	test('the strip prints both ends and names the percentile in words', () => {
 		const { runs } = contextCost(canaryHealth(), OPTIONS);
-		const columns = contextColumns(runs, CANARY_LIMIT, OPTIONS.percentile);
-		expect(columns).toHaveLength(runs.length);
-		columns.forEach((column, at) => {
-			const run = runs[at];
-			const said = Object.fromEntries(column.rows.map((row) => [row.label, row.value]));
-			expect(column.date).toBe(run.runId);
-			// A run that measured nothing prints a dash, which is the one reading
-			// that is not a number the chart could have drawn.
-			expect(said['The longest article'].replace(/,/g, '')).toContain(
-				run.largest === null ? '-' : String(run.largest)
-			);
-			expect(said[highLabel(OPTIONS.percentile)].replace(/,/g, '')).toContain(
-				run.high === null ? '-' : String(run.high)
-			);
-			expect(said['Articles measured']).toBe(String(run.items));
+		const strip = contextColumns(runs, CANARY_LIMIT, OPTIONS.percentile);
+		expect(strip.columns).toHaveLength(runs.length);
+		const said = (label: string, at: number) =>
+			strip.series.find((one) => one.label === label)?.values[at] ?? null;
+		runs.forEach((run, at) => {
+			expect(strip.columns[at]).toBe(run.runId);
+			// A run that measured nothing prints the not-measured words, which is
+			// the one reading that is not a number the chart could have drawn.
+			if (run.largest === null) expect(said('The longest article', at)).toBeNull();
+			else expect(said('The longest article', at)?.replace(/,/g, '')).toContain(String(run.largest));
+			if (run.high === null) expect(said(highLabel(OPTIONS.percentile), at)).toBeNull();
+			else {
+				expect(said(highLabel(OPTIONS.percentile), at)?.replace(/,/g, '')).toContain(
+					String(run.high)
+				);
+			}
+			expect(said('Articles measured', at)).toBe(String(run.items));
 		});
 		// `p99` is a subsystem term. The strip says it in words a reader who has
 		// never met one still understands, and the words follow the knob.
@@ -1329,14 +1331,14 @@ test.describe('one plot a percentile, on one shared scale', () => {
 	test('THE ORACLE: the strip under the plots prints the newest run own ladder', () => {
 		const newest = history.runs.at(-1);
 		expect(newest, 'no run to read').toBeTruthy();
-		const column = latencyColumns([newest!])[0];
-		expect(column.date).toBe(newest!.runId);
-		expect(column.rows.slice(0, PERCENTILES.length).map((row) => row.label)).toEqual(
+		const strip = latencyColumns([newest!]);
+		expect(strip.columns[0]).toBe(newest!.runId);
+		expect(strip.series.slice(0, PERCENTILES.length).map((one) => one.label)).toEqual(
 			PERCENTILES.map((percentile) => `p${percentile}`)
 		);
 		PERCENTILES.forEach((percentile, at) => {
 			expect(
-				column.rows[at].value,
+				strip.series[at].values[0],
 				`the strip and the p${percentile} plot disagree about the newest run`
 			).toBe(seconds(newest!.ms[at] / 1000));
 		});

@@ -45,7 +45,7 @@
 			width={chart.width_px}
 			height={chart.height_px}
 			label="Prompt tokens a second as the item ledger counted them, beside the same figure as the model server counted it, per {clocks.grain}."
-			columns={clockStrip}
+			readout={clockStrip}
 			readoutName="clocks"
 			readoutMaxShare={chart.readout_max_share}
 			restingNote=", the last one"

@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { sparkline } from '../src/lib/charts/sparkline';
+import { sparklineShape } from '../src/lib/charts/sparkline';
 import { stacked } from '../src/lib/charts/stacked';
 import { targetBar } from '../src/lib/charts/targetbar';
 import { waterfall } from '../src/lib/charts/waterfall';
@@ -133,31 +133,30 @@ test.describe('the stacked bars', () => {
 
 test.describe('the sparkline', () => {
 	test('movement is the change against where it started', () => {
-		const s = sparkline([100, 110, 130]);
+		const s = sparklineShape([100, 110, 130]);
 		expect(s.empty).toBe(false);
 		expect(s.movement).toBeCloseTo((130 - 100) / 100, 10);
 		expect(s.rising).toBe(true);
 	});
 
 	test('a fall is a fall even when it ends above zero', () => {
-		const s = sparkline([200, 150]);
+		const s = sparklineShape([200, 150]);
 		expect(s.rising).toBe(false);
 		expect(s.movement).toBeCloseTo(-0.25, 10);
 	});
 
 	test('starting from zero has no percentage, and says so', () => {
-		expect(sparkline([0, 5]).movement).toBeNull();
+		expect(sparklineShape([0, 5]).movement).toBeNull();
 	});
 
 	test('one point has no direction', () => {
-		expect(sparkline([5]).empty).toBe(true);
+		expect(sparklineShape([5]).empty).toBe(true);
 	});
 
 	test('the domain is the drawn extent, never zero', () => {
-		const s = sparkline([980, 1000, 990]);
-		const y = s.option.yAxis as { min: number; max: number };
-		expect(y.min).toBe(980);
-		expect(y.max).toBe(1000);
+		const s = sparklineShape([980, 1000, 990]);
+		expect(s.min).toBe(980);
+		expect(s.max).toBe(1000);
 	});
 });
 
@@ -165,8 +164,7 @@ test.describe('every chart in the vocabulary', () => {
 	const built = [
 		targetBar(4, 6, 'lower-is-better', 'x').option,
 		waterfall(10, [{ label: 'a', delta: 2 }]).option,
-		stacked(['a'], [{ label: 's', token: '--chart-1', values: [1] }]).option,
-		sparkline([1, 2]).option
+		stacked(['a'], [{ label: 's', token: '--chart-1', values: [1] }]).option
 	];
 
 	test('paints with sentinels only, never a hex somebody typed', () => {

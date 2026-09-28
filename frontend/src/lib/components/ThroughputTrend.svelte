@@ -31,11 +31,9 @@
 		dayTicks,
 		frame,
 		linearAxis,
-		observeWidth,
-		pointerReadout,
-		readoutMarks,
-		type DayReadout
+		observeWidth
 	} from '$lib/charts/frame';
+	import { pointerReadout, readoutMarks, readoutOf } from '$lib/charts/readout';
 	import ChartReadout from './ChartReadout.svelte';
 	import type { ThroughputDay } from '$lib/charts/series';
 	import { daysInWindow } from '$lib/charts/viewport';
@@ -161,36 +159,44 @@
 		return `${value.toFixed(2)} tok/s`;
 	}
 
-	/** The long form: everything about one day and one series, including which
-	 * run moved. It is the mark's accessible name, where length costs nothing. */
-	function caption(day: ThroughputDay, key: SeriesKey): string {
+	/** One series' spread on one day: the median, the middle half, and both ends.
+	 * The strip prints it as the series' own entry, so the series name is not
+	 * repeated here. */
+	function readoutLine(day: ThroughputDay, key: SeriesKey): string {
 		const band = day[key];
-		const runs = day.runs
-			.map((run) => `${run.runId} ${(key === 'read' ? run.read : run.write).toFixed(2)}`)
-			.join(', ');
 		return (
-			`${day.date} ${key}: median ${rate(band.median)}, ` +
+			`median ${rate(band.median)}, ` +
 			`middle half ${band.p25.toFixed(2)} to ${band.p75.toFixed(2)}, ` +
-			`slowest ${band.min.toFixed(2)}, fastest ${band.max.toFixed(2)} over ${day.items} items. ` +
-			`Run medians: ${runs}.`
+			`slowest ${band.min.toFixed(2)}, fastest ${band.max.toFixed(2)}`
 		);
 	}
 
-	/** The short form: the day's rate and its extent, sized to sit on one line
-	 * inside a readout capped at `chart.readout_max_share` of the plot.
-	 *
-	 * The readout carried `caption()` verbatim until 2026-08-30, on the rule that
-	 * one day gets one sentence. The cap ends that: `caption()` closes with a run
-	 * list that grows with the day's run count, so it is the one clause here with
-	 * no bound, and four wrapped lines of it under the plot is not a readout. The
-	 * `<title>` keeps every word, including the middle half the box already
-	 * draws, and the run count stays in the verdict line under the legend.
-	 *
-	 * The series name is the strip's own row label, so it is not repeated here.
-	 */
-	function readoutLine(day: ThroughputDay, key: SeriesKey): string {
-		const band = day[key];
-		return `${band.median.toFixed(2)} (${band.min.toFixed(2)}-${band.max.toFixed(2)})`;
+	/** A run's id with its day dropped where the id opens with it: the strip's
+	 * heading already prints the day, and the rest is what tells runs apart. */
+	function runName(runId: string, date: string): string {
+		return runId.startsWith(`${date}-`) ? runId.slice(date.length + 1) : runId;
+	}
+
+	/** Everything about one day and one series, including which run moved. It is
+	 * the candle's accessible name, and every word of it is in the strip at that
+	 * day: the spread on the series' own entry, the item count on its own, and
+	 * each run's rate on that run's own entry. */
+	function caption(day: ThroughputDay, key: SeriesKey): string {
+		const runs = day.runs
+			.map(
+				(run) =>
+					`run ${runName(run.runId, day.date)} ${key} ${(key === 'read' ? run.read : run.write).toFixed(2)}`
+			)
+			.join(', ');
+		return (
+			`${shortDate(day.date)} ${key}: ${readoutLine(day, key)}. ${day.items} items` +
+			(runs === '' ? '.' : `; by run, ${runs}.`)
+		);
+	}
+
+	/** What a model rule says, on the rule and in the strip on the day it opens. */
+	function swapSentence(swap: { from: string; to: string; date: string }): string {
+		return `Model changed from ${swap.from} to ${swap.to} on ${shortDate(swap.date)}.`;
 	}
 
 	function shift(now: number, before: number): string {
@@ -205,31 +211,62 @@
 	 * same measurement of the same articles and a reader stepping right means
 	 * the next day. Every series is printed at once, so comparing read against
 	 * write costs no second hover. A day that ran nothing still gets a column,
-	 * or an arrow key would step over it without saying so.
+	 * or an arrow key would step over it without saying so. The strip opens on
+	 * the newest day, so it is never blank and never shifts the page as it fills.
+	 *
+	 * Each candle's whole sentence is in it: the spread on the series' entry, the
+	 * day's item count, one entry a run with both of its rates side by side, and
+	 * the day the model changed. The run entries grow with the day's run count, so
+	 * the strip keeps room for the busiest day's entries on every day.
 	 */
-	const columns = $derived<DayReadout[]>(
-		calendar.map((date, index) => {
-			const day = byDate.get(date);
-			return {
-				x: x(index),
-				date: shortDate(date),
-				rows:
-					day === undefined
-						? [{ label: 'nothing ran', value: '', colour: '' }]
-						: drawn.map((series) => ({
-								label: series.label,
-								value: readoutLine(day, series.key),
-								colour: series.colour
-							}))
-			};
+	const readout = $derived(
+		readoutOf({
+			type: 'dateSeries',
+			columns: calendar.map((date) => shortDate(date)),
+			series: [
+				...drawn.map((series) => ({
+					label: series.label,
+					swatch: series.colour,
+					values: calendar.map((date) => byDate.get(date)?.[series.key].median ?? null),
+					format: (_: number, index: number) => {
+						const day = byDate.get(calendar[index]);
+						return day === undefined ? '' : readoutLine(day, series.key);
+					}
+				})),
+				{
+					label: 'items',
+					swatch: null,
+					values: calendar.map((date) => byDate.get(date)?.items ?? null),
+					format: (value: number) => String(value)
+				}
+			],
+			events: {
+				lines: calendar.map((date) => {
+					const day = byDate.get(date);
+					const swap = swaps.find((one) => one.date === date);
+					return [
+						...(swap === undefined ? [] : [{ label: swapSentence(swap), value: '', swatch: null }]),
+						...(day === undefined
+							? []
+							: day.runs.map((run) => ({
+									label: `run ${runName(run.runId, date)}`,
+									value: drawn
+										.map(
+											(series) =>
+												`${series.key} ${(series.key === 'read' ? run.read : run.write).toFixed(2)}`
+										)
+										.join(', '),
+									swatch: null
+								})))
+					];
+				})
+			},
+			notMeasured: 'nothing ran',
+			resting: 'last'
 		})
 	);
-	const marks = $derived(readoutMarks(columns));
-	/** The strip opens on the newest day, so it is never blank and never shifts
-	 * the page as it fills. */
-	const resting = $derived(columns.length === 0 ? null : columns[columns.length - 1]);
-	const readout = $derived(selected === null ? resting : (columns[selected] ?? resting));
-	const guide = $derived(selected === null ? null : (columns[selected]?.x ?? null));
+	const marks = $derived(readoutMarks(calendar.map((_, index) => x(index))));
+	const guide = $derived(selected === null ? null : x(selected));
 
 	/** The span, said once, for a reader who cannot see the axis. The axis used
 	 * to carry this as a single string and no per-day label at all. */
@@ -264,7 +301,7 @@
 	<div
 		class="relative mt-4 rounded-md border border-rule bg-surface p-3"
 		data-throughput="chart"
-		data-readout-columns={columns.length}
+		data-readout-columns={readout.columns.length}
 	>
 		<!-- The measured element is this one, not the card: the card's padding and
 		     border are not part of the width the chart draws into. -->
@@ -322,10 +359,10 @@
 						stroke="var(--color-text-tertiary)"
 						stroke-width="1"
 						stroke-dasharray="3 3"
+						role="img"
+						aria-label={swapSentence(swap)}
 						data-throughput-swap={swap.date}
-					>
-						<title>{`Model changed from ${swap.from} to ${swap.to} on ${swap.date}.`}</title>
-					</line>
+					/>
 				{/each}
 
 				<!-- The column under the pointer, marked across both series, so a
@@ -348,8 +385,13 @@
 						{#each drawn as series (series.key)}
 							{@const band = day[series.key]}
 							{@const cx = centre(index, series.key)}
-							<g data-candle={series.key} data-date={date} data-model={day.model ?? ''}>
-								<title>{caption(day, series.key)}</title>
+							<g
+								role="img"
+								aria-label={caption(day, series.key)}
+								data-candle={series.key}
+								data-date={date}
+								data-model={day.model ?? ''}
+							>
 								<line
 									x1={cx}
 									x2={cx}
@@ -414,11 +456,12 @@
 			     console prints - see `ChartReadout.svelte` for the rules it holds. -->
 			<ChartReadout
 				{readout}
+				at={selected}
 				name="throughput"
 				maxShare={readoutMaxShare}
-				resting={selected === null}
 				restingNote=", the newest day"
 				hint="Point at a day to read it. Left and Right step through the days, Escape returns to the newest."
+				eventRoom
 			/>
 		{/if}
 

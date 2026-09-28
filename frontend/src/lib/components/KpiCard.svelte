@@ -10,16 +10,13 @@
 	 * card is still a card - an empty plot area with a dash in it is worse than
 	 * no plot at all.
 	 *
-	 * A trend arrives one of two ways. An engine-backed pair (a server-drawn SVG
-	 * and the option that redraws it) is right where the shape needs a scale and
-	 * an axis. Markup is right where it does not: it costs no chunk, it follows
-	 * the page's window with no second drawing on the server, and it is finished
-	 * before any script runs.
+	 * A trend is markup, handed in as a snippet: it costs no chunk, it follows
+	 * the page's window with no second drawing on the server, and it is
+	 * finished before any script runs. It declares its own readout strip, so a
+	 * card holds whatever its trend says and says nothing of its own.
 	 */
-	import Chart from '$lib/charts/Chart.svelte';
 	import { percentOf } from '$lib/charts/rank';
 	import { movementVerdict, type MovementPolarity } from '$lib/charts/theme';
-	import type { EChartsOption } from 'echarts';
 	import type { Snippet } from 'svelte';
 
 	let {
@@ -32,8 +29,6 @@
 		polarity = 'no-agreed-direction',
 		track = null,
 		trend = null,
-		trendSvg = null,
-		trendOption = null,
 		windowed = null,
 		windowDays = null
 	}: {
@@ -57,14 +52,9 @@
 		 * the caption is required, because a bar with no named limit says only
 		 * that a bar exists. */
 		track?: { fraction: number; caption: string } | null;
-		/** A trend drawn as markup, in the card's own trend slot.
-		 *
-		 * Eleven engine-backed sparklines is eleven chart instances and a lazy chunk
-		 * on a page that already renders complete without one, so a grid of cards
-		 * takes this one and it wins where both are given. */
+		/** A trend drawn as markup, in the card's own trend slot. It carries its
+		 * own readout strip and declares it. */
 		trend?: Snippet | null;
-		trendSvg?: string | null;
-		trendOption?: EChartsOption | null;
 		/** Names the card as following the page's time window. Null where it does
 		 * not, which is most of them - only a rate has a span. */
 		windowed?: string | null;
@@ -99,12 +89,8 @@
 		<p class="kpi-track-caption" data-kpi-caption={label}>{track.caption}</p>
 	{/if}
 	{#if trend}
-		<div class="kpi-trend" data-readout-none="a card's direction line, too small to hold a strip">
+		<div class="kpi-trend">
 			{@render trend()}
-		</div>
-	{:else if trendSvg && trendOption}
-		<div class="kpi-trend" data-readout-none="a card's direction line, too small to hold a strip">
-			<Chart svg={trendSvg} option={trendOption} width={220} height={34} label="{label}, recent trend" />
 		</div>
 	{/if}
 	{#if movement !== null || note}

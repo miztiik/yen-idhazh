@@ -20,16 +20,12 @@
 	import ChartReadout from '$lib/components/ChartReadout.svelte';
 	import RunSquares from '$lib/components/RunSquares.svelte';
 	import RunYield from '$lib/components/RunYield.svelte';
-	import {
-		coverage,
-		coverageSentence,
-		notMeasuredRow,
-		type DayReadout,
-		type ReadoutRow
-	} from '$lib/charts/frame';
-	import { plannedDays, runYield, yieldRows, type RunYieldSource } from '$lib/charts/run-yield';
+	import { coverage, coverageSentence } from '$lib/charts/frame';
+	import { readoutOf, type ReadoutLine } from '$lib/charts/readout';
+	import { plannedDays, runYield, yieldSeries, type RunYieldSource } from '$lib/charts/run-yield';
 	import type { TimeWindow } from '$lib/charts/viewport';
 	import { HEALTH_FILL, type DayColumn } from '$lib/console/run-square';
+	import { shortDate } from '$lib/format';
 
 	let {
 		yieldDays,
@@ -84,29 +80,32 @@
 	const NO_RUN = 'No run is on record for this day.';
 	const NOTHING_PLANNED = 'No article was planned on this day.';
 
-	/** One day for both figures: the chart's counts first, then every run. */
-	function rowsFor(index: number): ReadoutRow[] {
-		const column = load.columns[index];
-		const squares = days[index]?.squares ?? [];
-		const counts = column.planned > 0 ? yieldRows(column) : [];
-		if (squares.length === 0) return [...counts, notMeasuredRow(NO_RUN)];
-		return [
-			...(counts.length > 0 ? counts : [notMeasuredRow(NOTHING_PLANNED)]),
-			...squares.map((square) => ({
-				label: `Run ${square.n}`,
-				value: square.outcome,
-				colour: HEALTH_FILL[square.health]
-			}))
-		];
-	}
-
-	/** The readout prints no position of its own: each figure keeps its own marks,
-	 * from its own geometry, and reports only which day it landed on. */
-	const columns = $derived<DayReadout[]>(
-		load.columns.map((column, index) => ({ x: 0, date: column.date, rows: rowsFor(index) }))
+	/** One day for both figures: the chart's counts first, then every run.
+	 *
+	 * The readout prints no position of its own: each figure keeps its own marks,
+	 * from its own geometry, and reports only which day it landed on. It rests on
+	 * the newest day, which is the one an operator came for, until one is picked. */
+	const readout = $derived(
+		readoutOf({
+			type: 'dateSeries',
+			columns: load.columns.map((column) => shortDate(column.date)),
+			series: yieldSeries(load.columns),
+			events: {
+				lines: days.map((day) =>
+					day.squares.map(
+						(square): ReadoutLine => ({
+							label: `Run ${square.n}`,
+							value: square.outcome,
+							swatch: HEALTH_FILL[square.health]
+						})
+					)
+				),
+				none: NO_RUN
+			},
+			notMeasured: NOTHING_PLANNED,
+			resting: 'last'
+		})
 	);
-	/** The newest day, which is the one an operator came for, until one is picked. */
-	const readout = $derived(columns[selected ?? columns.length - 1] ?? null);
 
 	let squares = $state<{ reveal: (index: number) => void } | undefined>();
 </script>
@@ -124,7 +123,7 @@
 	{/if}
 </p>
 
-<div data-readout-columns={columns.length} data-run-health-figures>
+<div data-readout-columns={readout.columns.length} data-run-health-figures>
 	<RunYield
 		{load}
 		{height}
@@ -156,9 +155,9 @@
 		     the key: every count and every run carries the colour it is drawn in. -->
 		<ChartReadout
 			{readout}
+			at={selected}
 			name="run-health"
 			maxShare={readoutMaxShare}
-			resting={selected === null}
 			restingNote=", the newest day"
 			hint="Point at a day to read its counts and every run on it. Left and Right step through the days, Escape returns to the newest."
 		/>

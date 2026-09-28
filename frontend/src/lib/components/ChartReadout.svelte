@@ -1,13 +1,21 @@
 <script lang="ts">
-	/** The strip a chart prints its hovered column into.
+	/** The strip a chart prints its hovered column or record into.
 	 *
 	 * One implementation, because two charts had grown their own and a third
 	 * would have made three. Every rule the row settled lives here rather than in
 	 * each chart: the strip sits **below** the plot and never over it, so it
 	 * cannot cover a mark at any width; it prints **every series at one column**,
-	 * so comparing four series costs one hover rather than four; and it is
-	 * **capped at `chart.readout_max_share` of the plot**, because a reader
-	 * glancing at a chart reads a short column of values and not a paragraph.
+	 * so comparing four series costs one hover rather than four; and its entries
+	 * **lie side by side**, wrapping to a new line only when the next one does not
+	 * fit - never one entry per line stacked under the chart.
+	 *
+	 * The strip may be as wide as its plot, `chart.readout_max_share` of it. A
+	 * share under one wrapped the entries on a phone while the plot still had
+	 * room, which is the tall block this layout replaced. Each value keeps the
+	 * room its widest reading needs, so stepping from column to column does not
+	 * reflow the strip or change the panel's height - and never more room than
+	 * the strip is wide, so on a phone a value whose widest reading would not
+	 * fit takes the strip's width instead of pushing the page sideways.
 	 *
 	 * It is the legend as well. A separate legend would print each series colour
 	 * and label a second time, and one fact drawn twice is how two of them drift.
@@ -16,49 +24,192 @@
 	 * with JavaScript off still gets one column's numbers in words - which is
 	 * what makes the hover an addition rather than the only way to read a value.
 	 */
-	import { readoutCapStyle, type DayReadout } from '$lib/charts/frame';
+	import {
+		readoutCapStyle,
+		type Readout,
+		type ReadoutFacts,
+		type ReadoutLine
+	} from '$lib/charts/readout';
 
 	let {
 		readout,
+		at = null,
 		name,
 		maxShare,
 		resting = false,
 		restingNote = '',
-		hint = 'Point at a column to read it. Left and Right step through them, Escape returns to the newest.'
+		hint = 'Point at a column to read it. Left and Right step through them, Escape returns to the newest.',
+		eventRoom = false
 	}: {
-		/** The column to print. Null draws nothing at all. */
-		readout: DayReadout | null;
+		/** What `readoutOf` or `factsOf` built. Null draws nothing at all. */
+		readout: Readout | ReadoutFacts | null;
+		/** The column a pointer or a key picked, or null for the resting one. A
+		 * record chart hands the record it picked as `readout` instead. */
+		at?: number | null;
 		/** What the strip is of, so a page with several can be told apart. */
 		name: string;
 		/** `chart.readout_max_share`. */
 		maxShare: number;
-		/** True while no column has been picked, so the heading can say which
-		 * column it fell back to rather than looking like a choice. */
+		/** For a record: true while no record has been picked, so the heading can
+		 * say which one it fell back to rather than looking like a choice. A
+		 * column strip knows this from `at`. */
 		resting?: boolean;
 		restingNote?: string;
+		/** How to drive the strip, in one sentence under it. Empty prints none,
+		 * for a strip whose page says it once for several - eleven cards in one
+		 * grid would otherwise print one sentence eleven times. */
 		hint?: string;
+		/** Keep room on every column for as many event lines as the busiest
+		 * column prints, so stepping onto the one day that has a line does not
+		 * grow the strip and push everything under it down. */
+		eventRoom?: boolean;
 	} = $props();
+
+	interface Entry {
+		label: string;
+		value: string;
+		swatch: string | null;
+		/** The characters the widest reading of this entry needs, or zero. */
+		reserve: number;
+		/** Room held for an event line this column does not have: laid out, never
+		 * seen and never read out. */
+		held?: boolean;
+	}
+
+	/** The widest of a series' readings, so the strip keeps room for it. */
+	function widest(values: readonly (string | null)[], missing: string): number {
+		return values.reduce((most, value) => Math.max(most, (value ?? missing).length), 0);
+	}
+
+	/** What the strip prints: a heading and its entries, in either shape. */
+	const view = $derived.by(
+		(): { shape: 'columns' | 'record'; heading: string; resting: boolean; entries: Entry[] } | null => {
+			if (readout === null) return null;
+			if ('subject' in readout) {
+				return {
+					shape: 'record',
+					heading: readout.subject,
+					resting,
+					entries: readout.facts.map((fact) => ({
+						label: fact.label,
+						value: fact.value ?? readout.notMeasured,
+						swatch: fact.swatch,
+						reserve: fact.reserve ?? 0
+					}))
+				};
+			}
+			if (readout.columns.length === 0) return null;
+			const column = Math.min(readout.columns.length - 1, Math.max(0, at ?? readout.resting));
+			const measured = readout.series.some((one) => one.values[column] !== null);
+			const series: Entry[] = measured
+				? readout.series.map((one) => ({
+						label: one.note === undefined ? one.label : `${one.label} (${one.note})`,
+						value: one.values[column] ?? readout.notMeasured,
+						swatch: one.swatch,
+						reserve: widest(one.values, readout.notMeasured)
+					}))
+				: [{ label: readout.notMeasured, value: '', swatch: null, reserve: 0 }];
+			const events = readout.events[column] ?? [];
+			// A column nothing measured already says so in one sentence, so it does
+			// not say "nothing" a second time in the events' own words. An event
+			// that did happen on it - a setting moved on a day nobody measured -
+			// still prints.
+			const none: Entry[] =
+				measured && events.length === 0 && readout.eventsNone !== ''
+					? [{ label: readout.eventsNone, value: '', swatch: null, reserve: 0 }]
+					: [];
+			// The widest whole line any column prints - its label and its value -
+			// held once for each line this column is short of the busiest. A column
+			// with its own "none" sentence already holds a line, so it holds nothing
+			// more.
+			const most = eventRoom ? Math.max(0, ...readout.events.map((lines) => lines.length)) : 0;
+			const roomiest = readout.events
+				.flat()
+				.reduce<ReadoutLine | null>(
+					(best, line) =>
+						best === null || line.label.length + line.value.length > best.label.length + best.value.length
+							? line
+							: best,
+					null
+				);
+			const held: Entry[] =
+				readout.eventsNone === '' && roomiest !== null
+					? Array.from({ length: Math.max(0, most - events.length) }, () => ({
+							label: roomiest.label,
+							value: roomiest.value,
+							swatch: roomiest.swatch,
+							reserve: 0,
+							held: true
+						}))
+					: [];
+			return {
+				shape: 'columns',
+				heading: readout.columns[column],
+				resting: at === null,
+				entries: [...series, ...events.map((line) => ({ ...line, reserve: 0 })), ...none, ...held]
+			};
+		}
+	);
 </script>
 
-{#if readout}
+{#if view}
+	<!-- A container, so a value's kept room can be capped at the strip's own
+	     width. The strip already takes its plot's width rather than its
+	     contents', so being one changes nothing it draws. -->
 	<dl
-		class="mt-3 text-[0.75rem] text-text-tertiary"
+		class="@container mt-3 flex flex-wrap items-baseline gap-x-4 gap-y-1 text-[0.75rem] text-text-tertiary"
 		style={readoutCapStyle(maxShare)}
 		data-readout={name}
+		data-readout-shape={view.shape}
 		aria-live="polite"
 	>
-		<dt class="font-semibold text-text-secondary" data-readout-day>
-			{readout.date}{resting ? restingNote : ''}
+		<!-- The heading takes a line of its own, so the entries after it start at
+		     the same place on every column and the eye does not hunt for them. -->
+		<dt
+			class="basis-full font-semibold text-text-secondary"
+			data-readout-day={view.shape === 'columns' ? '' : undefined}
+			data-readout-subject={view.shape === 'record' ? '' : undefined}
+		>
+			{view.heading}{view.resting ? restingNote : ''}
 		</dt>
-		{#each readout.rows as row (row.label)}
-			<div class="mt-1 flex items-center gap-2" data-readout-row={row.label}>
-				{#if row.colour}
-					<span class="size-3 shrink-0 rounded-sm" style="background: {row.colour}"></span>
+		{#each view.entries as entry, index (`${index}:${entry.label}`)}
+			<!-- An entry wider than the strip wraps inside itself, value under label,
+			     rather than pushing the page sideways. The room a value keeps for its
+			     widest reading is capped at the strip's width: on a phone that
+			     reading can be wider than the strip, and a strip that scrolls the
+			     page sideways costs more than one value that reflows. -->
+			<div
+				class="flex min-w-0 max-w-full flex-wrap items-center gap-x-1.5"
+				class:held={entry.held}
+				aria-hidden={entry.held ? 'true' : undefined}
+				data-readout-row={entry.held ? undefined : entry.label}
+				data-readout-held={entry.held ? '' : undefined}
+			>
+				{#if entry.swatch}
+					<span class="size-3 shrink-0 rounded-sm" style="background: {entry.swatch}"></span>
 				{/if}
-				<dd class="grow">{row.label}</dd>
-				<dd class="tabular-nums text-text-secondary">{row.value}</dd>
+				<dd>{entry.label}</dd>
+				{#if entry.value !== ''}
+					<dd
+						class="min-w-[min(var(--readout-reserve),100cqi)] tabular-nums text-text-secondary"
+						style={entry.reserve > 0 ? `--readout-reserve: ${entry.reserve}ch` : undefined}
+					>
+						{entry.value}
+					</dd>
+				{/if}
 			</div>
 		{/each}
 	</dl>
-	<p class="mt-2 text-[0.75rem] text-text-tertiary" data-readout-hint={name}>{hint}</p>
+	{#if hint !== ''}
+		<p class="mt-2 text-[0.75rem] text-text-tertiary" data-readout-hint={name}>{hint}</p>
+	{/if}
 {/if}
+
+<style>
+	/* Laid out so the strip keeps its height, never seen and never read out. A
+	   rule of its own rather than a utility, so the strip holds its room
+	   wherever it is drawn. */
+	.held {
+		visibility: hidden;
+	}
+</style>

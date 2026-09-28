@@ -20,7 +20,7 @@
  */
 
 import type { DayMetrics } from '$lib/server/payload';
-import type { ReadoutRow } from './frame';
+import type { ReadoutInputSeries } from './readout';
 import { grouped } from './series';
 import { daysInWindow, type TimeWindow } from './viewport';
 
@@ -172,19 +172,27 @@ export function yieldPercent(rate: number | null): string {
 	return `${Math.round(pct)}%`;
 }
 
-/** A day's three counts and its share, as the readout under the chart prints them.
+/** Every day's three counts and its share, as the readout under the chart
+ * prints them.
  *
- * Each row carries the colour its mark is drawn in, so the readout is the
- * chart's key as well and the plot needs no legend of its own. Only for a day
- * that planned something: a day that planned nothing has no share to print, and
- * a row of zeros beside it would read as a day that planned and lost it all. */
-export function yieldRows(column: RunYieldDay): ReadoutRow[] {
+ * Each series carries the colour its mark is drawn in, so the readout is the
+ * chart's key as well and the plot needs no legend of its own. A day that
+ * planned nothing reads null in all four: it has no share to print, and a row of
+ * zeros beside it would read as a day that planned and lost it all. */
+export function yieldSeries(columns: readonly RunYieldDay[]): ReadoutInputSeries[] {
+	const planned = (column: RunYieldDay) => column.planned > 0;
 	return [
 		...YIELD_SERIES.map((entry) => ({
 			label: entry.label,
-			value: grouped(yieldCount(column, entry.key)),
-			colour: `var(${entry.token})`
+			swatch: `var(${entry.token})`,
+			values: columns.map((column) => (planned(column) ? yieldCount(column, entry.key) : null)),
+			format: (value: number) => grouped(value)
 		})),
-		{ label: 'Share published', value: yieldPercent(column.yield), colour: `var(${YIELD_LINE_TOKEN})` }
+		{
+			label: 'Share published',
+			swatch: `var(${YIELD_LINE_TOKEN})`,
+			values: columns.map((column) => (planned(column) ? column.yield : null)),
+			format: (rate: number) => yieldPercent(rate)
+		}
 	];
 }

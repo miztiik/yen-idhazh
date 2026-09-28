@@ -183,16 +183,15 @@ def test_a_sparkline_can_never_be_taller_than_a_chart() -> None:
 def test_a_readout_may_not_be_wider_than_the_plot_or_zero_wide() -> None:
     """A readout at 0 is a strip nobody can read; one over 1 is not a share.
 
-    The strip sits below the plot, so no value here can cover a mark. The bound
-    is against the other failure: a readout as wide as the chart it explains,
-    which is what the floating box it replaced was - 40 to 55 percent of a
-    220px plot, measured 2026-08-29.
+    The strip sits below the plot, so no value here can cover a mark. The
+    default is the whole plot: a narrower cap wrapped the strip's entries on a
+    phone while the plot still had room to lay them side by side.
     """
     for refused in (0.0, -0.1, 1.01, 2.0):
         with pytest.raises(ValidationError):
             ChartConfig(readout_max_share=refused)
-    assert ChartConfig(readout_max_share=1.0).readout_max_share == 1.0
-    assert ChartConfig().readout_max_share == 0.33
+    assert ChartConfig(readout_max_share=0.5).readout_max_share == 0.5
+    assert ChartConfig().readout_max_share == 1.0
 
 
 def test_fast_motion_is_faster_than_base_motion() -> None:

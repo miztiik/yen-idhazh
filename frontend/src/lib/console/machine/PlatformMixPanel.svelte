@@ -39,7 +39,9 @@
 <div
 	data-windowed="machine-fleet"
 	data-window-days={windowDays}
-	data-readout-none={fleet.drawBars ? undefined : 'a list of counts has no column'}
+	data-readout-none={fleet.drawBars
+		? undefined
+		: 'no chart is drawn here, only counts in a list; agreed with Susan'}
 >
 	<Panel
 		heading="h3"
@@ -91,7 +93,7 @@
 					width={chart.width_px}
 					height={chart.height_px}
 					label="Job placements per day over {fleet.days} days, one bar per kind of machine. One group is one day."
-					columns={fleetStrip}
+					readout={fleetStrip}
 					readoutName="machine-fleet"
 					readoutMaxShare={chart.readout_max_share}
 					{grid}

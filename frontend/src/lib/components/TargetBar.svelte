@@ -43,7 +43,7 @@
 	data-target-bar={label}
 	data-target-band={marks.band}
 	data-target-tone={tone}
-	data-readout-none="one value against one threshold, and both are already in words"
+	data-readout-none="one value against one threshold, and both are already in words; agreed with Susan"
 >
 	<p class="target-head">
 		<span class="target-label">{label}</span>

@@ -17,7 +17,7 @@
 	 * is the column a reader most needs to see picked.
 	 */
 	import type { DaySlots } from '$lib/charts/day-slots';
-	import { pointerReadout, type ReadoutMark } from '$lib/charts/frame';
+	import { pointerReadout, type ReadoutMark } from '$lib/charts/readout';
 	import {
 		axisLabels,
 		cellFor,
@@ -159,7 +159,6 @@
 					<span
 						class="shrink-0 rounded-sm"
 						style="width: {under.cell}px; height: {under.cell}px; background: {HEALTH_FILL[square.health]}"
-						title={square.label}
 						aria-label={square.label}
 						data-health={square.health}
 						role="img"
@@ -211,7 +210,6 @@
 						<span
 							class="rounded-sm"
 							style="width: {strip_.cell}px; height: {strip_.cell}px; background: {HEALTH_FILL[square.health]}"
-							title={square.label}
 							aria-label={square.label}
 							data-health={square.health}
 							role="img"

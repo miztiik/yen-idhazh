@@ -8,13 +8,24 @@
  * The domain is the drawn extent rather than zero. A sparkline is about change,
  * and anchoring at zero flattens every series whose variation is small next to
  * its level - which is most of them.
+ *
+ * Its strip is built here too, from the same points the line is drawn from, so
+ * a day the line drops cannot leave its date behind under another day's value.
  */
 
-import type { EChartsOption } from 'echarts';
-import { paint } from './theme';
+import { shortDate } from '../format';
+import { readoutOf, type Readout } from './readout';
 
-export interface Sparkline {
-	option: EChartsOption;
+/** The rules one line is drawn by, with no drawing attached.
+ *
+ * A trend inside a list row cannot be a chart instance - a failure ledger has
+ * one per row. So the domain rule, the movement rule and the two-point minimum
+ * live here, where the card, the row and every test read them from one place. */
+export interface SparklineShape {
+	/** The finite values, in order. */
+	values: number[];
+	min: number;
+	max: number;
 	/** Last minus first, as a share of first. Null where the first is zero or
 	 * there is nothing to compare. The card prints this; the line only shows it. */
 	movement: number | null;
@@ -22,19 +33,12 @@ export interface Sparkline {
 	empty: boolean;
 }
 
-/** The same series with no engine attached, for a sparkline drawn as markup.
- *
- * A trend inside a list row cannot be a chart instance - a failure ledger has
- * one per row. So the domain rule, the movement rule and the two-point minimum
- * live here, and both drawings read them from one place. */
-export interface SparklineShape {
-	/** The finite values, in order. */
-	values: number[];
-	min: number;
-	max: number;
-	movement: number | null;
-	rising: boolean;
-	empty: boolean;
+/** One reading of a line: the day it was taken, in the ledger's spelling, and
+ * its value, or null where the ledger has none. The date travels with the
+ * value, so a reading that is dropped takes its date with it. */
+export interface SparkPoint {
+	date: string;
+	value: number | null;
 }
 
 /** The shape plus the points to draw. Kept apart so the console does not carry
@@ -43,7 +47,33 @@ export interface SparklineMarks extends SparklineShape {
 	/** The points in the unit square, y measured downward the way SVG does. A
 	 * flat series sits on the middle line rather than on an edge. */
 	points: { x: number; y: number }[];
+	/** The day of each finite value, one per value and in the same order. */
+	dates: string[];
 }
+
+/** What a line measures, as its strip names and prints it. */
+export interface SparklineSeries {
+	/** The strip entry's label. */
+	label: string;
+	/** The one formatter the figure beside the line and the strip both print
+	 * through, told the day a value was taken on. */
+	format: (value: number, date: string) => string;
+}
+
+/** A sentence that belongs to one drawn day - the model changed on it. */
+export interface SparklineRule {
+	/** Which drawn point it lands on, counted from the oldest. */
+	point: number;
+	label: string;
+}
+
+/** The colour a line is drawn in, and so the swatch its strip prints as its key. */
+export const SPARKLINE_SWATCH = 'var(--chart-2)';
+
+/** What a strip prints for a day with no value. A line drops a missing reading
+ * before it draws, so no column it keeps is ever unmeasured; this is the one
+ * sentence the builder asks every strip for. */
+const NOT_MEASURED = 'Nothing was recorded on this day.';
 
 export function sparklineShape(values: readonly number[]): SparklineShape {
 	const points = values.filter((v) => Number.isFinite(v));
@@ -66,10 +96,15 @@ export function sparklineShape(values: readonly number[]): SparklineShape {
 	};
 }
 
-/** The line a component draws. */
-export function sparklineMarks(values: readonly number[]): SparklineMarks {
-	const shape = sparklineShape(values);
-	if (shape.empty) return { ...shape, points: [] };
+/** The line a component draws, from its readings oldest first. */
+export function sparklineMarks(readings: readonly SparkPoint[]): SparklineMarks {
+	const kept = readings.filter(
+		(reading): reading is { date: string; value: number } =>
+			reading.value !== null && Number.isFinite(reading.value)
+	);
+	const dates = kept.map((reading) => reading.date);
+	const shape = sparklineShape(kept.map((reading) => reading.value));
+	if (shape.empty) return { ...shape, points: [], dates };
 
 	const span = shape.max - shape.min;
 	return {
@@ -77,37 +112,43 @@ export function sparklineMarks(values: readonly number[]): SparklineMarks {
 		points: shape.values.map((v, i) => ({
 			x: i / (shape.values.length - 1),
 			y: span === 0 ? 0.5 : 1 - (v - shape.min) / span
-		}))
+		})),
+		dates
 	};
 }
 
-export function sparkline(values: readonly number[]): Sparkline {
-	const shape = sparklineShape(values);
-	if (shape.empty) return { option: {}, movement: null, rising: false, empty: true };
-
-	const { values: points, movement, rising, min, max } = shape;
-	const token = rising ? '--band-high' : '--chart-4';
-
-	return {
-		movement,
-		rising,
-		empty: false,
-		option: {
-			animation: false,
-			grid: { left: 1, right: 1, top: 2, bottom: 2, containLabel: false },
-			tooltip: { show: false },
-			xAxis: { type: 'category', data: points.map((_, i) => String(i)), show: true, boundaryGap: false, axisLine: { show: false }, axisTick: { show: false }, axisLabel: { show: false } },
-			yAxis: { type: 'value', min, max, show: false },
-			series: [
-				{
-					type: 'line',
-					data: [...points],
-					showSymbol: false,
-					smooth: 0.25,
-					lineStyle: { width: 1.75, color: paint(token) },
-					areaStyle: { color: paint(token), opacity: 0.12 }
-				}
-			]
-		}
-	};
+/** The strip a line reads into: one column per drawn day, its one series, and
+ * each rule's sentence on the day it lands on.
+ *
+ * One function for every line, whether the line prints its own strip or the
+ * list it sits in prints one for all of its rows, so the two cannot show one
+ * row two different ways. A line too short to draw has no column, and the
+ * strip prints nothing for it. */
+export function sparklineReadout(
+	marks: SparklineMarks,
+	series: SparklineSeries,
+	rules: readonly SparklineRule[]
+): Readout {
+	const dates = marks.empty ? [] : marks.dates;
+	return readoutOf({
+		type: 'dateSeries',
+		columns: dates.map(shortDate),
+		series: [
+			{
+				label: series.label,
+				swatch: SPARKLINE_SWATCH,
+				values: marks.empty ? [] : marks.values,
+				format: (value, column) => series.format(value, dates[column])
+			}
+		],
+		events: {
+			lines: dates.map((_, column) =>
+				rules
+					.filter((rule) => rule.point === column)
+					.map((rule) => ({ label: rule.label, value: '', swatch: null }))
+			)
+		},
+		notMeasured: NOT_MEASURED,
+		resting: 'newest'
+	});
 }

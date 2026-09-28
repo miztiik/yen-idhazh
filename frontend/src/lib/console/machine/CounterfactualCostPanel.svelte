@@ -146,7 +146,7 @@
 						width={chart.width_px}
 						height={chart.height_px}
 						label={costLabel(costShape, days)}
-						columns={costStrip}
+						readout={costStrip}
 						readoutName="counterfactual-cost"
 						readoutMaxShare={chart.readout_max_share}
 						{grid}

@@ -577,10 +577,13 @@ test('a square says what happened without a mouse', async ({ page }) => {
 	await page.goto('/console/');
 
 	// The colour alone is not the answer. Anyone who cannot see the difference
-	// between amber and red still has to be able to read the run.
+	// between amber and red still has to be able to read the run - and a native
+	// tooltip is not how, because it needs a mouse held still over a 7px square.
+	// The words are the square's name and are printed in the strip under it.
 	const first = page.locator(`[data-day="${DAY}"] [data-health]`).first();
 	await expect(first).toHaveAttribute('aria-label', new RegExp(`^Run 1 on ${shortDate(DAY)}: `));
-	await expect(first).toHaveAttribute('title', /succeeded/);
+	await expect(first).toHaveAttribute('aria-label', /succeeded/);
+	expect(await first.getAttribute('title')).toBeNull();
 });
 
 test('the run that read only the start of an article says so on its own square', async ({
@@ -1147,13 +1150,17 @@ test('a candle carries its spread and its runs without a mouse', async ({ page }
 	await page.goto('/console/model/');
 
 	const newest = page.locator('[data-candle="write"][data-date="2026-08-20"]');
-	const caption = await newest.locator('title').textContent();
+	// Its name, never a native tooltip: a `<title>` needs a hover, and the strip
+	// under the chart prints every word of this sentence for a key and a thumb.
+	const caption = await newest.getAttribute('aria-label');
+	await expect(newest.locator('title')).toHaveCount(0);
 
 	expect(caption).toContain('median');
 	expect(caption).toContain('middle half');
-	// Per run, because a day hides which of its four runs moved.
-	expect(caption).toContain('Run medians: 2026-08-20-1');
-	expect(caption).toContain('2026-08-20-2');
+	// Per run, because a day hides which of its four runs moved. The run's day is
+	// the strip's heading, so the name keeps what tells the runs apart.
+	expect(caption).toContain('by run, run 1 write');
+	expect(caption).toContain('run 2 write');
 });
 
 test('writing draws slower than reading, on one shared scale', async ({ page }) => {
@@ -1347,23 +1354,25 @@ test('the candle reads out its day and every series at that column', async ({ pa
 	const plot = page.locator('[data-throughput="chart"] svg');
 	await plot.evaluate((node: SVGSVGElement) => node.focus());
 
-	// The readout carried `caption()` verbatim until 2026-08-30, on the rule that
-	// one day gets one sentence. The strip is now capped at a share of the plot,
-	// and the per-run list in `caption()` is the one clause that grows with the
-	// day's run count - four wrapped lines of it is not a readout. The `<title>`
-	// keeps every word; the strip keeps the median and the extent per series.
+	// The strip carries every word the candle's sentence does: an SVG `<title>` is
+	// a tooltip only a mouse reaches, so the spread, the item count and each run's
+	// two rates moved into the strip. The run entries grow with the day's run
+	// count, and the strip keeps room for the busiest day's entries.
 	await expect(readout.locator('[data-readout-day]')).toHaveText(/^\d+ \w+ \d{4}$/);
 
-	// One row per series drawn, read against write off one hover rather than two.
+	// One row per series drawn, read against write off one hover rather than two,
+	// then the day's item count, then one entry a run with both of its rates.
 	const rows = await readout
 		.locator('[data-readout-row]')
 		.evaluateAll((nodes) =>
 			nodes.map((node) => (node.getAttribute('data-readout-row') ?? '').trim())
 		);
-	expect(rows).toEqual(['read', 'write']);
-	for (const series of rows) {
+	expect(rows.slice(0, 3)).toEqual(['read', 'write', 'items']);
+	expect(rows.length, 'the day printed no run').toBeGreaterThan(3);
+	for (const run of rows.slice(3)) expect(run).toMatch(/^run \S+$/);
+	for (const series of ['read', 'write']) {
 		await expect(readout.locator(`[data-readout-row="${series}"] dd`).last()).toHaveText(
-			/^[\d.]+ \([\d.]+-[\d.]+\)$/
+			/^median [\d.]+ tok\/s, middle half [\d.]+ to [\d.]+, slowest [\d.]+, fastest [\d.]+$/
 		);
 	}
 
