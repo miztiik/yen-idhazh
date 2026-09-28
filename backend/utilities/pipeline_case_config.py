@@ -9,8 +9,7 @@ from pathlib import Path
 
 from idhazh.contracts.pipeline_tests import PipelineTestsConfig
 from idhazh.llm.server import SETTING_KEYS
-
-CASES_ROOT = Path("backend/var/cases")
+from utilities.pipeline_test_case import CASES_ROOT
 
 
 def write_case(case: object, *, source: Path, root: Path) -> Path:

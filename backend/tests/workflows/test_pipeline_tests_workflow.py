@@ -26,7 +26,7 @@ from idhazh.contracts.pipeline_tests import (
 from idhazh.contracts.run_plan import RunPlan
 from idhazh.llm.server import setting, window
 from idhazh.telemetry import traces
-from utilities import candidate_pointer, model_refs, pipeline_test_ledgers
+from utilities import candidate_pointer, model_refs, pipeline_test_case, pipeline_test_ledgers
 
 from ._harness import (
     COMMIT_PROGRAM_CALL,
@@ -151,8 +151,8 @@ def _required_environment(script: str) -> set[str]:
 
 
 def _recorded(root: Path, case: str, item_ids: Sequence[str]) -> None:
-    """Write what one case's work stage would have left under `backend/var/cases/`."""
-    items = root / "backend" / "var" / "cases" / case / "run" / "items"
+    """Write what one case's work stage would have left under the case folder."""
+    items = root / pipeline_test_case.CASES_ROOT / case / "run" / "items"
     items.mkdir(parents=True, exist_ok=True)
     for item_id in item_ids:
         (items / f"{item_id}.article.json").write_text("{}", encoding="utf-8")
@@ -454,6 +454,44 @@ def test_it_publishes_nothing_a_reader_sees_and_writes_only_the_trial_roots() ->
     assert isinstance(with_block, dict)
     assert str(with_block.get("path")).startswith("backend/var/")
     assert with_block.get("retention-days") == "90"
+
+
+#: The folder the ledger module gathers into and the commit job downloads into.
+#: With `SCRATCH_CONFIG` and the case folder, it is the third scratch folder the
+#: workflow names, and naming it here means a fourth is added on purpose.
+LEDGER_TREE: str = "backend/var/trial-ledgers"
+
+#: A path under `backend/var/` as a step spells it. It ends where a path ends in
+#: a shell line: at whitespace, a quote or a closing bracket.
+SCRATCH_PATH: re.Pattern[str] = re.compile(r"backend/var/[^\s\"'`)]*")
+
+
+def test_every_scratch_path_the_workflow_names_is_under_one_declared_folder() -> None:
+    """The case folder is spelled once in Python, and the workflow is read against it.
+
+    The three case programs import one constant, `pipeline_test_case.CASES_ROOT`.
+    The workflow cannot import it, and every other test runs a program against a
+    folder the test itself builds - so a step still spelling an old folder would
+    pass them all and fail only on a real dispatch, where the server starts on a
+    config root nobody wrote or the upload finds nothing.
+    """
+    case_folder = pipeline_test_case.CASES_ROOT.as_posix()
+    folders = (case_folder, SCRATCH_CONFIG, LEDGER_TREE)
+    named = {
+        found.rstrip("/")
+        for text in _strings(_load_workflows()[WORKFLOW])
+        for found in SCRATCH_PATH.findall(text)
+    }
+
+    stray = sorted(
+        path
+        for path in named
+        if not any(path == folder or path.startswith(f"{folder}/") for folder in folders)
+    )
+    assert not stray, f"these paths sit under none of the three scratch folders: {stray}"
+    assert any(path.startswith(f"{case_folder}/") for path in named), (
+        f"no step names a path under {case_folder}, so this test is checking nothing"
+    )
 
 
 def test_the_commit_job_stages_the_declared_trial_roots_and_nothing_wider() -> None:
@@ -938,7 +976,7 @@ def test_the_case_runner_refuses_to_run_without_the_plan_the_cases_share(tmp_pat
     a reader of the log has to go and find. This one names what is missing and
     which step writes it.
     """
-    (tmp_path / "backend" / "var" / "cases" / "baseline" / "config").mkdir(parents=True)
+    (tmp_path / pipeline_test_case.CASES_ROOT / "baseline" / "config").mkdir(parents=True)
     completed = _ran_a_case(tmp_path, ["baseline", "2026-09-14"])
     assert completed.returncode == 2
     assert "no plan to run" in completed.stderr
@@ -958,7 +996,7 @@ def test_a_case_whose_pipeline_failed_is_not_reported_as_a_call_it_could_not_ser
     The half-written run goes with it: a case that failed leaves no `run`
     directory for the report to read as a measurement.
     """
-    case_root = tmp_path / "backend" / "var" / "cases" / "baseline"
+    case_root = tmp_path / pipeline_test_case.CASES_ROOT / "baseline"
     (case_root / "config").mkdir(parents=True)
     plan = tmp_path / "backend" / "var" / "pipeline-tests" / "plan.json"
     plan.parent.mkdir(parents=True)

@@ -28,7 +28,9 @@ from pathlib import Path
 #: What a call this program cannot serve exits with.
 REFUSED = 2
 
-#: Where the case-config step writes one config root per declared case.
+#: Where each case's tree lives: the config root the case-config step writes,
+#: and the run this program files beside it. The config writer and the report
+#: import it from here, so the three programs cannot name two folders.
 CASES_ROOT = Path("backend/var/cases")
 
 #: The one plan every case runs, written by the plan step before any case.
