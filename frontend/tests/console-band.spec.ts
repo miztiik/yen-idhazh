@@ -436,16 +436,26 @@ const CONFIG = JSON.parse(readFileSync(join(REPO, 'config', 'idhazh.json'), 'utf
 };
 const BAND_GUARDRAIL_BYTES = CONFIG.page_weight.payload_ceilings_bytes['console/band.json'];
 
+/** The telemetry copy's windows, from the declaration of the task that deletes it. */
+const TELEMETRY_SERIES = (
+	JSON.parse(
+		readFileSync(join(REPO, 'config', 'gardener', 'telemetry-aggregate.json'), 'utf8')
+	) as { series: Record<string, { unit: string; value?: number }> }
+).series;
+
 /**
  * The longest months list retention can leave, which is what bounds this payload.
  *
  * `months` is `fetchable_months`, the union of the month shards across the seven
- * published series, and `idhazh prune-state` deletes a shard past its own
- * `observability.public_*_keep_months`. All of them are 14 today, so the list
- * holds fourteen entries however long the project runs - the bound is read here
- * rather than typed, so a retention change moves this test with it.
+ * published series, and each series drops a month past its own window: the
+ * publishers trim theirs to `observability.public_*_keep_months`, and the
+ * gardener's `telemetry-aggregate` task trims the browser's telemetry copy to its
+ * `public-copy` series. All of them are 14 today, so the list holds fourteen
+ * entries however long the project runs - the bound is read here rather than
+ * typed, so a retention change moves this test with it.
  */
 const KEPT_MONTHS = Math.max(
+	TELEMETRY_SERIES['public-copy']?.value ?? 0,
 	...Object.entries(CONFIG.observability)
 		.filter(([key, value]) => key.startsWith('public_') && key.endsWith('_keep_months') && value !== null)
 		.map(([, value]) => value as number)
