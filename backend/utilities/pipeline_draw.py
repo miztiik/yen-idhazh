@@ -92,7 +92,7 @@ def main(argv: list[str] | None = None) -> int:
     drawn = sub.add_parser("pick", help="Draw the two addresses for this run.")
     drawn.add_argument("--seed", default=os.environ.get("GITHUB_RUN_ID", ""))
 
-    made = sub.add_parser("plan", help="Write the run plan the cases all share.")
+    made = sub.add_parser("plan", help="Write the run plan the test cases all share.")
     made.add_argument("--addresses", required=True)
     made.add_argument("--feeds", required=True)
     made.add_argument("--execution", required=True)

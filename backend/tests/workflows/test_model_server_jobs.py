@@ -18,7 +18,7 @@ from pytest import MonkeyPatch
 from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.base import canonical_json
 from idhazh.telemetry import silicon
-from utilities import candidate_pointer, model_refs, model_runtime, pipeline_case_config
+from utilities import candidate_pointer, model_refs, model_runtime, pipeline_test_case_config
 
 from ._harness import (
     ACTIONS_DIR,
@@ -71,21 +71,21 @@ LOG_SUMMARY_STEP: Final = "Prompt cache log summary"
 
 #: Every place a server is started, and the config root that start reads its
 #: flags from. Five roots and three shapes: the committed tree, the scratch copy
-#: the candidate action cuts, and the per-case copies cut from that one.
+#: the candidate action cuts, and the per-test-case copies cut from that one.
 LAUNCH_ROOTS: Final = (
     ("digest.yml", "work", "Start the model", "config"),
     ("validate.yml", "qualify", "Start the candidate", "backend/var/candidate-config"),
     (
         "idhazh-pipeline-tests.yaml",
-        "cases",
+        "test-cases",
         "Start the model",
-        "backend/var/cases/baseline/config",
+        "backend/var/test-cases/baseline/config",
     ),
     (
         "idhazh-pipeline-tests.yaml",
-        "cases",
+        "test-cases",
         "Restart the model with two slots",
-        "backend/var/cases/parallel-2/config",
+        "backend/var/test-cases/parallel-2/config",
     ),
     ("measure.yml", "budgets", "Start the tokenizer", "backend/var/candidate-config"),
 )
@@ -644,14 +644,16 @@ def _the_five_roots(tmp_path: Path) -> dict[str, Path]:
     pointer = _published(model_refs.trial_rows(committed, "", prefix=""))["models_file"]
     candidate_pointer.point_at(pointer, scratch=scratch)
 
-    cases = tmp_path / "cases"
-    pipeline_case_config.main(["--config-root", str(scratch), "--cases-root", str(cases)])
+    test_cases = tmp_path / "test-cases"
+    pipeline_test_case_config.main(
+        ["--config-root", str(scratch), "--test-cases-root", str(test_cases)]
+    )
 
     return {
         "config": committed,
         "backend/var/candidate-config": scratch,
-        "backend/var/cases/baseline/config": cases / "baseline" / "config",
-        "backend/var/cases/parallel-2/config": cases / "parallel-2" / "config",
+        "backend/var/test-cases/baseline/config": test_cases / "baseline" / "config",
+        "backend/var/test-cases/parallel-2/config": test_cases / "parallel-2" / "config",
     }
 
 

@@ -1,53 +1,53 @@
-# Two articles, three cases, one runner - the loop a person can close in the
-# hour they wrote the change in.
+# Two articles, three test cases, one runner - the loop a person can close in
+# the hour they wrote the change in.
 #
 # A production run takes about 200 minutes and has been cancelling shards, so a
 # change to the pipeline was tested the next day, against a day of eighty
 # articles whose spread hid whatever the change did. This dispatch runs the real
 # path - the real fetcher, the real extractor, the real two calls, the real
-# model server - over two articles and reports what each case cost.
+# model server - over two articles and reports what each test case cost.
 #
-# Three cases, in sequence, on ONE runner, over the SAME two articles, and never
-# a matrix. Between two GitHub-hosted runners prefill spans 4.2x
-# (docs/reference/pipeline-cost.md), which is larger than anything a case here is
-# looking for, so a matrix would report the hosts it drew rather than the change
-# it ran. Sequential on one box cancels the host.
+# Three test cases, in sequence, on ONE runner, over the SAME two articles, and
+# never a matrix. Between two GitHub-hosted runners prefill spans 4.2x
+# (docs/reference/pipeline-cost.md), which is larger than anything a test case
+# here is looking for, so a matrix would report the hosts it drew rather than
+# the change it ran. Sequential on one box cancels the host.
 #
 # The two articles are DRAWN, not fixed, from `config/pipeline-tests.json`. The
 # draw is made once, in `Pick the two articles`, seeded from the run id GitHub
-# allocated, and every case reads that step's output - so the three cases record
-# the same two item ids and the comparison between them is valid. A fixed pair
-# would pass for as long as those two pages stayed up and say nothing about
-# anything else the extractor meets.
+# allocated, and every test case reads that step's output - so the three test
+# cases record the same two item ids and the comparison between them is valid.
+# A fixed pair would pass for as long as those two pages stayed up and say
+# nothing about anything else the extractor meets.
 #
 # It publishes nothing a reader sees. No step writes `frontend/public/` and
 # nothing here is on any reader's path. It does commit one thing: a `commit` job
-# appends what the cases wrote under `state/pipeline-tests/`, the trial root
-# `validate.yml` and the bench already commit into and no console page reads.
-# The case job keeps `contents: read`; the write is the second job's alone. What
-# the cases produced - the article text included - still leaves only as an
+# appends what each test case wrote under that test case's own trial root,
+# `state/pipeline-tests-<id>/`, which no console page reads. The test-cases job
+# keeps `contents: read`; the write is the second job's alone. What the test
+# cases produced - the article text included - still leaves only as an
 # artifact.
 #
 # It also answers "can this candidate model walk the real path", for the price
 # of a dispatch rather than the price of a bench. Name a models file and every
-# case runs on those weights, through the real prompts and the real two calls;
-# name nothing and it runs the configured model exactly as it always did. It is
-# not the qualification - that is validate.yml, ten gates on a frozen corpus
-# - and two articles settle nothing about how good a model is.
+# test case runs on those weights, through the real prompts and the real two
+# calls; name nothing and it runs the configured model exactly as it always did.
+# It is not the qualification - that is validate.yml, ten gates on a frozen
+# corpus - and two articles settle nothing about how good a model is.
 #
 # Two things one dispatch cannot settle. Whether two articles are
 # representative of the eighty a production day carries - they are not, and the
 # draw is what stops them being representative of nothing. And the faithfulness
-# scorer, which every case skips: it is a second model download, it is identical
-# across the cases so it cancels from every comparison here, and it is not what
-# the two-call path is being measured for.
+# scorer, which every test case skips: it is a second model download, it is
+# identical across the test cases so it cancels from every comparison here, and
+# it is not what the two-call path is being measured for.
 name: Pipeline tests
 
-# Dispatch only, and it asks for ONE thing: which model to run the cases on.
-# Every case setting is still drawn or read from config (Guardrail #6) - the
-# addresses, the draw size, the job bound, the slot counts, the windows. The
-# committed config names the incumbent by design, so which model to check is
-# the one question config cannot answer, and it is the same line a swap would
+# Dispatch only, and it asks for ONE thing: which model to run the test cases
+# on. Every test case setting is still drawn or read from config (Guardrail #6)
+# - the addresses, the draw size, the job bound, the slot counts, the windows.
+# The committed config names the incumbent by design, so which model to check
+# is the one question config cannot answer, and it is the same line a swap would
 # later move.
 #
 # Empty runs the configured model, which is exactly what this dispatch did
@@ -62,8 +62,8 @@ on:
 permissions:
   contents: read
 
-# One at a time. The cases are read against each other by wall clock, and two
-# dispatches sharing a runner pool is the one confound the sequential design
+# One at a time. The test cases are read against each other by wall clock, and
+# two dispatches sharing a runner pool is the one confound the sequential design
 # exists to remove.
 concurrency:
   group: pipeline-tests
@@ -76,7 +76,7 @@ env:
   MODEL_SERVER_PROBE: 'http://127.0.0.1:8080'
 
 jobs:
-  cases:
+  test-cases:
     runs-on: ubuntu-latest
     # Said here rather than inherited. The `commit` job below takes the write,
     # and a reader comparing the two has to be able to see that this one does
@@ -104,9 +104,10 @@ jobs:
       - name: Install
         run: pip install -e .
 
-      # The draw, made ONCE, before any case runs. `github.run_id` is allocated
-      # by GitHub and nothing in the run can compute it, so two dispatches read
-      # different articles and this line says which pair a result belongs to.
+      # The draw, made ONCE, before any test case runs. `github.run_id` is
+      # allocated by GitHub and nothing in the run can compute it, so two
+      # dispatches read different articles and this line says which pair a
+      # result belongs to.
       #
       # It prints the seed and the addresses as well as publishing them, because
       # a result whose inputs are only in a step output is a result nobody can
@@ -138,9 +139,9 @@ jobs:
             --models-file "$CANDIDATE_MODELS_FILE" \
             | tee /dev/stderr >> "$GITHUB_OUTPUT"
 
-      # The config root every case is cut from. The committed `config/` is never
-      # edited - the action copies it and moves one line, `models_file`, so a
-      # candidate is run through the exact line a swap would later move and
+      # The config root every test case is cut from. The committed `config/` is
+      # never edited - the action copies it and moves one line, `models_file`,
+      # so a candidate is run through the exact line a swap would later move and
       # every other control is the committed one by construction.
       #
       # `trial_state` is not a control. It says where this run's own ledgers
@@ -195,7 +196,7 @@ jobs:
       # No `if:`. A restored cache entry is the one case where nobody watched
       # the bytes arrive, so it is the case that most needs checking.
       #
-      # It reads the config root the cases are cut from, which IS the
+      # It reads the config root the test cases are cut from, which IS the
       # candidate's own entry - so a dispatch cannot check one model's bytes
       # against another model's recorded digest - and it reads the declaration
       # rather than a filename, so it covers every file the key digested.
@@ -205,26 +206,26 @@ jobs:
           python3 backend/utilities/model_runtime.py verify-model-files \
             --config-root backend/var/candidate-config
 
-      # One config root per case, cut from the scratch copy above and differing
-      # only in what that case changes. The committed config is never edited: a
-      # case that edited it would leave the next case reading whatever the last
-      # one wrote.
+      # One config root per test case, cut from the scratch copy above and
+      # differing only in what that test case changes. The committed config is
+      # never edited: a test case that edited it would leave the next test case
+      # reading whatever the last one wrote.
       #
-      # Two files move, and the case declares one intention that moves both.
+      # Two files move, and the test case declares one intention that moves both.
       # `visuals.enabled_kinds` empty is what makes no picture reachable, so the
       # gate takes the plan fields off the summarize-and-plan call's grammar;
       # `summarize.asks_for_a_visual_plan` false is what sizes the window for
       # the call that is really sent. Apart they disagree, and the disagreement
       # refuses articles that fit.
-      - name: Write each case's config
+      - name: Write each test case's config
         run: |
           set -euo pipefail
-          python3 backend/utilities/pipeline_case_config.py \
+          python3 backend/utilities/pipeline_test_case_config.py \
             --config-root backend/var/candidate-config
 
-      # One plan, written once, from the addresses the draw chose. The cases all
-      # run it, so the two item ids are fixed before the first request and the
-      # three cases are comparing the same work.
+      # One plan, written once, from the addresses the draw chose. The test
+      # cases all run it, so the two item ids are fixed before the first request
+      # and the three test cases are comparing the same work.
       #
       # Everything but the address comes off the feed in `config/sources.json` -
       # the vertical, the tier, the form - so this step invents nothing about a
@@ -249,27 +250,28 @@ jobs:
           MODEL_ALIAS: ${{ steps.models.outputs.candidate_id }}
         run: |
           set -euo pipefail
-          # Every flag, the alias and the weights come from the first case's
-          # config, so the server this case measures is the server that case's
-          # config describes (Guardrail #6).
+          # Every flag, the alias and the weights come from the first test
+          # case's config, so the server this test case measures is the server
+          # that test case's config describes (Guardrail #6).
           python3 backend/utilities/model_runtime.py start-server \
-            --config-root backend/var/cases/baseline/config
+            --config-root backend/var/test-cases/baseline/config
           for _ in $(seq 1 120); do
             curl -sf "${MODEL_SERVER_PROBE}/health" > /dev/null && break
             sleep 5
           done
           # Assert it, do not hope. Without this the loop simply ends, every
-          # item fails as "model unreachable", and three cases agree on nothing.
+          # item fails as "model unreachable", and three test cases agree on
+          # nothing.
           curl -sf "${MODEL_SERVER_PROBE}/health" > /dev/null || {
             echo "the model never became healthy" >&2
             tail -50 llama-server.log >&2
             exit 1
           }
           # Healthy says a server answers. It does not say which weights it
-          # answers for, and every case's numbers are read against case one's
-          # alias whether or not the server agrees. The alias is read by name
-          # rather than pasted into this program, and it comes from the entry
-          # the case's own config points at.
+          # answers for, and every test case's numbers are read against test
+          # case one's alias whether or not the server agrees. The alias is read
+          # by name rather than pasted into this program, and it comes from the
+          # entry the test case's own config points at.
           curl -sf "${MODEL_SERVER_PROBE}/v1/models" \
             | jq -e --arg alias "$MODEL_ALIAS" '[.data[].id] | index($alias) != null' > /dev/null || {
             echo "the server does not serve ${MODEL_ALIAS}" >&2
@@ -277,45 +279,48 @@ jobs:
             exit 1
           }
 
-      # Case one. The production path exactly as the daily run walks it: both
-      # calls, the visual decision on, one slot on the server. Every other case is
-      # read against this one, so it runs first and it changes nothing.
+      # Test case one. The production path exactly as the daily run walks it:
+      # both calls, the visual decision on, one slot on the server. Every other
+      # test case is read against this one, so it runs first and it changes
+      # nothing.
       #
       # `python3 <path>`, which is how this repository calls into
       # `backend/utilities/`. A program is handed to an interpreter, so it asks
       # nothing of a file mode - and the first dispatch of this workflow died on
-      # exactly that mode, exit 126 `Permission denied`, back when the case body
-      # was a script committed 100644.
+      # exactly that mode, exit 126 `Permission denied`, back when the test case
+      # body was a script committed 100644.
       #
-      # `!cancelled()` on every case, because a rig exists to say what happened.
-      # On that first dispatch one broken call took all three cases with it, so
-      # the run read as a baseline problem where it had a caller problem; three
-      # cases failing the same way would have named the cause on the run page.
-      # A case still needs the one plan, and the runner refuses by name without
-      # it rather than summarizing nothing quietly.
-      - name: Case baseline
+      # `!cancelled()` on every test case, because a rig exists to say what
+      # happened. On that first dispatch one broken call took all three test
+      # cases with it, so the run read as a baseline problem where it had a
+      # caller problem; three test cases failing the same way would have named
+      # the cause on the run page. A test case still needs the one plan, and the
+      # runner refuses by name without it rather than summarizing nothing
+      # quietly.
+      - name: Test case baseline
         if: ${{ !cancelled() }}
         env:
           RUN_DATE: ${{ steps.plan.outputs.date }}
         run: python3 backend/utilities/pipeline_test_case.py baseline "$RUN_DATE"
 
-      # Case two. No picture is reachable, so the summarize-and-plan call comes
-      # back with the summary alone and the plan's decode is not spent. The
-      # server is the same process case one used - nothing about this case is a
-      # start-time setting - so what the difference measures is the decode and
-      # nothing else.
-      - name: Case no-visual-decision
+      # Test case two. No picture is reachable, so the summarize-and-plan call
+      # comes back with the summary alone and the plan's decode is not spent. The
+      # server is the same process test case one used - nothing about this test
+      # case is a start-time setting - so what the difference measures is the
+      # decode and nothing else.
+      - name: Test case no-visual-decision
         if: ${{ !cancelled() }}
         env:
           RUN_DATE: ${{ steps.plan.outputs.date }}
         run: python3 backend/utilities/pipeline_test_case.py no-visual-decision "$RUN_DATE"
 
-      # The slot count is fixed when the process starts, so this case costs a
-      # restart and a second model load. That load is itself one of the numbers
-      # worth having: it is the fixed cost `run.shard_size` exists to amortise.
+      # The slot count is fixed when the process starts, so this test case costs
+      # a restart and a second model load. That load is itself one of the
+      # numbers worth having: it is the fixed cost `run.shard_size` exists to
+      # amortise.
       #
-      # It carries an id because case three reads its outcome, and it runs after a
-      # failed case for the same reason the cases do.
+      # It carries an id because test case three reads its outcome, and it runs
+      # after a failed test case for the same reason the test cases do.
       - name: Restart the model with two slots
         id: restart
         if: ${{ !cancelled() }}
@@ -328,9 +333,9 @@ jobs:
             kill -0 "$(cat llama-server.pid)" 2>/dev/null || break
             sleep 1
           done
-          mv llama-server.log backend/var/cases/baseline/llama-server.log
+          mv llama-server.log backend/var/test-cases/baseline/llama-server.log
           python3 backend/utilities/model_runtime.py start-server \
-            --config-root backend/var/cases/parallel-2/config
+            --config-root backend/var/test-cases/parallel-2/config
           for _ in $(seq 1 120); do
             curl -sf "${MODEL_SERVER_PROBE}/health" > /dev/null && break
             sleep 5
@@ -350,15 +355,16 @@ jobs:
             exit 1
           }
 
-      # Case three. Two slots, and the window doubled with them so each slot
-      # still holds what the production gate admits articles against.
+      # Test case three. Two slots, and the window doubled with them so each
+      # slot still holds what the production gate admits articles against.
       #
-      # The one case that reads a step rather than only `!cancelled()`, and the
-      # difference is what a failed restart leaves behind: a healthy one-slot
-      # server. This case would then run against one slot and publish the number
-      # under `parallel-2`, which is a wrong answer that looks like a right one.
-      # A failed restart fails the job, so nothing is hidden by the skip.
-      - name: Case parallel-2
+      # The one test case that reads a step rather than only `!cancelled()`, and
+      # the difference is what a failed restart leaves behind: a healthy
+      # one-slot server. This test case would then run against one slot and
+      # publish the number under `parallel-2`, which is a wrong answer that looks
+      # like a right one. A failed restart fails the job, so nothing is hidden by
+      # the skip.
+      - name: Test case parallel-2
         if: ${{ !cancelled() && steps.restart.conclusion == 'success' }}
         env:
           RUN_DATE: ${{ steps.plan.outputs.date }}
@@ -371,27 +377,27 @@ jobs:
           if [ -f llama-server.pid ]; then
             kill "$(cat llama-server.pid)" 2>/dev/null || true
           fi
-          cp llama-server.log backend/var/cases/parallel-2/llama-server.log 2>/dev/null || true
+          cp llama-server.log backend/var/test-cases/parallel-2/llama-server.log 2>/dev/null || true
 
       # The runtime half of the Oracle. The workflow-shape half asserts that one
-      # step draws and every case reads it; this asserts the cases really did land
-      # on the same two items, which is the thing that makes a comparison
-      # between them mean anything. An address that could not be fetched is
-      # reported by name rather than passed over: a stale list is the expected
-      # way this workflow decays.
+      # step draws and every test case reads it; this asserts the test cases
+      # really did land on the same two items, which is the thing that makes a
+      # comparison between them mean anything. An address that could not be
+      # fetched is reported by name rather than passed over: a stale list is the
+      # expected way this workflow decays.
       #
       # Two different failures, and only one of them is this step's to raise. A
-      # case that recorded nothing failed or was skipped, its own step is red and
-      # the job is red with it, so the report names it and moves on. A case that
-      # recorded articles which are not the pair the draw chose has produced
-      # numbers nobody may subtract, and that is what raises here.
-      - name: Say what the three cases measured
+      # test case that recorded nothing failed or was skipped, its own step is
+      # red and the job is red with it, so the report names it and moves on. A
+      # test case that recorded articles which are not the pair the draw chose
+      # has produced numbers nobody may subtract, and that is what raises here.
+      - name: Say what the three test cases measured
         if: always()
         env:
           EXPECTED_ITEM_IDS: ${{ steps.plan.outputs.item_ids }}
         run: |
           set -euo pipefail
-          python3 backend/utilities/pipeline_case_report.py \
+          python3 backend/utilities/pipeline_test_case_report.py \
             --expected "$EXPECTED_ITEM_IDS" | tee -a "$GITHUB_STEP_SUMMARY"
 
       # Ninety days, because a change is often argued about weeks after the
@@ -401,12 +407,12 @@ jobs:
       # republished to a reader, and this is not that: nothing under
       # `backend/var/` is committed, nothing here reaches a reader, and an
       # operator is who downloads it.
-      - name: Upload what the cases produced
+      - name: Upload what the test cases produced
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: pipeline-tests-${{ github.run_id }}
-          path: backend/var/cases/
+          path: backend/var/test-cases/
           retention-days: 90
 
       # The ledgers, separately from the tree above, because the `commit` job
@@ -416,14 +422,14 @@ jobs:
       #
       # Gathered into one fixed directory rather than uploaded by a glob over
       # `state/`. An artifact's internal root is the common ancestor of what
-      # matched, so a glob would unpack one case's ledger at the depth three
-      # cases' ledgers sit at the moment two of them died.
+      # matched, so a glob would unpack one test case's ledger at the depth
+      # three test cases' ledgers sit at the moment two of them died.
       # No `tee` into the log. This program prints what a person reads on
       # stderr, which the log already shows, and keeps stdout for the one
       # `key=value` line the step output takes. A `tee` here would copy the
       # progress lines into `$GITHUB_OUTPUT` as well, and one line that is not
       # `key=value` fails the step and loses the push.
-      - name: Gather the ledgers the cases wrote
+      - name: Gather the ledgers the test cases wrote
         id: ledgers
         if: always()
         run: |
@@ -432,7 +438,7 @@ jobs:
             --tree backend/var/trial-ledgers \
             >> "$GITHUB_OUTPUT"
 
-      - name: Upload the ledgers the cases wrote
+      - name: Upload the ledgers the test cases wrote
         if: always()
         uses: actions/upload-artifact@v7
         with:
@@ -441,20 +447,24 @@ jobs:
           if-no-files-found: ignore
           retention-days: 90
 
-  # The run's own measurements, kept. Until now every case wrote a span rollup
-  # and a trace for each item, and the runner was torn down with all of it - so a
-  # dispatch could only ever be read off its own run page.
+  # The run's own measurements, kept. Until now every test case wrote a span
+  # rollup and a trace for each item, and the runner was torn down with all of
+  # it - so a dispatch could only ever be read off its own run page.
   #
   # Its own job because it is the only thing here that writes to the repository.
-  # The cases read the open web; this one never does, and what crosses between
-  # them is read against the contracts before anything is staged.
+  # The test cases read the open web; this one never does, and what crosses
+  # between them is read against the contracts before anything is staged.
   commit:
-    needs: cases
-    # A case that failed still measured what it reached, and a dispatch that died
-    # on case three has two cases worth keeping. A dispatch that never started a
-    # case uploaded nothing, and downloading an artifact nobody made fails the
-    # step - so the job asks first.
-    if: always() && needs.cases.outputs.ledgers == 'true'
+    needs: test-cases
+    # A test case that failed still measured what it reached, and a dispatch
+    # that died on test case three has two test cases worth keeping. A dispatch
+    # that never started a test case uploaded nothing, and downloading an
+    # artifact nobody made fails the step - so the job asks first.
+    #
+    # The index form, as `measure.yml` reads its hyphenated job id. A misspelled
+    # name here reads as an empty string and skips this job with no error, so a
+    # test holds it to a job this one needs and an output that job declares.
+    if: always() && needs['test-cases'].outputs.ledgers == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -475,7 +485,7 @@ jobs:
       # Into a scratch directory, never straight onto `state/`. The check has to
       # read exactly what arrived, and a download unpacked over the checkout
       # would be read together with rows that are already committed.
-      - name: Take the ledgers the cases wrote
+      - name: Take the ledgers the test cases wrote
         uses: actions/download-artifact@v8
         with:
           pattern: pipeline-tests-ledgers-*
@@ -495,10 +505,10 @@ jobs:
       # `place` prints the roots to stage, and creates every declared one first.
       # The commit script hands its arguments to `git add`, which aborts on a
       # path the checkout does not hold and takes the whole step with it.
-      - name: Commit the ledgers the cases wrote
+      - name: Commit the ledgers the test cases wrote
         env:
-          COMMIT_MESSAGE: 'pipeline tests: what the cases wrote'
-          NOTHING_STAGED_MESSAGE: 'the cases wrote no ledger this dispatch has not already committed'
+          COMMIT_MESSAGE: 'pipeline tests: what the test cases wrote'
+          NOTHING_STAGED_MESSAGE: 'the test cases wrote no ledger this dispatch has not already committed'
           PUSH_FAILED_MESSAGE: 'the pipeline-test ledgers lost every push attempt'
         run: |
           set -euo pipefail
