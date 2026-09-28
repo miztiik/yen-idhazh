@@ -641,9 +641,8 @@ def test_a_program_that_started_its_own_server_probes_that_one() -> None:
 #: second address a config value cannot move, which is the state
 #: `model_server.base_url` exists to end.
 LOOPBACK_IS_WRITTEN_IN: Final = {
-    # The committed default, and the changelog line that quotes it.
+    # The committed default.
     "backend/idhazh/contracts/knobs/model_server.py",
-    "backend/idhazh/contracts/app_config.py",
     # The body of `loopback_url`, which is the one home for the literal.
     "backend/idhazh/llm/server.py",
     # Two hand-run instruments whose `--base` default is a literal. Neither
@@ -655,11 +654,11 @@ LOOPBACK_IS_WRITTEN_IN: Final = {
 }
 
 
-def test_the_loopback_host_is_written_in_five_named_places() -> None:
+def test_the_loopback_host_is_written_in_four_named_places() -> None:
     """Survivors, not zero. Zero is the wrong answer and an earlier draft claimed it.
 
     `loopback_url` has to write the host somewhere, and the committed default
-    has to say it. What must not happen is a sixth module quietly spelling an
+    has to say it. What must not happen is a fifth module quietly spelling an
     address again, which is what the three self-spawning instruments did until
     2026-09-23 - six literals between them, each one a place a moved port could
     be left behind.
