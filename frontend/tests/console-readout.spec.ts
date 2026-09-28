@@ -26,22 +26,23 @@ const ROUTES = [
 	'/console/machine/',
 	'/console/judgement/'
 ] as const;
-// Two lists, because the two scans below seed differently. `chartsOn` seeds on
-// `svg`, so it can ask its question only of a route that draws one, and
-// `/console/voices/` draws none of its own - its two day matrices are `<div>`
-// tables. `declarationsOn` seeds on the declaration itself, so it reaches them.
-// Measured on the canary build 2026-09-22: `/console/voices/` renders 0 charts
-// the first scan can see and 6 declarations the second one reads.
-const DECLARING_ROUTES = [...ROUTES, '/console/voices/'] as const;
+// Every console route. The pointer, keyboard and tap blocks below read an
+// `svg` column chart and run on the four that draw one; the partition, the
+// title rule and the moved-words rule seed on marks as well as on drawings, so
+// they reach `/console/voices/`, whose two day matrices are `<div>` grids.
+const ALL_ROUTES = [...ROUTES, '/console/voices/'] as const;
 const DESKTOP = { width: 1440, height: 1000 };
 const PHONE = { width: 390, height: 844 };
 
+/** Where every console chart's declaration lives. */
+const OWNER = '[data-readout-columns], [data-readout-records], [data-readout-none]';
+
 interface DeclaredChart {
-	/** `columns`, `none`, or `undeclared` - and `undeclared` is the failure. */
-	partition: 'columns' | 'none' | 'undeclared';
+	/** `columns`, `records`, `none`, or `undeclared` - and `undeclared` is the failure. */
+	partition: 'columns' | 'records' | 'none' | 'undeclared';
 	/** Enough of the chart's own attributes to name it in a failure message. */
 	where: string;
-	columns: number;
+	count: number;
 	reason: string;
 	/** How many readout strips the declaring element holds. */
 	strips: number;
@@ -51,11 +52,16 @@ interface DeclaredChart {
 
 /** Every chart on the route, with the declaration its own markup carries.
  *
- * An icon is not a chart: `Icon.svelte` is the one component that draws a glyph
- * and it carries `class="icon"`, which `icons.spec.ts` already holds it to.
+ * A chart is found by what it draws: an `svg` that is not an icon, a mark that
+ * names itself with `role="img"`, or a mark a strip reads. The HTML charts - a
+ * board, a strip of tiles, a matrix of squares - draw no `svg`, and seeding on
+ * one alone walked straight past them. An icon is not a chart: `Icon.svelte`
+ * draws every glyph with `class="icon"`, which `icons.spec.ts` holds it to. The
+ * band above every route is not a chart either: it prints three facts in words
+ * and its run squares are badges beside the verdict it prints.
  */
 async function chartsOn(page: Page): Promise<DeclaredChart[]> {
-	return page.evaluate(() => {
+	return page.evaluate((OWNER) => {
 		/** Enough of a name to find the chart again from a failure message. */
 		const named = (node: Element): string => {
 			const owner = node.closest(
@@ -72,64 +78,84 @@ async function chartsOn(page: Page): Promise<DeclaredChart[]> {
 			);
 		};
 
-		return [...document.querySelectorAll('[data-surface="operator"] svg')]
-			.filter((svg) => !svg.classList.contains('icon'))
-			.filter((svg) => svg.getBoundingClientRect().width > 0)
-			.map((svg) => {
-				const owner = svg.closest('[data-readout-columns], [data-readout-none]');
-				if (owner === null) {
-					return {
-						partition: 'undeclared' as const,
-						where: named(svg),
-						columns: 0,
+		const seeds = [
+			...document.querySelectorAll(
+				'[data-surface="operator"] svg, [data-surface="operator"] [role="img"], [data-surface="operator"] [data-readout-at]'
+			)
+		]
+			.filter((node) => node.closest('svg.icon') === null)
+			.filter((node) => node.closest('[data-console-band]') === null)
+			// A mark inside an `svg` is covered by the `svg` it is drawn in.
+			.filter((node) => node.tagName.toLowerCase() === 'svg' || node.closest('svg') === null)
+			.filter((node) => {
+				const box = node.getBoundingClientRect();
+				return box.width > 0 && box.height > 0;
+			});
+
+		const found = new Map<Element, DeclaredChart>();
+		for (const seed of seeds) {
+			const owner = seed.closest(OWNER);
+			if (owner === null) {
+				const panel = seed.closest('[data-console-panel], [data-windowed], section') ?? seed;
+				if (!found.has(panel)) {
+					found.set(panel, {
+						partition: 'undeclared',
+						where: named(seed),
+						count: 0,
 						reason: '',
 						strips: 0,
 						legend: []
-					};
+					});
 				}
-				const declared = owner.getAttribute('data-readout-columns');
-				// The row's claim is that the strip already prints the swatch and the
-				// label, so a second swatch in the same colour is one fact drawn twice.
-				// A swatch in a colour the strip does NOT print is not a key to a
-				// series - the run-length chart tints one square to name the shaded
-				// band its sentence is about, and no strip row is drawn in that fill.
-				const printed = new Set(
-					[...owner.querySelectorAll('[data-readout] [data-readout-row] span')].map(
-						(el) => getComputedStyle(el).backgroundColor
-					)
-				);
-				const legend = [...owner.querySelectorAll('span, i, em')]
-					.filter((el) => el.closest('[data-readout]') === null)
-					.filter((el) => (el.textContent ?? '').trim() === '')
-					// A mark that names itself is data, not a key. The run squares under
-					// the chart of articles published against planned are spans in the
-					// colours the readout's run rows print, and each carries its own
-					// accessible name; a key swatch carries none.
-					.filter((el) => !(el.getAttribute('role') === 'img' && el.hasAttribute('aria-label')))
-					.filter((el) => {
-						const box = el.getBoundingClientRect();
-						return box.width > 0 && box.width <= 28 && box.height > 0 && box.height <= 28;
-					})
-					.filter((el) => printed.has(getComputedStyle(el).backgroundColor))
-					.map((el) => el.outerHTML.slice(0, 120));
-				return {
-					partition: declared === null ? ('none' as const) : ('columns' as const),
-					where: named(owner),
-					columns: Number(declared ?? 0),
-					reason: owner.getAttribute('data-readout-none') ?? '',
-					strips: owner.querySelectorAll('[data-readout]').length,
-					legend
-				};
+				continue;
+			}
+			if (found.has(owner)) continue;
+			const columns = owner.getAttribute('data-readout-columns');
+			const records = owner.getAttribute('data-readout-records');
+			// The row's claim is that the strip already prints the swatch and the
+			// label, so a second swatch in the same colour is one fact drawn twice.
+			// A swatch in a colour the strip does NOT print is not a key to a
+			// series - the run-length chart tints one square to name the shaded
+			// band its sentence is about, and no strip row is drawn in that fill.
+			const printed = new Set(
+				[...owner.querySelectorAll('[data-readout] [data-readout-row] span')].map(
+					(el) => getComputedStyle(el).backgroundColor
+				)
+			);
+			const legend =
+				columns === null
+					? []
+					: [...owner.querySelectorAll('span, i, em')]
+							.filter((el) => el.closest('[data-readout]') === null)
+							.filter((el) => (el.textContent ?? '').trim() === '')
+							// A mark that names itself is data, not a key. The run squares
+							// under the chart of articles published against planned are spans
+							// in the colours the readout's run rows print, and each carries
+							// its own accessible name; a key swatch carries none.
+							.filter(
+								(el) => !(el.getAttribute('role') === 'img' && el.hasAttribute('aria-label'))
+							)
+							.filter((el) => !el.hasAttribute('data-readout-at'))
+							.filter((el) => {
+								const box = el.getBoundingClientRect();
+								return box.width > 0 && box.width <= 28 && box.height > 0 && box.height <= 28;
+							})
+							.filter((el) => printed.has(getComputedStyle(el).backgroundColor))
+							.map((el) => el.outerHTML.slice(0, 120));
+			found.set(owner, {
+				partition: columns !== null ? 'columns' : records !== null ? 'records' : 'none',
+				where: named(owner),
+				count: Number(columns ?? records ?? 0),
+				reason: owner.getAttribute('data-readout-none') ?? '',
+				strips: owner.querySelectorAll('[data-readout]').length,
+				legend
 			});
-	});
+		}
+		return [...found.values()];
+	}, OWNER);
 }
 
-/** Every element that declares itself, chart or not.
- *
- * A target bar and a shard board draw no `svg` at all, so the scan above cannot
- * see them - and they are exactly the surfaces Decision 2 of the row names.
- * This is what holds their reason to the same standard.
- */
+/** Every element that declares it has no hover, chart or not. */
 async function declarationsOn(page: Page): Promise<{ where: string; reason: string }[]> {
 	return page.evaluate(() =>
 		[...document.querySelectorAll('[data-surface="operator"] [data-readout-none]')].map((node) => ({
@@ -142,6 +168,17 @@ async function declarationsOn(page: Page): Promise<{ where: string; reason: stri
 			reason: node.getAttribute('data-readout-none') ?? ''
 		}))
 	);
+}
+
+/** The words of a mark's name a strip has to carry: every figure, and every
+ * word of four letters or more. The short words - of, at, the, and - are how a
+ * sentence and a strip of labelled entries say the same thing differently. */
+function significant(name: string): string[] {
+	return name
+		.toLowerCase()
+		.split(/\s+/)
+		.map((token) => token.replace(/^[("']+|[)"'.,:;]+$/g, ''))
+		.filter((token) => /\d/.test(token) || /^[a-z'-]{4,}$/.test(token));
 }
 
 async function open(page: Page, route: string, size = DESKTOP): Promise<void> {
@@ -157,8 +194,8 @@ function dayOf(owner: Locator): Locator {
 }
 
 test.describe('the readout is the default', () => {
-	for (const route of ROUTES) {
-		test(`THE ORACLE: every chart on ${route} declares its columns or says why not`, async ({
+	for (const route of ALL_ROUTES) {
+		test(`THE ORACLE: every chart on ${route} declares its columns, its records or says why not`, async ({
 			page
 		}) => {
 			await open(page, route);
@@ -168,19 +205,27 @@ test.describe('the readout is the default', () => {
 
 			expect(
 				charts.filter((chart) => chart.partition === 'undeclared').map((chart) => chart.where),
-				'these charts declare neither a shared column nor a reason for having none'
+				'these charts declare neither a column, a record nor a reason for having none'
 			).toEqual([]);
 
-			// A chart with a column has the strip, and it has it in its own markup
-			// rather than somewhere else on the page.
+			// A chart with a column or a record has the strip, and it has it in its
+			// own markup rather than somewhere else on the page.
 			expect(
 				charts
 					.filter((chart) => chart.partition === 'columns' && chart.strips !== 1)
 					.map((chart) => `${chart.where} holds ${chart.strips} strips`),
 				'a chart with a shared column resolves exactly one readout strip'
 			).toEqual([]);
+			expect(
+				charts
+					.filter((chart) => chart.partition === 'records' && chart.strips < 1)
+					.map((chart) => chart.where),
+				'a chart that reads records prints no strip'
+			).toEqual([]);
 
-			// The strip is the legend. Nothing else in the chart may draw a swatch.
+			// The strip is the legend. Nothing else in a column chart may draw a
+			// swatch. A record chart keeps its own key: one record shows only its
+			// own colours, so the key is the one place every colour is named.
 			expect(
 				charts
 					.filter((chart) => chart.partition === 'columns' && chart.legend.length > 0)
@@ -188,45 +233,149 @@ test.describe('the readout is the default', () => {
 				'these charts draw a key as well as a strip'
 			).toEqual([]);
 		});
-	}
 
-	// The wider list. This is the block that reaches a drawing which is not an
-	// `<svg>`, because it seeds on the declaration rather than on the picture.
-	for (const route of DECLARING_ROUTES) {
-		test(`every chart on ${route} that has no readout gives a reason in words`, async ({
+		test(`every chart on ${route} that has no readout says why, and who agreed`, async ({
 			page
 		}) => {
 			await open(page, route);
 			const declared = await declarationsOn(page);
 
-			expect(declared.length, `${route} declares no chart without a readout`).toBeGreaterThan(0);
-
 			// A reason, not a token. "none" and "n/a" pass an attribute check and
-			// tell a reader nothing about what was decided.
+			// tell a reader nothing about what was decided - and a chart somebody
+			// decided needs no hover looks the same as one where it was forgotten,
+			// so the exception names who agreed it.
 			expect(
 				declared
 					.filter((one) => one.reason.trim().split(/\s+/).length < 5)
 					.map((one) => `${one.where}: "${one.reason}"`),
 				'these reasons are too short to be a reason'
 			).toEqual([]);
+			expect(
+				declared
+					.filter((one) => !one.reason.trim().endsWith('; agreed with Susan'))
+					.map((one) => `${one.where}: "${one.reason}"`),
+				'these exceptions do not say who agreed them'
+			).toEqual([]);
+		});
+
+		test(`no mark inside a chart on ${route} carries a native tooltip`, async ({ page }) => {
+			// A `title` is the browser's own tooltip: no key reaches it, no thumb
+			// reaches it and no theme styles it. Every one a chart carried moved
+			// into that chart's strip. A title outside a chart - a link, a badge -
+			// is not a mark, and is not this rule's business.
+			await open(page, route);
+			const titled = await page.evaluate(
+				(OWNER) =>
+					[...document.querySelectorAll(OWNER)].flatMap((owner) =>
+						[owner, ...owner.querySelectorAll('[title]')]
+							.filter((node) => node.hasAttribute('title'))
+							.map((node) => `${node.tagName.toLowerCase()}: ${node.getAttribute('title')}`)
+					),
+				OWNER
+			);
+			expect(titled, 'these chart marks still carry a native tooltip').toEqual([]);
+		});
+
+		test(`every mark a strip reads on ${route} has every word of its name in that strip`, async ({
+			page
+		}) => {
+			// The witness that nothing a tooltip said was lost. The sentence a mark's
+			// tooltip carried stays on the mark as its accessible name, so a screen
+			// reader keeps it; pointing at the mark must then put every figure and
+			// every word of four letters or more of that sentence in the strip.
+			await open(page, route);
+			const owners = page.locator(
+				'[data-surface="operator"] [data-readout-columns], [data-surface="operator"] [data-readout-records]'
+			);
+			const lost: string[] = [];
+			for (let at = 0; at < (await owners.count()); at += 1) {
+				const owner = owners.nth(at);
+				const marks = owner.locator('[role="img"][aria-label], [data-readout-at][aria-label]');
+				const count = Math.min(await marks.count(), 40);
+				for (let index = 0; index < count; index += 1) {
+					const mark = marks.nth(index);
+					// The chart's own frame, a whole drawing, a mark that holds other
+					// marks, and a mark of a chart nested inside this one are not one of
+					// this chart's marks: pointing at them reads whatever sits there.
+					const leaf = await mark.evaluate(
+						(node, OWNER) =>
+							node.tagName.toLowerCase() !== 'svg' &&
+							!node.hasAttribute('tabindex') &&
+							node.querySelector('[aria-label], [role="img"]') === null &&
+							node.parentElement?.closest(OWNER) === node.closest(OWNER) &&
+							node.closest(OWNER)?.hasAttribute('data-readout-none') === false &&
+							node.getBoundingClientRect().width > 0,
+						OWNER
+					);
+					if (!leaf) continue;
+					await mark.evaluate((node) => node.scrollIntoView({ behavior: 'instant', block: 'center' }));
+					const box = await mark.boundingBox();
+					if (box === null) continue;
+					await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+					await page.waitForTimeout(60);
+					const name = (await mark.getAttribute('aria-label')) ?? '';
+					const strip = (await owner.locator('[data-readout]').first().innerText()).toLowerCase();
+					const missing = significant(name).filter((word) => !strip.includes(word));
+					if (missing.length > 0) lost.push(`${name} -> missing ${missing.join(', ')}`);
+				}
+			}
+			expect(lost, 'these marks name facts their strip does not print').toEqual([]);
 		});
 	}
 
-	test('THE ORACLE: the console has charts on both sides of the partition', async ({ page }) => {
+	test('THE ORACLE: the console has charts on every side of the partition', async ({ page }) => {
 		// A partition with one side empty is a partition that proves nothing. The
-		// second side is the interesting one: it is the set of charts somebody
+		// last side is the interesting one: it is the set of charts somebody
 		// decided should have no hover.
 		const withColumns: string[] = [];
+		const withRecords: string[] = [];
 		const withReasons = new Set<string>();
-		for (const route of ROUTES) {
+		for (const route of ALL_ROUTES) {
 			await open(page, route);
 			const charts = await chartsOn(page);
 			withColumns.push(...charts.filter((c) => c.partition === 'columns').map((c) => c.where));
+			withRecords.push(...charts.filter((c) => c.partition === 'records').map((c) => c.where));
 			for (const one of await declarationsOn(page)) withReasons.add(one.reason);
 		}
 		expect(withColumns.length, 'no chart on the console carries a readout').toBeGreaterThan(3);
+		expect(withRecords.length, 'no chart on the console reads a record').toBeGreaterThan(2);
 		expect(withReasons.size, 'no chart on the console states why it has none').toBeGreaterThan(2);
 	});
+
+	for (const route of ['/console/', '/console/machine/', '/console/voices/'] as const) {
+		test(`the keyboard steps and clears a record strip on ${route}`, async ({ page }) => {
+			await open(page, route);
+			const owners = page.locator('[data-surface="operator"] [data-readout-records]');
+			let driven = 0;
+			for (let index = 0; index < (await owners.count()); index += 1) {
+				const owner = owners.nth(index);
+				if (Number((await owner.getAttribute('data-readout-records')) ?? 0) < 2) continue;
+				const focusable = owner
+					.locator('[tabindex="0"]')
+					.or(owner.and(page.locator('[tabindex="0"]')))
+					.first();
+				if ((await focusable.count()) === 0) continue;
+				const heading = owner.locator('[data-readout] [data-readout-subject]').first();
+				const name = (await owner.getAttribute('aria-label')) ?? `records ${index}`;
+				const resting = await heading.innerText();
+
+				await focusable.focus();
+				await page.waitForTimeout(150);
+				const opened = await heading.innerText();
+				// A list steps on Down, a row on Right, and a grid on both.
+				await page.keyboard.press('ArrowRight');
+				await page.keyboard.press('ArrowDown');
+				await page.waitForTimeout(150);
+				expect(await heading.innerText(), `${name}: no arrow key moved the strip`).not.toBe(opened);
+
+				await page.keyboard.press('Escape');
+				await page.waitForTimeout(150);
+				expect(await heading.innerText(), `${name}: Escape did not return to rest`).toBe(resting);
+				driven += 1;
+			}
+			expect(driven, `${route}: no record chart could be driven from the keyboard`).toBeGreaterThan(0);
+		});
+	}
 
 	for (const route of ROUTES) {
 		test(`pointing at either end of a chart on ${route} reads two different columns`, async ({
@@ -254,6 +403,16 @@ test.describe('the readout is the default', () => {
 				await owner.evaluate((node) =>
 					node.scrollIntoView({ behavior: 'instant', block: 'center' })
 				);
+				// A strip of tiles draws no `svg` and has no plot to point across; the
+				// mark under the pointer answers it, and the moved-words block above
+				// points at every one of its marks. An engine chart says it draws, so
+				// it is waited for rather than walked past.
+				if (
+					(await owner.locator('svg').count()) === 0 &&
+					(await owner.getAttribute('data-chart-drawn')) === null
+				) {
+					continue;
+				}
 				const plot = owner.locator('svg').first();
 				// Named when nothing arrives. Waiting on the locator alone reports a
 				// selector and the whole test budget, which says neither which chart
