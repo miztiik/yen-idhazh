@@ -1,6 +1,6 @@
 # Glossary
 
-**Last Updated**: 2026-09-27
+**Last Updated**: 2026-09-28
 
 The words this project uses for its own machinery, and where each one is defined.
 
@@ -56,7 +56,7 @@ a doc is a fine change to make; moving it into *this* page is not.
 | **span** | One timed operation in the telemetry tree | [telemetry.md](telemetry.md) |
 | **span rollup** | A month of spans folded to one row per date, run, shard and span name | [telemetry.md](telemetry.md) |
 | **stage** | One step of the loop, invocable on its own with a file in and a file out | [pipeline-loop.md](pipeline-loop.md) |
-| **trial run** | A run that takes production's exact code path and writes its ledgers to `state/<name>/` instead of `state/`, so it can never be read as a published day. `retention.trial_state_days` is what empties it again | `backend/idhazh/contracts/knobs/run.py`, the `run.trial_state_dirname` field |
+| **trial run** | A run that takes production's exact code path and writes its ledgers to `state/<name>/` instead of `state/`, so it can never be read as a published day. The gardener's `trials` task, whose window is in `config/gardener/trials.json`, is what empties it again | `backend/idhazh/contracts/knobs/run.py`, the `run.trial_state_dirname` field |
 | **work order** | One URL that survived deduplication and was chosen for the day. It is `PlannedItem` in code, and nothing but this row calls it a work order | `backend/idhazh/contracts/run_plan.py` |
 
 ## Design rationale

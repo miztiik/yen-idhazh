@@ -13,9 +13,9 @@ default and `--no-dry-run` is the second word. The reason is
 schedule, so a state file deleted here stops being recoverable from history once
 that prune passes over the range (CLAUDE.md section 8). `git revert` is not a
 recovery path for a file older than the squash's window in
-`config/gardener/corpus-squash.json`. The precedent is
-the fold step in `.github/workflows/digest.yml`, which ships `idhazh
-prune-state --dry-run` for exactly that reason and has never removed a file.
+`config/gardener/corpus-squash.json`. The precedent is the gardener's
+retention tasks, each of which ships with `dry_run: true` in its own
+declaration for exactly that reason.
 
 **`--target` names a ledger, never a path.** The vocabulary below is closed, and
 a word outside it is refused with the whole list rather than resolved against
@@ -426,8 +426,8 @@ def report(outcome: Outcome) -> list[str]:
 
     A count says a deletion happened and nothing about what it took. This list
     is what a person reads before passing `--no-dry-run`, so it is the paths
-    themselves - the same rule `stages/prune_state.py` states for the scheduled
-    pass.
+    themselves - the same rule the gardener holds its scheduled tasks to: a pass
+    hands back every file it took, by name.
     """
     span = f"{outcome.since} to {outcome.until}"
     verb = "would remove" if outcome.dry_run else "removed"

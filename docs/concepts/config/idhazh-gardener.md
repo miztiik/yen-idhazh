@@ -26,8 +26,8 @@ naming both values.
 ## One declaration a task
 
 A task is named by its file: `config/gardener/seen.json` declares the task
-`seen`. A missing `config/gardener/` means no tasks. One ships today,
-`corpus-squash`, the one `history` task (below).
+`seen`. A missing `config/gardener/` means no tasks. Eleven ship today: ten
+`retention` tasks and `corpus-squash`, the one `history` task (below).
 **There is no index file and no `name` key**, so a task can never be listed under
 one name and filed under another.
 
@@ -41,17 +41,39 @@ Every declaration carries these keys, whatever its kind:
 | `dry_run` | `bool`, no default | True reports what a live pass would take and takes nothing |
 | `max_deletes_per_run` | a count, or `null` | The most one pass deletes. `null` is no ceiling and `0` is a survey. A collection pruned through GitHub's API spends a request a delete, so `null` there can use up the token's hourly allowance on one backlog |
 | `owns` or `owns_everything_else_under` | a list of folders | Exactly one of the two. `owns` names repository-relative folders; the second is the complement: every folder under its roots that no other task owns and no ledger family claims |
+| `appends_to` | a list of ledger names, default `[]` | The ledgers a task files a report of its own into, through the ledger door: one new raw file under the wake's day, on a dry run too, because a report is what a dry run is for. Appending is not owning: the door mints each file's name, so it can overwrite nothing, and the runner refuses a report anywhere else before anything is staged |
 
 Each kind adds its own keys, and a key on the wrong kind is refused by name:
 
 | Kind | Its own keys |
 | --- | --- |
-| `retention` | `series`, one window per series, for `telemetry-aggregate` alone |
+| `retention` | `series`, one window per series, for two tasks alone: `telemetry-aggregate` keeps `full-grain`, `aggregate` and `public-copy`, and `scores` keeps `full-grain` and `archive` |
 | `collection` | none yet |
 | `compaction` | `ledger` (required); `raw_index_keep_days` (90), `daily_keep_days` (45), `monthly_window` (13 months), `max_periods_per_run` (8), `max_raw_files_per_period` (2000), `compact_after_hours` (24) |
 | `history` | `every_days`, how many whole days apart two rewrites may run. Its `window` is whole days and nothing else, because the squash cuts history at 00:00 UTC on the day that many days back |
 
-## The one declaration that ships: `corpus-squash`
+## The retention declarations that ship
+
+Each deletes what it owns past its window, and each ships `dry_run: true`. The
+windows were keys in `config/idhazh.json` until 2026-09-28 and moved here with
+no value changed, because each task is the only thing that reads its number.
+Why each tree gets the age it has is
+[retention-ages.md](retention-ages.md#every-tree-names-its-own-cleanup-age).
+
+| Task | Owns | Window | Why that window |
+| --- | --- | --- | --- |
+| `telemetry-aggregate` | `state/item-health`, `state/item-health-summary`, `frontend/public/telemetry` | 14 months: `full-grain` 14 months, `aggregate` forever, `public-copy` 14 months | a 366-day console read can open 14 month files; the summary is what a year-over-year claim reads; the browser's copy ages with its source |
+| `scores` | `state/scores`, `state/score-index`, `state/score-archive` | 14 months: `full-grain` 14 months, `archive` forever | the same 14; the archive is the evidence behind every quality claim once the rows are gone |
+| `feed-health` | `state/feed-health` | 14 months | the same 14; deleted rather than summarised, because no older total has a reader |
+| `host-fingerprint` | `state/host-fingerprint` | 14 months | the published machine shard is folded from it, so it keeps at least `public_machine_keep_months` |
+| `seen` | `state/seen` | 90 days | at least `collect.seen_window_days`, the days the collector reads |
+| `counterfactual-scores` | `state/counterfactual-scores` | 30 days | at least `lens_weights.window_days`, the days a reader opens |
+| `traces` | `state/traces` | 7 days | a trace is opened to see one recent run, and the span rollup is the record that stays |
+| `trials` | everything under `state` that no other task owns and no ledger claims | 90 days | nothing reads a trial's rows, and 90 days is the artifact retention used everywhere else |
+| `digest-fragments` | `state/digest-fragments` | 390 days | 30 days times `retention.image_months`, the window the archive page states; past it a run's block of a day is a second copy nothing reads |
+| `visual-prune` | `frontend/public/digest` | 390 days, at most 200 files a pass | the same stated window. It deletes rendered charts only, and files a report of every pass into `visual-prunes` |
+
+## The history declaration: `corpus-squash`
 
 `config/gardener/corpus-squash.json` is the corpus squash, which
 `.github/workflows/prune.yml` runs in its own job and never in the matrix.
@@ -86,7 +108,13 @@ names the file an operator edits and the rule it broke.
 | An owned entry that is a file | A shard checks out folders, so a file would match nothing |
 | `seen` keeping less than `collect.seen_window_days` | The planner still reads those days |
 | `counterfactual-scores` keeping less than `lens_weights.window_days` | A reader still opens those days |
-| A `telemetry-aggregate` series keeping less than the `observability` key it covers, a series no key covers, or a `telemetry-aggregate` with no series | The series would delete what the knob keeps |
+| `telemetry-aggregate` or `scores` with no series, a series that is not one of its trees, or one of its trees with no series | A tree with no window is a tree nothing bounds |
+| A task's `window` that differs from its `full-grain` series, or a ceiling on a task that keeps series | One number is spelled once; a ceiling could stop a month's summary part way through |
+| An `aggregate` or `archive` series that does not keep longer than the `full-grain` series beside it | A month would be deleted before it was ever summarised |
+| A `public-copy` series that is not equal to the `full-grain` series | The copy is the browser's copy of that ledger |
+| A `feed-health` window, a `full-grain` series or a `public-copy` series under the month files the widest console read selects | A panel blanks for a month that ran |
+| `host-fingerprint` keeping less than `observability.public_machine_keep_months` | The published machine shard is folded from it |
+| `digest-fragments` or `visual-prune` keeping anything but 30 days times `retention.image_months`, or anything but forever when that is `-1` | The archive page states that window to a reader |
 | `series` on any other task | One task keeps several series |
 | A compaction not called `compact-<ledger>` | One compaction a ledger, found by name |
 | `raw_index_keep_days` below `daily_keep_days` | The daily period may still need the index to rebuild a file |
@@ -119,8 +147,20 @@ against a pair kept forever passes; a floor kept forever against a bounded pair 
 refused, because a person chose never to delete that ledger; forever against
 forever passes; and a ledger no task ever limited has no floor.
 
+**2026-09-28: a cleanup age lives in the declaration of the task that deletes by
+it.** Eleven keys left `config/idhazh.json` - the ledger ages, the trial window,
+the picture cleanup's fuse and the one dry run every pass shared - because each
+had one reader and that reader is now a task. The rules that tied them together
+moved with them: the summary pairs, the published copy, the machine source and
+the console window are checked here when the declarations load, and the four
+published ages that stayed in `observability` keep theirs in `config.load`. A
+moved key left in the app config is refused by name, pointing at its
+declaration, rather than read as a second spelling somebody has to hold in
+step. `retention.image_months` stays where it is, because the archive page
+states it to a reader, and the loader holds both picture windows to it (Fowler).
+
 ## See also
 
 - [../../architecture/publishing/idhazh-gardener.md](../../architecture/publishing/idhazh-gardener.md) - how a wake runs.
-- [retention-ages.md](retention-ages.md) - the `observability` ages a series is held to.
+- [retention-ages.md](retention-ages.md) - where every cleanup age lives, and why each tree keeps what it keeps.
 - [../config.md](../config.md) - what makes a value a knob.

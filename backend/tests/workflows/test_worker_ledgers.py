@@ -28,7 +28,6 @@ from ._harness import (
     METRICS_FILE,
     RECORD_COMMAND,
     RECORD_STEP,
-    RETIRE_STEP,
     REVIEW_STEP,
     RUN_ARTIFACTS,
     SUBSTITUTED_DATE,
@@ -243,11 +242,11 @@ def test_a_ledger_that_will_not_push_cannot_cost_the_day_a_worker() -> None:
             f"work step {name} must not fail the shard"
         )
     # Closed-world, because a publish step that swallowed its own failure would
-    # publish nothing and report success. The two fold steps are here for the
-    # harvest's reason: they run after the day is committed and touch only
-    # months past `observability.item_health_full_grain_months`, so the most a
+    # publish nothing and report success. The fold step and its commit are here
+    # for the harvest's reason: they run after the day is committed and touch
+    # only days that can gain no more rows, so the most a
     # failure costs is one run's worth of bytes and the next run folds the same
-    # month again. The picture download joins them because a day where nothing
+    # days again. The picture download joins them because a day where nothing
     # was drawable produces no `shard-visuals-*` artifact at all, and every item
     # then publishes with no picture. The review tree joins it one rung further
     # out again: nothing downloads it, no gate reads it, and it is built after
@@ -276,7 +275,6 @@ def test_a_ledger_that_will_not_push_cannot_cost_the_day_a_worker() -> None:
         ("assemble", "actions/download-artifact@v8"),
         ("assemble", FINGERPRINT_STEP),
         ("assemble", HARVEST_STEP),
-        ("assemble", RETIRE_STEP),
         ("assemble", CLOSED_DAY_FOLD_STEP),
         ("assemble", REVIEW_STEP),
         ("assemble", COMMIT_STEPS["fold"]),

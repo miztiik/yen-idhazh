@@ -81,11 +81,11 @@ LIVE_BY_DECISION: Final = {
 }
 
 
-def test_the_committed_gardener_config_loads_with_the_corpus_squash_alone() -> None:
+def test_the_committed_gardener_config_loads_and_the_squash_is_its_one_history_task() -> None:
     settings = config.load_gardener()
     assert (settings.config.attempts, settings.config.shards) == (6, 5)
-    assert set(settings.tasks) == {"corpus-squash"}
-    assert isinstance(settings.tasks["corpus-squash"], HistoryPolicy)
+    history = [name for name, policy in settings.tasks.items() if isinstance(policy, HistoryPolicy)]
+    assert history == ["corpus-squash"]
 
 
 def test_a_declaration_ships_in_dry_run_unless_a_named_decision_put_it_live() -> None:
@@ -215,27 +215,151 @@ def test_a_window_a_reader_still_opens_is_not_deleted_under_it(
 
 
 @pytest.mark.parametrize(
-    ("series", "refusal"),
+    ("change", "refusal"),
     [
-        ({"full-grain": {"unit": "months", "value": 13}}, "item_health_full_grain_months is 14"),
-        ({"aggregate": {"unit": "months", "value": 99}}, "is never delete"),
-        ({"hourly": {"unit": "days", "value": 7}}, "covers no observability key"),
-        ({}, "keeps no series"),
+        ("unknown", "keeps a series called hourly, which is not one of its trees"),
+        ("missing", "names no window for its public-copy series"),
+        ("none", "keeps no series"),
     ],
 )
-def test_a_series_is_held_to_the_knob_it_covers(
-    tmp_path: Path, series: dict[str, Any], refusal: str
+def test_a_series_task_names_every_series_it_keeps_and_no_other(
+    tmp_path: Path, change: str, refusal: str
 ) -> None:
-    kept = fixture("telemetry-aggregate")["series"] | series if series else {}
-    declared = fixture("telemetry-aggregate", series=kept)
+    kept: dict[str, Any] = fixture("telemetry-aggregate")["series"]
+    series = {
+        "unknown": kept | {"hourly": {"unit": "days", "value": 7}},
+        "missing": {name: window for name, window in kept.items() if name != "public-copy"},
+        "none": {},
+    }[change]
+    declared = fixture("telemetry-aggregate", series=series)
     assert refusal in refused(a_garden(tmp_path, telemetry_aggregate=declared))
 
 
-def test_only_the_series_task_keeps_series(tmp_path: Path) -> None:
+def test_only_the_tasks_that_keep_several_series_carry_series(tmp_path: Path) -> None:
     declared = fixture("traces", series={"full-grain": MONTHS})
-    assert "Only telemetry-aggregate keeps several series" in refused(
+    assert "Only scores, telemetry-aggregate keep several series" in refused(
         a_garden(tmp_path, traces=declared)
     )
+
+
+def test_a_task_that_keeps_series_keeps_its_window_as_its_full_grain_series(
+    tmp_path: Path,
+) -> None:
+    """One number spelled twice is two numbers the day somebody edits one of them."""
+    declared = fixture("telemetry-aggregate", window={"unit": "months", "value": 15})
+    assert "The window is the full-grain series" in refused(
+        a_garden(tmp_path, telemetry_aggregate=declared)
+    )
+
+
+@pytest.mark.parametrize(
+    ("name", "summary"), [("telemetry-aggregate", "aggregate"), ("scores", "archive")]
+)
+@pytest.mark.parametrize(("months", "loads"), [(13, False), (14, False), (15, True)])
+def test_a_summary_series_sits_above_the_rows_it_summarises(
+    tmp_path: Path, name: str, summary: str, months: int, loads: bool
+) -> None:
+    """At or under the full-grain window a month would be deleted before it was summarised."""
+    kept = fixture(name)["series"] | {summary: {"unit": "months", "value": months}}
+    config_dir = a_garden(tmp_path, **{name.replace("-", "_"): fixture(name, series=kept)})
+    if loads:
+        config.load_gardener(config_dir)
+    else:
+        message = refused(config_dir)
+        assert f"{name}.json keeps its {summary} series {months} months" in message
+        assert "or a month is deleted before it is ever summarised" in message
+
+
+@pytest.mark.parametrize("months", [13, 15])
+def test_the_public_copy_lasts_exactly_as_long_as_the_ledger_it_copies(
+    tmp_path: Path, months: int
+) -> None:
+    """Either way round leaves a month nothing can answer for."""
+    kept = fixture("telemetry-aggregate")["series"] | {
+        "public-copy": {"unit": "months", "value": months}
+    }
+    message = refused(
+        a_garden(tmp_path, telemetry_aggregate=fixture("telemetry-aggregate", series=kept))
+    )
+    assert f"keeps its public-copy series {months} months and its full-grain series" in message
+
+
+def _thirteen_months(name: str) -> dict[str, Any]:
+    """One task's declaration with every window of its full-grain rows at thirteen months."""
+    short = {"unit": "months", "value": 13}
+    declared = fixture(name, window=short)
+    if declared.get("series"):
+        declared["series"] = declared["series"] | {"full-grain": short}
+        if "public-copy" in declared["series"]:
+            declared["series"]["public-copy"] = short
+    return declared
+
+
+@pytest.mark.parametrize("name", ["feed-health", "scores", "telemetry-aggregate"])
+def test_a_window_a_console_read_still_opens_is_refused(tmp_path: Path, name: str) -> None:
+    """A 366-day read reaches fourteen month shards, and thirteen is one short of it.
+
+    The retired check compared `months * 30` against the window, which passed 13
+    while a reader could still ask for a fourteenth shard - so the check is
+    against the shards the read selects.
+    """
+    message = refused(a_garden(tmp_path, **{name.replace("-", "_"): _thirteen_months(name)}))
+    assert f"{name}.json keeps" in message
+    assert "366-day console read can select 14 month shards" in message
+
+
+def test_the_machine_ledger_lasts_as_long_as_the_published_shard_folded_from_it(
+    tmp_path: Path,
+) -> None:
+    """A published month whose source months are gone is a shard nothing can rebuild."""
+    short = fixture("host-fingerprint", window={"unit": "months", "value": 13})
+    message = refused(a_garden(tmp_path, host_fingerprint=short))
+    assert "host-fingerprint.json keeps 13 months" in message
+    assert "observability.public_machine_keep_months is 14" in message
+
+
+def a_picture_task(window: dict[str, Any]) -> dict[str, Any]:
+    return fixture(
+        "traces", owns=["frontend/public/digest"], window=window, max_deletes_per_run=200
+    )
+
+
+@pytest.mark.parametrize(
+    ("window", "loads"),
+    [
+        ({"unit": "days", "value": 390}, True),
+        ({"unit": "days", "value": 389}, False),
+        ({"unit": "months", "value": 13}, False),
+        ({"unit": "forever"}, False),
+    ],
+)
+def test_a_picture_window_is_the_one_the_archive_page_states(
+    tmp_path: Path, window: dict[str, Any], loads: bool
+) -> None:
+    """`retention.image_months` is 13, which the page states as 390 thirty-day days."""
+    config_dir = a_garden(tmp_path, visual_prune=a_picture_task(window))
+    if loads:
+        config.load_gardener(config_dir)
+    else:
+        message = refused(config_dir)
+        assert "visual-prune.json keeps" in message and "retention.image_months is 13" in message
+
+
+def test_with_no_picture_window_the_cleanup_keeps_every_picture(tmp_path: Path) -> None:
+    config_dir = a_garden(tmp_path, visual_prune=a_picture_task({"unit": "forever"}))
+    app = json.loads((config_dir / "idhazh.json").read_text(encoding="utf-8"))
+    app["retention"]["image_months"] = -1
+    (config_dir / "idhazh.json").write_text(json.dumps(app), encoding="utf-8")
+
+    config.load_gardener(config_dir)
+
+
+@pytest.mark.parametrize("name", ["scores", "telemetry-aggregate"])
+def test_a_task_that_summarises_whole_months_carries_no_ceiling(tmp_path: Path, name: str) -> None:
+    """A ceiling could stop part way through a month, and the next summary would be partial."""
+    declared = fixture(name, max_deletes_per_run=50)
+    message = refused(a_garden(tmp_path, **{name.replace("-", "_"): declared}))
+    assert f"{name}.json names a ceiling of 50" in message
 
 
 def test_a_compaction_is_named_for_its_ledger(tmp_path: Path) -> None:

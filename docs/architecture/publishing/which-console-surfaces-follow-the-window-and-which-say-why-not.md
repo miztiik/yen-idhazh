@@ -1,6 +1,6 @@
 # Which console surfaces follow the window, and which say why not
 
-**Last Updated**: 2026-09-27
+**Last Updated**: 2026-09-28
 
 One control at the top of the console sets the span for the whole page. This page
 is the control, and the list of every surface that does not simply follow it -
@@ -131,8 +131,8 @@ reading the control's own attribute back against the panel's.
 `/console/machine/`, and `scoredDays` with `modelByDate` on `/console/model/`,
 all read every committed score row rather than the window. That is deliberate - a
 change marker has to sit on the day it happened, whatever span is being read -
-but `idhazh prune-state` archives a score month past
-`observability.scores_full_grain_months` and deletes that month's day files, and
+but the gardener's `scores` task archives a score month past its full-grain
+window and deletes that month's day files, and
 the archive carries cohort totals rather than dated rows. So from the first live
 deletion those three lose the dates in the deleted month. **No number a reader
 sees moves; a date list silently shortens.**

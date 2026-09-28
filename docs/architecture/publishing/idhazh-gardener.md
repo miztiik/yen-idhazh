@@ -26,9 +26,9 @@ two lookups: the module named for the task (hyphens become underscores), else
 the module named for its kind. A config value never names a module, so text in
 a file cannot choose which code runs (Guardrail #11).
 
-**Today the folder holds no module and `config/gardener/` does not exist**, so
-every command below answers "no tasks". The first tasks arrive with their
-modules.
+**The folder is the only count.** `config/gardener/` says how many tasks there
+are, and nothing else does: a task joins when its declaration and its module
+land together, and the pre-flight below refuses either one arriving alone.
 
 ## A wake, in order
 
@@ -53,6 +53,19 @@ thousand, so counting folders would balance nothing.
 newline-separated string (`cone`) because that is what a sparse checkout reads.
 A task that owns everything else under a root adds no folder: it reads what it
 needs from git.
+
+**A task is handed the folders it walks, and never lists `state/` itself.**
+`gardener_publish.py` reads, in one `git ls-tree` with no recursion, which of
+the shard's owned folders the commit holds and every folder directly under
+`state/`, and the runner turns that into `TaskContext.owned_folders` before any
+task runs. A folder the commit holds and the checkout lacks fails its task,
+because a wrong checkout would otherwise report a silent zero. A declared folder
+the commit does not hold yet - `state/score-archive/` before the first month is
+archived - is left out and logged, and the task's first write makes it. A
+complement task's folders come from the commit alone, so a folder somebody left
+in the checkout and never committed is not the sweep's to take, and
+`idhazh gardener run-task`, which starts no process and so reads no commit,
+refuses one by name.
 
 **The plan is written twice.** The plan job runs before anything of ours is
 installed, so `gardener_shards.py` cannot import the typed planner in
@@ -90,6 +103,15 @@ no ledger family or ledger root claims. A collection task is checked on what it
 wrote alone: what it takes lives on GitHub. The record the shard writes is the
 one write no task owns.
 
+**A report a task files is held to the ledger it appends to, not to what it
+owns.** A declaration's `appends_to` names the ledgers a task may file a report
+of its own into, through the ledger door: `visual-prune` files one
+`visual-prunes` row a pass, whatever it found. Each report must be a fresh raw
+file of one of those ledgers under the wake's day, or the shard stops before
+anything is staged, the way it stops for a path outside what a task owns. A
+report lands on a dry run too, because what a dry run found is the thing it
+exists to report; every deletion it named is still held back.
+
 ## The record
 
 One record per shard, always. Every task adds its row - a
@@ -108,7 +130,8 @@ working and began to publish. A slow push is therefore never read as a slow task
 `backend/utilities/gardener_publish.py` is the only code that pushes. It is the
 entry point a shard runs: it reads the commit the checkout is at, calls the
 runner, and lands the `Shard` the runner hands back - the record, every path the
-shard's live tasks wrote and deleted, and the commit message. Each attempt
+shard's live tasks wrote and deleted, every report any of its tasks filed, and
+the commit message. Each attempt
 fetches `main`, resets the index to it with `--mixed`, stages exactly those
 writes and deletions, checks what it staged, commits as
 `miztiik <miztiik@users.noreply.github.com>` and pushes. A lost push waits a

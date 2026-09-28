@@ -205,7 +205,7 @@ Every place where the tree, or a ruling, departs from the text further down. A w
 | 2 | The payload ledger, the two roots, and the arrow mapping | 1 | B | DONE | p50r2 | #1131 | p50-r2-worker |
 | 3 | Two ledgers become parquet and their union drivers retire | 2, 4 | D | DONE | p50r3 | #1142 | p50-r3-worker |
 | 4 | The gardener: registry, config, schedule, record, commit loop | 2 | C | DONE | p50r4 | #1139 | p50-r4-worker |
-| 5 | Every prune pass becomes a gardener task | 3, 4 | E | IN-FLIGHT | p50r5 | - | p50-r5-worker |
+| 5 | Every prune pass becomes a gardener task | 3, 4 | E | DONE | p50r5 | #1145 | p50-r5-worker |
 | 6 | The corpus squash becomes Python | 4 | D | DONE | p50r6 | #1141 | p50-r6-worker |
 | 7 | One compaction task a ledger, two compact periods, and the diagrams move into the page | 5, 11 | F | PENDING | - | - | - |
 | 8 | `prune.yml` becomes `idhazh-gardener.yml`, and the whole garden is scheduled | 6, 7 | G | PENDING | - | - | - |

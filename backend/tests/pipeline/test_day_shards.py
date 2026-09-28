@@ -269,6 +269,10 @@ def test_a_row_the_contract_cannot_read_stops_the_read(tmp_path: Path) -> None:
 #: host-fingerprint one: `load_item_health` settles the window itself, while the
 #: host records are read by the two panels that show them.
 #:
+#: The cleanup passes left `retention.py` for the gardener's tasks, so their walk
+#: is named where it runs now, each with the day-file call it would be if it
+#: went back.
+#:
 #: Written out rather than discovered. A discovered list passes on a module
 #: nobody checked, and it would grow with the repository (Guardrail #12).
 MOVED: Final = (
@@ -287,7 +291,19 @@ MOVED: Final = (
         "day_files(state_dir / HOST_FINGERPRINT_DIRNAME)",
         "dates_by_month(",
     ),
-    ("backend/idhazh/retention.py", "day_files(ledger_root)", "shard_files("),
+    ("backend/idhazh/gardener/retention_files.py", "day_files(tree)", "shards_by_month("),
+    (
+        "backend/idhazh/gardener/tasks/counterfactual_scores.py",
+        "day_files(tree)",
+        "shard_files(",
+    ),
+    ("backend/idhazh/gardener/tasks/scores.py", "day_files(scores)", "shards_by_month("),
+    ("backend/idhazh/gardener/tasks/scores.py", "day_files(index)", "shard_files("),
+    (
+        "backend/idhazh/gardener/tasks/telemetry_aggregate.py",
+        "day_files(census)",
+        "shards_by_month(",
+    ),
     ("backend/idhazh/evals/writer.py", "day_files(state_dir / LEDGER_DIRNAME)", "shard_files("),
     ("backend/idhazh/evals/writer.py", "day_files(state_dir / INDEX_DIRNAME)", "shard_files("),
     ("backend/idhazh/telemetry/prune.py", "day_files(state_root / ledger)", "shard_files("),

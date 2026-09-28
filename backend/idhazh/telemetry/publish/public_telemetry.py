@@ -15,9 +15,10 @@ The projection's shape is `PublicTelemetryRow`, not a list of names here. This
 module owns *when* a shard is written and *from what*; the contract owns which
 cells may cross and what each one may hold (Guardrail #3).
 
-It owns *where* a shard sits too, through `shard_path`. `retention.prune_telemetry`
-deletes a copy in the same step that folds the days it copies, and it asks here
-for the file to unlink rather than spelling `<month>.csv` a second time.
+It owns *where* a shard sits too, through `shard_path`. The gardener's
+`telemetry-aggregate` task deletes a copy in the same pass that folds the days
+it copies, and it finds the copy by the `<YYYY-MM>.csv` name `shard_path`
+spells, through `retention.month_shards`, rather than by a spelling of its own.
 """
 
 from __future__ import annotations
@@ -181,10 +182,10 @@ def publish(
     appended to, so an ordinary run reads one month's days whatever the ledger
     holds. `None` is unbounded on purpose - a fresh clone has to rebuild a mirror
     it never published, and a cover in months would leave it permanently short of
-    one. What bounds the ledger is retention rather than this read:
-    `observability.item_health_full_grain_months` caps it at fourteen months.
+    one. What bounds the ledger is retention rather than this read: the
+    gardener's `telemetry-aggregate` task keeps fourteen months at full grain.
     That cap has never had a candidate to take - the oldest partition on disk is
-    2026-08 and `retention.prune_telemetry` first reaches it on 2027-10-01 - so
+    2026-08 and the task first reaches it on 2027-10-01 - so
     the unbounded case reads every partition there has ever been. **The day grain
     makes that case about thirty times wider in file handles and not one row
     wider**, and the listing behind it grows by one directory entry a day rather

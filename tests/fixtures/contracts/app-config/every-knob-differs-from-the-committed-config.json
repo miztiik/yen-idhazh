@@ -304,24 +304,16 @@
     "cost_input_per_million": 1.5,
     "cost_output_per_million": 7.5,
     "evaluation_enabled": false,
-    "feed_health_keep_months": 20,
     "host_fingerprint": false,
     "host_fingerprint_bandwidth_cache_multiple": 3,
     "host_fingerprint_bandwidth_floor_mib": 256,
-    "host_fingerprint_keep_months": 26,
-    "item_health_aggregate_keep_months": 36,
-    "item_health_full_grain_months": 18,
     "public_day_metrics_keep_months": 21,
     "public_machine_keep_months": 22,
     "public_run_days_keep_months": 19,
     "public_run_timeline_keep_months": 5,
     "public_span_rollup_keep_months": 23,
-    "public_telemetry_keep_months": 18,
     "sample_rate": 0.25,
-    "score_archive_keep_months": 48,
-    "scores_full_grain_months": 24,
     "telemetry_publish": false,
-    "trace_window_days": 7,
     "tracing_enabled": true,
     "visual_aggregate_keep_months": 42,
     "visuals_full_grain_months": 26
@@ -368,12 +360,9 @@
     "rows_per_split_min": 150
   },
   "retention": {
-    "dry_run": true,
     "image_months": 12,
-    "max_deletes_per_run": 50,
     "pages_hard_cap_mb": 900,
-    "site_budget_mb": 600,
-    "trial_state_days": 45
+    "site_budget_mb": 600
   },
   "run": {
     "max_parallel": 2,

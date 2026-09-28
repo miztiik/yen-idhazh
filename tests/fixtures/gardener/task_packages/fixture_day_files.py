@@ -38,7 +38,12 @@ def day_files(context: TaskContext, folders: Sequence[str]) -> Pass:
         )
 
     return take(
-        Collection(name=folders[0], listing=listing, describe=describe, delete=Path.unlink),
+        Collection(
+            name=folders[0] if folders else "no folder",
+            listing=listing,
+            describe=describe,
+            delete=Path.unlink,
+        ),
         window=Window.older_than(today=context.today.isoformat(), days=window.value),
         ceiling=context.policy.max_deletes_per_run,
         dry_run=context.policy.dry_run,

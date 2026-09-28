@@ -45,7 +45,6 @@ import logging
 import sys
 import time
 from collections.abc import Sequence
-from datetime import date as date_type
 from pathlib import Path
 from typing import Final
 
@@ -83,7 +82,6 @@ from idhazh.stages import (
     compact,
     decide,
     harvest,
-    prune_state,
     qualify,
     qualify_canaries,
     qualify_decide,
@@ -126,6 +124,31 @@ def _council_run(parser: argparse.ArgumentParser, stage: str, given: str | None)
     return given
 
 
+def _point_at_the_gardener() -> int:
+    """Say where each pass of the retired cleanup verb went, and run nothing.
+
+    Every flag it took still parses, so an old command line reaches this message
+    rather than an argument error. It exits 2, the command-line convention for a
+    request this program will not carry out, because the work it asked for runs
+    somewhere else now.
+    """
+    sys.stderr.write(
+        f"{RETIRED_CLEANUP_VERB} is retired. Each pass it ran is a gardener task now, "
+        "declared in config/gardener/<task>.json, and a task's dry run is that file's "
+        "dry_run. Run one task in this checkout with\n"
+        f"  python -m idhazh {gardener_cli.VERB} {gardener_cli.RUN_TASK} NAME "
+        "--run-id RUN_ID --attempt N --git-sha SHA\n"
+        "or run it and land what it did with\n"
+        "  python backend/utilities/gardener_publish.py NAME --run-id RUN_ID --attempt N\n"
+    )
+    return 2
+
+
+#: The cleanup verb whose passes are gardener tasks now. It stays only to say where
+#: each pass went, and it is removed once the gardener's own workflow runs them.
+RETIRED_CLEANUP_VERB: Final = "prune-state"
+
+
 #: Every verb this router accepts, and the whole of what `--help` lists. Named
 #: here rather than inline so that the workflows can be held against it: a
 #: workflow step spelling a verb this tuple does not carry is a run that dies
@@ -142,7 +165,7 @@ STAGES: Final[tuple[str, ...]] = (
     "harvest",
     "compact",
     "rebuild-score-index",
-    "prune-state",
+    RETIRED_CLEANUP_VERB,
     "run",
     "validate",
     "decide",
@@ -511,7 +534,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument(
         "--dry-run",
         action="store_true",
-        help="Report what the telemetry fold would do and change nothing on disk.",
+        help=(
+            "Accepted so an old cleanup command line still parses, and ignored: each "
+            "gardener task's dry run is its own declaration's `dry_run`."
+        ),
     )
     parser.add_argument(
         "--month",
@@ -534,6 +560,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         ),
     )
     args = parser.parse_args(argv)
+    if args.stage == RETIRED_CLEANUP_VERB:
+        return _point_at_the_gardener()
 
     settings = config.load(args.config)
     logging.basicConfig(
@@ -545,10 +573,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     # production's code path and must not be readable as a production day, and
     # the only way to guarantee that for every ledger at once is to move the
     # root they all hang off (Guardrail #6).
-    #
-    # `prune-state` is the exception, and it is the only one: it is the stage
-    # that EMPTIES the trial tree, so it has to see the tree that contains it.
-    if settings.app.run.trial_state_dirname and args.stage != "prune-state":
+    if settings.app.run.trial_state_dirname:
         common.STATE_ROOT = common.STATE_ROOT / settings.app.run.trial_state_dirname
         logging.getLogger(__name__).warning(
             "trial run: every ledger goes to %s and no published series reads it",
@@ -701,22 +726,6 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
         return rebuild_score_index.stage_rebuild_score_index(
             months=None if args.every_shard else args.month
-        )
-
-    if args.stage == "prune-state":
-        # And this one only reads and deletes committed files. A fold that opened
-        # a socket would be reading the open web to decide what to delete.
-        pruned_on = args.date or _today()
-        return prune_state.stage_prune_state(
-            observability=settings.app.observability,
-            collect=settings.app.collect,
-            extract_config=settings.app.extract,
-            retention_config=settings.app.retention,
-            lens_weights=settings.app.lens_weights,
-            run_id=plan_stage._run_id(pruned_on, args.execution),
-            commit_sha=args.commit,
-            today=date_type.fromisoformat(pruned_on),
-            dry_run=args.dry_run,
         )
 
     date = args.date or _today()

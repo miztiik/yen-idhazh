@@ -6,7 +6,7 @@ right history to keep, but it is the wrong column to read when the question is
 
 **It reaches only the months still at full grain.** Re-banding needs each row's
 own `hhem`, `coverage`, `unsupported_numbers` and `hedge_dropped`, and a month
-past `observability.scores_full_grain_months` keeps distributions rather than
+past the scores task's full-grain window keeps distributions rather than
 rows. Those months are named in the report and are not re-banded - deliberately
 lost, and printed rather than silently missing from the denominator.
 """

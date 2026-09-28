@@ -28,6 +28,8 @@ from idhazh import cli, day_shards, ledger
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.ledger_name import DAY_TREES, LedgerName
 from idhazh.contracts.ledgers import Grain
+from idhazh.gardener import registry as gardener_registry
+from idhazh.gardener import runner as gardener_runner
 from idhazh.ledger import paths
 from idhazh.stages import compact as compact_stage
 from idhazh.telemetry import sinks, traces
@@ -524,6 +526,12 @@ def _reachable_modules() -> dict[str, set[ModuleType]]:
     One hop past the dispatched stage, because a stage that hands the writing to a
     helper module still owes the run the rows: the fold writes its months through
     `retention`, and the probe writes its row through `telemetry.silicon`.
+
+    A verb that enters the gardener's runner also enters every shipped task. The
+    runner finds a task by walking its package rather than by importing it by
+    name, so no call this walk can read leads there; the discovery is asked
+    instead of restated, and a task added to the package is reached the day it
+    lands.
     """
     reachable: dict[str, set[ModuleType]] = {}
     for verb, dispatched in _dispatched_modules().items():
@@ -531,6 +539,12 @@ def _reachable_modules() -> dict[str, set[ModuleType]]:
         for module in dispatched:
             entered.add(module)
             entered |= _calls_into(module)
+        if gardener_runner in entered:
+            entered |= {
+                task_module
+                for task in gardener_registry.discover().values()
+                if (task_module := inspect.getmodule(task.run)) is not None
+            }
         reachable[verb] = entered
     return reachable
 

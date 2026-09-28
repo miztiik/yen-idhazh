@@ -210,31 +210,68 @@ _WINDOW_FLOORS: Final[Mapping[str, str]] = MappingProxyType(
     }
 )
 
-#: The one task that keeps several series of one tree family at different ages.
-SERIES_TASK: Final = "telemetry-aggregate"
+#: The name of a task's series that its own `window` must equal: the rows kept
+#: one by one, which every task that keeps series has.
+FULL_GRAIN: Final = "full-grain"
+
+#: The telemetry task's series for the browser's copy of the ledger it folds.
+PUBLIC_COPY: Final = "public-copy"
 
 
 @dataclass(frozen=True, slots=True)
-class _SeriesFloor:
-    """The `observability` key one series must outlive, and the ledger it covers, if any."""
+class _Series:
+    """One series a task may keep, and the ledger under `state/` whose files it deletes."""
 
-    #: In months, and null there means never delete.
-    knob: str
-    #: The ledger under `state/` whose files the series deletes. The published
-    #: copy covers a tree outside `state/`, so it names none.
+    #: The published copy covers a tree outside `state/`, so it names none.
     ledger: LedgerName | None
 
 
-#: Every series `telemetry-aggregate` may keep, and the knob each one must reach.
-_SERIES_FLOORS: Final[Mapping[str, _SeriesFloor]] = MappingProxyType(
+#: Every task that keeps several series of one tree family at different ages,
+#: and each series it may keep.
+_SERIES: Final[Mapping[str, Mapping[str, _Series]]] = MappingProxyType(
     {
-        "full-grain": _SeriesFloor("item_health_full_grain_months", LedgerName.ITEM_HEALTH),
-        "public-copy": _SeriesFloor("public_telemetry_keep_months", None),
-        "aggregate": _SeriesFloor(
-            "item_health_aggregate_keep_months", LedgerName.ITEM_HEALTH_SUMMARY
+        "telemetry-aggregate": MappingProxyType(
+            {
+                FULL_GRAIN: _Series(LedgerName.ITEM_HEALTH),
+                PUBLIC_COPY: _Series(None),
+                "aggregate": _Series(LedgerName.ITEM_HEALTH_SUMMARY),
+            }
+        ),
+        "scores": MappingProxyType(
+            {
+                FULL_GRAIN: _Series(LedgerName.SCORES),
+                "archive": _Series(LedgerName.SCORE_ARCHIVE),
+            }
         ),
     }
 )
+
+#: The summary series of a task, which has to outlive its full-grain series or
+#: a month is deleted before it was ever summarised.
+_SUMMARY_SERIES: Final[Mapping[str, str]] = MappingProxyType(
+    {"telemetry-aggregate": "aggregate", "scores": "archive"}
+)
+
+#: Each task whose files a console read can still open, and the series that
+#: reaches that far - None for a task's own window. A task that keeps series
+#: keeps its window equal to its full-grain one, so that series stands for it.
+_CONSOLE_READS: Final[tuple[tuple[str, str | None], ...]] = (
+    ("feed-health", None),
+    ("scores", FULL_GRAIN),
+    ("telemetry-aggregate", FULL_GRAIN),
+    ("telemetry-aggregate", PUBLIC_COPY),
+)
+
+#: The tasks that delete what the archive page promises to keep for
+#: `retention.image_months`, and how many days that knob counts a month as.
+#: Thirty because that is the arithmetic the promise was first made in; a
+#: calendar month would move what every picture window selects.
+_PICTURE_WINDOW_TASKS: Final = ("digest-fragments", "visual-prune")
+_DAYS_A_PICTURE_MONTH: Final = 30
+
+#: The task whose ledger the published machine shard is folded from, which may
+#: therefore not keep less than `observability.public_machine_keep_months`.
+_MACHINE_SOURCE_TASK: Final = "host-fingerprint"
 
 #: The longest a calendar month runs, in days. A gap measured in "one whole
 #: month" is measured at the month that is hardest to fit.
@@ -314,7 +351,12 @@ def refuse_what_the_declarations_break(
     _refuse_a_second_complement(tasks)
     _refuse_a_file_where_a_folder_belongs(tasks, repo_root)
     _refuse_a_window_under_its_floor(tasks, app)
-    _refuse_a_series_under_its_floor(tasks, app)
+    _refuse_a_series_the_task_cannot_keep(tasks)
+    _refuse_a_summary_that_goes_first(tasks)
+    _refuse_a_copy_that_is_not_its_source(tasks)
+    _refuse_a_window_a_console_read_still_opens(tasks, appearance)
+    _refuse_a_machine_source_shorter_than_its_copy(tasks, app)
+    _refuse_a_picture_window_the_archive_does_not_state(tasks, app)
     for name, policy in tasks.items():
         if isinstance(policy, CompactionPolicy):
             _refuse_a_compaction_that_cuts_its_ledger(
@@ -444,45 +486,169 @@ def _refuse_a_window_under_its_floor(tasks: Mapping[str, TaskPolicy], app: AppCo
             )
 
 
-def _knob_window(months: int | None) -> Window:
-    """An `observability` month knob as a window. Null there means never delete."""
-    if months is None:
-        return ForeverWindow(unit="forever")
-    return MonthsWindow(unit="months", value=months)
+def _where(name: str) -> str:
+    return f"config/{GARDENER_TASKS_DIR}/{name}.json"
 
 
-def _refuse_a_series_under_its_floor(tasks: Mapping[str, TaskPolicy], app: AppConfig) -> None:
-    """Series belong to one task, and each must outlive the knob it covers."""
+def _series_of(policy: TaskPolicy, series: str | None) -> Window:
+    """A task's window when `series` is None, else that series, which must be declared."""
+    if series is None:
+        return policy.window
+    kept = policy.series if isinstance(policy, RetentionPolicy) else None
+    assert kept is not None and series in kept, "checked by the series rule, which runs first"
+    return kept[series]
+
+
+def _outlives(longer: Window, shorter: Window) -> bool:
+    """Whether a window keeps strictly further back than another, wherever the calendar falls."""
+    if isinstance(longer, ForeverWindow):
+        return not isinstance(shorter, ForeverWindow)
+    if isinstance(shorter, ForeverWindow):
+        return False
+    if type(longer) is type(shorter):
+        return longer.value > shorter.value
+    longer_days, shorter_days = _days_kept(longer), _days_needed(shorter)
+    assert longer_days is not None and shorter_days is not None
+    return longer_days > shorter_days
+
+
+def _refuse_a_series_the_task_cannot_keep(tasks: Mapping[str, TaskPolicy]) -> None:
+    """Series belong to the tasks that keep several at once, and each names every one it keeps.
+
+    A task that keeps series keeps its own `window` equal to its full-grain one,
+    so one number is never spelled twice with room to disagree.
+    """
     for name, policy in tasks.items():
         carries = isinstance(policy, RetentionPolicy) and bool(policy.series)
-        if name != SERIES_TASK and carries:
+        if name not in _SERIES and carries:
             raise ValueError(
-                f"config/{GARDENER_TASKS_DIR}/{name}.json keeps series. Only "
-                f"{SERIES_TASK} keeps several series at once"
+                f"{_where(name)} keeps series. Only "
+                f"{', '.join(sorted(_SERIES))} keep several series at once"
             )
-    keeper = tasks.get(SERIES_TASK)
-    if keeper is None:
+    for keeper_name, allowed in _SERIES.items():
+        keeper = tasks.get(keeper_name)
+        if keeper is None:
+            continue
+        where = _where(keeper_name)
+        if not isinstance(keeper, RetentionPolicy) or not keeper.series:
+            raise ValueError(
+                f"{where} keeps no series. It is a retention task that keeps several, so it "
+                "names each one with its window"
+            )
+        unknown = sorted(set(keeper.series) - set(allowed))
+        if unknown:
+            raise ValueError(
+                f"{where} keeps a series called {unknown[0]}, which is not one of its "
+                f"trees. It keeps {', '.join(sorted(allowed))}"
+            )
+        missing = sorted(set(allowed) - set(keeper.series))
+        if missing:
+            raise ValueError(
+                f"{where} names no window for its {missing[0]} series. It keeps "
+                f"{', '.join(sorted(allowed))}, and a tree with no window is a tree "
+                "nothing bounds"
+            )
+        full_grain = keeper.series[FULL_GRAIN]
+        if full_grain != keeper.window:
+            raise ValueError(
+                f"{where} keeps its window {_spelled(keeper.window)} and its {FULL_GRAIN} "
+                f"series {_spelled(full_grain)}. The window is the {FULL_GRAIN} series, so "
+                "the two are one number"
+            )
+        if keeper.max_deletes_per_run is not None:
+            raise ValueError(
+                f"{where} names a ceiling of {keeper.max_deletes_per_run}. It summarises a "
+                "whole month before that month's files go, and a ceiling could stop it part "
+                "way through one, so the next pass would summarise what was left over the "
+                "summary of the whole month. It carries none"
+            )
+
+
+def _refuse_a_summary_that_goes_first(tasks: Mapping[str, TaskPolicy]) -> None:
+    """A summary series keeps strictly longer than the rows it summarises."""
+    for name, summary in _SUMMARY_SERIES.items():
+        policy = tasks.get(name)
+        if policy is None:
+            continue
+        kept, rows = _series_of(policy, summary), _series_of(policy, FULL_GRAIN)
+        if not _outlives(kept, rows):
+            raise ValueError(
+                f"{_where(name)} keeps its {summary} series {_spelled(kept)} and its "
+                f"{FULL_GRAIN} series {_spelled(rows)}. The {summary} must sit above the "
+                f"{FULL_GRAIN}, or a month is deleted before it is ever summarised"
+            )
+
+
+def _refuse_a_copy_that_is_not_its_source(tasks: Mapping[str, TaskPolicy]) -> None:
+    """The browser's copy of a ledger and the ledger itself age as one number."""
+    policy = tasks.get("telemetry-aggregate")
+    if policy is None:
         return
-    if not isinstance(keeper, RetentionPolicy) or not keeper.series:
+    copy, source = _series_of(policy, PUBLIC_COPY), _series_of(policy, FULL_GRAIN)
+    if copy != source:
         raise ValueError(
-            f"config/{GARDENER_TASKS_DIR}/{SERIES_TASK}.json keeps no series. It is the "
-            "retention task that keeps several, so it names each one with its window"
+            f"{_where('telemetry-aggregate')} keeps its {PUBLIC_COPY} series "
+            f"{_spelled(copy)} and its {FULL_GRAIN} series {_spelled(source)}. The copy is "
+            "the browser's copy of that ledger, so any other pair leaves either a published "
+            "month nothing can check or a window the console cannot draw"
         )
-    for series, window in sorted(keeper.series.items()):
-        floor = _SERIES_FLOORS.get(series)
-        if floor is None:
+
+
+def _refuse_a_window_a_console_read_still_opens(
+    tasks: Mapping[str, TaskPolicy], appearance: AppearanceConfig
+) -> None:
+    """A task may not delete a month file the widest console read can still select."""
+    window_days = appearance.console.max_window_days
+    shards = months_a_window_can_touch(window_days)
+    for name, series in _CONSOLE_READS:
+        policy = tasks.get(name)
+        if policy is None:
+            continue
+        kept = _series_of(policy, series)
+        if not _reaches(kept, MonthsWindow(unit="months", value=shards)):
+            which = "its window" if series is None else f"its {series} series"
             raise ValueError(
-                f"config/{GARDENER_TASKS_DIR}/{SERIES_TASK}.json keeps a series called "
-                f"{series}, which covers no observability key. It keeps "
-                f"{', '.join(sorted(_SERIES_FLOORS))}"
+                f"{_where(name)} keeps {which} {_spelled(kept)}, and a {window_days}-day "
+                f"console read can select {shards} month shards. It must keep at least "
+                f"{shards} months, or a panel blanks for a month that ran"
             )
-        months: int | None = getattr(app.observability, floor.knob)
-        if not _reaches(window, _knob_window(months)):
+
+
+def _refuse_a_machine_source_shorter_than_its_copy(
+    tasks: Mapping[str, TaskPolicy], app: AppConfig
+) -> None:
+    """The published machine shard is rebuilt from its ledger, so the ledger lasts as long."""
+    policy = tasks.get(_MACHINE_SOURCE_TASK)
+    if policy is None:
+        return
+    published = app.observability.public_machine_keep_months
+    if not _reaches(policy.window, MonthsWindow(unit="months", value=published)):
+        raise ValueError(
+            f"{_where(_MACHINE_SOURCE_TASK)} keeps {_spelled(policy.window)} and "
+            f"observability.public_machine_keep_months is {published}. The published "
+            "machine shard is folded from state/host-fingerprint/, so a source month "
+            "deleted while the published one is still kept is a shard nothing can rebuild"
+        )
+
+
+def _refuse_a_picture_window_the_archive_does_not_state(
+    tasks: Mapping[str, TaskPolicy], app: AppConfig
+) -> None:
+    """The archive page states `retention.image_months`, so the cleanup keeps exactly that."""
+    months = app.retention.image_months
+    stated: Window = (
+        ForeverWindow(unit="forever")
+        if months < 0
+        else DaysWindow(unit="days", value=months * _DAYS_A_PICTURE_MONTH)
+    )
+    for name in _PICTURE_WINDOW_TASKS:
+        policy = tasks.get(name)
+        if policy is not None and policy.window != stated:
             raise ValueError(
-                f"config/{GARDENER_TASKS_DIR}/{SERIES_TASK}.json keeps its {series} series "
-                f"{_spelled(window)} and observability.{floor.knob} is "
-                f"{'never delete' if months is None else f'{months} months'}, so the "
-                "series would delete what that knob keeps"
+                f"{_where(name)} keeps {_spelled(policy.window)} and retention.image_months "
+                f"is {months}, which the archive page states to a reader as "
+                f"{_spelled(stated)}. The cleanup keeps exactly the window the page states, "
+                "so a reader is never told a picture stays that the cleanup takes"
             )
 
 
@@ -498,12 +664,13 @@ def _old_tree_floor(ledger: LedgerName, tasks: Mapping[str, TaskPolicy]) -> Wind
     from idhazh.ledger.paths import STATE_DIRNAME
 
     old_tree = f"{STATE_DIRNAME}/{ledger.value}"
-    for policy in tasks.values():
+    for name, policy in tasks.items():
         if not isinstance(policy, RetentionPolicy) or old_tree not in (policy.owns or ()):
             continue
+        allowed = _SERIES.get(name, {})
         for series, window in (policy.series or {}).items():
-            floor = _SERIES_FLOORS.get(series)
-            if floor is not None and floor.ledger is ledger:
+            kept = allowed.get(series)
+            if kept is not None and kept.ledger is ledger:
                 return window
         return policy.window
     return None
