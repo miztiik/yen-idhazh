@@ -218,7 +218,7 @@ async function main(args: string[]): Promise<number> {
 	const python = pythonPath(root, opts.python);
 	const npm = npmPath();
 	const env: NodeJS.ProcessEnv = { ...process.env, PYTHONPATH: join(root, 'backend'), IDHAZH_PYTHON: python,
-		SKIP_CONSOLE_SUITE: 'false', IDHAZH_TEST_BUILD: opts.mode };
+		SKIP_CONSOLE_SUITE: 'false', SKIP_PANELS_SUITE: 'false', IDHAZH_TEST_BUILD: opts.mode };
 	for (const name of ['DIGEST_ROOT', 'STATE_ROOT', 'TELEMETRY_ROOT', 'PYTEST_ADDOPTS']) delete env[name];
 	const packages: Record<string, string> = {};
 	if (selected.groups.some((group) => group !== 'backend')) {

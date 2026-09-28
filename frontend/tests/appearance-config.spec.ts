@@ -11,7 +11,7 @@ import { expect, test } from '@playwright/test';
 import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { assistConfig, mergeLayers } from '../src/lib/server/config';
+import { assistConfig, consoleConfig, mergeLayers } from '../src/lib/server/config';
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -158,4 +158,28 @@ const pipelineOwned = Object.keys(onDisk).filter((key) => !DECLARED.includes(key
 expect(pipelineOwned.length).toBeGreaterThan(0);
 for (const key of pipelineOwned) expect(handed).not.toContain(key);
 });
+});
+
+/** The keys the `console` block carries that no console page is handed.
+ *
+ * Whatever `consoleConfig()` returns is inlined into all five prerendered
+ * console documents. The running order is read by each route for itself, and
+ * two knobs are read by the sufficiency specs alone, so none of the three may
+ * ride along. Named rather than counted, as the assist block's are.
+ */
+test.describe('the console block a page is handed', () => {
+	const NOT_HANDED = ['panel_groups', 'judged_panel_ids', 'plot_min_fill_share'];
+
+	test('carries none of the keys only a route or the gate specs read', () => {
+		const onDisk = (
+			JSON.parse(readFileSync(join(REPO, 'config', 'appearance.json'), 'utf8')) as {
+				console: Record<string, unknown>;
+			}
+		).console;
+		const handed = Object.keys(consoleConfig());
+		for (const key of NOT_HANDED) {
+			expect(onDisk, `config/appearance.json no longer carries console.${key}`).toHaveProperty(key);
+			expect(handed, `consoleConfig() hands every console page console.${key}`).not.toContain(key);
+		}
+	});
 });
