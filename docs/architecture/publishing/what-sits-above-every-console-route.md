@@ -123,7 +123,9 @@ a stuck strip that tall would cover a phone.
 worst state on a line under its label, keeps the width the longer of the two
 needs, and shares whatever the row has left; when the row runs out, the tab list
 scrolls sideways inside the strip and the days control stays pinned at the
-trailing end. The strip never wraps to a second row and no label is shortened. Adding a route is an entry in the route list in
+trailing end. The strip never wraps to a second row and no label is shortened.
+Every tab fills the row's height, a tab with no worst state included, so the rule
+under the active route sits on one line whichever route it is. Adding a route is an entry in the route list in
 [band.ts](../../../frontend/src/lib/console/band.ts) and a page, never a layout
 change, and `console-shell.spec.ts` holds the row with one tab more than the
 console has, and again with as many more as it takes to make the list scroll.

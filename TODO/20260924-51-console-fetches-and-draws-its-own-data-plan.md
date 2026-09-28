@@ -52,7 +52,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | The Hardware route stops counting every job twice | - | A | IN-FLIGHT | p51r1 | - | p51-r1-worker |
-| 2 | The console shell: a stuck tab strip, the span control on it, jump links, a completeness sentence | - | A | IN-FLIGHT | p51r2 | - | p51-r2-worker |
+| 2 | The console shell: a stuck tab strip, the span control on it, jump links, a completeness sentence | - | A | DONE | p51r2 | - | p51-r2-worker |
 | 3 | The three ledgers the console reads are published | plan 50's rows titled "One compaction task a ledger, two compact periods, and the diagrams move into the page" and "The three ledgers the console's routes read become parquet" | B | PENDING | - | - | - |
 | 4 | The chart vocabulary and the house style, with no panel moved | - | B | IN-FLIGHT | p51r4 | - | p51-r4-worker |
 | 5 | One readout strip, every chart, and hover a keyboard can reach | 1, 4 | C | PENDING | - | - | - |
