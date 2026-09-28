@@ -3,7 +3,7 @@
 A program in a heredoc is never imported, never linted by the repository's own
 ruff pass, and never run until the step runs - so a missing `import` is not a
 red test, it is a runner hour spent and thrown away at the line that needed it.
-That is not hypothetical: the server arm of `measure.yml` used `hashlib.sha256`
+That is not hypothetical: the server job of `measure.yml` used `hashlib.sha256`
 without importing it, which fired only after the model had summarized all five
 articles, about fifty minutes in.
 

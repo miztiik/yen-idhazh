@@ -169,7 +169,7 @@ def test_a_shard_out_of_clock_stops_itself_instead_of_being_killed(
     what it has and names what it skipped.
 
     The whole shard timeout is spent here, so the deadline is already behind the
-    first item and the loop stops at the top - which is the arm that matters,
+    first item and the loop stops at the top - which is the branch that matters,
     because it is the one that says the shard chose to stop.
     """
     run_plan = plan()

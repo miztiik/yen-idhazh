@@ -112,7 +112,7 @@ def test_a_published_day_that_still_carries_key_points_reads(stem: str, fixture:
 
     Every day published before 2026-09-24 carries `key_points` on every item,
     and a published day is never rewritten. `extra="forbid"` would refuse one
-    outright, so the read side drops the key by name - and this is the arm that
+    outright, so the read side drops the key by name - and this is the half that
     proves it, because the canonical fixture no longer carries the key and so
     proves only the new shape.
     """

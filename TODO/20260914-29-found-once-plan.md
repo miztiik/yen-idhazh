@@ -352,7 +352,7 @@ worst order available.
 
 **Oracle.** A reading-page test on a built day with a known group: the anchor
 draws once, the members do not draw as cards, every member's address still
-resolves, and every member appears in the month index. A second arm with
+resolves, and every member appears in the month index. A second check with
 `ui.draw_same_story` off restores one card per item.
 
 **What the reader loses, stated.** On a false merge, a story is one click away
@@ -450,7 +450,7 @@ tombstone shelf and pass.
   break the across-outlets rule row #2 just repaired.
 
 **Oracle.** A built plan carrying one outlet's piece twice plans it once. A
-second arm with two different outlets plans both.
+second check with two different outlets plans both.
 
 ## Row #8 - a ceiling on the day, beside the ceiling on a run
 
@@ -473,7 +473,7 @@ number a person set at 80 publishes about 356. Anybody reading `80` and picturin
 an 80-item day is wrong by a factor of four and a half.
 
 **Oracle.** A built multi-run day stops at the day ceiling with runs still
-under their own. A second arm stops a single run at the run ceiling with the day
+under their own. A second check stops a single run at the run ceiling with the day
 still under its own.
 
 ## Row #9 - the same story is one story for 36 hours, not one day
@@ -555,7 +555,7 @@ $$
   what it was" - instead of a variance:
   $\sigma^2 = -\text{scale}^2 / (2\ln(\text{decay}))$.
 - **`freshness_decay_at_scale` of 1.0 turns the whole thing off**, exactly,
-  and that is the revert path. It ships on, and the row's second oracle arm is
+  and that is the revert path. It ships on, and the row's second oracle check is
   that off reproduces today's order byte for byte.
 - It feeds **ranking**, never grouping. A story's age changes where it sits,
   never whether it is the same story as another.
@@ -623,7 +623,7 @@ folded day. The existing same-story flowchart in
 is one half of it and is linked rather than copied.
 
 **Oracle.** A built day where the top item by `rank_score` alone is not the top
-item by the composite, proving the weights bind. A second arm with every weight
+item by the composite, proving the weights bind. A second check with every weight
 but `rank_score` set to zero reproduces today's order exactly.
 
 ## Row #12 - label the sheet, then set the floor
@@ -766,7 +766,7 @@ four, the alarm keeps its meaning, and nobody has to learn a new vocabulary.
 
 **One knob is worth proposing beyond that, and it is the owner's call.**
 `collect.source_quality_auto_retire`, default **false** for the first release.
-The loop measures and draws from the day it lands; the retirement arm switches on
+The loop measures and draws from the day it lands; the retirement step switches on
 once a person has watched the panel for a cycle and agrees with what it is
 pointing at. It carries its removal condition on the declaring line
 (Guardrail #6): delete the flag once one real retirement has been reviewed and
@@ -872,7 +872,7 @@ export entry, and the three new keys in **both**
 `every-knob-differs-from-the-committed-config.json` and `tuned.json` - only the
 full suite catches those. Integration: `to_article_with_source` driven with a
 `seen_elsewhere` set built by the real fold from two captured pages under
-`tests/fixtures/pages/`, no mocks. End-to-end: one canary arm proving a refused
+`tests/fixtures/pages/`, no mocks. End-to-end: one canary check proving a refused
 item still writes an honest item-health row. No test walks `state/` or the
 committed days.
 

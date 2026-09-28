@@ -50,7 +50,7 @@ and a composite action took ten inputs to carry them to a download - four hops,
 every one of them a place a value could be pasted into a command.
 
 **`measure.yml` is the one file still declaring the three pin values in its own
-`env:` block**, and its four inline download arms are what read them. A workflow
+`env:` block**, and its four inline download steps are what read them. A workflow
 `env:` block cannot read a file, and two of those jobs have no Python set up at
 all, so moving it means adding a step to jobs that cannot run one. A test holds
 the two copies equal instead, so the second cannot drift from the first.
@@ -191,9 +191,9 @@ watched the bytes arrive.
 | Workflow and job | Weights | Digest read from |
 | --- | --- | --- |
 | every job on the shared download | whatever its config root declares | that root's own `models.summarizer.sha256` and each companion's, read by `verify-model-files` |
-| `measure.yml`'s four inline arms | the bench candidate, or the summarizer | the `models` job's republished `candidate_sha256`, or `models.summarizer.sha256` |
+| `measure.yml`'s four inline download steps | the bench candidate, or the summarizer | the `models` job's republished `candidate_sha256`, or `models.summarizer.sha256` |
 
-The four inline arms are the exception, and deliberately: an operator can point
+The four inline download steps are the exception, and deliberately: an operator can point
 the bench at a model config does not name, so that job resolves the digest once
 - from the dispatch input, or from config when there is none - and republishes
 it as a job output the whole run reads. The bench's raw case checks the same
@@ -211,7 +211,7 @@ that search would have gone on passing.
 The production entry is **5.68 GB** (`5,680,522,464` bytes). The 57-to-338-second
 figures in
 [what-a-bench-dispatch-costs.md](benchmarks/what-a-bench-dispatch-costs.md) were
-taken on the 4.28 GB bench arm, not on this file.
+taken on the 4.28 GB bench candidate, not on this file.
 
 ### The digest settles the bytes, and the declared size settles the document
 
@@ -221,7 +221,7 @@ the file's size against the entry's own `byte_count`**, for the weights and for
 each companion. An entry that declares no size skips the check, because that is
 an entry nobody has fetched yet rather than an entry that disagrees with itself.
 
-It used to be two arms doing this and two not. `validate.yml` had done it since
+It used to be two jobs doing this and two not. `validate.yml` had done it since
 it was written and `measure.yml` had not; the drift was found on 2026-09-15 by
 diffing the two files. Both halves are inside one verb now, so there is no
 second place for one of them to be missing from.
@@ -235,14 +235,14 @@ look wrong: every figure would be internally consistent.
 
 Four server starts exist across the workflows and **all four now ask
 `GET /v1/models` before anything is measured** - the daily run's worker, the
-bench's runtime arm, the bench's vocabulary arm, and both starts in
+bench's runtime job, the bench's vocabulary job, and both starts in
 `idhazh-pipeline-tests.yaml`. Two of those learned it on 2026-09-15; the daily
-run and the validation arm already did it.
+run and the validation job already did it.
 
 The alias comes from the same config the server's flags came from, never from a
 second copy, so the two cannot disagree (Guardrail #6). The test is discovery-
 based rather than a list: every step whose script waits on `/health` must also
-name `/v1/models`, so an arm added later is held to the rule whether or not
+name `/v1/models`, so a step added later is held to the rule whether or not
 anybody remembered it.
 
 ## One place writes a production model ref, and it is config

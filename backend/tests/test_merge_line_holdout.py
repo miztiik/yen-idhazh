@@ -4,9 +4,9 @@ Unit tier for the two rules a reading rests on - which side of the line a pair
 falls and how much of the marked file has to be counted - and integration tier
 for the verb writing a row the contract reads back.
 
-**The oracle has two arms and both are checked.** The four cells plus the
+**The oracle has two halves and both are checked.** The four cells plus the
 unresolved count add up to the marked population, AND the count that was
-resolved clears the floor. The first arm on its own is satisfied by four zeros
+resolved clears the floor. The first half on its own is satisfied by four zeros
 and a full unresolved count, which is a run that scored nothing reading as a
 line that merged nothing.
 
@@ -286,7 +286,7 @@ def test_the_floor_is_a_constant_and_not_a_knob() -> None:
 def test_the_four_cells_and_the_unresolved_count_add_up_to_the_marked_file(
     tmp_path: Path,
 ) -> None:
-    """The first arm of the oracle: every marked pair lands in exactly one count.
+    """The first half of the oracle: every marked pair lands in exactly one count.
 
     A pair counted twice, or one dropped on its way past, would leave the row
     describing a file that is not the one on disk.
@@ -381,7 +381,7 @@ def test_a_pair_whose_day_is_gone_is_counted_unresolved_rather_than_dropped(
 
 
 def test_a_reading_below_the_floor_writes_no_row_at_all(tmp_path: Path) -> None:
-    """The second arm of the oracle, and the one the first arm cannot stand in for.
+    """The second half of the oracle, and the one the first half cannot stand in for.
 
     Four zeros and a full unresolved count satisfy the sum. The floor is what
     makes that a refusal rather than a row saying the line merged nothing.

@@ -563,7 +563,7 @@ def test_one_outlet_never_runs_the_identical_piece_twice(
 def test_two_outlets_on_one_story_are_both_planned() -> None:
     """The same rule, with the one thing changed that is allowed to change it.
 
-    The two feeds carry the identical pair of headlines as the arm above. Only
+    The two feeds carry the identical pair of headlines as the check above. Only
     the masthead differs, and both pieces plan - because two newsrooms running
     one story is the digest working, not a repeat.
     """

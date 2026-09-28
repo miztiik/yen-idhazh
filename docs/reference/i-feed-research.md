@@ -9,7 +9,7 @@ selects what applies to this app and what to build first.
 ## Scope and reading depth
 
 Search and review date: 2026-09-09. The search covered contextual/news,
-nonstationary, sleeping and many-arm bandits; budgeted discovery/crawling;
+nonstationary, sleeping and many-armed bandits; budgeted discovery/crawling;
 off-policy/slate evaluation; drift/windowing; diversity/feedback loops; and
 hybrid assessment. It included foundational and recent papers. This was a broad
 targeted review, not a claim to have found every publication on the subject.
@@ -71,7 +71,7 @@ years. Authors are abbreviated with `et al.` where noted.
 | --- | --- | --- |
 | [Judging LLM-as-a-Judge with MT-Bench and Chatbot Arena](https://arxiv.org/abs/2306.05685), Zheng et al., 2023. | Abstract | Evaluate position, verbosity and self-preference biases when a model has assessment weight. Human-preference agreement is not factual verification. |
 | [Large Language Models Cannot Self-Correct Reasoning Yet](https://arxiv.org/abs/2310.01798), Huang et al., 2023. | Methods | Supply external feedback and equal-budget comparisons. Its reasoning results are not a universal ban on hybrid assessment or Python tuning. |
-| [Calibration-Gated LLM Pseudo-Observations for Online Contextual Bandits](https://arxiv.org/abs/2604.14961), Pershin, Golovanov, Baltabaev and Trankova, 2026. | Methods | Test assessor influence against observed errors. This preliminary single-seed, short-horizon study found calibration gating worse than its simple task-specific baseline; its title is not evidence to adopt the gate. Do not count unplayed-arm guesses as delivery. |
+| [Calibration-Gated LLM Pseudo-Observations for Online Contextual Bandits](https://arxiv.org/abs/2604.14961), Pershin, Golovanov, Baltabaev and Trankova, 2026. | Methods | Test assessor influence against observed errors. This preliminary single-seed, short-horizon study found calibration gating worse than its simple task-specific baseline; its title is not evidence to adopt the gate. Do not count untried-source guesses as delivery. |
 | [Jump Start or False Start? A Theoretical and Empirical Evaluation of LLM-initialized Bandits](https://arxiv.org/abs/2604.02527), Bayley, Zhu, Aoki, Cao and Wilson, 2026. | Methods | Audit initial-prior alignment and model-version sensitivity. Linear/noise assumptions and conjoint preference experiments do not establish our news-quality calibration. |
 
 ## Further leads

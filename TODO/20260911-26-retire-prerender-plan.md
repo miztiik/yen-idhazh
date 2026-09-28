@@ -61,7 +61,7 @@ Execute per [`../docs/how-to/execute-a-plan.md`](../docs/how-to/execute-a-plan.m
 
 **No row changes what any document contains.** This is what makes every gate in this plan cheap: the four ceilings in `page_weight.ceilings_bytes` must hold to the byte, and a moved byte is a defect rather than a re-pricing.
 
-**Every measurement names its arms, its pin and its spread.** `kit.version.name` defaults to `Date.now`, so two builds of one unchanged tree disagree on about 20 percent of `build/` by filename. Row #1 pins `BUILD_VERSION` across both arms and says so, per [`../docs/reference/agent-notes/gates-and-builds.md`](../docs/reference/agent-notes/gates-and-builds.md).
+**Every measurement names its setups, its pin and its spread.** `kit.version.name` defaults to `Date.now`, so two builds of one unchanged tree disagree on about 20 percent of `build/` by filename. Row #1 pins `BUILD_VERSION` across both setups and says so, per [`../docs/reference/agent-notes/gates-and-builds.md`](../docs/reference/agent-notes/gates-and-builds.md).
 
 **Row #1 may not be the first record in `docs/reference/benchmarks/`, and its own text says it is.** [`20260910-23-article-classification-plan.md`](20260910-23-article-classification-plan.md) row #P5 writes a different record into the same directory, the directory does not exist yet, and **both rows are unblocked today**, so either may create it. Row #1 writes *a* record. **Whichever of the two lands second drops the word "first" from its own text and names the row that created the directory.** Found 2026-09-11; neither plan named it ([`20260911-execution-order.md`](20260911-execution-order.md) section 6).
 
@@ -116,7 +116,7 @@ npm run test:browser
 
 **Fact 4 - four surfaces still tell a reader something false, and one of them is a gate guide.** They are named in rows #3 and #4. This is the real cost of leaving prerender unowned: not the six documents, but that the last two plan-docs to touch the subject both inherited "every route is prerendered" from a page nobody corrected.
 
-**What this ruling is not.** It is not a finding that prerendering is good, and it does not defend the seven declarations individually - row #1 measures them as one arm, and section 6 is what a worker executes the day the owner says so.
+**What this ruling is not.** It is not a finding that prerendering is good, and it does not defend the seven declarations individually - row #1 measures them as one setup, and section 6 is what a worker executes the day the owner says so.
 
 ### 0.3 The inventory this plan is priced against
 
@@ -148,7 +148,7 @@ Read 2026-09-11 from `main` at `b0e0411a`, in an isolated worktree. Every figure
 
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | What prerendering actually weighs, both arms | - | A | DONE #645 | p26-1 | #645 | worker |
+| 1 | What prerendering actually weighs, both setups | - | A | DONE #645 | p26-1 | #645 | worker |
 | 2 | The guard retires, and nothing a reader sees moves | - | A | DONE #613 | p26-r2 | #613 | worker |
 | 3 | The three surfaces that say every route is prerendered | - | B | DONE #614 | p26-r3 | #614 | worker |
 | 4 | The ruling, written where the next person arrives | 1, 2 | B | DONE #649 | p26-4 | #649 | worker |
@@ -170,11 +170,11 @@ Derived from the rows' own `Files touched` lists on 2026-09-11. **It is derived 
 
 ---
 
-## 2. Row #1 - What prerendering actually weighs, both arms
+## 2. Row #1 - What prerendering actually weighs, both setups
 
 ### Scope
 
-Build the site twice from one tree - once as it stands, once with the seven `prerender = true` declarations removed - and write up the difference as a record under `docs/reference/benchmarks/`. **The second arm is a throwaway measurement branch that is never merged and never pushed**; its only product is a number.
+Build the site twice from one tree - once as it stands, once with the seven `prerender = true` declarations removed - and write up the difference as a record under `docs/reference/benchmarks/`. **The second setup is a throwaway measurement branch that is never merged and never pushed**; its only product is a number.
 
 **This row does not create that directory, and an earlier draft said it did.** Three records already sit there - `day-window-read.md`, `two-call-re-read.md` and `instructions-in-front.md` - written by plan 24 row #1 and plan 11 rows #3d and #3e. Follow their shape rather than inventing one. Corrected by the orchestrator, 2026-09-12.
 
@@ -182,14 +182,14 @@ Build the site twice from one tree - once as it stands, once with the seven `pre
 
 | What | How |
 | --- | --- |
-| The pin | `BUILD_VERSION` set to one literal string across both arms, because `kit.version.name` defaults to `Date.now` and two unpinned builds of one tree disagree on about 20 percent of `build/` by filename |
-| Arm A | `main` as it stands. `npm run build` |
-| Arm B | The same tree with the seven `export const prerender = true` lines deleted and nothing else changed. `npm run build` |
+| The pin | `BUILD_VERSION` set to one literal string across both setups, because `kit.version.name` defaults to `Date.now` and two unpinned builds of one tree disagree on about 20 percent of `build/` by filename |
+| Setup A | `main` as it stands. `npm run build` |
+| Setup B | The same tree with the seven `export const prerender = true` lines deleted and nothing else changed. `npm run build` |
 | Document count | `(Get-ChildItem frontend/build -Recurse -Filter index.html).Count`, and the same for `__data.json` |
-| Site total | `python -m idhazh site-weight --site-tree build` on each arm - the number the 1 GB Pages cap is measured against |
-| Page ceilings | `npm run bundle-gate` on each arm, capturing the `/404` and `/evals/` figures it prints at `gzip -5` |
-| First-byte content | On arm B, whether `frontend/build/index.html` exists at all. **This is the load-bearing observation**, not a byte count: `adapter-static` has one fallback and the route comment predicts there is no root document on that arm |
-| Spread | Three builds per arm at the same pin, reporting the range. A build is deterministic at a pinned version, so a non-zero spread is itself the finding |
+| Site total | `python -m idhazh site-weight --site-tree build` on each setup - the number the 1 GB Pages cap is measured against |
+| Page ceilings | `npm run bundle-gate` on each setup, capturing the `/404` and `/evals/` figures it prints at `gzip -5` |
+| First-byte content | On setup B, whether `frontend/build/index.html` exists at all. **This is the load-bearing observation**, not a byte count: `adapter-static` has one fallback and the route comment predicts there is no root document on that setup |
+| Spread | Three builds per setup at the same pin, reporting the range. A build is deterministic at a pinned version, so a non-zero spread is itself the finding |
 
 ### Files touched
 
@@ -203,28 +203,28 @@ Build the site twice from one tree - once as it stands, once with the seven `pre
 git status --porcelain frontend/src
 ```
 
-`GATE-DOCS`, plus: **`git status --porcelain frontend/src` prints nothing.** Arm B is a scratch edit and a single tracked line surviving it fails this row. The record itself must name the hardware, the date, both arms, the pin and the spread, or it is an estimate.
+`GATE-DOCS`, plus: **`git status --porcelain frontend/src` prints nothing.** Setup B is a scratch edit and a single tracked line surviving it fails this row. The record itself must name the hardware, the date, both setups, the pin and the spread, or it is an estimate.
 
 ### Oracle
 
 **The fixture is the tree at the commit the row runs on, and it is named in the record.** There is no smaller one: the quantity under measurement is what the whole site weighs, and a canary day cannot answer it. This is `CLAUDE.md` Guardrail #12's escape hatch used deliberately - the read is over a growing collection, it happens once, by hand, off the daily path, and its cost is written down here rather than discovered later.
 
-**The oracle for the row's own correctness is the ceiling file.** `npm run bundle-gate` on arm A must print `/404` and `/evals/` inside the 4,400 B and 6,600 B written in `config/idhazh.json`. If it does not, the worktree is not clean and no number from it is usable.
+**The oracle for the row's own correctness is the ceiling file.** `npm run bundle-gate` on setup A must print `/404` and `/evals/` inside the 4,400 B and 6,600 B written in `config/idhazh.json`. If it does not, the worktree is not clean and no number from it is usable.
 
 ### Decisions
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | **Both arms, even though the ruling is already made.** A ruling defended only in prose can only be argued with; a ruling with a number beside it can be overturned by a better number. Section 6 is executable the day the owner wants it, and this is the row that tells them what they would be buying | `CLAUDE.md` Guardrail #10 |
-| 2 | **Arm B is never merged and never pushed.** It exists for one afternoon in one worktree. The plan's hard scope forbids removing a declaration, and a branch that did it would be one merge away from doing it by accident | This plan, section 0 |
+| 1 | **Both setups, even though the ruling is already made.** A ruling defended only in prose can only be argued with; a ruling with a number beside it can be overturned by a better number. Section 6 is executable the day the owner wants it, and this is the row that tells them what they would be buying | `CLAUDE.md` Guardrail #10 |
+| 2 | **Setup B is never merged and never pushed.** It exists for one afternoon in one worktree. The plan's hard scope forbids removing a declaration, and a branch that did it would be one merge away from doing it by accident | This plan, section 0 |
 | 3 | **The record goes under `docs/reference/benchmarks/` and the instrument log gets one line.** A run is a fact about a day and the figure it produces is in force only until the next run; appending to the log instead would leave two readings of one quantity in date order, where only the ordering says which governs | `CLAUDE.md` section 5 |
 
 ### Rejected alternatives
 
 | Rejected | Why |
 | --- | --- |
-| Estimate it from the six documents' current sizes | It answers the wrong question. The interesting number is not what the six weigh, it is whether arm B produces a root document at all - and an estimate cannot see a missing file |
-| Measure only arm A | Half a measurement is a description. The decision this priced is a comparison |
+| Estimate it from the six documents' current sizes | It answers the wrong question. The interesting number is not what the six weigh, it is whether setup B produces a root document at all - and an estimate cannot see a missing file |
+| Measure only setup A | Half a measurement is a description. The decision this priced is a comparison |
 | Leave the measurement to whoever executes section 6 | Then the number arrives after the decision, which is the failure `CLAUDE.md` Guardrail #10 exists to stop |
 
 ### What this row does not do
@@ -482,7 +482,7 @@ Named here so they are not mistaken for work this plan is doing.
 - [`20260911-classification-research-record.md`](20260911-classification-research-record.md) - the research record whose 2026-09-11 reading of `frontend/prerender-guard.js` and `frontend/svelte.config.js` is where both plans' prerender paragraphs came from.
 - [`../docs/architecture/publishing/frontend.md`](../docs/architecture/publishing/frontend.md) - the living doc that owns the six routes, the 2026-09-09 split and the 2026-09-10 seam, and the page row #4 writes the ruling into.
 - [`../docs/concepts/ui-shell.md`](../docs/concepts/ui-shell.md) - the four surfaces the site publishes, and the page "the UI shell plan" was probably a memory of.
-- [`../docs/reference/agent-notes/gates-and-builds.md`](../docs/reference/agent-notes/gates-and-builds.md) - why `BUILD_VERSION` is pinned across both of row #1's arms, and what an unpinned pair costs.
+- [`../docs/reference/agent-notes/gates-and-builds.md`](../docs/reference/agent-notes/gates-and-builds.md) - why `BUILD_VERSION` is pinned across both of row #1's setups, and what an unpinned pair costs.
 - [`../docs/concepts/growing-reads.md`](../docs/concepts/growing-reads.md) - what a read over a growing collection must declare, which row #1's measurement does.
 - [`../docs/how-to/execute-a-plan.md`](../docs/how-to/execute-a-plan.md) - how a worker runs a row, and where the no-two-rows-one-file rule comes from.
 - [`../docs/how-to/author-a-plan.md`](../docs/how-to/author-a-plan.md) - the shape every row above is written in.

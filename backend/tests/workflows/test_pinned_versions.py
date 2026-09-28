@@ -39,8 +39,8 @@ pytestmark = pytest.mark.workflow
 
 #: The one file that still carries a second copy of the pin, and why it may. Its
 #: three values sit in a workflow-level `env:` block, which cannot read a file at
-#: all, and its four consumers are the inline download arms plan 46 converts.
-#: Delete this and the test below when those arms go.
+#: all, and its four consumers are the inline download steps plan 46 converts.
+#: Delete this and the test below when those steps go.
 PIN_SECOND_COPY = "measure.yml"
 
 

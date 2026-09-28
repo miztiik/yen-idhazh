@@ -863,7 +863,7 @@ def test_a_thinking_entry_reads_its_verdict_off_the_answer_span() -> None:
 def test_a_pairs_calls_are_counted_rather_than_derived_from_its_pairs() -> None:
     """Two calls cold, four behind a reasoning span, and the tokens of every one of them.
 
-    The thinking arm is the one that matters. Twice the pairs is the right answer
+    The thinking setup is the one that matters. Twice the pairs is the right answer
     cold and wrong by half here, so a figure derived that way would under-report
     every reasoning span the run paid for, and no cold test could see it.
 

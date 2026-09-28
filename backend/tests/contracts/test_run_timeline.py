@@ -62,7 +62,7 @@ def _a_row(**cells: Any) -> RunTimelineRow:
 
 
 def test_a_row_carrying_every_step_round_trips_byte_identically() -> None:
-    """The oracle's first arm: all eight steps, through the shape and back."""
+    """The oracle's first half: all eight steps, through the shape and back."""
     text = read_text(CONTRACT_FIXTURES_DIR / "run-timeline-row" / "every-step.json")
     row = RunTimelineRow.from_json(text)
     assert row.to_json() == text
@@ -70,7 +70,7 @@ def test_a_row_carrying_every_step_round_trips_byte_identically() -> None:
 
 
 def test_a_row_that_died_at_fetch_loads_with_the_other_seven_null() -> None:
-    """The oracle's second arm: one step filled, seven absent, and it still draws.
+    """The oracle's second half: one step filled, seven absent, and it still draws.
 
     A bar needs a start and a length, and this row has both. Nothing else about
     it is required, which is what lets an item that never reached the model

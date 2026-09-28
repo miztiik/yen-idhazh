@@ -44,7 +44,7 @@ A_DATE = "2026-09-20"
 A_RUN = "2026-09-21-35534060762"
 
 #: Every council verb the router carries. Named here so a verb added without a
-#: zero-tenant arm fails this file rather than shipping untested.
+#: zero-tenant check fails this file rather than shipping untested.
 COUNCIL_VERBS = ("council-prepare", "council-settle")
 
 #: The stage modules the content-similarity judge owns, spelled one by one. A
@@ -153,7 +153,7 @@ def _judge_modules_reached(module: str, prefixes: tuple[str, ...]) -> list[str]:
 
 @pytest.mark.parametrize("verb", COUNCIL_VERBS)
 def test_a_council_verb_runs_a_night_that_hosts_nobody(verb: str, tmp_path: Path) -> None:
-    """The zero-tenant arm, against a config that registers nobody.
+    """The zero-tenant check, against a config that registers nobody.
 
     A venue with no tenants judges nothing, and that is correct. What it must
     not do is fail: every step of the night still runs, which is what makes the

@@ -252,7 +252,7 @@ def test_an_item_whose_machine_never_answered_records_six_nulls(
     """Nulls and never zeros: a zero here would read as a machine out of memory.
 
     This is the ordinary path on every machine this project is written on, so
-    the degraded arm is the one a developer sees and the filled one is CI's.
+    the degraded branch is the one a developer sees and the filled one is CI's.
     """
     monkeypatch.setattr(host, "MEMINFO", tmp_path / "absent")
 
@@ -514,7 +514,7 @@ def test_the_processor_busy_share_is_read_from_a_real_proc_stat_pair() -> None:
     **This runner reported no stolen ticks at either end**, which is asserted
     rather than assumed: a capture with steal in it would make the subtraction
     below and the one in the function differ, and the reader deserves to know
-    which arm of the arithmetic this fixture exercises.
+    which branch of the arithmetic this fixture exercises.
     """
     at_start = read_text(PROC_STAT_AT_START)
     at_end = read_text(PROC_STAT_AT_END)
@@ -590,7 +590,7 @@ def test_a_kernel_that_does_not_account_theft_records_nothing_rather_than_zero()
     """A steal figure of zero is a claim about the host, and a short line makes none.
 
     The column arrived in Linux 2.6.11 and every runner this project draws
-    reports it, so this is the arm a developer machine will never produce - which
+    reports it, so this is the branch a developer machine will never produce - which
     is why it is written here rather than waited for. The busy figure is still
     the best the kernel can give: a kernel that does not account theft has
     already folded it into user and system time, and nothing downstream can

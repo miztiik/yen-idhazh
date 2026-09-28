@@ -112,7 +112,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 - **Scope:** Any motion is tokenised, bounded in duration and count, and honours a reduced-motion preference.
 - **Files touched:** `frontend/src/app.css` or the token layer, `frontend/src/lib/charts/**`, `config/appearance.json`, `frontend/tests/**`, `docs/concepts/design-system.md`
 - **Acceptance gates:** `npm run check`; build; the browser suite; the section 12 smoke.
-- **Oracle:** On the heaviest committed day, the count of animated elements is bounded by a stated number regardless of item count, and with reduced motion requested the count is **zero**. Both arms, because a preference honoured in one component and not another is the usual shape of this defect.
+- **Oracle:** On the heaviest committed day, the count of animated elements is bounded by a stated number regardless of item count, and with reduced motion requested the count is **zero**. Both halves, because a preference honoured in one component and not another is the usual shape of this defect.
 
 ### Decisions
 

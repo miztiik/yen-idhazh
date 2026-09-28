@@ -227,7 +227,7 @@ test.describe('the three costs, as arithmetic', () => {
 		const cost = articleCost(canaryHealth(), machines);
 		expect(
 			cost.processorSeconds.outOf - cost.processorSeconds.from,
-			'the canary resolved every article, so the unresolved arm asserts nothing'
+			'the canary resolved every article, so the unresolved half asserts nothing'
 		).toBeGreaterThan(0);
 	});
 
@@ -467,7 +467,7 @@ test.describe('the panel, on the canary', () => {
 		expect(health.length, 'the narrowest window drew no article at all').toBeGreaterThan(0);
 		expect(
 			memoryStepsFrom(health).steps.length,
-			'this window now holds a memory step, so the absence arm asserts nothing'
+			'this window now holds a memory step, so the absence half asserts nothing'
 		).toBe(0);
 
 		const memory = page.locator(`${PANEL} [data-article-cost="memory"]`);

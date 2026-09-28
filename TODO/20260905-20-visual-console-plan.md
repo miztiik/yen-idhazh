@@ -40,7 +40,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 
 - **Scope:** The pipeline funnel per potential class, and the downgrade funnel end to end.
 - **Files touched:** `frontend/src/lib/server/payload.ts`, `frontend/src/routes/console/**`, `frontend/src/lib/console/**`, `config/idhazh.json` (the ceiling this grows), `frontend/tests/console-visual-*.spec.ts` (new), `docs/architecture/publishing/frontend.md`
-- **Acceptance gates:** `npm run check`; build; `bundle-gate`; the browser suite; the section 12 smoke including a truncated-ledger arm.
+- **Acceptance gates:** `npm run check`; build; `bundle-gate`; the browser suite; the section 12 smoke including a truncated-ledger check.
 - **Oracle:** Each funnel's stages are re-derived in the spec from the committed ledger and compared to the drawn values, and the stages are **monotonic or the non-monotonic case is drawn explicitly** - committed chart counts are already known not to be monotonic per day, so a funnel that assumes it will lie.
 
 ### Decisions

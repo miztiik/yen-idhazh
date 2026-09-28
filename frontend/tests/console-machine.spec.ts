@@ -1025,7 +1025,7 @@ test.describe('the counterfactual cost, once it has a shape', () => {
 	test('a band under a pixel is printed rather than drawn as a band', () => {
 		// Measured against the tallest column, because that is what sets the axis.
 		// The committed rate leaves the writing half above a quarter of every day,
-		// so this arm is reached by an operator who prices writing at almost
+		// so this branch is reached by an operator who prices writing at almost
 		// nothing - which the rate control allows.
 		const thin = costOverDays(RUNS, { ...RATE, outputPerMillion: 0.000_01 }, SIZE);
 		expect(thin.splitTooThin).toBe(true);

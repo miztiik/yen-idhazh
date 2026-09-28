@@ -69,7 +69,7 @@ Decisions taken by the owner. Each is challengeable through its litigation row.
 | **D7** | **Numerals in prose are enforced.** Every number in `title`, `caption`, `alt_text` and `key_points` must match a Tier 1 element, with a narrow allow-list. | §2, §3, L8 |
 | **D8** | **Feedback is captured out-of-band.** The application is stateless and serverless; a separate reviewer population supplies labels through the repository. | §6, L13 |
 | **D9** | **Paired comparisons are A/B across config versions.** The second candidate is a Visual Plan generated under a different `weights.json` or prompt version for the same article. | §6, L16 |
-| **D10** | **The `none` control arm is a config ratio, not a mode.** `review.none_arm_ratio ∈ [0.0, 1.0]`. | §6, L12 |
+| **D10** | **The `none` control setup is a config ratio, not a mode.** `review.none_setup_ratio ∈ [0.0, 1.0]`. | §6, L12 |
 | **D11** | **The diagram path ships in v1**, with its own trusted-data model, validator rules and compiler target. | §3, §4, L9 |
 | **D12** | **Rejected plans are labelled too.** A sample of plans that failed validation is rendered into `review/` — never published — and included in the labelling set. | §6, L30 |
 | **D13** | **Extraction is measured.** The upstream stage enters the measured pipeline. | §5, L29 |
@@ -283,7 +283,7 @@ The existing repository already has the right instinct that **numbers must not c
     ╚══════════════════════════════════════════════════════════════╝
                               │
                      sampled  │  queue: published + rejected +
-                              │  config-B variants + `none` arm
+                              │  config-B variants + `none` setup
                               ▼
     ╔══════════════════════════════════════════════════════════════╗
     ║                         HUMAN LOOP                           ║
@@ -1427,7 +1427,7 @@ Reviewers see the **article and the visual only**. Never the plan, never `why`, 
 
 > **Order is enforced and answers lock.** A reviewer who commits to "keep" first will rationalise Q1–Q4 to match. The review page does not allow revisiting earlier answers after Q5.
 
-#### 5.4.2 The `none` control arm
+#### 5.4.2 The `none` control setup
 
 For queue items the planner declined to illustrate, the instrument is a different question and its answers are **never aggregated with Q1–Q5**:
 
@@ -1436,7 +1436,7 @@ For queue items the planner declined to illustrate, the instrument is a differen
 
 The third option's free text is the most valuable label in the system: it names a visual the planner failed to imagine.
 
-#### 5.4.3 Measuring compression directly — the timed arm
+#### 5.4.3 Measuring compression directly — the timed setup
 
 Preference is a proxy. Compression is a **cost of comprehension**, and it can be measured directly even on a static site, because the review page runs JavaScript locally and exports what it records.
 
@@ -1562,7 +1562,7 @@ That distribution alone shows the architecture is not exercising visual intellig
 | **Cost** | Free | Real, recurring |
 | **Gates** | **Publication** | Nothing |
 | **Answers** | Is it structurally sound and factually safe? | Does it actually help a reader? |
-| **Inputs** | Plan, elements, validation result | Published visuals, rejected samples, config-B variants, `none` arm |
+| **Inputs** | Plan, elements, validation result | Published visuals, rejected samples, config-B variants, `none` setup |
 | **Outputs** | Metrics, typed rejection reasons, failure classes | Keep-rate, gain, agreement, learned weights |
 
 **How they interlock.** The Machine Loop is the fast inner loop and the gate; the Human Loop is the slow outer loop and the scoreboard. Because human answers are stored against the same metadata the machine metrics use, the Human Loop is what eventually lets you **validate the machine metrics themselves** — testing whether `information_delta` actually predicts `visual_keep_rate`. Until that correlation is measured, the quality index stays a diagnostic and never a gate.
@@ -1664,7 +1664,7 @@ unattributed_ms                must reconcile to zero within tolerance
 # flags in force
 VISUAL_DOWNGRADE
 REVIEW_MODE
-none_arm_ratio
+none_setup_ratio
 ```
 
 #### 6.1.1 Rules
@@ -1732,7 +1732,7 @@ An unset alarm catches nothing for a month. Accepted: a wrong alarm trains peopl
 | **Published visual** | Shipped output | Q1–Q5 | The bulk |
 | **Rejected plan** | Failed validation, rendered into `review/` only, never published | Q1–Q5, flagged as unpublished | D12 — sized to anchor the low end of each component |
 | **Config-B variant** | A second plan under a different `weights.json` / prompt version | Pairwise | D9, in `pairwise` mode |
-| **`none` decision** | The planner declined | The §4.2 question in §5 | `none_arm_ratio` |
+| **`none` decision** | The planner declined | The §4.2 question in §5 | `none_setup_ratio` |
 
 Every item carries its type. **Aggregation that ignores item type is a defect** — a rejected plan's keep-rate is not a published visual's keep-rate.
 
@@ -1793,15 +1793,15 @@ REVIEW_MODE = absolute | pairwise | comprehension
 
 All three write the same ledger schema with an explicit `mode` field, so regimes can never silently blend in aggregation. **Treat any aggregation that omits `mode` as a defect.**
 
-#### 6.3.7 The `none` control arm
+#### 6.3.7 The `none` control setup
 
 ```text
-review.none_arm_ratio = 0.0 … 1.0        # config, versioned with the queue
+review.none_setup_ratio = 0.0 … 1.0        # config, versioned with the queue
 ```
 
 | Setting | Behaviour |
 | --- | --- |
-| `0.0` | No control arm. `missed_visual_rate` is unmeasurable |
+| `0.0` | No control setup. `missed_visual_rate` is unmeasurable |
 | `~0.05` | Collapse detector — enough to notice the planner stopping, not enough for a precise rate |
 | `1.0` | Every `none` reviewed; `missed_visual_rate` exact; reviewer effort roughly doubles |
 
@@ -1893,8 +1893,8 @@ Failure modes **not** prevented by anything in this document, ordered by how qui
 | **R12** | **No blast-radius query after a defect** | Nothing owns *detection* of which published visuals a compiler bug touched | A defect ships and the affected set is unknowable, so nothing is re-rendered | **Addressed** — full input tuple stored per published visual | Medium |
 | **R13** | **Reviewer fatigue and order effects** | Item 38 of 40 is judged differently from item 2 | Indistinguishable from a real quality change | **Addressed** — `queue_position` on every label | Low |
 | **R14** | **Reviewer anchoring on `why`** | A reviewer shown the model's rationale judges the argument, not the visual | Labels look normal and are contaminated | **Addressed** — `why` never shown to reviewers | Medium |
-| **R15** | **Evaluation cost outside the budget** | D9 needs a second plan per sampled article; D12 needs rejected renders; the `none` arm adds review load | `cost_per_published_visual` counts publication only | **Addressed** — `evaluation_cost` reported separately and included in any total-cost claim | Medium |
-| **R16** | **`none_arm_ratio` is zero-sum** | Presented as freely crankable, but reviewer capacity is fixed | Cranking toward 1.0 starves the quality sample while sharpening the missed rate | **Addressed** — set from a reviewer-hours budget, and the ratio recorded on the queue | Medium |
+| **R15** | **Evaluation cost outside the budget** | D9 needs a second plan per sampled article; D12 needs rejected renders; the `none` setup adds review load | `cost_per_published_visual` counts publication only | **Addressed** — `evaluation_cost` reported separately and included in any total-cost claim | Medium |
+| **R16** | **`none_setup_ratio` is zero-sum** | Presented as freely crankable, but reviewer capacity is fixed | Cranking toward 1.0 starves the quality sample while sharpening the missed rate | **Addressed** — set from a reviewer-hours budget, and the ratio recorded on the queue | Medium |
 | **R17** | **Renderer drift breaks archives** | Minor version bumps change pixel output | Archived artifacts stop reproducing; diffs fill with noise until nobody trusts them | **Addressed** — pin versions, record `renderer_version`, treat a bump as a corpus event | Medium |
 | **R18** | **Cross-article repetition** | A running story yields the same visual daily | Every per-article metric is perfect. The reader sees the same visual five days running | Fingerprint the (element set, type) pair across a rolling window; report `visual_repetition_rate` | Medium |
 | **R19** | **Stratifying on planner output** | Type is chosen by the planner, so rare types occur only on unusual articles | `bubble` keep-rate measures unusual articles, not bubbles | **Addressed** — stratify by potential class; report conditioned on both | Medium |
@@ -1928,11 +1928,11 @@ Two structural defences:
 | **L9** | Diagram family in v1 | (a) ship (b) defer, drop the enum value (c) defer, keep the value | **(a)** — D11 | Medium | The most expensive decision here: a second extractor, validator, compiler and renderer dependency for a family sharing nothing with charts. Counter-counter: a process diagram is often the only good visual for a non-numeric story, and deferring caps the system's ceiling |
 | **L10** | Integrity invariant vs KPI | (a) `trusted_data_ratio` as a dashboard KPI (b) a build-failing invariant on value provenance, with coverage reported separately | **(b)** | High | **Corrected from an earlier draft**, which declared the ratio structurally 1.0 forever — derived values break that. The invariant is "every displayed value resolves to a Tier 1 element or a complete derived chain"; coverage is a report expected below 1.0 |
 | **L11** | Type entropy | (a) set a diversity target (b) observe only, read jointly with appropriateness | **(b)** | High | Making entropy a target invites diversification into wrong types. Uniform is the wrong ideal: most news quantities genuinely are category comparisons, so a large `bar` share may be correct |
-| **L12** | False negatives | (a) ignore (b) full control arm (c) thin sample | **(b) and (c) unified** — D10, one ratio knob | Medium | A ratio makes the metric's precision a moving target; any published `missed_visual_rate` is meaningless without the ratio it was sampled at, which is why the ratio is recorded on the queue |
+| **L12** | False negatives | (a) ignore (b) full control setup (c) thin sample | **(b) and (c) unified** — D10, one ratio knob | Medium | A ratio makes the metric's precision a moving target; any published `missed_visual_rate` is meaningless without the ratio it was sampled at, which is why the ratio is recorded on the queue |
 | **L13** | Human loop design | (a) one reviewer, absolute (b) pairwise, stratified, ≥ 2 on overlap (c) both behind `REVIEW_MODE` | **(c)** — D8 | Medium | Two instruments means two schemas and a discontinuity at the switch. The `mode` field is the only thing preventing a silent blend — treat any aggregation omitting it as a defect |
 | **L14** | Cost and latency | (a) unbudgeted (b) explicit p95 budget plus the cost family | **(b)** | High | One model doing seven jobs under constrained decoding on a wide schema has a real tail. D1 makes it two calls, which makes the budget mandatory rather than optional |
 | **L15** | Versioning and migration | (a) none (b) versions on every artefact plus a documented re-render path | **(b)** | High | Replacing the routing contract breaks an already-published corpus. Without versions, no metric survives the cutover |
-| **L16** | Source of the paired second item | (a) A/B across config versions (b) depth-0 vs downgraded (c) visual vs no-visual | **(a)** — D9 | Low | (a) only compares two options the system already believes are reasonable, so it can sit in a local maximum indefinitely. Periodically injecting (c) as a separate arm is the cheapest guard |
+| **L16** | Source of the paired second item | (a) A/B across config versions (b) depth-0 vs downgraded (c) visual vs no-visual | **(a)** — D9 | Low | (a) only compares two options the system already believes are reasonable, so it can sit in a local maximum indefinitely. Periodically injecting (c) as a separate setup is the cheapest guard |
 | **L17** | Console alarm thresholds | (a) set now from judgement (b) unset, derived from observed percentiles after one corpus month | **(b)** | High | An unset alarm catches nothing for a month. Accepted — a wrong alarm trains people to ignore alarms, which is worse and harder to undo |
 | **L18** | Diagram renderer | (a) Mermaid CLI (b) Mermaid client-side (c) Graphviz `dot` (d) hand-rolled (e) frontend-owned | **OPEN — explicitly not decided.** Owner withheld pending repository context | — | Must be scored against the fidelity / compression / colour / interactivity requirements, not build simplicity. An earlier recommendation of (c) is **withdrawn**: it optimises build hygiene and scores badly on interactivity and colour control |
 | **L19** | Diagram integrity model | (a) reuse chart rules (b) parallel Trusted Node / Edge structure with span-anchored edges | **(b)** | High | (b) is a second extractor and will reject many diagrams a reader would have accepted, because articles frequently imply ordering without asserting it. Accepted anyway: an unanchored edge is an invented causal claim, the easiest way to reintroduce fabrication into a system built to prevent it |
@@ -1950,7 +1950,7 @@ Two structural defences:
 | **L31** | Trusted Fact → Trusted Element | (a) keep numeric-only (b) generalise to `kind`-discriminated elements | **(b)** — D14 | Medium | (b) widens the extractor from one job to six, each a new failure surface. Counter: a numeric-only trust model structurally excludes most of a news corpus from ever receiving a visual, contradicting the stated goal |
 | **L32** | The `claim` element | (a) allow model-authored claim text (b) verbatim spans only, deterministic truncation | **(b)** | **High** | (b) produces awkward card text — real sentences are rarely card-shaped, and the pressure to "let it rewrite slightly" will be constant. **That pressure is the risk.** A paraphrased claim reads as sourced, renders as authoritative, and is nowhere in the article. The easiest way to reintroduce fabrication after every other route is closed |
 | **L33** | `keyfacts` type | (a) ship (b) ship with an explicit kill criterion (c) omit | **(b)** | Medium | Predicted: high decision rate, poor keep rate — easiest for a model to justify, least informative for a reader. Ship it, but pre-commit to dropping it if the prediction holds rather than defending it afterwards |
-| **L34** | Comprehension timing instrument | (a) stated preference only (b) add the timed A/B arm | **(b)** | Medium | Timing unsupervised reviewers is noisy — interruptions dominate, small *n* makes medians unstable. Counter: it is the only measurement about *comprehension cost* rather than *opinion*, at a marginal cost of one page in `review/` |
+| **L34** | Comprehension timing instrument | (a) stated preference only (b) add the timed A/B setup | **(b)** | Medium | Timing unsupervised reviewers is noisy — interruptions dominate, small *n* makes medians unstable. Counter: it is the only measurement about *comprehension cost* rather than *opinion*, at a marginal cost of one page in `review/` |
 | **L35** | Article Visual Potential | (a) rates over all articles (b) every rate per potential class | **(b)** | **High** | (b) fragments every metric into thinner series, and the classifier's thresholds become a tuning surface needing an owner. Counter: without it, a 4% chart rate on narrative articles and 4% on chartable articles are indistinguishable — a confound that probably invalidates more of the KPI set than any other single issue here |
 
 #### 7.2.1 Verdict template

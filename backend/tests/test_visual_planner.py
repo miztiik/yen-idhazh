@@ -203,7 +203,7 @@ class TestTheReachabilityGate:
 
         Until 2026-09-15 `visuals.enabled_kinds` was read by its own validator
         and by nothing in the pipeline, while three docstrings said it took the
-        plan off the call. An arm of the two-call experiment set it to `[]` to
+        plan off the call. A setup of the two-call experiment set it to `[]` to
         measure a run with no visual plan and measured a run identical to the
         other two.
         """

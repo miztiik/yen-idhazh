@@ -220,7 +220,7 @@ flowchart TD
 ```
 
 **No green and no red anywhere on it, and that is a choice.** Those two colours
-mean an outcome passed or failed, and no arm of this loop does either - a held
+mean an outcome passed or failed, and no branch of this loop does either - a held
 day is an ordinary day, a dropped pair costs nothing, and every other box does
 work. Spending the two colours decoratively here would spend them for the pair
 diagram above, which needs them.

@@ -116,6 +116,6 @@ def test_no_schema_builder_escapes_this_check() -> None:
     }
     covered = {"label_schema", "summarize_and_plan_schema"}
     assert built == covered, (
-        f"{built - covered} builds a schema for the decoder and no arm above sends it "
+        f"{built - covered} builds a schema for the decoder and no check above sends it "
         "through unbounded_quantifier"
     )

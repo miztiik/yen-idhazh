@@ -179,7 +179,7 @@ def test_an_operators_repair_is_written_once_so_it_never_collides_with_a_writer(
 
 
 def test_a_name_outside_the_grammar_is_in_no_class_at_all() -> None:
-    """The tripwire this whole file exists to arm.
+    """The tripwire this whole file exists to set.
 
     A file somebody drops into a day directory under a name nothing spells is
     what a lost push race turns into a conflict. It has to read as unclassified

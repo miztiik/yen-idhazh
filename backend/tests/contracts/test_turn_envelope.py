@@ -188,7 +188,7 @@ def test_a_run_records_which_weights_ran_and_not_how_their_turns_are_written() -
     ModelUse.model_validate(written), "and the record it wrote reads back"
 
 
-def test_the_thinking_arms_closing_marker_is_derived_from_its_own_reply_openings() -> None:
+def test_the_thinking_entry_closing_marker_is_derived_from_its_own_reply_openings() -> None:
     """Guardrail #10 over a string: the marker is read off this model, not guessed.
 
     `qwen3.5-9b-q4km-thinking.json` is the incumbent's weights with reasoning
@@ -208,7 +208,7 @@ def test_the_thinking_arms_closing_marker_is_derived_from_its_own_reply_openings
     ).summarizer
     markers = derived(recorded()["entries"]["qwen3.5-9b-q4km-thinking.json"])
 
-    assert entry.thinks, "the arm exists to turn reasoning on"
+    assert entry.thinks, "the thinking entry exists to turn reasoning on"
     assert entry.thinking_close == "\n</think>\n\n"
     assert markers.reply_opening_thinking + entry.thinking_close == markers.reply_opening
     assert entry.thinking_kwarg == "enable_thinking", "a marker with no keyword is refused"

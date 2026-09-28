@@ -114,7 +114,7 @@ def test_a_story_past_the_seed_is_the_one_this_gate_exists_for(
     so no prerendered document carries it and no build would ever open it. A
     reader's browser fetches it. The gate has to find it there.
 
-    Two arms over one built day, because the second alone would pass against a
+    Two halves over one built day, because the second alone would pass against a
     gate that refused everything: the whole day is accepted, and the same day is
     refused once its last story loses its summary.
     """

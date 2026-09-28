@@ -29,8 +29,8 @@ weighed.
 
 | | |
 | --- | --- |
-| Instrument, live arm | `idhazh.llm.server.grammar_completion_payload` off the committed entry, posted to a server started by `idhazh.llm.server.server_argv` - the judge's own body, not a body written for this page |
-| Instrument, census arm | Every committed row read back through `StorySimilarityPair.from_csv_row` |
+| Instrument, live measurement | `idhazh.llm.server.grammar_completion_payload` off the committed entry, posted to a server started by `idhazh.llm.server.server_argv` - the judge's own body, not a body written for this page |
+| Instrument, census count | Every committed row read back through `StorySimilarityPair.from_csv_row` |
 | Weights | `Qwen3.5-9B-Q4_K_M.gguf`, sha256 `03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8` - the file `models.summarizer` declares |
 | Build | `b10444-5f754ea0e`, read off `/props` on the running process |
 | Prompt | The judge's own system turn and the first two items of `tests/fixtures/contracts/digest-day`, rendered through the entry's turn markers |
@@ -38,7 +38,7 @@ weighed.
 | Sampler | `temperature` 0.0, `top_p` 1.0, `seed` 0 - the judging knob's temperature, as a shard sends it |
 | Machine | 12th Gen Intel Core i7-1265U, 10 cores and 12 threads, 31.8 GiB. **Not the production runner** - what a token window contains is a property of the weights and the build rather than of the host, so a developer box answers this and could not answer a throughput one (Guardrail #2) |
 | Date | 2026-09-21. Weights loaded in 15.2 s |
-| Spread | Zero on the live arm. Three runs at each width returned identical logprobs to sixteen significant figures, which is what temperature 0.0 and a fixed seed should give. The census arm is a count of a fixed file, so it has no spread to report |
+| Spread | Zero on the live measurement. Three runs at each width returned identical logprobs to sixteen significant figures, which is what temperature 0.0 and a fixed seed should give. The census count reads a fixed file, so it has no spread to report |
 
 ## The window, at both widths
 
@@ -71,7 +71,7 @@ two day files, and all 82 carry a margin.
 | 82 | 0.1082 | 0.6190 | 0.9001 | 0.9703 | 0.9943 | 0.7714 | 0.2715 |
 
 Forty-one of the eighty-two sit above 0.90 and none below 0.10. Read against the
-live arm, **a large part of that spread is an artefact rather than a finding**:
+live measurement, **a large part of that spread is an artefact rather than a finding**:
 the old rule subtracted a verdict's second spelling from its first whenever the
 vocabulary offered one, and on the reply measured here it did exactly that.
 
@@ -89,8 +89,8 @@ about the population.
 estimated either. The plumbing for a reasoning span in front of the answer ships
 here behind a config entry that no committed file declares, and it stays shut
 until a replay says otherwise. **That replay is priced rather than guessed**:
-82 pairs at the measured 94.53 s a pair is 2.15 h for the cold arm, and the
-thinking arm at the measured 11.18 tokens a second is about 5.4 h at an
+82 pairs at the measured 94.53 s a pair is 2.15 h for the cold setup, and the
+thinking setup at the measured 11.18 tokens a second is about 5.4 h at an
 estimated 800 reasoning tokens a call and about 8.3 h at 1,500 - past the 6 h
 job ceiling on one job, so it runs as a matrix on the council's own workflow.
 The 800 and the 1,500 are estimates and the measurement that would replace them

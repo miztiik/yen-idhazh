@@ -52,7 +52,7 @@ measured is how many tokens these weights spend before closing the block, and
 that is a property of the weights rather than of a knob. Against the 900-token
 answer worst case of 149.8 seconds, every 100 tokens of thinking is **16.6
 seconds**, so the whole question is the token count. **What settles it**: one
-qualification arm with `thinking_close` declared, reading the thinking span's
+qualification setup with `thinking_close` declared, reading the thinking span's
 completion tokens off the dispatch log the two-call path already writes. The
 digest's own path makes two calls an item, so an item pays two spans.
 

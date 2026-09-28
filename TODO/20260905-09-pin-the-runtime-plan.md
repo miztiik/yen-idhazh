@@ -326,7 +326,7 @@ change in between.
 no captured log carries a flash-attention line, a KV-buffer line or a
 compute-buffer line. The cause was the verbosity, not the build. Measured
 2026-09-09 on a Windows developer box against `llama-server` `b10444`
-(`5f754ea0e`) and the 8B weights, three runs an arm, zero spread on every
+(`5f754ea0e`) and the 8B weights, three runs a setup, zero spread on every
 figure:
 
 | Reading, at `-lv 4` | no flag, as committed | `-fa on` | `-fa off` |
@@ -339,7 +339,7 @@ figure:
 Three consequences, and the third is the one that changes the plan.
 
 1. **The instrument is the log at `-lv 4`, not `/props`.** `/props` and
-   `/metrics` are byte-identical between the two arms, so neither can answer the
+   `/metrics` are byte-identical between the two setups, so neither can answer the
    question. `/props` remains the right reader for the effective `n_ctx` and the
    build string, and needs no verbosity change for those.
 2. **The check has three states, not two.** `llama_context: flash_attn` prints
@@ -478,7 +478,7 @@ article cap. Four things this run settles, and the last one is new:
    it; near 2,304 MiB says the head-dimension card was read wrong and the raise
    actually cost about 1.1 GiB. Either way the window still clears the trigger -
    this decides how much margin plan 11 inherits.
-2. **Whether `auto` resolves to enabled on a RUNNER's processor.** Every arm of
+2. **Whether `auto` resolves to enabled on a RUNNER's processor.** Every setup of
    the 2026-09-09 measurement was a Windows developer box. `resolve_fused_ops`
    is now the reader and `flash_attention: on` is now the ask, so the run either
    prints the decision or fails the check.
