@@ -1377,7 +1377,7 @@ def prune_trial_state(
             path.unlink()
 
     if not dry_run:
-        _drop_empty_directories(root)
+        drop_empty_directories(root)
 
     return TracePruneResult(
         deleted=tuple(deleted),
@@ -1387,7 +1387,7 @@ def prune_trial_state(
     )
 
 
-def _drop_empty_directories(root: Path) -> None:
+def drop_empty_directories(root: Path) -> None:
     """Take the emptied trial tree away, root included.
 
     Without this the child count under `state/` only ever rises: a trial that

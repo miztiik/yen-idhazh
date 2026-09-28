@@ -246,6 +246,8 @@ reads are here and not how many. These are `backend/`'s;
 | `similarity.holdout.score_marks` | `state/content-similarity-judge/holdout-pairs.csv`, then one published day payload for each distinct date its rows name | the length of the hand-marked file, and nothing else. The verb that calls it is typed by a person; another year of archive adds no read, and a day nothing marks is never opened. This is the backend twin of `similarity-holdout.holdoutReading` below, and it has the same cover for the same reason |
 | `corpus.scored_from_items` | one run's items directory | one run |
 | `evals.retrieval.index_months` | one listing of `frontend/public/assist/index/` | the shards' own names. The question is which months exist, and a file answers it without being opened. The eval's knob check used to load every shard to learn the same thing |
+| `gardener_publish.Checkout.committed_folders`, which the `trials` task's folders come from | one `git ls-tree -d --name-only HEAD -- state/ <each owned folder>` over the object database, no `-r` | the folders directly under `state/` plus one entry per owned folder, never a file. It grows only when a family or a task is added, not with the rows any of them hold. A bounded input cannot answer it: "what under `state/` does nothing claim" is a question about every child of `state/`, and a wake whose checkout is empty for this task can only ask the commit |
+| the `trials` task's walk of each folder the listing hands it | every file under the trial trees - today `state/pipeline-tests/` alone | the trial trees and nothing else, and its own window empties them: what it walks is what the last 90 days of trial runs wrote, and a tree it empties is removed whole |
 
 ### Unbounded, and it says so
 
