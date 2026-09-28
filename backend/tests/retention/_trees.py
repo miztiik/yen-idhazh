@@ -50,7 +50,7 @@ def site(root: Path, days: dict[str, list[str]]) -> Path:
 
 #: The day the fold is run against in every test below, and the twenty months of
 #: history it is run over. Twenty rather than fourteen so both sides of the
-#: threshold carry several months: at `item_health_full_grain_months` 14 the fold
+#: threshold carry several months: at the fold's 14-month full-grain window it
 #: takes six and leaves fourteen, and a threshold off by one shows up as a shard
 #: on the wrong side rather than as an empty result.
 TODAY: Final = date(2026, 8, 30)

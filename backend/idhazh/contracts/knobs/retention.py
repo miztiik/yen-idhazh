@@ -1,12 +1,15 @@
-"""What the published site is allowed to delete, where every default deletes nothing."""
+"""What the published site is allowed to weigh, and how long a picture is promised to stay."""
 
 from __future__ import annotations
 
-from typing import Final
+from collections.abc import Mapping
+from types import MappingProxyType
+from typing import Any, Final
 
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from idhazh.contracts.base import Model
+from idhazh.contracts.knobs.removed import refuse_a_removed_knob
 
 #: The platform's own ceiling on a published Pages site, in MB. A property of the
 #: host rather than a preference, so it is the bound `retention.pages_hard_cap_mb`
@@ -23,15 +26,26 @@ from idhazh.contracts.base import Model
 #: change - the field below refuses anything above this line and nothing above.
 PAGES_HARD_CAP_MB: Final = 1024
 
+#: The `retention` names this block used to carry, and where the same number
+#: lives now: the declaration of the gardener task that reads it.
+SUPERSEDED_RETENTION_KNOBS: Final[Mapping[str, str]] = MappingProxyType(
+    {
+        "dry_run": "dry_run in every config/gardener/<task>.json",
+        "max_deletes_per_run": "max_deletes_per_run in config/gardener/visual-prune.json",
+        "trial_state_days": "window.value in config/gardener/trials.json",
+    }
+)
+
 
 class RetentionConfig(Model):
-    """Every default here deletes nothing. A default is a promise, not a placeholder.
+    """What the site may weigh, and the picture window the archive states to a reader.
 
+    Every default here deletes nothing. A default is a promise, not a placeholder.
     The committed file is one step ahead of the defaults from 2026-09-13:
-    `image_months` is 13 there and -1 here. `dry_run` is true in both, so the
-    committed config names a window and still removes nothing - which is the
-    order this was landed in, so that the first evidence of what the window
-    selects arrives before the deletion rather than after it.
+    `image_months` is 13 there and -1 here. What deletes is the gardener's
+    `visual-prune` task, whose own declaration carries the window in days, its
+    fuse and its `dry_run`; `config.load_gardener` refuses a window that is not
+    this one, so the page never states a window the cleanup does not keep.
     """
 
     image_months: int = Field(
@@ -55,25 +69,6 @@ class RetentionConfig(Model):
             "stands (Carmack, 2026-09-13). The derivation is "
             "docs/reference/site-weight.md, 'What a published day adds in "
             "rendered visuals'."
-        ),
-    )
-    dry_run: bool = True
-    max_deletes_per_run: int = Field(
-        default=200,
-        ge=0,
-        description="The fuse. An off-by-one in a date parse must not eat the archive.",
-    )
-    trial_state_days: int = Field(
-        default=90,
-        ge=1,
-        description=(
-            "How long a trial run's ledgers under `state/<run.trial_state_dirname>/` "
-            "are kept. Ninety days because it is the artifact retention this project "
-            "already uses everywhere else, so a trial's rows outlive the run's own "
-            "artifacts by nothing and a question asked of one can still be asked of "
-            "the other. Nothing reads these rows - no published series, no gate, no "
-            "console band - so the window is about disk and about a reader who opens "
-            "`state/` and wonders what a directory is, rather than about evidence."
         ),
     )
     pages_hard_cap_mb: int = Field(
@@ -107,3 +102,14 @@ class RetentionConfig(Model):
             "docs/reference/pipeline-cost.md, 'Where the alarm fires, and what it buys'."
         ),
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _refuse_a_removed_knob(cls, data: Any) -> Any:
+        """Fail a config still spelling a knob a gardener declaration took, naming the file.
+
+        The fuse, the trial window and the dry-run switch each moved into the
+        declaration of the task that reads it, so a number left here would be
+        read by nothing and believed by whoever set it.
+        """
+        return refuse_a_removed_knob("retention", data, SUPERSEDED_RETENTION_KNOBS)

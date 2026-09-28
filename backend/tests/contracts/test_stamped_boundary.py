@@ -11,12 +11,14 @@ import pytest
 from conftest import CONTRACT_FIXTURES_DIR, read_text
 from pydantic import ValidationError
 
+from idhazh import config
 from idhazh.contracts import CONTRACTS
 from idhazh.contracts.base import Contract, StalePayloadError
 from idhazh.contracts.console_band import ConsoleBand, ConsoleRoute, RouteId
 from idhazh.contracts.console_payloads import CONSOLE_PAYLOADS, payloads_by_stem
 from idhazh.contracts.item_health import DROPPED_CELLS, RETIRED_CELLS, ItemHealthRow
 from idhazh.contracts.knobs.console import ConsoleConfig
+from idhazh.contracts.knobs.gardener import MonthsWindow, RetentionPolicy
 from idhazh.contracts.knobs.observability import ObservabilityConfig
 from idhazh.contracts.knobs.windows import months_a_window_can_touch
 from idhazh.contracts.public_run_day import PublicRunDay
@@ -298,15 +300,20 @@ def test_a_day_cannot_draw_more_charts_than_it_published() -> None:
         PublicRunDay.model_validate(payload | {"published_items": 3, "published_charts": 7})
 
 
-def test_every_published_month_payload_has_a_non_null_retention_knob() -> None:
+def test_every_published_month_payload_has_a_window_that_ends() -> None:
     """A payload a run appends to with no age is a directory that grows for ever.
 
-    `item_health_aggregate_keep_months` and `score_archive_keep_months` are null
-    today and each says in its own description why. Nothing minted for the
-    console may join them: a null default that spreads stops reading as a
-    decision (CLAUDE.md Guardrail #12).
+    The item-health aggregate and the score archive are kept forever today, and
+    each declaration under `config/gardener/` says so. Nothing minted for the
+    console may join them: a forever that spreads stops reading as a decision
+    (CLAUDE.md Guardrail #12). The browser's copy of the item-health ledger ages
+    with the public-copy series of `config/gardener/telemetry-aggregate.json`;
+    every other month folder has its own `public_*_keep_months` knob.
     """
     observability = ObservabilityConfig()
+    telemetry = config.load_gardener().tasks["telemetry-aggregate"]
+    assert isinstance(telemetry, RetentionPolicy) and telemetry.series
+    widest = months_a_window_can_touch(ConsoleConfig().max_window_days)
     monthly = {
         entry.published_to.rsplit("/", 1)[0].removeprefix("frontend/public/")
         for entry in CONSOLE_PAYLOADS
@@ -319,8 +326,11 @@ def test_every_published_month_payload_has_a_non_null_retention_knob() -> None:
         "machine",
         "span-rollup",
     }
-    for root in monthly:
+    for root in monthly - {"telemetry"}:
         knob = f"public_{root.replace('-', '_')}_keep_months"
         months = getattr(observability, knob)
         assert months is not None, f"observability.{knob} may not be null"
-        assert months >= months_a_window_can_touch(ConsoleConfig().max_window_days)
+        assert months >= widest
+    copy = telemetry.series[config.PUBLIC_COPY]
+    assert isinstance(copy, MonthsWindow), "the public-copy series may not be forever"
+    assert copy.value >= widest

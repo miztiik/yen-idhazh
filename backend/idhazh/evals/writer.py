@@ -11,8 +11,8 @@ nothing new to say, so it writes nothing. That is the promise in
 `docs/concepts/evaluation.md`, and it is what keeps a count over the ledger a
 count of items rather than a count of times the pipeline looked at them.
 
-A month past `observability.scores_full_grain_months` stops being rows and
-becomes `state/score-archive/<YYYY-MM>.json` (`idhazh.evals.archive`). That is
+A month past the full-grain window of `config/gardener/scores.json` stops being
+rows and becomes `state/score-archive/<YYYY-MM>.json` (`idhazh.evals.archive`). That is
 why `recorded_observations` reads two places: the promise above has to hold for
 a month whose rows are gone, and the archive's sorted digest index is the only
 thing that can still answer it.
@@ -118,7 +118,7 @@ def observation(payload: Mapping[str, object]) -> tuple[str, ...]:
 def observation_digest(payload: Mapping[str, object]) -> str:
     """The same identity as one hash, which is the form that survives a deletion.
 
-    A month past `observability.scores_full_grain_months` is summarised and its
+    A month past the scores task's full-grain window is summarised and its
     day files are unlinked, and the summary keeps this digest rather than the four
     values it came from - `state/score-archive/` is a fixed-width index instead
     of a second copy of the addresses.
@@ -177,12 +177,12 @@ def indexed_observations(state_dir: Path) -> set[str]:
     **This opens one file a recorded day and it is declared rather than hidden**
     (Guardrail #12, `docs/concepts/growing-reads.md`). It was one file a month
     until 2026-09-13, when the grain change turned 2 opens into 23, and it gains
-    about 365 a year. The ledger bound is what answers it: a day past
-    `observability.scores_full_grain_months` is folded into one
+    about 365 a year. The ledger bound is what answers it: a day past the scores
+    task's full-grain window is folded into one
     `state/score-archive/<YYYY-MM>.json` and its index day is dropped, so the
-    live index holds at most fourteen months of days. **`--dry-run` is on the
-    workflow step today, so nothing prunes and the count grows until that is
-    flipped** (`docs/architecture/publishing/retention.md`).
+    live index holds at most fourteen months of days. **The task ships
+    `dry_run: true`, so nothing prunes and the count grows until its declaration
+    is flipped** (`docs/architecture/publishing/retention.md`).
 
     A cover was rejected rather than overlooked: a measurement re-taken outside
     a window would read as new, and a count over the ledger would become a count

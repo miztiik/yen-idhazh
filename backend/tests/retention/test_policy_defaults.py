@@ -19,9 +19,7 @@ from ._visual_prune import NAME, pruned, published, window
 
 def test_retention_is_off_by_default() -> None:
     """A default is a promise, not a placeholder."""
-    config = RetentionConfig()
-    assert config.image_months == -1
-    assert config.dry_run is True
+    assert RetentionConfig().image_months == -1
 
 
 def test_a_disabled_policy_deletes_nothing(tmp_path: Path) -> None:

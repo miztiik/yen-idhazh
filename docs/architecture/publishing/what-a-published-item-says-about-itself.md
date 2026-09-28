@@ -1,6 +1,6 @@
 # What a published item says about itself
 
-**Last Updated**: 2026-09-23
+**Last Updated**: 2026-09-28
 
 Beyond its words, a published story carries five fields saying why it is on the
 page and whose clock its time came off, plus two saying whether another source
@@ -64,7 +64,7 @@ joiner, the figure veto, the window past midnight and what each costs - is
 to meet, and never a description of shipped code.** No run can revise an item, so
 nothing has ever had the chance to be visible or silent.
 
-**Deleting the fields is not the cheap option it looks like.** Every persisted model is `extra="forbid"`, so a model without the two fields rejects every payload that carries them. Measured on this checkout, 2026-08-26: six committed days, 2,121 items, 2,121 carrying `updated_at`, 2,107 carrying `updated_by_run`, and **zero** carrying a value in either. Removal costs a read-side migration that strips two keys from every day forever, or a rewrite of all six committed payloads. Retention deletes nothing today (`retention.dry_run` is on, and the 13-month window `image_months` took on 2026-09-13 reaches no committed day), so waiting for the old payloads to age out is not available either. That is the whole price, and the reader gets nothing for it.
+**Deleting the fields is not the cheap option it looks like.** Every persisted model is `extra="forbid"`, so a model without the two fields rejects every payload that carries them. Measured on this checkout, 2026-08-26: six committed days, 2,121 items, 2,121 carrying `updated_at`, 2,107 carrying `updated_by_run`, and **zero** carrying a value in either. Removal costs a read-side migration that strips two keys from every day forever, or a rewrite of all six committed payloads. Retention deletes nothing today (every `config/gardener/<task>.json` carries `dry_run: true`, and the 13-month window `image_months` took on 2026-09-13 reaches no committed day), so waiting for the old payloads to age out is not available either. That is the whole price, and the reader gets nothing for it.
 
 **The named trigger that would revive revision is a summarizer model swap, and it fired on 2026-08-27** ([../../concepts/evaluation.md](../../concepts/evaluation.md)). A better summarizer is the one event that makes words already published worth rewriting; a bug fix in the pipeline is not, and neither is a new field. Nothing was revised, and that is the correct answer here rather than an oversight: no comparison against the retired model was ever run, so nothing measured says the new summaries are better, and rewriting published words on an unmeasured hunch is the move Guardrail #10 forbids. What the swap does change is the run-manifest join the two fields exist for - from the first day the new model publishes, a day can hold summaries from two different models, so the join now has something to join.
 

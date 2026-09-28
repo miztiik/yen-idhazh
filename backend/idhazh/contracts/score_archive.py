@@ -11,7 +11,7 @@ measurement in that month would become re-scoreable: `evals.writer` refuses a
 repeat by comparing against every row the ledger holds, so a deleted row is a
 row the next run has never seen.
 
-So a month past `observability.scores_full_grain_months` is summarised into this
+So a month past the full-grain window of `config/gardener/scores.json` is summarised into this
 shape first, and the shard is unlinked only after the summary has been written,
 read back and reconciled against it.
 

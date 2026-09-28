@@ -138,7 +138,7 @@ rather than hidden.** `indexed_observations` opens one file a partition, and the
 index moved from month files to day files with the ledger it describes - so **2
 opens became 23, and it gains about 365 a year**. The bytes did not move: the same
 digests are spread over more files, 21 more header lines. The ledger bound is what
-answers it - `observability.scores_full_grain_months` is 14, so once the prune is
+answers it - the `full-grain` series of `config/gardener/scores.json` is 14 months, so once the prune is
 switched on the live index holds at most fourteen months of days and everything
 older is one `state/score-archive/<YYYY-MM>.json` a month. **The `scores` task
 ships `dry_run: true`, so nothing prunes and the count grows until its
@@ -300,8 +300,8 @@ and not yet enforced, and it says so here rather than in a sentence that would b
 wrong.** Six of the seven series are trimmed on every assemble, because their
 publishers reach `series.publish_series`, which calls `prune_months`.
 `public_telemetry.publish` does not: its deletion lives in the gardener's
-`telemetry-aggregate` task, which ships `dry_run: true`. So
-`public_telemetry_keep_months` is 14 and the directory holds every month it has
+`telemetry-aggregate` task, which ships `dry_run: true`. So its `public-copy`
+series is 14 months and the directory holds every month it has
 ever published - 2 files on 2026-09-13, gaining one a month. Every listing of it
 grows with it, including the one
 `publication_checks.checks.console` takes on its contract sweep. What closes it is
@@ -335,9 +335,9 @@ names and the day files inside them.
 **The eighth answers to a different knob, and that knob has never bitten,
 2026-09-12.** `public_telemetry.publish` is the odd member of this block: it
 reads the **source ledger** rather than a published directory, so what caps it is
-`observability.item_health_full_grain_months` and not one of the
+the `full-grain` series of `config/gardener/telemetry-aggregate.json` and not one of the
 `public_*_keep_months` the other seven answer to. The two are held **equal** by
-the config contract, because a projection and the ledger it projects have to age
+the gardener loader, because a projection and the ledger it projects have to age
 together. What makes the daily cover hold is that a run appends to one month, so
 the month it names is the only one that can have changed - and the filter is
 skipped for any month whose mirror is missing, which is what lets a fresh clone

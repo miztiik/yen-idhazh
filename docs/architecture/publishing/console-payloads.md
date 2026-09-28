@@ -238,35 +238,39 @@ the payload is.
 ## Retention
 
 Five of the ten file by month, and a payload a run appends to with no age is
-a directory that grows for ever (Guardrail #12). Each has a knob under
-`observability` in `config/idhazh.json`, and every one of them has a **non-null**
-default:
+a directory that grows for ever (Guardrail #12). Every one of them has an age
+that ends. Four are knobs under `observability` in `config/idhazh.json`, each
+with a **non-null** default:
 
-`public_telemetry_keep_months`, `public_run_days_keep_months`,
-`public_day_metrics_keep_months`, `public_machine_keep_months`,
-`public_span_rollup_keep_months`.
+`public_run_days_keep_months`, `public_day_metrics_keep_months`,
+`public_machine_keep_months`, `public_span_rollup_keep_months`.
 
-All five default to **14**, and 14 is not a round number. `console.max_window_days`
+The fifth, `telemetry`, is the `public-copy` series of
+`config/gardener/telemetry-aggregate.json`, because the gardener task that folds
+the ledger it copies is the thing that deletes it.
+
+All five are **14** months, and 14 is not a round number. `console.max_window_days`
 is 366, a 367-day inclusive read starting on the last day of a month can touch
 fourteen month shards, and `ObservabilityConfig.refuse_windows_shorter_than`
-refuses any of them set below that. **A shard deleted while a window preset can
+refuses any of the four knobs set below that - the gardener loader refuses the
+same of the `public-copy` series. **A shard deleted while a window preset can
 still reach it blanks that panel silently**, because a month with no file reads
 exactly like a month with no runs.
 
 One of the five projects a state ledger, and it is held **equal** to the ledger
-it projects: `public_telemetry_keep_months` to `item_health_full_grain_months`.
-Any other pair leaves either a published month nothing can check against its
-source, or a source month the console has no copy of to draw. The other four
-have no state ledger of their own: `run-days` reduces the committed day
+it projects: the `public-copy` series to the `full-grain` series of the same
+declaration. Any other pair leaves either a published month nothing can check
+against its source, or a source month the console has no copy of to draw. The
+other four have no state ledger of their own: `run-days` reduces the committed day
 payloads, `day-metrics` and `span-rollup` have no age on the state side, and
 `machine` is where the month boundary is first drawn at all.
 
 **`public_scores_keep_months` and `public_feed_health_keep_months` were two more
 until 2026-09-16.** They are refused by name now rather than ignored, because a
 config file still spelling one is an operator believing a number nothing reads.
-There is no successor to send them to: `scores_full_grain_months` and
-`feed_health_keep_months` govern the `state/` ledgers, which are still there and
-keep their own ages.
+There is no successor to send them to: the `scores` and `feed-health`
+declarations under `config/gardener/` govern the `state/` ledgers, which are
+still there and keep their own ages.
 
 ## What the console actually fetches, and what it still carries
 

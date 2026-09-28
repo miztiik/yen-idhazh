@@ -599,7 +599,7 @@ class TestTheRow:
     def test_the_row_carries_the_counterweights_its_tags_are_measured_against(self) -> None:
         """A label outlives the score row it was drawn from, so it copies these three.
 
-        `state/scores/` keeps `observability.scores_full_grain_months` months of
+        `state/scores/` keeps the scores task's full-grain window of
         item-level rows. Re-joining on `output_digest` stops working the day
         that month is archived, and the three counterweights the tag vocabulary
         mirrors are exactly what would be lost - which is the precision and
@@ -735,8 +735,8 @@ class TestTheLoopStaysOpen:
     def test_the_queue_says_which_months_a_draw_can_no_longer_reach(self) -> None:
         """A row count gives no hint that a month was ever there.
 
-        `state/scores/` becomes a summary past
-        `observability.scores_full_grain_months`, and a summary holds no row to
+        `state/scores/` becomes a summary past the scores task's full-grain
+        window, and a summary holds no row to
         label. The report names those months rather than leaving the operator to
         infer them from a shortfall.
         """

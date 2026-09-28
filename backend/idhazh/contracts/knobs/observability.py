@@ -20,15 +20,30 @@ class LogLevel(StrEnum):
     ERROR = "ERROR"
 
 
-#: The `observability` names this block used to carry, and the knob that governs
-#: the same ledger now. An empty value means the ledger itself is gone.
+#: The `observability` names this block used to carry, and where the same number
+#: lives now. An empty value means the ledger itself is gone. A cleanup age moved
+#: into the declaration of the gardener task that spends it.
 SUPERSEDED_RETENTION_NAMES: Final[Mapping[str, str]] = MappingProxyType(
     {
-        "keep_months": "item_health_full_grain_months",
-        "hard_delete_after_months": "item_health_aggregate_keep_months",
+        "keep_months": "series.full-grain.value in config/gardener/telemetry-aggregate.json",
+        "hard_delete_after_months": "series.aggregate in config/gardener/telemetry-aggregate.json",
         "public_scores_keep_months": "",
         "public_feed_health_keep_months": "",
         "runtime_counters_scrape": "",
+        "trace_window_days": "window.value in config/gardener/traces.json",
+        "item_health_full_grain_months": (
+            "series.full-grain.value in config/gardener/telemetry-aggregate.json"
+        ),
+        "item_health_aggregate_keep_months": (
+            "series.aggregate in config/gardener/telemetry-aggregate.json"
+        ),
+        "public_telemetry_keep_months": (
+            "series.public-copy.value in config/gardener/telemetry-aggregate.json"
+        ),
+        "feed_health_keep_months": "window.value in config/gardener/feed-health.json",
+        "host_fingerprint_keep_months": "window.value in config/gardener/host-fingerprint.json",
+        "scores_full_grain_months": "series.full-grain.value in config/gardener/scores.json",
+        "score_archive_keep_months": "series.archive in config/gardener/scores.json",
     }
 )
 
@@ -143,13 +158,13 @@ class ObservabilityConfig(Model):
     row, so a month file stays readable across a day somebody turned something
     off.
 
-    **Every ledger names its own cleanup age.** One age covered
-    `state/item-health/` while `state/feed-health/`, `state/scores/` and
-    `frontend/public/telemetry/` had none, so three of the four grew with nothing
-    to stop them and the fourth was tuned by a number that said nothing about
-    them. The four full-grain windows are checked against the shards a console
-    read can still select, and a summary that replaces a full-grain window must
-    outlive it.
+    **A ledger's cleanup age lives with the task that spends it.** Each retention
+    pass is a gardener task, and how long it keeps what it owns is its own
+    declaration under `config/gardener/`. What is left here is the windows the
+    publishers read for the copies they trim, and the visual-attempt windows,
+    whose pass lands with the ledger's writer. The published windows are checked
+    against the shards a console read can still select, and a summary that
+    replaces a full-grain window must outlive it.
     """
 
     evaluation_enabled: bool = Field(
@@ -252,104 +267,9 @@ class ObservabilityConfig(Model):
             "of the model call. It stays an instrument nothing reads: no page renders "
             "a span, no gate consults one, and the ledgers stay the record. True "
             "writes one JSON line per span to the committed trace under state/traces/, "
-            "a short rolling window observability.trace_window_days bounds, and folds "
+            "a short rolling window the gardener's traces task bounds, and folds "
             "the shard's spans into the committed span rollup. That file is the only "
             "destination a span has, so no run reaches a third party whatever this says."
-        ),
-    )
-    trace_window_days: int = Field(
-        default=7,
-        ge=1,
-        description=(
-            "How many days of raw span traces state/traces/ keeps. A trace is the "
-            "evidence an operator opens to see one recent run step by step; the "
-            "committed record is the span rollup, so a trace has a short life and a "
-            "file past this window is deleted whole rather than folded - a fold would "
-            "invent a total nobody reads. Seven days covers a week of runs, and the "
-            "window is what keeps state/traces/ a constant size whatever the project's "
-            "age rather than one that grows with it (Guardrail #12). It does "
-            "nothing until observability.tracing_enabled is true: before that no trace "
-            "is written and the prune walks an empty tree."
-        ),
-    )
-    item_health_full_grain_months: int = Field(
-        default=14,
-        ge=1,
-        description=(
-            "How long state/item-health/ stays readable item by item. Past it a month "
-            "is folded to one row per (date, stage) and the full-grain shard goes, so "
-            "a reader keeps every daily total and loses the per-item detail the "
-            "console's failure list offers. Fourteen because console.max_window_days "
-            "is 366, and a 366-day window reads 367 inclusive days, which can fall in "
-            "fourteen calendar months - a window ending on the first of a month starts "
-            "on the last day of another. Thirteen looks like a year plus the month "
-            "being written and is one shard short of what the console can still ask "
-            "for."
-        ),
-    )
-    item_health_aggregate_keep_months: int | None = Field(
-        default=None,
-        ge=1,
-        description=(
-            "Months after which the folded item-health month is removed outright. Null "
-            "means never, and never is the default: the fold is a small fraction of the "
-            "shard it summarises, and deleting it would make a year-over-year comparison "
-            "unanswerable, which Guardrail #10 then forbids citing at all. Set, it must sit "
-            "ABOVE item_health_full_grain_months, or a month would be deleted before "
-            "it was ever folded."
-        ),
-    )
-    feed_health_keep_months: int = Field(
-        default=14,
-        ge=1,
-        description=(
-            "How long state/feed-health/ keeps a month. It is a per-feed-per-run "
-            "record rather than a measurement worth summarising, so its retention is "
-            "one number and there is no aggregate under it. Fourteen for the same "
-            "reason the item-health window is: the console reaches 367 inclusive days "
-            "and those days can fall in fourteen calendar months. The ledger files by "
-            "day and this age is still a month, so the prune takes a month's day files "
-            "whole."
-        ),
-    )
-    host_fingerprint_keep_months: int | None = Field(
-        default=None,
-        ge=1,
-        description=(
-            "How long state/host-fingerprint/ keeps a month. Null means never, and "
-            "never is the default, so a clone that configures nothing deletes nothing. "
-            "config/idhazh.json sets 14. A row here is one job's silicon on one run - "
-            "the machine the platform handed us and what its model server counted - so "
-            "it is deleted rather than folded: a total over a month fourteen months "
-            "back names no machine and answers nothing. Without a window this tree "
-            "grows every run for ever, one row per job per shard (Guardrail #12). Set, "
-            "it may not sit below public_machine_keep_months, because the published "
-            "machine shard is rebuilt from this ledger. The ledger files by day and "
-            "this age is a month, so the prune takes a month's day files whole."
-        ),
-    )
-    scores_full_grain_months: int = Field(
-        default=14,
-        ge=1,
-        description=(
-            "How long state/scores/ stays readable item by item. The eval ledger is "
-            "the only record of how a summary scored, and the console's model panels "
-            "take medians and percentiles over the rows themselves - so this is the "
-            "window inside which a quality question can still be asked of the items "
-            "rather than of a total. Fourteen matches the census it is read beside; a "
-            "shorter one would leave a day whose failures are still readable and whose "
-            "quality is not."
-        ),
-    )
-    score_archive_keep_months: int | None = Field(
-        default=None,
-        ge=1,
-        description=(
-            "Months after which a summarised score month is removed outright. Null "
-            "means never, on the same argument as item_health_aggregate_keep_months: a "
-            "summary is kilobytes and it is the only thing that makes a year-over-year "
-            "quality claim citable. Set, it must sit ABOVE "
-            "scores_full_grain_months."
         ),
     )
     visuals_full_grain_months: int = Field(
@@ -377,27 +297,16 @@ class ObservabilityConfig(Model):
             "it must sit ABOVE visuals_full_grain_months."
         ),
     )
-    public_telemetry_keep_months: int = Field(
-        default=14,
-        ge=1,
-        description=(
-            "How long frontend/public/telemetry/ keeps a published shard. It must "
-            "EQUAL item_health_full_grain_months and the contract refuses any other "
-            "pair: the projection is the browser's copy of that ledger, so a published "
-            "month whose source has been folded away is a rate nobody can check, and a "
-            "source month with no published copy is a window the console cannot draw."
-        ),
-    )
     public_run_days_keep_months: int = Field(
         default=14,
         ge=1,
         description=(
             "How long frontend/public/run-days/ keeps a month of day rows. Fourteen "
             "because the console reaches 367 inclusive days and those days can fall in "
-            "fourteen month shards, which is the same reason feed_health_keep_months "
-            "is fourteen. It has no state ledger to be paired with: the source is the "
-            "committed day payloads themselves, whose retention is the archive's, and "
-            "this row is a reduction of two of them to counts."
+            "fourteen month shards, which is the same reason the gardener's feed-health "
+            "task keeps fourteen months. It has no state ledger to be paired with: the "
+            "source is the committed day payloads themselves, whose retention is the "
+            "archive's, and this row is a reduction of two of them to counts."
         ),
     )
     public_day_metrics_keep_months: int = Field(
@@ -420,8 +329,8 @@ class ObservabilityConfig(Model):
             "Fourteen on the same argument. The shard is folded from "
             "state/item-health/ and state/host-fingerprint/, so it may not outlive "
             "either source: a published month whose source months are gone cannot be "
-            "rebuilt, which is the argument public_telemetry_keep_months makes for "
-            "its own pair."
+            "rebuilt. config.load_gardener refuses a host-fingerprint task that keeps "
+            "less than this, on the argument the telemetry copy makes for its own pair."
         ),
     )
     public_span_rollup_keep_months: int = Field(
@@ -429,7 +338,7 @@ class ObservabilityConfig(Model):
         ge=1,
         description=(
             "How long frontend/public/span-rollup/ keeps a published shard. Fourteen "
-            "on the same argument as the item-health copy above."
+            "on the same argument as public_run_days_keep_months."
         ),
     )
     public_run_timeline_keep_months: int = Field(
@@ -485,49 +394,41 @@ class ObservabilityConfig(Model):
     @model_validator(mode="before")
     @classmethod
     def _refuse_a_removed_knob(cls, data: Any) -> Any:
-        """Fail a config that still names one of the five retired knobs.
+        """Fail a config that still names a retired knob, and say where its number went.
 
         `keep_months` and `hard_delete_after_months` governed `state/item-health/`
-        and nothing else, while three other ledgers had no age at all. They were
-        read and dropped for a day so the rows that spend the new ages could land
-        one at a time; now that every reader has moved, a file still spelling one
-        is refused by name.
+        and nothing else, while three other ledgers had no age at all. Their
+        successors have since moved again, with every other cleanup age: each is
+        the window of the gardener task that deletes by it, in that task's own
+        declaration, because the task is the only thing that reads it.
 
-        `public_scores_keep_months` and `public_feed_health_keep_months` are next,
-        and they have no successor because the trees they bounded are gone. They
-        pruned published copies of `state/scores/` and `state/feed-health/` that
-        nothing ever fetched; the ledgers stay and keep their own ages.
+        `public_scores_keep_months` and `public_feed_health_keep_months` have no
+        successor because the trees they bounded are gone. They pruned published
+        copies of `state/scores/` and `state/feed-health/` that nothing ever
+        fetched; the ledgers stay and keep their own ages.
 
-        `runtime_counters_scrape` is the fifth and has no successor either. It
-        switched off a row in `state/runtime-counters.csv`, and that ledger is
-        gone: the four cells a reader still wants are on the host row, which
-        `job-clock` writes from the same scrape. Honouring the flag would now
-        switch off nothing at all.
+        `runtime_counters_scrape` has no successor either. It switched off a row
+        in `state/runtime-counters.csv`, and that ledger is gone: the four cells a
+        reader still wants are on the host row, which `job-clock` writes from the
+        same scrape. Honouring the flag would now switch off nothing at all.
 
-        Refused rather than ignored, and refused rather than carried forward. The
-        old age values were set against a check that could not answer the question
-        - it compared `months * 30` against the console window instead of the
-        shards that window selects - so honouring them would honour the defect,
-        and dropping any of the five silently would leave an operator believing a
-        number nothing reads.
+        Refused rather than ignored, and refused rather than carried forward: a
+        number left here would be read by nothing, and an operator who changed it
+        would believe they had moved a window that did not move.
         """
         return refuse_a_removed_knob("observability", data, SUPERSEDED_RETENTION_NAMES)
 
     def full_grain_months(self) -> Mapping[str, int]:
-        """Every window that has to outlive what a console read can still select.
+        """Every published window here that has to outlive what a console read can select.
 
-        The published windows are in here beside the state ones because the
-        console fetches them now: a published shard deleted while a window
-        preset still reaches it blanks the panel that draws it, and it does so
-        silently, because a month with no file is indistinguishable from a month
-        with no runs.
+        The console fetches these copies: a published shard deleted while a
+        window preset still reaches it blanks the panel that draws it, and it
+        does so silently, because a month with no file is indistinguishable from
+        a month with no runs. The windows of the ledgers behind them are the
+        gardener's, and `config.load_gardener` holds those to the same read.
         """
         return MappingProxyType(
             {
-                "item_health_full_grain_months": self.item_health_full_grain_months,
-                "feed_health_keep_months": self.feed_health_keep_months,
-                "scores_full_grain_months": self.scores_full_grain_months,
-                "public_telemetry_keep_months": self.public_telemetry_keep_months,
                 "public_run_days_keep_months": self.public_run_days_keep_months,
                 "public_day_metrics_keep_months": self.public_day_metrics_keep_months,
                 "public_machine_keep_months": self.public_machine_keep_months,
@@ -554,49 +455,10 @@ class ObservabilityConfig(Model):
 
     @model_validator(mode="after")
     def _a_summary_outlives_the_rows_it_replaces(self) -> Self:
-        for kept, full_grain in (
-            ("item_health_aggregate_keep_months", "item_health_full_grain_months"),
-            ("score_archive_keep_months", "scores_full_grain_months"),
-            ("visual_aggregate_keep_months", "visuals_full_grain_months"),
-        ):
-            months: int | None = getattr(self, kept)
-            if months is not None and months <= getattr(self, full_grain):
-                raise ValueError(
-                    f"observability.{kept} must sit above {full_grain}, or a month is "
-                    "deleted before it is ever summarised"
-                )
-        return self
-
-    @model_validator(mode="after")
-    def _the_published_copy_lasts_as_long_as_its_source(self) -> Self:
-        """A projection and the ledger it projects age together.
-
-        Two pairs. `public_telemetry` is the browser's copy of
-        `state/item-health/` and must EQUAL it. `public_machine` is folded from
-        `state/host-fingerprint/` and may not outlive it, but it may be shorter:
-        the state ledger carries columns the published shard drops, so an
-        operator who wants the raw machines longer than the drawn ones is asking
-        for something coherent. `public_run_days`, `public_day_metrics` and
-        `public_span_rollup` appear in neither pair - they have no state ledger
-        of their own and are bounded by their own knob and by
-        `refuse_windows_shorter_than`.
-        """
-        for published, source in (
-            ("public_telemetry_keep_months", "item_health_full_grain_months"),
-        ):
-            if getattr(self, published) != getattr(self, source):
-                raise ValueError(
-                    f"observability.{published} must equal {source}. The projection is "
-                    "the browser's copy of that ledger, so any other pair leaves either "
-                    "a published month nothing can check or a window the console cannot "
-                    "draw"
-                )
-        host_months = self.host_fingerprint_keep_months
-        if host_months is not None and host_months < self.public_machine_keep_months:
+        months = self.visual_aggregate_keep_months
+        if months is not None and months <= self.visuals_full_grain_months:
             raise ValueError(
-                "observability.host_fingerprint_keep_months must be at least "
-                "public_machine_keep_months. The published machine shard is folded from "
-                "state/host-fingerprint/, so a source month deleted while the published "
-                "one is still kept is a shard nothing can rebuild"
+                "observability.visual_aggregate_keep_months must sit above "
+                "visuals_full_grain_months, or a month is deleted before it is ever summarised"
             )
         return self

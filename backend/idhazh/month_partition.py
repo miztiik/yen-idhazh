@@ -107,7 +107,7 @@ def shards_in_window(today: str, within_days: int) -> list[str]:
 
     What it still answers is the question the `keep_months` knobs are sized
     against: how many month-shaped buckets a day-counted window reaches. That is
-    why `observability.item_health_full_grain_months` is 14 and not 13 against a
+    why the telemetry-aggregate task keeps 14 months and not 13 against a
     366-day `console.max_window_days`, and `contracts.app_config` states the
     rule while `tests/contracts/` and `tests/retention/` drive it. A grain change
     does not touch it, because both knobs are still counted in months.

@@ -51,8 +51,9 @@ the producer wiring that carries the same value into the ledger row did not
 land with them.
 
 The ledger is append-only: a writer adds a file to the day and nothing edits a
-file that is already there. It is not kept for ever: a month
-older than `observability.item_health_full_grain_months` (14) is folded to one
+file that is already there. It is not kept for ever: a month older than the
+`full-grain` series of `config/gardener/telemetry-aggregate.json` (14 months) is
+folded to one
 row per `(date, stage)` in `state/item-health-summary/<YYYY-MM>.csv` and that
 month's day directories are deleted, by the gardener's `telemetry-aggregate`
 task. The browser's copy of that same month under

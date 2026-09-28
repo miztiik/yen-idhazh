@@ -36,7 +36,9 @@ which evicting from it costs a reader anything.
 
 **2. Nothing goes while a live read can still select it.** A config that would
 delete a month the console can still ask for fails validation rather than
-deleting quietly. `ObservabilityConfig.refuse_windows_shorter_than` is the check.
+deleting quietly. `ObservabilityConfig.refuse_windows_shorter_than` is the check
+for the published ages that are knobs, and `config.load_gardener` makes it for
+every gardener declaration whose files a console read opens.
 It counts the month files a console read opens, and compares every window against
 that count rather than against the window's own length - because a month is not
 thirty days. The browser's copy of a ledger is held to the same rule: it and the
@@ -48,7 +50,8 @@ contract, and reconciles it field by field against a second reading of the shard
 before anything is unlinked. A fold that wrote a summary nobody re-read would
 trade an unreadable month for an unread one.
 
-**4. A fuse bounds one run.** `retention.max_deletes_per_run` is 200, against the
+**4. A fuse bounds one run.** The picture cleanup's `max_deletes_per_run`, in
+`config/gardener/visual-prune.json`, is 200, against the
 491 rendered visuals committed on 2026-09-13 - so a policy that selected every
 picture on disk would still take three runs to finish. An off-by-one in a date
 parse cannot eat the archive in one pass. It can only leave a backlog the next
@@ -165,14 +168,14 @@ is the count of month shards a console read opens, and no read opens a visual
 | Artefact | Policy | Age | Why that policy |
 | --- | --- | --- | --- |
 | `state/seen/` | Delete (lookup) | `collect.seen_window_days` | `ledger.load_seen` opens the day files that window names and nothing else, so an older day answers no question anybody asks. The one age here counted in days, so the prune keeps exactly the files the read opens |
-| `state/feed-health/` | Delete (lookup) | `observability.feed_health_keep_months` | a per-feed-per-run record, not a total worth keeping. The quarantine reads 31 days and the console reaches 367 inclusive days, a year and a day |
-| `state/host-fingerprint/` | Delete (lookup) | `observability.host_fingerprint_keep_months` | one job's silicon on one run, so a total over an old month names no machine. The age is null by default - a deletion default is a promise - and `config/idhazh.json` names 14, the floor `public_machine_keep_months` sets because the published shard is folded from this tree |
-| `state/traces/` | Delete (lookup) | `observability.trace_window_days` | a trace is what an operator opens to see one recent run step by step. No committed instance yet |
-| `state/item-health/` | **Fold** -> `state/item-health-summary/` | `observability.item_health_full_grain_months` | every console rate divides by this census, so the daily totals have to outlive the per-item grain |
-| `state/scores/` | **Fold** -> `state/score-archive/` | `observability.scores_full_grain_months` | it is the evidence behind every published quality claim, so the summary is written, read back and reconciled first |
+| `state/feed-health/` | Delete (lookup) | 14 months, the window of `config/gardener/feed-health.json` | a per-feed-per-run record, not a total worth keeping. The quarantine reads 31 days and the console reaches 367 inclusive days, a year and a day |
+| `state/host-fingerprint/` | Delete (lookup) | 14 months, the window of `config/gardener/host-fingerprint.json` | one job's silicon on one run, so a total over an old month names no machine. The gardener loader refuses a window below `public_machine_keep_months`, because the published shard is folded from this tree |
+| `state/traces/` | Delete (lookup) | 7 days, the window of `config/gardener/traces.json` | a trace is what an operator opens to see one recent run step by step. No committed instance yet |
+| `state/item-health/` | **Fold** -> `state/item-health-summary/` | 14 months, the `full-grain` series of `config/gardener/telemetry-aggregate.json` | every console rate divides by this census, so the daily totals have to outlive the per-item grain |
+| `state/scores/` | **Fold** -> `state/score-archive/` | 14 months, the `full-grain` series of `config/gardener/scores.json` | it is the evidence behind every published quality claim, so the summary is written, read back and reconciled first |
 | `state/visuals/` | **Fold** -> `state/visual-aggregate/` | `observability.visuals_full_grain_months` | one row per attempt at a picture, and `none` is the majority outcome by design - so the cause breakdown has to outlive the attempts. The [fold key](#the-visual-fold-key-is-eight-terms-and-it-could-not-wait) is what decides that, and it is settled. No committed instance yet |
-| `state/item-health-summary/` | Keep | `observability.item_health_aggregate_keep_months`, null | the fold costs a measured 63.8 bytes a row over four stages - about 93 KB a year against the shard's 77 MB - and deleting it would make a year-over-year comparison unanswerable. No committed instance yet |
-| `state/score-archive/` | Keep | `observability.score_archive_keep_months`, null | the same argument. No committed instance yet |
+| `state/item-health-summary/` | Keep | forever, the `aggregate` series of `config/gardener/telemetry-aggregate.json` | the fold costs a measured 63.8 bytes a row over four stages - about 93 KB a year against the shard's 77 MB - and deleting it would make a year-over-year comparison unanswerable. No committed instance yet |
+| `state/score-archive/` | Keep | forever, the `archive` series of `config/gardener/scores.json` | the same argument. No committed instance yet |
 | `state/visual-aggregate/` | Keep | `observability.visual_aggregate_keep_months`, null | the same argument again, and one more of its own: it is the only record that a gate ever refused anything. No committed instance yet |
 | `state/score-index/` | Keep | none, deliberately | an identity set carrying no date. It is what stops an old measurement being scored again as if it were new |
 | `state/published/` | Keep | none - the **read** carries the cover, `collect.published_window_days` | forgetting an address republishes it as new |
@@ -206,7 +209,7 @@ is the program `prune.yml` runs to do it
 | --- | --- | --- | --- |
 | `frontend/public/digest/<Y>/<M>/<D>/digest.json`, `run.json` | **Keep, always** | never | the record that a day happened. The archive is the product, so age is not a reason to remove any of it |
 | `frontend/public/digest/<Y>/<M>/<D>/*.svg` | Delete (asset) | `retention.image_months`, **13** | the item survives without its picture, which is what makes a visual the one published thing safe to remove. Not because it is the bigger half - it is not: 491 visuals weighing 6,244,624 bytes against 24,543,254 bytes of day payload in the same tree on 2026-09-13 |
-| `frontend/public/telemetry/` | Delete (projection) | `observability.public_telemetry_keep_months` | the browser's copy of `state/item-health/`, refused at any value but its source's |
+| `frontend/public/telemetry/` | Delete (projection) | 14 months, the `public-copy` series of `config/gardener/telemetry-aggregate.json` | the browser's copy of `state/item-health/`, refused at any value but its source's |
 | `frontend/public/run-days/` | Delete | `observability.public_run_days_keep_months` | a reduction of the day payloads to counts. It has no state ledger to be paired with |
 | `frontend/public/day-metrics/` | Delete | `observability.public_day_metrics_keep_months` | bounds the published copy without claiming to bound the ledger, which has no age of its own |
 | `frontend/public/machine/` | Delete | `observability.public_machine_keep_months` | the source is one appended CSV, so the copy is where a month boundary first exists |
@@ -298,7 +301,8 @@ window joins that check in the same commit. Fowler, 2026-09-13.
 
 `retention.image_months` was `-1` until 2026-09-13 - no age window at all - so
 this is the first age this project has put on a published asset rather than a
-tightening of one. `retention.dry_run` stays `true`, so the window names days
+tightening of one. `config/gardener/visual-prune.json` keeps `dry_run: true`,
+so the window names days
 and removes none of them; the deletion is a separate commit, and it lands that
 way round so that the first evidence of what the window selects arrives before
 the deletion rather than after it.

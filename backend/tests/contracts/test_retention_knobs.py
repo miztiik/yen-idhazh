@@ -11,12 +11,14 @@ import pytest
 from conftest import CONFIG_DIR, REPO_ROOT, read_text
 from pydantic import ValidationError
 
-from idhazh import cli, month_partition
+from idhazh import cli, config, month_partition
 from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.knobs.collect import SUPERSEDED_COLLECT_NAMES, CollectConfig
 from idhazh.contracts.knobs.console import ConsoleConfig
+from idhazh.contracts.knobs.gardener import ForeverWindow, MonthsWindow, RetentionPolicy
 from idhazh.contracts.knobs.models import ModelsConfig
 from idhazh.contracts.knobs.observability import SUPERSEDED_RETENTION_NAMES, ObservabilityConfig
+from idhazh.contracts.knobs.retention import SUPERSEDED_RETENTION_KNOBS
 from idhazh.retention import oldest_month_kept
 
 from ._fixtures import APP_CONFIG_EVERY_KNOB_DIFFERS, committed_models_raw
@@ -26,9 +28,13 @@ pytestmark = pytest.mark.contract
 
 def test_never_hard_deleting_is_the_default_a_reader_gets() -> None:
     """A summary costs kilobytes and is what makes a year-over-year claim citable."""
-    fresh = ObservabilityConfig()
-    assert fresh.item_health_aggregate_keep_months is None
-    assert fresh.score_archive_keep_months is None
+    tasks = config.load_gardener().tasks
+    for name, summary in (("telemetry-aggregate", "aggregate"), ("scores", "archive")):
+        policy = tasks[name]
+        assert isinstance(policy, RetentionPolicy) and policy.series is not None
+        assert isinstance(policy.series[summary], ForeverWindow), (
+            f"config/gardener/{name}.json deletes its {summary} series"
+        )
 
 
 def test_the_committed_config_no_longer_emits_a_removed_name() -> None:
@@ -40,14 +46,55 @@ def test_the_committed_config_no_longer_emits_a_removed_name() -> None:
     """
     raw = json.loads(read_text(CONFIG_DIR / "idhazh.json"))
     assert not set(raw["observability"]) & set(SUPERSEDED_RETENTION_NAMES)
+    assert not set(raw["retention"]) & set(SUPERSEDED_RETENTION_KNOBS)
     assert not set(raw["collect"]) & set(SUPERSEDED_COLLECT_NAMES)
-    assert raw["observability"]["item_health_full_grain_months"] == 14
-    assert raw["observability"]["public_telemetry_keep_months"] == 14
 
     for successor in (*SUPERSEDED_COLLECT_NAMES.values(), "availability_rest_runs"):
         assert successor in raw["collect"], f"collect.{successor} is defaulted, not set"
     loaded = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json"))
     assert loaded.collect.availability_strikes_before_rest == 5
+
+
+#: Every cleanup knob that moved into a gardener declaration, and the file it went to.
+MOVED_TO_A_DECLARATION = [
+    ("observability", "trace_window_days", "config/gardener/traces.json"),
+    ("observability", "feed_health_keep_months", "config/gardener/feed-health.json"),
+    ("observability", "host_fingerprint_keep_months", "config/gardener/host-fingerprint.json"),
+    ("observability", "scores_full_grain_months", "config/gardener/scores.json"),
+    ("observability", "score_archive_keep_months", "config/gardener/scores.json"),
+    (
+        "observability",
+        "item_health_full_grain_months",
+        "config/gardener/telemetry-aggregate.json",
+    ),
+    (
+        "observability",
+        "item_health_aggregate_keep_months",
+        "config/gardener/telemetry-aggregate.json",
+    ),
+    (
+        "observability",
+        "public_telemetry_keep_months",
+        "config/gardener/telemetry-aggregate.json",
+    ),
+    ("retention", "dry_run", "config/gardener/<task>.json"),
+    ("retention", "max_deletes_per_run", "config/gardener/visual-prune.json"),
+    ("retention", "trial_state_days", "config/gardener/trials.json"),
+]
+
+
+@pytest.mark.parametrize(("block", "knob", "file"), MOVED_TO_A_DECLARATION)
+def test_a_cleanup_knob_left_in_the_app_config_is_sent_to_its_declaration(
+    block: str, knob: str, file: str
+) -> None:
+    """Refused by name, and by a message that says which declaration took the number."""
+    payload = json.loads(read_text(CONFIG_DIR / "idhazh.json"))
+    assert knob not in payload[block], "the committed file must not spell the moved knob"
+    payload[block][knob] = 14
+
+    with pytest.raises(ValidationError, match=re.escape(f"{block}.{knob} is now")) as refusal:
+        AppConfig.model_validate(payload)
+    assert file in str(refusal.value)
 
 
 def test_the_rest_rule_reads_the_knob_the_committed_config_spells() -> None:
@@ -213,7 +260,11 @@ def test_no_configured_age_deletes_a_shard_a_366_day_read_still_selects() -> Non
         walked = min(month_partition.shards_in_window(anchor.isoformat(), window))
         assert walked == (anchor - span).isoformat()[:7]
 
-    kept = ObservabilityConfig().item_health_full_grain_months
+    folded = config.load_gardener().tasks["telemetry-aggregate"]
+    assert isinstance(folded, RetentionPolicy) and folded.series is not None
+    full_grain = folded.series["full-grain"]
+    assert isinstance(full_grain, MonthsWindow), "the census is kept in whole months"
+    kept = full_grain.value
     too_short = 0
     for offset in range(cycle):
         anchor = start + timedelta(days=offset)

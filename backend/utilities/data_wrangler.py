@@ -464,8 +464,8 @@ def refill(
     teaching.
 
     **How far back it reaches is now a configured number.** Every candidate comes
-    from a ledger row, and `state/scores/` keeps
-    `observability.scores_full_grain_months` months of rows before a month
+    from a ledger row, and `state/scores/` keeps the scores task's full-grain
+    window of rows before a month
     becomes a summary. A summarised month carries no address and no digest, so
     there is nothing to re-fetch and nothing to join - those months are counted
     and named rather than left as a gap in the ledger count above.

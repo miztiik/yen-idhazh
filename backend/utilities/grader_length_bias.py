@@ -146,7 +146,7 @@ def _cut_by_row(state_dir: Path) -> dict[str, bool | None]:
 
     An empty `source_word_count` is a row that does not know its own pre-cap
     length, and that is `None` rather than `False`. So is a pair whose month has
-    aged out of `observability.scores_full_grain_months`: the summary that
+    aged out of the scores task's full-grain window: the summary that
     replaced it counts cuts per cohort and cannot answer for one item. Both land
     in the report's `cut unknown` group, and `load_pairs` names the archived
     months so the two causes are told apart there rather than guessed at.
@@ -169,8 +169,8 @@ def load_pairs(evidence_dir: Path, state_dir: Path) -> list[Pair]:
 
     A pair the ledger cannot answer for lands in the report's `cut unknown`
     group, and there are two ways to get there: a row that never recorded its
-    pre-cap length, and a month that has aged out of
-    `observability.scores_full_grain_months`. The second is named here, because
+    pre-cap length, and a month that has aged out of the scores task's
+    full-grain window. The second is named here, because
     from inside the table the two are the same empty cell.
     """
     files = index(evidence_dir)

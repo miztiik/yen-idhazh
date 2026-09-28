@@ -1,9 +1,10 @@
 """Summarise a month of the eval ledger, and prove the summary before the rows go.
 
 `state/scores/<YYYY>/<MM>/<DD>.csv` is the committed record of how every summary
-scored. Past `observability.scores_full_grain_months` a whole month of those day
-files is turned into `state/score-archive/<YYYY-MM>.json` and unlinked - and the
-whole safety argument of this module is the order those two things happen in.
+scored. Past the full-grain window of `config/gardener/scores.json` a whole month
+of those day files is turned into `state/score-archive/<YYYY-MM>.json` and
+unlinked - and the whole safety argument of this module is the order those two
+things happen in.
 
 **The archive keeps a month while the ledger below it keeps days**, because a
 day file of one month's totals is a shape nothing consumes
@@ -99,8 +100,8 @@ MEASUREMENT_COLUMNS: Final = (
 
 #: What a person reading a utility's refusal needs to know in one line.
 RAW_WINDOW_NOTE: Final = (
-    f"{ledger.tree_relpath(LedgerName.SCORES)}/ keeps observability.scores_full_grain_months "
-    "months of item-level rows. An older month exists only as "
+    f"{ledger.tree_relpath(LedgerName.SCORES)}/ keeps item-level rows for the full-grain "
+    "window of config/gardener/scores.json. An older month exists only as "
     f"{ledger.tree_relpath(LedgerName.SCORE_ARCHIVE)}/<YYYY-MM>.json, which carries totals, "
     "distributions, ranges, spread and the dedupe index, and no item."
 )

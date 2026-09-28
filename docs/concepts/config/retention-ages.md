@@ -2,11 +2,14 @@
 
 **Last Updated**: 2026-09-28
 
-Which instruments run at all, and how long what they write is kept. One JSON
-block holds both - `observability` in `config/idhazh.json` - because a switch
-that stops a record being written and an age that stops it being kept are the
-two ends of the same question. What a knob is, and why these are knobs rather
-than constants, is [../config.md](../config.md).
+Which instruments run at all, and how long what they write is kept. The switches
+live in one JSON block - `observability` in `config/idhazh.json` - with the ages
+a publisher reads, because a switch that stops a record being written and an age
+that stops it being kept are the two ends of the same question. **The age of a
+ledger under `state/` is not in that block.** It is the window of the gardener
+task that deletes the ledger, in that task's own `config/gardener/<task>.json`,
+because the task is the only thing that reads the number. What a knob is, and
+why these are knobs rather than constants, is [../config.md](../config.md).
 
 ## Observability surface
 
@@ -18,15 +21,8 @@ than constants, is [../config.md](../config.md).
 | `telemetry_publish` | `true` | The copy into `frontend/public/telemetry/<YYYY-MM>.csv`. |
 | `tracing_enabled` | `true` | The span tree. False writes no trace under `state/traces/` and no span rollup. |
 | `sample_rate` | `1.0` | Nothing. It is the fraction of runs whose scorer runs. |
-| `item_health_full_grain_months` | `14` | Nothing. It is where `state/item-health/` stops being kept item by item. |
-| `item_health_aggregate_keep_months` | `null` | Nothing by default. Null means a folded month is never removed. |
-| `feed_health_keep_months` | `14` | Nothing. It is where `state/feed-health/` stops keeping a month, and past it the month is deleted rather than summarised. |
-| `host_fingerprint_keep_months` | `null`, committed `14` | Nothing by default. Null means `state/host-fingerprint/` never loses a month, and the committed file names the window one step ahead of the default. Set, it may not sit below `public_machine_keep_months`. |
-| `scores_full_grain_months` | `14` | Where `state/scores/` stops being kept item by item. Past it a month becomes `state/score-archive/<YYYY-MM>.json` and the shard is deleted. |
-| `score_archive_keep_months` | `null` | Nothing by default. Null means a summarised score month is never removed. |
 | `visuals_full_grain_months` | `14` | Where `state/visuals/` stops being kept attempt by attempt. Past it a month folds to the eight-term group in `state/visual-aggregate/` and the shard is deleted. |
 | `visual_aggregate_keep_months` | `null` | Nothing by default. Null means a folded visual month is never removed. |
-| `public_telemetry_keep_months` | `14` | Nothing. It is where `frontend/public/telemetry/` stops keeping a shard, and it must equal `item_health_full_grain_months`. |
 | `cost_currency` | `"USD"` | Nothing. It is the ISO 4217 code the console prints a counterfactual cost in. |
 | `cost_input_per_million` | `0.20` | Nothing. It is what a hosted provider would charge for a million prompt tokens. |
 | `cost_output_per_million` | `0.60` | Nothing. The same, for a million written tokens. |
@@ -102,31 +98,35 @@ Until 2026-09-02 one knob decided when a month stopped being kept at full grain
 cleanup age at all, so three trees grew with nothing to stop them while the
 fourth was tuned by a number that said nothing about them.
 
-Fourteen names replace it, each a knob and not a constant (Guardrail #6). Ten are
-full-grain windows, returned together by `ObservabilityConfig.full_grain_months`
-so `refuse_windows_shorter_than` can check every one of them against what a
-console read still selects; three are the ages that govern what a fold leaves
-behind; and one is `visuals_full_grain_months`, which is a full-grain window and
-is **not** in that mapping yet, because no console read opens one of its shards
-today ([../adaptive-pruning.md](../adaptive-pruning.md#the-visual-fold-key-is-eight-terms-and-it-could-not-wait)).
+Now every tree has an age of its own, and each age is a value in a file rather
+than a constant (Guardrail #6). **A ledger's age sits with whatever reads it.**
+Where a gardener task deletes the ledger, the age is that task's window, and a
+task that keeps several series of one tree - the rows, a summary of them, a
+published copy - names each one under `series`. Where a publisher or the visual
+fold reads the age, it is a knob in `observability`, and
+`ObservabilityConfig.full_grain_months` returns the ones a console read opens so
+`refuse_windows_shorter_than` can check them against what that read still
+selects. `visuals_full_grain_months` is a full-grain window and is **not** in
+that mapping yet, because no console read opens one of its shards today
+([../adaptive-pruning.md](../adaptive-pruning.md#the-visual-fold-key-is-eight-terms-and-it-could-not-wait)).
 
-| Ledger | Full grain | Summary after it |
-| --- | --- | --- |
-| `state/item-health/` | `item_health_full_grain_months` (14) | `item_health_aggregate_keep_months` (null) |
-| `state/scores/` | `scores_full_grain_months` (14) | `score_archive_keep_months` (null) |
-| `state/visuals/` | `visuals_full_grain_months` (14) | `visual_aggregate_keep_months` (null) |
-| `state/feed-health/` | `feed_health_keep_months` (14) | none - a per-feed-per-run record is not a total worth keeping |
-| `state/host-fingerprint/` | `host_fingerprint_keep_months` (null by default, 14 committed) | none - one job's silicon on one run, and a total over an old month names no machine |
+| Ledger | Full grain | Summary after it | Declared in |
+| --- | --- | --- | --- |
+| `state/item-health/` | 14 months | forever, in `state/item-health-summary/` | `config/gardener/telemetry-aggregate.json`, series `full-grain` and `aggregate` |
+| `state/scores/` | 14 months | forever, in `state/score-archive/` | `config/gardener/scores.json`, series `full-grain` and `archive` |
+| `state/visuals/` | 14 months | forever, in `state/visual-aggregate/` | `visuals_full_grain_months` and `visual_aggregate_keep_months` (null) in `observability` |
+| `state/feed-health/` | 14 months | none - a per-feed-per-run record is not a total worth keeping | `config/gardener/feed-health.json` |
+| `state/host-fingerprint/` | 14 months | none - one job's silicon on one run, and a total over an old month names no machine | `config/gardener/host-fingerprint.json` |
 
 And one for each published copy, because a reader fetches those and our own disk
 is not what bounds them:
 
 | Published copy | Age | Paired with |
 | --- | --- | --- |
-| `frontend/public/telemetry/` | `public_telemetry_keep_months` (14) | `item_health_full_grain_months` |
+| `frontend/public/telemetry/` | 14 months, the `public-copy` series of `config/gardener/telemetry-aggregate.json` | the `full-grain` series of the same file, which it must equal |
 | `frontend/public/run-days/` | `public_run_days_keep_months` (14) | nothing - the source is the day payloads, whose retention is the archive's |
 | `frontend/public/day-metrics/` | `public_day_metrics_keep_months` (14) | nothing - `state/day-metrics/` has no age of its own |
-| `frontend/public/machine/` | `public_machine_keep_months` (14) | `host_fingerprint_keep_months`, which may not sit below it - the shard is folded from that tree and from `state/item-health/` |
+| `frontend/public/machine/` | `public_machine_keep_months` (14) | the window of `config/gardener/host-fingerprint.json`, which may not sit below it - the shard is folded from that tree and from `state/item-health/` |
 | `frontend/public/span-rollup/` | `public_span_rollup_keep_months` (14) | nothing |
 
 **Two ages left this table on 2026-09-16.** `public_scores_keep_months` and
@@ -136,26 +136,40 @@ the two knobs with them. A config file still spelling either is refused by name
 rather than ignored, and it is sent nowhere: the two ledgers above keep their
 own ages, which is a different number for a different ledger.
 
-**Two more ages sit outside this block**, because each is a read cover first and
-a cleanup age second: `observability.trace_window_days` bounds `state/traces/`,
-and `collect.seen_window_days` bounds `state/seen/` by naming the day files the
-reader opens.
+**Two more trees are bounded by a read, and a window that deletes what the read
+opens is refused.** `state/seen/` keeps 90 days, the window of
+`config/gardener/seen.json`, and the gardener loader refuses that window below
+`collect.seen_window_days`, the day files the collector reads. The
+`counterfactual-scores` window is held the same way above
+`lens_weights.window_days`.
 
-**A third sits outside it for the opposite reason.** `retention.trial_state_days`
-(90) bounds `state/<run.trial_state_dirname>/`, and nothing reads those rows at
-all - no published series, no gate, no console band. The age is about disk and
-about a reader who opens `state/` and wonders what a directory is, so it needs
-no full-grain window, no summary and no published pair.
+**Two are kept a short, fixed time because nothing sums them.** `state/traces/`
+keeps 7 days, the window of `config/gardener/traces.json`. A trace is the
+evidence an operator opens to see one recent run step by step, and the committed
+record is the span rollup, so a trace past its window is deleted whole rather
+than folded - a fold would invent a total nobody reads. Seven days covers a week
+of runs and keeps the tree one size whatever the project's age (Guardrail #12).
+`state/<run.trial_state_dirname>/` keeps 90 days, the window of
+`config/gardener/trials.json`, and nothing reads those rows at all - no
+published series, no gate, no console band. That age is about disk and about a
+reader who opens `state/` and wonders what a directory is, so it needs no
+full-grain window, no summary and no published pair. Ninety days is the artifact
+retention this project already uses everywhere else, so a trial's rows outlive
+the run's own artifacts by nothing.
 
-**Null keeps a summary indefinitely, and a finite value must sit above its own
-full-grain window.** The contract refuses any other pair, so a month can never
-be deleted before the thing that replaces it has been written.
+**A summary is kept forever unless a value says otherwise, and a finite value
+must sit above its own full-grain window.** The gardener loader refuses any
+other pair for the two tasks that keep series, and the `observability` contract
+refuses it for the visual pair. Either way a month can never be deleted before
+the thing that replaces it has been written.
 
-**A published copy must last exactly as long as the ledger it copies, where
-there is one.** The contract refuses any pair but equality for the three copies
-that name a source, in both directions: a published month whose source has been
-folded away is a rate nobody can check, and a source month with no published copy
-is a window the console cannot draw. The other four have no state ledger behind
+**A published copy lasts as long as the ledger it is built from.** The loader
+refuses a `public-copy` series that differs from the `full-grain` series of
+`telemetry-aggregate`, in both directions: a published month whose source has
+been folded away is a rate nobody can check, and a source month with no
+published copy is a window the console cannot draw. The machine shard is folded
+from `state/host-fingerprint/`, so that task's window is refused below
+`public_machine_keep_months`. The other three copies have no state ledger behind
 them and are bounded by their own knob alone.
 
 **This block sets the ages. Which policy a tree is under - fold, delete or keep
@@ -180,7 +194,11 @@ The retired check compared the old age times 30 against `max_window_days` - `390
 > 366` - which is arithmetic about days, not about the files a read selects. A
 month is not thirty days. The check now compares against the shards, and
 `backend/tests/contracts/` sweeps every end date in one 400-year
-Gregorian cycle to prove it. Measured 2026-09-02 over all **146,097** anchor
+Gregorian cycle to prove it. The gardener loader makes the same comparison for
+every declaration whose files a console read opens - the `feed-health` window,
+the `full-grain` series of `scores` and `telemetry-aggregate`, and the
+`public-copy` series - and refuses a window under fourteen months by naming the
+file. Measured 2026-09-02 over all **146,097** anchor
 dates - arithmetic over the calendar, so the spread is zero by construction:
 fourteen months keeps back at least as far as the console reads on every one of
 them, and it is exactly tight on **3,636** of them, 2.5 percent. Those same
@@ -190,9 +208,9 @@ them, and it is exactly tight on **3,636** of them, 2.5 percent. Those same
 
 `keep_months` and `hard_delete_after_months` were read and dropped for a day, so
 that the rows spending the new ages could land one at a time. Since 2026-09-03 a
-file spelling either is **refused**, and the message names the knob that governs
-the same ledger: `item_health_full_grain_months` and
-`item_health_aggregate_keep_months`.
+file spelling either is **refused**, and the message names where the number that
+governs the same ledger lives now: the `full-grain` and `aggregate` series of
+`config/gardener/telemetry-aggregate.json`.
 
 **Refused rather than ignored.** Every config model forbids unknown keys, so
 both names already failed - with "extra inputs are not permitted", which does not
@@ -207,24 +225,50 @@ number forward would carry the defect forward.
 `collect.quarantine_after_failures` was removed on the same day and behaves the
 same way: refused, naming `availability_strikes_before_rest`.
 
+**Eleven more names left `config/idhazh.json` on 2026-09-28, and no value
+changed.** Each cleanup age moved into the declaration of the task that deletes
+by it, so the one number a task reads is in the one file that task owns. A file
+still spelling a moved name is refused the same way, naming the new place:
+
+| Name in `config/idhazh.json` | Value | Where the value is now |
+| --- | --- | --- |
+| `observability.item_health_full_grain_months` | 14 | `series.full-grain` in `config/gardener/telemetry-aggregate.json` |
+| `observability.item_health_aggregate_keep_months` | null | `series.aggregate` in `config/gardener/telemetry-aggregate.json`, as `forever` |
+| `observability.public_telemetry_keep_months` | 14 | `series.public-copy` in `config/gardener/telemetry-aggregate.json` |
+| `observability.scores_full_grain_months` | 14 | `series.full-grain` in `config/gardener/scores.json` |
+| `observability.score_archive_keep_months` | null | `series.archive` in `config/gardener/scores.json`, as `forever` |
+| `observability.feed_health_keep_months` | 14 | `window` in `config/gardener/feed-health.json` |
+| `observability.host_fingerprint_keep_months` | 14 | `window` in `config/gardener/host-fingerprint.json` |
+| `observability.trace_window_days` | 7 | `window` in `config/gardener/traces.json`, in days |
+| `retention.trial_state_days` | 90 | `window` in `config/gardener/trials.json`, in days |
+| `retention.max_deletes_per_run` | 200 | `max_deletes_per_run` in `config/gardener/visual-prune.json` |
+| `retention.dry_run` | true | `dry_run` in every `config/gardener/<task>.json` |
+
+A task that keeps series keeps its own `window` equal to its `full-grain`
+series, so the two spellings of that number are refused unless they agree.
+`backend/tests/gardener/tasks/test_every_window_moved_unchanged.py` reads each
+old value from a frozen copy of the file as it was and checks the declaration
+holds the same one, key by key.
+
 **Validation reads `config/appearance.json`.** That file owns the console window
 the published site really uses, and `AppConfig.console` is the layer under it, so
-`config.load` runs the same check twice - once against each. The appearance
-file's digest is not recorded on the run manifest, because nothing in the run
-reads a value out of it.
+`config.load` runs the same check twice - once against each - and
+`config.load_gardener` checks every declaration against the appearance file's
+window. The appearance file's digest is not recorded on the run manifest,
+because nothing in the run reads a value out of it.
 
-`item_health_aggregate_keep_months` defaults to null - never - and that is a
+The `aggregate` series of `telemetry-aggregate` is `forever`, and that is a
 decision rather than an omission. A shard has to stay readable for a year, and
 the folded aggregate costs a measured 63.8 bytes a row over four stages - about
-93 KB a year against the shard's 77 MB. Set it, and it must sit above
-`item_health_full_grain_months`, or a month would be deleted before it was ever
-folded; the contract refuses the pair otherwise.
+93 KB a year against the shard's 77 MB. Give it a finite window, and it must sit
+above the `full-grain` series, or a month would be deleted before it was ever
+folded; the gardener loader refuses the pair otherwise.
 
-**What `item_health_full_grain_months` governs is `state/item-health/`, and
-nothing else.** Past the window a month is folded to one row per `(date, stage)`
-in `state/item-health-summary/<YYYY-MM>.csv` and the full-grain shard is deleted,
-by the gardener's `telemetry-aggregate` task. What survives is every count and
-every timing total; what goes is the
+**What the `full-grain` series of `telemetry-aggregate` governs is
+`state/item-health/`, and nothing else.** Past the window a month is folded to
+one row per `(date, stage)` in `state/item-health-summary/<YYYY-MM>.csv` and the
+full-grain shard is deleted, by the gardener's `telemetry-aggregate` task. What
+survives is every count and every timing total; what goes is the
 per-item detail, which is what the console's failure list offers and no rate
 needs. Folding the committed `state/item-health/2026-08.csv` on 2026-08-30 turned
 4,167 rows and 1,270,452 bytes into 24 rows and 1,531 bytes - **829.8 times
@@ -233,19 +277,18 @@ smaller**, and 93,136 bytes a year against the shard's 77,285,830.
 The 219 KB a year the old description quoted was an estimate at five stages and
 120 bytes a row. Measured it is **63.8 bytes a row over four stages**, because
 `plan` wrote no row in that month - so 93 KB a year, 2.4 times cheaper than the
-estimate. The description keeps the estimate's conclusion, which the measurement
-only strengthens.
+estimate. The conclusion drawn from the estimate - keep the aggregate forever -
+stands, and the measurement only strengthens it.
 
-**Five of the six now decide something, and the gardener's tasks spend them.** The
-`telemetry-aggregate` task folds `state/item-health/` past
-`item_health_full_grain_months` and unlinks the browser's copy of that month past
-`public_telemetry_keep_months`; the `feed-health` task deletes `state/feed-health/`
-past `feed_health_keep_months`; and the `scores` task archives `state/scores/` past
-`scores_full_grain_months` before deleting the shard. `score_archive_keep_months`
-is the sixth and is null, so nothing has ever deleted an archive. The
-`host-fingerprint` task deletes `state/host-fingerprint/` past
-`host_fingerprint_keep_months`, which was the one committed day-filed ledger with
-no age at all until 2026-09-19.
+**Each of these ages is one task's own window, and that task spends it.** The
+`telemetry-aggregate` task folds `state/item-health/` past its `full-grain`
+series and unlinks the browser's copy of that month past its `public-copy`
+series; the `feed-health` task deletes `state/feed-health/` past its window; and
+the `scores` task archives `state/scores/` past its `full-grain` series before
+deleting the shard. Its `archive` series is `forever`, so nothing has ever
+deleted an archive. The `host-fingerprint` task deletes `state/host-fingerprint/`
+past its window; that was the one committed day-filed ledger with no age at all
+until 2026-09-19.
 
 **A score month is summarised before it is deleted, and it is the only ledger here
 with a summary in front of the deletion.** The archive is
@@ -268,15 +311,18 @@ evidence, the quarantine reads 31 days, and the console reaches at most 366 - so
 no older total has a reader, and writing one would persist a shape nothing
 consumes. That is why the table above gives it a full-grain age and no summary
 beside it. `state/seen/` is not on that list at all because it is a lookup rather
-than a measurement: an out-of-window day file is deleted through
-`collect.seen_window_days`.
+than a measurement: an out-of-window day file is deleted by the `seen` task,
+whose window may not sit below `collect.seen_window_days`.
 
-**And the step ships in dry run.** It prints every file a live run would remove
-and removes none of them. `.github/workflows/prune.yml` squashes and force-pushes
+**And every task ships in dry run.** Each declaration carries `dry_run: true`,
+so a pass lists every file a live pass would remove and removes none of them.
+`.github/workflows/prune.yml` squashes and force-pushes
 `main` on a schedule, so a state file deleted here stops being recoverable from
 history once that prune passes over it (`CLAUDE.md` section 8) - which makes
-"read the list first" the only safe order. Turning the deletion on is a one-line
-commit of its own. Measured on this checkout on 2026-09-13: a live run today
+"read the list first" the only safe order. Turning one task's deletion on is a
+one-line commit to that task's own declaration
+([../../how-to/run-the-pipeline.md](../../how-to/run-the-pipeline.md#turning-state-cleanup-on)).
+Measured on this checkout on 2026-09-13: a live run today
 removes nothing, the first file any tree loses is `state/seen/2026/08/23.csv` on
 **2026-11-22**, and the first files the fourteen-month rules take are the day
 files under `state/item-health/2026/08/`, `frontend/public/telemetry/2026-08.csv`,
@@ -291,8 +337,9 @@ is zero.
 ## See also
 
 - [../config.md](../config.md) - what a knob is, and what is not one.
+- [idhazh-gardener.md](idhazh-gardener.md) - the fields of a gardener declaration, and every task that ships.
 - [../adaptive-pruning.md](../adaptive-pruning.md) - which policy each tree is under, and the register of every artefact this project writes.
 - [../telemetry.md](../telemetry.md) - the logging flags and what each instrument records.
 - [../../architecture/publishing/retention.md](../../architecture/publishing/retention.md) - what the fold and the deletion actually do to the tree.
 - [../../architecture/publishing/telemetry-series.md](../../architecture/publishing/telemetry-series.md) - the published series these ages bound.
-- [../../how-to/prune-a-collection.md](../../how-to/prune-a-collection.md) - running the step that spends these ages.
+- [../../how-to/prune-a-collection.md](../../how-to/prune-a-collection.md) - deleting the old members of one collection by hand, a ceiling at a time.
