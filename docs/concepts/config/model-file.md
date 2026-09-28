@@ -1,6 +1,6 @@
 # The model's own file
 
-**Last Updated**: 2026-09-24
+**Last Updated**: 2026-09-28
 
 What `config/` says about a set of weights: which model runs, what runtime
 settings are declared for those exact bytes, how a turn is written for it, and
@@ -363,13 +363,14 @@ Two pairs of knobs look like one knob each and are not:
  satisfies `min_rows: 500` and cannot satisfy `train_rows: 1000`, and a session
  that silently trained on 600 while every note said 1000 produces a result
  nobody can attribute.
-- **`prune_every_days` is how often the prune fires; `prune_keep_days` is how far
- back it keeps.** "Prune quarterly" names neither on its own. The first costs one
- force-push each time; the second costs storage, and it is also how far
- `git blame` reaches afterwards.
+- **The squash's `every_days` is how often it fires; its `window` is how far back
+ it keeps.** Both are in `config/gardener/corpus-squash.json`, not in `finetune`,
+ because nothing but the squash reads them. "Prune quarterly" names neither on
+ its own. The first costs one force-push each time; the second costs storage,
+ and it is also how far `git blame` reaches afterwards.
 
-`harvest_every_days`, `prune_every_days` and `prune_keep_days` are the clearest
-case in this project of a knob that **cannot** be workflow syntax.
+`harvest_every_days` and the squash's `every_days` are the clearest case in this
+project of a knob that **cannot** be workflow syntax.
 `on.schedule` is parsed by GitHub Actions before any step runs, so no value in
 `config/` can reach a cron line at all - and 5-field cron has no every-N-days
 field to write one with. Each cadence is therefore a due-check in a step, reading

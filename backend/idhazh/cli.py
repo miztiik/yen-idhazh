@@ -83,7 +83,6 @@ from idhazh.stages import (
     compact,
     decide,
     harvest,
-    prune_stamp,
     prune_state,
     qualify,
     qualify_canaries,
@@ -143,7 +142,6 @@ STAGES: Final[tuple[str, ...]] = (
     "harvest",
     "compact",
     "rebuild-score-index",
-    "prune-stamp",
     "prune-state",
     "run",
     "validate",
@@ -650,10 +648,6 @@ def main(argv: Sequence[str] | None = None) -> int:
             state_dir=common.STATE_ROOT if args.state_root is None else args.state_root,
         )
         return 0
-
-    if args.stage == "prune-stamp":
-        # Above the fetcher for the same reason: it rewrites one committed field.
-        return prune_stamp.stage_prune_stamp(corpus_dir=args.corpus_dir, date=args.date or _today())
 
     if args.stage == "council-shard":
         # Above the fetcher because a hosted unit reads committed files and posts

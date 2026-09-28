@@ -24,12 +24,14 @@ from ._harness import (
     HARVEST_COMMAND,
     HARVEST_STEP,
     PRUNE_PUSH_MODULE,
+    PRUNE_PUSH_STEP,
     RETIRE_COMMAND,
     RETIRE_DRY_RUN_FLAG,
     RETIRE_STEP,
     REVIEW_ARTIFACT,
     REVIEW_COMMAND,
     REVIEW_STEP,
+    SQUASH_DUE_MODULE,
     SUBSTITUTED_DATE,
     SUBSTITUTED_DAY_DIR,
     TOLERATED,
@@ -149,9 +151,9 @@ def test_the_fold_ships_in_dry_run_because_the_history_it_deletes_from_is_rewrit
 
     `.github/workflows/prune.yml` squashes and force-pushes `main` on a schedule
     (CLAUDE.md section 8), so `git revert` is not a recovery path for a state file
-    older than `finetune.prune_keep_days`. The step therefore prints the files a
-    live run would remove and removes none of them, and the flag is what makes
-    that true rather than a comment saying it is.
+    older than the squash's window in `config/gardener/corpus-squash.json`. The
+    step therefore prints the files a live run would remove and removes none of
+    them, and the flag is what makes that true rather than a comment saying it is.
 
     Deleting the flag is the one-line commit that turns the deletion on, and it
     is deliberately a commit somebody has to write and this test has to be
@@ -363,13 +365,13 @@ def test_the_prune_reads_both_its_numbers_from_config() -> None:
     `on.schedule` is parsed before any step runs, so nothing in `config/` can
     reach it, and 5-field cron has no every-N-days field to write one with. The
     daily cron is the wake-up; this step is the schedule. Run against the real
-    committed config, so a renamed knob fails here.
+    committed declaration, so a renamed knob fails here.
     """
     workflow = _load_workflows()["prune.yml"]
     step = _step(workflow, "prune", "id", "due")
-    assert "backend/utilities/prune_due.py" in _script(step, "prune due step")
+    assert "backend/utilities/corpus_squash_due.py" in _script(step, "prune due step")
     done = subprocess.run(
-        [sys.executable, str(REPO_ROOT / "backend" / "utilities" / "prune_due.py")],
+        [sys.executable, str(SQUASH_DUE_MODULE)],
         cwd=REPO_ROOT,
         capture_output=True,
         text=True,
@@ -377,16 +379,17 @@ def test_the_prune_reads_both_its_numbers_from_config() -> None:
     )
     assert done.returncode == 0, done.stderr
     outputs = dict(line.split("=", 1) for line in done.stdout.splitlines() if "=" in line)
-    finetune = json.loads(read_text(CONFIG_DIR / "idhazh.json"))["finetune"]
+    declared = json.loads(read_text(CONFIG_DIR / "gardener" / "corpus-squash.json"))
+    keep_days = declared["window"]["value"]
 
     assert outputs["due"] in {"true", "false"}
-    assert outputs["keep_days"] == str(finetune["prune_keep_days"])
+    assert outputs["keep_days"] == str(keep_days)
     assert re.fullmatch(r"\d{4}-\d{2}-\d{2}", outputs["today"])
     assert re.fullmatch(r"\d{4}-\d{2}-\d{2}", outputs["boundary"])
     assert (
         datetime.date.fromisoformat(outputs["today"])
         - datetime.date.fromisoformat(outputs["boundary"])
-    ).days == finetune["prune_keep_days"]
+    ).days == keep_days
 
     schedule = _triggers(workflow)["schedule"]
     assert isinstance(schedule, list) and len(schedule) == 1
@@ -421,7 +424,7 @@ def test_the_prune_only_clones_the_whole_history_when_it_is_due() -> None:
     ]
     assert gated.count("steps.due.outputs.due == 'true'") == len(gated) - 1
     for step in steps:
-        if step.get("name") == "Push the rewritten history":
+        if step.get("name") == PRUNE_PUSH_STEP:
             assert _normalize_condition(step["if"], "push condition") == (
                 "steps.due.outputs.due == 'true'"
             )

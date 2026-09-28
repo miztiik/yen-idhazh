@@ -57,9 +57,11 @@ def runner_garden() -> dict[str, TaskPolicy]:
     return declared(*sorted((GARDENER_FIXTURES / "runner").glob("*.json")))
 
 
-def test_the_shipped_package_declares_no_task() -> None:
-    """Row by row, tasks arrive with their modules. Today the folder holds none."""
-    assert registry.discover() == {}
+def test_the_shipped_package_declares_the_corpus_squash_alone() -> None:
+    """Row by row, tasks arrive with their modules. The history task is the first."""
+    shipped = registry.discover()
+    assert set(shipped) == {"corpus_squash"}
+    assert shipped["corpus_squash"].kind is TaskKind.HISTORY
 
 
 def test_finding_the_tasks_loads_no_heavy_library() -> None:

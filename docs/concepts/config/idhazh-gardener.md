@@ -1,6 +1,6 @@
 # The gardener's knobs and declarations
 
-**Last Updated**: 2026-09-27
+**Last Updated**: 2026-09-28
 
 What the gardener may delete and rewrite, and how each of its tasks is declared.
 Two inputs, both under `config/`: the gardener's own knobs in
@@ -26,7 +26,8 @@ naming both values.
 ## One declaration a task
 
 A task is named by its file: `config/gardener/seen.json` declares the task
-`seen`. A missing `config/gardener/` means no tasks, and nothing ships one yet.
+`seen`. A missing `config/gardener/` means no tasks. One ships today,
+`corpus-squash`, the one `history` task (below).
 **There is no index file and no `name` key**, so a task can never be listed under
 one name and filed under another.
 
@@ -48,7 +49,29 @@ Each kind adds its own keys, and a key on the wrong kind is refused by name:
 | `retention` | `series`, one window per series, for `telemetry-aggregate` alone |
 | `collection` | none yet |
 | `compaction` | `ledger` (required); `raw_index_keep_days` (90), `daily_keep_days` (45), `monthly_window` (13 months), `max_periods_per_run` (8), `max_raw_files_per_period` (2000), `compact_after_hours` (24) |
-| `history` | `every_days`, how many whole days apart two rewrites may run |
+| `history` | `every_days`, how many whole days apart two rewrites may run. Its `window` is whole days and nothing else, because the squash cuts history at 00:00 UTC on the day that many days back |
+
+## The one declaration that ships: `corpus-squash`
+
+`config/gardener/corpus-squash.json` is the corpus squash, which
+`.github/workflows/prune.yml` runs in its own job and never in the matrix.
+
+| Key | Committed | What it decides |
+| --- | --- | --- |
+| `window` | `{unit: days, value: 60}` | How many days of history a squash keeps |
+| `every_days` | `30` | How many whole days apart two squashes may run |
+| `owns` | `["corpus"]` | The one file the task writes, `corpus/corpus.meta.json`, sits under it |
+| `dry_run` | `false` | The squash has run live since 2026-08-28 by owner decision (`CLAUDE.md` section 8), so the declaration transcribes a live squash rather than starting one |
+
+Both numbers were `finetune.prune_keep_days` and `finetune.prune_every_days` until
+2026-09-28. They moved here because the squash is the only thing that reads them,
+and a copy left in `config/idhazh.json` is now refused by name, pointing here.
+
+**Every other declaration ships `dry_run: true`**, and a contract test holds the
+committed tree to that, naming `corpus-squash` as its one exception with the
+decision beside it. A task earns its first deletion from a person reading its
+records, so turning one live is an edit to that list, never a side effect of the
+change that added the task.
 
 ## What the loader refuses
 

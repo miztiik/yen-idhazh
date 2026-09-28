@@ -1,6 +1,6 @@
 # Fine-tune a summarizer
 
-**Last Updated**: 2026-09-14
+**Last Updated**: 2026-09-28
 
 How the training corpus is built, what maintains it, and what a person does with
 it. Training itself does not happen here: the runner has no GPU, 4 vCPU and a
@@ -106,7 +106,7 @@ a model cannot improve by copying: `hedge_dropped`, `unsupported_numbers`,
 | --- | --- | --- |
 | Harvest | CI, a step in the digest run | every `finetune.harvest_every_days` |
 | Roll | CI, the same step, the same commit | the same moment |
-| Prune | CI, `prune.yml`, wired to nothing | every `finetune.prune_every_days` |
+| Prune | CI, `prune.yml`, wired to nothing | every `every_days` of `config/gardener/corpus-squash.json` |
 
 ### The harvest runs inside the digest job, and it has to
 
@@ -141,7 +141,7 @@ in a 31-day month. Above 31 it cannot be written at all. The harder fact, which
 covers the prune too: **`on.schedule` is parsed before any step runs, so no value
 in `config/` can ever reach it.** Any config-driven cadence is a due-check in a
 step, and a due-check needs durable state - which is what `harvested_date` and
-`pruned_date` in `corpus/corpus.meta.json` are.
+`last_run` in `corpus/corpus.meta.json` are.
 
 A missed day therefore self-corrects on the next wake, and the answer does not
 depend on which clock the job read.
@@ -164,12 +164,29 @@ version loses data:
 
 ### The prune rewrites history, and that costs something
 
-`prune.yml` wakes daily, reads `pruned_date` out of a shallow checkout, and on 29
-days out of 30 exits without doing anything. When
-`finetune.prune_every_days` have passed it takes a full clone, squashes every
-commit older than `finetune.prune_keep_days`, stamps the meta file and
-force-pushes `main` - unless `main` moved while it was rewriting, which is the
-one case it refuses and pushes nothing.
+`prune.yml` wakes daily, reads `last_run` out of a shallow checkout with
+`backend/utilities/corpus_squash_due.py`, and on 29 days out of 30 exits without
+doing anything. When the `every_days` of `config/gardener/corpus-squash.json` have
+passed it takes a full clone and runs `backend/utilities/corpus_history.py`: one
+program that squashes every commit older than that declaration's `window`,
+records the run in the meta file and force-pushes `main` - unless `main` moved
+while it was rewriting, which is the one case it refuses and pushes nothing. A
+wake that finds nothing old enough still records the run, and pushes without
+force.
+
+**The boundary is read off author dates.** The squash replays every later
+commit, and a replay gives each one the day of the squash as its committer date,
+so a cut read off committer dates would find nothing at the next two due wakes.
+The cut is 00:00 UTC on the day `window.value` days back, and the boundary is the
+last commit of the unbroken run from the root whose author dates are all at or
+before it, so a commit authored long before it landed can keep extra history but
+never lose any.
+
+**A stamp the due check cannot read stops the job before the clone.** A missing
+key, a value that is not a day, or a file that is not JSON prints no `due` at
+all, because the two errors are different sizes: a false "due" rewrites `main`
+every day, and a false "not due" costs one day. A `last_run` of null is the
+contract's own "never run", and is due.
 
 **This is the only force-push in the repository** and the single exception
 `CLAUDE.md` section 8 carries. It exists because the corpus commits article text
@@ -182,9 +199,9 @@ What it costs, said rather than implied:
 
 - A squash boundary is per-commit, not per-path. The range it collapses carries
  `backend/`, `docs/` and `state/` as well as `corpus/`.
-- `git blame` and `git bisect` reach back `prune_keep_days` to
- `prune_keep_days + prune_every_days` and no further. At the committed 60 and 30
- that is 60 to 90 days.
+- `git blame` and `git bisect` reach back the declaration's `window` to `window`
+ plus `every_days` and no further. At the committed 60 and 30 that is 60 to 90
+ days.
 - A commit SHA older than the boundary stops resolving, so a link to one dies.
 - A clone taken before a prune has to be re-fetched.
 
@@ -198,11 +215,12 @@ and nothing records that it existed. The prune therefore reads origin's tip
 again immediately before the push and compares it with the commit it checked
 out. If the two differ it pushes nothing and fails the run.
 
-**Refusing costs one wake, which is one day.** The stamp that says the prune ran
-is written by the same run, so a refused prune leaves `pruned_date` where it was,
-and `prune_due.py` calls an unstamped prune due. The cron wakes daily, so the
-next morning's wake runs it again. Nothing else changes: the boundary is
-recomputed from that day, and a day of extra history is a day of extra history.
+**Refusing costs one wake, which is one day.** The record that says the squash
+ran is written by the same run, so a refused push leaves `last_run` on origin
+where it was, and `corpus_squash_due.py` calls the squash due again. The cron
+wakes daily, so the next morning's wake runs it again. Nothing else changes: the
+boundary is recomputed from that day, and a day of extra history is a day of
+extra history.
 
 Until 2026-09-22 the only thing holding a clash off was the cron minute, placed
 in the one 266-minute window the serial digest schedule leaves idle. A gap is not
@@ -372,7 +390,7 @@ only way they differ:
  **Size, measured on the same 1,852 rows.** 19.2 MB raw, 10,851 bytes a row;
  4.3 MB once git compresses it, 2,444 bytes a row, a 4.4x ratio. The compressed
  figure is the one that matters, because it is what each commit that rewrites
- the window adds to history, and it is what `finetune.prune_every_days` bounds.
+ the window adds to history, and it is what the squash's `every_days` bounds.
 - **`stats`** prints the row count against the window, the date range, the word
  and target spreads, the counts per vertical and per model, how many rows a
  session would really draw, and a warning when the live prompt no longer matches
@@ -442,7 +460,7 @@ The authoring session has its own brief:
 
 ## The knobs
 
-All in the `finetune` block of `config/idhazh.json`.
+All in the `finetune` block of `config/idhazh.json`, except the squash's two.
 
 | Knob | Default | What it costs |
 | --- | --- | --- |
@@ -451,13 +469,19 @@ All in the `finetune` block of `config/idhazh.json`.
 | `train_rows` | 1000 | GPU hours. A **ceiling**, not a demand |
 | `min_rows` | 500 | nothing trains below it, and a repair refuses to cut past it |
 | `harvest_every_days` | 7 | one commit each time it fires |
-| `prune_every_days` | 30 | one force-push each time it fires, or a day's delay when `main` moved |
-| `prune_keep_days` | 60 | storage, and how far `git blame` reaches |
 | `holdout_days` | 14 | rows that never train |
 | `reference_rows` | 500 | human hours, once. About 2 min a drafted row |
 | `reference_test_rows` | 100 | human hours, once. About 5 min a read row |
 | `epochs` | 2 | GPU hours |
 | `sequence_length` | 16384 | GPU memory on the training machine, quadratically in attention |
+
+The squash's two are in its own declaration, `config/gardener/corpus-squash.json`,
+because nothing else reads them:
+
+| Knob | Committed | What it costs |
+| --- | --- | --- |
+| `every_days` | 30 | one force-push each time it fires, or a day's delay when `main` moved |
+| `window.value` | 60 | storage, and how far `git blame` reaches |
 
 `train_rows` and `corpus_rows` are two knobs because they price differently: the
 window costs storage, the sample costs wall-clock. Window 2000 with sample 1000

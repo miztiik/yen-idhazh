@@ -207,15 +207,15 @@ def harvest_is_due(meta: CorpusMeta, *, date: str, every_days: int) -> bool:
 
 
 def prune_is_due(meta: CorpusMeta, *, date: str, every_days: int) -> bool:
-    """Whether `prune.yml` should squash today.
+    """Whether the corpus squash should run today.
 
-    A repository that has never been pruned is due the first time this is asked,
-    which is why the stamp is written even when the squash finds nothing to do -
-    without it the check fires again tomorrow, and every day after that.
+    A repository the squash has never run on is due the first time this is
+    asked, which is why the run is recorded even when the squash finds nothing
+    to do - without it the check fires again tomorrow, and every day after that.
     """
-    if meta.pruned_date is None:
+    if meta.last_run is None:
         return True
-    return _days_between(meta.pruned_date, date) >= every_days
+    return _days_between(meta.last_run, date) >= every_days
 
 
 # --- The harvest -----------------------------------------------------------
@@ -546,15 +546,15 @@ def harvest(
     return meta
 
 
-def stamp_prune(corpus_dir: Path, *, date: str) -> CorpusMeta:
-    """Record that the prune ran, without recounting anything.
+def record_run(corpus_dir: Path, *, date: str) -> CorpusMeta:
+    """Record that the corpus squash ran on `date`, without recounting anything.
 
-    Written even when the squash found nothing older than the boundary. Without
-    the stamp the due-check fires again tomorrow and every day after that, which
-    is a force-push a day rather than one a month.
+    Written even when the squash found nothing older than its cut. Without it
+    the due check fires again tomorrow and every day after that, which is a
+    force-push a day rather than one a month.
     """
     meta = read_meta(corpus_dir).model_copy(
-        update={"version": CorpusMeta.schema_version(), "pruned_date": date}
+        update={"version": CorpusMeta.schema_version(), "last_run": date}
     )
     corpus_dir.mkdir(parents=True, exist_ok=True)
     atomic_write.write_atomic(meta_path(corpus_dir), meta.to_json())

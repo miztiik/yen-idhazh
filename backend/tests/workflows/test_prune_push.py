@@ -1,31 +1,32 @@
-"""What does the prune do when `main` moves while it is rewriting history?
+"""What does the corpus squash do when `main` moves while it is rewriting history?
 
-`prune.yml` squashes everything older than the boundary and force-pushes the
-result. A force push is a whole-ref operation: it replaces the branch with this
-checkout, so a commit another run pushed in the meantime is deleted and nothing
-records that it existed. Until now the only thing holding that off was a cron
-minute placed in the one idle gap the serial digest schedule leaves, and a gap
-is not a lock.
+`prune.yml`'s history job squashes everything older than the boundary and
+force-pushes the result. A force push is a whole-ref operation: it replaces the
+branch with this checkout, so a commit another run pushed in the meantime is
+deleted and nothing records that it existed. Until now the only thing holding
+that off was a cron minute placed in the one idle gap the serial digest
+schedule leaves, and a gap is not a lock.
+
+These drive the push in `backend/utilities/corpus_history.py` against real
+repositories. The squash in front of it is driven end to end by
+`backend/tests/gardener/test_corpus_history.py`.
 """
 
 from __future__ import annotations
 
-import subprocess
-import sys
 from pathlib import Path
 
 import pytest
 
+from utilities import corpus_history
+
 from ._harness import (
-    PRUNE_BASE_ENV,
     PRUNE_PUSH_CALL,
-    PRUNE_PUSH_MODULE,
     PRUNE_PUSH_STEP,
-    PRUNE_REMEMBER_STEP,
-    PRUNE_SQUASH_STEP,
     _git,
     _isolated_env,
     _load_workflows,
+    _mapping,
     _race,
     _script,
     _scripted_origin,
@@ -46,26 +47,22 @@ CORPUS_ROW_FILE = "corpus/corpus.jsonl"
 RACED_FILE = "docs/unrelated.md"
 
 
-def _push_the_rewritten_history(
-    runner: Path, env: dict[str, str], base: str, squashed: str
-) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        [sys.executable, str(PRUNE_PUSH_MODULE)],
-        cwd=runner,
-        env={**env, PRUNE_BASE_ENV: base, "SQUASHED": squashed},
-        capture_output=True,
-        text=True,
-    )
+def _the_same_git(env: dict[str, str], monkeypatch: pytest.MonkeyPatch) -> None:
+    """The program's own git calls see the isolated configuration the harness's do."""
+    for name in ("HOME", "USERPROFILE", "GIT_CONFIG_GLOBAL", "GIT_CONFIG_NOSYSTEM"):
+        monkeypatch.setenv(name, env[name])
+    monkeypatch.setenv("GIT_TERMINAL_PROMPT", "0")
+    monkeypatch.delenv("GITHUB_OUTPUT", raising=False)
 
 
 def _a_squashed_checkout(tmp_path: Path, env: dict[str, str]) -> tuple[Path, Path, str]:
-    """The checkout the prune leaves behind, and the commit it started from.
+    """The checkout the squash leaves behind, and the commit it started from.
 
     Two harvest commits so the orphan root has something to collapse, then the
-    squash the workflow runs: a root commit holding the whole tree at the
-    boundary, `main` rebased onto it, and the stamp on top. Every commit the
-    checkout now carries is new, so only a force push can land it - which is what
-    makes the refusal worth testing.
+    squash the program runs: a root commit holding the whole tree at the
+    boundary, `main` rebased onto it, and the record of the run on top. Every
+    commit the checkout now carries is new, so only a force push can land it -
+    which is what makes the refusal worth testing.
     """
     origin, runner = _scripted_origin(tmp_path, env, ["corpus"])
     for row in (1, 2):
@@ -82,51 +79,58 @@ def _a_squashed_checkout(tmp_path: Path, env: dict[str, str]) -> tuple[Path, Pat
     _git(runner, env, "checkout", "main")
     _git(runner, env, "rebase", "--onto", root, cut, "main")
 
-    _write(runner / "corpus" / "corpus.meta.json", '{"pruned_date": "2026-09-22"}\n')
+    _write(runner / "corpus" / "corpus.meta.json", '{"last_run": "2026-09-22"}\n')
     _git(runner, env, "add", "corpus")
     _git(runner, env, "commit", "-m", "corpus: pruned 2026-09-22")
     return origin, runner, base
 
 
 def test_the_prune_refuses_to_force_over_a_commit_that_landed_while_it_ran(
-    tmp_path: Path,
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """The oracle: a commit pushed between the checkout and the push survives.
 
     Without the re-fetch this push replaces `main` with a history the racing
     commit is not in, and the only copy of it left is the other run's log line
-    saying it had pushed.
+    saying it had pushed. The words are pinned whole: they are what an operator
+    reads, and they have not changed since the push was a program of its own.
     """
     env = _isolated_env(tmp_path)
+    _the_same_git(env, monkeypatch)
     origin, runner, base = _a_squashed_checkout(tmp_path, env)
     _race(tmp_path, env, RACED_FILE, "a run pushed while the prune was rewriting\n")
     raced = _git(tmp_path / "other", env, "rev-parse", "HEAD").strip()
     assert raced != base, "the racing push must have moved the tip, or this tests nothing"
 
-    result = _push_the_rewritten_history(runner, env, base, squashed="true")
+    code = corpus_history.push_rewritten(runner, tip_before=base, rewritten=True)
 
-    assert result.returncode != 0, result.stdout
-    # Both commits, so an operator reading the failed run knows what moved.
-    assert base in result.stderr, result.stderr
-    assert raced in result.stderr, result.stderr
-    assert "due again" in result.stderr, result.stderr
+    assert code == 1
+    assert capsys.readouterr().err.splitlines()[-5:] == [
+        "main moved while the prune was rewriting it, so nothing was pushed",
+        f"  this job checked out {base}",
+        f"  origin/main is now {raced}",
+        "pushing would discard every commit between the two.",
+        "the prune is unstamped, so it is due again at the next daily wake.",
+    ]
     # The pushed commit is still the tip, and its content is still readable.
     assert _git(origin, env, "rev-parse", "main").strip() == raced
     assert "prune was rewriting" in _git(origin, env, "show", f"{raced}:{RACED_FILE}")
 
 
-def test_the_prune_lands_the_rewritten_history_when_nothing_moved(tmp_path: Path) -> None:
+def test_the_prune_lands_the_rewritten_history_when_nothing_moved(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """The other half: a refusal that refused everything would bound nothing.
 
-    `prune_keep_days` only bounds the repository when the rewrite reaches origin,
-    so the day nobody raced, the force push still has to happen.
+    The window only bounds the repository when the rewrite reaches origin, so
+    the day nobody raced, the force push still has to happen.
     """
     env = _isolated_env(tmp_path)
+    _the_same_git(env, monkeypatch)
     origin, runner, base = _a_squashed_checkout(tmp_path, env)
 
-    result = _push_the_rewritten_history(runner, env, base, squashed="true")
+    assert corpus_history.push_rewritten(runner, tip_before=base, rewritten=True) == 0
 
-    assert result.returncode == 0, result.stderr
     assert (
         _git(origin, env, "rev-parse", "main").strip()
         == _git(runner, env, "rev-parse", "HEAD").strip()
@@ -135,50 +139,70 @@ def test_the_prune_lands_the_rewritten_history_when_nothing_moved(tmp_path: Path
     assert base not in _git(origin, env, "log", "--format=%H", "main")
 
 
-def test_a_prune_that_squashed_nothing_still_refuses_a_tip_that_moved(tmp_path: Path) -> None:
-    """The stamp-only wake takes the same answer, and it costs nothing to give it.
+def test_a_run_that_rewrote_nothing_never_forces(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Only a rewrite earns a forcing push, so a run that says it made none cannot replace main.
+
+    Handed a checkout that only a force could land, the plain push is refused
+    and origin keeps the history it had.
+    """
+    env = _isolated_env(tmp_path)
+    _the_same_git(env, monkeypatch)
+    origin, runner, base = _a_squashed_checkout(tmp_path, env)
+
+    assert corpus_history.push_rewritten(runner, tip_before=base, rewritten=False) != 0
+
+    assert _git(origin, env, "rev-parse", "main").strip() == base
+
+
+def test_a_prune_that_squashed_nothing_still_refuses_a_tip_that_moved(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The record-only wake takes the same answer, and it costs nothing to give it.
 
     A plain push loses this race anyway - git refuses a non-fast-forward - so the
     outcome is the same failed step either way. Refusing here says which commit
     moved rather than leaving an operator to read a rejection message.
     """
     env = _isolated_env(tmp_path)
+    _the_same_git(env, monkeypatch)
     origin, runner = _scripted_origin(tmp_path, env, ["corpus"])
     base = _git(runner, env, "rev-parse", "HEAD").strip()
-    _write(runner / "corpus" / "corpus.meta.json", '{"pruned_date": "2026-09-22"}\n')
+    _write(runner / "corpus" / "corpus.meta.json", '{"last_run": "2026-09-22"}\n')
     _git(runner, env, "add", "corpus")
     _git(runner, env, "commit", "-m", "corpus: pruned 2026-09-22")
     _race(tmp_path, env, RACED_FILE, "a run pushed while the prune was reading\n")
     raced = _git(tmp_path / "other", env, "rev-parse", "HEAD").strip()
 
-    result = _push_the_rewritten_history(runner, env, base, squashed="false")
+    assert corpus_history.push_rewritten(runner, tip_before=base, rewritten=False) == 1
 
-    assert result.returncode != 0, result.stdout
     assert _git(origin, env, "rev-parse", "main").strip() == raced
 
 
-def test_the_prune_remembers_its_tip_before_it_rewrites_anything() -> None:
-    """A base commit read after the squash names a commit only this job holds.
+def test_the_history_step_runs_the_shipped_program_and_nothing_else() -> None:
+    """One step squashes, records and pushes, so the decision to force stays in one process.
 
-    The comparison is against origin's tip, so the value it is compared with has
-    to be what origin handed over. The rebase replaces every commit below the
-    boundary, so by the time the stamp is written there is nothing left in the
-    checkout that still names it - which is why the reading step sits above the
-    squash rather than beside the push.
+    The tip the push compares against has to be read before the rewrite, and
+    the program reads it itself, so no step hands a commit or a flag to a later
+    one through the job's environment. The day it squashes against is the due
+    step's own reading, so the job reads the clock once.
     """
     workflow = _load_workflows()["prune.yml"]
-    names = [step.get("name") for step in _steps(workflow, "prune")]
+    step = _step(workflow, "prune", "name", PRUNE_PUSH_STEP)
 
-    for step_name in (PRUNE_REMEMBER_STEP, PRUNE_SQUASH_STEP, PRUNE_PUSH_STEP):
-        assert step_name in names, f"prune.yml no longer runs {step_name!r}"
-    assert names.index(PRUNE_REMEMBER_STEP) < names.index(PRUNE_SQUASH_STEP)
-
-    remembered = _script(_step(workflow, "prune", "name", PRUNE_REMEMBER_STEP), PRUNE_REMEMBER_STEP)
-    assert f'{PRUNE_BASE_ENV}=$(git rev-parse HEAD)' in remembered
-    assert '>> "$GITHUB_ENV"' in remembered, "a later step reads it, so it goes to the job env"
-
-    pushed = _script(_step(workflow, "prune", "name", PRUNE_PUSH_STEP), PRUNE_PUSH_STEP)
-    assert tuple(pushed.split()) == PRUNE_PUSH_CALL, (
-        "the push runs the shipped script and nothing else, or the tests above "
-        "are driving a second copy of it"
+    assert tuple(_script(step, PRUNE_PUSH_STEP).split()) == PRUNE_PUSH_CALL, (
+        "the step runs the shipped program and nothing else, or the tests are "
+        "driving a second copy of it"
     )
+    assert _mapping(step.get("env"), "history step env") == {
+        "TODAY": "${{ steps.due.outputs.today }}",
+        "RUN_ID": "${{ steps.due.outputs.today }}-${{ github.run_id }}",
+        "ATTEMPT": "${{ github.run_attempt }}",
+    }
+    for other in _steps(workflow, "prune"):
+        script = other.get("run")
+        assert not (isinstance(script, str) and "GITHUB_ENV" in script), (
+            f"{other.get('name') or other.get('id')} writes the job environment, and the "
+            "squash takes nothing from another step but the due step's outputs"
+        )

@@ -92,9 +92,9 @@ def test_every_committing_job_configures_the_same_identity() -> None:
     A hosted runner carries no git identity, so a job that commits has to set
     one or `git commit` refuses. The commit program is executed by the tests
     below, which read the name off the commit it pushed - so what is left here
-    is every other file that sets an identity and that nothing runs. One of
-    those could drift to a different name and nothing would notice until a
-    reader wondered who the other authors were.
+    is every workflow, for an identity set inline where nothing runs it. None
+    sets one today; one that did could drift to a different name and nothing
+    would notice until a reader wondered who the other authors were.
     """
     assert f"{commit_and_push.COMMITTER_NAME} <{commit_and_push.COMMITTER_EMAIL}>" == (
         COMMIT_IDENTITY
@@ -103,11 +103,11 @@ def test_every_committing_job_configures_the_same_identity() -> None:
     assert GIT_IDENTITY_SOURCES, "no file is read, so this test would pass on nothing"
     for path in GIT_IDENTITY_SOURCES:
         text = read_text(path)
-        author = re.search(r'git config user\.name "([^"]+)"', text)
-        address = re.search(r'git config user\.email "([^"]+)"', text)
-        assert author is not None, f"{path.name} commits, so it must set user.name"
-        assert address is not None, f"{path.name} commits, so it must set user.email"
-        assert f"{author.group(1)} <{address.group(1)}>" == COMMIT_IDENTITY
+        authors = re.findall(r'git config user\.name "([^"]+)"', text)
+        addresses = re.findall(r'git config user\.email "([^"]+)"', text)
+        assert len(authors) == len(addresses), f"{path.name} sets half an identity"
+        for author, address in zip(authors, addresses, strict=True):
+            assert f"{author} <{address}>" == COMMIT_IDENTITY, path.name
 
 
 @requires_space_free_paths

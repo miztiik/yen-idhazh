@@ -1,14 +1,17 @@
-"""Can a program that repairs a job's own checkout start when `pip install -e .` did not?
+"""Can a program a job runs outside its install start when `pip install -e .` did not?
 
-Two steps in this repository exist to put a run back in a state it can work
-from: the one that replaces a stale `state/` with what origin's tip carries, and
-the one that pushes the history the prune rewrote. A job reaches both of them
-when something about that job has already gone wrong, and a failed install is
-one of the things that goes wrong - so a name either program resolved at import
-time would take the step down in exactly the job it exists to rescue.
+Three programs in this repository are held to the standard library at import.
+The one that replaces a stale `state/` with what origin's tip carries puts a run
+back in a state it can work from, and a job reaches it when something has
+already gone wrong - a failed install is one of those things. The history job's
+due check runs on a shallow checkout before any install at all, and it is what
+decides whether the job goes on to rewrite `main`. The history job's squash
+program keeps its push and the refusal in front of it drivable by a test with
+nothing of this project loaded.
 
 Module scope only. A name imported inside a function is resolved when that
-function runs, and neither program has one.
+function runs, and the squash program imports `idhazh` in the one function that
+reads its declaration.
 """
 
 from __future__ import annotations
@@ -21,14 +24,13 @@ from typing import Final
 import pytest
 from conftest import read_text
 
-from ._harness import PRUNE_PUSH_MODULE, TAKE_STATE_MODULE
+from ._harness import PRUNE_PUSH_MODULE, SQUASH_DUE_MODULE, TAKE_STATE_MODULE
 
 pytestmark = pytest.mark.workflow
 
-#: Every program held to this, named one by one. A third program a broken job
-#: reaches for is declared here or it is held to nothing, and the two below are
-#: the two whose calling step can run after the install has already failed.
-STANDALONE_PROGRAMS: Final = (TAKE_STATE_MODULE, PRUNE_PUSH_MODULE)
+#: Every program held to this, named one by one. A fourth program a broken job
+#: reaches for is declared here or it is held to nothing.
+STANDALONE_PROGRAMS: Final = (TAKE_STATE_MODULE, SQUASH_DUE_MODULE, PRUNE_PUSH_MODULE)
 
 
 def _imports_at_module_scope(source: str, filename: str) -> list[str]:

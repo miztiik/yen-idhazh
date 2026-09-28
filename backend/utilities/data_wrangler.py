@@ -106,7 +106,7 @@ def stats(corpus_dir: Path, settings: config.Settings) -> int:
     print(f"{'rows':<{_WIDTH}} {len(rows)} of a {finetune.corpus_rows}-row window")
     print(f"{'dates':<{_WIDTH}} {meta.first_date or '-'} to {meta.last_date or '-'}")
     print(f"{'last harvested':<{_WIDTH}} {meta.harvested_date or 'never'}")
-    print(f"{'last pruned':<{_WIDTH}} {meta.pruned_date or 'never'}")
+    print(f"{'last squash':<{_WIDTH}} {meta.last_run or 'never'}")
     print(_spread("source words", [row.source_words for row in rows]))
     print(_spread("target characters", [len(row.assistant) for row in rows]))
 
