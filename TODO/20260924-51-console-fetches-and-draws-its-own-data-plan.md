@@ -54,9 +54,9 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | 1 | The Hardware route stops counting every job twice | - | A | DONE | p51r1 | #1138 | p51-r1-worker |
 | 2 | The console shell: a stuck tab strip, the span control on it, jump links, a completeness sentence | - | A | IN-FLIGHT | p51r2 | - | p51-r2-worker |
 | 3 | The three ledgers the console reads are published | plan 50's rows titled "One compaction task a ledger, two compact periods, and the diagrams move into the page" and "The three ledgers the console's routes read become parquet" | B | PENDING | - | - | - |
-| 4 | The chart vocabulary and the house style, with no panel moved | - | B | DONE | p51r4 | - | p51-r4-worker |
-| 5 | One readout strip, every chart, and hover a keyboard can reach | 1, 4 | C | PENDING | - | - | - |
-| 6 | The ten sufficiency gates and the panel capture group | 4, 5 | C | PENDING | - | - | - |
+| 4 | The chart vocabulary and the house style, with no panel moved | - | B | DONE | p51r4 | #1137 | p51-r4-worker |
+| 5 | One readout strip, every chart, and hover a keyboard can reach | 1, 4 | C | IN-FLIGHT | p51r5 | - | p51-r5-worker |
+| 6 | The ten sufficiency gates and the panel capture group | 4, 5 | C | IN-FLIGHT | p51r6 | - | p51-r6-worker |
 | 7 | The query door module and its two entry points | 4; plan 50's row titled "The index and watermark shapes are declared" | C | PENDING | - | - | - |
 | 8 | One panel end to end: the browser fetches the ledger and draws it in d3 | 1, 2, 3, 4, 5, 6, 7 | D | PENDING | - | - | - |
 
@@ -67,6 +67,8 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 **Rows 3 and 4 run two-wide.** Row 3 is backend, config and the build (`config/idhazh.json`, `copy-visuals.mjs`, `bundle-gate.mjs`, the ceiling test); row 4 is new frontend chart modules under `frontend/src/lib/charts/d3/`. Disjoint.
 
 **Group C is rows 5, 6 and 7, and depends-on edges make it safe.** The overlaps that force the edges: **rows 5 and 6 both edit `config/appearance.json`** (row 5 the `chart.readout_max_share` value, row 6 the `console.panel_groups` and `console.judged_panel_ids` keys), so row 6 depends on row 5 and the file is edited once at a time; **rows 1 and 5 both edit `fleet.ts`** (row 5 rebuilds its `Readout` producer), so row 5 depends on row 1; and **row 7 edits `chart-vocabulary.spec.ts` and `frontend/package.json`, which row 4 creates and touches** (row 4 adds `d3-shape`, row 7 adds the engine), so row 7 depends on row 4. Row 7's index-shape test binds to the Pydantic index contracts **plan 50's index-shapes row** declares, so it also waits on that plan-50 row - for the shape only, never for live data. Row 7 shares `bundle-gate.mjs` with row 3 (row 3 the ceiling key, row 7 the engine's `FORBIDDEN` entry), but row 3 waits on plan 50's migration, which waits on row 7, so row 7 always lands first and the file is edited in order. **The cross-plan chain stays acyclic**: plan 50's migration -> plan 51 row 7 -> plan 51 row 4 -> nothing, and plan 51 row 7 -> plan 50's index-shapes row, which reaches nothing in plan 51.
+
+**Rows 5 and 6 run side by side anyway** (plan owner, 2026-09-28). The edge from row 6 to row 5 orders one file, and the two rows edit different lines of it: row 5 re-sets `chart.readout_max_share`, and row 6 adds two `console` keys. Whichever row merges second takes main in first.
 
 **Why the query door is its own row (row 7) and not folded into the panel.** It is the N2 and N3 keystone every one of plan 52's fifty panels calls, so it ships as an independently revertible row with its own witness, exactly as the vocabulary (row 4), the strip (row 5) and the gates (row 6) do. Plan 50's row titled "The three ledgers the console's routes read become parquet" also depends on this row by name; the door depends only on row 4 and on plan 50's index-shapes row (for the shape of the index it reads), neither of which reaches plan 50's migration, so the door lands before that migration and the cross-plan pointer resolves without a cycle.
 
