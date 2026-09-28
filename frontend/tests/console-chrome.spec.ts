@@ -335,7 +335,9 @@ for (const route of ROUTES) {
 			// own. An entry may start a new line only where it would not have
 			// fitted on the line before it. A new line is read from where the entry
 			// starts, not from its top: the strip aligns entries on their baseline,
-			// so two on one line can sit a few pixels apart vertically.
+			// so two on one line can sit a few pixels apart vertically. There is no
+			// slack in the fit: the browser wraps an entry that misses by a fifth of
+			// a pixel, and a box is measured exactly, to a sixty-fourth of one.
 			const early = await strip.evaluate((node) => {
 				const room = node.getBoundingClientRect().right;
 				const gap = parseFloat(getComputedStyle(node).columnGap) || 0;
@@ -346,7 +348,7 @@ for (const route of ROUTES) {
 					(box, index) =>
 						index > 0 &&
 						box.left <= boxes[index - 1].left + 1 &&
-						boxes[index - 1].right + gap + box.width <= room + 1
+						boxes[index - 1].right + gap + box.width <= room + 0.02
 				).length;
 			});
 			expect(early, 'an entry went to a new line while it fitted on the last one').toBe(0);
