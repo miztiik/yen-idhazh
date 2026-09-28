@@ -13,6 +13,14 @@ Traps in `git`, worktrees, merges and the `gh` CLI. Index and scope:
 
 **Merging the old history back restores the wrong credit.** Other agents and their worktrees were left running at the owner's request. Before publishing from an old branch, carry only its unmerged changes onto the repaired `main` in a fresh branch and worktree. Do not merge old `main` back into repaired `main`, and do not reset a worktree that holds another agent's work. GitHub's cached contributor display can lag behind the corrected branch history.
 
+**A commit made on this machine is stamped in local time, `+02:00`, although every persisted instant here is UTC** ([CLAUDE.md section 2](../../../CLAUDE.md#2-path-and-time-conventions)). Git writes the offset of the clock it runs on, so nothing fails: the instant is right and only its offset is wrong. The tell is `git log -1 --format=%cI`: on 2026-09-28 two plan-doc commits made here read `+02:00`, while every commit the pipeline's runner writes ends in `Z`. Set the zone for the commit alone; a commit made this way the same day recorded `Z`:
+
+```powershell
+$env:TZ = 'UTC'; git commit -m '<message>'; Remove-Item Env:TZ
+```
+
+GitHub's own squash merges carry the same offset and take no such switch; that is filed as a known defect.
+
 ## Worktrees
 
 **More than one agent shares this checkout, so a listing from earlier in the session is fiction.** Worktrees appear and disappear mid-task. Read `git worktree list` immediately before you stage, and never `git add.` in a checkout you did not create - it sweeps another branch's work into your commit.
@@ -257,6 +265,12 @@ This loads no profile and changes no saved account. Stop if the returned login
 is not the intended actor; do not print or export a token for an account check.
 
 **`gh pr merge`'s exit code says nothing useful.** It exits non-zero with `fatal: 'main' is already used by worktree` when any worktree holds `main`, and with `could not determine current branch: failed to run git: not on any branch` from a detached worktree - and in both the server-side merge and the branch delete have already succeeded. Both come from gh switching the local branch after the merge, so run it from a folder outside every checkout and name the repository - `gh pr merge <n> --squash --delete-branch --repo <owner/repo>` - and there is no local branch to switch. It can still exit 1 on a merge that succeeded, and the merge can be invisible for a few seconds afterwards. `gh pr view <n> --repo <owner/repo> --json state,mergedAt,mergeCommit` is the only reliable read, and a second merge attempt is the one action here that is not idempotent.
+
+**`mergeable: UNKNOWN` just after `main` moves reads as a problem, and is a question GitHub has not answered yet.** GitHub works out whether a pull request can merge only when somebody asks, so the first `gh pr view` after any push to `main` - a sibling's merge, a pipeline commit - can return `UNKNOWN UNKNOWN`. It is not a conflict and not a reason to update the branch. Twice on 2026-09-28 the first ask read `UNKNOWN UNKNOWN` and the next, under a minute later, read `MERGEABLE CLEAN`. Ask again before you act on it:
+
+```powershell
+gh pr view <n> --repo <owner/repo> --json mergeable,mergeStateStatus --jq '.mergeable + " " + .mergeStateStatus'
+```
 
 **Do not detach a row's worktree in order to free its branch - remove the worktree instead.** Detaching throws the branch away, which is the only signal `sweep_worktrees.py` can judge a leftover on, so the tree is kept for ever.
 
