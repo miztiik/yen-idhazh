@@ -24,8 +24,15 @@
 import { expect, test } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { fleetChart, fleetOverWindow } from '../src/lib/charts/fleet';
-import { FOLDED_KEY, UNRECORDED_STOP } from '../src/lib/charts/machine-colour';
+import {
+	fleetChart,
+	fleetOverWindow,
+	foldSentence,
+	type FleetFold,
+	type FoldedMachine
+} from '../src/lib/charts/fleet';
+import { FOLDED_KEY, FOLDED_NAME, UNRECORDED_STOP } from '../src/lib/charts/machine-colour';
+import { machineName } from '../src/lib/charts/machine-name';
 import type { HostFingerprint } from '../src/lib/server/host-fingerprint';
 
 /** `config/appearance.json` read off disk, so the gate is the page's own gate. */
@@ -255,9 +262,20 @@ test.describe('the count as a trend, and the fold past the top kinds', () => {
 		expect(SIX).toHaveLength(6);
 		expect(trend.series).toHaveLength(TOP_KINDS + 1);
 		expect(trend.folded).toBe(SIX.length - TOP_KINDS);
-		expect(trend.series.at(-1)?.identity.key).toBe(FOLDED_KEY);
+		// The trend names its fold rather than leaving a reader to guess which
+		// series it is, and the named one is the bar drawn last.
+		expect(trend.fold?.series).toBe(trend.series.at(-1));
+		expect(trend.fold?.series.identity.key).toBe(FOLDED_KEY);
 		// The fold row names its members, because colour is never the only carrier.
-		expect(trend.series.at(-1)?.identity.folded).toHaveLength(SIX.length - TOP_KINDS);
+		expect(trend.fold?.series.identity.folded).toHaveLength(SIX.length - TOP_KINDS);
+	});
+
+	test('the fold sentence names the kinds it holds and counts what it names', () => {
+		const [fifth, sixth] = SIX.slice(TOP_KINDS).map((kind) => machineName(kind.cpu_model));
+		expect(foldSentence(trend.fold)).toBe(
+			`The ${FOLDED_NAME} bar holds 2 kinds too rare for a bar of their own: ` +
+				`${fifth} and ${sixth}.`
+		);
 	});
 
 	test('the fold bar is the sum of the kinds it folded, over the window', () => {
@@ -313,5 +331,153 @@ test.describe('the count as a trend, and the fold past the top kinds', () => {
 	test('a window with nothing in it draws no chart at all', () => {
 		const plot = fleetChart(view([]).trend);
 		expect(plot.empty).toBe(true);
+	});
+});
+
+test.describe('the colour ramp running out, and the bar that holds what it folded', () => {
+	/** Nine machines against seven colours.
+	 *
+	 * The ramp gives the first six keys a colour each and folds the rest into its
+	 * own `Other machines` group - by key order, not by rarity, so two machines
+	 * below hold more placements than kinds that keep a bar and are folded only
+	 * because their digests sort last. The committed record reached this shape on
+	 * 2026-09-27: ten identities, four folded, and the group ranked second.
+	 */
+	const NINE = [
+		{ fingerprint: '1111000011110000', cpu_model: 'AMD EPYC 7763 64-Core Processor', on: 60 },
+		{ fingerprint: '2222000022220000', cpu_model: 'AMD EPYC 9V74 80-Core Processor', on: 20 },
+		{ fingerprint: '3333000033330000', cpu_model: 'INTEL(R) XEON(R) PLATINUM 8573C', on: 12 },
+		{ fingerprint: '4444000044440000', cpu_model: 'Intel(R) Xeon(R) 6973P-C', on: 9 },
+		{
+			fingerprint: '5555000055550000',
+			cpu_model: 'Intel(R) Xeon(R) Platinum 8370C CPU @ 2.80GHz',
+			on: 5
+		},
+		{ fingerprint: '6666000066660000', cpu_model: 'AMD EPYC 9V45 96-Core Processor', on: 3 },
+		{ fingerprint: 'aaaa0000aaaa0000', cpu_model: 'AMD EPYC 9V74 80-Core Processor', on: 15 },
+		{ fingerprint: 'bbbb0000bbbb0000', cpu_model: 'INTEL(R) XEON(R) PLATINUM 8573C', on: 10 },
+		{ fingerprint: 'cccc0000cccc0000', cpu_model: 'AMD EPYC 7763 64-Core Processor', on: 1 }
+	];
+	const COLOURED = NINE.slice(0, 6);
+	const UNCOLOURED = NINE.slice(6);
+	const DAYS = ['2026-09-10', '2026-09-11'];
+	const placed = (kinds: readonly { on: number }[]) =>
+		kinds.reduce((carry, kind) => carry + kind.on, 0);
+
+	function crowded(): HostFingerprint[] {
+		return NINE.flatMap((kind) =>
+			Array.from({ length: kind.on }, (_, index) =>
+				row({
+					fingerprint: kind.fingerprint,
+					cpu_model: kind.cpu_model,
+					date: DAYS[index % DAYS.length],
+					shard: index
+				})
+			)
+		);
+	}
+
+	test('the fixture runs the ramp out, and its group outranks kinds with a colour', () => {
+		const fleet = view(crowded());
+		const group = fleet.kinds.find((kind) => kind.identity.key === FOLDED_KEY);
+		expect(group?.placements).toBe(placed(UNCOLOURED));
+		// Second only to the commonest machine: the shape that used to take a slot.
+		expect(fleet.kinds[1].identity.key).toBe(FOLDED_KEY);
+	});
+
+	test("the ramp's group never takes a named slot, and the fold is drawn last", () => {
+		const trend = view(crowded()).trend;
+		const named = trend.series.slice(0, -1);
+		expect(named.map((one) => one.identity.name)).toEqual(
+			COLOURED.slice(0, TOP_KINDS).map((kind) => machineName(kind.cpu_model))
+		);
+		expect(named.every((one) => one.identity.key !== FOLDED_KEY)).toBe(true);
+		expect(trend.fold?.series).toBe(trend.series.at(-1));
+	});
+
+	test('the fold bar is everything the named slots left out, counted two ways', () => {
+		const trend = view(crowded()).trend;
+		const outside = placed([...COLOURED.slice(TOP_KINDS), ...UNCOLOURED]);
+		expect(trend.other).toBe(outside);
+		expect(trend.outsideTop).toBe(outside);
+		expect(trend.fold?.series.placements).toBe(outside);
+	});
+
+	test("the fold bar keeps the ramp's colour, so one name has one colour on the page", () => {
+		const fleet = view(crowded());
+		const group = fleet.kinds.find((kind) => kind.identity.key === FOLDED_KEY);
+		expect(fleet.trend.fold?.series.identity.colourStop).toBe(group?.identity.colourStop);
+	});
+
+	test('the sentence names the rare kinds and the machines with no colour apart', () => {
+		const trend = view(crowded()).trend;
+		const [fifth, sixth] = COLOURED.slice(TOP_KINDS).map((kind) => machineName(kind.cpu_model));
+		// Every machine the ramp folded shares its name with a bar that is drawn,
+		// so each is called another one. Most placements first.
+		const others = UNCOLOURED.map((kind) => `another ${machineName(kind.cpu_model)}`);
+		expect(foldSentence(trend.fold)).toBe(
+			`The ${FOLDED_NAME} bar holds 5 kinds. ${fifth} and ${sixth} are too rare for a bar ` +
+				`of their own. The page has no colour left for the other 3: ${others[0]}, ` +
+				`${others[1]} and ${others[2]}.`
+		);
+		expect(trend.folded).toBe(5);
+	});
+});
+
+test.describe('the fold sentence, case by case', () => {
+	/** A fold bar holding exactly these machines, and nothing the sentence reads besides. */
+	function fold(rare: FoldedMachine[], uncoloured: FoldedMachine[]): FleetFold {
+		return {
+			series: {
+				identity: {
+					key: FOLDED_KEY,
+					name: FOLDED_NAME,
+					colourStop: 5,
+					folded: [...rare, ...uncoloured].map((one) => one.name)
+				},
+				counts: [1],
+				placements: 1
+			},
+			rare,
+			uncoloured
+		};
+	}
+
+	test('no fold bar prints no sentence', () => {
+		expect(foldSentence(null)).toBeNull();
+	});
+
+	test('one rare kind reads in the singular', () => {
+		expect(foldSentence(fold([{ name: 'AMD EPYC 9V45', another: false }], []))).toBe(
+			`The ${FOLDED_NAME} bar holds 1 kind too rare for a bar of its own: AMD EPYC 9V45.`
+		);
+	});
+
+	test('a bar that is only the machines with no colour says only that', () => {
+		const said = foldSentence(
+			fold(
+				[],
+				[
+					{ name: 'AMD EPYC 9V74', another: true },
+					{ name: 'Intel Xeon 6973P-C', another: false }
+				]
+			)
+		);
+		expect(said).toBe(
+			`The ${FOLDED_NAME} bar holds 2 kinds the page has no colour left for: ` +
+				'another AMD EPYC 9V74 and Intel Xeon 6973P-C.'
+		);
+		expect(said).not.toContain('rare');
+	});
+
+	test('a sentence that opens on another machine opens on a capital', () => {
+		expect(
+			foldSentence(
+				fold([{ name: 'AMD EPYC 9V74', another: true }], [{ name: 'AMD EPYC 9V45', another: false }])
+			)
+		).toBe(
+			`The ${FOLDED_NAME} bar holds 2 kinds. Another AMD EPYC 9V74 is too rare for a bar of ` +
+				'its own. The page has no colour left for the other one: AMD EPYC 9V45.'
+		);
 	});
 });

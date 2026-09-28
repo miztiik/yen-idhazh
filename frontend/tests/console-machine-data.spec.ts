@@ -14,7 +14,8 @@
  */
 
 import { expect, test } from '@playwright/test';
-import { readFileSync, readdirSync } from 'node:fs';
+import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -31,7 +32,7 @@ import {
 	highLabel,
 	type ContextOptions
 } from '../src/lib/console/machine/context-cost';
-import { readDayShards } from '../src/lib/server/payload';
+import { HOST_FINGERPRINT_KEY, mergedDayShards, readDayShards } from '../src/lib/server/payload';
 import {
 	CLOCKS_AGREE_WITHIN_PCT,
 	hostRows,
@@ -42,7 +43,7 @@ import {
 	type MachineLimits,
 	type MachineRun
 } from '../src/lib/server/machine-counters';
-import { ledgers, plan, type ShardReading } from './support/machine-rows';
+import { halvesDay, ledgers, plan, type ShardReading } from './support/machine-rows';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
@@ -508,6 +509,71 @@ test.describe('a shard is a set and never a count', () => {
 	});
 });
 
+test.describe('a job written in two halves', () => {
+	/** One work shard as the ledger holds it: the probe's half names the machine,
+	 * the clock's half names what the job cost, and both sit in one file. */
+	const SHARD: ShardReading & { fingerprint: string } = {
+		...FULL[0],
+		fingerprint: '3a7f0b1c2d4e5f60'
+	};
+	const RUN_ID = SHARD.runId ?? '';
+
+	test('the merged row reads the same shard as the two halves read apart', () => {
+		const root = mkdtempSync(join(tmpdir(), 'idhazh-halves-'));
+		try {
+			const dir = halvesDay(root, SHARD);
+			const merged = mergedDayShards(dir, HOST_FINGERPRINT_KEY, -1).rows;
+			const apart = readDayShards(dir, -1).rows;
+			expect(merged).toHaveLength(1);
+			expect(apart).toHaveLength(2);
+
+			const { health } = ledgers([SHARD]);
+			const counted = machineCounters(merged, health, plan([RUN_ID, 1]), LIMITS);
+			expect(counted.refused).toEqual([]);
+			// `mergeHost` already joined a shard's halves, so merging them earlier
+			// may not move a counter - it only stops handing the rest of the page a
+			// row with no machine in it.
+			expect(counted).toEqual(machineCounters(apart, health, plan([RUN_ID, 1]), LIMITS));
+			const [shard] = only(counted.runs, RUN_ID).reported;
+			expect(shard.jobSeconds).toBe(600);
+			expect(shard.cpuModel).toBe('AMD EPYC 7763 64-Core Processor');
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
+	test('a retry on a second machine is still refused once the halves are merged', () => {
+		const root = mkdtempSync(join(tmpdir(), 'idhazh-halves-'));
+		try {
+			// Two attempts at one shard on two runners. Merged into one row, the run
+			// would be read off whichever machine happened to come first.
+			const dir = halvesDay(root, SHARD, 1);
+			halvesDay(
+				root,
+				{
+					...SHARD,
+					fingerprint: 'c81d9e0a1b2c3d4e',
+					cpuModel: 'INTEL(R) XEON(R) PLATINUM 8573C',
+					jobSeconds: 720
+				},
+				2
+			);
+			const rows = mergedDayShards(dir, HOST_FINGERPRINT_KEY, -1).rows;
+			const { runs, refused } = machineCounters(
+				rows,
+				ledgers([SHARD]).health,
+				plan([RUN_ID, 1]),
+				LIMITS
+			);
+			expect(runs).toEqual([]);
+			expect(refused.map((run) => run.runId)).toEqual([RUN_ID]);
+			expect(refused[0].why).toContain('two machine records that disagree');
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+});
+
 test.describe('the ledgers this reads are the committed ones', () => {
 	const limits = machineLimits();
 	const rows = hostRows();
@@ -589,6 +655,16 @@ test.describe('the module cannot reach a browser', () => {
 		expect(source).toContain("join(STATE_ROOT, 'host-fingerprint')");
 		// And the item side through the shared reader, which is rooted the same way.
 		expect(source).toContain('itemHealthRows(days)');
+	});
+
+	test("it reads the machine record through the door that merges a job's halves", () => {
+		// The fleet reads the same ledger through `mergedDayShards` in
+		// `host-fingerprint.ts`. One reader merged and one raw would put two panels
+		// on one route in disagreement about how many rows a job has.
+		expect(source).toContain(
+			"mergedDayShards(join(STATE_ROOT, 'host-fingerprint'), HOST_FINGERPRINT_KEY, days)"
+		);
+		expect(source).not.toContain('readDayShards');
 	});
 });
 

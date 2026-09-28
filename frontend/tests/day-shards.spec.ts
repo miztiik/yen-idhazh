@@ -1,17 +1,20 @@
 import { expect, test } from '@playwright/test';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { machineRecordDays } from '../src/lib/server/host-fingerprint';
 import {
 	dayShardFiles,
+	HOST_FINGERPRINT_KEY,
 	ITEM_HEALTH_KEY,
 	ITEM_HEALTH_RULE,
+	mergedDayShards,
 	OBSERVATION_KEY,
 	readDayShards,
 	settledDayShards,
 	settleRows
 } from '../src/lib/server/payload';
+import { halvesDay } from './support/machine-rows';
 
 /**
  * The server-side day walk: a day is a `<DD>/` directory of writer-owned files,
@@ -311,6 +314,140 @@ test('one key on two days is two measurements, not a repeat', () => {
 		// And the cover still bounds it, so neither the settlement nor the walk
 		// grows with the archive (Guardrail #12).
 		expect(settledDayShards(dir, OBSERVATION_KEY, undefined, 1).rows).toHaveLength(1);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+test('each frontend key is the backend key, cell for cell and in order', () => {
+	// The originals are in `backend/idhazh/ledger/keys.py`. Read from there
+	// rather than restated here, so a key that gains or loses a cell on either
+	// side turns this red instead of settling two records as one.
+	const source = readFileSync(
+		join(import.meta.dirname, '..', '..', 'backend', 'idhazh', 'ledger', 'keys.py'),
+		'utf8'
+	);
+	const copies: [string, readonly string[]][] = [
+		['HOST_FINGERPRINT_KEY', HOST_FINGERPRINT_KEY],
+		['ITEM_HEALTH_KEY', ITEM_HEALTH_KEY],
+		['OBSERVATION_KEY', OBSERVATION_KEY]
+	];
+	for (const [name, copy] of copies) {
+		const declared = new RegExp(`^${name}: Final = \\(([^)]*)\\)`, 'm').exec(source);
+		expect(declared, `keys.py no longer declares ${name} as a tuple`).not.toBeNull();
+		const cells = [...(declared?.[1] ?? '').matchAll(/"([^"]*)"/g)].map((match) => match[1]);
+		expect(cells, `${name} in payload.ts has drifted from keys.py`).toEqual([...copy]);
+	}
+});
+
+/**
+ * `state/host-fingerprint/` settles by merging, not by choosing.
+ *
+ * A job writes its machine row in two halves into the one file it owns: the
+ * probe before the heaviest step, the clock after the last item. Neither half
+ * repeats the other's cells, so keeping either row whole - which is all a
+ * preference can do - loses the other half.
+ */
+const HALVES = {
+	date: '2026-09-27',
+	runId: '2026-09-27-36328542513',
+	job: 'work',
+	shard: 1,
+	fingerprint: '5301d30a5a74b44c',
+	cpuModel: 'AMD EPYC 7763 64-Core Processor',
+	cores: 2,
+	modelLoadMs: 4567.509,
+	jobSeconds: 9407,
+	serverPromptTokens: 28955,
+	serverPromptSeconds: 3357.9
+};
+
+/** The cells a row actually filled. An empty cell is a reading nobody took. */
+function filled(row: Record<string, string>): string[] {
+	return Object.keys(row)
+		.filter((cell) => row[cell] !== '')
+		.sort();
+}
+
+test("one job's two halves read back as one row holding both", () => {
+	const root = mkdtempSync(join(tmpdir(), 'host-fingerprint-'));
+	try {
+		const dir = halvesDay(root, HALVES);
+		const halves = readDayShards(dir, -1);
+		expect(halves.rows, 'the day really does hold both halves').toHaveLength(2);
+
+		const merged = mergedDayShards(dir, HOST_FINGERPRINT_KEY, -1);
+		expect(merged.rows).toHaveLength(1);
+		// The oracle: nothing either half wrote is lost, and nothing is invented.
+		expect(filled(merged.rows[0])).toEqual(
+			[...new Set([...filled(halves.rows[0]), ...filled(halves.rows[1])])].sort()
+		);
+		expect(merged.rows[0].fingerprint).toBe(HALVES.fingerprint);
+		expect(merged.rows[0].job_seconds).toBe(String(HALVES.jobSeconds));
+		expect(merged.columns).toEqual(halves.columns);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+test('a retry on a second machine is two records, and they come back as they were', () => {
+	const root = mkdtempSync(join(tmpdir(), 'host-fingerprint-'));
+	try {
+		// One key, two attempts, two runners: both probes filled `fingerprint`,
+		// differently. No union can say which machine was the job's, so the merge
+		// hands on what the ledger holds and the reader downstream decides.
+		const dir = halvesDay(root, HALVES, 1);
+		halvesDay(
+			root,
+			{
+				...HALVES,
+				fingerprint: 'c81d9e0a1b2c3d4e',
+				cpuModel: 'INTEL(R) XEON(R) PLATINUM 8573C',
+				jobSeconds: 8120
+			},
+			2
+		);
+		const merged = mergedDayShards(dir, HOST_FINGERPRINT_KEY, -1);
+		expect(merged.rows).toHaveLength(4);
+		expect(merged.rows).toEqual(readDayShards(dir, -1).rows);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+test('two halves stamped by two builds are still one job', () => {
+	const root = mkdtempSync(join(tmpdir(), 'host-fingerprint-'));
+	try {
+		const dir = halvesDay(root, HALVES);
+		const file = join(dir, '2026', '09', '27', `${HALVES.runId}-1-work-01.csv`);
+		const [header, probe, clock] = readFileSync(file, 'utf8').trim().split('\n');
+		// The clock half written by a newer build, and a cell both halves repeat
+		// with one value. Neither is a disagreement: `version` says which build
+		// wrote a row, not which job, and one value twice is not two values.
+		const rewritten = clock.replace(/^2026-09-20,/, '2026-09-27,').split(',');
+		rewritten[header.split(',').indexOf('cores')] = '2';
+		writeFileSync(file, `${[header, probe, rewritten.join(',')].join('\n')}\n`, 'utf8');
+
+		const merged = mergedDayShards(dir, HOST_FINGERPRINT_KEY, -1);
+		expect(merged.rows).toHaveLength(1);
+		expect(merged.rows[0].version, 'the first half keeps its stamp').toBe('2026-09-20');
+		expect(merged.rows[0].cores).toBe('2');
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+test('the merge is bounded by the same day cover as every other read', () => {
+	const root = mkdtempSync(join(tmpdir(), 'host-fingerprint-'));
+	try {
+		const dir = halvesDay(root, { ...HALVES, date: '2026-09-26', runId: '2026-09-26-1' });
+		halvesDay(root, HALVES);
+
+		expect(mergedDayShards(dir, HOST_FINGERPRINT_KEY, -1).rows).toHaveLength(2);
+		// The newest recorded day only, so the read cannot grow with the archive
+		// behind it (Guardrail #12).
+		const newest = mergedDayShards(dir, HOST_FINGERPRINT_KEY, 1).rows;
+		expect(newest.map((row) => row.date)).toEqual([HALVES.date]);
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}

@@ -17,6 +17,9 @@
  * what a committed day would hand it.
  */
 
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 /** One shard's figures, stated the way a person checking the page would state
  * them. Every field may be `''`, which is the ledger's own way of saying a cell
  * was never filled - and which the reader must not read as zero. */
@@ -162,4 +165,68 @@ export function ledgers(readings: ShardReading[]): {
 /** The planned shard count a run's manifest recorded, by run id. */
 export function plan(...runs: [string, number][]): Map<string, number> {
 	return new Map(runs);
+}
+
+/** The columns a fixture day of the machine record writes: the key, the stamp,
+ * the machine cells the Hardware route reads, and the four the job's clock
+ * fills. Every one is a contract column, in the contract's order. */
+const HALVES_COLUMNS = [
+	'version',
+	'date',
+	'run_id',
+	'job',
+	'shard',
+	'fingerprint',
+	'cpu_model',
+	'cores',
+	'model_load_ms',
+	'job_seconds',
+	'server_prompt_tokens',
+	'server_prompt_seconds'
+] as const;
+
+/** One job's machine row as the ledger really holds it: two halves in the one
+ * file that job owns, written under `root`.
+ *
+ * The probe wrote the machine before the job's heaviest step and the clock wrote
+ * what the job cost after its last item, and neither half repeats a cell of the
+ * other - the shape every `work` file under `state/host-fingerprint/` has held
+ * since 2026-09-18. The file is named `<run>-<attempt>-<job>-<shard>.csv` in its
+ * day directory, so a second attempt at one job is a second file, as it is on a
+ * runner. Returns the ledger's own directory, for a reader to open.
+ */
+export function halvesDay(
+	root: string,
+	reading: ShardReading & { fingerprint: string },
+	attempt = 1
+): string {
+	const date = reading.date ?? DATE;
+	const runId = reading.runId ?? RUN;
+	const job = reading.job || 'work';
+	const shard = reading.shard ?? 0;
+	const key = { version: '2026-09-20', date, run_id: runId, job, shard: String(shard) };
+	const probe: Record<string, string> = {
+		...key,
+		fingerprint: reading.fingerprint,
+		cpu_model: cell(reading.cpuModel),
+		cores: cell(reading.cores)
+	};
+	const clock: Record<string, string> = {
+		...key,
+		model_load_ms: cell(reading.modelLoadMs),
+		job_seconds: cell(reading.jobSeconds),
+		server_prompt_tokens: cell(reading.serverPromptTokens),
+		server_prompt_seconds: cell(reading.serverPromptSeconds)
+	};
+	const line = (row: Record<string, string>) =>
+		HALVES_COLUMNS.map((name) => row[name] ?? '').join(',');
+	const ledger = join(root, 'host-fingerprint');
+	const day = join(ledger, date.slice(0, 4), date.slice(5, 7), date.slice(8, 10));
+	mkdirSync(day, { recursive: true });
+	writeFileSync(
+		join(day, `${runId}-${attempt}-${job}-${String(shard).padStart(2, '0')}.csv`),
+		`${[HALVES_COLUMNS.join(','), line(probe), line(clock)].join('\n')}\n`,
+		'utf8'
+	);
+	return ledger;
 }
