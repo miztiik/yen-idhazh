@@ -110,6 +110,7 @@
     "chart_minutes_target": 6.0,
     "chart_rule_days": 14,
     "chart_width": 520,
+    "completeness_grace_days": 2,
     "context_cut_off_reason": "max_tokens",
     "context_high_percentile": 95.0,
     "default_window_days": 21,
@@ -120,6 +121,10 @@
     "feed_rows": 6,
     "fleet_min_rows": 80,
     "fleet_top_kinds": 2,
+    "judged_panel_ids": [
+      "platform-mix",
+      "run-health"
+    ],
     "machine_colour_stops": 5,
     "max_window_days": 180,
     "min_attempts_for_rate": 3,
@@ -169,6 +174,7 @@
         }
       ]
     },
+    "plot_min_fill_share": 0.9,
     "precision_axis_multiple": 10.0,
     "processor_lost_pct_marked": 2.0,
     "processor_lost_pct_named": 25.0,

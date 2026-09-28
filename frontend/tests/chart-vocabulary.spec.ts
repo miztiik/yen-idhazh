@@ -1,9 +1,7 @@
 import { expect, test } from '@playwright/test';
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
-import { compile, preprocess } from 'svelte/compiler';
 import { render } from 'svelte/server';
 import ts from 'typescript';
 
@@ -24,6 +22,7 @@ import { rankedList } from '../src/lib/charts/d3/rankedList';
 import { bandScale, linearScale, timeScale } from '../src/lib/charts/d3/scale';
 import { tileStrip } from '../src/lib/charts/d3/tileStrip';
 import { CHART_VOCABULARY_PAGE } from '../scripts/doc-test-inputs';
+import { serverCompiler } from './support/server-render';
 
 /**
  * THE ORACLE for the chart vocabulary: every chart type is written down, and
@@ -564,17 +563,7 @@ test.describe('drawn by Svelte, rendered on the server', () => {
 
 	/** One component compiled to a server module beside its siblings. A child
 	 * component is compiled for real and its import pointed at the copy. */
-	async function compiled(file: string, name: string, rewrite: readonly [string, string][]): Promise<string> {
-		const filename = path.join(frontend, file);
-		const pre = await preprocess(readFileSync(filename, 'utf8'), vitePreprocess(), { filename });
-		const result = compile(pre.code, { generate: 'server', filename, name });
-		mkdirSync(built, { recursive: true });
-		const module = path.join(built, `${name}.server.mjs`);
-		let code = result.js.code;
-		for (const [from, to] of rewrite) code = code.split(`'${from}'`).join(`'${to}'`);
-		writeFileSync(module, code, 'utf8');
-		return module;
-	}
+	const compiled = serverCompiler(built);
 
 	test.beforeAll(async () => {
 		await compiled('src/lib/components/Reserved.svelte', 'Reserved', []);

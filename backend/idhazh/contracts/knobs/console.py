@@ -79,6 +79,21 @@ class ConsoleConfig(Model):
         default=TodayAnchor.RIGHT,
         description="Where today sits in the initial viewport when enough history exists.",
     )
+    completeness_grace_days: int = Field(
+        default=1,
+        ge=1,
+        description=(
+            "How many whole UTC days the day the console's record was written may "
+            "trail the reader's own UTC day before the sentence under the tab strip "
+            "stops saying how complete the record is and says how many days are "
+            "missing. One, because a run finishes at least once a day: a record "
+            "from yesterday is what a morning before the first run looks like, and "
+            "one from the day before that means a whole day passed with nothing "
+            "recorded. It decides only when the count is said, never what it "
+            "counts - the count is the whole days between the record's day and "
+            "today, so at least one, which is why zero is refused."
+        ),
+    )
     pan_days: int = Field(default=7, ge=1, description="Days moved by one arrow-key pan.")
     zoom_factor: float = Field(default=1.5, gt=1.0)
     min_window_days: int = Field(
@@ -521,6 +536,34 @@ class ConsoleConfig(Model):
             "refuses a list that names one it does not."
         ),
     )
+    judged_panel_ids: list[str] = Field(
+        default_factory=list,
+        description=(
+            "The panels the sufficiency gates judge, by the ids `panel_groups` "
+            "places. Nothing reads it but the gate spec. It is an opt-in list "
+            "rather than every panel because two of the gates read attributes no "
+            "panel draws yet, and a third needs every trend a panel draws to say "
+            "whether it draws the settings-change rule, which most do not. A gate "
+            "that is red on the day it lands is a gate people learn to skip. A "
+            "panel joins in the pull request that redraws it. Every panel in "
+            "`panel_groups` is still pictured by the capture, judged or not."
+        ),
+    )
+    plot_min_fill_share: float = Field(
+        default=0.85,
+        gt=0.0,
+        le=1.0,
+        description=(
+            "The share of a judged panel's content width its drawn plots must "
+            "cover, at every width the console is pictured at. Width and not area: "
+            "a full-width chart under a title, a note and a readout strip covers "
+            "well under this share of the panel's area, and a floor on area would "
+            "teach people to stretch a chart to pass. An estimate, not a "
+            "measurement: no panel is judged yet, so nothing has been measured "
+            "against it. What replaces it is the share the first judged panels "
+            "cover at 390 CSS px, the narrowest width."
+        ),
+    )
 
     @model_validator(mode="before")
     @classmethod
@@ -612,15 +655,17 @@ class ConsoleConfig(Model):
     def _every_panel_is_named_once(self) -> Self:
         """A panel belongs to one group of one route, and a route groups all or none.
 
-        Two rules, and each catches a different way the knob goes quietly wrong.
+        Three rules, and each catches a different way the knob goes quietly wrong.
         A panel named twice draws twice, which reads as a duplicated instrument
-        rather than as a config anybody would look at. And a route that titles
+        rather than as a config anybody would look at. A route that titles
         some groups and not others has no heading level left to give the panels:
         a titled group steps its panels down to an h3 under its own h2, so a
         route holding both kinds would draw two panel titles at two sizes with
-        nothing on the page to say why.
+        nothing on the page to say why. And a panel id on two routes is one name
+        for two panels.
         """
         seen_groups: set[str] = set()
+        route_of: dict[str, str] = {}
         for route, groups in self.panel_groups.items():
             for group in groups:
                 if group.id in seen_groups:
@@ -634,4 +679,40 @@ class ConsoleConfig(Model):
             named = [panel for group in groups for panel in group.panels]
             if len(named) != len(set(named)):
                 raise ValueError(f"console.panel_groups[{route}] names a panel twice")
+            # One id is one panel on the whole console. A panel's pictures are
+            # filed by its id alone, and the judged list is a flat list of ids,
+            # so an id on two routes would be two panels that one name picks at
+            # random.
+            for panel in named:
+                if panel in route_of:
+                    raise ValueError(
+                        f"console.panel_groups names {panel} on {route_of[panel]} and on {route}"
+                    )
+                route_of[panel] = route
+        return self
+
+    @model_validator(mode="after")
+    def _only_a_drawn_panel_is_judged(self) -> Self:
+        """The gates judge a panel the console draws, and each one once.
+
+        A judged id no route places is a panel the gate spec would look for and
+        never find, so it would fail on a page rather than on the file that named
+        it. A judged id listed twice is one panel judged twice.
+        """
+        drawn = {
+            panel
+            for groups in self.panel_groups.values()
+            for group in groups
+            for panel in group.panels
+        }
+        seen: set[str] = set()
+        for panel in self.judged_panel_ids:
+            if panel in seen:
+                raise ValueError(f"console.judged_panel_ids names {panel} twice")
+            if panel not in drawn:
+                raise ValueError(
+                    f"console.judged_panel_ids names {panel}, and no route in "
+                    "console.panel_groups draws it"
+                )
+            seen.add(panel)
         return self

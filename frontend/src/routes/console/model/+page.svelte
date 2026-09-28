@@ -54,7 +54,7 @@
 	import SwapDots from '$lib/components/SwapDots.svelte';
 	import ThroughputTrend from '$lib/components/ThroughputTrend.svelte';
 	import TimeHistogram from '$lib/components/TimeHistogram.svelte';
-	import WindowControl from '$lib/components/WindowControl.svelte';
+	import WindowControlSource from '$lib/components/WindowControlSource.svelte';
 	import { base } from '$app/paths';
 	import type { ModelDay, SourceDoubt } from './+page.server';
 
@@ -490,11 +490,11 @@
 	<meta name="robots" content="noindex" />
 </svelte:head>
 
-<!-- The title, the strip and the band are the shell and live in
-     `../+layout.svelte`. The control stays here because it governs this route's
-     panels and nothing above them. -->
+<!-- The title, the strip, the band and the days control are the shell and live
+     in `../+layout.svelte`. The window stays here because it governs this
+     route's panels and nothing above them, and this hands it up. -->
 <div data-console-panels="model">
-	<WindowControl days={windowDays} {presets} {monthsFor} {ready} onChange={show} />
+	<WindowControlSource days={windowDays} {presets} {monthsFor} {ready} onChange={show} />
 
 	<!-- One sentence, no chart. A route that never points at another is a route
 	     that hides the panel explaining its own numbers. -->

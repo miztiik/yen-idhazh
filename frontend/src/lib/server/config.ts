@@ -229,6 +229,11 @@ export interface ConsoleConfig {
 	 * one of them - the contract refuses a config where it is not. */
 	window_presets: number[];
 	today_anchor: 'right' | 'centre';
+	/** Whole UTC days the record's day may trail the reader's before the
+	 * sentence under the strip stops saying how complete the record is and says
+	 * how many days are missing. It decides when the count is said, never what
+	 * it counts. */
+	completeness_grace_days: number;
 	pan_days: number;
 	zoom_factor: number;
 	min_window_days: number;
@@ -513,6 +518,7 @@ const CONSOLE_DEFAULTS: ConsoleConfig = {
 	default_window_days: 30,
 	window_presets: [1, 7, 14, 30, 90],
 	today_anchor: 'right',
+	completeness_grace_days: 1,
 	pan_days: 7,
 	zoom_factor: 1.5,
 	min_window_days: 1,
@@ -722,7 +728,10 @@ type DigestBlock = Partial<UiConfig> &
 	Partial<Record<(typeof BUILD_ONLY_KEYS)[number], number>>;
 
 /** The `console` block: everything `ConsoleConfig` holds, plus the running
- * order, which `consoleConfig()` deliberately leaves out of what it inlines. */
+ * order, which `consoleConfig()` deliberately leaves out of what it inlines.
+ * The block also carries `judged_panel_ids` and `plot_min_fill_share`, which
+ * only the sufficiency specs read, straight from the file - so no type here
+ * names them and `consoleConfig()` leaves them out too. */
 type ConsoleBlock = Partial<ConsoleConfig> & { panel_groups?: PanelGroups };
 
 interface RawAppearance {
@@ -990,10 +999,17 @@ export function summarizeConfig(): SummarizeConfig {
 
 export function consoleConfig(): ConsoleConfig {
 	const merged = mergeLayers(CONSOLE_DEFAULTS, raw().console, appearance().console);
-	// The running order shares the block and must not ride along - see the note
-	// on `ConsolePanelGroup`.
-	const { panel_groups: _order, ...knobs } = merged as ConsoleBlock;
-	return knobs as ConsoleConfig;
+	// Whatever this returns is inlined into all five prerendered console
+	// documents, so it keeps the declared interface and nothing else. The block
+	// also holds the running order, which each route reads for itself - see the
+	// note on `ConsolePanelGroup` - and a knob no page reads would otherwise ride
+	// to every one of them. `CONSOLE_DEFAULTS` names every field of the
+	// interface, so there is no second list here to forget to update.
+	const kept = {} as Record<keyof ConsoleConfig, unknown>;
+	for (const key of Object.keys(CONSOLE_DEFAULTS) as (keyof ConsoleConfig)[]) {
+		kept[key] = merged[key];
+	}
+	return kept as ConsoleConfig;
 }
 
 /** The groups one console route draws, in order, refusing a list it cannot draw.

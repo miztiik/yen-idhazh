@@ -1,6 +1,6 @@
 # Run the Gates
 
-**Last Updated**: 2026-09-27
+**Last Updated**: 2026-09-28
 Set up a machine, then run every check `CLAUDE.md` section 9 asks for before a
 merge. This page owns the project's actual gate commands; the neutral PR
 lifecycle that calls for them is
@@ -32,6 +32,7 @@ Documentation-only changes run a whitespace check, not either application suite.
 | `logic` | Verified build-independent frontend functions | No site build, preview server or Chromium |
 | `reader` | Reading pages, layout, filters, themes and read state | Canary build |
 | `console` | The operator dashboards | Canary build |
+| `panels` | A picture of every console panel that carries an id, at three widths in both themes; the sufficiency gates' witness panel; the panels `console.judged_panel_ids` opts in | Canary build |
 | `archive` | Browsing, calendar and pagination | Canary build |
 | `model-search` | On-device search and recovery | Canary build |
 | `publishing` | Payloads, projections, canaries and malformed-day handling | Canary build and Python |
@@ -115,7 +116,7 @@ second thing to keep correct. `ciAnswer` in `test-scope.ts` is the one place
 that decides, and the truth table is in
 `frontend/scripts/tests/test-scope.test.mjs`.
 
-`ciAnswer` returns four answers. **`code` says whether the change carries
+`ciAnswer` returns five answers. **`code` says whether the change carries
 anything but documentation, and `gates`, `robots` and `site` skip when it does
 not** - a changed sentence cannot break an application check, on a branch or on
 a merge. That branch is a closed list of prefixes rather than a guess, so a path
@@ -129,6 +130,20 @@ whether the `gates` job opens every committed day or none of them: a `main` push
 carrying code, and any change to the contracts, the tooling or a committed
 payload under `frontend/public/`, open all of them; every other change opens
 none.
+
+**`panels` buys the panel pictures and the sufficiency gates** whenever `console`
+is bought, and also for anything every panel is drawn from: the panel frame and
+readout strip, the chart modules, the stylesheets, `config/appearance.json`, and
+the pictures' own specs, fixture and helpers. The browser job sets
+`SKIP_PANELS_SUITE` from it, and uploads what the group drew as the
+`panel-captures` artefact on a pass or a fail - a picture that exists only on a
+red run is one nobody can read on the run a reviewer is asked to approve. The
+pictures land in `frontend/test-results/panels/` as
+`<panel-id>--<width>--<theme>--<state>.png`, and each capture test writes one
+`_notes--<route>--<width>--<theme>.txt` beside them naming each panel's state,
+the share of the panel's width its plots cover, and the test's own run time. The
+argument for the wider set is in
+[../reference/test-selection.md](../reference/test-selection.md).
 
 **A push to `main` keeps the run it started.** A pull request cancels its own
 older run, because a newer commit supersedes it. A push does not, and the two
@@ -530,8 +545,8 @@ The browser gate runs against the **canary day**, not the real digest, so it
 does not change meaning when the pipeline publishes.
 
 Prefer `npm run test:changed` locally. In the manual full frontend sequence
-below, `test:logic` owns the build-independent group and `test:browser` owns the
-other five groups. Together they retain the full test inventory.
+below, `test:logic` owns the build-independent group and `test:browser` owns
+every other group. Together they retain the full test inventory.
 
 ```powershell
 .\.venv\Scripts\python.exe backend\utilities\build_canary_day.py

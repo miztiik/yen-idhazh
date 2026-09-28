@@ -16,20 +16,33 @@ export type Selection = {
 
 const ALL: TestGroup[] = ['backend', ...FRONTEND_GROUPS];
 const READER: TestGroup[] = ['logic', 'reader', 'publishing'];
-const CONSOLE: TestGroup[] = ['logic', 'console', 'publishing'];
+const CONSOLE: TestGroup[] = ['logic', 'console', 'panels', 'publishing'];
 
 /** The operator console's own files.
  *
  * The console's specs are 584 of the browser suite's 997 tests, measured
  * 2026-09-05, and the console is a page one operator opens rather than anything
  * a reader is served. So a pull request buys them only when the change is the
- * console's own; every other change reaches them in `nightly.yml`, within the
- * day. What that costs is stated rather than implied: a shared component or a
- * token edit that breaks the console is found the next morning, not at the
- * pull request.
+ * console's own; every other change reaches them on the merge push to `main`,
+ * which runs every group. What that costs is stated rather than implied: a
+ * shared component or a token edit that breaks the console is found on that
+ * push, not at the pull request.
  */
 const CONSOLE_OWNED =
 	/^frontend\/(tests\/console[-.]|src\/(routes|lib)\/console\/|src\/lib\/components\/Console[A-Z]|src\/lib\/server\/console-shell\.ts$)/;
+
+/** What a console panel's picture is drawn from, beyond the console's own files.
+ *
+ * The `panels` group is two spec files against the console's hundreds of
+ * tests, so it is bought by a wider set: the panel frame and the readout strip
+ * every panel shares, the chart modules, the stylesheets and tokens, the
+ * appearance config the panels read, and the captures' own specs, fixture and
+ * helpers. These are the edits that move every panel image at once, and
+ * deferring them to the merge push would mean their first pictures arrive
+ * after the change is already on `main`.
+ */
+const PANELS_DRAWN =
+	/^(frontend\/(tests\/(panel-|fixtures\/panels\/|support\/)|src\/(styles|lib\/charts)\/|src\/lib\/components\/(Panel|PanelGroup|ChartReadout|Reserved)\.svelte$)|config\/appearance\.json$)/;
 
 /** A document a test reads is that test's input, not documentation.
  *
@@ -52,12 +65,22 @@ function consoleIsTheSubject(paths: readonly string[]): boolean {
 	});
 }
 
-export type CiAnswer = { browser: boolean; code: boolean; console: boolean; validateAll: boolean };
+function panelsAreTheSubject(paths: readonly string[]): boolean {
+	return paths.some((path) => PANELS_DRAWN.test(path.replaceAll('\\', '/')));
+}
+
+export type CiAnswer = {
+	browser: boolean;
+	code: boolean;
+	console: boolean;
+	panels: boolean;
+	validateAll: boolean;
+};
 
 /** Anything under here IS the archive, so a change to it has to be re-read. */
 const ARCHIVE_TOUCHED = /^frontend\/public\/(digest|telemetry|assist)\//;
 
-/** The four lines the `scope` job writes to `$GITHUB_OUTPUT`.
+/** The five lines the `scope` job writes to `$GITHUB_OUTPUT`.
  *
  * A pure function of the changed paths, so the truth table is checked here at
  * microseconds a case rather than through a temporary git repository and a
@@ -77,6 +100,9 @@ export function ciAnswer(paths: readonly string[], isPr: boolean): CiAnswer {
 		browser: selection.groups.some((group) => group !== 'backend' && group !== 'logic'),
 		code,
 		console: selection.groups.includes('console') && !deferred,
+		// Whatever buys the console buys its pictures, and so does anything every
+		// panel is drawn from.
+		panels: selection.groups.includes('panels') && (!deferred || panelsAreTheSubject(paths)),
 		// A published day is frozen, so the only thing that can invalidate one is a
 		// change to the shape it is read through - or an edit to the day itself.
 		// Everything else leaves an answer that was settled when the day was
@@ -137,6 +163,9 @@ export function selectPaths(paths: readonly string[]): Selection {
 			const group = groupForSpec(path);
 			selected = group ? [group] : [...FRONTEND_GROUPS];
 			reason = group ? 'changed frontend spec' : 'unmapped spec; all frontend groups';
+		} else if (/^frontend\/tests\/fixtures\/panels\//.test(path)) {
+			selected = ['panels'];
+			reason = 'the panel the sufficiency gates are proven against';
 		} else if (/^frontend\/src\/routes\/(?:console)(?:\/|$)/.test(path)) {
 			selected = CONSOLE;
 			reason = 'console route and publishing checks';
@@ -238,6 +267,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
 		console.log(`browser=${answer.browser}`);
 		console.log(`code=${answer.code}`);
 		console.log(`console=${answer.console}`);
+		console.log(`panels=${answer.panels}`);
 		console.log(`validate_all=${answer.validateAll}`);
 	} else {
 		console.log(JSON.stringify(selectPaths(paths), null, 2));
