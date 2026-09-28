@@ -1,6 +1,6 @@
 # What the page is drawn from
 
-**Last Updated**: 2026-09-27
+**Last Updated**: 2026-09-28
 
 Every knob a reader's page or an operator's console is drawn from: the file that
 owns them, the rule that decides which file owns a key when two name it, the
@@ -91,6 +91,8 @@ The console knobs are:
 - `console.source_rows`
 - `console.feed_rows`
 - `console.completeness_grace_days`
+- `console.judged_panel_ids`
+- `console.plot_min_fill_share`
 
 The 30-day setting is a viewport. It never deletes rows. `failure_list_max` is
 the same idea one level down: the failed-item list shows a page at a time and
@@ -136,6 +138,14 @@ that means a whole day passed with nothing recorded. It decides only when the
 count is said, never what it counts - the count is the whole days between the
 record's day and today, so zero is refused
 ([../../architecture/publishing/what-sits-above-every-console-route.md](../../architecture/publishing/what-sits-above-every-console-route.md#the-sentence-under-the-strip-dates-the-record)).
+
+`judged_panel_ids` (empty) and `plot_min_fill_share` (0.85) are read by no page.
+The sufficiency specs read them: the first is the list of panels the gates judge,
+and gate 1 fails a judged panel whose plots cover less of its width than the
+second. Neither is in what `consoleConfig()` inlines into the five console
+documents, because a page has no use for a number only its tests read. The
+contract refuses a judged id that no console route draws, and one named twice
+([../design-system.md](../design-system.md#sufficiency-is-a-gate-not-a-taste)).
 
 ## Reader surface
 

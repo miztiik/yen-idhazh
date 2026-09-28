@@ -101,6 +101,11 @@ class AppConfig(Contract):
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-28",
+            change="console.judged_panel_ids and console.plot_min_fill_share, additive.",
+            why="The sufficiency gates judge an opt-in list of panels against a fill floor.",
+        ),
+        ChangelogEntry(
             version="2026-09-27T22:00",
             change="console.completeness_grace_days, additive, default 1.",
             why="The console says its record has stopped once a whole UTC day has none.",
@@ -114,11 +119,6 @@ class AppConfig(Contract):
             version="2026-09-24",
             change="ui.filter_settle_ms, additive, default 120.",
             why="The list narrows on the keystroke; the count beside it settles after one.",
-        ),
-        ChangelogEntry(
-            version="2026-09-23",
-            change="model_server.base_url, additive, default http://127.0.0.1:8080.",
-            why="The address a stage posts to was three python constants and no config value.",
         ),
         ChangelogEntry(
             version="2026-08-21",
