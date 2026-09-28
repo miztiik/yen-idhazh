@@ -7,7 +7,9 @@ the higher attempt is current: GitHub re-runs a failed job into the same run id,
 so the re-run replaces its first try rather than adding to it. The door writes
 both files and removes neither, and it says that choosing between them is a
 reader's job. This module is that job, done once, so no reader invents its own
-version of it.
+version of it: `settle_rows` keeps one file's rows per unit - the last file of
+its highest attempt - and then the first row per key, and both the ledger's
+reader and the compaction call it.
 
 **Oldest first, and the order is written down rather than inherited.** Files
 sort by the day they cover, then by the instant they were written, then by
@@ -15,28 +17,27 @@ their `file_id`, all read from each file's own envelope. A directory listing
 happens to agree today, because a `file_id` starts with its clock; a reader that
 leaned on that would change its answer the day the name grammar did.
 
-**The walk reads every day a ledger has a folder for, and that is deliberate
-(Guardrail #12).** The two ledgers that read through here ask about their whole
-history: a retirement is permanent, so a window would forget the oldest ones
-and ask a dead server again, and the cleanup record is about whether a backlog
-is shrinking, which has no time bound. What it costs grows with the files: one
-per day of retirements and one per cleanup pass, and a parquet file's envelope
-is read from its footer without its rows.
-`docs/concepts/growing-reads.md` lists both reads.
+**A reader names the days it wants, or reads every day a ledger has a folder
+for (Guardrail #12).** `ledger/ledger_files.py` reads the days no compact index
+names and nothing else, and the compaction reads one day at a time. What an
+unbounded read costs grows with the files: one per writer per day that has not
+been compacted yet, and a parquet file's envelope is read from its footer
+without its rows. `docs/concepts/growing-reads.md` lists the reads.
 
-**A file this build cannot read is skipped, with one warning that names it.** A
-file under a newer row shape, a row today's model refuses, a file that is not a
-ledger file at all, or one filed in the wrong folder is a `ValueError`, and a
-reader that stopped on it would cost the run its day to protect one row. Only
-`ValueError` is caught. A missing parquet engine raises `ImportError`, and that
-must stop the run: skipping every file for it would read as a ledger with no
-history.
+**A reader skips a file this build cannot read, with one warning that names it;
+the compaction stops that day instead.** A file under a newer row shape, a row
+today's model refuses, a file that is not a ledger file at all, or one filed in
+the wrong folder is a `ValueError`. A reader that stopped on it would cost the
+run its day to protect one row. The compaction must never delete a file it
+could not read, so `read_day_files` raises rather than skips. Only `ValueError`
+is caught. A missing parquet engine raises `ImportError`, and that must stop the
+run: skipping every file for it would read as a ledger with no history.
 """
 
 from __future__ import annotations
 
 import logging
-import uuid
+from collections.abc import Collection, Sequence
 from pathlib import Path
 from typing import NamedTuple
 
@@ -46,7 +47,7 @@ from idhazh.contracts.file_envelope import FileEnvelope, Tier
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.ledger import paths
 from idhazh.ledger.keys import preference_for
-from idhazh.ledger.persist import load, read_envelope
+from idhazh.ledger.persist import StoredRow, load_stored, read_envelope
 
 logger = logging.getLogger(__name__)
 
@@ -106,9 +107,61 @@ def _order(held: RawFile) -> tuple[str, int, str]:
     return (held.envelope.covers, held.envelope.written_at_ms, str(held.envelope.file_id))
 
 
-def list_raw_files(state_dir: Path, ledger: LedgerName) -> list[RawFile]:
+def raw_days(state_dir: Path, ledger: LedgerName) -> list[str]:
+    """Every UTC day this ledger has a raw folder with something in it for, oldest first.
+
+    Folder names only: one entry is read from each day folder to see that it
+    is not empty, and no file is opened. A day the compaction has emptied keeps
+    no folder on a runner, because git keeps no empty folder, and the
+    compaction removes the one it emptied on a developer's machine.
+    """
+    return [
+        day
+        for day, folder in _day_folders(state_dir, paths.raw_root(state_dir, ledger))
+        if next(folder.iterdir(), None) is not None
+    ]
+
+
+def listed_days(state_dir: Path, ledger: LedgerName) -> list[str]:
+    """Every UTC day a raw listing of this ledger sits under `index/` for, oldest first.
+
+    The listings are the compaction's record of which raw files a day held. A
+    name that is not a `<YYYY-MM-DD>.json` listing is left out with a warning.
+    """
+    folder = paths.raw_root(state_dir, ledger) / paths.INDEX_DIRNAME
+    if not folder.is_dir():
+        return []
+    found: list[str] = []
+    for path in sorted(folder.iterdir()):
+        try:
+            if path.suffix != ".json" or paths.raw_index_path(state_dir, ledger, path.stem) != path:
+                raise ValueError("not a day's listing")
+        except ValueError as refusal:
+            _skip(state_dir, path, refusal)
+            continue
+        found.append(path.stem)
+    return found
+
+
+def _held(ledger: LedgerName, covers: str, path: Path) -> RawFile:
+    """One raw file and its envelope, or a `ValueError` saying why it is not one of this day's."""
+    if not path.is_file():
+        raise ValueError("not a file")
+    envelope = read_envelope(path)
+    if (envelope.ledger, envelope.tier, envelope.covers) != (ledger, Tier.RAW, covers):
+        raise ValueError(
+            f"its envelope says {envelope.tier.value} {envelope.ledger.value} "
+            f"{envelope.covers}, and it sits in the raw {ledger.value} folder for {covers}"
+        )
+    return RawFile(path, envelope)
+
+
+def list_raw_files(
+    state_dir: Path, ledger: LedgerName, *, days: Collection[str] | None = None
+) -> list[RawFile]:
     """Every raw file of this ledger whose envelope this build can read, oldest first.
 
+    `days` bounds the read to the days named; `None` reads every day folder.
     Every file in a day folder is read, whatever its suffix, because
     `ledger.format` may be JSON lines as well as parquet. A file whose envelope
     names another ledger, another tier or another day than the folder it sits in
@@ -116,71 +169,93 @@ def list_raw_files(state_dir: Path, ledger: LedgerName) -> list[RawFile]:
     """
     found: list[RawFile] = []
     for covers, folder in _day_folders(state_dir, paths.raw_root(state_dir, ledger)):
+        if days is not None and covers not in days:
+            continue
         for path in sorted(folder.iterdir()):
-            if not path.is_file():
-                _skip(state_dir, path, "not a file")
-                continue
             try:
-                envelope = read_envelope(path)
-                if (envelope.ledger, envelope.tier, envelope.covers) != (ledger, Tier.RAW, covers):
-                    raise ValueError(
-                        f"its envelope says {envelope.tier.value} {envelope.ledger.value} "
-                        f"{envelope.covers}, and it sits in the raw {ledger.value} folder "
-                        f"for {covers}"
-                    )
+                found.append(_held(ledger, covers, path))
             except ValueError as refusal:
                 _skip(state_dir, path, refusal)
-                continue
-            found.append(RawFile(path, envelope))
     return sorted(found, key=_order)
 
 
-def _rank(held: RawFile) -> tuple[int, int, str]:
-    """Which of two files for one work unit is current: the higher attempt, then the later write."""
-    return (held.envelope.identity.attempt, held.envelope.written_at_ms, str(held.envelope.file_id))
+def read_day_files(state_dir: Path, ledger: LedgerName, day: str) -> list[RawFile]:
+    """One day's raw files, oldest first, or a refusal naming the first one that cannot be read.
 
-
-def pick_current_files(state_dir: Path, ledger: LedgerName) -> list[RawFile]:
-    """For each work unit, the file its highest attempt wrote, oldest first.
-
-    Two files at one attempt for one unit would be one attempt writing twice,
-    which the door never does; the later write is kept, so the answer is still
-    one file and still the same file on every read.
+    For the compaction, which deletes what it read and so may not skip a file:
+    a file it cannot read would be deleted unread. A day with no folder holds
+    nothing, which is an empty list.
     """
-    best: dict[uuid.UUID, RawFile] = {}
-    for held in list_raw_files(state_dir, ledger):
-        kept = best.get(held.envelope.unit_id)
-        if kept is None or _rank(held) > _rank(kept):
-            best[held.envelope.unit_id] = held
-    return sorted(best.values(), key=_order)
+    folder = paths.raw_root(state_dir, ledger).joinpath(day[:4], day[5:7], day[8:10])
+    if not folder.is_dir():
+        return []
+    found: list[RawFile] = []
+    for path in sorted(folder.iterdir()):
+        try:
+            found.append(_held(ledger, day, path))
+        except ValueError as refusal:
+            raise ValueError(f"{_shown(state_dir, path)} cannot be read: {refusal}") from refusal
+    return sorted(found, key=_order)
+
+
+def settle_rows[C: Contract](
+    files: Sequence[Sequence[StoredRow[C]]], key: tuple[str, ...]
+) -> list[StoredRow[C]]:
+    """The current rows of a union of files, in the order given: one file per unit, then key.
+
+    `files` holds each file's rows, oldest file first. For each work unit the
+    rows of one file are kept - the last file holding that unit's highest
+    attempt - and every other row of the unit goes. A re-run replaces its first
+    try rather than adding to it, even when it filed fewer rows; and one attempt
+    that wrote a unit twice is its later write, so a union has one answer on
+    every read. A compact file is passed before the raw files of its day: its
+    rows were written before any raw file that arrived after it.
+
+    Of the rows left, the first row of each `key` is kept: two writers that are
+    not attempts at one unit - two runs reading the same evidence from two stale
+    checkouts - can each file a row for one key, and the first one filed wins,
+    which is the rule `ledger/keys.py` gives a key that declares no preference
+    of its own. A key that does declare one is refused, because this would apply
+    the wrong rule to it.
+    """
+    if preference_for(key) is not None:
+        raise ValueError(f"{key} declares a preference, and this settlement keeps the first row")
+    current: dict[str, tuple[int, int]] = {}
+    for position, rows in enumerate(files):
+        for held in rows:
+            rank = (held.identity.attempt, position)
+            current[held.identity.unit_id] = max(current.get(held.identity.unit_id, rank), rank)
+    kept: dict[tuple[str, ...], StoredRow[C]] = {}
+    for position, rows in enumerate(files):
+        for held in rows:
+            if current[held.identity.unit_id] == (held.identity.attempt, position):
+                kept.setdefault(tuple(str(getattr(held.row, name)) for name in key), held)
+    return list(kept.values())
 
 
 def load_current_rows[C: Contract](
-    state_dir: Path, ledger: LedgerName, *, model: type[C], key: tuple[str, ...]
+    state_dir: Path,
+    ledger: LedgerName,
+    *,
+    model: type[C],
+    key: tuple[str, ...],
+    days: Collection[str] | None = None,
 ) -> list[C]:
-    """This ledger's current rows, oldest first, and the first row of each `key` only.
+    """This ledger's current raw rows, oldest first, settled by `settle_rows`.
 
-    Two writers that are not attempts at one unit - two runs, say, reading the
-    same evidence from two stale checkouts - can each file a row for one key.
-    The first one filed is kept, which is the rule `ledger/keys.py` gives a key
-    that declares no preference of its own. A key that does declare one is
-    refused here, because this reader would apply the wrong rule to it.
-
-    Each file is read on its own, so one file this build cannot read costs the
-    rows in it and never the rows in the files beside it.
+    `days` bounds the read to the days named, as `list_raw_files` does. Each
+    file is read on its own, so one file this build cannot read costs the rows
+    in it and never the rows in the files beside it.
     """
     if preference_for(key) is not None:
         raise ValueError(
             f"{ledger.value} settles on {key}, which declares a preference, and this "
             "reader keeps the first row per key"
         )
-    kept: dict[tuple[str, ...], C] = {}
-    for held in pick_current_files(state_dir, ledger):
+    stored: list[list[StoredRow[C]]] = []
+    for held in list_raw_files(state_dir, ledger, days=days):
         try:
-            rows = load([held.path], model=model)
+            stored.append(load_stored([held.path], model=model))
         except ValueError as refusal:
             _skip(state_dir, held.path, refusal)
-            continue
-        for row in rows:
-            kept.setdefault(tuple(str(getattr(row, name)) for name in key), row)
-    return list(kept.values())
+    return [held.row for held in settle_rows(stored, key)]
