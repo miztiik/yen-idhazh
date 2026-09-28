@@ -15,9 +15,11 @@
 	import { base } from '$app/paths';
 	import { onMount } from 'svelte';
 	import { axisLabels, denseCellFor, ROW_STRIP_PX, type LabelAlign } from '$lib/charts/run-history';
+	import { factsOf, markReadout, recordsOf } from '$lib/charts/readout';
 	import { grouped } from '$lib/charts/series';
 	import { windowOfDays } from '$lib/charts/viewport';
 	import { shortDate } from '$lib/format';
+	import ChartReadout from '$lib/components/ChartReadout.svelte';
 	import SourceCutRange from '$lib/components/SourceCutRange.svelte';
 	import TargetBar from '$lib/components/TargetBar.svelte';
 	import WindowControl from '$lib/components/WindowControl.svelte';
@@ -141,6 +143,59 @@
 		centre: 'left: 50%; transform: translateX(-50%)',
 		end: 'right: 0'
 	};
+
+	/** What one feed square says: the day and what the feed did on it. */
+	function feedSaid(feedId: string, date: string): string {
+		const day = strips.get(feedId)?.get(date) ?? null;
+		return day ? day.label : `${shortDate(date)}: nothing on record.`;
+	}
+
+	/** One record a square of the feed matrix, row by row, so a square's index is
+	 * its feed's row times the days plus its day. It rests on the first feed's
+	 * newest day - the top row is the feed nearest to a rest. */
+	let feedPicked = $state<number | null>(null);
+	const feedRecords = $derived(
+		recordsOf(
+			data.feeds.flatMap((feed) =>
+				stripDates.map((date) =>
+					factsOf(
+						`${feed.feedId}, ${shortDate(date)}`,
+						[{ label: 'That day', value: feedSaid(feed.feedId, date) }],
+						'nothing on record'
+					)
+				)
+			)
+		)
+	);
+
+	/** Every square of both lists of sources, judged rows first, in the order a
+	 * reader meets them; the index of a square is its place here. */
+	const retiringSquares = $derived(
+		data.retiring === null
+			? []
+			: [...data.retiring.rows, ...data.retiring.unjudged].flatMap((row) =>
+					row.squares.map((square) => ({ sourceId: row.sourceId, square }))
+				)
+	);
+	const retiringIndex = $derived(
+		new Map(retiringSquares.map((one, index) => [`${one.sourceId}|${one.square.date}`, index]))
+	);
+	let retiringPicked = $state<number | null>(null);
+	const retiringRecords = $derived(
+		recordsOf(
+			retiringSquares.map((one) =>
+				factsOf(
+					`${one.sourceId}, ${shortDate(one.square.date)}`,
+					[{ label: 'That day', value: one.square.label }],
+					'nothing on record'
+				)
+			)
+		)
+	);
+	/** The newest day of the first source, the one closest to retiring. */
+	const retiringResting = $derived(
+		Math.max(0, (data.retiring?.rows[0]?.squares.length ?? 0) - 1)
+	);
 </script>
 
 <div data-console-panels="voices">
@@ -497,11 +552,23 @@
 			{data.feedRecord.runs === 1 ? 'run' : 'runs'}, so there is nothing to list.
 		</p>
 	{:else if data.feeds.length > 0}
+		<!-- One tab stop for the whole matrix. Left and Right step along a feed's
+		     days, Up and Down move to the same day of the feed above or below. -->
+		<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 		<div
 			class="console-table mt-3"
 			data-windowed="feed-outcomes"
 			data-window-days={windowDays}
-			data-readout-none="one square a day for every feed, each naming its own day and what that day did, so a strip would reprint the whole list"
+			data-readout-records={feedRecords.length}
+			tabindex="0"
+			role="group"
+			aria-label="Every feed's days, one square a day. Arrow keys read a square, Escape returns to the first feed's newest day."
+			use:markReadout={{
+				count: feedRecords.length,
+				walk: Math.max(1, stripDates.length),
+				onSelect: (index) => (feedPicked = index),
+				selected: feedPicked
+			}}
 			data-model-rule="no"
 			data-model-rule-name="feed-outcomes"
 			data-model-rule-none="a feed answered or it did not, before any summary was written"
@@ -512,7 +579,7 @@
 			</p>
 
 			<ol class="feed-rows" data-feeds="table" data-feeds-drawn={data.feeds.length} data-feeds-hidden={data.feedsHidden}>
-				{#each data.feeds as feed (feed.feedId)}
+				{#each data.feeds as feed, row (feed.feedId)}
 					<!-- The streak and the track length are published because they are what
 					     the marker is drawn from. A check that re-reads the bar's own
 					     numbers off the page cannot be fooled by a bar drawn to the wrong
@@ -550,17 +617,17 @@
 								data-feed-strip={feed.feedId}
 								style="grid-template-columns: repeat({stripDates.length}, {stripCell.cell}px); gap: {stripCell.gap}px"
 							>
-								{#each stripDates as date (date)}
+								{#each stripDates as date, column (date)}
 									{@const day = strips.get(feed.feedId)?.get(date) ?? null}
+									{@const at = row * stripDates.length + column}
 									<span
 										class="feed-square"
 										style="block-size: {stripCell.cell}px"
+										data-readout-at={at}
+										data-readout-picked={feedPicked === at ? 'yes' : undefined}
 										data-feed-day={date}
 										data-feed-outcome={day ? day.outcome : 'none'}
-										title={day ? day.label : `${shortDate(date)}: nothing on record.`}
-										aria-label="{feed.feedId} on {day
-											? day.label
-											: `${shortDate(date)}: nothing on record.`}"
+										aria-label="{feed.feedId} on {feedSaid(feed.feedId, date)}"
 										role="img"
 									></span>
 								{/each}
@@ -603,6 +670,18 @@
 				</p>
 			{/if}
 
+			{#if feedRecords.length > 0}
+				<!-- Directly under the day axis: the square a reader is on, in words. -->
+				<ChartReadout
+					readout={feedRecords[feedPicked ?? Math.max(0, stripDates.length - 1)] ?? null}
+					resting={feedPicked === null}
+					name="feed-outcomes"
+					maxShare={data.chart.readout_max_share}
+					restingNote=", its newest day"
+					hint="Point at a square to read it. Left and Right step through a feed's days, Up and Down move between feeds, Escape returns to rest."
+				/>
+			{/if}
+
 			<ul class="feed-key">
 				{#each FEED_KEY as entry (entry.outcome)}
 					<li><span class="feed-square" data-feed-outcome={entry.outcome}></span>{entry.text}</li>
@@ -623,6 +702,7 @@
 		     `collect.source_quality_dwell_days`, which the run applied when it read
 		     the record - a control that moved this span would be a control that
 		     lies about what will fire. Same argument the ranking weight makes. -->
+		<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 		<div
 			class="console-table mt-3"
 			data-retiring="table"
@@ -631,7 +711,19 @@
 			data-retiring-drawn={strip.rows.length}
 			data-retiring-hidden={strip.hidden}
 			data-retiring-cap={data.console.source_rows}
-			data-readout-none="one square a day for every source, each naming its own day and what that day did, so a strip would reprint the whole list"
+			data-readout-records={retiringRecords.length > 0 ? retiringRecords.length : undefined}
+			data-readout-none={retiringRecords.length > 0
+				? undefined
+				: 'no source has a day on record, so there is no square to read; agreed with Susan'}
+			tabindex={retiringRecords.length > 0 ? 0 : undefined}
+			role="group"
+			aria-label="Every source's days, one square a day. Arrow keys read a square, Escape returns to the first source's newest day."
+			use:markReadout={{
+				count: retiringRecords.length,
+				walk: Math.max(1, strip.dates.length),
+				onSelect: (index) => (retiringPicked = index),
+				selected: retiringPicked
+			}}
 			data-model-rule="no"
 			data-model-rule-name="source-yield"
 			data-model-rule-none="a source published an address or it did not, and no model was asked"
@@ -700,12 +792,14 @@
 										.length}, {dwellCell.cell}px); gap: {dwellCell.gap}px"
 								>
 									{#each row.squares as square (square.date)}
+										{@const at = retiringIndex.get(`${row.sourceId}|${square.date}`) ?? -1}
 										<span
 											class="feed-square"
 											style="block-size: {dwellCell.cell}px"
+											data-readout-at={at}
+											data-readout-picked={retiringPicked === at ? 'yes' : undefined}
 											data-retiring-day={square.date}
 											data-retiring-state={square.state}
-											title={square.label}
 											aria-label="{row.sourceId} on {square.label}"
 											role="img"
 										></span>
@@ -777,6 +871,18 @@
 					</p>
 				{/if}
 
+				{#if retiringRecords.length > 0}
+					<!-- Directly under the day axis: the square a reader is on, in words. -->
+					<ChartReadout
+						readout={retiringRecords[retiringPicked ?? retiringResting] ?? null}
+						resting={retiringPicked === null}
+						name="source-yield"
+						maxShare={data.chart.readout_max_share}
+						restingNote=", its newest day"
+						hint="Point at a square to read it. Left and Right step through a source's days, Up and Down move between sources, Escape returns to rest."
+					/>
+				{/if}
+
 				{#if strip.unjudged.length > 0}
 					<!-- Drawn, never hidden. A source under its evidence floors has a
 					     shape worth seeing; what it has not got is a number anybody may
@@ -807,12 +913,14 @@
 											.length}, {dwellCell.cell}px); gap: {dwellCell.gap}px"
 									>
 										{#each row.squares as square (square.date)}
+											{@const at = retiringIndex.get(`${row.sourceId}|${square.date}`) ?? -1}
 											<span
 												class="feed-square"
 												style="block-size: {dwellCell.cell}px"
+												data-readout-at={at}
+												data-readout-picked={retiringPicked === at ? 'yes' : undefined}
 												data-retiring-day={square.date}
 												data-retiring-state={square.state}
-												title={square.label}
 												aria-label="{row.sourceId} on {square.label}"
 												role="img"
 											></span>
@@ -1279,5 +1387,15 @@
 		.feed-axis {
 			margin-inline-start: 0;
 		}
+	}
+	/* The square the strip under the axis is reading. */
+	.feed-square[data-readout-picked] {
+		outline: 2px solid var(--color-focus);
+		outline-offset: 1px;
+	}
+
+	.console-table[role='group']:focus-visible {
+		outline: 2px solid var(--color-focus);
+		outline-offset: 4px;
 	}
 </style>
