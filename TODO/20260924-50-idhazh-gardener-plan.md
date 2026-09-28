@@ -24,23 +24,22 @@ and docs/how-to/run-the-gates.md. Then read this plan's section 0, section 1 (th
 Reckoner, the only tracker) and each row just before you dispatch it.
 
 STEP 1 - ADOPT OR CLOSE. Run git worktree list, gh pr list and git branch -r. At the last
-update nothing of this plan was in flight: rows 1 to 7 and 11 had merged (#1127, #1131,
-#1142, #1139, #1145, #1141, #1151, #1136), row 10 is collapsed, and the only plan-50
-worktree left was the owner's own, p50own, which holds no unpushed work.
+update rows 1 to 7 and 11 had merged (#1127, #1131, #1142, #1139, #1145, #1141, #1151,
+#1136), row 10 is collapsed, and row 8 was in flight: #1156, worktree p50r8, its
+worker finished and reported. The owner's own worktree, p50own, holds no unpushed work.
 Section 0's three plan-54 reads ran before row 5 and all three came back empty.
 
-STEP 2 - DISPATCH. Row 8 is ready now: rows 6 and 7 have merged. Row 7 merged on
-2026-09-28 at 17:22 UTC as #1151, and its findings are deviations 96 to 113. The pool
-runs one wide until row 8's worker REPORTS, because nothing else is ready. Refill a slot
-on a report, never on a merge. Two workers started together return together (deviation 94).
-  now                row 8. It PAUSES at ESCALATE trigger 1, before the commit that
-                     removes the pruned_date alias. Read deviations 14, 15, 17, 24, 55,
-                     81, 86, 90, 98, 110 and 114 to 117 first: each hands row 8 work a
-                     row before it left. It deletes prune.yml, so it merges only after
-                     the squash's first live run (WATCH below) and never while a
-                     prune.yml run is queued or running
+STEP 2 - DISPATCH. Row 8 is built and waits only for its merge. Its worker reported on
+2026-09-28; its findings are deviations 118 to 131 and three open questions for a person
+(section "Open questions for a person, from row 8"). ESCALATE trigger 1 was answered: the
+owner chose A3 (deviation 130), and the change is on #1156. Refill a slot on a report,
+never on a merge. Two workers started together return together (deviation 94).
+  merge row 8        only after the squash's first live run (WATCH below) has recorded
+                     the run and pushed without force, and never while a prune.yml run
+                     is queued or running. Then remove p50r8. Its named observation is
+                     the first idhazh-gardener.yml run after the merge
   after row 7        row 9. It also needs plan 51's row 7, the query door, merged. That
-                     row was in flight on 2026-09-28 (worktree p51r7). Row 9 also fires
+                     row was in flight on 2026-09-28 (#1154). Row 9 also fires
                      ESCALATE trigger 5, which is a person's pick, and deviation 112 is a
                      rename it owes before `scores` moves. If either is open when row 9 is
                      next, surface it to the person (CLAUDE.md section 0c). Do not build
@@ -201,6 +200,20 @@ Every place where the tree, or a ruling, departs from the text further down. A w
 | 115 | 8 | Three places name `prune.yml` and move with it: `pages.yml`'s upstream-workflow list, `docs/reference/github-actions.md` and the workflow harness tests | `pages.yml` does not name it: its `workflow_run` list is `[CI, Content refresh]`. Those that do are `docs/reference/github-actions.md`, `backend/tests/workflows/_harness.py`, `test_prune_push.py`, `test_staged_paths.py`, `test_triggers.py`, and a comment in `backend/tests/retention/test_score_ledger.py` | Found at dispatch |
 | 116 | 8 | File list: `backend/idhazh/gardener/tasks/github_collections.py` (new) and `backend/tests/gardener/tasks/test_github_collections.py`; trigger 2 names `push_rewritten_history.py` | The task module is `tasks/collection.py`, holding only `KIND` and `run`, and the GitHub code stays in `gardener/github_collections.py`, already tested by `backend/tests/gardener/test_github_collections.py` (deviation 14). The tip-moved refusal that trigger 2 guards now lives in `backend/utilities/corpus_history.py` (deviation 45) | Found at dispatch |
 | 117 | 8 | Section 5.9.11 and `prune.yml`'s header: a scheduled run starts 40 to 70 minutes after its cron minute (n=3, 2026-08-23 and 24) | Measured 2026-09-28: the last ten scheduled `prune.yml` runs (cron 23:37) were each created 112 to 139 minutes late, at 01:29 to 01:56 UTC. Over the same five days the last digest run of each day ended between 00:00 and 00:52 UTC, and the first began no earlier than 07:38. So a 00:40 wake starts about 02:30 to 03:00 and its force push lands by about 03:50, inside the gap on either model. Not trigger 4: section 4 holds no drift figure, and the chain fits. Row 8 restates the window derivation (decision 8) with these readings | Plan owner's measurement, 2026-09-28 |
+| 118 | 8 | Section 5.1: `cone_mb` on every record row | `cone_bytes`: exact, and empty when a hand run weighed nothing | Fowler, 2026-09-28 |
+| 119 | 8 | Section 5.2: `max_cone_mb` of 64 | 768, an estimate. The heaviest shard owns 46.3 MB today and grows about 1.4 MB a day, so 64 would turn red within two weeks and stay red | Carmack, 2026-09-28 |
+| 120 | 8 | A shard over the ceiling stops before any task runs | Its tasks still run and its record lands, then it exits 1: stopping first would block the deletions that shrink it | Fowler and Carmack, 2026-09-28 |
+| 121 | 8 | Section 5.9.11: `permissions` at workflow level | Set per job, and a test pins them | Fowler and Carmack, 2026-09-28 |
+| 122 | 8 | (not in the plan) | Both history checkouts pin `ref: main`; without it the tip check refuses on every due wake | Carmack, 2026-09-28 |
+| 123 | 8 | Section 5.9.7: the plan payload | The plan job also outputs one `run_id` for the whole wake | Row 8's worker, 2026-09-28 |
+| 124 | 8 | Section 5.6: a complement task asserts nothing about the working tree | The `trials` task's folders are in no shard's checkout, so it would fail at every wake. The shard adds them to its own checkout before any task runs: 952 bytes today | Fowler and Carmack, 2026-09-28 |
+| 125 | 8 | The retired `prune` block is refused through `knobs/removed.py` | Through `SUPERSEDED_APP_NAMES` in `contracts/app_config.py`, which is where a retired top-level key is already refused | Row 8's worker, 2026-09-28 |
+| 126 | 8 | Deviation 81: whether the runner refuses a history task outside its own job | It does, with exit 2, naming `backend/utilities/corpus_history.py` as the only program that runs it | Fowler and Carmack, 2026-09-28 |
+| 127 | 8 | (not in the plan) | A collection declaration names its collection in a `collection` key and is filed under that name; its window is whole days, and it owns no folder. `gardener_shards.py` joins the list of standard-library-only programs | Fowler and Carmack; the list is the worker's, 2026-09-28 |
+| 128 | 8 | (not in the plan) | CLAUDE.md section 8 and `AGENTS.md` name `idhazh-gardener.yml`'s history job as the standing force-push exception, no wider than before | Fowler and Carmack, 2026-09-28 |
+| 129 | 8 | Deviation 117 and decision 8: the force-push window | The timing test checks the push against the measured busy times of the other scheduled runs. At a start delay of 112 to 334 minutes, an estimate from `prune.yml`'s own lateness, plus 55 minutes of job limits, the push lands between 02:32 and 07:09 UTC. The quiet time runs from 01:23, when the council's latest run ends, to 07:23, when the first digest run is created: 69 minutes of margin before and 14 after. The scheduled wakes before the first due squash, about 2026-10-29, replace the estimate, and the test turns red if the real delay leaves the window | Carmack, 2026-09-28 |
+| 130 | 8 | ESCALATE trigger 1 | The owner chose A3 on 2026-09-28: the old name goes in row 8, which merges only after the squash's first live run has rewritten `corpus/corpus.meta.json` and pushed. The worker held the change as a patch outside the repository; the plan owner applied it to #1156 and stamped the changelog entry `2026-09-28T21:00`. Until about 2026-10-28 GitHub allows a re-run of a digest run from before the rename, which would write the old name back; that now stops the harvest and the squash loudly, and cannot cause a wrong force push | Owner, 2026-09-28 |
+| 131 | all | (not in the plan) | Plan 52's doc reached main with two lines using the word the ledger sweep refuses, so every pull request's test job failed. The plan owner changed both to "Keep" on main, the words #1154 also carries | Plan owner, 2026-09-28 |
 
 ## 0. Operating contract
 
@@ -2172,6 +2185,14 @@ def squash_history(repo: Path, *, keep_days: int, now: datetime, message: str) -
   | 2 | **Not in row 7 and not in row 8.** Row 7 would roughly double and the fold would stop from its merge to row 8's; row 8 already carries the workflow rename and ESCALATE trigger 1 | Fowler and Carmack, 2026-09-28 |
 
 ---
+
+## Open questions for a person, from row 8
+
+Row 8 shipped each of these as the plan wrote it. None blocks a row; each needs a person, because it changes an owner's ruling, a trigger's subject or a growing read.
+
+1. **The history job's start condition.** It runs only when every `run-tasks` shard succeeded or none ran (row 8 decision 4). So one red shard skips that day's squash, which is then due again at the next wake, while a failed `plan` job does not skip it. Row 8's worker proposes `if: ${{ !cancelled() }}`: the squash would then run on a day a shard is red, and the red shard's work is retried at the next wake either way. Changing it overturns an owner ruling of 2026-09-24 and 2026-09-26.
+2. **The gap between the tip check and the force push** (ESCALATE trigger 2). `corpus_history.py` reads origin's tip, then pushes with `--force`; a commit landing between the two is lost. `--force-with-lease=refs/heads/main:<tip>` would make GitHub refuse the push instead. Any change here is trigger 2.
+3. **The `run-tasks` checkout is a growing read** (Guardrail #12). Each shard checks out the folders its tasks own, and those grow with what the repository keeps while every task is report-only: the heaviest shard holds 46.3 MB today and grows about 1.4 MB a day. Section 5.6 said it stops growing once its tasks run live; for this shard that is false for about a year. `max_cone_mb: 768` turns a shard red before it grows unseen, and `docs/concepts/growing-reads.md` records the read. A person approves it or names the bound.
 
 ## Dependent plans
 
