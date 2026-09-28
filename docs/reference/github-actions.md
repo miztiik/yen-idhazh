@@ -525,37 +525,39 @@ path - the real fetcher, the real extractor, the real two calls, the real model
 server - over two articles, three times over, and reports what each pass cost.
 It publishes nothing a reader sees: no step writes `frontend/public/` and no
 page is on any reader's path. It does commit one thing. A second `commit` job
-appends what each case measured - its span rollup and its traces - under that
-case's own trial root, which no console page reads, and what the passes produced
-otherwise leaves as a 90-day artifact.
+appends what each test case measured - its span rollup and its traces - under
+that test case's own trial root, which no console page reads, and what the
+passes produced otherwise leaves as a 90-day artifact.
 
-**The write is one job's, and the reading job never has it.** The `cases` job
-holds `contents: read`; the `commit` job holds `contents: write` and runs no
-case. The two meet through an artifact, and the artifact is read before anything
-is staged: `backend/utilities/pipeline_test_ledgers.py` takes every downloaded
-row through the contract its ledger declares and every directory name out of
-`config/pipeline-tests.json`, so nothing a fetched page touched decides a path
-(Guardrail #11). A refusal ends the job with nothing staged. The split bounds
-what a bad push could reach; the check is the control.
+**The write is one job's, and the reading job never has it.** The `test-cases`
+job holds `contents: read`; the `commit` job holds `contents: write` and runs no
+test case. The two meet through an artifact, and the artifact is read before
+anything is staged: `backend/utilities/pipeline_test_ledgers.py` takes every
+downloaded row through the contract its ledger declares and every directory name
+out of `config/pipeline-tests.json`, so nothing a fetched page touched decides a
+path (Guardrail #11). A refusal ends the job with nothing staged. The split
+bounds what a bad push could reach; the check is the control.
 
-**Each case writes its own trial root.** The three cases share one plan, so they
-share a run id, a shard, a job and an attempt - which is the whole of a writer's
-filename. Without a root each, the last case to write would be the only one
-anybody could read. `backend/utilities/pipeline_case_config.py` names them
-`pipeline-tests-<case>`, side by side under `state/` rather than nested, because
-`run.trial_state_dirname` is a slug and a slug holds no separator.
+**Each test case writes its own trial root.** The three test cases share one
+plan, so they share a run id, a shard, a job and an attempt - which is the whole
+of a writer's filename. Without a root each, the last test case to write would
+be the only one anybody could read.
+`backend/utilities/pipeline_test_case_config.py` names them `pipeline-tests-<id>`,
+side by side under `state/` rather than nested, because `run.trial_state_dirname`
+is a slug and a slug holds no separator.
 
 **The dispatch takes one field, and it names the model.** Leave
-`candidate_models_file` empty and the cases run the model `config/idhazh.json`
-already names, which is what every reading this workflow has taken. Name a file
-under `config/models/` and a scratch copy of `config/` points at it, every case
-is cut from that copy, and the real prompts and the real two calls run on those
-weights - so the cheapest real-path check of a candidate is a dispatch here
-rather than a bench. What it settles and what it does not is in
+`candidate_models_file` empty and the test cases run the model
+`config/idhazh.json` already names, which is what every reading this workflow
+has taken. Name a file under `config/models/` and a scratch copy of `config/`
+points at it, every test case is cut from that copy, and the real prompts and
+the real two calls run on those weights - so the cheapest real-path check of a
+candidate is a dispatch here rather than a bench. What it settles and what it
+does not is in
 [../how-to/evaluate-new-summarizer-model.md](../how-to/evaluate-new-summarizer-model.md#the-cheapest-check-is-the-pipeline-tests-and-it-uses-the-real-prompts).
 The committed config is never written: the scratch copy differs in one line, and
-in `run.trial_state_dirname`, which puts each case's own ledgers under
-`state/pipeline-tests-<case>/` rather than beside the rows the console reads.
+in `run.trial_state_dirname`, which puts each test case's own ledgers under
+`state/pipeline-tests-<id>/` rather than beside the rows the console reads.
 
 **The two articles are drawn, not fixed.** `config/pipeline-tests.json` holds at
 least twenty candidate addresses, each one an article this pipeline has really
@@ -565,44 +567,46 @@ prints the seed beside the pair. A fixed pair would pass for as long as those
 two pages stayed up and say nothing about anything else the extractor meets; a
 draw with no seed printed could not be replayed.
 
-**The draw happens once, before any case starts.** One step draws, one step turns
-the pair into a run plan, and all three cases run that one plan - so the three
-record the same two item ids and the numbers between them can be subtracted. The
-final step compares what each case recorded against what the plan asked for and
-fails the job when they disagree, because an address that 404s would otherwise
-leave one case with one item and three rows of plausible numbers.
+**The draw happens once, before any test case starts.** One step draws, one step
+turns the pair into a run plan, and all three test cases run that one plan - so
+the three record the same two item ids and the numbers between them can be
+subtracted. The final step compares what each test case recorded against what the
+plan asked for and fails the job when they disagree, because an address that 404s
+would otherwise leave one test case with one item and three rows of plausible
+numbers.
 
-**Three cases, in sequence, on one runner, and never a matrix.** Prefill spans
-4.2x between GitHub-hosted runners ([pipeline-cost.md](pipeline-cost.md)), which
-is larger than anything a case here is looking for, so three jobs would report
-the three hosts they drew. Sequential on one box cancels the host.
+**Three test cases, in sequence, on one runner, and never a matrix.** Prefill
+spans 4.2x between GitHub-hosted runners ([pipeline-cost.md](pipeline-cost.md)),
+which is larger than anything a test case here is looking for, so three jobs
+would report the three hosts they drew. Sequential on one box cancels the host.
 
-| Case | What it changes | What the difference prices |
+| Test case | What it changes | What the difference prices |
 | --- | --- | --- |
 | `baseline` | nothing - the production path exactly | the number the other two are read against |
 | `no-visual-decision` | no picture is reachable, so the summarize-and-plan call returns the summary alone | the visual plan's decode, on the same server process |
 | `parallel-2` | two server slots, and the window doubled with them | decode throughput at two slots, plus a second model load |
 
-Each case is a step rather than an iteration of a loop, so the run page shows
-each case's own wall clock. Every case setting is in config (Guardrail #6): the
-addresses, the draw size, the job bound, the slot counts and the windows. One
-step writes a config root per case from the committed `config/`, differing only
-in what that case changes, and the committed config is never edited - a case that
-edited it would leave the next case reading whatever the last one wrote.
+Each test case is a step rather than an iteration of a loop, so the run page
+shows each test case's own wall clock. Every test case setting is in config
+(Guardrail #6): the addresses, the draw size, the job bound, the slot counts and
+the windows. One step writes a config root per test case from the committed
+`config/`, differing only in what that test case changes, and the committed
+config is never edited - a test case that edited it would leave the next test
+case reading whatever the last one wrote.
 
-**The parallel case doubles `n_ctx` because llama-server divides the window it is
-given between its slots.** Two slots on the committed 65,536 is a 32,768-token
-slot, and the worst article the truncation cap admits needs 64,699 - so leaving
-the window alone would make that case a test of a smaller window wearing a
-concurrency case's name. The slot count is fixed when the process starts, which
-is why that case costs a restart and a second model load.
+**The parallel test case doubles `n_ctx` because llama-server divides the window
+it is given between its slots.** Two slots on the committed 65,536 is a
+32,768-token slot, and the worst article the truncation cap admits needs 64,699 -
+so leaving the window alone would make that test case a test of a smaller window
+wearing a concurrency test case's name. The slot count is fixed when the process
+starts, which is why that test case costs a restart and a second model load.
 
 Two things one dispatch cannot settle. **Whether two articles are representative
 of the eighty a production day carries - they are not**, and the draw is what
 stops them being representative of nothing instead. And the faithfulness scorer,
-which every case skips: it is a second model download, it is identical across the
-cases so it cancels from every comparison here, and it is not what the two-call
-path is being measured for.
+which every test case skips: it is a second model download, it is identical
+across the test cases so it cancels from every comparison here, and it is not
+what the two-call path is being measured for.
 
 ## Display names and files
 

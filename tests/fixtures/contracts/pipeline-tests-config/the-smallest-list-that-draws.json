@@ -23,7 +23,7 @@
     {"source_id": "feed-18","title": "Fixture story 18","url": "https://example.test/18"},
     {"source_id": "feed-19","title": "Fixture story 19","url": "https://example.test/19"}
   ],
-  "cases": [
+  "test_cases": [
     {"asks_for_a_visual_plan": true,"id": "baseline","n_ctx": null,"n_parallel": null},
     {"asks_for_a_visual_plan": false,"id": "no-picture","n_ctx": null,"n_parallel": null}
   ],
