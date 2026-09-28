@@ -2,7 +2,7 @@
 
 **Last Updated**: 2026-09-28
 
-**Twenty-three defects are open.** Two of them need evidence or a ruling before any code
+**Twenty-four defects are open.** Two of them need evidence or a ruling before any code
 is worth writing, and two more wait on one design ruling; the rest are known fixes
 with named blast radiuses.
 Defect 2 needed three repairs before a person could label anything, and all three
@@ -20,7 +20,9 @@ two of the chart colours look the same, and that row put them side by side.
 Defects 38 to 47 were filed on 2026-09-28 from what plan 51's rows found outside
 their own files: 38 and 39 wait on one Susan ruling about which machines get a
 colour, and each of the other eight names the change or the plan row that fixes
-it.
+it. Defect 48 was filed the same day, while plan 51's row 5 merged: GitHub stamps
+its squash merges in local time, and one account setting is the first thing to
+try.
 **This file cannot
 be deleted by writing more of it.**
 
@@ -76,6 +78,33 @@ decision. Current project behaviour belongs in `docs/` (Guardrail #4).
 | 45 | A change to `Panel.svelte` does not buy the console tests on a pull request | 2 | **OPEN - one pattern in the selector and a truth-table case** |
 | 46 | `DateSeries` cannot draw the settings-change rule that gate 6 asks of every trend | 2 | **OPEN - plan 52's row 26, before a date series is judged** |
 | 47 | The Pipelines route draws no panel ids, so the pictures and gates reach 15 panels, not 26 | 2 | **OPEN - a plan 52 route row gives each section an id** |
+| 48 | GitHub stamps its squash merges in local time, `+02:00`, not UTC | 1 | **OPEN - one account setting to try, then one merge to read** |
+
+## 48 - GitHub stamps its squash merges in local time, `+02:00`, not UTC (OPEN)
+
+**Every squash merge GitHub writes on `main` carries a `+02:00` offset**, for its
+author and its committer time alike. All 39 of GitHub's commits among `main`'s
+last 200 read that way on 2026-09-28, while every commit the pipeline's runner
+writes ends in `Z`. The instant is right and only its offset is wrong, but
+CLAUDE.md section 2 says a commit time is UTC, and two such times compared as text
+rather than as instants sort a merge and a pipeline commit in the wrong order.
+The one program here that reads commit dates, `backend/utilities/corpus_history.py`,
+decides by `%at`, which carries no offset, so no decision reads it today; its
+dry-run line prints the boundary's author time with whatever offset that commit
+carries.
+
+**The home is outside the repository, and it is not yet known where.** A commit
+made on this machine takes `TZ=UTC` for the commit
+([`docs/reference/agent-notes/git-and-github.md`](../docs/reference/agent-notes/git-and-github.md)),
+and a merge GitHub writes takes no such switch. The likeliest source is the
+time-zone setting of the account that merges - an estimate, not measured. One
+merge settles it: set that zone to UTC, merge one pull request, and read
+`git log -1 --format=%cI` on the merge. If the offset stays, the remaining choice
+is between living with it and merging on this machine under `TZ=UTC`, which
+changes how every row merges. Level 1 - a wrong offset is visible on the commit
+that carries it, and nothing depends on it.
+
+Found on 2026-09-28 by plan 51's owner, while merging that plan's row 5.
 
 ## 47 - The Pipelines route draws no panel ids, so the pictures and gates reach 15 panels, not 26 (OPEN)
 
