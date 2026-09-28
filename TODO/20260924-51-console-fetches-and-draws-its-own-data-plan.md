@@ -27,23 +27,26 @@ output to a file under %TEMP%, then read the file. Then read this plan's section
 section 1 (the Status Reckoner, the only tracker), section 2.2, and each row just before
 you dispatch it.
 
-STEP 1 - ADOPT OR CLOSE. Run git worktree list, gh pr list and git branch -vv. At
-handover nothing of this plan was in flight. Rows 1, 2, 4, 5 and 6 had merged (#1138,
-#1140, #1137, #1143, #1144), and so had #1146, this run's tool notes and defects 38 to
-47. This run's worktrees, local branches and leftover folders were all swept on
-2026-09-28, so any plan 51 checkout you find was made after the handover.
+STEP 1 - ADOPT OR CLOSE. Run git worktree list, gh pr list and git branch -vv. At the
+last update, 2026-09-28 at about 21:30 UTC, nothing of this plan was in flight. Rows 1,
+2, 4, 5, 6 and 7 had merged (#1138, #1140, #1137, #1143, #1144, #1154), and so had
+#1146, this run's tool notes and defects 38 to 47. This run's worktrees, local branches
+and leftover folders were all swept, row 7's after its merge, so any plan 51 checkout
+you find was made after that update.
 
 STEP 2 - DISPATCH. Row 7 merged on 2026-09-28 (#1154). Its open questions were
 settled by Carmack and Fowler before dispatch - row 7's decisions 10 to 18 and
 deviations 7 to 12 - and its parquet reader by the owner (deviations 14 and 15).
-Nothing is ready now: row 3 waits on plan 50's rows 7 and 9, and row 8 on row 3.
-  after row 7 merges       tell the person that plan 50's row 9 no longer waits on
-                           this plan, and that its three readers import
-                           sliceFromDisk() from frontend/src/lib/server/
-                           (deviation 9).
-  after plan 50's rows     row 3. Row 2's text says row 3 must date the completeness
-  7 and 9 merge            sentence from the newest compacted day, not from
-                           generated_at, but row 3's file list does not name
+The person was told the same evening that plan 50's row 9 no longer waits on this
+plan, and that its readers import sliceFromDisk() from frontend/src/lib/server/.
+Nothing is ready now. Row 3 needs packed files of its three ledgers on main, and row
+8 needs row 3 (deviation 16). Measured on main at e5a0f8718: state/compact/ does not
+exist, the three ledgers are still CSV, and every packing task is report-only.
+  after packed files of    row 3. They reach main by the route the person picks in
+  the three ledgers are    OPEN FOR THE PERSON below, and never before plan 50's row
+  on main                  9 merges. Row 2's text says row 3 must date the
+                           completeness sentence from the newest compacted day, not
+                           from generated_at, but row 3's file list does not name
                            frontend/src/lib/console/completeness.ts. Settle it at
                            dispatch.
   after rows 3 and 7       row 8. Get Susan's ruling on defect 38 first: does speed or
@@ -84,12 +87,18 @@ for it (docs/reference/agent-notes/git-and-github.md), and a plan-doc stamp push
 straight to the trunk is such a commit. GitHub's own squash merges carry the same
 offset; that is defect 48, and it is not this plan's to fix.
 
-OPEN FOR THE PERSON. Ask in one message, in the shape CLAUDE.md section 0c gives:
-  1. Whether a /console/query page gets a plan of its own. Row 7 builds no page: the
-     door is a module a chart calls. Plan 50 records a query page as its own plan, and
-     inside this plan it would fire ESCALATE trigger 1, a tenth prerendered route.
-  The owner answered the other question on 2026-09-28: d3-sankey lays the flow out
-  (deviation 13).
+OPEN FOR THE PERSON. Asked on 2026-09-28 at about 21:30 UTC, in the shape CLAUDE.md
+section 0c gives, and not yet answered:
+  1. How packed files of item-health, scores and host-fingerprint first reach main.
+     Plan 50's row 9 ships their three packing tasks report-only, and every reader it
+     moves reads packed files only (plan 50 deviations 132 and 133). The choices put
+     to the person: row 9's one-time migration packs every finished day itself and
+     the tasks stay report-only; or the three tasks go live in row 9's pull request
+     with max_periods_per_run raised from 8; or they onboard report-only, and four
+     console routes show "missing" until they go live. The plan owner recommended
+     the first.
+  Answered on 2026-09-28: plan 55 is the query page's own plan, and d3-sankey lays the
+  flow out (deviation 13).
 ```
 
 ### Deviations and owner rulings to date
@@ -113,6 +122,7 @@ Only what no row records. Each row's own departures are in its decisions and its
 | 13 | 4 | Decision 6: the flow's layout is our own arithmetic on `d3-shape`, and `d3-sankey` is not taken | d3-sankey 0.12.3 lays the flow out. The flow keeps two rules of its own on top of it: each node sits in the column of its depth, so a drop stays beside its stage, and each column is stacked again from the shared top edge. The owner put the added weight at about 2 KB gzipped and asked for no measurement. The vocabulary page carries the reasons | Owner, 2026-09-28 |
 | 14 | 7 | Decision 11 as set at dispatch: the engine is pinned exactly at `1.33.1-dev57.0` | The engine takes a caret range like every other dependency, and the test is the guard: the door's oracle runs against whatever version is installed, so an upgrade that changed a behaviour turns it red on the pull request that raised the version, which a pin would only have delayed. Plan 55 takes the engine the same way | Owner, 2026-09-28 |
 | 15 | 7 | Row 7's scope: no config change. Its ESCALATE note: host the parquet add-on on this site, checked against a digest, with the native engine for the Node half | The engine downloads its parquet add-on from DuckDB's own host, as it does on any site. One config value, `ledger.engine_extension_repository`, tells the engine where and gives the page's `connect-src` that one origin. The door's oracle downloads the add-on once on a fresh machine, which is the one exception to "no test touches the network". The owner ruled that the trust-boundary guardrail does not apply to this download and that the guardrail's text stays as it is | Owner, 2026-09-28 |
+| 16 | 3, 8 | Row 3 depends on plan 50's rows 7 and 9 | Row 3 also needs packed files of its three ledgers on main. Its decision 5 sets each ceiling from a built index, and no index exists until something packs a day. Plan 50's row 9 ships the three packing tasks report-only (plan 50 deviation 98), so row 3 cannot start the day row 9 merges unless packed files reach main another way. Row 9 also misses two readers of these ledgers, `evalRows()` and `itemHealthRows()` in `payload.ts` (plan 50 deviation 132). The person was asked how packed files first reach main (OPEN FOR THE PERSON) | Plan owner, measured on main at e5a0f8718, 2026-09-28 |
 
 ## 0. Operating contract
 
