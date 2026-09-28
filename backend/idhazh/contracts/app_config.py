@@ -101,6 +101,11 @@ class AppConfig(Contract):
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-27T22:00",
+            change="console.completeness_grace_days, additive, default 1.",
+            why="The console says its record has stopped once a whole UTC day has none.",
+        ),
+        ChangelogEntry(
             version="2026-09-27",
             change="ledger block, additive: format, two compressions and the published list.",
             why="The ledger door reads its format and compressions from config, not from source.",
@@ -114,11 +119,6 @@ class AppConfig(Contract):
             version="2026-09-23",
             change="model_server.base_url, additive, default http://127.0.0.1:8080.",
             why="The address a stage posts to was three python constants and no config value.",
-        ),
-        ChangelogEntry(
-            version="2026-09-22T16:00",
-            change="run.qualification_repeats, additive, default 3, floor 3, ceiling 10.",
-            why="The replay count is a knob with a floor, not a dispatch input that could be 1.",
         ),
         ChangelogEntry(
             version="2026-08-21",
