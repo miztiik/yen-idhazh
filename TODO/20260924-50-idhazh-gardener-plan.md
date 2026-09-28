@@ -35,7 +35,10 @@ runs one wide until row 8's worker REPORTS, because nothing else is ready. Refil
 on a report, never on a merge. Two workers started together return together (deviation 94).
   now                row 8. It PAUSES at ESCALATE trigger 1, before the commit that
                      removes the pruned_date alias. Read deviations 14, 15, 17, 24, 55,
-                     81, 86, 90, 98 and 110 first: each hands row 8 work a row before it left
+                     81, 86, 90, 98, 110 and 114 to 117 first: each hands row 8 work a
+                     row before it left. It deletes prune.yml, so it merges only after
+                     the squash's first live run (WATCH below) and never while a
+                     prune.yml run is queued or running
   after row 7        row 9. It also needs plan 51's row 7, the query door, merged. That
                      row was in flight on 2026-09-28 (worktree p51r7). Row 9 also fires
                      ESCALATE trigger 5, which is a person's pick, and deviation 112 is a
@@ -65,7 +68,9 @@ execute-a-plan.md.
 
 WATCH, whoever owns the plan on the day:
   2026-09-29 onward  the corpus squash is due. prune.yml wakes at 23:37 UTC, and its runs
-                     have started about two hours late. This is the first live run of
+                     start about two hours late (deviation 117), so the first due run is
+                     the one created about 01:30 to 02:00 UTC on 2026-09-29. This is the
+                     first live run of
                      backend/utilities/corpus_history.py: it should record the run and
                      push without force, because no commit is old enough (deviation 54)
   about 2026-10-29   the first squash that rewrites history replays six September merge
@@ -192,6 +197,10 @@ Every place where the tree, or a ruling, departs from the text further down. A w
 | 111 | 7 | Row 7's file list | Also touched: `backend/idhazh/config.py`, `ledger/keys.py`, `ledger/rows.py`, `ledger/__init__.py`, `test_task_registry.py`, `test_gardener_config.py`, `_ledger_derivation.py`, `test_ledger_door_jobs.py`, `persistence.md` and `docs/reference/agent-notes/browser.md`. `docs/reference/github-actions.md` was not: nothing it states changed | Found at build |
 | 112 | 9 | (not in the plan) | `scores` rows carry an `attempt` field of their own, and since deviation 104 the door refuses a row whose own `attempt` differs from its writer's. One of the two needs a new name before row 9 moves `scores` onto the door; `persistence.md` says so | Row 7's worker, 2026-09-28 |
 | 113 | 7 | (another plan) | Plan 51's freshness paragraph said `compact_after_hours: 24`, and read as if compact files would appear on their own. It now says `compact_after_days: 1` (deviation 99), and one added sentence says every compaction ships report-only until a person turns it on (deviation 98). Corrected on main by this plan's owner | Plan owner, 2026-09-28 |
+| 114 | 8 | Oracle: `fetch-depth: 0` appears in exactly one job of one workflow, the history job's second checkout | `ci.yml` already takes two full clones, at its lines 64 and 111, in jobs that never push. The rule's own reason is a job that commits paying for a clone it does not use, so it binds jobs that commit or push: among those, only the history job's second checkout takes `fetch-depth: 0` | Found at dispatch |
+| 115 | 8 | Three places name `prune.yml` and move with it: `pages.yml`'s upstream-workflow list, `docs/reference/github-actions.md` and the workflow harness tests | `pages.yml` does not name it: its `workflow_run` list is `[CI, Content refresh]`. Those that do are `docs/reference/github-actions.md`, `backend/tests/workflows/_harness.py`, `test_prune_push.py`, `test_staged_paths.py`, `test_triggers.py`, and a comment in `backend/tests/retention/test_score_ledger.py` | Found at dispatch |
+| 116 | 8 | File list: `backend/idhazh/gardener/tasks/github_collections.py` (new) and `backend/tests/gardener/tasks/test_github_collections.py`; trigger 2 names `push_rewritten_history.py` | The task module is `tasks/collection.py`, holding only `KIND` and `run`, and the GitHub code stays in `gardener/github_collections.py`, already tested by `backend/tests/gardener/test_github_collections.py` (deviation 14). The tip-moved refusal that trigger 2 guards now lives in `backend/utilities/corpus_history.py` (deviation 45) | Found at dispatch |
+| 117 | 8 | Section 5.9.11 and `prune.yml`'s header: a scheduled run starts 40 to 70 minutes after its cron minute (n=3, 2026-08-23 and 24) | Measured 2026-09-28: the last ten scheduled `prune.yml` runs (cron 23:37) were each created 112 to 139 minutes late, at 01:29 to 01:56 UTC. Over the same five days the last digest run of each day ended between 00:00 and 00:52 UTC, and the first began no earlier than 07:38. So a 00:40 wake starts about 02:30 to 03:00 and its force push lands by about 03:50, inside the gap on either model. Not trigger 4: section 4 holds no drift figure, and the chain fits. Row 8 restates the window derivation (decision 8) with these readings | Plan owner's measurement, 2026-09-28 |
 
 ## 0. Operating contract
 
