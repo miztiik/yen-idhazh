@@ -18,13 +18,17 @@
  * negative width. The stepped list prints each stage's own numbers and says
  * why there is no diagram.
  *
- * The layout is written here rather than taken from d3-sankey: a straight
- * funnel has no crossings, merges or loops, which are the only cases a general
- * layout solves, and d3-sankey's layout spreads each column's spare height
- * between its nodes, which moves the main line off the shared top edge. The
+ * d3-sankey lays the flow out, and two of the funnel's own rules are put back
+ * on it. Every node sits in the column of its own depth (`sankeyLeft`): the
+ * library's default sends each node with nothing leaving it to the last
+ * column, which would put every drop at the far edge. And the library spreads
+ * each column's spare height between the nodes in it, which moves the main
+ * line off the shared top edge, so each column is stacked again from the top
+ * before the library attaches the ribbons where the nodes now stand. The
  * ribbons are filled shapes on `curveBumpX`, the curve d3's own link generator
  * uses, so two ribbons meeting at a bend never overlap as stroked lines do.
  */
+import { sankey, sankeyLeft, type SankeyLink, type SankeyNode } from 'd3-sankey';
 import { area, curveBumpX } from 'd3-shape';
 
 import type { Frame } from '../frame';
@@ -160,6 +164,13 @@ const ribbon = area<Edge>()
 	.y1((edge) => edge.y1)
 	.curve(curveBumpX);
 
+/** A stage or a drop, as the layout sees it. `layer` is the column the library
+ * drew it in, which the library writes and its type definitions leave out. */
+type Stop = { id: string; label: string; drop: boolean; layer?: number };
+
+/** What carries on to the next stage, or what one stage lost. */
+type Carry = { drop: boolean };
+
 function diagram(stages: readonly FlowStageInput[], opts: FlowOptions): FlowGeometry | SteppedGeometry {
 	const box = opts.frame;
 	const last = stages.length - 1;
@@ -169,7 +180,6 @@ function diagram(stages: readonly FlowStageInput[], opts: FlowOptions): FlowGeom
 	if (columns > 1 && pitch <= opts.nodeWidth) {
 		return stepped(stages, 'This panel is too narrow to hold a column for every stage, so the stages are listed.');
 	}
-	const columnX = (column: number) => box.left + column * pitch;
 
 	// A column holds its own stage and the drops of the stage before it, and
 	// in a balanced flow those add up to what arrived at that earlier stage.
@@ -182,66 +192,93 @@ function diagram(stages: readonly FlowStageInput[], opts: FlowOptions): FlowGeom
 	if (!(perItem > 0) || !Number.isFinite(perItem)) {
 		return stepped(stages, 'This panel is too short to draw every branch with room between them, so the stages are listed.');
 	}
+	if (columns === 1) {
+		// One stage that lost nothing is one bar: there is nothing to lay out.
+		const only = stages[0];
+		const bar: FlowNode = {
+			label: only.label,
+			value: only.arrived,
+			column: 0,
+			x: box.left,
+			y: box.top,
+			width: opts.nodeWidth,
+			height: only.arrived * perItem,
+			drop: false
+		};
+		return { kind: 'diagram', frame: box, columns, nodes: [bar], ribbons: [] };
+	}
 
-	const nodes: FlowNode[] = stages.map((stage, index) => ({
+	// Stages first, so every column lists its own stage above the drops that land in it.
+	const stops: SankeyNode<Stop, Carry>[] = stages.map((stage, index) => ({
+		id: `stage-${index}`,
 		label: stage.label,
-		value: stage.arrived,
-		column: index,
-		x: columnX(index),
-		y: box.top,
-		width: opts.nodeWidth,
-		height: stage.arrived * perItem,
-		drop: false
+		drop: false,
+		fixedValue: stage.arrived
 	}));
-	const ribbons: FlowRibbon[] = [];
+	const carries: SankeyLink<Stop, Carry>[] = [];
 	stages.forEach((stage, index) => {
-		const from = columnX(index) + opts.nodeWidth;
-		const to = columnX(index + 1);
-		const carried = box.top + stage.left * perItem;
-		if (index < last && stage.left > 0) {
-			ribbons.push({
-				from: stage.label,
-				to: stages[index + 1].label,
-				value: stage.left,
-				drop: false,
-				path:
-					ribbon([
-						{ x: from, y0: box.top, y1: carried },
-						{ x: to, y0: box.top, y1: carried }
-					]) ?? ''
-			});
-		}
-		// Each drop leaves from under the flow that carried on, and lands in the
-		// next column under the stage there, one gap below it.
-		let source = carried;
-		let target = index < last ? box.top + stages[index + 1].arrived * perItem + opts.nodeGap : box.top;
-		for (const drop of lostAt(index)) {
-			const height = drop.count * perItem;
-			nodes.push({
-				label: drop.label,
-				value: drop.count,
-				column: index + 1,
-				x: to,
-				y: target,
-				width: opts.nodeWidth,
-				height,
-				drop: true
-			});
-			ribbons.push({
-				from: stage.label,
-				to: drop.label,
-				value: drop.count,
-				drop: true,
-				path:
-					ribbon([
-						{ x: from, y0: source, y1: source + height },
-						{ x: to, y0: target, y1: target + height }
-					]) ?? ''
-			});
-			source += height;
-			target += height + opts.nodeGap;
-		}
+		// A carry of zero stays in the graph, so every later stage keeps the column of its own depth.
+		if (index < last) carries.push({ source: `stage-${index}`, target: `stage-${index + 1}`, value: stage.left, drop: false });
+		lostAt(index).forEach((drop, order) => {
+			const id = `drop-${index}-${order}`;
+			stops.push({ id, label: drop.label, drop: true });
+			carries.push({ source: `stage-${index}`, target: id, value: drop.count, drop: true });
+		});
 	});
+
+	const layout = sankey<Stop, Carry>()
+		.nodeId((stop) => stop.id)
+		.nodeAlign(sankeyLeft)
+		.nodeSort(null)
+		.linkSort(null)
+		.iterations(0)
+		.nodeWidth(opts.nodeWidth)
+		.nodePadding(opts.nodeGap)
+		.extent([
+			[box.left, box.top],
+			[box.left + box.innerWidth, box.top + box.innerHeight]
+		]);
+	const graph = layout({ nodes: stops, links: carries });
+	const below = new Map<number, number>();
+	for (const node of graph.nodes) {
+		const column = node.layer ?? 0;
+		const height = (node.y1 ?? 0) - (node.y0 ?? 0);
+		node.y0 = below.get(column) ?? box.top;
+		node.y1 = node.y0 + height;
+		below.set(column, node.y1 + opts.nodeGap);
+	}
+	layout.update(graph);
+
+	const nodes: FlowNode[] = graph.nodes.map((node) => ({
+		label: node.label,
+		value: node.value ?? 0,
+		column: node.layer ?? 0,
+		x: node.x0 ?? 0,
+		y: node.y0 ?? 0,
+		width: (node.x1 ?? 0) - (node.x0 ?? 0),
+		height: (node.y1 ?? 0) - (node.y0 ?? 0),
+		drop: node.drop
+	}));
+	const ribbons: FlowRibbon[] = graph.links
+		.filter((link) => link.value > 0)
+		.map((link) => {
+			const from = link.source as SankeyNode<Stop, Carry>;
+			const to = link.target as SankeyNode<Stop, Carry>;
+			const half = (link.width ?? 0) / 2;
+			const leaves = link.y0 ?? 0;
+			const lands = link.y1 ?? 0;
+			return {
+				from: from.label,
+				to: to.label,
+				value: link.value,
+				drop: link.drop,
+				path:
+					ribbon([
+						{ x: from.x1 ?? 0, y0: leaves - half, y1: leaves + half },
+						{ x: to.x0 ?? 0, y0: lands - half, y1: lands + half }
+					]) ?? ''
+			};
+		});
 	return { kind: 'diagram', frame: box, columns, nodes, ribbons };
 }
 
