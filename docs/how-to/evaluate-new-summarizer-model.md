@@ -55,9 +55,9 @@ gh workflow run idhazh-pipeline-tests.yaml \
 Type nothing and it runs the configured model, which is what it did before the
 field existed.
 
-**What it costs.** One dispatch took 106 minutes on 2026-09-15 - three cases
-over two articles, of which 105 minutes were the cases themselves and under a
-minute was setup. One dispatch, so there is no spread. A bench dispatch of
+**What it costs.** One dispatch took 106 minutes on 2026-09-15 - three test
+cases over two articles, of which 105 minutes were the test cases themselves and
+under a minute was setup. One dispatch, so there is no spread. A bench dispatch of
 `measure.yml` on 2026-09-16 took 189 minutes, and one of the four that day took
 288. A candidate is always a cache miss, so it pays its own download: the same
 fetch in `Model validation` took 25 to 74 seconds on 2026-08-26, which is about
@@ -72,8 +72,8 @@ things has failed, and it has failed for 106 minutes rather than for 189.
 nothing about quality. There is no gate, no frozen corpus, no repeat, no
 faithfulness scorer, and no comparison against the incumbent's recorded numbers.
 A green dispatch is permission to spend the bench and the qualification, never a
-substitute for them. It publishes nothing either: what the cases produced leaves
-as a 90-day artifact.
+substitute for them. It publishes nothing either: what the test cases produced
+leaves as a 90-day artifact.
 
 The workflow is described in
 [../reference/github-actions.md](../reference/github-actions.md#pipeline-tests).

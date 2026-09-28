@@ -1031,7 +1031,7 @@ def _stages_a_state_path(workflow: dict[str, object]) -> bool:
     no reader of the file can resolve them - that workflow is covered by the
     tests that read it against its tenants instead.
     `idhazh-pipeline-tests.yaml` is the second: its roots are printed by
-    `pipeline_test_ledgers place` out of the declared cases, and
+    `pipeline_test_ledgers place` out of the declared test cases, and
     `test_pipeline_tests_workflow.py` holds it against those.
 
     A folded `run: >-` body is one line by the time PyYAML has read it and a
@@ -2383,9 +2383,9 @@ def _server_starters(
 
     A step that stands a server up any other way is a second answer to what the
     run executes, so the set this returns is compared by equality. A job's
-    starters come back in the order its steps run, because a case that restarts
-    a server is comparing itself against the cases before it and the order is
-    what says which start each case ran under.
+    starters come back in the order its steps run, because a test case that
+    restarts a server is comparing itself against the test cases before it and
+    the order is what says which start each test case ran under.
     """
     found: dict[tuple[str, str], tuple[str, ...]] = {}
     for filename, workflow in workflows.items():

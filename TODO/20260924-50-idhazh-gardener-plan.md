@@ -1,16 +1,16 @@
 # Plan 50 - Idhazh Gardener: one utility tends every ledger
 
-**Last Updated**: 2026-09-27
+**Last Updated**: 2026-09-28
 
 **Level**: 5 (CLAUDE.md section 6). It changes a persisted contract, the project's persistence format, and the one workflow that force-pushes `main`. The owner's rulings recorded in section 0 and in each row ARE the design consultation; the ESCALATE triggers name what still stops a worker.
 
-**Chain** (CLAUDE.md section 0d). **Intent**: [docs/concepts/telemetry-intent.md](../docs/concepts/telemetry-intent.md) is the north star this plan serves; section 0's intent map says which of its eleven statements this plan delivers and which it only clears the way for. Locally: one utility tends every ledger; its config decides what happens and when; it runs the decision tree every day; nothing depends on anything else. **Contract**: section 5 below declares every persisted shape, path, key and exit code in full. **Code**: the eleven rows.
+**Chain** (CLAUDE.md section 0d). **Intent**: [docs/concepts/telemetry-intent.md](../docs/concepts/telemetry-intent.md) is the north star this plan serves; section 0's intent map says which of its eleven statements this plan delivers and which it only clears the way for. Locally: one utility tends every ledger; its config decides what happens and when; it runs the decision tree every day; nothing depends on anything else. **Contract**: section 5 below declares every persisted shape, path, key and exit code in full. **Code**: the twelve rows.
 
 Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delegates a row where delegation pays; **keep a running pool of parallel N = 2, refilling a slot the moment a worker returns its report and never waiting on a merge** - section 1 names the pairs that run two-wide; consult a persona only where two answers would lead to different code; AUTO-merge on green gates where no ESCALATE trigger fired; honor the ESCALATE triggers in section 0. AUTHOR-AND-STOP until the user authorizes.
 
 ## Execution handover (zero-context cold start)
 
-A paste-ready brief for an agent that picks this plan up with no prior context. [execute-a-plan.md](../docs/how-to/execute-a-plan.md) is the canonical contract; this brief adds only what this plan's run has learned. Written 2026-09-27, about 20:10 UTC, and brought up to date 2026-09-28, about 12:15 UTC, when the first owner handed over after row 5 merged.
+A paste-ready brief for an agent that picks this plan up with no prior context. [execute-a-plan.md](../docs/how-to/execute-a-plan.md) is the canonical contract; this brief adds only what this plan's run has learned. Written 2026-09-27, about 20:10 UTC, and brought up to date 2026-09-28, about 12:15 UTC, when the first owner handed over after row 5 merged, and about 14:00 UTC, when the second owner's dispatch checks on row 7 added deviations 96 to 101 and row 12.
 
 ```text
 You are the OWNER of TODO/20260924-50-idhazh-gardener-plan.md. You have no prior context.
@@ -29,17 +29,21 @@ nothing of this plan was in flight: rows 1, 2, 3, 4, 5, 6 and 11 had merged (#11
 Section 0's three plan-54 reads ran before row 5 and all three came back empty.
 
 STEP 2 - DISPATCH. Row 7 is ready now: rows 5 and 11 have merged. Read deviations 8, 23,
-43 and 69 before you brief it. Nothing else is ready, so the pool runs one wide until
+43 and 69 before you brief it, and 96 to 101, which the second owner's dispatch checks
+added on 2026-09-28: they take the CSV fold out of row 7, add the backend reader, and ship
+the three compactions report-only. Nothing else is ready, so the pool runs one wide until
 row 7's worker REPORTS. Refill a slot on a report, never on a merge. Two workers started
 together return together (deviation 94).
   after rows 6, 7    row 8. It PAUSES at ESCALATE trigger 1, before the commit that
                      removes the pruned_date alias. Read deviations 14, 15, 17, 24, 55,
-                     81, 86 and 90 first: each hands row 8 work a row before it left
+                     81, 86, 90 and 98 first: each hands row 8 work a row before it left
   after row 7        row 9. It also needs plan 51's row 7, the query door, merged. Both
                      rows that one waits on have merged (#1137, #1136), but it had not
                      started on 2026-09-28. Row 9 also fires ESCALATE trigger 5, which is
                      a person's pick. If either is open when row 9 is next, surface it to
                      the person (CLAUDE.md section 0c). Do not build sliceFromDisk() here
+  after rows 7, 8    row 12. Its design question is written in the row; settle it by
+                     debate at dispatch. It edits digest.yml, so it needs a merge window
 
 STEP 3 - GATES. A worker runs `npm --prefix frontend run test:changed -- --list`, then only
 its row's named acceptance gates, then pushes and reports. CI is the one full-suite run
@@ -170,6 +174,12 @@ Every place where the tree, or a ruling, departs from the text further down. A w
 | 93 | 5 | (not in the plan) | The commits ran the tasks first, then the console follow, then the module deletion, and the window move last. Moving the keys first would have needed a bridge that is then thrown away | Fowler, 2026-09-28 |
 | 94 | all | STEP 2: refill a slot the moment a worker reports | The tool that starts workers in parallel returns only when every worker it started has finished. So the pool ran in waves of two, and a finished worker's slot waited for its sibling | Plan owner, 2026-09-28 |
 | 95 | 5 | Deviation 44: a worker waits for its CI run and then reports | Row 5's worker stopped after its CI run went green, while it wrote its pull request description, and never reported. The owner finished the description from the worker's running report and merged on that green run | Plan owner, 2026-09-28 |
+| 96 | 7, 12 | Decision 9: row 7 moves `digest.yml`'s fold step into the gardener, `stages/compact.py` becomes the compaction task's body, and `run.settled_fold_after_days` leaves | Row 7 leaves the CSV fold as it is: the step, the knob, the `compact` verb and `stages/compact.py`. That step folds the eight CSV day trees in `DAY_TREES`, not the parquet ledgers row 7 compacts. Each of those trees already belongs to a retention task that ships `dry_run: true`, and `_refuse_overlapping_claims` refuses a second owner, so no row 7 task may write there. Stopping the fold leaves about 128 extra files a day: each open day holds 5 to 30 writer files a tree, and a folded day holds one, measured on main 2026-09-28. New row 12, after row 8, carries decision 9 for these trees. Until it lands, a CSV day closes after 7 days and a parquet day after 1. Row 7 no longer edits `digest.yml`, so it needs no merge window | Fowler and Carmack, 2026-09-28 |
+| 97 | 7 | Row 7 names `ledger/settle.py` as "the read-side settlement over a raw day tree", and names no reader | `settle.py` is the CSV post-merge settlement, and row 7 does not touch it. The raw-tree settlement is `ledger/raw_files.py` (deviation 59). `ledger.load_retirements` reads only raw files, and it has four production callers: `stages/plan.py`, `stages/assemble.py`, `telemetry/publish/source_health.py`, and `file_retirements` in `telemetry/source_health.py`, which skips an address it already retired. So a compaction that deleted raw files would make the pipeline fetch a dead feed again and file it again. A new module reads the monthly files, then the daily files, then calls `raw_files.py` for the raw days no compact index names. `load_retirements` and `load_visual_prunes` switch to it and keep their signatures. Its tests replace `backend/tests/ledger/test_settle.py`, and both loaders' entries in `docs/concepts/growing-reads.md` change | Fowler; Carmack agreed, 2026-09-28 |
+| 98 | 7, 8 | (not settled in the plan) | The three compaction declarations ship `dry_run: true`. `backend/tests/contracts/test_gardener_config.py` refuses a live declaration that `LIVE_BY_DECISION` does not name, and a new compaction copies nothing that already runs live. Turning one on is ESCALATE trigger 6, and because deviation 97's reader lands first, that is a config change only. The cost: until a person turns them on, nothing lands under `state/compact/`, and `state/raw/gardener/` grows by one record file a shard a wake. Row 8's first-run check expects each compaction's record, not compact files | Fowler and Carmack, 2026-09-28 |
+| 99 | 4, 7 | Section 5.9.5: `compact_after_hours`, "30 gives thirty hours"; rejected alternative 10 keeps six hours open | The knob becomes `compact_after_days`: `int`, `ge=1`, default `1`. `schedule.is_eligible` takes days. Only whole days keep the wake time out of which days qualify (CLAUDE.md section 2, deviation 23); six hours would make the wake time an input just as thirty does. No alias: nothing reads the knob yet, and config files are outside CLAUDE.md section 11 (owner, 2026-09-21). Do not copy section 5.3's 23:59 table row: 23 h 59 min have passed at that wake, not 24 h | Fowler and Carmack, 2026-09-28 |
+| 100 | 7 | Decision 4: a day below the watermark that has raw files again is compacted again from the union | The ledger door stamps every row with its writer's `unit_id` and `attempt`. A compact file written through it unchanged would carry the compaction's identity and lose the rows' own, so a re-run's attempt 2 would sit beside attempt 1 instead of replacing it. A compact file keeps each row's original identity columns, so `ledger/persist.py` joins row 7's file list. A re-compaction keeps the highest attempt per `unit_id` first, then the first row per key. Test: compact attempt 1, add an attempt 2 that files fewer rows, compact again, and compare with settling both raw files | Fowler and Carmack, 2026-09-28 |
+| 101 | 7 | Row 7's file list | Row 2 already put the four `.gitattributes` lines and the four `paths.py` builders on main, so row 7 writes none of them. `backend/tests/workflows/test_digest_workflow.py` does not exist, and after deviation 96 row 7 edits no workflow | Found at dispatch |
 
 ## 0. Operating contract
 
@@ -220,7 +230,7 @@ Every place where the tree, or a ruling, departs from the text further down. A w
 
 ## 1. Status Reckoner
 
-**Ten pull requests in seven slots. One row is one pull request; three pairs run two-wide - rows 4 and 11, rows 3 and 6, rows 8 and 9 - and row 10 is collapsed.** The dispatcher is a running pool, not a wave ([execute-a-plan.md](../docs/how-to/execute-a-plan.md)): a slot frees when a worker returns its report, never when a pull request merges. `Depends-on` and the `Files touched` lists are the readiness test; `Parallel-group` is a hint.
+**Eleven pull requests in eight slots. One row is one pull request; three pairs run two-wide - rows 4 and 11, rows 3 and 6, rows 8 and 9 - row 12 runs after row 8, and row 10 is collapsed.** The dispatcher is a running pool, not a wave ([execute-a-plan.md](../docs/how-to/execute-a-plan.md)): a slot frees when a worker returns its report, never when a pull request merges. `Depends-on` and the `Files touched` lists are the readiness test; `Parallel-group` is a hint.
 
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -235,6 +245,7 @@ Every place where the tree, or a ruling, departs from the text further down. A w
 | 9 | The three ledgers the console's routes read become parquet | 7, and plan 51's row titled **The query door module and its two entry points** | H | PENDING | - | - | - |
 | 10 | `span-rollup` becomes parquet | - | - | **COLLAPSED** | - | - | - |
 | 11 | The index and watermark shapes are declared | 2 | C | DONE | p50r11 | #1136 | p50-r11-worker |
+| 12 | The closed-day fold of the CSV day trees moves into the gardener | 7, 8 | I | PENDING | - | - | - |
 
 **Row 5 now depends on row 3 as well as row 4.** Its `visual-prune` task calls the parquet writer row 3 creates; dispatched after row 4 alone it would write CSV through a door that does not exist.
 
@@ -2249,6 +2260,33 @@ def squash_history(repo: Path, *, keep_days: int, now: datetime, message: str) -
   | # | Option | Why rejected | What it would cost to take | Authority |
   | --- | --- | --- | --- | --- |
   | 1 | Leave the shapes in row 7 | Plan 51's door, and this plan's row 9 after it, would wait for four more merges | Zero; costs the door four merges of waiting | Fowler and Carmack |
+
+---
+
+### Row #12 - The closed-day fold of the CSV day trees moves into the gardener
+
+- **Scope:** row 7 decision 9, for the trees row 7 cannot reach (deviation 96). `backend/idhazh/stages/compact.py` folds every closed day of each CSV day tree in `DAY_TREES` into one `settled.csv` and deletes the writer files it read. Its only production caller is `digest.yml`'s step `Fold the days that can gain no more rows`. This row makes a gardener task do that fold, and removes the step, `run.settled_fold_after_days` and the stage in the same change. **When it lands, one rule in `config/gardener/` decides when a day is closed**, for CSV and parquet alike.
+
+**Why it is its own row.** Row 7 compacts parquet ledgers under `state/raw/`, and none of these trees is there. They stay CSV (Hard scope - out), and ESCALATE trigger 3 stops any migration beyond the six named. Row 9 may move `item-health`, `scores` and `host-fingerprint` first, and plan 52 deletes `span-rollup`, so the trees this row folds are the ones still in `DAY_TREES` when it is dispatched.
+
+**The design question, settled at dispatch by Fowler and Carmack: which task folds each tree.** Two facts bound the answer. Each tree already belongs to one retention task - `feed-health`, `host-fingerprint`, `counterfactual-scores`, `scores` (with `score-index`) and `telemetry-aggregate` (`item-health`) - while `span-rollup` and `candidate-models` fall under the `trials` complement, and `_refuse_overlapping_claims` refuses a second owner. And each of those tasks ships `dry_run: true`, which writes nothing, while the fold runs live today: a fold placed inside them would stop until a person turns on a deletion window. `corpus-squash` is the one precedent for a live task: `LIVE_BY_DECISION` in `backend/tests/contracts/test_gardener_config.py` names it because it copied a job that already ran live.
+
+- **Files touched (expected; the dispatch check confirms them):**
+  - `.github/workflows/digest.yml` (the step and its commit step), `backend/idhazh/stages/compact.py`, `backend/idhazh/cli.py` (the `compact` verb; `measure.yml`'s `runtime` job and `validate.yml`'s `decide` job still call it with `--config backend/var/candidate-config`, so its removal condition is that neither does)
+  - `config/idhazh.json`, `backend/idhazh/contracts/knobs/run.py`, `backend/idhazh/contracts/knobs/removed.py`
+  - the task module and the declaration that fold, under `backend/idhazh/gardener/tasks/` and `config/gardener/`
+  - `backend/tests/pipeline/test_compact.py`, `backend/tests/workflows/test_closed_day_fold_push.py`, `backend/tests/conftest.py`, `backend/tests/contracts/test_gardener_config.py`
+  - `docs/concepts/growing-reads.md`, `docs/architecture/publishing/idhazh-gardener.md`, `docs/reference/github-actions.md`
+  - `TODO/20260924-50-idhazh-gardener-plan.md` (this row's Reckoner line)
+- **Acceptance gates:** local `ruff check .`, `mypy backend`, `pytest backend/tests/gardener backend/tests/pipeline backend/tests/contracts backend/tests/workflows`. CI runs the full suite.
+- **Oracle:** **the fold changes no answer**: over a fixture tree, `day_shards.settled_rows` reads the same rows for every day before and after the task runs, and a day that is still open is never touched. After the merge, no workflow step runs `idhazh compact` against the committed `state/`.
+- **Merge window:** it edits `digest.yml`, so it merges only while no digest run is queued or running (deviations 52 and 54).
+- **Decisions:**
+
+  | # | Decision | Authority |
+  | --- | --- | --- |
+  | 1 | **The fold never pauses.** The step leaves `digest.yml` in the same change that makes a gardener task fold, and that task folds on its first wake. Stopping it leaves about 128 extra files a day (deviation 96) | Fowler and Carmack, 2026-09-28 |
+  | 2 | **Not in row 7 and not in row 8.** Row 7 would roughly double and the fold would stop from its merge to row 8's; row 8 already carries the workflow rename and ESCALATE trigger 1 | Fowler and Carmack, 2026-09-28 |
 
 ---
 

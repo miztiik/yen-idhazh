@@ -5,14 +5,14 @@ production run takes about 200 minutes and has been cancelling shards, so a
 change to the pipeline is tested a day after it is written, by a run whose
 result is mixed in with eighty other articles. The test workflow runs two
 articles down the real path three times over, on one runner, and this file is
-where the two articles come from and what the three cases differ by.
+where the two articles come from and what the three test cases differ by.
 
 **Addresses are candidates, never a fixed pair.** A fixed pair would be the
 worst kind of test: it passes for as long as those two pages stay up and stays
 silent about everything else the extractor meets. A dispatch draws its pair from
 this list, seeded from the run id it was allocated, so two dispatches read
 different articles and the seed says which - and the draw is made once, before
-any case starts, so the three cases compare like with like.
+any test case starts, so the three test cases compare like with like.
 
 **A candidate names a feed and not a vertical.** The feed is already in
 `config/sources.json` with its vertical, its tier and its form, so repeating
@@ -51,10 +51,10 @@ Headline = Annotated[
     str, StringConstraints(min_length=1, max_length=UNTRUSTED_LINE_MAX, pattern=r"\S")
 ]
 
-#: What every case's trial root is named after, and what the bench and
-#: `Model validation` already write under. One root per case, side by side under
-#: `state/` rather than nested inside a shared parent: `run.trial_state_dirname`
-#: is a `Slug`, and a slug holds no separator.
+#: What every test case's trial root is named after, and what the bench and
+#: `Model validation` already write under. One root per test case, side by side
+#: under `state/` rather than nested inside a shared parent:
+#: `run.trial_state_dirname` is a `Slug`, and a slug holds no separator.
 TRIAL_STATE_PREFIX: str = "pipeline-tests"
 
 
@@ -90,20 +90,20 @@ class PipelineTestCandidate(Model):
 class PipelineTestCase(Model):
     """One pass over the two articles, and what it changes about the run.
 
-    A case is a whole pass rather than a knob, because the numbers that matter -
-    wall clock, tokens a second, what the picture cost - are per pass. Three cases
-    over the same two articles is what makes the difference between two of them
-    readable; one case over six articles is not.
+    A test case is a whole pass rather than a knob, because the numbers that
+    matter - wall clock, tokens a second, what the picture cost - are per pass.
+    Three test cases over the same two articles is what makes the difference
+    between two of them readable; one test case over six articles is not.
     """
 
-    id: Slug = Field(description="What the case is called in the log and in the artifact.")
+    id: Slug = Field(description="What the test case is called in the log and in the artifact.")
     n_parallel: int | None = Field(
         default=None,
         ge=1,
         le=8,
         description=(
-            "The model server's slot count for this case. None leaves the committed "
-            "value, which is what the production run serves. A case that moves it "
+            "The model server's slot count for this test case. None leaves the committed "
+            "value, which is what the production run serves. A test case that moves it "
             "needs the server restarted, because the slot count is fixed when the "
             "process starts."
         ),
@@ -112,13 +112,13 @@ class PipelineTestCase(Model):
         default=None,
         ge=512,
         description=(
-            "The window for this case. None leaves the committed value. A case that "
-            "raises the slot count raises this with it: llama-server divides the "
+            "The window for this test case. None leaves the committed value. A test case "
+            "that raises the slot count raises this with it: llama-server divides the "
             "window it is given between its slots, so two slots on the committed "
             "window is a 32,768-token slot rather than the 65,536 the production "
             "gate admits articles against - and the worst article the truncation cap "
-            "admits needs 64,699. Leaving it alone would make the case a test of a "
-            "smaller window wearing a concurrency case's name."
+            "admits needs 64,699. Leaving it alone would make the test case a test of a "
+            "smaller window wearing a concurrency test case's name."
         ),
     )
     asks_for_a_visual_plan: bool = Field(
@@ -135,27 +135,32 @@ class PipelineTestCase(Model):
 
     @property
     def trial_state_dirname(self) -> str:
-        """Where this case's ledgers go under `state/`.
+        """Where this test case's ledgers go under `state/`.
 
         Derived rather than declared, because it is not a choice anybody makes:
-        the dispatch runs one plan, so the three cases share a run id, a shard, a
-        job and an attempt - which is the whole of a writer's filename. Without a
-        root each, the last case to write would be the only one anybody could
-        read, and the three numbers this workflow exists to subtract would be one
-        number.
+        the dispatch runs one plan, so the three test cases share a run id, a
+        shard, a job and an attempt - which is the whole of a writer's filename.
+        Without a root each, the last test case to write would be the only one
+        anybody could read, and the three numbers this workflow exists to
+        subtract would be one number.
 
         Here rather than beside either caller: the config writer names the root
         and the commit job checks what arrived against it, and a second spelling
-        in either would drift the day a case id changed.
+        in either would drift the day a test case id changed.
         """
         return f"{TRIAL_STATE_PREFIX}-{self.id}"
 
 
 class PipelineTestsConfig(Contract):
-    """`config/pipeline-tests.json` - the candidate addresses and the cases."""
+    """`config/pipeline-tests.json` - the candidate addresses and the test cases."""
 
     __schema_stem__: ClassVar[str] = "pipeline-tests-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-28",
+            change="`cases` is now `test_cases`.",
+            why="Each tests the pipeline under one setting, and its item class already said so.",
+        ),
         ChangelogEntry(
             version="2026-09-15T12:00",
             change="`arms` is now `cases`.",
@@ -179,8 +184,8 @@ class PipelineTestsConfig(Contract):
         le=8,
         description=(
             "How many addresses one dispatch draws. Two is what fits the hour: the "
-            "cases run in sequence over the same articles, so the cost is this number "
-            "times the number of cases."
+            "test cases run in sequence over the same articles, so the cost is this "
+            "number times the number of test cases."
         ),
     )
     budget_minutes: int = Field(
@@ -197,17 +202,17 @@ class PipelineTestsConfig(Contract):
         min_length=MINIMUM_CANDIDATES,
         description="The addresses a dispatch draws from. One per feed, all distinct.",
     )
-    cases: list[PipelineTestCase] = Field(
+    test_cases: list[PipelineTestCase] = Field(
         min_length=2,
         description=(
             "The passes, in order. The first is the baseline the rest are read "
-            "against, so there are at least two: one case measures nothing it can be "
-            "compared with."
+            "against, so there are at least two: one test case measures nothing it "
+            "can be compared with."
         ),
     )
 
     def to_json(self) -> str:
-        """One candidate a line, one case a line - see `records_json`.
+        """One candidate a line, one test case a line - see `records_json`.
 
         The same reason `config/sources.json` has: a person curates it, and a
         record's five short fields are read together or not at all. At a field a
@@ -217,7 +222,7 @@ class PipelineTestsConfig(Contract):
 
     @model_validator(mode="after")
     def _the_list_can_answer_the_draw(self) -> Self:
-        """Distinct addresses, distinct feeds, distinct case names, enough to draw from.
+        """Distinct addresses, distinct feeds, distinct test case names, enough to draw from.
 
         Two candidates on one feed would let a draw take two articles off the same
         site and call that a spread, and the point of the list is that it is not.
@@ -228,9 +233,9 @@ class PipelineTestsConfig(Contract):
         feeds = [candidate.source_id for candidate in self.candidates]
         if len(set(feeds)) != len(feeds):
             raise ValueError("two candidates name one feed, so a draw could take both")
-        names = [case.id for case in self.cases]
+        names = [test_case.id for test_case in self.test_cases]
         if len(set(names)) != len(names):
-            raise ValueError("two cases share a name, so their results cannot be told apart")
+            raise ValueError("two test cases share a name, so their results cannot be told apart")
         if self.articles_a_dispatch > len(self.candidates):
             raise ValueError("the draw asks for more addresses than the list holds")
         return self

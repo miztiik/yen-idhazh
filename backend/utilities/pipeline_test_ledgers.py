@@ -1,24 +1,25 @@
 """Which trees did a pipeline-test dispatch write, and may they be pushed?
 
-The cases run on one runner and write their ledgers under `state/`, one tree per
-case. The job that pushes them is a second job holding `contents: write`, and an
-artifact is the only thing between the two - so this module is what moves the
-trees onto and off that artifact, and what reads them before anything is staged.
+The test cases run on one runner and write their ledgers under `state/`, one tree
+per test case. The job that pushes them is a second job holding `contents: write`,
+and an artifact is the only thing between the two - so this module is what moves
+the trees onto and off that artifact, and what reads them before anything is
+staged.
 
 **The check is the control, not the job split.** Every byte here is downstream of
 text this project did not write (Guardrail #11). Two shapes may be in the tree
 and nothing else: `<root>/<ledger>/<YYYY>/<MM>/<DD>/<name>.csv`, read row by row
 through the contract `ledger.segment_contract` names, and
 `<root>/traces/<YYYY>/<MM>/<DD>/<name>.jsonl`, one JSON object a line. `<root>`
-has to be the trial root of a case `config/pipeline-tests.json` declares and
+has to be the trial root of a test case `config/pipeline-tests.json` declares and
 `<ledger>` a day tree, so every directory name comes from committed
 config rather than from the artifact.
 
 **Gather and place are here rather than in the workflow** because both need the
-same two facts the check needs - which cases are declared, and what each one's
-trial root is called - and a copy of either in a `run:` body is a second spelling
-that drifts. They also fix the artifact's root directory, which a glob would
-leave to whichever cases happened to produce a file.
+same two facts the check needs - which test cases are declared, and what each
+one's trial root is called - and a copy of either in a `run:` body is a second
+spelling that drifts. They also fix the artifact's root directory, which a glob
+would leave to whichever test cases happened to produce a file.
 
 **Two streams, and the split is not tidiness.** A line another program reads goes
 to stdout: `gather`'s `ledgers=<true|false>`, which the step appends to
@@ -48,26 +49,26 @@ DAY_SHARD_PARTS = 5
 TRACES = "traces"
 
 #: What `gather` prints for the step output the commit job reads. A dispatch that
-#: died before the first case wrote nothing, and a download of an artifact nobody
-#: uploaded fails the step it is in.
+#: died before the first test case wrote nothing, and a download of an artifact
+#: nobody uploaded fails the step it is in.
 FOUND_KEY = "ledgers"
 
 
 def _roots(config_root: Path) -> list[str]:
-    """Every declared case's trial root, in the order config declares them."""
+    """Every declared test case's trial root, in the order config declares them."""
     settings = PipelineTestsConfig.from_json(
         (config_root / "pipeline-tests.json").read_text(encoding="utf-8")
     )
-    return [case.trial_state_dirname for case in settings.cases]
+    return [test_case.trial_state_dirname for test_case in settings.test_cases]
 
 
 def _a_day_tree(name: str) -> LedgerName | None:
     """The day tree this directory name is, or `None` for anything else.
 
     `LedgerName` covers every ledger under `state/`, so reading a name back is no
-    longer the same question as "does a writer file a segment here". A case run
-    writes day trees and traces, so anything else under a trial root is reported
-    rather than read.
+    no longer the same question as "does a writer file a segment here". A test
+    case run writes day trees and traces, so anything else under a trial root is
+    reported rather than read.
     """
     try:
         which = LedgerName(name)
@@ -117,7 +118,7 @@ def refusals(tree: Path, *, roots: frozenset[str]) -> list[str]:
         relative = path.relative_to(tree).as_posix()
         parts = relative.split("/")
         if parts[0] not in roots:
-            found.append(f"{relative} is filed under {parts[0]}, which no declared case names")
+            found.append(f"{relative} is filed under {parts[0]}, which no declared test case names")
         elif len(parts) < 3:
             found.append(f"{relative} sits directly under a trial root and names no ledger")
         elif parts[1] == TRACES:
@@ -125,17 +126,17 @@ def refusals(tree: Path, *, roots: frozenset[str]) -> list[str]:
         else:
             which = _a_day_tree(parts[1])
             if which is None:
-                found.append(f"{relative} names {parts[1]}, which a case run does not write")
+                found.append(f"{relative} names {parts[1]}, which a test case run does not write")
             else:
                 found += _refuse_segment(path, "/".join(parts[1:]), which)
     return found
 
 
 def gather(state: Path, tree: Path, *, roots: list[str]) -> list[str]:
-    """Copy every declared case's trial root into one directory, and say which arrived.
+    """Copy every declared test case's trial root into one directory, and say which arrived.
 
     One fixed destination rather than a glob over `state/`, so the artifact's
-    root directory is the same whether three cases produced a file or one.
+    root directory is the same whether three test cases produced a file or one.
     """
     if tree.exists():
         shutil.rmtree(tree)
@@ -184,7 +185,10 @@ def main(argv: list[str] | None = None) -> int:
             print(f"gathered {name}", file=sys.stderr)
         found = any(args.tree.rglob("*"))
         if not found:
-            print("no case left a ledger tree behind, so there is nothing to push", file=sys.stderr)
+            print(
+                "no test case left a ledger tree behind, so there is nothing to push",
+                file=sys.stderr,
+            )
         print(f"{FOUND_KEY}={'true' if found else 'false'}")
         return 0
 
