@@ -37,14 +37,13 @@ door. gzip -5 from node v24.12.0's zlib:
 | 2 | `duckdb-browser-eh.worker.js`, the worker that runs it | 773,223 | 190,354 | yes |
 | 3 | `duckdb-browser.mjs`, the calls a page makes, bundled with the `apache-arrow` code it imports | 200,072 | 47,146 | yes, one lazy chunk |
 | 4 | the door's engine module, and two one-line modules holding the wasm's and the worker's addresses | 2,498 | 1,362 | yes, three lazy chunks |
-| 5 | `wasm_eh/parquet.duckdb_extension.wasm`, the parquet reader | 3,218,307 | 747,651 | **not yet** - the pinned build does not link it, and how it is delivered is undecided |
+| 5 | `wasm_eh/parquet.duckdb_extension.wasm`, the parquet reader | 3,218,307 | 747,651 | **no** - the engine downloads it from DuckDB's own host the first time a query needs it (owner ruling, 2026-09-28) |
 | 6 | `duckdb-mvp.wasm`, the build for browsers without exception handling | 41,325,187 | - | no |
 
 **Against the 1 GiB cap**, from the 99,781,515-byte site of 2026-09-27
 (`pages.yml`, `du -sb build`): rows 1 to 4 take it to 136,671,055 bytes, 12.7
-percent of the cap; row 5 would take it to 139,889,362 bytes, 13.0 percent. Row 6
-would have added 41.3 MB more for browsers from before 2022, which is why one
-build ships.
+percent of the cap. Row 5 never reaches the site. Row 6 would have added 41.3 MB
+more for browsers from before 2022, which is why one build ships.
 
 **A reader pays the engine once a deploy, not once.** Measured on the live site on
 2026-09-28 at 15:48 UTC: `favicon.svg` answered `Cache-Control: max-age=600`,
@@ -53,8 +52,9 @@ ETag is the file's last-modified time and its size in hex - `0x6aba5aa3` is
 12:16:35 UTC that day and `0x152` is 338 bytes - and every file carries the same
 last-modified, the deploy's. So every deploy changes every file's validator, and
 a file that did not change is sent again after each deploy: about 8.4 MB of
-engine on a reader's first data panel after it, 9.2 MB once the parquet reader
-ships. How the device keeps it across deploys is the first panel's decision.
+engine on a reader's first data panel after it. The parquet add-on, 0.52 MB with
+brotli, comes from DuckDB's host, which our deploys do not touch. How the device
+keeps the engine across deploys is the first panel's decision.
 
 ## What a published day adds in rendered visuals, 2026-09-13
 

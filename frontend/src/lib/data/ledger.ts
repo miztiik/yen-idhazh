@@ -26,5 +26,10 @@ const published = fetchedBytes(__ASSET_BASE_URL__ || base, (url, init) => fetch(
 /** Ask a committed ledger for the slice a panel draws. Columns and a date range
  *  are named by the caller; nothing fetches a whole ledger. */
 export function slice(ledger: LedgerName, options: SliceOptions): Promise<SliceResult> {
-	return readSlice(published, () => import('./engine').then((engine) => engine.browserEngine()), ledger, options);
+	return readSlice(
+		published,
+		() => import('./engine').then((engine) => engine.browserEngine(__ENGINE_EXTENSION_REPOSITORY__)),
+		ledger,
+		options
+	);
 }

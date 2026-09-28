@@ -11,6 +11,7 @@ import { daysBetween, filesFor } from '../src/lib/data/slice';
 import { cellOf, SliceValueError, statementFor } from '../src/lib/data/slice-query';
 import { indexPath, readSlice, type EngineOpener } from '../src/lib/data/slice-reader';
 import { checkedRequest, SliceRequestError, type SliceOptions, type SliceResult } from '../src/lib/data/slice-shapes';
+import { engineExtensionRepository } from '../src/lib/server/config';
 import { sliceFromDisk } from '../src/lib/server/ledger-disk';
 
 /**
@@ -24,7 +25,9 @@ import { sliceFromDisk } from '../src/lib/server/ledger-disk';
  * answered from the fixture files under `tests/fixtures/ledger-door/`, read
  * inside the test that asks, and a case that needs a 404, a short body, a
  * refused fetch or a different stamp says so by path. Nothing here touches the
- * network.
+ * network but the engine itself: a machine's first query downloads its parquet
+ * add-on from `ledger.engine_extension_repository` and keeps it in a cache under
+ * the home directory (owner ruling, 2026-09-28).
  *
  * The fixture holds a monthly file for 2026-08, daily files for 2026-08-31,
  * 09-01, 09-02 and 09-05, a zero-row day on 09-03, and a hole on 09-04.
@@ -86,7 +89,7 @@ function counted(): { open: EngineOpener; opened: () => number } {
 	return {
 		open: () => {
 			count += 1;
-			return nodeEngine(locate);
+			return nodeEngine(locate, engineExtensionRepository());
 		},
 		opened: () => count
 	};
@@ -388,7 +391,7 @@ test.describe('THE ORACLE through the engine, at both entry points', () => {
 	async function bothWays(options: SliceOptions): Promise<{ browser: SliceResult; disk: SliceResult; warned: string[] }> {
 		const { fetcher } = recorded();
 		const { result: browser, warned } = await warnings(() =>
-			readSlice(fetchedBytes(PREFIX, fetcher), () => nodeEngine(locate), LEDGER, options)
+			readSlice(fetchedBytes(PREFIX, fetcher), () => nodeEngine(locate, engineExtensionRepository()), LEDGER, options)
 		);
 		const { result: disk, warned: more } = await warnings(() => sliceFromDisk(STATE, LEDGER, options));
 		return { browser, disk, warned: [...warned, ...more] };
@@ -417,10 +420,12 @@ test.describe('THE ORACLE through the engine, at both entry points', () => {
 	});
 
 	test('a filter narrows the rows, and a filter that matches nothing is quiet rather than an empty ok', async () => {
-		const narrowed = await bothWays(ask('2026-09-01', '2026-09-05', { where: [{ column: 'job', op: '=', value: 'plan' }] }));
+		// Up to 09-03, the zero-row day: 09-04 is the fixture's hole, and a hole is unreachable.
+		const narrowed = await bothWays(ask('2026-09-01', '2026-09-03', { where: [{ column: 'job', op: '=', value: 'plan' }] }));
 		expect(narrowed.disk, narrowed.warned.join('\n')).toMatchObject({ state: 'ok' });
 		if (narrowed.disk.state === 'ok') expect(narrowed.disk.rows.map((row) => row.job)).toEqual(['plan']);
-		const nothing = await bothWays(ask('2026-09-01', '2026-09-05', { where: [{ column: 'shard', op: '>', value: 9 }] }));
+		expect(narrowed.browser).toEqual(narrowed.disk);
+		const nothing = await bothWays(ask('2026-09-01', '2026-09-03', { where: [{ column: 'shard', op: '>', value: 9 }] }));
 		expect(nothing.disk, nothing.warned.join('\n')).toEqual({ state: 'quiet', rows: [], through: '2026-09-05' });
 		expect(nothing.browser).toEqual(nothing.disk);
 	});

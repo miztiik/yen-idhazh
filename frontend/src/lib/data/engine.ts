@@ -14,7 +14,7 @@
  * `unreachable`. The worker starts from a `blob:` bootstrap that imports the
  * same-origin worker file by absolute URL: a worker started from a same-origin
  * URL takes its policy from its own response headers, and Pages sends none,
- * while a `blob:` worker inherits the page's `connect-src 'self'`. A relative URL
+ * while a `blob:` worker inherits the page's `connect-src`. A relative URL
  * does not resolve inside a `blob:` worker, so both addresses are made absolute.
  *
  * **In Node** it loads the package's blocking build and reads the wasm from the
@@ -23,13 +23,13 @@
  * variable the browser bundler cannot follow, so no browser chunk carries the
  * Node half.
  *
- * **Neither half fetches code from anywhere else.** Automatic extension install
- * and load are switched off, so no query can reach a third-party host. That
- * leaves the parquet reader out: this build links only DuckDB's core functions,
- * and parquet is a separate extension file the engine would otherwise download
- * from DuckDB's own host the first time a query needs it. Until that file is
- * delivered from this site's own origin, a query over parquet fails and the
- * door draws `unreachable`.
+ * **The parquet reader is an add-on the engine downloads.** This build links
+ * only DuckDB's core functions, so the first query over parquet makes the engine
+ * fetch the parquet add-on from `ledger.engine_extension_repository` - DuckDB's
+ * own host by default - and check its signature before loading it, which is
+ * what DuckDB-Wasm does on any site. In a browser the page's `connect-src`
+ * admits that one origin; in Node the engine keeps the file in a cache under the
+ * user's home directory, so only a machine's first query downloads it.
  */
 
 import type { Bound, EngineSession, QueryEngine } from './slice-query';
@@ -40,8 +40,10 @@ const PACKAGE = '@duckdb/duckdb-wasm';
 /** The Node half's build, in a variable so the browser bundler never follows it. */
 const NODE_BUILD = `${PACKAGE}/blocking`;
 
-/** No statement may fetch code: the engine's automatic extension install and load stay off. */
-const SETTINGS = ['SET autoinstall_known_extensions = false', 'SET autoload_known_extensions = false'];
+/** Where the engine fetches an add-on from. Empty leaves the engine's built-in address. */
+function repositorySetting(repository: string): string[] {
+	return repository ? [`SET custom_extension_repository = '${repository.replaceAll("'", "''")}'`] : [];
+}
 
 /** An engine result, as far as this module reads one. */
 interface ResultTable {
@@ -81,12 +83,12 @@ function once(slot: 'browser' | 'node', start: () => Promise<QueryEngine>): Prom
 	return started;
 }
 
-/** The engine in this browser tab. */
-export function browserEngine(): Promise<QueryEngine> {
-	return once('browser', startInBrowser);
+/** The engine in this browser tab, fetching its add-ons from `repository`. */
+export function browserEngine(repository: string): Promise<QueryEngine> {
+	return once('browser', () => startInBrowser(repository));
 }
 
-async function startInBrowser(): Promise<QueryEngine> {
+async function startInBrowser(repository: string): Promise<QueryEngine> {
 	const [duckdb, wasm, worker] = await Promise.all([
 		import('@duckdb/duckdb-wasm'),
 		import('@duckdb/duckdb-wasm/dist/duckdb-eh.wasm?url'),
@@ -103,7 +105,7 @@ async function startInBrowser(): Promise<QueryEngine> {
 		const db = new duckdb.AsyncDuckDB(new duckdb.VoidLogger(), new Worker(bootstrap));
 		await db.instantiate(new URL(wasm.default, location.href).href);
 		const connection = await db.connect();
-		for (const statement of SETTINGS) await connection.query(statement);
+		for (const statement of repositorySetting(repository)) await connection.query(statement);
 		return {
 			async withFiles(files, work) {
 				const names = mintNames(files.length);
@@ -131,12 +133,13 @@ async function startInBrowser(): Promise<QueryEngine> {
 	}
 }
 
-/** The engine in this Node process. `locate` turns a path inside the package into a file path. */
-export function nodeEngine(locate: (specifier: string) => string): Promise<QueryEngine> {
-	return once('node', () => startInNode(locate));
+/** The engine in this Node process. `locate` turns a path inside the package into a file path;
+ *  `repository` is where the engine fetches its add-ons. */
+export function nodeEngine(locate: (specifier: string) => string, repository: string): Promise<QueryEngine> {
+	return once('node', () => startInNode(locate, repository));
 }
 
-async function startInNode(locate: (specifier: string) => string): Promise<QueryEngine> {
+async function startInNode(locate: (specifier: string) => string, repository: string): Promise<QueryEngine> {
 	const duckdb = (await import(/* @vite-ignore */ NODE_BUILD)) as typeof import('@duckdb/duckdb-wasm/blocking');
 	const file = (name: string) => locate(`${PACKAGE}/dist/${name}`);
 	const db = await duckdb.createDuckDB(
@@ -149,7 +152,7 @@ async function startInNode(locate: (specifier: string) => string): Promise<Query
 	);
 	await db.instantiate(() => {});
 	const connection = db.connect();
-	for (const statement of SETTINGS) connection.query(statement);
+	for (const statement of repositorySetting(repository)) connection.query(statement);
 	return {
 		async withFiles(files, work) {
 			const names = mintNames(files.length);

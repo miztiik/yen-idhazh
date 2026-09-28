@@ -277,6 +277,7 @@
   "ledger": {
     "compression_compact": "snappy",
     "compression_raw": "zstd",
+    "engine_extension_repository": "https://mirror.example/duckdb",
     "format": "json",
     "published": [
       "item-health"

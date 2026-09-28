@@ -108,8 +108,10 @@ any other field an older index carries.
 ## The engine
 
 `frontend/src/lib/data/engine.ts` is the only module in `frontend/` that imports
-the query engine, `@duckdb/duckdb-wasm`, pinned exactly at `1.33.1-dev57.0`: its
-`latest` tag is a development build, so a caret would let an install move it.
+the query engine, `@duckdb/duckdb-wasm`, taken at a caret range like every other
+dependency. Nothing pins it: the door's oracle runs against whatever version is
+installed, so an upgrade that breaks a query or the add-on below turns that test
+red on the pull request that raised the version (owner ruling, 2026-09-28).
 `frontend/tests/chart-vocabulary.spec.ts` holds that to one importer, holds every
 panel to `ledger.ts`, and holds `sliceFromDisk()` to the modules under
 `frontend/src/lib/server/`.
@@ -156,26 +158,43 @@ variable the browser bundler cannot follow, so the Node half's own few lines rid
 in the browser's engine chunk - 2,287 bytes with both halves - and none of the
 Node build does.
 
-**No statement may fetch code.** The engine's automatic extension install and load
-are switched off in both halves, so no query can reach a third-party host.
+## Where the parquet reader comes from
 
-## What does not work yet: the parquet reader
+**The engine downloads it, the way DuckDB-Wasm does on any site.** The engine
+links only DuckDB's core functions, so the first query over parquet makes it fetch
+the parquet add-on - `<repository>/v<DuckDB version>/wasm_eh/parquet.duckdb_extension.wasm`,
+3,218,307 bytes for DuckDB 1.5.4 and 522,051 with brotli - and it checks the
+add-on's signature before loading it. `<repository>` is
+`ledger.engine_extension_repository` in `config/idhazh.json`, DuckDB's own host by
+default. `engine.ts` tells the engine that address with `SET
+custom_extension_repository`, and the page's `connect-src` admits its origin
+through `engineOrigins()` in `frontend/asset-base.js`, so one edit moves both.
+Owner ruling, 2026-09-28: this is normal DuckDB-Wasm behaviour, and the site
+allows it.
 
-**The pinned build reads no parquet by itself.** It links only DuckDB's core
-functions. `read_parquet` lives in a separate extension file,
-`wasm_eh/parquet.duckdb_extension.wasm` (3,218,307 bytes for DuckDB 1.5.4), which
-the engine otherwise downloads from `extensions.duckdb.org` the first time a query
-needs it. Measured 2026-09-28 on a Windows developer machine, Node 24.12.0: the
-newest stable release, 1.32.0 (DuckDB 1.4.3), is the same.
+Measured 2026-09-28 with a throwaway page that starts the engine the way
+`engine.ts` does and reads the fixture's month file, once under the site's shipped
+policy and once with the add-on's origin added:
 
-Two consequences. In a browser the page's `connect-src`, which names this site and
-the two hosts the encoder downloads its model from, refuses that host.
-In Node the blocking build loads an extension only over HTTP or from a cache it
-keeps under the user's home directory, and pointed at a file on disk it waits for
-ever instead of failing. So until the file is delivered from this site's own
-origin, every query over parquet ends `unreachable`, with the engine's own message
-in the console. How the file is delivered is an open decision, held in the active
-plan-doc for the console's data under `TODO/`.
+| # | Browser | Shipped policy | With the add-on's origin |
+| --- | --- | --- | --- |
+| 1 | Chromium 151 | Refused: the add-on request failed `csp` | 3 rows x 35 columns |
+| 2 | Edge 154 | Refused the same way | 3 rows x 35 columns |
+
+Firefox was not run: the test tool's own Firefox build was not installed. Told
+another address, the engine asked for
+`<that address>/v1.5.4/wasm_eh/parquet.duckdb_extension.wasm`, so a mirror serves
+that layout. Pointed at a file on disk instead of an address, the Node half waits
+for ever rather than failing, so a mirror is an `https://` address, never a path.
+
+**In Node** the engine downloads the add-on over HTTPS the first time and keeps it
+under the user's home directory, in `.duckdb/extensions/<host>/v1.5.4/wasm_eh/`, so
+later runs read it from disk; the first read took 1.3 seconds on a developer
+machine. So the door's oracle in `frontend/tests/ledger-door.spec.ts` reaches the
+network once on a fresh machine - a CI runner, every run. That is the one
+exception to "no test touches the network", taken by the owner on 2026-09-28. A
+host that is down or has moved fails those tests and any build-time read, which is
+where somebody wants to learn it.
 
 ## Design rationale
 
@@ -185,7 +204,16 @@ environment and take a byte source and an engine as arguments. `ledger.ts` binds
 the published site, which needs `$app/paths`; `ledger-disk.ts` binds the disk under
 `$lib/server/`, where SvelteKit refuses a browser import. So
 `frontend/tests/ledger-door.spec.ts` drives the real reader over recorded
-responses and over the disk, with no browser and no network.
+responses and over the disk, with no browser, and no network but the engine's own
+first download of its add-on.
+
+**The add-on comes from DuckDB's host, not ours.** It is what every site running
+this engine does, and it keeps 3.2 MB off the site and a download step out of the
+build. What it costs is one more origin in `connect-src`, and the engine's
+signature check is what makes that origin safe to admit. Serving a copy from this
+site, checked against a digest in `config/`, with the native engine for the Node
+half, was the alternative weighed on 2026-09-28; the owner ruled for the normal
+design.
 
 **Files are read by column name.** A day written before a column existed reads
 that column as null. A column no file in the span holds reads as null in every

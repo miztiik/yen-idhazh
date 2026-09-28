@@ -17,6 +17,7 @@ import { join } from 'node:path';
 import { nodeEngine } from '../data/engine';
 import { readSlice, type ByteSource } from '../data/slice-reader';
 import type { LedgerName, SliceOptions, SliceResult } from '../data/slice-shapes';
+import { engineExtensionRepository } from './config';
 
 const resolver = createRequire(import.meta.url);
 
@@ -38,5 +39,5 @@ export function diskBytes(stateDir: string): ByteSource {
 
 /** The same query as `slice()`, over the same compacted files, read from disk while the site is built. */
 export function sliceFromDisk(stateDir: string, ledger: LedgerName, options: SliceOptions): Promise<SliceResult> {
-	return readSlice(diskBytes(stateDir), () => nodeEngine(locate), ledger, options);
+	return readSlice(diskBytes(stateDir), () => nodeEngine(locate, engineExtensionRepository()), ledger, options);
 }
