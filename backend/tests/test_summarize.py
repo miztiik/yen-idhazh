@@ -1904,7 +1904,7 @@ class TestAConstrainedCallerGetsBothSpans:
         )
 
     def test_span_one_carries_neither_the_grammar_nor_the_alternatives_request(self) -> None:
-        """The row's oracle, and the arm a recorded reply cannot reach.
+        """The row's oracle, and the half a recorded reply cannot reach.
 
         A grammar of three literals leaves the model able to write those three
         words and nothing else, so span one could not open a reasoning block at
@@ -1958,7 +1958,7 @@ class TestAConstrainedCallerGetsBothSpans:
         assert self.grammar_body(post_sampling_probs=True)["post_sampling_probs"] is True
 
     def test_the_window_is_the_servers_list_at_the_position_the_caller_named(self) -> None:
-        """The reply arm, on a recorded reply whose answer does not open the decode.
+        """The reply half, on a recorded reply whose answer does not open the decode.
 
         The fixture is read inside the test rather than at module scope, so a
         reply that stops carrying a window fails this one test with a message
@@ -1976,7 +1976,7 @@ class TestAConstrainedCallerGetsBothSpans:
         assert past_the_end.first_token_choices == (), "a position the reply does not carry"
 
     def test_the_pair_of_recorded_replies_reads_back_as_one_constrained_answer(self) -> None:
-        """Both arms meeting: two recorded spans over one real socket.
+        """Both halves meeting: two recorded spans over one real socket.
 
         `RecordedEndpoint` is a server, not a mock (Guardrail #7). It replays the
         two committed bodies in order and hands back what it was posted, so the

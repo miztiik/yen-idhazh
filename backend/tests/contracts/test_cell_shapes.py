@@ -291,7 +291,7 @@ def _failed_census_row(**cells: Any) -> Any:
 def test_a_row_built_by_hand_still_gets_the_fold(case: str) -> None:
     """The column folds, so there is no door a producer can go round.
 
-    This is the arm that says the guarantee is structural. It calls the contract
+    This is the check that says the guarantee is structural. It calls the contract
     directly - no recorder, no writer, no helper - with the value in every column
     that holds text somebody else wrote, and asks for a row back rather than a
     refusal. A helper the producer has to remember can be forgotten; a type

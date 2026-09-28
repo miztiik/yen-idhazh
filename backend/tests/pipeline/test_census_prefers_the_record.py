@@ -185,7 +185,7 @@ def test_which_writer_reaches_the_ledger_first_does_not_change_the_row(
     two derivations. It is not one any more: both read the row the shard sealed,
     and this test is what says so.
 
-    One work stage feeds both arms. Two runs would differ in every timing cell
+    One work stage feeds both halves. Two runs would differ in every timing cell
     and prove nothing about the derivation.
     """
     settings = config.load(CONFIG_DIR)

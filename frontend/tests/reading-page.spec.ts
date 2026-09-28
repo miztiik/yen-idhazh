@@ -770,10 +770,10 @@ test.describe('with the offline reader installed', () => {
  * every served day - so the publisher names are derived here exactly as they are
  * in a build.
  *
- * **The knob-off arm is in `day-list.spec.ts` and not here.** `ui.draw_same_story`
- * is read at build time and inlined into the one shell, so a browser arm would
- * need a second build of the whole site; what it would prove past the logic arm
- * is that one `$derived` reads the knob. The logic arm drives `foldedMembers`
+ * **The knob-off check is in `day-list.spec.ts` and not here.** `ui.draw_same_story`
+ * is read at build time and inlined into the one shell, so a browser check would
+ * need a second build of the whole site; what it would prove past the logic check
+ * is that one `$derived` reads the knob. The logic check drives `foldedMembers`
  * with the knob off and gets an empty set, which is one card per story.
  */
 test.describe('one card, and every publisher on it is a way in', () => {

@@ -3,7 +3,7 @@
 The plan is the council's, so every tenant here is written by the test that uses
 it and nothing in this file imports `idhazh.similarity` or any judge contract.
 
-Every arm runs on a config the test wrote. The committed one registers a judge,
+Every check runs on a config the test wrote. The committed one registers a judge,
 and a judge answers out of a ledger the pipeline appends to every night, so a
 plan run against `config/` would be asserting what the archive holds rather than
 what the planner does (CLAUDE.md section 13).

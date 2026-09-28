@@ -518,7 +518,7 @@ a complete-looking one with a file missing - which llama-server reports at load
 rather than at fetch, on a different machine, hours later.
 
 **What is refused is an entry declaring two companions to a surface that can
-publish one.** The measurement arms still republish a single companion's four
+publish one.** The measurement jobs still republish a single companion's four
 refs for their own inline downloads, and that projection names the count and the
 files rather than truncating in silence.
 

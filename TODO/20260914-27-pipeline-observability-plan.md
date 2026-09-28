@@ -11,10 +11,10 @@
 | Field | Value |
 | --- | --- |
 | Why this plan exists | A 5x model-time regression ran for six days and no surface named it. Median model time per item moved 97,879 ms -> 475,890 ms between run `34745383977` (2026-09-13) and run `34852763827` (2026-09-14), median output tokens 229 -> 1,158, and the two agree within 4 percent, so the whole move is decoded-token volume at an unchanged decode rate. Nothing recorded that the configuration had changed, nothing printed during a 200-minute shard, and the published telemetry mirror carries no second-call columns at all. This plan builds the instrument that makes the next one visible on day one |
-| Hard scope - in | `state/item-health/<YYYY>/<MM>/<DD>.csv` widened to the per-item spine (selection terms, per-stage delays, per-call tokens and cache, per-item hardware, configuration provenance, full failure detail). Structured per-item, per-stage and heartbeat log lines from `work.py`. Prebaked selection sub-scores on `PlannedItem`. The `item_label_call` / `summarize_and_visual_decision_call` rename across code, persisted columns and prose. Prompt and reply capture to a 90-day artifact behind a config flag. `recovered_completion` wired to a caller. The cancelled-shard artifact loss. A dispatch-only three-arm test workflow |
+| Hard scope - in | `state/item-health/<YYYY>/<MM>/<DD>.csv` widened to the per-item spine (selection terms, per-stage delays, per-call tokens and cache, per-item hardware, configuration provenance, full failure detail). Structured per-item, per-stage and heartbeat log lines from `work.py`. Prebaked selection sub-scores on `PlannedItem`. The `item_label_call` / `summarize_and_visual_decision_call` rename across code, persisted columns and prose. Prompt and reply capture to a 90-day artifact behind a config flag. `recovered_completion` wired to a caller. The cancelled-shard artifact loss. A dispatch-only three-setup test workflow |
 | Hard scope - out | see the table below |
 | ESCALATE triggers | 1. A read-side migration cannot be written for a widened persisted shape, and the row proposes a dual read side instead. 2. A row proposes to change the grain of any directory under `frontend/public/`. 3. A row proposes to delete `frontend/public/telemetry/` while the console still fetches it. 4. A row proposes `n_parallel` above 1 as a production default before row 11 has measured it. 5. A row proposes to change an output budget, a truncation cap or the call sequence - this plan builds the instrument and changes no pipeline behaviour that selects or shortens what publishes. 6. The widened day file exceeds 150 KB at 80 rows |
-| Chosen strategy | Contracts land before the producers that write them and the readers that parse them (Fowler, CLAUDE.md section 14); the three test arms run sequentially on one runner because the between-runner spread is 4.2x and would swallow the effect (Carmack, Guardrail #10) |
+| Chosen strategy | Contracts land before the producers that write them and the readers that parse them (Fowler, CLAUDE.md section 14); the three test setups run sequentially on one runner because the between-runner spread is 4.2x and would swallow the effect (Carmack, Guardrail #10) |
 | Execution | autonomous orchestrator per docs/how-to/execute-a-plan.md. Parallel N = 4. **Rows group into five pull requests, not eleven** - the `Ships on` column is authoritative. Stack commits inside a group; one PR per group. Documentation-only edits land on `main` directly with no PR (owner decision, 2026-09-14) |
 
 ### Hard scope - out
@@ -22,11 +22,11 @@
 | What is out | What it costs to leave out | What would bring it in |
 | --- | --- | --- |
 | Fixing the slowdown itself - output budgets, the truncation cap, `run.max_parallel`, the call sequence | The pipeline stays at roughly 200 minutes a run and keeps cancelling shards | This plan's instrument producing the per-call rate and per-stage split that a fix would be argued against. The fix is the next plan, and it is deliberately not this one |
-| Streaming call 2 to timestamp the `visual` field boundary (the exact split) | The summary-vs-plan split is a token ratio, labelled an estimate in the data | Row 7's estimate disagreeing with row 11 arm S2's measured delta by more than 10 percent |
+| Streaming call 2 to timestamp the `visual` field boundary (the exact split) | The summary-vs-plan split is a token ratio, labelled an estimate in the data | Row 7's estimate disagreeing with row 11 setup S2's measured delta by more than 10 percent |
 | Changing `frontend/public/` from month to day grain | `state/` and the published mirror stay at different grains | An owner ruling. `console.window_presets` includes 90 days, which is 5 fetches at month grain and up to 90 at day grain, and `WindowControl.svelte` prices the month figure |
 | Deleting `frontend/public/telemetry/` and serving telemetry from `state/` | Telemetry keeps a second home shaped for a browser rather than for analysis | A console data path that reads from somewhere else. Owner intends this; it is not a row here because the console breaks the day the directory goes |
 | Retiring `keyphrases` and `lede_sentence_ids` from the label call | The label call keeps decoding two arrays with zero consumers anywhere in the pipeline | A reading of what those two arrays cost in decoded tokens, which row 5 produces for free once `label_tokens_written` is split by field |
-| `n_parallel: 2` as a production default | Possible decode throughput left on the table | Row 11 arm S3's number, taken on one runner against arm S1 |
+| `n_parallel: 2` as a production default | Possible decode throughput left on the table | Row 11 setup S3's number, taken on one runner against setup S1 |
 | Retiring `state/runtime-counters.csv` now that item-health carries the same signals | Two ledgers carry overlapping machine data | A row in a later plan, after item-health has written the hardware columns for long enough to prove they are equivalent |
 
 ## 1. Status Reckoner
@@ -43,7 +43,7 @@
 | 8 | What the model saw, kept for 90 days | 4 | C | PR-3 | PENDING | - | - | - |
 | 9 | A cut reply keeps its summary | 1 | D | PR-4 | PENDING | - | - | - |
 | 10 | A killed shard keeps the work it finished | - | D | PR-4 | PENDING | - | - | - |
-| 11 | Two articles, three arms, one runner | 4 | E | PR-5 | OPEN | p27-tests | #740 | - |
+| 11 | Two articles, three setups, one runner | 4 | E | PR-5 | OPEN | p27-tests | #740 | - |
 
 ### Pull request groups
 
@@ -222,7 +222,7 @@
   - `backend/idhazh/stages/work.py`
   - `backend/tests/` - the calls test module
 - **Acceptance gates:** local - `ruff`, `mypy`, the calls test module. CI - full suite.
-- **Oracle:** `summary_ms + visual_plan_ms` equals the call's decode time exactly, and their ratio equals `summary_tokens_written : visual_plan_tokens_written`. It cannot settle whether decode rate is genuinely flat across the two halves of one reply; row 11 arm S2 is the check, and a disagreement wider than 10 percent promotes the streaming approach out of hard-scope-out.
+- **Oracle:** `summary_ms + visual_plan_ms` equals the call's decode time exactly, and their ratio equals `summary_tokens_written : visual_plan_tokens_written`. It cannot settle whether decode rate is genuinely flat across the two halves of one reply; row 11 setup S2 is the check, and a disagreement wider than 10 percent promotes the streaming approach out of hard-scope-out.
 - **Decisions:**
 
 | # | Decision | Authority |
@@ -309,23 +309,23 @@
 | 1 | Have the shard commit payloads directly instead of uploading artifacts | Four shards committing to one branch is the contention the artifact hand-off exists to avoid | A merge strategy for payload files and a retry loop on push. Priced by measuring push contention across four concurrent shards | Carmack |
 | 2 | Make the census count only items that reached `assemble` | Records the loss instead of fixing it, and the work is still thrown away | Nothing to build. It costs 33 articles of model time per affected run | Editor |
 
-## 12. Row #11 - Two articles, three arms, one runner
+## 12. Row #11 - Two articles, three setups, one runner
 
-- **Scope:** `.github/workflows/idhazh-pipeline-tests.yaml`, dispatch-only, picks two articles at random from a configured list of at least twenty and runs three arms in sequence on one runner.
+- **Scope:** `.github/workflows/idhazh-pipeline-tests.yaml`, dispatch-only, picks two articles at random from a configured list of at least twenty and runs three setups in sequence on one runner.
 - **Files touched:**
   - `.github/workflows/idhazh-pipeline-tests.yaml`
   - `config/pipeline-tests.json`
   - `backend/idhazh/contracts/app_config.py` or a new contract module for the URL list
   - `schemas/pipeline-tests-config.schema.json`
 - **Acceptance gates:** local - the contract export, `ruff`, `mypy`, the config test module. CI - full suite, plus one real dispatch.
-- **Oracle:** the three arms record the same two `item_id` values, proving the pick happened once. It cannot settle whether two articles are representative of eighty; they are a fast signal, not a sample.
+- **Oracle:** the three setups record the same two `item_id` values, proving the pick happened once. It cannot settle whether two articles are representative of eighty; they are a fast signal, not a sample.
 - **Decisions:**
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | Three arms run sequentially on one runner, not as a matrix. The between-runner spread is 4.2x, wider than anything being measured, so a matrix would compare CPUs rather than settings | Carmack, Guardrail #10 |
-| 2 | The article pick happens once, before the arms, seeded from the run id and printed. A per-arm pick would compare different articles and answer nothing | Carmack |
-| 3 | Arms: `baseline` (both calls, both tasks, `n_parallel 1`), `no_visual_decision` (`plan=False`), `parallel_2` (both tasks, `n_parallel 2`). The third restarts the server because `n_parallel` is a start-time flag | owner, 2026-09-14 |
+| 1 | Three setups run sequentially on one runner, not as a matrix. The between-runner spread is 4.2x, wider than anything being measured, so a matrix would compare CPUs rather than settings | Carmack, Guardrail #10 |
+| 2 | The article pick happens once, before the setups, seeded from the run id and printed. A per-setup pick would compare different articles and answer nothing | Carmack |
+| 3 | Setups: `baseline` (both calls, both tasks, `n_parallel 1`), `no_visual_decision` (`plan=False`), `parallel_2` (both tasks, `n_parallel 2`). The third restarts the server because `n_parallel` is a start-time flag | owner, 2026-09-14 |
 | 4 | `plan=False` needs no new code. `call_two_model` already builds a summary-only grammar and `dag.py` line 93 hardcodes `plan=True`; the row makes that value come from config | Guardrail #6 |
 | 5 | Dispatch-only, no schedule, so the workflow costs nothing when nobody is looking at it | Carmack |
 | 6 | The URL list lives in `config/`, schema-validated, and the job reports which addresses failed to fetch so the list can be pruned as links rot | Guardrail #6 |
@@ -335,9 +335,9 @@
 
 | # | Option | Why rejected | What it would cost to take | Authority |
 | --- | --- | --- | --- | --- |
-| 1 | A matrix of three jobs | Three runners, three CPU draws, and only 17 percent of draws land on the fast part - the arms would differ by hardware more than by setting | Nothing to build, and it is faster. It costs the validity of every comparison it produces | Carmack |
-| 2 | Extend `measure.yml` rather than add a workflow | `measure.yml` is 1,427 lines and answers a different question; adding a third arm set to it makes both harder to read | Nothing to build. It costs a clear separation between benchmarking a model and probing the pipeline | Fowler |
-| 3 | Run all twenty articles | 20 articles at roughly 8 minutes each across three arms is most of a working day, which is the slow loop this row exists to escape | Runner minutes. The list exists so that repeated dispatches cover it by rotation instead | Carmack |
+| 1 | A matrix of three jobs | Three runners, three CPU draws, and only 17 percent of draws land on the fast part - the setups would differ by hardware more than by setting | Nothing to build, and it is faster. It costs the validity of every comparison it produces | Carmack |
+| 2 | Extend `measure.yml` rather than add a workflow | `measure.yml` is 1,427 lines and answers a different question; adding a third group of setups to it makes both harder to read | Nothing to build. It costs a clear separation between benchmarking a model and probing the pipeline | Fowler |
+| 3 | Run all twenty articles | 20 articles at roughly 8 minutes each across three setups is most of a working day, which is the slow loop this row exists to escape | Runner minutes. The list exists so that repeated dispatches cover it by rotation instead | Carmack |
 
 ## 13. What execution surfaced
 
@@ -348,8 +348,8 @@ The plan predicted eleven rows of work and one census error. It did not predict 
 | 1 | An empty headline killed a whole work shard rather than degrading one item. `discover.clean_title` returns `None` for a feed entry with no title, nothing gated it between there and the extractor, and the per-item loop caught nothing. A single headline-less entry from any live feed would have taken down a shard | the test rig's first successful dispatch | #748 |
 | 2 | `state/item-health/2026/09/14.csv` carried two headers and two row widths. A scheduled run on a checkout taken before row 2 merged wrote the retired 43-column shape, and `merge=union` stacked both tables silently. It took `main` red and every open pull request with it | the full suite, after the merge | #747 |
 | 3 | A mechanical substitution over prose broke 14 sentences where the retired phrase was a verb rather than a name, and missed 7 more where a line wrap had split it | a reviewer reading one diff | #744 |
-| 4 | The arm script was committed mode 644 and invoked as a bare command, so the first dispatch died on exit 126. No YAML test, no lint and no shellcheck can see a file mode | the first dispatch | #746 |
-| 5 | One broken arm skipped the two after it, so a rig built to report what happened reported nothing | the first dispatch | #746 |
+| 4 | The script that runs each setup was committed mode 644 and invoked as a bare command, so the first dispatch died on exit 126. No YAML test, no lint and no shellcheck can see a file mode | the first dispatch | #746 |
+| 5 | One broken setup skipped the two after it, so a rig built to report what happened reported nothing | the first dispatch | #746 |
 
 Two measurements the plan asserted were confirmed rather than assumed. Prompt caching was never broken - the summarize-and-plan call reuses 98.2 percent of its prompt, which is 0.8 percent of a run's model time, so the cost is decode and not prefill. And the census over-reported by 3.5x: 46 items recorded as published on 2026-09-14 against 13 in the committed day.
 
@@ -359,11 +359,11 @@ Both are the owner's under CLAUDE.md section 0. Neither is an agent's to take.
 
 | # | Decision | Why it is not an agent's |
 | --- | --- | --- |
-| 1 | Three arms over two articles need about 115 minutes; `budget_minutes` and the job bound both say 45. Raising the bound, drawing one article, or dropping an arm each change what a dispatch measures | ESCALATE trigger 5 in section 0 |
+| 1 | Three setups over two articles need about 115 minutes; `budget_minutes` and the job bound both say 45. Raising the bound, drawing one article, or dropping a setup each change what a dispatch measures | ESCALATE trigger 5 in section 0 |
 | 2 | Whether a story with no headline should publish untitled or be dropped. Every downstream surface already has an untitled fallback, so publishing is reachable in one line. The row shipped the drop because that is what was asked for | Editor rules what runs, CLAUDE.md section 14 |
 
 ### One number, for the plan that follows
 
-The first successful arm measured **2,172,743 ms of model time over two articles - about 18 minutes an article**, on a stock `ubuntu-latest`, 2026-09-15, one run, no spread. The production median on 2026-09-14 was 475,890 ms an item. Two articles is a signal and not a sample, and the runner model was not recorded for this arm. The fix plan starts here.
+The first successful setup measured **2,172,743 ms of model time over two articles - about 18 minutes an article**, on a stock `ubuntu-latest`, 2026-09-15, one run, no spread. The production median on 2026-09-14 was 475,890 ms an item. Two articles is a signal and not a sample, and the runner model was not recorded for this setup. The fix plan starts here.
 
 Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delegates a row where delegation pays; keep parallel N = 4 rows in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0.

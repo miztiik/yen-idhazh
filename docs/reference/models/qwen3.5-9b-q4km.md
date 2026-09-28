@@ -61,8 +61,8 @@ what llama.cpp reported when it loaded the file; the model file has no
 
 **Two config files name these weights, and they are one model.**
 `qwen3.5-9b-q4km.json` runs with reasoning off; `qwen3.5-9b-q4km-thinking.json`
-is the same file with `turns.thinking_close` declared, added 2026-09-17 as an
-arm of the four-arm qualification. Both carry this page's `sha256`, so nothing
+is the same file with `turns.thinking_close` declared, added 2026-09-17 as a
+setup of the four-setup qualification. Both carry this page's `sha256`, so nothing
 about the identity above moves between them and this page is the dossier for
 both - one page a model, the same rule that gives Gemma's two files one page
 ([../models.md](../models.md#what-earns-a-dossier)). The status line at the top
@@ -86,9 +86,9 @@ non-empty block closes with the same bytes an empty one does. That identity is
 checked in `backend/tests/contracts/test_turn_envelope.py` rather than left as
 an argument on this page.
 
-**What the thinking arm has not measured.** Nothing on this page was re-taken
+**What the thinking setup has not measured.** Nothing on this page was re-taken
 with reasoning on. A thinking span decodes into the same sequence, so seconds an
-item and the window headroom both move, and neither has a reading - the arm
+item and the window headroom both move, and neither has a reading - the setup
 exists to take them. No decode cap is sent on either file, so the span ends
 on the marker above or on the window and on nothing else
 ([../../architecture/summarize/throughput.md](../../architecture/summarize/throughput.md#what-a-thinking-span-costs-and-the-one-part-that-is-still-an-estimate)).
@@ -425,7 +425,7 @@ and a re-run replaces its page rather than adding a second one.
 ## See also
 
 - [../models.md](../models.md) - the index, one row a model.
-- [../benchmarks/four-candidates-on-one-news-day.md](../benchmarks/four-candidates-on-one-news-day.md) - these weights with the reasoning channel ON, on 2026-09-17: no valid reply in 24 attempts. That arm is a separate config entry, not the one this dossier describes.
+- [../benchmarks/four-candidates-on-one-news-day.md](../benchmarks/four-candidates-on-one-news-day.md) - these weights with the reasoning channel ON, on 2026-09-17: no valid reply in 24 attempts. That setup is a separate config entry, not the one this dossier describes.
 - [../pipeline-cost.md](../pipeline-cost.md) - the instrument log: everything measured that is not a property of one model.
 - [../../../config/models/qwen3.5-9b-q4km.json](../../../config/models/qwen3.5-9b-q4km.json) - where the identity above is declared. `config/idhazh.json` names this file in one line, `models_file`, and that line is the whole of a swap.
 - [../../../backend/idhazh/measured.py](../../../backend/idhazh/measured.py) - the readings a gate or a test reads, including which are pinned to these weights.
