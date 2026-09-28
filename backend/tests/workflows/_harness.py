@@ -621,24 +621,30 @@ TAKE_STATE_MODULE: Final = REPO_ROOT / "backend" / "utilities" / "take_state_fro
 
 TAKE_STATE_CALL: Final = ("python3", "backend/utilities/take_state_from_the_tip.py", "state")
 
-#: The prune's own push, in a program rather than inline so a test can drive it
-#: against a real repository. It is the one file in the repository that may
-#: force-push, and the one that may refuse to.
-PRUNE_PUSH_MODULE: Final = REPO_ROOT / "backend" / "utilities" / "push_rewritten_history.py"
+#: The history job's one program: the squash, the record of the run and the push,
+#: in a program rather than inline so a test can drive it against a real
+#: repository. It is the one file in the repository that may force-push, and the
+#: one that may refuse to.
+PRUNE_PUSH_MODULE: Final = REPO_ROOT / "backend" / "utilities" / "corpus_history.py"
 
-PRUNE_PUSH_CALL: Final = ("python3", "backend/utilities/push_rewritten_history.py")
+#: The step that runs it, and the whole of what that step runs. The day and the
+#: run arrive through the step's `env`, so no expression is spliced into shell.
+PRUNE_PUSH_STEP: Final = "Squash the history, record the run and push it"
 
-#: The commit the prune checked out, remembered before the squash rewrites it.
-#: The push compares origin's tip against this, so a step that captured it after
-#: the rewrite would be comparing the tip against a commit only this job holds.
-PRUNE_BASE_ENV: Final = "BASE_COMMIT"
+PRUNE_PUSH_CALL: Final = (
+    "python",
+    "backend/utilities/corpus_history.py",
+    "--today",
+    '"$TODAY"',
+    "--run-id",
+    '"$RUN_ID"',
+    "--attempt",
+    '"$ATTEMPT"',
+)
 
-#: The step that remembers it, and the step that rewrites history afterwards.
-PRUNE_REMEMBER_STEP: Final = "Remember the tip this job checked out"
-
-PRUNE_SQUASH_STEP: Final = "Squash everything older than the boundary"
-
-PRUNE_PUSH_STEP: Final = "Push the rewritten history"
+#: The history job's due check, which runs on a shallow checkout before any
+#: install and decides whether the full clone happens at all.
+SQUASH_DUE_MODULE: Final = REPO_ROOT / "backend" / "utilities" / "corpus_squash_due.py"
 
 #: The step the `plan` job exists for. The catch-up above runs ahead of it: a
 #: fold that refuses a row ends the job, and a refusal that lands after the feed
@@ -861,12 +867,11 @@ WORK_PAYLOAD_ARTIFACTS: Final = (
 COMMIT_IDENTITY: Final = "miztiik <miztiik@users.noreply.github.com>"
 
 
-#: Every file that configures git before a job commits and that no test runs. A
-#: runner carries no identity of its own, so each of these has to set one, and a
-#: name nothing reads drifts in silence. The commit program is not here: a test
-#: runs it and reads the identity off the commit it pushed, which settles the
-#: same question by execution.
-GIT_IDENTITY_SOURCES: Final = (WORKFLOWS_DIR / "prune.yml",)
+#: Every workflow, read for a git identity set inline. None sets one today: each
+#: job that commits runs a program that sets its own, and a test runs each of
+#: those programs or holds its two values to the commit program's. A workflow
+#: that goes back to setting one inline is held to the same name here.
+GIT_IDENTITY_SOURCES: Final = tuple(sorted(WORKFLOWS_DIR.glob("*.yml")))
 
 # What a `${{ }}` expression stands in for when a test runs the real call site
 # outside Actions. `day_dir` is the digest date as a path, which is what lets the

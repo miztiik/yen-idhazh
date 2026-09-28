@@ -11,12 +11,19 @@ from pydantic import Field, StringConstraints, model_validator
 from idhazh.contracts.base import Model
 from idhazh.contracts.knobs.removed import refuse_a_removed_knob
 
-#: The `finetune` roles this block used to carry. `student` named the small
+#: The `finetune` keys this block used to carry. `student` named the small
 #: visual planner, retired when the two calls moved onto the summarizer's
 #: weights, and re-pointing it at `summarize` would make the teacher and the
 #: student one model - a session that trains a model on its own output. Nothing
-#: read it, so it is gone rather than moved.
-SUPERSEDED_FINETUNE_NAMES: Final[Mapping[str, str]] = MappingProxyType({"student": ""})
+#: read it, so it is gone rather than moved. The two prune numbers moved into the
+#: corpus squash's own declaration, which is the only thing that reads them.
+SUPERSEDED_FINETUNE_NAMES: Final[Mapping[str, str]] = MappingProxyType(
+    {
+        "student": "",
+        "prune_every_days": "every_days in config/gardener/corpus-squash.json",
+        "prune_keep_days": "window.value in config/gardener/corpus-squash.json",
+    }
+)
 
 
 #: What a `finetune` role may spell. A key in `models` is a Python attribute
@@ -135,27 +142,6 @@ class FinetuneConfig(Model):
             "any step runs, so no value in config can ever reach it. The step wakes with "
             "the daily run, reads `harvested_at` from the committed meta file and decides "
             "for itself, which also means a missed day self-corrects on the next wake."
-        ),
-    )
-    prune_every_days: int = Field(
-        default=30,
-        ge=1,
-        description=(
-            "How often `prune.yml` fires. Each firing costs one force-push of `main` - "
-            "the single exception CLAUDE.md section 8 carries, and the reason it carries "
-            "one is that git history is append-only, so deleting a corpus row does not "
-            "delete its bytes."
-        ),
-    )
-    prune_keep_days: int = Field(
-        default=60,
-        ge=1,
-        description=(
-            "Where the squash boundary sits. Retention is this number, full stop, and it "
-            "is not a multiple of anything. At 30 and 60 the history holds 60 to 90 days "
-            "of commits - 9 to 13 weekly harvests, 25 MB to 38 MB, flat forever. Two whole "
-            "datasets survive any squash for free, because the boundary commit holds a "
-            "complete copy of the corpus and so does the tip."
         ),
     )
     holdout_days: int = Field(

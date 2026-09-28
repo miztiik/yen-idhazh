@@ -1,6 +1,6 @@
 # Contracts and Schemas
 
-**Last Updated**: 2026-09-27
+**Last Updated**: 2026-09-28
 
 The persisted-shape subsystem: where the models live, how a schema is obtained from one, the small hand copy the frontend carries, and the tests that stop the two drifting apart. This is the operational home of Guardrail #3 (contracts before logic) and `CLAUDE.md` sections 1a and 11.
 
@@ -178,7 +178,7 @@ edit does not start (Guardrail #11).
 
 ### Two of these are contracts and are deliberately not migration surfaces
 
-`EvidenceItem` and the two corpus shapes carry a `version` like everything else and owe no read-side migration when they change (section 11). Nothing they were written into survives: the oldest `EvidenceItem` that can exist is a 14-day workflow artifact, and the corpus is a rolling window regenerable from the run's own payloads whose history is rewritten every `finetune.prune_every_days`. A shape change there owes a re-run or a re-harvest. They are contracts under Guardrail #3 all the same, because each crosses a process boundary and something on the far side has to be able to refuse a file it cannot trust.
+`EvidenceItem` and the corpus row carry a `version` like everything else and owe no read-side migration when they change (section 11). Nothing they were written into survives: the oldest `EvidenceItem` that can exist is a 14-day workflow artifact, and the corpus is a rolling window regenerable from the run's own payloads whose history is rewritten every `every_days` of `config/gardener/corpus-squash.json`. A shape change there owes a re-run or a re-harvest. They are contracts under Guardrail #3 all the same, because each crosses a process boundary and something on the far side has to be able to refuse a file it cannot trust. **`CorpusMeta` is the exception**: the harvest and the squash's due check read the committed `corpus/corpus.meta.json` on every run, so when `pruned_date` became `last_run` on 2026-09-28 both readers learned the old name for one release, and they drop it together.
 
 ### A shard-grain fact is its own contract, not a field on the run manifest
 

@@ -12,9 +12,9 @@ name: Corpus prune
 # What it costs, said out loud rather than implied: a squash boundary is
 # per-commit and not per-path, so the range this collapses carries `backend/`,
 # `docs/` and `state/` as well as `corpus/`. After a prune `git blame` and
-# `git bisect` reach back `prune_keep_days`, a commit SHA older than the boundary
-# stops resolving, and a clone taken before the prune has to be re-fetched.
-# Owner decision, 2026-08-28.
+# `git bisect` reach back the `window` of `config/gardener/corpus-squash.json`, a
+# commit SHA older than the boundary stops resolving, and a clone taken before
+# the prune has to be re-fetched. Owner decision, 2026-08-28.
 #
 # Wired to nothing. An earlier draft hung this off the harvest with `needs:`,
 # which puts a job that rewrites history inside the production digest pipeline -
@@ -27,10 +27,11 @@ on:
     # below reads one committed file out of a shallow checkout and exits.
     #
     # The CADENCE is not here and cannot be. `on.schedule` is parsed before any
-    # step runs, so no value in `config/idhazh.json` can reach a cron line, and
+    # step runs, so no value in `config/` can reach a cron line, and
     # 5-field cron has no every-N-days field to write one with - `0 4 */30 * *`
     # would fire on the 1st and 31st of a month and then again on the 1st.
-    # `finetune.prune_every_days` is the cadence; this cron is only the wake-up.
+    # `every_days` in `config/gardener/corpus-squash.json` is the cadence; this
+    # cron is only the wake-up.
     #
     # The MINUTE is derived, not chosen. A scheduled run starts 40 to 70 minutes
     # after its cron minute and then takes 164 to 184 minutes end to end
@@ -52,7 +53,7 @@ on:
   workflow_dispatch:
     inputs:
       force:
-        description: 'Prune now, even if finetune.prune_every_days says it is not due'
+        description: 'Prune now, even if every_days in config/gardener/corpus-squash.json says it is not due'
         type: boolean
         default: false
 
@@ -76,20 +77,21 @@ jobs:
         with:
           fetch-depth: 1
 
-      # Reads two committed files and writes nothing. The stamp that closes the
-      # loop is written by the contract, further down.
+      # Reads two committed files and writes nothing. The record of the run that
+      # closes the loop is written by the program further down. A stamp it cannot
+      # read ends the job here, before the full clone: it prints no `due`.
       - id: due
         env:
           FORCE: ${{ inputs.force }}
         run: |
           set -euo pipefail
-          python3 backend/utilities/prune_due.py | tee /dev/stderr >> "$GITHUB_OUTPUT"
+          python3 backend/utilities/corpus_squash_due.py | tee /dev/stderr >> "$GITHUB_OUTPUT"
 
       - name: Not due
         if: steps.due.outputs.due != 'true'
         run: |
-          echo "last prune: ${{ steps.due.outputs.last_prune }}"
-          echo "nothing to prune - fewer than finetune.prune_every_days have passed"
+          echo "last run: ${{ steps.due.outputs.last_run }}, and the squash is ${{ steps.due.outputs.lifecycle_status }}"
+          echo "nothing to squash - fewer than every_days in config/gardener/corpus-squash.json have passed"
 
       # Everything below only runs on the day the prune is due, which is why the
       # full clone happens about twelve times a year rather than daily.
@@ -97,14 +99,6 @@ jobs:
         if: steps.due.outputs.due == 'true'
         with:
           fetch-depth: 0
-
-      # Read here because the squash below replaces every commit this checkout
-      # holds, so afterwards nothing in it still names what origin handed over.
-      # The push compares origin's tip against this value and refuses if another
-      # run moved it.
-      - name: Remember the tip this job checked out
-        if: steps.due.outputs.due == 'true'
-        run: echo "BASE_COMMIT=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
 
       - uses: actions/setup-python@v7
         if: steps.due.outputs.due == 'true'
@@ -117,77 +111,23 @@ jobs:
         if: steps.due.outputs.due == 'true'
         run: pip install -e .
 
-      # The squash. `git checkout --orphan` at the boundary produces a root
-      # commit holding a COMPLETE copy of the tree, so no data is lost - only the
-      # deltas behind it are. That is also why no `keep_generations` knob is
-      # needed: the boundary holds one whole dataset and the tip holds another,
-      # so N and N-1 always survive.
-      - name: Squash everything older than the boundary
-        if: steps.due.outputs.due == 'true'
-        env:
-          BOUNDARY: ${{ steps.due.outputs.boundary }}
-          KEEP_DAYS: ${{ steps.due.outputs.keep_days }}
-        run: |
-          set -euo pipefail
-          git config user.name "miztiik"
-          git config user.email "miztiik@users.noreply.github.com"
-
-          # The newest commit at or before the boundary. `--first-parent` so a
-          # merged branch's own commits cannot be picked as the boundary.
-          CUT=$(git rev-list --first-parent --before="${BOUNDARY}T00:00:00Z" -n 1 HEAD || true)
-          if [ -z "$CUT" ]; then
-            echo "no commit is older than ${BOUNDARY} - nothing to squash"
-            echo "SQUASHED=false" >> "$GITHUB_ENV"
-            exit 0
-          fi
-          if [ "$CUT" = "$(git rev-parse HEAD)" ]; then
-            echo "the boundary is the tip, so squashing would collapse the whole branch" >&2
-            echo "SQUASHED=false" >> "$GITHUB_ENV"
-            exit 0
-          fi
-          echo "boundary ${BOUNDARY} resolves to $CUT"
-          BEHIND=$(git rev-list --count "$CUT")
-          if [ "$BEHIND" -le 1 ]; then
-            echo "only $BEHIND commit is behind the boundary - already pruned"
-            echo "SQUASHED=false" >> "$GITHUB_ENV"
-            exit 0
-          fi
-
-          git checkout --orphan pruned-root "$CUT"
-          git commit -m "corpus: squash history older than ${KEEP_DAYS} days"
-          ROOT=$(git rev-parse HEAD)
-          git checkout main
-          git rebase --onto "$ROOT" "$CUT" main
-          echo "SQUASHED=true" >> "$GITHUB_ENV"
-          echo "$BEHIND commits collapsed into $ROOT"
-
-      # Written whether or not the squash found anything, and that is the point:
-      # an unstamped run is due again tomorrow.
-      - name: Stamp the prune
+      # The squash, the record of the run and the one force-push in this
+      # repository, in one program so the decision to force never crosses a step
+      # as an environment string. It remembers the tip before it rewrites
+      # anything, collapses what is older than the declaration's window into one
+      # root holding a complete copy of the tree, records the run whether or not
+      # anything was old enough, and pushes - with force only when it rewrote.
+      # It re-reads origin's tip first, and a tip that moved means another run
+      # pushed while this job was rewriting: it refuses rather than delete that
+      # run's work.
+      #
+      # A program rather than inline shell, so a test can drive it against a real
+      # repository and watch it refuse. `today` is the due step's own reading, so
+      # the job reads the clock once.
+      - name: Squash the history, record the run and push it
         if: steps.due.outputs.due == 'true'
         env:
           TODAY: ${{ steps.due.outputs.today }}
-        run: |
-          set -euo pipefail
-          python -m idhazh prune-stamp --date "$TODAY"
-          git add corpus
-          if git diff --cached --quiet; then
-            echo "the stamp did not move"
-          else
-            git commit -m "corpus: pruned ${TODAY}"
-          fi
-
-      # The one force-push in this repository, and the only step allowed to
-      # refuse one. The program re-reads origin's tip and compares it with the
-      # commit remembered above: a tip that moved means another run pushed while
-      # this job was rewriting, and forcing over it would delete that run's work.
-      #
-      # It is `--force` and not `--force-with-lease` because a lease compares
-      # against a ref this job fetched at checkout, and the rebase above has
-      # already rewritten every commit the lease would name.
-      #
-      # A program rather than inline shell, so a test can drive it against a real
-      # repository and watch it refuse.
-      - name: Push the rewritten history
-        if: steps.due.outputs.due == 'true'
-        run: python3 backend/utilities/push_rewritten_history.py
+          RUN_ID: ${{ steps.due.outputs.today }}-${{ github.run_id }}
+          ATTEMPT: ${{ github.run_attempt }}
+        run: python backend/utilities/corpus_history.py --today "$TODAY" --run-id "$RUN_ID" --attempt "$ATTEMPT"

@@ -1,6 +1,6 @@
 # Adaptive Pruning
 
-**Last Updated**: 2026-09-20
+**Last Updated**: 2026-09-28
 
 One question, asked of every file this project writes:
 
@@ -188,13 +188,17 @@ is the count of month shards a console read opens, and no read opens a visual
 | Artefact | Policy | Age | Why that policy |
 | --- | --- | --- | --- |
 | `corpus/corpus.jsonl` | Delete (eviction) | `finetune.corpus_rows`, a row count | the one artefact bounded by a count rather than an age, because no reader can reach it |
-| `corpus/corpus.meta.json` | Keep | none | the census of the window above |
+| `corpus/corpus.meta.json` | Keep | none | the census of the window above, and `last_run`, the day the corpus squash last ran |
 | `corpus/holdout.txt` | Keep | none | the ids held out of training |
 
 The bytes those rows add to **git history** are a separate problem with a separate
 answer, and `CLAUDE.md` section 8 owns it: history is append-only, so bounding the
 repository means rewriting it, which is the one force-push exception in this
-project and what it costs is stated there.
+project and what it costs is stated there. The squash is the gardener's one
+`history` task: `config/gardener/corpus-squash.json` declares how many days of
+history it keeps and how often it runs, and `backend/utilities/corpus_history.py`
+is the program `prune.yml` runs to do it
+([../how-to/fine-tune-a-model.md](../how-to/fine-tune-a-model.md)).
 
 ### `frontend/public/` - what a reader downloads
 

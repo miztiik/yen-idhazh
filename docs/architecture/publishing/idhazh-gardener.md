@@ -1,6 +1,6 @@
 # The gardener
 
-**Last Updated**: 2026-09-27
+**Last Updated**: 2026-09-28
 
 How the one program that deletes and rewrites what this repository keeps is put
 together: where its tasks come from, how a wake is split into shards, what a
@@ -161,8 +161,12 @@ machinery an injected instruction would need to act (CLAUDE.md Guardrail #11).
 Every other git call in this repository already lives under `backend/utilities/`
 for the same reason. So the runner writes the record and hands back the paths,
 and `gardener_publish.py` reads the commit, calls it and lands them. A task that
-must run git itself - the corpus rewrite is one - has the same limit, and the
-design for it is still to be written.
+must run git itself has the same limit, and the corpus rewrite is the one that
+does: `backend/utilities/corpus_history.py` runs its git - the boundary, the new
+root, the replay and the push - in the history job, and binds the
+`corpus-squash` task through the registry only for the step that needs none,
+recording the run. It never lands through `gardener_publish.py`, whose reset to
+`origin/main` would throw the rewrite away.
 
 ## See also
 
