@@ -133,7 +133,8 @@ the front page. That build broke in its prerender (next paragraph), so the gate
 read the browser output the break leaves whole. It failed on two files - the chunk
 holding the package, and a one-line chunk holding the wasm's address - and neither
 is on the front page's static path. Neither is a page's own module either, so the
-gate as it stood before this change, which read only those, passed the same build.
+gate as it stood before this change, which read only those, would have passed the
+same build.
 
 **A static import of the package breaks the build before the gate runs.** In the
 prerender the package resolves to its Node build, which mistakes the prerender's
