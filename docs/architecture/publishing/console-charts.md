@@ -1,6 +1,6 @@
 # Console Charts
 
-**Last Updated**: 2026-09-27
+**Last Updated**: 2026-09-28
 What a chart on the operator console has to conform to: the one coordinate
 frame every chart draws through, the pointer readout every chart with a shared
 column carries, what an empty chart box says until a mark lands in it, how a
@@ -186,35 +186,37 @@ cannot reach is a state an implementation can pass by never entering.
 SVG `<title>`.** It was two charts when the strip was written and seven of
 twenty-four by 2026-08-30; it is the default on every console route that draws
 one, from 2026-08-31, and a chart with no shared column now says so in
-`data-readout-none` rather than by saying nothing.
+`data-readout-none` rather than by saying nothing. From 2026-09-28 a chart of
+separate records - a square per run, a bar per shard - reads one record at a
+time in the same strip, and no chart mark carries a native `title`.
 
-**The rule has two halves, and a drawing satisfies exactly one of them.** Either
-it resolves to an ancestor carrying `data-readout-columns` - an integer of one
-or more, holding exactly one strip and no competing swatch - or it resolves to
-one carrying `data-readout-none`, free text saying in words why it has no column
-to name. Never both on one element, and never a second strip under one
-`data-readout-columns`. A drawing that carries neither is the failure the rule
-exists to catch, because a chart somebody forgot looks exactly like a chart
-somebody decided about.
+**The rule has three answers, and a drawing gives exactly one of them.** It
+resolves to an ancestor carrying `data-readout-columns` - an integer of one or
+more, holding exactly one strip and no competing swatch - or to one carrying
+`data-readout-records`, the count of records its strip can print, or to one
+carrying `data-readout-none`, free text saying in words why it has nothing to
+read and closing `; agreed with Susan`. Never two on one element, and never a
+second strip under one declaration. A drawing that carries none is the failure
+the rule exists to catch, because a chart somebody forgot looks exactly like a
+chart somebody decided about.
 
-**Two scans hold that rule, and they do not reach the same drawings.**
+**One scan holds that rule, on all five console routes.**
 [frontend/tests/console-readout.spec.ts](../../../frontend/tests/console-readout.spec.ts)
-seeds one on `svg` and asks "does this chart declare?", so it can ask only of a
-route that draws one. It seeds the other on `[data-readout-none]` and asks "is
-this reason worth reading?", so that one reaches any drawing that declares,
-`<svg>` or not - the two day matrices on `/console/voices/` are `<div>` tables,
-and the second scan is the only one that can see them. That asymmetry is why the
-file carries two route lists rather than one. The first runs on `/console/`,
-`/console/model/`, `/console/machine/` and `/console/judgement/`; the second adds
-`/console/voices/`. What falls outside both is a drawing that is neither an
-`<svg>` nor a declaration. Widening the first seed to every `role="img"` drawing
-would reach those, and it turns three console routes red until each one
-declares, so it is a pass of its own rather than a line in this one.
+seeds on every `<svg>`, every `role="img"` and every mark a strip reads, so it
+reaches the `<div>` day matrices on `/console/voices/` and the HTML bars on
+`/console/machine/` as well as the drawn charts. It skips the console band and
+the icons, which draw no data. Until 2026-09-28 it was two scans over two route
+lists, and a drawing that was neither an `<svg>` nor a declaration fell outside
+both. The same scan points at every named mark and asks that the figures and the
+words of its name are printed in the strip, so moving a tooltip into the strip
+cannot silently drop a fact.
 
 Both are **never pinned to the pointer** - a readout under a thumb is a
-readout nobody reads. One
-Svelte action beside `observeWidth` drives it
-([frontend/src/lib/charts/frame.ts](../../../frontend/src/lib/charts/frame.ts)):
+readout nobody reads. Two
+Svelte actions drive them
+([frontend/src/lib/charts/readout.ts](../../../frontend/src/lib/charts/readout.ts)):
+`pointerReadout` for a chart with columns and `markReadout` for a chart of
+records drawn in HTML. The column action listens to
 `pointermove` and `pointerdown` on the `<svg>`, which is one stream covering
 mouse, pen and touch, plus `focusin`, `keydown`, `pointerleave` and `focusout`.
 The hit rule is nearest mark **by x**, from positions the chart already
@@ -224,19 +226,23 @@ numbers before they could be read.
 
 The `<svg>` takes `tabindex="0"` and the marks take none: Left and Right step,
 Home and End jump, Escape closes. A tab stop per data point is a trap rather
-than access - the committed ledger draws 2,541 of them. The `<title>` elements
-stay as each mark's accessible name and are never the publication: nothing a
-readout alone can tell you is needed to read either chart, which is also the
-whole no-JavaScript answer.
+than access - the committed ledger draws 2,541 of them. A chart of records does
+the same with one stop per chart, and its arrow keys follow its layout. The
+`<title>` elements stay as each mark's accessible name and are never the
+publication: nothing a readout alone can tell you is needed to read either
+chart, which is also the whole no-JavaScript answer. Susan ruled on 2026-09-28
+that an SVG `<title>` is a mouse-only tooltip too, so its words move into the
+strip as well; 25 of them in 13 files had not moved at that date.
 
 **The stage-timing chart takes one of the two, and it is a strip below the plot
 rather than a box over it.** A floating box was measured on 2026-08-29 at 88 to
 121px over a 220px plot - 40 to 55 percent of the chart it was explaining - so
-this one is laid out under the plot where it cannot cover a mark at any width,
-and `chart.readout_max_share` bounds it at a third of the plot so it cannot
-become a paragraph beside a chart being glanced at. The run-health strip still
-gets none - it has no per-day point to land on, and it says so where it is
-drawn. `FailurePanels` gained one: it does print every stage's rate and its
+this one is laid out under the plot where it cannot cover a mark at any width.
+`chart.readout_max_share` was a third of the plot until 2026-09-28 and is the
+whole plot now, with the entries side by side, because a third of a phone plot
+stacked every entry on a line of its own. The run-health strip gets records
+rather than columns - it has no per-day point to land on, and a square is one
+run. `FailurePanels` gained one: it does print every stage's rate and its
 denominator in type under the plot, but not per day, and the day is the column
 the strip prints.
 
@@ -273,10 +279,12 @@ changes the room it takes and never moves the marks under the pointer. The
 `<title>` keeps every word, including the middle half the box already draws, and
 the run count stays in the verdict line under the legend.
 
-The strip's shape is not this chart's own. `dayTicks`, `dayColumnX`,
-`readoutCapStyle` and `readoutMarks` in
+The strip's shape is not this chart's own. `dayTicks` and `dayColumnX` in
 [frontend/src/lib/charts/frame.ts](../../../frontend/src/lib/charts/frame.ts)
-hold the axis-thinning, the column arithmetic, the cap and the hover targets, so
+hold the axis-thinning and the column arithmetic, and `readoutCapStyle` and
+`readoutMarks` in
+[frontend/src/lib/charts/readout.ts](../../../frontend/src/lib/charts/readout.ts)
+hold the cap and the hover targets, so
 the stage-timing trend directly above this one on the page and this chart cannot
 drift apart. Two charts stacked on one page that hover differently cost the
 operator a second guess.
