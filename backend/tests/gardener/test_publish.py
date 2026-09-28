@@ -258,6 +258,40 @@ def test_a_folder_that_is_not_a_checkout_has_no_commit_to_name(
     assert gardener_publish.Checkout(loose).head() is None
 
 
+def test_the_commit_listing_names_the_owned_folders_it_holds_and_every_child_of_state(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Read from the commit, so a folder the checkout lacks is still named, and never recursed.
+
+    An owned folder with a trailing slash would list its children rather than
+    itself, and the folder would read as absent - the slash is stripped. A child
+    of `state/` that holds a named folder is listed as that folder: git walks into
+    it to reach the name, so it never reads as the complement's to take whole.
+    """
+    quiet_git(tmp_path, monkeypatch)
+    _, checkout = an_origin(
+        tmp_path,
+        {
+            "state/seen/2026/09/01.csv": "a\n",
+            "state/raw/visual-prunes/2026/09/01/x.csv": "b\n",
+            "state/a-trial-run/2026-05-01.txt": "c\n",
+            "frontend/public/digest/2026/09/01/digest.json": "{}\n",
+        },
+    )
+    shutil.rmtree(checkout / "state" / "seen")
+
+    listed = gardener_publish.Checkout(checkout).committed_folders(
+        ["state/seen/", "state/score-archive", "state/raw/visual-prunes", "frontend/public/digest"]
+    )
+
+    assert listed == {
+        "state/seen",
+        "state/raw/visual-prunes",
+        "state/a-trial-run",
+        "frontend/public/digest",
+    }
+
+
 def test_a_shard_names_its_record_among_its_writes_and_never_both_writes_and_deletes() -> None:
     with pytest.raises(ValidationError, match="one of the files it writes"):
         Shard(

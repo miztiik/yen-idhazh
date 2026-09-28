@@ -13,6 +13,7 @@ written out below, in UTC.
 
 from __future__ import annotations
 
+import shutil
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -26,7 +27,16 @@ from idhazh.gardener import runner
 from idhazh.gardener.outcome import EXIT_INTEGRITY, EXIT_OK, EXIT_TASK_FAILED, Outcome
 from utilities import gardener_publish
 
-from ._garden import GARDENER_FIXTURES, a_config, an_origin, commits_on, git, on_origin, quiet_git
+from ._garden import (
+    GARDENER_FIXTURES,
+    a_config,
+    an_origin,
+    commits_on,
+    git,
+    on_origin,
+    quiet_git,
+    write,
+)
 from ._garden import task_package as a_package
 
 pytestmark = pytest.mark.slow
@@ -78,6 +88,7 @@ def ran(
             attempt=1,
             shard=0,
             git_sha=git(checkout, "rev-parse", "HEAD").strip(),
+            committed_folders=None,
             package=tasks,
             clock=lambda: WAKE,
             say=said.append,
@@ -177,11 +188,12 @@ def test_a_task_that_reaches_outside_what_it_owns_stops_the_shard_before_anythin
     assert git(checkout, "status", "--porcelain", "--", "state") == ""
 
 
-def test_a_task_whose_folder_is_missing_fails_and_says_which(
+def test_a_folder_the_commit_holds_and_the_checkout_lacks_fails_its_task(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    files = {key: text for key, text in RUNNER_FILES.items() if "rehearsal" not in key}
-    _, checkout, settings = a_garden(tmp_path, monkeypatch, "runner", files)
+    """A checkout that left out a folder the commit holds is a wrong checkout, not a zero."""
+    _, checkout, settings = a_garden(tmp_path, monkeypatch, "runner", RUNNER_FILES)
+    shutil.rmtree(checkout / "state" / "rehearsal")
 
     outcome, _ = ran(
         ("compact-gardener", "old-days", "rehearsal"),
@@ -189,13 +201,86 @@ def test_a_task_whose_folder_is_missing_fails_and_says_which(
         checkout,
         "garden_tasks_ok",
         monkeypatch,
-        land=False,
     )
 
     assert outcome.exit_code == EXIT_TASK_FAILED
     rows = rows_of(outcome.record)
     assert rows["rehearsal"].stopped_because is StopReason.FAILED
     assert rows["old-days"].stopped_because is StopReason.EXHAUSTED
+
+
+def test_a_folder_the_commit_does_not_hold_yet_is_walked_as_nothing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Nothing has written the folder, so there is nothing in it to take, and the task runs."""
+    files = {key: text for key, text in RUNNER_FILES.items() if "rehearsal" not in key}
+    _, checkout, settings = a_garden(tmp_path, monkeypatch, "runner", files)
+
+    with caplog.at_level("INFO", logger=runner.__name__):
+        outcome, _ = ran(("rehearsal",), settings, checkout, "garden_tasks_ok", monkeypatch)
+
+    assert outcome.exit_code == EXIT_OK
+    row = rows_of(outcome.record)["rehearsal"]
+    assert (row.stopped_because, row.candidates_seen) == (StopReason.EXHAUSTED, 0)
+    assert "which the commit does not hold yet" in caplog.text
+
+
+def test_without_the_commit_a_missing_folder_is_skipped_rather_than_failed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`run-task` reads no commit, so the checkout is taken as it stands."""
+    _, checkout, settings = a_garden(tmp_path, monkeypatch, "runner", RUNNER_FILES)
+    shutil.rmtree(checkout / "state" / "rehearsal")
+
+    outcome, _ = ran(
+        ("rehearsal",), settings, checkout, "garden_tasks_ok", monkeypatch, land=False
+    )
+
+    assert outcome.exit_code == EXIT_OK
+    assert rows_of(outcome.record)["rehearsal"].stopped_because is StopReason.EXHAUSTED
+
+
+def a_garden_with_the_complement(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, files: dict[str, str]
+) -> tuple[Path, GardenerSettings]:
+    quiet_git(tmp_path, monkeypatch)
+    _, checkout = an_origin(tmp_path, files)
+    declared = a_config(
+        checkout, GARDENER_FIXTURES / "runner", GARDENER_FIXTURES / "garden" / "trials.json"
+    )
+    return checkout, config.load_gardener(declared)
+
+
+def test_a_complement_task_with_no_commit_to_read_is_refused_before_anything_runs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """What the complement owns is what nothing else claims, and only the commit says that."""
+    checkout, settings = a_garden_with_the_complement(tmp_path, monkeypatch, RUNNER_FILES)
+
+    outcome, said = ran(
+        ("old-days", "trials"), settings, checkout, "garden_tasks_ok", monkeypatch, land=False
+    )
+
+    assert (outcome.exit_code, outcome.record) == (EXIT_INTEGRITY, None)
+    assert any("trials owns everything else under state" in line for line in said)
+    assert (checkout / "state" / "old-days" / AGED).is_file(), "a task ran before the refusal"
+
+
+def test_a_complement_task_walks_the_folders_the_commit_holds_that_nothing_claims(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A folder somebody left in the checkout and never committed is not the sweep's to take."""
+    stray = "state/a-trial-run/2026-05-01.txt"
+    checkout, settings = a_garden_with_the_complement(
+        tmp_path, monkeypatch, {**RUNNER_FILES, stray: "aged\n"}
+    )
+    write(checkout / "state" / "never-committed" / "2026-05-01.txt", "aged\n")
+
+    outcome, said = ran(("trials",), settings, checkout, "garden_tasks_ok", monkeypatch)
+
+    assert outcome.exit_code == EXIT_OK
+    assert rows_of(outcome.record)["trials"].selected == 1
+    assert f"  {stray}" in said
 
 
 def test_modules_that_do_not_match_the_declarations_stop_the_shard(

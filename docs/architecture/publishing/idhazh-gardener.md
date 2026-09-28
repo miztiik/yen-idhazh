@@ -54,6 +54,19 @@ newline-separated string (`cone`) because that is what a sparse checkout reads.
 A task that owns everything else under a root adds no folder: it reads what it
 needs from git.
 
+**A task is handed the folders it walks, and never lists `state/` itself.**
+`gardener_publish.py` reads, in one `git ls-tree` with no recursion, which of
+the shard's owned folders the commit holds and every folder directly under
+`state/`, and the runner turns that into `TaskContext.owned_folders` before any
+task runs. A folder the commit holds and the checkout lacks fails its task,
+because a wrong checkout would otherwise report a silent zero. A declared folder
+the commit does not hold yet - `state/score-archive/` before the first month is
+archived - is left out and logged, and the task's first write makes it. A
+complement task's folders come from the commit alone, so a folder somebody left
+in the checkout and never committed is not the sweep's to take, and
+`idhazh gardener run-task`, which starts no process and so reads no commit,
+refuses one by name.
+
 **The plan is written twice.** The plan job runs before anything of ours is
 installed, so `gardener_shards.py` cannot import the typed planner in
 `idhazh.gardener.shards`. The two emit one payload for one config, byte for byte,

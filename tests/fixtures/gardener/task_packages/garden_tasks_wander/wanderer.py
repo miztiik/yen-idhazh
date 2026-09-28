@@ -18,4 +18,4 @@ NEIGHBOUR = "state/neighbour"
 
 
 def run(context: TaskContext) -> Pass:
-    return day_files(context, (*(context.policy.owns or ()), NEIGHBOUR))
+    return day_files(context, (*(context.owned_folders), NEIGHBOUR))

@@ -20,6 +20,13 @@ task runs. Every other refusal was made while the declarations loaded
 run, and the shard exits 1 when nothing worse happened. What it had already done
 is on the row, because the core carries it out of any failure part way.
 
+**Every task is handed the folders it walks, judged against the commit.** A
+folder the commit holds and the checkout lacks fails the task, because a wrong
+checkout would otherwise report a silent zero. A declared folder the commit does
+not hold yet is left out and logged: nothing has written one, and the task's
+first write makes it. A complement task is answered only from the commit, so a
+caller that could not read it is refused before any task runs.
+
 **What a task touched must sit inside what it owns.** Every path it took and
 every file it wrote is checked, on a dry run too, because the check is over the
 selection rather than over what was deleted. A path outside is exit 2, and
@@ -136,9 +143,76 @@ def owner_of(name: str, tasks: Mapping[str, TaskPolicy]) -> Callable[[str], bool
     return in_the_complement
 
 
-def _missing_folders(policy: TaskPolicy, repo_root: Path) -> list[str]:
-    """The owned folders that are not in this checkout. The complement form owns no named one."""
-    return [folder for folder in policy.owns or () if not (repo_root / folder).is_dir()]
+@dataclass(frozen=True, slots=True)
+class Folders:
+    """The folders one task walks, worked out before it runs, and the two kinds it cannot."""
+
+    #: What the task walks, in the order it walks them.
+    walk: tuple[str, ...]
+    #: Folders the commit holds and this checkout lacks. A checkout that left out
+    #: a folder it should have held turns every deletion under it into a silent
+    #: zero, so the task fails rather than report one.
+    missing: tuple[str, ...]
+    #: Declared folders the commit does not hold yet, because nothing has written
+    #: one. There is nothing there to walk, and the task's first write makes it.
+    absent: tuple[str, ...]
+
+
+def _a_child_of(folder: str, roots: Sequence[str]) -> bool:
+    parent = PurePosixPath(folder).parent
+    return any(parent == PurePosixPath(root) for root in roots)
+
+
+def folders_of(
+    name: str,
+    tasks: Mapping[str, TaskPolicy],
+    repo_root: Path,
+    committed: frozenset[str] | None,
+) -> Folders:
+    """Which folders a task walks, judged against the commit when the caller could read it.
+
+    `committed` is every folder the commit holds that a declaration names, and
+    every folder directly under `state/`, read by the program that runs git.
+    None means nobody could read the commit - `idhazh gardener run-task` starts
+    no process - and the checkout is then taken as it stands.
+
+    A complement task cannot be answered without the commit. What it owns is
+    whatever nothing else claims, and read off a working tree that set would
+    include a folder somebody left there and never committed.
+    """
+    policy = tasks[name]
+    if policy.owns is None:
+        if committed is None:
+            raise ShardRefusedError(
+                f"{name} owns everything else under {', '.join(policy.claims())}, and only the "
+                "commit can say what that is. Run it through backend/utilities/"
+                "gardener_publish.py, which reads the commit"
+            )
+        owns = owner_of(name, tasks)
+        swept = tuple(
+            sorted(
+                folder
+                for folder in committed
+                if _a_child_of(folder, policy.claims()) and owns(folder)
+            )
+        )
+        here = [folder for folder in swept if (repo_root / folder).is_dir()]
+        gone = [folder for folder in swept if not (repo_root / folder).is_dir()]
+        return Folders(walk=tuple(here), missing=tuple(gone), absent=())
+    walk: list[str] = []
+    missing: list[str] = []
+    absent: list[str] = []
+    for folder in policy.owns:
+        present = (repo_root / folder).is_dir()
+        if committed is not None and folder not in committed:
+            absent.append(folder)
+        elif present:
+            walk.append(folder)
+        elif committed is None:
+            absent.append(folder)
+        else:
+            missing.append(folder)
+    return Folders(walk=tuple(walk), missing=tuple(missing), absent=tuple(absent))
 
 
 def _nothing_reached(name: str, policy: TaskPolicy) -> Pass:
@@ -168,13 +242,22 @@ class _Ran:
     failed: bool
 
 
-def _run_one(name: str, held: registry.TaskModule, context: TaskContext) -> _Ran:
+def _run_one(
+    name: str, held: registry.TaskModule, context: TaskContext, folders: Folders
+) -> _Ran:
     """One task, timed, with any failure turned into the row that says so."""
     started = time.monotonic()
-    missing = _missing_folders(context.policy, context.repo_root)
     failed = True
-    if missing:
-        logger.error("%s owns %s, and this checkout has none of it", name, ", ".join(missing))
+    for folder in folders.absent:
+        logger.info(
+            "%s owns %s, which the commit does not hold yet, so it walks none", name, folder
+        )
+    if folders.missing:
+        logger.error(
+            "%s owns %s, which the commit holds and this checkout does not",
+            name,
+            ", ".join(folders.missing),
+        )
         outcome = _nothing_reached(name, context.policy)
     else:
         try:
@@ -254,6 +337,7 @@ def run(
     attempt: int,
     shard: int,
     git_sha: str,
+    committed_folders: frozenset[str] | None,
     package: ModuleType = shipped_tasks,
     clock: Callable[[], datetime] = utc_now,
     say: Callable[[str], None] = print,
@@ -261,7 +345,10 @@ def run(
     """Run these tasks as one shard, write its record, and hand back what is left to land.
 
     `git_sha` is the commit this checkout is at, which the record's envelope
-    names. It is read by whoever calls this, before any task runs.
+    names. `committed_folders` is what that commit holds of the folders these
+    tasks own, and every folder directly under `state/` (`folders_of`). Both are
+    read by whoever calls this, before any task runs, because reading them
+    starts git.
     """
     state_dir = repo_root / ledger.STATE_DIRNAME
     try:
@@ -284,6 +371,11 @@ def run(
     )
     ran: list[_Ran] = []
     try:
+        # Every task's folders before the first task runs, so a task the commit
+        # cannot answer for stops the shard with nothing yet done.
+        resolved = {
+            name: folders_of(name, settings.tasks, repo_root, committed_folders) for name in names
+        }
         for name in names:
             context = TaskContext(
                 state_dir=state_dir,
@@ -294,8 +386,10 @@ def run(
                 attempt=attempt,
                 job=job,
                 shard=shard,
+                git_sha=git_sha,
+                owned_folders=resolved[name].walk,
             )
-            done = _run_one(name, bound[name], context)
+            done = _run_one(name, bound[name], context, resolved[name])
             _refuse_a_path_outside(done, settings.tasks)
             ran.append(done)
         ended = clock().strftime(_INSTANT)

@@ -57,6 +57,7 @@ from idhazh.gardener.outcome import (
     Shard,
     worst,
 )
+from idhazh.ledger import STATE_DIRNAME
 
 #: The one identity every commit in this repository carries. The same two values
 #: `backend/utilities/commit_and_push.py` sets, which a test holds in step.
@@ -112,6 +113,31 @@ class Checkout:
     def staged_names(self) -> set[str]:
         """Every path the next commit would change."""
         return set(self.git("diff", "--cached", "--name-only", "-z").split("\0")) - {""}
+
+    def committed_folders(self, owned: Sequence[str]) -> frozenset[str]:
+        """Which of these folders the commit holds, and every folder directly under `state/`.
+
+        One `git ls-tree` over the object database, so a folder a sparse checkout
+        left out is still seen, and nothing recurses: the cost is one entry per
+        folder named and one per child of `state/`, whatever those folders hold.
+        `state/` carries its slash, which lists what is inside it; an owned folder
+        carries none, which names the folder itself - with a slash it would list
+        its children, and the folder would read as absent. A child of `state/`
+        that holds a named folder is listed as that folder and not as itself,
+        because git walks into it to reach the name - so the sweep never reads a
+        folder holding another task's folder as its own to take.
+        """
+        listed = self.git(
+            "ls-tree",
+            "-d",
+            "--name-only",
+            "-z",
+            "HEAD",
+            "--",
+            f"{STATE_DIRNAME}/",
+            *(folder.rstrip("/") for folder in owned),
+        )
+        return frozenset(listed.split("\0")) - {""}
 
 
 def sleep_with_jitter(attempt: int, *, sleep: Callable[[float], None] = time.sleep) -> None:
@@ -209,10 +235,12 @@ def run_and_land(
     say: Callable[[str], None] = print,
 ) -> Outcome:
     """Read the commit, run the shard, and land what it hands back; the worst code wins."""
-    sha = Checkout(repo_root).head()
+    checkout = Checkout(repo_root)
+    sha = checkout.head()
     if sha is None:
         say(f"shard {shard}: {repo_root.name} is not a git checkout, so no record can name it")
         return Outcome(exit_code=EXIT_INTEGRITY, record=None, landing=None)
+    owned = sorted({folder for name in names for folder in settings.tasks[name].owns or ()})
     ran = runner.run(
         names,
         settings=settings,
@@ -221,6 +249,7 @@ def run_and_land(
         attempt=attempt,
         shard=shard,
         git_sha=sha,
+        committed_folders=checkout.committed_folders(owned),
         package=package,
         clock=clock,
         say=say,
