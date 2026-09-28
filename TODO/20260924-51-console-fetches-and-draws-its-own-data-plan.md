@@ -84,10 +84,10 @@ requests each stamp their own Reckoner line, the second conflicts on this file: 
 origin/main into its branch, keep both lines and push. Never rebase and force-push.
 
 STEP 5 - CLOSE. When every row is DONE, follow the closing section of
-execute-a-plan.md. File one defect this run found and did not file: GitHub writes every
-squash-merge commit on main with a +02:00 clock offset (all 39 such commits among main's
-last 200), and so does a commit made on this machine without TZ=UTC set. CLAUDE.md
-section 2 says a commit time is UTC.
+execute-a-plan.md. A commit made on this machine is stamped +02:00 unless TZ=UTC is set
+for it (docs/reference/agent-notes/git-and-github.md), and a plan-doc stamp pushed
+straight to the trunk is such a commit. GitHub's own squash merges carry the same
+offset; that is defect 48, and it is not this plan's to fix.
 
 OPEN FOR THE PERSON. Ask in one message, in the shape CLAUDE.md section 0c gives:
   1. A name on row 4's decision 6: the flow chart's layout is our own arithmetic on
