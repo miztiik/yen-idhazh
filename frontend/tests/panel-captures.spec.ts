@@ -180,18 +180,24 @@ interface Shot {
 async function shot(page: Page, id: string, file: string): Promise<Shot> {
 	const panel = page.locator(selectorOf(id));
 	const pad = await panel.evaluate((node) => Math.floor((parseFloat(getComputedStyle(node).marginTop) || 0) / 2));
-	const centred = async () => {
-		await panel.evaluate((node) => node.scrollIntoView({ block: 'center', behavior: 'instant' }));
+	// Placed with its top one band below the window's top, not centred.
+	// `scrollIntoView` centres inside the window less its `scroll-padding-top`,
+	// which the console sets while its strip is stuck, so a panel centred in a
+	// window grown to fit it exactly lands low enough to lose its foot.
+	const placed = async () => {
+		await panel.evaluate((node, gap) => {
+			window.scrollTo({ top: window.scrollY + node.getBoundingClientRect().top - gap, behavior: 'instant' });
+		}, pad);
 		const box = await panel.boundingBox();
 		if (box === null) throw new Error(`${id} has no box to picture`);
 		return box;
 	};
-	let box = await centred();
+	let box = await placed();
 	const view = page.viewportSize();
 	if (view === null) throw new Error('the page has no window size');
 	if (box.height + 2 * pad > view.height) {
 		await page.setViewportSize({ width: view.width, height: Math.ceil(box.height + 2 * pad) + 2 });
-		box = await centred();
+		box = await placed();
 	}
 	const size = page.viewportSize() ?? view;
 	const left = Math.max(0, Math.floor(box.x - pad));
