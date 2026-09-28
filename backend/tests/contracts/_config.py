@@ -30,7 +30,7 @@ FINGERPRINT_SURVIVORS: Final[dict[str, str]] = {
     "backend/idhazh/contracts/evidence.py": "a changelog entry, which is history",
     "backend/idhazh/contracts/label_row.py": "a changelog entry, which is history",
     "frontend/src/lib/server/model-work.ts": (
-        "the arm that reads a day whose identity is a digest, and the precedence "
+        "the branch that reads a day whose identity is a digest, and the precedence "
         "that lets a manifest beside one win. It retires on the condition written "
         "beside the field itself, which is about the rows and not about a date"
     ),

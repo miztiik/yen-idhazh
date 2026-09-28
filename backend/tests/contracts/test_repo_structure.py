@@ -389,13 +389,24 @@ def test_the_canary_writes_every_column_the_item_health_ledger_defines() -> None
 #: The retired word, on its own. The boundary is letters and digits rather than
 #: `\b`, so `warm`, `alarm`, `harm`, `charm`, `farm`, `swarm`, `armed`, `arm64`,
 #: `Carmack` and `barMaxWidth` are not hits and need no allow-list. An underscore
-#: is deliberately outside the boundary, so `_arm_lines` is a hit. Only the first
-#: letter may be a capital, so the processor's name, spelled in capitals, is not.
+#: is deliberately outside the boundary, so a name that carries the word between
+#: two underscores is a hit. Only the first letter may be a capital, so the
+#: processor's name, spelled in capitals, is not.
 RETIRED_WORD = re.compile(r"(?<![A-Za-z0-9])[Aa]rms?(?![A-Za-z0-9])")
 
 #: The one sense that stays. "At arm's length" is a viewing distance a reader
 #: holds a phone at, not a pass over the same work under different settings.
 ARMS_LENGTH = re.compile(r"(?<![A-Za-z0-9])[Aa]rm's length")
+
+#: The whole of the allow-list, and it cannot grow by drift: an entry is not a
+#: file or a concept but an exact spelling somebody outside this repository
+#: owns, so rewording it here would break or misquote the thing it names.
+#: Admitting a third means naming whose spelling it is. Stripping them also
+#: keeps this tuple's own lines out of the count.
+NOT_THE_RETIRED_WORD = (
+    "ubuntu-24.04-arm",  # GitHub's runner label, and GitHub parses it.
+    "Bandit with Many Arms",  # A paper's title, and its authors own it.
+)
 
 
 def _lines_that_may_still_spell_it(path: Path, text: str) -> set[int]:
@@ -419,53 +430,63 @@ def _lines_that_may_still_spell_it(path: Path, text: str) -> set[int]:
     return allowed
 
 
-def _word_sweep_files() -> list[Path]:
-    """The directories a person edits, and nothing a run writes.
-
-    Bounded by construction (Guardrail #12): these four trees are curated source,
-    so their size follows what somebody wrote rather than how many days the
-    pipeline has published.
-    """
-    roots = (
-        REPO_ROOT / ".github",
-        REPO_ROOT / "config",
-        REPO_ROOT / "backend" / "idhazh",
-        REPO_ROOT / "backend" / "utilities",
-    )
-    suffixes = {".py", ".sh", ".yml", ".yaml", ".json", ".mjs", ".js", ".md"}
-    found: list[Path] = []
-    for root in roots:
-        for path in sorted(root.rglob("*")):
-            if path.is_file() and path.suffix in suffixes:
-                found.append(path)
-    return found
-
-
 def test_the_retired_word_has_not_come_back() -> None:
-    """`arm` is retired from the workflows, the scripts, the config and the backend.
+    """A word from experiment design stays out of every tree a person edits.
 
-    It was benchmarking's word for the same work run again under different
-    settings - the arms of an experiment. This project has four plain words for a
-    unit of work, and stage, shard, worker and run all mean something else, so
-    the word was kept and nothing on the page explained it (CLAUDE.md section
-    0b). `case` replaced it, and `chart drawing` replaced it where it named a
-    feature under a kill rule rather than a second pass over anything.
+    `RETIRED_WORD` above matches it: that field's name for one setup being
+    compared. A reader has to know the field to understand the word, and every
+    sentence that used it already had a plain word for what it meant - a half
+    of a two-part check, a branch through code, a workflow step or job, a
+    candidate in a comparison. A word a reader has to look up in another field
+    is a second name for something that already has one (CLAUDE.md section 0b).
+    It came back through the docs, the tests and the plan-docs while only the
+    code was swept, so all of them are swept.
+
+    **What it reads, and why it is bounded** (Guardrail #12): the tracked files
+    of the trees `RETIRED_LEDGER_WORD_SWEEP` lists below - code, tests, docs,
+    schemas, config and the plan-docs, all of which grow with what somebody
+    wrote. It opens nothing a run appends to: not `state/`, `corpus/`,
+    `backend/var/`, `frontend/public/` or `frontend/build/`, and not
+    `node_modules/`, `.svelte-kit/` or `test-results/`, none of which
+    `git ls-files` lists. So it costs the same on the thousandth published day
+    as on the third. A Python file's syntax tree is parsed only when that file
+    has a hit, to excuse the changelog entry that records a rename.
 
     What this cannot settle: whether the replacement reads naturally. A person
     reads the sentence; this only refuses the word.
     """
+    listed = subprocess.run(
+        ["git", "ls-files", "--", *RETIRED_LEDGER_WORD_SWEEP],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.splitlines()
+    assert len(listed) > 900, "the sweep found almost nothing, so it would pass on nothing"
+
     offenders: list[str] = []
-    for path in _word_sweep_files():
-        rel = path.relative_to(REPO_ROOT)
-        text = read_text(path)
-        excused = _lines_that_may_still_spell_it(path, text)
+    for relative in listed:
+        text = (REPO_ROOT / relative).read_bytes().decode("utf-8", "replace")
+        hits: list[tuple[int, str]] = []
         for number, line in enumerate(text.split("\n"), start=1):
-            if number in excused:
-                continue
-            without_idiom = ARMS_LENGTH.sub("", line)
-            if RETIRED_WORD.search(without_idiom):
-                offenders.append(f"{rel.as_posix()}:{number}: {line.strip()}")
-    assert not offenders, "the retired word is back:\n" + "\n".join(offenders)
+            counted = ARMS_LENGTH.sub("", SOMEBODY_ELSES_ADDRESS.sub("", line))
+            for spelling in NOT_THE_RETIRED_WORD:
+                counted = counted.replace(spelling, "")
+            if RETIRED_WORD.search(counted):
+                hits.append((number, line))
+        if not hits:
+            continue
+        excused = _lines_that_may_still_spell_it(REPO_ROOT / relative, text)
+        for number, line in hits:
+            if number not in excused:
+                offenders.append(f"{relative}:{number}: {line.strip()}")
+
+    assert not offenders, (
+        "the retired word is back. One part of a two-part check is a half, or a "
+        "check where the parts are counted; a path through code is a branch; a "
+        "workflow step or job is a step or a job; one setup in a comparison is a "
+        "candidate or a setup; and as a verb it is set:\n" + "\n".join(offenders)
+    )
 
 
 #: The ledger path the same-story judge's output sat under until it moved beneath
@@ -634,7 +655,7 @@ BORROWED_JUDGE_WORD = re.compile(
 
 #: The judging council's own files. The word is banned outright inside these,
 #: which the loose pattern above cannot do repository-wide: `leg` still names
-#: the first clause of a two-part rule and one arm of a measurement gate, and
+#: the first clause of a two-part rule and one half of a measurement gate, and
 #: `fold` still names the telemetry compaction verb and the same-story merge.
 JUDGE_SUBSYSTEM = (
     "backend/idhazh/similarity",
@@ -678,7 +699,7 @@ def test_the_judging_council_spells_its_shard_and_its_count_plainly() -> None:
     published day as on the third.
 
     **What it is deliberately blind to.** `leg` still names the first clause of a
-    two-part rule in `visual_validator.py`, one arm of a measurement gate in
+    two-part rule in `visual_validator.py`, one half of a measurement gate in
     `measure.yml`, a branch of a displayed value in `derived_values.py`, and the
     encoder's failover origin on the frontend - none of them a judging shard.
     `fold` still names the telemetry compaction verb, which is the digest

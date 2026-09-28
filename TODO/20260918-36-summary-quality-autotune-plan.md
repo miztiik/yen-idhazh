@@ -232,7 +232,7 @@ first; the link-only references in this section are historical.)
 | console-panels | 3 | 9 | frontend island on `/console/judgement/`; + the not-published/withhold panel from item-health (0e H4) | metric-fold-fit, publish-gate |
 | apply-gate | 4 | 8 | ESCALATE, owner sign-off, first published-day change; withhold = absent + item-health (0e H1-H3, E7 placement) | publish-gate |
 | rejects-ledger | 3 | 12 | the `state/rejects/` ledger + its prune verb + the corpus fence; reads the stamped `publish_decision` (0e Table C) | publish-gate |
-| plan34-gaps | 4 | 13 | retro plan-34 latent gaps (space-trap re-arm, thinking-variant, injection live-test note); the space-trap guard is shared with Row 6's G-Eval | 34 landed, geval-leg |
+| plan34-gaps | 4 | 13 | retro plan-34 latent gaps (space-trap re-set, thinking-variant, injection live-test note); the space-trap guard is shared with Row 6's G-Eval | 34 landed, geval-leg |
 
 **Peak pool width 2** (Carmack): Rows 1 and 3 are TWO co-roots from t0, not one width-1 head. The serial
 spine is `1 -> 2 -> 4 -> 5 -> 7 -> 8` (6 deep); the width-1 point is the TAIL (Row 8), by owner mandate.
@@ -520,7 +520,7 @@ disjointness check, never the letter (execute-a-plan.md).
 - **Files touched:** `frontend/src/routes/console/judgement/*.svelte`, a console reader under
   `frontend/src/lib/console/`, the affected browser specs.
 - **Acceptance gates:** frontend `test:changed`; browser smoke per section 12, including the data-absent
-  arm (rebuild with an empty band tree, confirm the panel draws its axis and its empty-state copy).
+  check (rebuild with an empty band tree, confirm the panel draws its axis and its empty-state copy).
 - **Oracle:** the browser oracle re-derives each drawn floor from the committed band shard; it cannot
   settle whether the panel reads well (Susan's sufficiency check).
 - **Decisions:**
@@ -620,7 +620,7 @@ disjointness check, never the letter (execute-a-plan.md).
   plan 34's merge). They land here as the last row because one - the first-token-probability space trap -
   is re-introduced by Row 6's G-Eval fluency judge, so the guard is shared (owner, 2026-09-19).
 - **Scope + files touched:**
-  - **Space-trap re-arm:** a trailing-space token in a rendered prompt silently shifts which
+  - **Space-trap re-set:** a trailing-space token in a rendered prompt silently shifts which
     digit/verdict the model emits from its first-token probabilities, and the output still parses.
     Assert the rendered prompt does not end in a space; build the digit/verdict token ids by
     encode-in-position (not by string); log all first-token probabilities. Covers

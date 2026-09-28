@@ -119,15 +119,15 @@ included. Owner ruling, 2026-09-21.
 
 The council runs one judge or many - in sequence, in parallel, or chained - and
 depends on none of them. That is a claim about the import graph, so it is
-checked rather than reviewed. Three arms, each failing on a different mistake.
+checked rather than reviewed. Three checks, each failing on a different mistake.
 
-| The arm | Where | What it refuses |
+| The check | Where | What it refuses |
 | --- | --- | --- |
 | directory | [../../../backend/tests/contracts/test_repo_structure.py](../../../backend/tests/contracts/test_repo_structure.py) | any statement in `backend/idhazh/council/` naming the judge's package, its four stage modules or any judge contract |
 | closure | [../../../backend/tests/council/test_council_runs_without_a_judge.py](../../../backend/tests/council/test_council_runs_without_a_judge.py) | a judge module reached at import time from any council module, by any route |
 | run | the same file | a night that cannot be driven end to end against tenants the test wrote |
 
-**The directory arm alone would have proved nothing.** Both couplings that
+**The directory check alone would have proved nothing.** Both couplings that
 really existed lived outside that directory: the command router imported four of
 the judge's stage modules, and the composed application config imported the
 judge's knob block. A check scoped to one directory reads green over both.

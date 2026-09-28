@@ -149,12 +149,12 @@ and its columns are not these columns.
 
 **Two things it adds to this page's own question.**
 
-The draw is lumpy at this size. One arm drew the two newest chips in the pool
-and the arm it was being compared against drew neither, which decided that
-comparison before a token was decoded. **A four-shard arm is not a sample of the
+The draw is lumpy at this size. One candidate drew the two newest chips in the pool
+and the candidate it was being compared against drew neither, which decided that
+comparison before a token was decoded. **A four-shard candidate is not a sample of the
 fleet; it is four draws.**
 
-And the processor is not the biggest term. Holding the arm and the processor
+And the processor is not the biggest term. Holding the candidate and the processor
 model both fixed, three Ornith shards on an EPYC 7763 ran at 0.79, 1.60 and
 1.71 output tokens a second - **2.2x apart on one processor model** - because
 each shard read different articles. This page's 8.8 percent is measured on

@@ -17,7 +17,7 @@ from utilities import memory_sampler
 #: The program, run the way a workflow step runs it.
 MODULE: Final = Path(memory_sampler.__file__).resolve()
 
-#: How long the detachment arm waits for a process to go away before it calls
+#: How long the detachment check waits for a process to go away before it calls
 #: that a failure. Generous, because it is bounding a scheduler and not a
 #: computation.
 PATIENCE_SECONDS: Final = 30.0
@@ -153,7 +153,7 @@ def test_a_status_that_cannot_be_read_skips_the_process_rather_than_ending_the_w
     kernel can release the task in between, and the read then raises on a path
     that was there a microsecond earlier. A short-lived python process is
     completely ordinary on a busy runner, and one of them killed the sampler in
-    CI - in the arm below that starts the real program against the real `/proc`.
+    CI - in the check below that starts the real program against the real `/proc`.
     In a digest run the same death ends the sampling with hours of job left.
 
     The fixture holds the condition open rather than the error number. Both are

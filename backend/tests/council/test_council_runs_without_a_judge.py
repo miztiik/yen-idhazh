@@ -1,7 +1,7 @@
 """Does the council run green with every judge deleted from the repository?
 
 The dictum, made checkable: the council runs one judge or many - in sequence, in
-parallel, or chained - and depends on none of them. Three arms hold it. A static
+parallel, or chained - and depends on none of them. Three checks hold it. A static
 walk of what a council verb pulls in at import time; a second walk that keeps the
 one agreed exception from growing; and a whole night driven end to end against
 tenants this test wrote, with no judge anywhere in the call.
@@ -55,7 +55,7 @@ A_SLUG: Final = "a-judgeless-tenant"
 
 ANOTHER_SLUG: Final = "another-judgeless-tenant"
 
-#: The night the run arm opens on, and the platform run id it is named after.
+#: The night the run check opens on, and the platform run id it is named after.
 #: Far enough after the committed `council.first_night` that the whole repair
 #: window is behind it, so a test about a union is not silently a test about the
 #: window's floor.
@@ -83,7 +83,7 @@ JUDGE_STAGE_MODULES: Final = (
 
 #: Every persisted shape a judge owns, spelled one by one for the same reason.
 #: Closed-world: a new judge contract joins this tuple, and until it does the
-#: arms below cannot see it - so `test_every_judge_contract_named_here_exists`
+#: checks below cannot see it - so `test_every_judge_contract_named_here_exists`
 #: holds the tuple against the tree.
 JUDGE_CONTRACT_MODULES: Final = (
     "idhazh.contracts.content_similarity_judge_metrics",
@@ -213,7 +213,7 @@ def test_every_judge_module_named_here_is_a_module_this_tree_has() -> None:
     """A closed-world list that has gone stale reads green over a real import.
 
     Every name below is spelled rather than matched by prefix, so a typo or a
-    module that moved would silently drop out of the two arms that use it. This
+    module that moved would silently drop out of the two checks that use it. This
     is what makes them fail instead.
     """
     named = (JUDGE_CODE_PACKAGE, *JUDGE_STAGE_MODULES, *JUDGE_CONTRACT_MODULES)
@@ -269,7 +269,7 @@ def test_the_judge_contracts_that_still_cross_cannot_grow() -> None:
 
 
 def test_this_file_names_no_judge_either() -> None:
-    """Asserted rather than assumed, because the run arm below is the coupling risk.
+    """Asserted rather than assumed, because the run check below is the coupling risk.
 
     Driving the night with a real judge is exactly the import this file exists to
     refuse, written as a test. The names above are strings in a list, and this is

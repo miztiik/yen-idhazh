@@ -239,7 +239,7 @@ LLAMA_DIGEST_CHECK: Final = 'echo "${LLAMA_CPP_SHA256}  llama.tar.gz" | sha256su
 #: hands back a different binary on every eviction, so nothing may ask it.
 LLAMA_RELEASE_TAGS: Final = "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags"
 
-#: The same address, as a workflow arm that still spells its own fetch writes it.
+#: The same address, as a workflow step that still spells its own fetch writes it.
 LLAMA_PINNED_ENDPOINT: Final = f"{LLAMA_RELEASE_TAGS}/${{LLAMA_CPP_BUILD}}"
 # One spelling for every download in the repository, weights and runtime alike.
 # `-f` is the load-bearing letter: without it curl writes an HTTP error body
@@ -274,7 +274,7 @@ VERIFY_MODEL_FILES: Final = f"{MODEL_RUNTIME_MODULE} verify-model-files"
 HUB_HOST: Final = "huggingface.co"
 
 #: What a step runs instead of writing a download of its own. A job whose fetch
-#: step is one call to this has converted; `measure.yml`'s four inline arms have
+#: step is one call to this has converted; `measure.yml`'s four inline jobs have
 #: not, and every rule scoped to the converted set skips them.
 SHARED_DOWNLOAD_CALLS: Final = (DOWNLOAD_MODEL_FILES,)
 
@@ -288,7 +288,7 @@ WEIGHTS_FETCH_JOBS: Final = 8
 
 # Every job in the repository that downloads a `.gguf`, the step that checks it,
 # the first step that reads it, and the one place the expected digest is
-# written. Discovery is closed-world, and this table holds only the arms that
+# written. Discovery is closed-world, and this table holds only the jobs that
 # still spell a download for themselves - the four `measure.yml` inline ones.
 # Every converted job is derived where the table is compared, off the verb its
 # check step runs, because listing a job whose check is one shared call would
@@ -300,10 +300,10 @@ WEIGHTS_CHECKS: Final = {
         "Measure runtime candidate",
         "${{ needs.models.outputs.candidate_sha256 }}",
     ),
-    # The raw arm downloads the draft head and never runs it - llama-bench has
-    # no speculative path. It fetches it to fill the cache the server arm
+    # The raw job downloads the draft head and never runs it - llama-bench has
+    # no speculative path. It fetches it to fill the cache the server job
     # restores, which is why the check matters more here than the reader does:
-    # nothing in this job would notice a corrupt copy, and the arm that loads it
+    # nothing in this job would notice a corrupt copy, and the job that loads it
     # is a different job on a different machine. The bench step is named below
     # as the ordering anchor, not as a reader of these bytes.
     ("measure.yml", "llama-bench"): (
@@ -1625,7 +1625,7 @@ def _shared_download_jobs(
     Computed rather than listed, from the two questions that together settle it:
     does the job download a `.gguf` at all, and is its fetch step one call to a
     shared thing rather than a download written by hand. `measure.yml`'s four
-    inline arms answer yes then no, so they fall out - which is why every rule
+    inline jobs answer yes then no, so they fall out - which is why every rule
     scoped to this set says nothing about them.
 
     A step that calls the shared download through a composite action counts:
