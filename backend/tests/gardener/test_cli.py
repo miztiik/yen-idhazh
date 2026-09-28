@@ -34,6 +34,25 @@ def test_the_gardener_is_a_verb_the_router_lists() -> None:
     assert "gardener" in cli.STAGES
 
 
+def test_the_retired_cleanup_verb_points_at_the_tasks_and_runs_nothing(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """An old command line, every flag it carried, is answered with where each pass went."""
+    old = ["--date", "2026-09-27", "--execution", "1", "--commit", SHA, "--dry-run"]
+
+    assert cli.main([cli.RETIRED_CLEANUP_VERB, *old]) == 2
+
+    said = capsys.readouterr()
+    assert said.out == ""
+    assert "config/gardener/<task>.json" in said.err
+    assert "python -m idhazh gardener run-task NAME --run-id RUN_ID --attempt N --git-sha SHA" in (
+        said.err
+    )
+    assert "python backend/utilities/gardener_publish.py NAME --run-id RUN_ID --attempt N" in (
+        said.err
+    )
+
+
 def test_list_tasks_prints_one_line_a_task(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     config_dir = the_garden(tmp_path)
 
@@ -104,16 +123,16 @@ def test_a_run_task_line_the_router_cannot_run_is_refused(
 def test_a_task_no_shipped_module_serves_exits_2_before_it_runs(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """The shipped task folder is empty, so a declared task has nothing to run it yet."""
+    """No shipped module is named for the task or for its kind, so nothing can run it."""
     quiet_git(tmp_path, monkeypatch)
-    _, checkout = an_origin(tmp_path, {"state/seen/.keep": ""})
-    config_dir = a_config(checkout, GARDENER_FIXTURES / "garden" / "seen.json")
+    _, checkout = an_origin(tmp_path, {"state/old-days/.keep": ""})
+    config_dir = a_config(checkout, GARDENER_FIXTURES / "runner" / "old-days.json")
 
     code = cli.main(
         [
             "gardener",
             "run-task",
-            "seen",
+            "old-days",
             *RUN,
             "--git-sha",
             SHA,
@@ -125,7 +144,7 @@ def test_a_task_no_shipped_module_serves_exits_2_before_it_runs(
     )
 
     assert code == EXIT_INTEGRITY
-    assert "config/gardener/seen.json is served by no module" in capsys.readouterr().out
+    assert "config/gardener/old-days.json is served by no module" in capsys.readouterr().out
 
 
 def test_the_landing_utility_takes_the_same_line_and_reads_the_commit_itself(
@@ -133,14 +152,14 @@ def test_the_landing_utility_takes_the_same_line_and_reads_the_commit_itself(
 ) -> None:
     """One parser builds both lines, so a line one accepts the other accepts, less the commit."""
     quiet_git(tmp_path, monkeypatch)
-    _, checkout = an_origin(tmp_path, {"state/seen/.keep": ""})
-    config_dir = a_config(checkout, GARDENER_FIXTURES / "garden" / "seen.json")
+    _, checkout = an_origin(tmp_path, {"state/old-days/.keep": ""})
+    config_dir = a_config(checkout, GARDENER_FIXTURES / "runner" / "old-days.json")
 
     code = gardener_publish.main(
-        ["seen", *RUN, "--repo-root", str(checkout), "--config", str(config_dir)]
+        ["old-days", *RUN, "--repo-root", str(checkout), "--config", str(config_dir)]
     )
 
     assert code == EXIT_INTEGRITY
-    assert "config/gardener/seen.json is served by no module" in capsys.readouterr().out
+    assert "config/gardener/old-days.json is served by no module" in capsys.readouterr().out
     with pytest.raises(SystemExit):
-        gardener_publish.main(["seen", *RUN, "--git-sha", SHA, "--config", str(config_dir)])
+        gardener_publish.main(["old-days", *RUN, "--git-sha", SHA, "--config", str(config_dir)])

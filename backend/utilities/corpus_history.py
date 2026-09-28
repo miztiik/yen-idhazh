@@ -378,6 +378,8 @@ def _squash_as_declared(
         attempt=attempt,
         job=ServerJob.HISTORY,
         shard=0,
+        git_sha=_git(repo, "rev-parse", "HEAD").strip(),
+        owned_folders=tuple(policy.owns or ()),
     )
 
     def record() -> tuple[str, ...]:

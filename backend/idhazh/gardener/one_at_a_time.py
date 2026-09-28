@@ -160,6 +160,11 @@ class Pass:
     as repository-relative POSIX paths. A pass that only deletes writes nothing,
     so `take` always leaves it empty; a task that writes a file of its own fills
     it, and the runner holds every path in it to what the task owns.
+
+    `appended` is the report files a task filed through the ledger door into a
+    ledger its declaration `appends_to`, on a dry run too. They are held to that
+    ledger rather than to what the task owns, and they land whatever `dry_run` says,
+    because a report is what a dry run is for.
     """
 
     collection: str
@@ -175,6 +180,7 @@ class Pass:
     bytes_freed: int
     stopped_because: StopReason
     resume_from: str | None
+    appended: tuple[str, ...] = ()
 
     @property
     def changed(self) -> bool:

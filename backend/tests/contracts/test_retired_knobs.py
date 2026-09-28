@@ -24,22 +24,31 @@ def test_a_config_still_carrying_a_removed_knob_is_refused_by_name() -> None:
     shards that window selects, so honouring it would honour the defect.
     """
     for block, removed, successor in (
-        ("observability", "keep_months", "item_health_full_grain_months"),
-        ("observability", "hard_delete_after_months", "item_health_aggregate_keep_months"),
+        (
+            "observability",
+            "keep_months",
+            "series.full-grain.value in config/gardener/telemetry-aggregate.json",
+        ),
+        (
+            "observability",
+            "hard_delete_after_months",
+            "series.aggregate in config/gardener/telemetry-aggregate.json",
+        ),
         ("collect", "quarantine_after_failures", "availability_strikes_before_rest"),
     ):
         model = ObservabilityConfig if block == "observability" else CollectConfig
-        with pytest.raises(ValidationError, match=successor) as raised:
+        with pytest.raises(ValidationError) as raised:
             model.model_validate({removed: 13})
         assert f"{block}.{removed}" in str(raised.value)
+        assert successor in str(raised.value)
 
 
 def test_an_age_whose_store_is_gone_says_so_instead_of_naming_a_successor() -> None:
     """The ledgers these three governed were deleted, so there is nowhere to send the value.
 
     `refuse_a_removed_knob` reads an empty replacement as "gone and nothing
-    replaces it". Pointing the two ages at `scores_full_grain_months` would be
-    worse than silence: that knob governs `state/scores/`, which is still there,
+    replaces it". Pointing the two ages at the scores task's window would be
+    worse than silence: that window governs `state/scores/`, which is still there,
     so an operator would move their number onto a live ledger's age. And
     `runtime_counters_scrape` switched off a row in a ledger that no longer
     exists, so honouring it today would switch off nothing at all.
@@ -54,18 +63,22 @@ def test_an_age_whose_store_is_gone_says_so_instead_of_naming_a_successor() -> N
         assert f"observability.{removed}" in str(raised.value)
 
 
-def test_the_removed_names_are_the_six_these_rows_retired() -> None:
-    """The map is what the refusal message reads, so it is the map that is asserted."""
+def test_every_removed_name_is_sent_somewhere_or_said_to_be_gone() -> None:
+    """The map is what the refusal message reads, so it is the map that is asserted.
+
+    Every cleanup age that left `observability` went to the declaration of the
+    gardener task that spends it, so its replacement names that file.
+    """
     assert dict(SUPERSEDED_COLLECT_NAMES) == {
         "quarantine_after_failures": "availability_strikes_before_rest"
     }
-    assert dict(SUPERSEDED_RETENTION_NAMES) == {
-        "keep_months": "item_health_full_grain_months",
-        "hard_delete_after_months": "item_health_aggregate_keep_months",
-        "public_scores_keep_months": "",
-        "public_feed_health_keep_months": "",
-        "runtime_counters_scrape": "",
-    }
+    gone = {"public_scores_keep_months", "public_feed_health_keep_months", "runtime_counters_scrape"}
+    assert {name for name, successor in SUPERSEDED_RETENTION_NAMES.items() if not successor} == gone
+    for name, successor in SUPERSEDED_RETENTION_NAMES.items():
+        if successor:
+            assert " in config/gardener/" in successor and successor.endswith(".json"), (
+                f"observability.{name} is sent to {successor!r}, which names no declaration"
+            )
 
 
 def test_an_unrelated_knob_in_a_block_with_no_removed_name_is_untouched() -> None:

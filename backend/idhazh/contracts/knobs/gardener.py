@@ -267,6 +267,15 @@ class _Declared(Model):
             "no ledger family claims. At most one task may use it."
         ),
     )
+    appends_to: list[LedgerName] = Field(
+        default_factory=list,
+        description=(
+            "The ledgers this task files a report of its own into, through the ledger door: "
+            "one new raw file under the wake's day, dry run or not. Appending is not "
+            "owning. The door names each file afresh, so it cannot overwrite anything, and "
+            "the folder it lands in stays with whichever task owns it."
+        ),
+    )
 
     @model_validator(mode="after")
     def _one_way_of_owning(self) -> Self:

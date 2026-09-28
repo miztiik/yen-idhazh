@@ -109,8 +109,8 @@ def test_a_measurement_whose_month_was_archived_is_still_not_new(tmp_path: Path)
     """The dedupe spans the archives too, or deleting a shard reopens the door.
 
     Sharding was the first way this could break and the fix was to read every
-    partition. Archiving is the second: a month past
-    `observability.scores_full_grain_months` has no rows left to read at all, so
+    partition. Archiving is the second: a month past the scores task's
+    full-grain window has no rows left to read at all, so
     a dedupe over the rows alone would call every measurement in it new on the
     day it was deleted - and a count over the ledger would stop being a count of
     items, which is the one thing this ledger promises it is not.

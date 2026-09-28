@@ -8,6 +8,15 @@
     "state/score-index",
     "state/score-archive"
   ],
+  "series": {
+    "archive": {
+      "unit": "forever"
+    },
+    "full-grain": {
+      "unit": "months",
+      "value": 14
+    }
+  },
   "window": {
     "unit": "months",
     "value": 14

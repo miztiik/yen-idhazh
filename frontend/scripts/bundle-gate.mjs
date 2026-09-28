@@ -261,8 +261,9 @@ if (uncapped.length > 0) {
  * set by how many ceilings are written rather than by how much the pipeline has
  * accumulated (Guardrail #12). A directory key does read every file under itself,
  * and that read grows - a month a run appends is a file this opens. It is
- * bounded where it matters by retention: observability.public_telemetry_keep_months
- * is 14, so the directory holds fourteen shards however long the project runs.
+ * bounded where it matters by retention: the gardener's telemetry-aggregate task
+ * keeps the public-copy series of config/gardener/telemetry-aggregate.json, 14
+ * months, so the directory holds fourteen shards however long the project runs.
  */
 const payloadCeilings = config.page_weight?.payload_ceilings_bytes ?? {};
 if (payloadCeilings === null || typeof payloadCeilings !== 'object' || Array.isArray(payloadCeilings)) {

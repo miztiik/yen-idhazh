@@ -54,7 +54,7 @@ Both the summary and the article body are untrusted (Guardrail #11). They print 
 inert terminal text and are sanitized on the way to the note field.
 
 **A draw only reaches the months still at full grain.** `state/scores/` keeps
-`observability.scores_full_grain_months` months of item-level rows and then
+the scores task's full-grain window of item-level rows and then
 becomes a summary, and a summary holds no row to label. So the report prints the
 months the draw could see and the months that have aged out, and a run against a
 ledger with no full-grain month left refuses instead of reporting a draw of

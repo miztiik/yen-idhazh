@@ -1,0 +1,143 @@
+{
+  "counterfactual-scores": {
+    "dry_written": [],
+    "removed": [
+      "state/counterfactual-scores/2027/10/14/2027-10-14-1-1-plan-00.csv",
+      "state/counterfactual-scores/2027/10/15/2027-10-15-1-1-plan-00.csv"
+    ],
+    "written": []
+  },
+  "digest-fragments": {
+    "dry_written": [],
+    "removed": [
+      "state/digest-fragments/2026/10/19/2026-10-19-1.json",
+      "state/digest-fragments/2026/10/20/2026-10-20-1.json"
+    ],
+    "written": []
+  },
+  "feed-health": {
+    "dry_written": [],
+    "removed": [
+      "state/feed-health/2026/08/11/2026-08-11-1-1-plan-00.csv",
+      "state/feed-health/2026/09/11/2026-09-11-1-1-plan-00.csv"
+    ],
+    "written": []
+  },
+  "host-fingerprint": {
+    "dry_written": [],
+    "removed": [
+      "state/host-fingerprint/2026/08/11/2026-08-11-1-1-plan-00.csv",
+      "state/host-fingerprint/2026/09/11/2026-09-11-1-1-plan-00.csv"
+    ],
+    "written": []
+  },
+  "scores": {
+    "dry_written": [],
+    "removed": [
+      "state/score-index/2026/08/04/2026-08-04-1-1-assemble-00.csv",
+      "state/score-index/2026/08/17/2026-08-17-1-1-assemble-00.csv",
+      "state/score-index/2026/09/04/2026-09-04-1-1-assemble-00.csv",
+      "state/score-index/2026/09/17/2026-09-17-1-1-assemble-00.csv",
+      "state/scores/2026/08/04/2026-08-04-1-1-assemble-00.csv",
+      "state/scores/2026/08/17/2026-08-17-1-1-assemble-00.csv",
+      "state/scores/2026/09/04/2026-09-04-1-1-assemble-00.csv",
+      "state/scores/2026/09/17/2026-09-17-1-1-assemble-00.csv"
+    ],
+    "written": [
+      "state/score-archive/2026-08.json",
+      "state/score-archive/2026-09.json"
+    ]
+  },
+  "seen": {
+    "dry_written": [],
+    "removed": [
+      "state/seen/2026/01/01.csv",
+      "state/seen/2027/08/15.csv",
+      "state/seen/2027/08/16.csv"
+    ],
+    "written": []
+  },
+  "telemetry-aggregate": {
+    "dry_written": [],
+    "removed": [
+      "frontend/public/telemetry/2026-07.csv",
+      "frontend/public/telemetry/2026-08.csv",
+      "frontend/public/telemetry/2026-09.csv",
+      "state/item-health/2026/08/04/settled.csv",
+      "state/item-health/2026/08/17/settled.csv",
+      "state/item-health/2026/09/04/settled.csv",
+      "state/item-health/2026/09/17/settled.csv"
+    ],
+    "written": [
+      "state/item-health-summary/2026-08.csv",
+      "state/item-health-summary/2026-09.csv"
+    ]
+  },
+  "traces": {
+    "dry_written": [],
+    "removed": [
+      "state/traces/2027/11/07/2027-11-07-1-1-work-00.jsonl",
+      "state/traces/2027/11/08/2027-11-08-1-1-work-00.jsonl"
+    ],
+    "written": []
+  },
+  "trials": {
+    "dry_written": [],
+    "removed": [
+      "state/old-trial/seen/2026/01/01.csv",
+      "state/pipeline-tests/item-health/2027-07.csv",
+      "state/pipeline-tests/seen/2027/08/17.csv",
+      "state/pipeline-tests/segments/item-health/2027-08-01-1-1-work-0.csv"
+    ],
+    "written": []
+  },
+  "visual-prune": {
+    "dry_written": [
+      "state/raw/visual-prunes/2027/11/15/<file_id>.parquet"
+    ],
+    "removed": [
+      "frontend/public/digest/2026/10/19/ai-0001.json",
+      "frontend/public/digest/2026/10/19/ai-0002.json",
+      "frontend/public/digest/2026/10/20/ai-0003.json"
+    ],
+    "written": [
+      "state/raw/visual-prunes/2027/11/15/<file_id>.parquet"
+    ]
+  },
+  "visual-prune-rows": {
+    "dry": {
+      "bytes_reclaimed": 0,
+      "candidates_found": 3,
+      "cutoff_date": "2026-10-21",
+      "date": "2027-11-15",
+      "deleted": 0,
+      "dry_run": true,
+      "fuse_tripped": false,
+      "max_deletes_per_run": 200,
+      "oldest_kept": "2026-10-19",
+      "payload_bytes_after": 5104,
+      "payload_bytes_before": 5104,
+      "policy_months": 13,
+      "run_id": "2027-11-15-19000000001",
+      "skipped_by_fuse": 0,
+      "version": "2026-09-06T13:00"
+    },
+    "live": {
+      "bytes_reclaimed": 3000,
+      "candidates_found": 3,
+      "cutoff_date": "2026-10-21",
+      "date": "2027-11-15",
+      "deleted": 3,
+      "dry_run": false,
+      "fuse_tripped": false,
+      "max_deletes_per_run": 200,
+      "oldest_kept": "2026-10-21",
+      "payload_bytes_after": 2104,
+      "payload_bytes_before": 5104,
+      "policy_months": 13,
+      "run_id": "2027-11-15-19000000001",
+      "skipped_by_fuse": 0,
+      "version": "2026-09-06T13:00"
+    }
+  }
+}

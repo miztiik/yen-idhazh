@@ -2,7 +2,8 @@
 
 Everything a task may know about the run it is part of, and nothing it could
 use to reach outside what it owns. The policy is its own validated declaration;
-the rest is the run's identity and the two roots it works under.
+the rest is the run's identity, the two roots it works under, and the folders
+the runner has already decided it may walk.
 """
 
 from __future__ import annotations
@@ -31,3 +32,12 @@ class TaskContext:
     attempt: int
     job: ServerJob
     shard: int
+    #: The commit this checkout is at. A file the task writes through the ledger
+    #: door names it, so the file can be traced to the code that wrote it.
+    git_sha: str
+    #: The repository-relative folders this task walks, in the order it walks
+    #: them, every one present in the checkout. The runner works them out before
+    #: the task runs - a declared folder the commit does not hold yet is left out,
+    #: and a complement task gets the folders nothing else claims - so a task
+    #: never lists `state/` to decide for itself what is its own.
+    owned_folders: tuple[str, ...]

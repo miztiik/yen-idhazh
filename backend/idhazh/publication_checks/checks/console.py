@@ -12,11 +12,11 @@ that case, because a contract change can invalidate any file.
 Four of the five directories are trimmed on every assemble by
 `series.prune_months`, so the sweep opens at most their own
 `public_*_keep_months` files. `telemetry` is the exception and says so here
-rather than in a sentence that would be wrong: its deletion lives in
-`retention.prune_telemetry`, inside the workflow step that ships `--dry-run`,
-so `public_telemetry_keep_months` is declared and not yet enforced and that
-directory gains one file a month. The daily case is unaffected - it opens only
-the months the run wrote.
+rather than in a sentence that would be wrong: its deletion lives in the
+gardener's `telemetry-aggregate` task, which ships `dry_run: true` in its own
+declaration, so its `public-copy` window is declared and not yet enforced and
+that directory gains one file a month. The daily case is unaffected - it opens
+only the months the run wrote.
 
 The band is checked every time whatever `ctx.months` says. It is one small file
 and it is the first thing the console asks for, so a band that will not load is

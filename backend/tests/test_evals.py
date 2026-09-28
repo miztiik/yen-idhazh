@@ -1318,7 +1318,7 @@ def test_an_archived_month_whose_rows_are_gone_still_refuses_its_observations(
 ) -> None:
     """The half that cannot be bounded, and the reason the archive keeps digests.
 
-    A month past `observability.scores_full_grain_months` has no rows left. Its
+    A month past the scores task's full-grain window has no rows left. Its
     digests are the only record those measurements were ever made, so dropping
     them would make every one of them new again on the day the rows went.
     """

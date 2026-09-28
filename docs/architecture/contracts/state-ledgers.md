@@ -62,7 +62,7 @@ That last row is the number to remember before reading any wall clock here as a 
 
 ## The item-health summary files by month because it summarises a month
 
-`state/item-health-summary/<YYYY-MM>.csv` is what is left of an item-health month once `observability.item_health_full_grain_months` has passed: one row per date and stage, folded by `retention.compact_month`.
+`state/item-health-summary/<YYYY-MM>.csv` is what is left of an item-health month once the `full-grain` series of `config/gardener/telemetry-aggregate.json` has passed: one row per date and stage, folded by `retention.compact_month`.
 
 A day file of a month's totals is a shape nothing consumes, so it files by month. It is also the one ledger here that is rewritten rather than appended, because every row in it is derived from the days it summarises.
 

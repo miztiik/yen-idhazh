@@ -91,10 +91,10 @@ BEFORE_PARTITION_NAME: Final = "before-partition.csv"
 #: elements are not recoverable and the bytes keep the name they were written
 #: under.
 #:
-#: **Removal condition: it goes when `observability.trace_window_days` has aged
-#: out every file written before the migration.** That is self-clearing and
-#: needs no later row - a trace is never folded, and `stages/prune_state.py`
-#: deletes whole files on that window.
+#: **Removal condition: it goes when the traces task's window has aged out
+#: every file written before the migration.** That is self-clearing and needs no
+#: later row - a trace is never folded, and the gardener's `traces` task deletes
+#: whole files on that window.
 PRE_IDENTITY_TRACE: Final = re.compile(r"[0-9]+-[0-9]{2}", re.ASCII)
 
 

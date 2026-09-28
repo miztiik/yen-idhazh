@@ -734,25 +734,12 @@ COMMIT_STAGED_PATHS: Final = {
     "bench": [f"{BENCH_LEDGER_ROOT}/{LedgerName.HOST_FINGERPRINT}"],
 }
 
-# The step that folds an out-of-window month before the step above commits it.
-# It runs after the day's own commit, so a retirement that loses its push costs
-# one run's bytes and never a published day.
-RETIRE_STEP: Final = "Retire the ledger shards and the visuals nothing still reads"
-
 # The step that replaces a closed day's writer files with the one file they
-# settle to. It runs after the day's own commit for the same reason the
-# retirement does: it deletes committed files, so a fold that loses its push may
-# never cost a published day.
+# settle to. It runs after the day's own commit: it deletes committed files, so a
+# fold that loses its push may never cost a published day.
 CLOSED_DAY_FOLD_STEP: Final = "Fold the days that can gain no more rows"
 
-RETIRE_COMMAND: Final = "python -m idhazh prune-state"
-
-# Set on purpose. `prune.yml` force-pushes main on a schedule, so a state file
-# this step deletes stops being recoverable from history once the prune passes
-# over it (CLAUDE.md section 8). The step logs every file a live run would remove
-# and removes nothing; turning the deletion on is a one-line commit of its own,
-# taken after a scheduled run has printed that list.
-RETIRE_DRY_RUN_FLAG: Final = "--dry-run"
+CLOSED_DAY_FOLD_COMMAND: Final = "python -m idhazh compact"
 
 # The step that fills the two ledgers the step above commits, and the two things
 # that decide which items are this shard's.

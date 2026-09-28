@@ -1,6 +1,6 @@
 # One visual, one file, and the race between two runs
 
-**Last Updated**: 2026-09-23
+**Last Updated**: 2026-09-28
 
 A visual's file is named for the item it belongs to, and nothing recomputes that
 name. This page is why: two earlier naming rules each published one story's
@@ -125,7 +125,7 @@ file before it can be enabled.
 | Resolve the add/add with `-X ours` or `-X theirs` | `theirs` puts the tip's picture under our alt text; `ours` overwrites an address a reader may already hold. Neither side of a coin flip is a correct answer to "whose chart is this". |
 | Renumber a raced chart instead of dropping it | Right while a path could mean two different stories, wrong now that it names one item. Moving this run's copy would file that item's picture under a name that is not its own, and leave two files where the day references one. |
 | Keep the first claimant's chart and null only the second | The order two items sit in a payload is not evidence of which one the chart was drawn for. This repairs 14 items by guessing on the other 14, and a guess that publishes is the failure being fixed. |
-| Leave the 2026-08-24 day as history and let retention prune it | Retention never removes it. `retention.dry_run` is `true`, which makes every pass report-only, and the prune deletes visuals rather than days, so it would never reach a payload even switched on. "Let it age out" is not a thing that happens here; the day stays wrong until somebody edits it. |
+| Leave the 2026-08-24 day as history and let retention prune it | Retention never removes it. `dry_run` is `true` in `config/gardener/visual-prune.json`, which makes every pass report-only, and the prune deletes visuals rather than days, so it would never reach a payload even switched on. "Let it age out" is not a thing that happens here; the day stays wrong until somebody edits it. |
 | Re-render the 2026-08-24 day from its committed decisions | Not rejected - impossible. It was offered as the thorough option in a handover and could never have been taken: the `visuals` artifact carries `retention-days: 1` and nothing under `backend/var/` is committed, so that day's decisions expired on 2026-08-25, before anyone read the handover. |
 
 ## See also

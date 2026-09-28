@@ -1,7 +1,7 @@
 """One rule for every `state/` day tree, held to by every reader of one.
 
-The day-side twin of `retention/test_telemetry_fold.py::test_the_month_readers
-_all_agree_on_what_a_month_is`, which found three month readers disagreeing on
+The day-side twin of `gardener/tasks/test_telemetry_aggregate_task.py::test_the_month
+_readers_all_agree_on_what_a_month_is`, which found three month readers disagreeing on
 2026-09-08 and one file left alone in one ledger and deleted in another.
 
 **Behaviour rather than identity.** Asserting that two names point at one
@@ -11,7 +11,7 @@ tree and asked what it did.
 
 **The set is the readers of a `<YYYY>/<MM>/<DD>.csv` tree under `state/`.**
 There is one other day walk in the repository and it is deliberately not in
-here: `retention._dated_days` reads `frontend/public/digest/`, where a day is a
+here: `retention.dated_days` reads `frontend/public/digest/`, where a day is a
 DIRECTORY holding a payload rather than a CSV file, and at its root it skips a
 name it cannot read instead of refusing it. Driven over these trees it would
 refuse the good day file too, because `07.csv` is not a day directory. A

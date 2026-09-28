@@ -148,7 +148,6 @@ def test_a_fresh_clone_runs_on_the_defaults() -> None:
     assert (CONFIG_DIR / minimal.models_file).is_file()
     assert minimal.run.safety_ceiling_per_run == committed.run.safety_ceiling_per_run
     assert minimal.retention.image_months == -1, "retention ships disabled"
-    assert minimal.retention.dry_run is True
     assert minimal.retention.pages_hard_cap_mb == PAGES_HARD_CAP_MB, (
         "an unconfigured clone enforces the platform's own ceiling"
     )
@@ -1032,23 +1031,13 @@ def test_a_fresh_clone_measures_itself_and_the_committed_config_agrees() -> None
     the claim: it was off until 2026-09-06, when the owner turned it on by
     default. On or off, the committed file and a fresh clone must agree - the
     point of this test is that the shipped config never silently diverges from
-    the defaults the code carries.
-
-    **One age is allowed to diverge, and it is named rather than skipped.**
-    `host_fingerprint_keep_months` defaults to null - never delete - because a
-    deletion default is a promise (`RetentionConfig`'s own rule), and the
-    committed file names the window one step ahead of it. Every other field
-    still has to agree, and this one still has to diverge in the one direction
-    that is safe: unconfigured keeps everything, committed names a window.
+    the defaults the code carries. No cleanup age is left here to diverge: each
+    one is the window of the gardener task that spends it.
     """
     committed = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json"))
     fresh = AppConfig.model_validate({})
 
-    assert committed.observability.model_dump(
-        exclude={"host_fingerprint_keep_months"}
-    ) == fresh.observability.model_dump(exclude={"host_fingerprint_keep_months"})
-    assert fresh.observability.host_fingerprint_keep_months is None
-    assert committed.observability.host_fingerprint_keep_months is not None
+    assert committed.observability.model_dump() == fresh.observability.model_dump()
     assert fresh.observability.evaluation_enabled
     assert fresh.observability.telemetry_publish
     assert fresh.observability.tracing_enabled
@@ -1099,45 +1088,15 @@ def test_a_sample_rate_of_zero_is_refused_because_the_toggle_already_says_off() 
     assert ObservabilityConfig(sample_rate=1.0).sample_rate == 1.0
 
 
-def test_the_trace_window_is_a_positive_span_of_days() -> None:
-    """The raw-trace window is counted in days, not months.
-
-    A trace is a lookup an operator opens for a recent run, so its window is a
-    short span of days rather than a full-grain month count - which is also why
-    it is not in `full_grain_months()` above. At least one day, or the day being
-    written would have nowhere to land. The value lives in config; this holds the
-    floor the model enforces, without asserting a default that would fail the day
-    somebody legitimately changes it.
-    """
-    assert ObservabilityConfig().trace_window_days >= 1
-    assert "trace_window_days" not in ObservabilityConfig().full_grain_months()
-    with pytest.raises(ValidationError):
-        ObservabilityConfig(trace_window_days=0)
-    assert ObservabilityConfig(trace_window_days=1).trace_window_days == 1
-
-
-def test_a_month_may_not_be_deleted_before_it_has_been_downsampled() -> None:
-    """A summary has to outlive the full-grain window it replaces, both times."""
-    fresh = ObservabilityConfig()
-    for summary, full_grain in (
-        ("item_health_aggregate_keep_months", "item_health_full_grain_months"),
-        ("score_archive_keep_months", "scores_full_grain_months"),
-    ):
-        keep = getattr(fresh, full_grain)
-        for early in (keep, keep - 1):
-            with pytest.raises(ValidationError, match=summary):
-                ObservabilityConfig(**{summary: early})
-        assert ObservabilityConfig(**{summary: keep + 1}) is not None
-
-
-def test_every_cleanup_age_outlives_the_shards_a_console_read_selects() -> None:
+def test_every_published_window_outlives_the_shards_a_console_read_selects() -> None:
     """The check the old `keep_months` never made, and the reason 13 was wrong.
 
     `console.max_window_days` is 366, and `month_partition.shards_in_window` walks 367
     inclusive days - so a window ending on the first of a month can start on the
     last day of another and open **14** month files. The retired check compared
     `months * 30` against the window, which passed 13 while a reader could still
-    ask for a fourteenth shard.
+    ask for a fourteenth shard. The windows of the ledgers behind these copies are
+    the gardener's, and `test_gardener_config.py` holds them to the same read.
     """
     window = ConsoleConfig().max_window_days
     shards = months_a_window_can_touch(window)
@@ -1147,44 +1106,15 @@ def test_every_cleanup_age_outlives_the_shards_a_console_read_selects() -> None:
 
     fresh = ObservabilityConfig()
     assert set(fresh.full_grain_months()) == {
-        "item_health_full_grain_months",
-        "feed_health_keep_months",
-        "scores_full_grain_months",
-        "public_telemetry_keep_months",
         "public_run_days_keep_months",
         "public_day_metrics_keep_months",
         "public_machine_keep_months",
         "public_span_rollup_keep_months",
     }
-    # One published payload is held equal to the ledger it projects, so
-    # lowering either half has to lower both to reach the shortness check.
-    paired = {
-        "item_health_full_grain_months": "public_telemetry_keep_months",
-        "public_telemetry_keep_months": "item_health_full_grain_months",
-    }
     for name, months in fresh.full_grain_months().items():
         assert months >= shards, f"observability.{name} is shorter than a console read"
-        short = {name: months - 1}
-        partner = paired.get(name)
-        if partner is not None:
-            short[partner] = months - 1
         with pytest.raises(ValidationError, match=name):
-            AppConfig.model_validate({"observability": short})
-
-
-def test_the_published_copy_lasts_exactly_as_long_as_the_ledger_it_copies() -> None:
-    """Either way round leaves a month nothing can answer for."""
-    for skew in (-1, 1):
-        with pytest.raises(ValidationError, match="public_telemetry_keep_months"):
-            ObservabilityConfig(
-                item_health_full_grain_months=20, public_telemetry_keep_months=20 + skew
-            )
-    assert (
-        ObservabilityConfig(
-            item_health_full_grain_months=20, public_telemetry_keep_months=20
-        ).public_telemetry_keep_months
-        == 20
-    )
+            AppConfig.model_validate({"observability": {name: months - 1}})
 
 
 def test_a_config_with_no_logging_block_reads_every_flag_at_its_documented_default() -> None:

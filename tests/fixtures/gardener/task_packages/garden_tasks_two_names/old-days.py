@@ -13,4 +13,4 @@ KIND = TaskKind.RETENTION
 
 
 def run(context: TaskContext) -> Pass:
-    return day_files(context, context.policy.owns or ())
+    return day_files(context, context.owned_folders)

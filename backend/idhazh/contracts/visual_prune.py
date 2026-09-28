@@ -1,8 +1,8 @@
 """What one cleanup pass over the rendered visuals found, took, and left behind.
 
-`state/raw/visual-prunes/YYYY/MM/DD/<file_id>.parquet`. One row per run of
-`idhazh prune-state`, written through the ledger door after the day is
-committed. Read whole - "is the backlog shrinking" has no time bound - so the
+`state/raw/visual-prunes/YYYY/MM/DD/<file_id>.parquet`. One row per pass of
+the gardener's `visual-prune` task, written through the ledger door, dry run or
+not. Read whole - "is the backlog shrinking" has no time bound - so the
 day layout buys the read nothing, and it is there for what it buys a writer
 instead: every writer holds a file of its own, so two runs never write one
 path. `idhazh.ledger` owns that trade and states it
@@ -10,7 +10,8 @@ path. `idhazh.ledger` owns that trade and states it
 files this ledger was committed as before it moved there.
 
 **`skipped_by_fuse` is the field this row exists for.** `deleted` is capped by
-`retention.max_deletes_per_run`, so it reads the same on a run that cleared its
+the visual-prune declaration's `max_deletes_per_run`, so it reads the same on a
+run that cleared its
 backlog and on one that could not get near it: 200 either way. Only the pair
 says which. A run that deleted 200 and skipped none is finished; a run that
 deleted 200 and skipped 4,000 has twenty more runs to go, and nothing else on
@@ -75,7 +76,8 @@ class VisualPruneRow(Contract):
         ),
     )
     max_deletes_per_run: int = Field(
-        ge=0, description="`retention.max_deletes_per_run` in force - the fuse."
+        ge=0,
+        description="The visual-prune declaration's `max_deletes_per_run` in force - the fuse.",
     )
     dry_run: bool = Field(
         description=(

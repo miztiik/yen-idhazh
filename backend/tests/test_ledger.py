@@ -1611,7 +1611,7 @@ def prune_identity(*, run_id: str = RUN_ID, attempt: int = 1) -> WriterIdentity:
         attempt=attempt,
         job=ServerJob.ASSEMBLE,
         shard=0,
-        producer="stages.prune_state",
+        producer="gardener.tasks.visual_prune",
         git_sha="a" * 40,
     )
 

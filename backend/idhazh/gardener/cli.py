@@ -139,6 +139,8 @@ def main(argv: Sequence[str] | None) -> int:
     if not re.fullmatch(COMMIT_SHA_PATTERN, args.git_sha):
         parser.error(f"--git-sha takes the forty hex digits of a commit, not {args.git_sha!r}")
     names, shard = chosen(settings, args, parser)
+    # No commit listing: this package starts no process, so a task walks its
+    # folders as the checkout holds them, and a complement task is refused.
     outcome = runner.run(
         names,
         settings=settings,
@@ -147,6 +149,7 @@ def main(argv: Sequence[str] | None) -> int:
         attempt=args.attempt,
         shard=shard,
         git_sha=args.git_sha,
+        committed_folders=None,
     )
     if outcome.record is not None:
         written = outcome.record.relative_to(args.repo_root).as_posix()

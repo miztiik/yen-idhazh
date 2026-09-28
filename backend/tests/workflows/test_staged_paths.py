@@ -7,17 +7,17 @@ import json
 import re
 import subprocess
 import sys
-from pathlib import Path
 from typing import cast
 
 import pytest
 from conftest import CONFIG_DIR, REPO_ROOT, read_text
 
 from idhazh import ledger
-from idhazh.contracts.ledger_name import LedgerName
-from idhazh.telemetry.publish import public_telemetry, series
+from idhazh.telemetry.publish import series
 
 from ._harness import (
+    CLOSED_DAY_FOLD_COMMAND,
+    CLOSED_DAY_FOLD_STEP,
     COMMIT_STAGED_PATHS,
     COMMIT_STEPS,
     CORPUS_SEED,
@@ -25,9 +25,6 @@ from ._harness import (
     HARVEST_STEP,
     PRUNE_PUSH_MODULE,
     PRUNE_PUSH_STEP,
-    RETIRE_COMMAND,
-    RETIRE_DRY_RUN_FLAG,
-    RETIRE_STEP,
     REVIEW_ARTIFACT,
     REVIEW_COMMAND,
     REVIEW_STEP,
@@ -120,117 +117,35 @@ def test_the_review_tree_is_an_artifact_and_no_commit_step_can_reach_it() -> Non
         assert "review" not in value, f"a commit step stages the review tree: {value}"
 
 
-def test_the_telemetry_fold_runs_only_once_the_day_is_committed() -> None:
-    """A fold that ran first could delete a month from a tree nothing pushed.
+def test_the_closed_day_fold_runs_only_once_the_day_is_committed() -> None:
+    """A fold that ran first could delete writer files from a tree nothing pushed.
 
-    The fold unlinks a committed file. Run before the day's own commit, a lost
-    push would hand `state/item-health` back to origin's tip and rebuild against
-    it, so the deletion would silently un-happen while the aggregate it wrote
-    stayed - and the next run would fold a shard that had already been folded.
+    The fold unlinks committed files. Run before the day's own commit, a lost
+    push would hand the day's paths back to origin's tip and rebuild against it,
+    so the deletion would be half-reverted while the settled file it wrote stayed.
     Behind the commit, the worst it can cost is one run's worth of bytes.
 
-    Neither step may fail the job. What assemble owes a reader is the published
-    day, and a thirteen-month-old month file must never be what stops one.
+    Neither the fold nor its commit may fail the job. What assemble owes a reader
+    is the published day, and no bookkeeping pass is worth the run.
     """
     workflow = _load_workflows()["digest.yml"]
     names = [step.get("name") for step in _steps(workflow, "assemble")]
-    fold = _step(workflow, "assemble", "name", RETIRE_STEP)
+    fold = _step(workflow, "assemble", "name", CLOSED_DAY_FOLD_STEP)
 
-    assert RETIRE_COMMAND in _script(fold, "assemble fold step")
-    assert names.index(COMMIT_STEPS["assemble"]) < names.index(RETIRE_STEP)
-    assert names.index(RETIRE_STEP) < names.index(COMMIT_STEPS["fold"])
-    for step_name in (RETIRE_STEP, COMMIT_STEPS["fold"]):
+    assert CLOSED_DAY_FOLD_COMMAND in _script(fold, "assemble fold step")
+    assert names.index(COMMIT_STEPS["assemble"]) < names.index(CLOSED_DAY_FOLD_STEP)
+    assert names.index(CLOSED_DAY_FOLD_STEP) < names.index(COMMIT_STEPS["fold"])
+    for step_name in (CLOSED_DAY_FOLD_STEP, COMMIT_STEPS["fold"]):
         step = _step(workflow, "assemble", "name", step_name)
         assert step.get("continue-on-error") == TOLERATED, (
             f"{step_name} must never be what costs a reader the day"
         )
 
 
-def test_the_fold_ships_in_dry_run_because_the_history_it_deletes_from_is_rewritten() -> None:
-    """Nothing this step deletes can be recovered once the scheduled prune passes.
-
-    `.github/workflows/prune.yml` squashes and force-pushes `main` on a schedule
-    (CLAUDE.md section 8), so `git revert` is not a recovery path for a state file
-    older than the squash's window in `config/gardener/corpus-squash.json`. The
-    step therefore prints the files a live run would remove and removes none of
-    them, and the flag is what makes that true rather than a comment saying it is.
-
-    Deleting the flag is the one-line commit that turns the deletion on, and it
-    is deliberately a commit somebody has to write and this test has to be
-    changed for.
-    """
-    fold = _step(_load_workflows()["digest.yml"], "assemble", "name", RETIRE_STEP)
-
-    assert RETIRE_DRY_RUN_FLAG in _script(fold, "assemble fold step")
-
-
-def test_the_fold_stages_the_browser_copy_it_deletes() -> None:
-    """A deletion reaches a commit only for a path `git add` is handed.
-
-    The commit program runs `git add` over every path a job owns in one call. The fold
-    unlinks `frontend/public/telemetry/<YYYY-MM>.csv` in the same step it folds
-    the ledger behind it, so a commit that staged `state` alone would push the
-    fold and leave the published copy of a month whose source is gone - the one
-    state `observability.public_telemetry_keep_months` exists to prevent.
-
-    Both paths are in a fresh checkout, which is the other half: `git add` on a
-    path that is not there aborts the step and takes the fold with it.
-    """
-    staged = COMMIT_STAGED_PATHS["fold"]
-
-    assert public_telemetry.PUBLIC_TELEMETRY_DIRNAME in "/".join(staged)
-    assert "frontend/public/telemetry" in staged
-    for relative in staged:
+def test_every_path_the_fold_commit_stages_exists_in_a_fresh_checkout() -> None:
+    """`git add` on a path that is not there aborts the step, and the fold's commit with it."""
+    for relative in COMMIT_STAGED_PATHS["fold"]:
         assert (REPO_ROOT / relative).is_dir(), f"{relative} must be in a fresh checkout"
-
-
-def test_the_fold_stages_state_whole_because_two_of_its_stores_appear_late() -> None:
-    """`state/item-health-summary/` and `state/score-archive/` are written, never seeded.
-
-    Neither exists in a fresh checkout: one appears the first time a month is
-    folded and the other the first time a month is archived. Naming either in
-    the commit step would abort `git add` under `set -euo pipefail` on every run
-    before that day, and take the sibling ledgers staged in the same call with
-    it. The feed retirements solved the same problem, while they were a CSV, by
-    committing a header-only file; there is no header-only form of a directory,
-    so the answer here is to stage `state`, which is always there.
-
-    The cleanup record is the third ledger this call covers and it needs no
-    change here either. Every run writes a file of its own under
-    `state/raw/visual-prunes/`, a path its own checkout did not carry - and
-    staging `state` whole already reaches it, which is why moving that record
-    needed nothing in this step.
-
-    What this no longer asserts is that the two late ledgers are absent from the
-    checkout. Staging `state` whole is correct whether or not they have appeared
-    yet, so their absence was never the reason the step is written this way -
-    and asserting it put a fuse on a date nobody chose: the first run to fold a
-    month or archive a score creates one, and this test goes red on a pull
-    request that did not touch it (`CLAUDE.md` section 13).
-    """
-    staged = COMMIT_STAGED_PATHS["fold"]
-
-    assert "state" in staged
-    cleanup_root = ledger.raw_root(Path(ledger.STATE_DIRNAME), LedgerName.VISUAL_PRUNES)
-    assert cleanup_root.parts[0] in staged
-    for late in ("item-health-summary", "score-archive"):
-        assert f"state/{late}" not in staged, (
-            f"state/{late} appears only once production writes it, so naming it here "
-            "aborts git add on every run before that day"
-        )
-
-
-def test_the_cleanup_is_filed_under_the_run_that_published_the_day() -> None:
-    """The step passes the same `github.run_id` the plan job filed its ledgers under.
-
-    Without it the cleanup row would carry a run id counted off the committed
-    manifest, and that count is what two overlapping runs were able to read the
-    same answer from - so a row would join to the wrong run, or to a run that
-    never happened.
-    """
-    fold = _step(_load_workflows()["digest.yml"], "assemble", "name", RETIRE_STEP)
-
-    assert "--execution \"${{ github.run_id }}\"" in _script(fold, "assemble fold step")
 
 
 def test_the_corpus_is_committed_but_never_rebuilt() -> None:

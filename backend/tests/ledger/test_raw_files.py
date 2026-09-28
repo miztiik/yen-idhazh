@@ -66,7 +66,7 @@ def filed(
             attempt=attempt,
             job=ServerJob.ASSEMBLE,
             shard=0,
-            producer="stages.prune_state",
+            producer="gardener.tasks.visual_prune",
             git_sha="a" * 40,
         ),
         fmt=fmt,

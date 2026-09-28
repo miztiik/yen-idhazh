@@ -182,8 +182,8 @@ OWNER_BUILT_AT_THE_BASE: Final[dict[str, str]] = {
     "month summary": "state/score-archive/2026-09.json",
 }
 
-#: Which directories `prune-state` protected before the registry claimed them,
-#: from the same commit.
+#: Which directories the old state cleanup protected before the registry claimed
+#: them, from the same commit.
 CLAIMED_AT_THE_BASE: Final[frozenset[str]] = frozenset(
     {
         "content-similarity-judge",
@@ -260,8 +260,8 @@ def test_the_committed_registry_names_every_ledger_exactly_once() -> None:
 def test_a_ledger_with_no_entry_stops_the_build_naming_it() -> None:
     """The refusal that replaces the hand-coded set, proved able to fire.
 
-    A ledger left out of the old Python set was a directory `prune-state`
-    silently emptied. Here it is a payload that will not validate, and the
+    A ledger left out of the old Python set was a directory the trial-tree
+    cleanup silently emptied. Here it is a payload that will not validate, and the
     message names the ledger an operator has to add.
     """
     with pytest.raises(ValidationError) as refusal:

@@ -104,10 +104,10 @@ def entry(ledger: LedgerName) -> LedgerEntry:
 def claimed_roots() -> frozenset[str]:
     """Every child of `state/` a writer owns, whatever its lifecycle status.
 
-    What `prune-state` subtracts from the children of `state/` before treating
-    what is left as a trial run's tree. An active family, a paused one and a
-    retired one are all claimed: the status says what a writer may do, never
-    whether the rows survive.
+    What the gardener's complement subtracts from the children of `state/`
+    before the `trials` task treats what is left as a trial run's tree. An
+    active family, a paused one and a retired one are all claimed: the status
+    says what a writer may do, never whether the rows survive.
 
     A family is named for its top-level folder, so each name here is a child of
     `state/`.

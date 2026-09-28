@@ -55,7 +55,7 @@ The check runs when the config loads, so each of these stops the build with the 
 
 | The registry | Why it is refused |
 | --- | --- |
-| leaves a `LedgerName` member out of every family | `prune-state` empties every directory under `state/` the registry does not claim, so a missing ledger is a production folder the trial sweep would empty |
+| leaves a `LedgerName` member out of every family | the gardener's `trials` task empties every directory under `state/` that no task owns and the registry does not claim, so a missing ledger is a production folder the trial sweep would empty |
 | lists one ledger twice in a family, or in two families | two entries are two answers about one ledger, and two families are two statuses for it |
 | lists one family twice | one folder with two lists would have two statuses |
 | lists a ledger whose prefix does not start with its family's name | the ledger would sit in one folder and take another folder's status |
@@ -128,7 +128,7 @@ flowchart TB
   SETTLE --> ROWS
   ROWS --> TREE
   SETTLE --> TREE
-  REG -->|"prune-state asks"| PRUNE
+  REG -->|"the trials task asks"| PRUNE
   PRUNE -->|"yes"| KEEP
   PRUNE -->|"no"| EMPTY
   TREE --> PRUNE
@@ -148,7 +148,7 @@ flowchart TB
   class ONBOARD,LOAD,DOOR sysOps;
 ```
 
-In one line: a ledger exists because a family lists it; the families, the ledgers and the typed names must agree or the build stops; everything that touches `state/` goes through the door the registry feeds; and `prune-state` empties only what the registry does not claim.
+In one line: a ledger exists because a family lists it; the families, the ledgers and the typed names must agree or the build stops; everything that touches `state/` goes through the door the registry feeds; and the gardener's `trials` task empties only what no task owns and the registry does not claim.
 
 The four drawn are the ones a CSV row moves through. The rest are read and written by those four or serve the ledger door, and reach neither the registry nor `state/` on their own; the table below lists them all.
 
@@ -189,7 +189,7 @@ One module outside may ask, and none may carry a copy. `backend/idhazh/path_clas
 
 **The set of ledgers is a config file, not a Python set and not a glob.** Owner decision, 2026-09-26.
 
-A frozen set in Python was what this replaced, and it is the defect rather than the alternative. `prune-state` subtracts the set from the children of `state/` and treats the remainder as a trial run's tree, so a ledger left out of the set is a production directory it empties. One ledger was exactly that: a real ledger, written by a stage, absent from the set - and its 90-day trial sweep emptied it well before the 14-month window its own retention knob promised. Nothing in the old design could catch it, because a missing name reads as a name that was never meant to be there.
+A frozen set in Python was what this replaced, and it is the defect rather than the alternative. The state cleanup of the day subtracted the set from the children of `state/` and treated the remainder as a trial run's tree, so a ledger left out of the set was a production directory it emptied. One ledger was exactly that: a real ledger, written by a stage, absent from the set - and its 90-day trial sweep emptied it well before the 14-month window its own retention knob promised. Nothing in the old design could catch it, because a missing name reads as a name that was never meant to be there.
 
 A glob over `state/` was the other candidate and it fails twice. Its cost rises with the data (CLAUDE.md Guardrail #12), and it cannot tell a retired ledger from one that has never run - a ledger whose first write failed is simply invisible to a walk, which is the opposite of what a protected set needs.
 
@@ -197,7 +197,7 @@ The config carries where each ledger lives and each family's lifecycle status. I
 
 **A lifecycle status belongs to a family, and an address to a ledger.** Owner decision, 2026-09-27. A status is a decision about a whole folder: pausing the similarity judge means none of its seven ledgers is written, and a status stored on each ledger made that seven edits that could disagree with each other. An address is a fact about one row shape - which folder, which grain, which file name - and two ledgers in one family still file differently. So the status is written once per folder, and the prefix keeps the whole nest so no builder has to ask the family anything.
 
-**The last four folders joined the registry rather than keep their own names.** `traces`, `day-metrics`, `digest-fragments` and `score-archive` were built by their owning modules from directory constants, and `prune-state` protected them from a list typed into the sweep beside the registry. That list was a second place to forget a folder, and each constant was a second spelling of where a ledger lives - the two defects the registry exists to remove. Each is now a one-ledger family, its owner composes its paths from the registry, and the one file name an owner minted, a digest fragment's, is minted inside the package like every other name under `state/`. None of them moved: each builder lands on the bytes it built before, and a test holds it.
+**The last four folders joined the registry rather than keep their own names.** `traces`, `day-metrics`, `digest-fragments` and `score-archive` were built by their owning modules from directory constants, and the state cleanup of the day protected them from a list typed into the sweep beside the registry. That list was a second place to forget a folder, and each constant was a second spelling of where a ledger lives - the two defects the registry exists to remove. Each is now a one-ledger family, its owner composes its paths from the registry, and the one file name an owner minted, a digest fragment's, is minted inside the package like every other name under `state/`. None of them moved: each builder lands on the bytes it built before, and a test holds it.
 
 **No module outside the package joins a ledger's name onto a root.** A hand-joined folder is right only until the registry moves the ledger, and then it reads a folder that no longer holds anything - which reads as a ledger with no history rather than as a fault. So every folder comes from `tree_root` or `tree_relpath`. `backend/tests/contracts/test_ledger_package.py` refuses a join of a `LedgerName` member anywhere else under `backend/`, and a typed `state/<family>` string in any module that is not a test.
 

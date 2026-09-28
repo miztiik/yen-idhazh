@@ -88,8 +88,8 @@ def trace_sink(
     (Guardrail #1, CLAUDE.md section 1b).
 
     The file is the committed trace under `state/traces/`, not a gitignored one,
-    so a recent run stays openable from the repository; `retention.prune_traces`
-    bounds the rolling window (CLAUDE.md section 1b, docs/concepts/telemetry.md).
+    so a recent run stays openable from the repository; the gardener's `traces`
+    task bounds the rolling window (CLAUDE.md section 1b, docs/concepts/telemetry.md).
 
     The file carries this writer's identity, so two shards and two attempts at
     one shard never open one path.

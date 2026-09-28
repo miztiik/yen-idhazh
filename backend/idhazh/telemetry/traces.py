@@ -2,10 +2,9 @@
 
 Where a raw trace lands once it is committed rather than left under gitignored
 `backend/var/`. The rollup is the record of a run; a raw trace is evidence with a
-short life, kept only so an operator can open a recent run.
-`retention.prune_traces` deletes whole files past
-`observability.trace_window_days`, because a trace is a lookup and a fold of it
-would invent a total nobody reads (`docs/concepts/telemetry.md`).
+short life, kept only so an operator can open a recent run. The gardener's
+`traces` task deletes whole files past its window, because a trace is a lookup
+and a fold of it would invent a total nobody reads (`docs/concepts/telemetry.md`).
 """
 
 from __future__ import annotations

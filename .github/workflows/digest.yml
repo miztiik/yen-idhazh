@@ -998,8 +998,8 @@ jobs:
           cache-dependency-path: pyproject.toml
 
       # `.[parquet]` rather than `.`: assemble files a low-yield retirement and
-      # publishes every retirement on record, and prune-state records its
-      # cleanup pass, all through the ledger door, whose files are parquet.
+      # publishes every retirement on record, both through the ledger door, whose
+      # files are parquet.
       - name: Install
         run: pip install -e ".[parquet]"
 
@@ -1191,92 +1191,6 @@ jobs:
           frontend/public/machine frontend/public/span-rollup
           frontend/public/run-timeline state corpus
 
-      # After the day is committed and never before it. The fold deletes a
-      # committed file, so it may only run once the thing it might collide with
-      # is already pushed - a fold that ran first and then lost the push would
-      # leave the month deleted in a tree nobody kept, and every later run would
-      # fold a shard that had already been folded.
-      #
-      # `--dry-run` is set on purpose and is the whole shape of this step today.
-      # `.github/workflows/prune.yml` force-pushes main on a schedule, so a state
-      # file this deletes stops being recoverable from history once the prune
-      # passes over it (CLAUDE.md section 8). So the step logs every file a live
-      # run would remove and removes nothing, and turning the deletion on is a
-      # separate one-line commit taken after a scheduled run has printed that
-      # list. Grep the job log for `prune-state would remove` to read it.
-      #
-      # The flag covers the whole invocation, so it also suspends the seen prune
-      # and the item-health fold, which had been live and had never fired. On
-      # 2026-09-13 the earliest either would have deleted anything is
-      # `state/seen/2026/08/23.csv` on 2026-11-22 - so removing the flag before
-      # then costs nothing that was already happening, and leaving it on costs
-      # nothing either.
-      #
-      # It also covers the score archive, which joined this step on 2026-09-03
-      # and is the one ledger here whose deletion is preceded by a summary that is
-      # written, read back and reconciled against the day files it replaces. The
-      # earliest it removes anything is the day files under `state/scores/2026/08/`
-      # on 2027-10-01, and its dry run prints what the archive would weigh against
-      # them.
-      #
-      # It also covers the archive cleanup, which joined this step on 2026-09-06
-      # and is the one thing here that would cost a reader something it can see.
-      # `retention.dry_run` is true, so nothing is ever deleted and the
-      # pass is a measurement of the backlog: it files one row under
-      # `state/raw/visual-prunes/YYYY/MM/DD/` every run, carrying what it found
-      # and what the fuse would have held back. `retention.image_months` took
-      # its first value, 13, on 2026-09-13, so the pass names a cutoff now -
-      # and nothing published is old enough to sit behind it. Switching the
-      # deletion on is plan 13's job and needs `frontend/public/digest` added to
-      # the commit call
-      # below, since `git add` records a removal only for a path it is handed.
-      #
-      # It also covers the trace prune, which joined this step on 2026-09-06 and
-      # is a lookup like the seen prune above: a raw span trace an operator opens
-      # for a recent run, deleted whole past `observability.trace_window_days`
-      # rather than folded. `state/traces/` is empty until
-      # `observability.tracing_enabled` is switched on in a later plan, so today
-      # this walks nothing - wiring the prune now is what makes the window bound
-      # the tree from the first run that ever writes one.
-      #
-      # `--execution` is the same `github.run_id` the plan job filed its ledgers
-      # under, so the cleanup row joins to the run that published the day.
-      #
-      # `continue-on-error` on both, for the reason the harvest carries it: what
-      # this job owes a reader is the published day, and thirteen-month-old
-      # telemetry must never be what stops one. A month it does not fold today it
-      # folds on the next run.
-      #
-      # It stages `state` whole rather than the directories it touches.
-      # `git add` runs under `set -euo pipefail` and would abort on a path a
-      # fresh checkout does not carry, and neither `state/item-health-summary/`
-      # nor `state/score-archive/` exists until the first fold or the first
-      # archive writes it, nor `state/traces/` until tracing is switched on.
-      # `state` always does, and the day's own commit above
-      # has already taken everything else in it. The cleanup record writes a
-      # file of its own under `state/raw/visual-prunes/` on every run, one the
-      # checkout it started from did not hold - staging `state` whole is what
-      # already reaches it, and is why moving that record needed nothing here.
-      #
-      # `frontend/public/telemetry` is named beside it because the fold deletes
-      # the browser's copy of a month in the same step it folds the ledger, and
-      # `git add` records a removal only for a path it is given. The directory is
-      # in every checkout - the day's own commit above stages it - so naming it
-      # cannot abort the step.
-      # `always()` because `Commit the day` above deliberately carries no
-      # `continue-on-error` - marking a lost publish as success is worse than
-      # failing - and without this the whole tail of the job is skipped with it.
-      # The job stays red and the record is still kept, which is strictly
-      # better than choosing one.
-      - name: Retire the ledger shards and the visuals nothing still reads
-        if: always()
-        continue-on-error: true
-        run: >-
-          python -m idhazh prune-state
-          --date "${{ needs.plan.outputs.date }}"
-          --execution "${{ github.run_id }}"
-          --commit "${{ github.sha }}" --dry-run
-
       # The closed-day fold, and this job is its only caller. A day older than
       # `run.settled_fold_after_days` can gain no more rows, so its writer files
       # are replaced by the one settled file they agree on.
@@ -1288,9 +1202,11 @@ jobs:
       # A fold that ran before that commit would be half-reverted by the
       # rebuild, silently, with the writer files already gone.
       #
-      # `always()` and `continue-on-error` for the reason the prune above them
-      # carries both: the day has already published by here, and no bookkeeping
-      # pass is worth the run.
+      # `always()` because `Commit the day` above deliberately carries no
+      # `continue-on-error` - marking a lost publish as success is worse than
+      # failing - and without it the whole tail of the job is skipped with it.
+      # `continue-on-error` because the day has already published by here, and
+      # no bookkeeping pass is worth the run.
       - name: Fold the days that can gain no more rows
         if: always()
         continue-on-error: true

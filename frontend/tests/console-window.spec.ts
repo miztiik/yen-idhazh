@@ -33,16 +33,16 @@ const CONFIG = JSON.parse(
 	};
 };
 
-/** The cleanup ages, from the file that sets them. A published shard older than
- * `public_telemetry_keep_months` is deleted by `idhazh prune-state`, so the
- * widest read this control offers has to stay inside what that leaves. */
-const APP = JSON.parse(
-	readFileSync(resolve(process.cwd(), '..', 'config', 'idhazh.json'), 'utf8')
+/** The cleanup ages, from the declaration that sets them. A published shard older
+ * than the `public-copy` series is deleted by the gardener's `telemetry-aggregate`
+ * task, so the widest read this control offers has to stay inside what that leaves. */
+const TELEMETRY = JSON.parse(
+	readFileSync(
+		resolve(process.cwd(), '..', 'config', 'gardener', 'telemetry-aggregate.json'),
+		'utf8'
+	)
 ) as {
-	observability?: {
-		public_telemetry_keep_months?: number;
-		item_health_full_grain_months?: number;
-	};
+	series?: Record<string, { unit: string; value?: number }>;
 };
 
 const PRESETS = CONFIG.console?.window_presets ?? [1, 7, 14, 30, 90];
@@ -65,8 +65,8 @@ function minus(date: string, days: number): string {
  * keeps 2025-07 through 2026-08. Restated here on purpose - nothing in a browser
  * can call the writer - so this is the reader's half of the promise and never
  * the authority on it. The writer's half is
- * `backend/tests/retention/test_retention_oracle.py::test_the_oracle_fifteen_months_leave_fourteen_of_each_and_one_verified_summary`,
- * which sweeps the same property through `month_partition.shards_in_window`.
+ * `backend/tests/gardener/tasks/test_telemetry_aggregate_task.py::test_the_fold_keeps_the_configured_window_at_full_grain`,
+ * which runs the task that deletes the months over twenty of them.
  */
 function monthsKept(today: string, months: number): string[] {
 	const [year, month] = today.split('-').map(Number);
@@ -213,18 +213,20 @@ test('the cost of widening is the months not already in hand, and never a 404', 
 });
 
 test('the widest window this control offers never names a shard the cleanup age took', () => {
-	// `retention.prune_telemetry` deletes the browser's copy of a month past
-	// `observability.public_telemetry_keep_months`, and that knob must equal the
-	// ledger's own window. This is the reader's half of the same promise: over
+	// The gardener's `telemetry-aggregate` task deletes the browser's copy of a
+	// month past its `public-copy` series, and that series must equal the ledger's
+	// own `full-grain` one. This is the reader's half of the same promise: over
 	// every anchor a year can offer, the months the widest read selects are all
 	// months the cleanup kept, so widening costs a fetch and never a 404.
 	//
-	// It reads both knobs rather than 366 and 14, because the two configs are
+	// It reads both windows rather than 366 and 14, because the two configs are
 	// where the pair is set and a test that repeated the numbers would agree with
 	// itself after an edit moved them.
-	const keepMonths = APP.observability?.public_telemetry_keep_months ?? 14;
+	const publicCopy = TELEMETRY.series?.['public-copy'];
+	expect(publicCopy?.unit, 'the public copy is kept in whole months').toBe('months');
+	const keepMonths = publicCopy?.value ?? 0;
 	const maxDays = CONFIG.console?.max_window_days ?? 366;
-	expect(keepMonths).toBe(APP.observability?.item_health_full_grain_months ?? 14);
+	expect(keepMonths).toBe(TELEMETRY.series?.['full-grain']?.value);
 
 	for (let offset = 0; offset < 366; offset += 1) {
 		const today = minus('2026-12-31', offset);

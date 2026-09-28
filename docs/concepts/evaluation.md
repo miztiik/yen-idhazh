@@ -1,6 +1,6 @@
 # Evaluation
 
-**Last Updated**: 2026-09-22
+**Last Updated**: 2026-09-28
 
 How a published summary is judged, and how the judgement is kept honest. This page fixes the vocabulary; the tunable bands live in [config/summary-length.md](config/summary-length.md).
 
@@ -439,8 +439,9 @@ counterweight's own precision and recall out of the same sixty labels.
 **Those three counterweights are copied onto the label row from 2026-09-03, and
 that is a change of policy rather than of shape.** The read side used to re-join
 `unsupported_numbers`, `hedge_dropped` and `extraction_suspect` from
-`state/scores/` on `output_digest`, and that ledger now keeps
-`observability.scores_full_grain_months` months of item-level rows before a month
+`state/scores/` on `output_digest`, and that ledger now keeps fourteen months of
+item-level rows - the `full-grain` series of `config/gardener/scores.json` -
+before a month
 becomes a summary. A label outlives its source row, so a re-join is a promise the
 ledger stops being able to keep - and what would be lost is exactly the precision
 and recall the sixty labels are drawn to buy. `LabelRow` carries the three as
@@ -1060,8 +1061,8 @@ A month with no committed shard exits non-zero rather than reporting a clean
 pass over nothing, and the refusal comes before any file is touched, so the
 months named beside a typo keep the index they had.
 
-**`state/score-archive/` is not a source for a rebuild.** A month past
-`observability.scores_full_grain_months` has no rows left to derive anything
+**`state/score-archive/` is not a source for a rebuild.** A month past the
+`full-grain` series of `config/gardener/scores.json` has no rows left to derive anything
 from, which is precisely why the archive keeps those digests itself.
 
 ### A month past fourteen becomes a summary, and the dedupe survives it
@@ -1078,7 +1079,7 @@ again - which turns a count over the ledger from a count of items into a count o
 times the pipeline looked, and that is the one thing this ledger promises it is
 not.
 
-So a month past `observability.scores_full_grain_months` is turned into
+So a month past the `full-grain` series of `config/gardener/scores.json` is turned into
 `state/score-archive/<YYYY-MM>.json` first, and the shard is unlinked only after
 that file has been written temp-then-rename, read back through its contract, and
 reconciled field by field against a second reading of the shard. The archive

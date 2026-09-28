@@ -32,7 +32,7 @@ asked for, and a detail is not a rule.
 **A name this does not recognise is left alone.** It is not deleted and it is
 not a fault. These directories are the top of their own ledger, and the stricter
 rule the published day tree uses - below a dated level an unreadable name raises
-(`retention._dated_days`) - stops at a root by design, because a root is allowed
+(`retention.dated_days`) - stops at a root by design, because a root is allowed
 to hold things that are not the partitioned tree at all.
 """
 
@@ -107,7 +107,7 @@ def shards_in_window(today: str, within_days: int) -> list[str]:
 
     What it still answers is the question the `keep_months` knobs are sized
     against: how many month-shaped buckets a day-counted window reaches. That is
-    why `observability.item_health_full_grain_months` is 14 and not 13 against a
+    why the telemetry-aggregate task keeps 14 months and not 13 against a
     366-day `console.max_window_days`, and `contracts.app_config` states the
     rule while `tests/contracts/` and `tests/retention/` drive it. A grain change
     does not touch it, because both knobs are still counted in months.

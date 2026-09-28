@@ -1,6 +1,6 @@
 # Telemetry Series
 
-**Last Updated**: 2026-09-21
+**Last Updated**: 2026-09-28
 
 The console's interactive charts read a published projection of item health. They
 never read `state/item-health/` directly.
@@ -329,20 +329,22 @@ to 2026-08-29 the shard carried `source_words_before_cap` and the reader did
 not. **Do not tighten it to an equality.** A writer-only column is the normal
 state between the commit that publishes a cell and the commit that draws it.
 
-**How long a shard is kept is a knob of its own, and it is now spent.**
-`observability.public_telemetry_keep_months` is 14, and the contract refuses any
-value that is not equal to `observability.item_health_full_grain_months`: this
+**How long a shard is kept is a value of its own, and it is now spent.** It is
+the `public-copy` series of `config/gardener/telemetry-aggregate.json`, 14
+months, and the gardener loader refuses any value that is not equal to the
+`full-grain` series of the same file: this
 file is the browser's copy of that ledger, so a published month whose source has
 been folded away is a rate nobody can check, and a source month with no published
 copy is a window the console cannot draw. Since 2026-09-03 the two files go
-together: `retention.prune_telemetry` folds the ledger month, unlinks the shard,
-and unlinks this copy of it in the same step
+together: the gardener's `telemetry-aggregate` task folds the ledger month,
+unlinks the shard, and unlinks this copy of it in the same pass
 ([../../concepts/config/retention-ages.md](../../concepts/config/retention-ages.md#every-tree-names-its-own-cleanup-age)).
 
 Three things about that deletion are worth stating on this page rather than only
 on the pruner's:
 
-- **It ships in dry run.** The step logs the files a live run would remove and
+- **It ships in dry run.** The task's declaration carries `dry_run: true`, so a
+ pass logs the files a live pass would remove and
  removes none of them, because `.github/workflows/prune.yml` force-pushes `main`
  on a schedule and a deleted file stops being recoverable once that prune passes
  over it (`CLAUDE.md` section 8). Measured 2026-09-02 on this checkout, a live

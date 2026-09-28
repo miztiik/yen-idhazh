@@ -169,8 +169,8 @@ LEDGERS_AN_OWNER_WRITES: Final[Mapping[str, str]] = MappingProxyType(
             "block per run of a date, written by `python -m idhazh assemble`"
         ),
         "state/score-archive": (
-            "idhazh.evals.archive, called by retention.prune_scores from "
-            "`python -m idhazh prune-state` the first time a month of scores ages out"
+            "idhazh.evals.archive, called by the gardener's scores task the first time "
+            "a month of scores ages out; the gardener stages each file it writes"
         ),
     }
 )

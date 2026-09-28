@@ -38,7 +38,7 @@ named in another script's numerals. The old walk entered it, found nothing to
 refuse, and yielded nothing - a stray tolerated in a tree whose whole rule is
 that nothing is tolerated.
 
-`retention._dated_days` walks a different day tree and does not move here. Its
+`retention.dated_days` walks a different day tree and does not move here. Its
 days are DIRECTORIES under `frontend/public/digest/` rather than CSV files, and
 at its root it skips a name it cannot read instead of refusing it, because that
 root is shared with things that are not the day tree. One walk per shape, for
@@ -122,9 +122,9 @@ def date_of(day_file: Path) -> str:
     """The `<YYYY-MM-DD>` a day file holds, read off its own path.
 
     The peer of `month_of`, and both exist because a boundary is either a month
-    or a day. `retention.prune_telemetry` and `prune_feed_health` compare a month
-    because their knobs are months; `prune_seen` compares a day, because its knob
-    is `collect.seen_window_days` and `days_in_window` hands it days. A caller
+    or a day. The gardener's `telemetry-aggregate` and `feed-health` tasks compare
+    a month because their windows are months; the `seen` task compares a day,
+    because its window is days and `days_in_window` hands it days. A caller
     with a day boundary that spelled this itself would be the second place the
     path layout is written down.
     """

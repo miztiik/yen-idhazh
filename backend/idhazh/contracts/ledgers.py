@@ -7,10 +7,10 @@ onboarded. A ledger is one row shape filed one way at one address, and each
 `LedgerName` member is exactly one ledger in exactly one family.
 
 The ledger names and `LedgerName` must be exactly each other, and the refusal
-that holds them there is the point of the file. `prune-state` empties every
-directory under `state/` the registry does not claim, so a ledger nobody wrote an
-entry for used to be a directory a later run silently emptied. It is now a build
-that will not start.
+that holds them there is the point of the file. The gardener's `trials` task
+empties every directory under `state/` that no task owns and the registry does
+not claim, so a ledger nobody wrote an entry for used to be a directory a later
+run silently emptied. It is now a build that will not start.
 
 Where a ledger lives is here. How its rows settle is not: a dedup key is a tuple
 and a preference is a callable, and a callable is not JSON.
@@ -195,8 +195,8 @@ class LedgersConfig(Model):
         if missing:
             raise ValueError(
                 f"no entry for {', '.join(missing)}. Every ledger needs one, because "
-                "prune-state empties every directory under state/ the registry does not "
-                "claim"
+                "the gardener's trials task empties every directory under state/ that no "
+                "task owns and the registry does not claim"
             )
         split = sorted(
             f"{name.value} is listed in families {' and '.join(sorted(set(families)))}"

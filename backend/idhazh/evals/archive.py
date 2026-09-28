@@ -1,15 +1,16 @@
 """Summarise a month of the eval ledger, and prove the summary before the rows go.
 
 `state/scores/<YYYY>/<MM>/<DD>.csv` is the committed record of how every summary
-scored. Past `observability.scores_full_grain_months` a whole month of those day
-files is turned into `state/score-archive/<YYYY-MM>.json` and unlinked - and the
-whole safety argument of this module is the order those two things happen in.
+scored. Past the full-grain window of `config/gardener/scores.json` a whole month
+of those day files is turned into `state/score-archive/<YYYY-MM>.json` and
+unlinked - and the whole safety argument of this module is the order those two
+things happen in.
 
 **The archive keeps a month while the ledger below it keeps days**, because a
 day file of one month's totals is a shape nothing consumes
-(`docs/concepts/partitions.md`). `retention.prune_scores` is where the two grains
-meet: it groups with `day_partition.days_by_month` and folds a month whole or not
-at all, so a month's input is at most 31 files.
+(`docs/concepts/partitions.md`). The gardener's `scores` task is where the two
+grains meet: it groups with `day_shards.shards_by_month` and folds a month
+whole or not at all, so a month's input is at most 31 files.
 
 The summary is computed, written temp-then-rename, read back through its
 contract, and reconciled field by field against a second reading of the day
@@ -99,8 +100,8 @@ MEASUREMENT_COLUMNS: Final = (
 
 #: What a person reading a utility's refusal needs to know in one line.
 RAW_WINDOW_NOTE: Final = (
-    f"{ledger.tree_relpath(LedgerName.SCORES)}/ keeps observability.scores_full_grain_months "
-    "months of item-level rows. An older month exists only as "
+    f"{ledger.tree_relpath(LedgerName.SCORES)}/ keeps item-level rows for the full-grain "
+    "window of config/gardener/scores.json. An older month exists only as "
     f"{ledger.tree_relpath(LedgerName.SCORE_ARCHIVE)}/<YYYY-MM>.json, which carries totals, "
     "distributions, ranges, spread and the dedupe index, and no item."
 )
@@ -238,7 +239,7 @@ def summarise(days: Sequence[Path], *, month: str, observation_key: Sequence[str
 
     A month is a tree of `<YYYY>/<MM>/<DD>` days since 2026-09-13, so the caller
     hands the files and the month they belong to rather than one path whose stem
-    said both. `retention.prune_scores` groups them with
+    said both. The gardener's `scores` task groups them with
     `day_shards.shards_by_month` and folds a month whole or not at all.
 
     `observation_key` is `evals.writer.OBSERVATION_KEY`, passed in rather than
