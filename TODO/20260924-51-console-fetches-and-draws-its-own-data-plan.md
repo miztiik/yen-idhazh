@@ -56,7 +56,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | 3 | The three ledgers the console reads are published | plan 50's rows titled "One compaction task a ledger, two compact periods, and the diagrams move into the page" and "The three ledgers the console's routes read become parquet" | B | PENDING | - | - | - |
 | 4 | The chart vocabulary and the house style, with no panel moved | - | B | DONE | p51r4 | #1137 | p51-r4-worker |
 | 5 | One readout strip, every chart, and hover a keyboard can reach | 1, 4 | C | IN-FLIGHT | p51r5 | - | p51-r5-worker |
-| 6 | The ten sufficiency gates and the panel capture group | 4, 5 | C | IN-FLIGHT | p51r6 | - | p51-r6-worker |
+| 6 | The ten sufficiency gates and the panel capture group | 4, 5 | C | DONE | p51r6 | #1144 | p51-r6-worker |
 | 7 | The query door module and its two entry points | 4; plan 50's row titled "The index and watermark shapes are declared" | C | PENDING | - | - | - |
 | 8 | One panel end to end: the browser fetches the ledger and draws it in d3 | 1, 2, 3, 4, 5, 6, 7 | D | PENDING | - | - | - |
 
