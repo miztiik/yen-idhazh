@@ -55,6 +55,7 @@ jobs:
       browser: ${{ steps.decide.outputs.browser }}
       code: ${{ steps.decide.outputs.code }}
       console: ${{ steps.decide.outputs.console }}
+      panels: ${{ steps.decide.outputs.panels }}
       validate_all: ${{ steps.decide.outputs.validate_all }}
       playwright: ${{ steps.browsers.outputs.playwright }}
     steps:
@@ -399,22 +400,44 @@ jobs:
       # A pull request buys the console's own specs only for a console change or
       # a harness change - they are 584 of the suite's 997 tests and the console
       # is an operator's page. Main runs every group, which is where a shared
-      # edit that broke the console is caught. The site job runs the no-server
+      # edit that broke the console is caught. The panel captures and gates are
+      # bought by a wider set - anything every panel is drawn from - because they
+      # are two spec files rather than hundreds. The site job runs the no-server
       # logic group.
       - name: Browser suite - canaries and retrieval
         working-directory: frontend
         env:
           SKIP_CONSOLE_SUITE: ${{ needs.scope.outputs.console == 'false' }}
+          SKIP_PANELS_SUITE: ${{ needs.scope.outputs.panels == 'false' }}
           # 4 vCPU with nothing else on it, so a worker per core: 344 s at one
           # worker, 207 s at four, runs 33989034726 and 33991122503, 2026-09-05.
           PLAYWRIGHT_WORKERS: '4'
         run: npm run test:browser
 
+      # Every console panel at three widths in both themes, plus the narrowest
+      # dark picture with every data request refused. A reviewer reads them;
+      # nothing diffs them, so there is no committed baseline to re-bless.
+      # Uploaded whether the suite passed or failed - a capture that exists only
+      # on a red run is one nobody can read - and skipped only for a cancelled
+      # run. No compression, because a PNG does not get smaller in a zip.
+      - uses: actions/upload-artifact@v7
+        if: ${{ !cancelled() && needs.scope.outputs.panels == 'true' }}
+        with:
+          name: panel-captures
+          path: frontend/test-results/panels/
+          retention-days: 14
+          compression-level: 0
+          if-no-files-found: error
+
       - uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: playwright-traces
-          path: frontend/test-results/
+          # The panel captures are their own artefact, so a red run does not
+          # upload them twice.
+          path: |
+            frontend/test-results/
+            !frontend/test-results/panels/
           retention-days: 7
           if-no-files-found: ignore
 

@@ -78,17 +78,20 @@ export function previewPort(worktree: string, env: Record<string, string | undef
 const PORT = previewPort(dirname(fileURLToPath(import.meta.url)), process.env);
 
 /**
- * The operator console's own specs, skipped when nothing it renders has moved.
+ * The operator console's own specs, skipped when nothing it renders has moved,
+ * and the panel captures and gates, skipped when nothing a panel is drawn from
+ * has moved.
  *
- * The shared selector decides from all changed paths. Shared and unknown inputs
- * include console coverage; main always runs every group. Test counts are
- * discovered rather than copied here.
+ * The shared selector decides both from all changed paths. Shared and unknown
+ * inputs include console coverage; main always runs every group. Test counts
+ * are discovered rather than copied here.
  *
  * Skipping is opt-in through the environment and never the default: a bare
  * `npm run test:browser` runs all browser groups. The build-independent group
  * runs separately through `npm run test:logic` without starting a server.
  */
 const SKIP_CONSOLE = (process.env.SKIP_CONSOLE_SUITE ?? '').trim() === 'true';
+const SKIP_PANELS = (process.env.SKIP_PANELS_SUITE ?? '').trim() === 'true';
 const GROUPS = groupedSpecs(fileURLToPath(new URL('./tests/', import.meta.url)));
 
 /** A group's own spec files, as the patterns `testIgnore` skips them by.
@@ -138,7 +141,11 @@ function workerCount(asked: string | undefined): number {
 export default defineConfig({
 	testDir: 'tests',
 	outputDir: 'test-results/browser',
-	testIgnore: SKIP_CONSOLE ? [WHOLE_DAY, ...specsOf('console')] : WHOLE_DAY,
+	testIgnore: [
+		WHOLE_DAY,
+		...(SKIP_CONSOLE ? specsOf('console') : []),
+		...(SKIP_PANELS ? specsOf('panels') : [])
+	],
 	fullyParallel: false,
 	forbidOnly: Boolean(process.env.CI),
 	retries: 0,
@@ -165,6 +172,11 @@ export default defineConfig({
 		// other the reader's worker retires itself and the case times out, so the one
 		// small project runs to completion before the large one starts.
 		...(name === 'reader' ? { dependencies: ['offline'] } : {}),
+		// Twelve page loads of captures sit in one file, and one file runs in one
+		// worker unless its tests may spread. Each capture test writes only its own
+		// images, so they may, and the last one to finish costs one page load
+		// rather than all twelve queued behind each other.
+		...(name === 'panels' ? { fullyParallel: true } : {}),
 		use: { ...devices['Desktop Chrome'] }
 	})),
 	webServer: {
