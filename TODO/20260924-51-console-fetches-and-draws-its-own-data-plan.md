@@ -33,25 +33,16 @@ handover nothing of this plan was in flight. Rows 1, 2, 4, 5 and 6 had merged (#
 47. This run's worktrees, local branches and leftover folders were all swept on
 2026-09-28, so any plan 51 checkout you find was made after the handover.
 
-STEP 2 - DISPATCH. Row 7 is ready now: row 4 (#1137) and plan 50's row 11 (#1136) have
-merged, and the owner ruled on 2026-09-28 that this plan builds it, as its decision 8
-says. Mark it IN-FLIGHT on the trunk before you cut its branch: plan 50's row 9 waits on
-it, and plan 50's owner reads that line. Nothing else is ready, so the pool runs one wide.
-Settle four things before you brief row 7:
-  a. Plan 50's paragraph "What a reader does with a stamp it does not know" asks the
-     door to compare each index's version with the one the bundle was built with and,
-     on a mismatch, to draw unreachable with both stamps in the console and fetch
-     nothing. Row 7's text does not say so.
-  b. Where the engine's .wasm files are served from, and what they add to the 1 GB
-     site. Nobody has measured it, and the package ships more than one build. Carmack
-     rules.
-  c. frontend/svelte.config.js already allows WebAssembly, and workers from the site
-     itself and from blob:. An engine served from any other origin widens that policy.
-  d. Plan 50's compaction is not built yet, so the fixture ledger in
-     tests/fixtures/ledger-door/ cannot come from it. Its indexes must validate against
-     backend/idhazh/contracts/ledger_index.py.
+STEP 2 - DISPATCH. Row 7 went IN-FLIGHT on 2026-09-28 in worktree p51r7, on branch
+p51r7-one-query-door-reads-a-ledger-in-the-browser-and-at-build-time. Its four open
+questions were settled by Carmack and Fowler before dispatch; they are row 7's
+decisions 10 to 18 and deviations 7 to 12 below. If you find its pull request open, or
+its branch with no pull request, adopt it: the worker keeps its running report in
+%TEMP%\p51r7\report.md. Nothing else is ready, so the pool runs one wide.
   after row 7 merges       tell the person that plan 50's row 9 no longer waits on
-                           this plan.
+                           this plan, and that its three readers import
+                           sliceFromDisk() from frontend/src/lib/server/
+                           (deviation 9).
   after plan 50's rows     row 3. Row 2's text says row 3 must date the completeness
   7 and 9 merge            sentence from the newest compacted day, not from
                            generated_at, but row 3's file list does not name
@@ -63,7 +54,16 @@ Settle four things before you brief row 7:
                            two things other text gives it: defect 44 says row 8 moves
                            MemoryBoard.svelte onto absentHatch, and row 5's decision 21
                            says the row that first puts a house-style component on a
-                           route removes its <title>. Settle both at dispatch.
+                           route removes its <title>. Settle both at dispatch. Row 7
+                           hands row 8 five more: the service worker skips the
+                           engine's .wasm by its suffix, beside the encoder's files;
+                           the cold-load spec asserts the engine is not first-load
+                           (deviation 11); the engine starts loading at the same time
+                           as the data fetches, or a cold load reaches the four-trip
+                           ceiling; the oracle adds "the engine's worker cannot fetch
+                           another origin"; and how the device keeps the engine across
+                           deploys (deviation 12). Its scope line reads "no change to
+                           the door's contract", so it may fix engine.ts.
 
 STEP 3 - GATES. A worker runs `npm --prefix frontend run test:changed -- --list`, then
 only its row's named acceptance gates, then pushes and reports. CI is the one full-suite
@@ -107,6 +107,12 @@ Only what no row records. Each row's own departures are in its decisions and its
 | 4 | 2, 6 | The owner merges each row as its gates go green | A worker call blocks the owner until it returns, so row 2's pull request waited about an hour with its gates green. Row 6 merged row 2's branch into its own to move on, and a helper agent merged row 6 | Plan owner, 2026-09-28 |
 | 5 | 5 | One worker delivers a row | Row 5's first worker ran out of room and returned a draft with five browser tests failing. The owner chose to finish it on the same branch, and a second worker did | Owner, 2026-09-28 |
 | 6 | 7 | This plan builds row 7 (decision 8) | On 2026-09-27 the owner's words were read as handing row 7 to plan 50's owner, so the row sat unstarted after it was ready. The owner ruled on 2026-09-28 that this plan builds it | Owner, 2026-09-28 |
+| 7 | 7 | Plan 50's paragraph "What a reader does with a stamp it does not know": the door refuses an index on any version mismatch | The door reads an index at its own stamp or an older one when the fields it reads check out, and refuses only a newer one. The gardener rewrites the indexes at its own wake, not in the commit that moves the stamp, so exact equality would blank every panel from a shape change to the next wake - days at the measured wake rate, and up to a month for `monthly.json` - which CLAUDE.md section 11 calls a release blocker. Plan 50's owner is told here. Row 7's decision 10 | Carmack and Fowler, 2026-09-28 |
+| 8 | 7 | Decision 3: the engine's selector picks between the single-threaded builds | One build ships, the one that needs WebAssembly exception handling. It adds 36.7 MB to a 99.8 MB site, which reaches 12.7 percent of the 1 GiB cap; the other build would add 42.2 MB more for browsers from before 2022. Row 7's decision 11 | Carmack and Fowler, 2026-09-28 |
+| 9 | 7 | Section 2.2: `ledger.ts` holds both entry points | `sliceFromDisk()` lives under `frontend/src/lib/server/`, where SvelteKit itself refuses a browser import, and a core module that imports nothing tied to one environment holds the logic, so a Node test can load it. Plan 50's row 9 imports it from there. Row 7's decision 16 | Fowler, 2026-09-28 |
+| 10 | 7 | Section 2.2's `SliceResult` | `ok` and `quiet` also carry `through`, the newest day compacted or `null`, so a panel can say how far its data reaches; a span wholly after that day is `quiet`. Row 7's decision 14 | Carmack and Fowler, 2026-09-28 |
+| 11 | 7, 8 | Row 7 asserts in `console-cold-load.spec.ts` that the engine is not first-load | No page loads the door until row 8, so that assertion could not fail in row 7. The bundle gate's new entry, proved by a deliberate static import, is row 7's witness, and the cold-load assertion moves to row 8. Row 7's decision 18 | Carmack, 2026-09-28 |
+| 12 | 7, 8 | Decision 2 and section 2.2: the engine is fetched once, and a daily file is cached for ever | Measured 2026-09-28 on the live site: Pages sends `Cache-Control: max-age=600` and an `ETag` built from the deploy time and the size (`"6aba5aa3-152"` on a 338-byte file deployed at 12:16:35 UTC). So an unchanged file is sent again after every deploy, several times a day, and the engine's 8.2 MB (compressed) is paid once a deploy rather than once. Row 8 decides how the device keeps it | Plan owner, measured 2026-09-28 |
 
 ## 0. Operating contract
 
@@ -157,7 +163,7 @@ Only what no row records. Each row's own departures are in its decisions and its
 | 4 | The chart vocabulary and the house style, with no panel moved | - | B | DONE | p51r4 | #1137 | p51-r4-worker |
 | 5 | One readout strip, every chart, and hover a keyboard can reach | 1, 4 | C | DONE | p51r5 | #1143 | p51-r5-worker |
 | 6 | The ten sufficiency gates and the panel capture group | 4, 5 | C | DONE | p51r6 | #1144 | p51-r6-worker |
-| 7 | The query door module and its two entry points | 4; plan 50's row titled "The index and watermark shapes are declared" | C | PENDING | - | - | - |
+| 7 | The query door module and its two entry points | 4; plan 50's row titled "The index and watermark shapes are declared" | C | IN-FLIGHT | p51r7 | - | p51-r7-worker |
 | 8 | One panel end to end: the browser fetches the ledger and draws it in d3 | 1, 2, 3, 4, 5, 6, 7 | D | PENDING | - | - | - |
 
 **Readiness is the file-disjointness test, not the group letter** (execute-a-plan.md). The letters record which rows the author believed independent; the `Files touched` lists are the fact, and the shared-file notes below are why three depends-on edges exist that the letters do not show.
@@ -216,7 +222,7 @@ export function mergedDayShards(
 
 ### 2.2 The query door
 
-The query door is three modules under `frontend/src/lib/data/`, and a panel sees only the first. `ledger.ts` is the public door every panel calls; `engine.ts` is **the only module in `frontend/` that imports the query engine** (`@duckdb/duckdb-wasm`), mirroring the backend's single-engine rule; `slice.ts` turns a date range into the set of files to fetch. A panel imports `ledger.ts` and nothing deeper.
+The query door is three modules under `frontend/src/lib/data/`, and a panel sees only the first. `ledger.ts` is the public door every panel calls; `engine.ts` is **the only module in `frontend/` that imports the query engine** (`@duckdb/duckdb-wasm`), mirroring the backend's single-engine rule; `slice.ts` turns a date range into the set of files to fetch. A panel imports `ledger.ts` and nothing deeper. **Corrected at row 7's dispatch, 2026-09-28:** the logic sits in a core module beside these, the index copy in a module of its own, and `sliceFromDisk()` in a module under `frontend/src/lib/server/` (row 7's decision 16).
 
 **`ledger.ts` has two entry points over one query.** `slice()` is what a panel calls in the browser; it fetches the compacted files over HTTP. `sliceFromDisk()` is what a build-time reader under `frontend/src/lib/server/` calls while the site is built; it reads the same files from `state/` on disk. Plan 50's row titled "The three ledgers the console's routes read become parquet" moves today's build-time readers onto `sliceFromDisk()` and adds no export of its own.
 
@@ -227,7 +233,9 @@ export async function slice(ledger: LedgerName, opts: SliceOptions): Promise<Sli
 
 /** The same query over the same compacted files, read from disk while the site is
  *  built. `stateDir` is `STATE_ROOT` from `frontend/src/lib/server/payload.ts`.
- *  Only build-time readers under `frontend/src/lib/server/` call it; a panel never does. */
+ *  Only build-time readers under `frontend/src/lib/server/` call it; a panel never does.
+ *  Corrected at row 7's dispatch (deviation 9): it is exported from a module under
+ *  `frontend/src/lib/server/`, not from `ledger.ts`, so SvelteKit refuses a browser import. */
 export async function sliceFromDisk(
 	stateDir: string,
 	ledger: LedgerName,
@@ -248,10 +256,12 @@ export type Row = Record<string, string | number | boolean | null>;
 
 /** What the door hands a panel, so the panel draws the right one of four nothings
  *  without inspecting an error. `rows` is empty for every state but `ok`; `loading`
- *  is the panel's own state before the promise resolves and is not returned here. */
+ *  is the panel's own state before the promise resolves and is not returned here.
+ *  `through` is the newest day `daily.json` names, or `null` before the first
+ *  compaction, so a panel can say how far its data reaches (deviation 10). */
 export type SliceResult =
-	| { state: 'ok'; rows: Row[] }
-	| { state: 'quiet'; rows: [] }                        // the window is covered but held no rows
+	| { state: 'ok'; rows: Row[]; through: DateStamp }
+	| { state: 'quiet'; rows: []; through: DateStamp | null } // covered, or wholly past `through`, and no rows
 	| { state: 'missing'; rows: [] }                      // the ledger is not published
 	| { state: 'unreachable'; rows: []; at: DateStamp };  // a date named in no index
 
@@ -926,6 +936,13 @@ Ruled by Susan on 2026-09-24. The complaint: the Hardware route is fifteen panel
   - `frontend/tests/ledger-door.spec.ts` (new, in the `logic` group of `frontend/scripts/test-groups.ts`), `tests/fixtures/ledger-door/` (a compacted fixture ledger: daily files, one monthly file, one zero-row day, and both indexes)
   - `backend/tests/contracts/test_frontend_index_shapes.py` (new: binds the hand-written `CompactEntry` and `CompactIndex` copy in `ledger.ts` to the Pydantic originals plan 50 declares)
   - `frontend/tests/console-cold-load.spec.ts` (the engine is not first-load)
+  - **Corrected at dispatch, 2026-09-28** (decisions 10 to 18, deviations 7 to 12):
+    - `frontend/tests/console-cold-load.spec.ts` leaves this row. No page loads the door yet, so the assertion could not fail; row 8 carries it.
+    - The door's logic moves out of `ledger.ts` into a core module under `frontend/src/lib/data/` that takes a byte source and imports nothing tied to one environment - no `$app/*`, no `node:*` - so `ledger-door.spec.ts` can load it. The hand-written `CompactEntry` and `CompactIndex` copy, the stamp this build reads, and the guard get a module of their own beside it, and `test_frontend_index_shapes.py` binds that module. `ledger.ts` keeps `slice()`, `LedgerName` and the public types, and binds `__ASSET_BASE_URL__ || base`.
+    - `sliceFromDisk()` moves to a new module under `frontend/src/lib/server/`.
+    - `backend/tests/contracts/test_ledger_door_fixture.py` (new): the fixture's two indexes validate against the real `CompactIndex`, and each entry's `rows` and `bytes` match the file the backend reader opens.
+    - Docs: a new page under `docs/architecture/publishing/` holds the door's rules and is linked from rule 4 of `docs/concepts/console-design/how-a-console-chart-gets-its-data.md`; `docs/architecture/contracts/schemas.md` names the hand copy, its test and the stamp rule; `docs/reference/site-weight.md` records the engine's measured bytes and the Pages cache reading in deviation 12.
+    - The contract gate is `pytest backend/tests/contracts` with no `-q`: `pyproject.toml` already passes one, and a second drops the summary line.
 - **Acceptance gates:** local `npm --prefix frontend run test:changed -- --list` then the selected checks; `pytest backend/tests/contracts -q`. `ci.yml`'s bundle gate and site-cap walk are re-read, because a package and a wasm asset landed. CI runs the full suite.
 - **Oracle:** given recorded index and parquet responses for the fixture ledger, `slice()` returns exactly the requested columns for exactly the requested date range, reads each date through one file only, returns `quiet` for the zero-row day and `unreachable` on a hole; `sliceFromDisk()` over the same fixture files on disk returns the same rows; and `git grep -l duckdb -- frontend/src` returns exactly one path. It cannot settle whether a panel draws the result well; row 8 and Susan do that.
 - **Decisions:**
@@ -941,6 +958,15 @@ Ruled by Susan on 2026-09-24. The complaint: the Hardware route is fifteen panel
   | 7 | **A date is reachable through exactly one file.** The door takes the coarsest period covering a date; the oracle over the two-period rule lives with plan 50's row titled "One compaction task a ledger, two compact periods, and the diagrams move into the page", and this row consumes it | Fowler |
   | 8 | **The door has both entry points, and plan 50 only calls the second.** Plan 50's parquet migration needs today's build-time readers to keep working once the CSV files go; building that entry here keeps one owner for the door and for the engine's Node set-up | Owner, 2026-09-27 |
   | 9 | **The door does not merge rows.** Plan 50's compaction writes one row per record (section 2.2), so a merge here would be a second copy of plan 50's rule | Owner, 2026-09-27 |
+  | 10 | **The door reads an index at its own stamp or an older one, and refuses a newer one.** It carries the stamp `CompactIndex` declares, and `test_frontend_index_shapes.py` pins that constant to `CompactIndex.schema_version()`. An index at that stamp or older is read when the fields the door reads pass a guard; a newer one draws `unreachable`, puts both stamps in the browser console, and fetches no data file. This mirrors the backend, where `persist.load` refuses only a newer shape. Deviation 7 | Carmack and Fowler, 2026-09-28 |
+  | 11 | **One engine build ships: the single-threaded one that needs WebAssembly exception handling**, emitted by Vite from the site's own origin, with the package pinned exactly at `1.33.1-dev57.0` - its `latest` tag is a development build, so a caret would let an install move it, and the lockfile digest is the only check on those bytes. A browser without the feature draws `unreachable`. Deviation 8 | Carmack and Fowler, 2026-09-28 |
+  | 12 | **The engine's worker starts from a `blob:` bootstrap that imports the same-origin worker file by absolute URL.** A worker started from a same-origin URL takes its policy from its own response headers, and Pages sends none, so it would run with no `connect-src` at all; a `blob:` worker inherits the page's policy, which needs no new source. This row proves the inheritance once on a built page - a `blob:` worker's request to another origin is refused - and writes the reading down; row 8's oracle keeps it | Carmack and Fowler, 2026-09-28 |
+  | 13 | **The fixture is what production writes.** The files with rows come from the backend door, `persist()` at the compact tier, for real `HostFingerprintRow` rows; the zero-row day is rendered by the same engine module with the contract's own columns, because `persist()` writes nothing for no rows; the two indexes are hand-written, and `test_ledger_door_fixture.py` checks them. The throwaway script that wrote the files is not committed | Fowler and Carmack, 2026-09-28 |
+  | 14 | **The four states, where section 2.2 was silent.** An entry with `rows: 0` is never fetched, so a span of quiet days loads no engine; no rows after the filter is `quiet`, never an empty `ok`. A date after `through` is clamped away, and a span wholly past it is `quiet`. `unreachable.at` is the first hole, ascending; a named file that fails to arrive, or whose decoded length differs from its entry's `bytes`, is `unreachable` at the first date it covers inside the span - the decoded length, because Pages compresses what it serves. `daily.json` absent is `missing`; `monthly.json` absent means no monthly entries; any other index failure is `unreachable` at `from`. A caller error throws by name: no columns, a column that is not `^[a-z_][a-z0-9_]*$` (every identifier is then double-quoted), `from` after `to`, a malformed date, an empty `in` list. Deviation 10 | Carmack and Fowler, 2026-09-28 |
+  | 15 | **`monthly.json` is fetched only when the span starts before the oldest day `daily.json` names**, as section 2.2 says, so the 30-day default reads one index and a cold load stays inside four round trips. Carmack preferred fetching both together, which saves the 90-day span one round trip; that is a one-line change once plan 50 writes `monthly.json` from its first run, so a young ledger answers no 404 | Fowler, 2026-09-28 |
+  | 16 | **The door is split so a Node test can load its logic.** A core module holds the states, the index guard, the address and the query, and takes a byte source; `ledger.ts` binds the site's prefix for `slice()`; `sliceFromDisk()` lives under `frontend/src/lib/server/`. The engine's Node half is reached only from that server module, and the browser build must be shown to carry none of it. The import walk keeps every panel on `ledger.ts`, so no panel can build a path through the core. Deviation 9 | Fowler and Carmack, 2026-09-28 |
+  | 17 | **Files are read by column name** (`union_by_name`), so a span that crosses a day written before a column existed reads that column as null instead of failing, and an integer the engine hands back as a `BigInt` becomes a `number` | Carmack and Fowler, 2026-09-28 |
+  | 18 | **This row proves the core, the Node engine and the bundle gate, not the browser engine.** Nothing loads the door in a browser until row 8, so its end-to-end test is the browser half's first run, and the cold-load assertion moves there with it. Deviation 11 | Fowler and Carmack, 2026-09-28 |
 
 - **Rejected alternatives:**
 
@@ -1035,7 +1061,7 @@ given and predicts nothing about the next job. Darker bars are faster machines.
 
 ## Dependent plans
 
-- `TODO/20260924-50-idhazh-gardener-plan.md`. Row 3 waits on its rows titled **One compaction task a ledger, two compact periods, and the diagrams move into the page** and **The three ledgers the console's routes read become parquet**. In the other direction, plan 50's row titled **The three ledgers the console's routes read become parquet** waits on this plan's row 7, titled **The query door module and its two entry points** - and row 7 depends only on row 4 and on plan 50's index-shapes row, neither of which reaches that migration, so row 7 lands first and the two pointers resolve without a cycle. **Plan 50 also owns two things this plan relies on**: its compaction writes one row per record, so the door never merges; and its migration row moves today's build-time readers onto row 7's `sliceFromDisk()` and adds no export to `ledger.ts`. Nothing else in that plan is a predecessor here.
+- `TODO/20260924-50-idhazh-gardener-plan.md`. Row 3 waits on its rows titled **One compaction task a ledger, two compact periods, and the diagrams move into the page** and **The three ledgers the console's routes read become parquet**. In the other direction, plan 50's row titled **The three ledgers the console's routes read become parquet** waits on this plan's row 7, titled **The query door module and its two entry points** - and row 7 depends only on row 4 and on plan 50's index-shapes row, neither of which reaches that migration, so row 7 lands first and the two pointers resolve without a cycle. **Plan 50 also owns two things this plan relies on**: its compaction writes one row per record, so the door never merges; and its migration row moves today's build-time readers onto row 7's `sliceFromDisk()`, which lives under `frontend/src/lib/server/` (deviation 9), and adds no export of its own. Nothing else in that plan is a predecessor here.
 - `TODO/20260926-54-check-publication-plan.md`. Its run-yield chart landed on `DayReadout` (#1117) and now shares one readout with the run squares in `Run health`; row 5 converts that readout, built in `routes/console/RunHealthPanel.svelte`, with every other chart. Nothing here waits on plan 54.
 - **[`20260926-52-fifty-panels-move-and-six-projections-go-plan.md`](20260926-52-fifty-panels-move-and-six-projections-go-plan.md), a placeholder and not yet a plan**, takes over after row 8. **The panel-by-panel verdict table Susan ruled now lives in plan 52** - all fifty-one panels, each KEEP, REDRAW, REPLACE, DELETE or NEW, with the columns each queries and the chart it becomes. Many of the redraws and new panels exist only because the browser can now query the ledger. One row per route; each row moves that route's panels to the query door and **deletes the projection under `frontend/public/` that fed them**. Rows 4 to 8 here exist to make that plan cheap, not to be it.
 - **The old charts are evidence of an old limit, not a decision to preserve** (Susan). They were drawn against what a build-time projection could carry - a narrow, pre-summed slice of the columns - so columns of real answers sat unread on every run: why an article was chosen, why a fetch was slow, what the source answered, how old the news was, whether a summary was cut off and reported as a success, which rule refused a reply, and whether a trend moved because of the model or because somebody changed a setting. Plan 52 draws them.
