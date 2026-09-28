@@ -394,7 +394,11 @@
 			{#if standing.counted === 0}
 				<p class="empty-lead" data-voices="none">No feed is active, so there is no weight to draw.</p>
 			{:else}
-				<ol class="standings" data-voices-drawn={standing.feeds.length}>
+				<ol
+					class="standings"
+					data-voices-drawn={standing.feeds.length}
+					data-readout-none="one row per feed, and the weight its bar draws is printed on the row; the floor its mark draws is the one figure in the sentence above; agreed with Susan"
+				>
 					{#each standing.feeds as feed (feed.sourceId)}
 						<li
 							class="standing"
