@@ -10,7 +10,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 
 ## Execution handover (zero-context cold start)
 
-A paste-ready brief for an agent that picks this plan up with no prior context. [execute-a-plan.md](../docs/how-to/execute-a-plan.md) is the canonical contract; this brief adds only what this plan's run has learned. Written 2026-09-27, about 20:10 UTC.
+A paste-ready brief for an agent that picks this plan up with no prior context. [execute-a-plan.md](../docs/how-to/execute-a-plan.md) is the canonical contract; this brief adds only what this plan's run has learned. Written 2026-09-27, about 20:10 UTC, and brought up to date 2026-09-28, about 12:15 UTC, when the first owner handed over after row 5 merged.
 
 ```text
 You are the OWNER of TODO/20260924-50-idhazh-gardener-plan.md. You have no prior context.
@@ -24,23 +24,22 @@ and docs/how-to/run-the-gates.md. Then read this plan's section 0, section 1 (th
 Reckoner, the only tracker) and each row just before you dispatch it.
 
 STEP 1 - ADOPT OR CLOSE. Run git worktree list, gh pr list and git branch -r. At handover
-nothing of this plan was in flight: rows 1 and 2 had merged (#1127, #1131) and no plan-50
-worktree was left.
+nothing of this plan was in flight: rows 1, 2, 3, 4, 5, 6 and 11 had merged (#1127, #1131,
+#1142, #1139, #1145, #1141, #1136), row 10 is collapsed, and no plan-50 worktree was left.
+Section 0's three plan-54 reads ran before row 5 and all three came back empty.
 
-STEP 2 - DISPATCH. Rows 4 and 11 are ready now and share no file: start both. Then refill
-a slot the moment a worker REPORTS, never when its pull request merges:
-  after row 4        rows 3 and 6 (they share no file)
-  after rows 3, 4    row 5. It shares backend/idhazh/cli.py and
-                     docs/concepts/adaptive-pruning.md with row 6: start it from a main
-                     that has row 6, or merge main in when row 6 lands
-  after rows 5, 11   row 7 (read deviation 8 first)
+STEP 2 - DISPATCH. Row 7 is ready now: rows 5 and 11 have merged. Read deviations 8, 23,
+43 and 69 before you brief it. Nothing else is ready, so the pool runs one wide until
+row 7's worker REPORTS. Refill a slot on a report, never on a merge. Two workers started
+together return together (deviation 94).
   after rows 6, 7    row 8. It PAUSES at ESCALATE trigger 1, before the commit that
-                     removes the pruned_date alias
-  after row 7        row 9. It also needs plan 51's row 7 merged, and that row needs
-                     plan 51's row 4 and this plan's row 11. If they have not landed when
-                     row 9 is next, surface it to the person (CLAUDE.md section 0c). Do
-                     not build sliceFromDisk() here
-  before row 5       section 0's three plan-54 reads; all three must come back empty
+                     removes the pruned_date alias. Read deviations 14, 15, 17, 24, 55,
+                     81, 86 and 90 first: each hands row 8 work a row before it left
+  after row 7        row 9. It also needs plan 51's row 7, the query door, merged. Both
+                     rows that one waits on have merged (#1137, #1136), but it had not
+                     started on 2026-09-28. Row 9 also fires ESCALATE trigger 5, which is
+                     a person's pick. If either is open when row 9 is next, surface it to
+                     the person (CLAUDE.md section 0c). Do not build sliceFromDisk() here
 
 STEP 3 - GATES. A worker runs `npm --prefix frontend run test:changed -- --list`, then only
 its row's named acceptance gates, then pushes and reports. CI is the one full-suite run
@@ -49,13 +48,25 @@ backend/utilities/gate_lock.py: that lock is shared by every worktree on this ma
 one run waited 27 minutes behind another plan's.
 
 STEP 4 - MERGE. GitHub refuses auto-merge on this repository, so merge by hand when CI is
-green: gh pr merge <N> --squash --delete-branch, then remove the worktree and its local
-branch. Each row stamps its own Reckoner line and the lines sit next to each other, so the
-second of two open pull requests conflicts on this file. Merge origin/main into its
-branch, keep both lines and push. Never rebase and force-push.
+green: gh pr merge <N> --repo miztiik/yen-idhazh --squash --delete-branch, run from outside
+the repository, then confirm with gh pr view and remove the worktree and its local branch.
+Run from a worktree, gh pr merge exits 1 even when the merge worked. A row that changes a
+workflow a scheduled run is using, or a file a scheduled job also writes, reads deviations
+52 and 54 for when it may merge. Each row stamps its own Reckoner line and the lines sit
+next to each other, so the second of two open pull requests conflicts on this file. Merge
+origin/main into its branch, keep both lines and push. Never rebase and force-push.
 
 STEP 5 - CLOSE. When every row is DONE or COLLAPSED, follow the closing section of
 execute-a-plan.md.
+
+WATCH, whoever owns the plan on the day:
+  2026-09-29 onward  the corpus squash is due. prune.yml wakes at 23:37 UTC, and its runs
+                     have started about two hours late. This is the first live run of
+                     backend/utilities/corpus_history.py: it should record the run and
+                     push without force, because no commit is old enough (deviation 54)
+  about 2026-10-29   the first squash that rewrites history replays six September merge
+                     commits. If one carried a change of its own, the program stops with
+                     exit 2 before any push, for a person (deviation 82)
 ```
 
 ### Deviations and owner rulings to date
@@ -147,6 +158,18 @@ Every place where the tree, or a ruling, departs from the text further down. A w
 | 81 | 6, 8 | (not in the plan) | A person can still record a squash run without squashing, by running `gardener_publish.py corpus-squash` or `idhazh gardener run-task corpus-squash`, which would push `last_run` and delay the next squash by 30 days. Row 8 decides whether the runner refuses a history task outside its own job | Row 6 worker, 2026-09-28; for row 8 |
 | 82 | 6 | (not in the plan) | The first real squash, about 2026-10-29, replays six September merge commits, and a plain rebase flattens merges. If one carried a change of its own, the replayed tree differs and the program stops with exit 2 before any push, for a person to decide | Fowler, 2026-09-28; named observation for that wake |
 | 83 | 3, 6 | Rows 3 and 6 share no file | After their deviations they shared seven, `backend/idhazh/cli.py` among them. Row 3 merged first, inside the 22:34 to 03:00 UTC gap before any digest run was created, with the migration already current. The owner merged main into row 6 with no conflict, ran ruff and mypy, and let CI run again | Plan owner, 2026-09-28 |
+| 84 | 5 | Section 5.5 lists what `TaskContext` carries, and a complement task asserts nothing about the working tree | `TaskContext` also carries `owned_folders` and `git_sha`. `backend/utilities/gardener_publish.py` runs one `git ls-tree -d --name-only -z HEAD -- state/ <each owned folder>`, and `runner.run` takes the answer as a required `committed_folders`, so a complement task's folders come from the commit and are held to the checkout. `idhazh gardener run-task` passes none, and a complement task is then refused by name. A declared folder the commit lacks is logged and skipped | Fowler and Carmack, 2026-09-28 |
+| 85 | 5 | `owns` is exclusive, and every path a task writes sits under it | A declaration may name `appends_to`, a list of ledgers that defaults to empty, and `Pass.appended` lists what the task filed there. The runner checks that each appended file is the path `ledger.raw_path()` gives for a listed ledger, the wake's day and the task's own file id and format, exempts it from `owns`, and lands it on a dry run too. `owns` stays exclusive. `visual-prune` files its `visual-prunes` report this way | Fowler and Carmack, 2026-09-28 |
+| 86 | 5, 8 | (not in the plan) | From row 5's merge until row 8's, nothing runs the cleanup tasks: `digest.yml` lost its cleanup step, and no workflow runs the gardener yet. Nothing that was being deleted stops being deleted, because the old step ran with `retention.dry_run: true`. The daily `visual-prunes` report pauses until row 8. Before the old passes were deleted, each old pass and its task ran live over their own copy of the real tree on 2026-09-28, and all ten pairs removed and wrote the same files: `traces` removed 92 on both sides, and the other nine nothing yet | Fowler and Carmack, 2026-09-28; the paired run is Carmack's |
+| 87 | 5 | Each task selects its own members | Every task selects through `one_at_a_time.take`, and its listing keeps the old walk's pruning by name. `scores` and `telemetry-aggregate` work in whole months: load refuses a series task whose window differs from its full-grain series, or that carries a ceiling, so `Pass.taken` stays a list of file paths. `visual-prune` counts past its fuse itself | Fowler and Carmack, 2026-09-28 |
+| 88 | 5 | Which keys leave `config/idhazh.json` | Eleven keys leave with their values unchanged, and each old spelling is refused by name, pointing at its declaration. No declaration records which key it came from: `docs/concepts/config/retention-ages.md` holds that table. `retention.image_months` and the other five `observability.public_*` windows stay. The pair rules, the host floor and the console check on the moved windows run in `config.load_gardener`. `scores` gains a full-grain series of 14 months and an archive kept forever | Fowler, 2026-09-28 |
+| 89 | 5 | (not settled in the plan) | `visual-prune` and `digest-fragments` declare `days: 390`, 13 months of 30 days, which is what the old passes computed from `retention.image_months`. Load refuses any value other than 30 times `retention.image_months` | Fowler and Carmack, 2026-09-28 |
+| 90 | 5, 8 | Row 5 retires the `prune-state` verb | `idhazh prune-state` stays as an alias. It accepts the old flags, prints the two gardener commands that replace it, says `dry_run` is set per declaration, and exits 2 before it loads config. Its removal condition, on the line that declares it, is row 8 | Fowler and Carmack, 2026-09-28 |
+| 91 | 5 | (not in the plan) | The ledger-staging derivation in `backend/tests/workflows/_ledger_derivation.py` followed one call from each verb and never reached a task module, because the runner imports tasks by walking their package. A verb that enters the runner now also enters every module `registry.discover()` returns. CI run 36383719163 failed until it did | Found at build |
+| 92 | 5 | (not in the plan) | `backend/idhazh/retention.py` keeps only the helpers the tasks call, and `cutoff` went with its last caller. `test_retention_oracle.py` and `test_trace_tree.py` went with the stage. The list of day-shard readers in `backend/tests/pipeline/test_day_shards.py` names the cleanup tasks where `retention.py` stood; CI run 36406294547 failed until it did | Found at build |
+| 93 | 5 | (not in the plan) | The commits ran the tasks first, then the console follow, then the module deletion, and the window move last. Moving the keys first would have needed a bridge that is then thrown away | Fowler, 2026-09-28 |
+| 94 | all | STEP 2: refill a slot the moment a worker reports | The tool that starts workers in parallel returns only when every worker it started has finished. So the pool ran in waves of two, and a finished worker's slot waited for its sibling | Plan owner, 2026-09-28 |
+| 95 | 5 | Deviation 44: a worker waits for its CI run and then reports | Row 5's worker stopped after its CI run went green, while it wrote its pull request description, and never reported. The owner finished the description from the worker's running report and merged on that green run | Plan owner, 2026-09-28 |
 
 ## 0. Operating contract
 
