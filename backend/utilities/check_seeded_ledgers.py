@@ -1,7 +1,7 @@
 """Does this checkout carry the state ledgers a run stages before it has written one?
 
-Three ledgers ship with the contract rather than appearing on the first run that
-has something to put in them. `backend/utilities/commit_and_push.py` stages
+One ledger ships with the contract rather than appearing on the first run that
+has something to put in it. `backend/utilities/commit_and_push.py` stages
 every path a job owns in one `git add`, so a path that is not there fails that
 call, stops the whole commit step, and takes every sibling ledger staged beside
 it. A header-only file is what makes the path exist on day one.
@@ -35,7 +35,6 @@ from pathlib import Path
 from typing import Final
 
 from idhazh import ledger
-from idhazh.contracts.feed_retirement import FeedRetirementRow
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.similarity_holdout_pair import SimilarityHoldoutPair
 
@@ -64,13 +63,13 @@ class Finding:
 
 
 def seeded_ledgers() -> tuple[Ledger, ...]:
-    """The ledgers whose header ships with the contract, read off the contract."""
+    """The ledgers whose header ships with the contract, read off the contract.
+
+    The feed retirements were the other one until 2026-09-28, when they moved
+    under `state/raw/`: a writer there creates its own file, and the step that
+    commits it stages `state` whole, so no path has to exist on day one.
+    """
     return (
-        Ledger(
-            name="feed retirements",
-            relpath=ledger.relpath(LedgerName.FEED_RETIREMENTS),
-            columns=FeedRetirementRow.csv_columns(),
-        ),
         Ledger(
             name="similarity holdout pairs",
             relpath=ledger.relpath(LedgerName.CONTENT_SIMILARITY_JUDGE_HOLDOUT_PAIRS),

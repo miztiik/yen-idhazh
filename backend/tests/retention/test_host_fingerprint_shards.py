@@ -153,6 +153,7 @@ def test_the_prune_stage_reaches_the_host_fingerprint_tree(tmp_path: Path) -> No
         observability=ObservabilityConfig(host_fingerprint_keep_months=keep),
         collect=CollectConfig(),
         retention_config=RetentionConfig(),
+        commit_sha="a" * 40,
         run_id="2026-08-30-1",
         today=TODAY,
         state_dir=state,

@@ -16,7 +16,6 @@ from pathlib import Path
 import pytest
 
 from idhazh import ledger
-from idhazh.contracts.feed_retirement import FeedRetirementRow
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.similarity_holdout_pair import SimilarityHoldoutPair
 from utilities.check_seeded_ledgers import audit, main, report, seeded_ledgers
@@ -47,7 +46,6 @@ def test_the_audit_names_every_store_whose_header_ships_with_the_contract() -> N
     declared = {seeded.relpath: seeded.columns for seeded in seeded_ledgers()}
 
     assert declared == {
-        ledger.relpath(LedgerName.FEED_RETIREMENTS): FeedRetirementRow.csv_columns(),
         ledger.relpath(LedgerName.CONTENT_SIMILARITY_JUDGE_HOLDOUT_PAIRS): SimilarityHoldoutPair.csv_columns(),
     }
 
@@ -59,7 +57,7 @@ def test_a_checkout_carrying_every_store_passes(tmp_path: Path) -> None:
         seeded.relpath for seeded in seeded_ledgers()
     ]
     assert all(finding.ok for finding in findings)
-    assert "2 of 2 seeded ledgers" in report(findings)
+    assert "1 of 1 seeded ledgers" in report(findings)
 
 
 def test_a_missing_store_is_named_rather_than_counted(tmp_path: Path) -> None:
@@ -69,12 +67,13 @@ def test_a_missing_store_is_named_rather_than_counted(tmp_path: Path) -> None:
     in the same `git add` call - which is the sentence an operator needs.
     """
     a_seeded_checkout(tmp_path)
-    (tmp_path / ledger.relpath(LedgerName.FEED_RETIREMENTS)).unlink()
+    holdout = ledger.relpath(LedgerName.CONTENT_SIMILARITY_JUDGE_HOLDOUT_PAIRS)
+    (tmp_path / holdout).unlink()
 
     findings = audit(tmp_path)
 
     broken = [finding for finding in findings if not finding.ok]
-    assert [finding.ledger.relpath for finding in broken] == [ledger.relpath(LedgerName.FEED_RETIREMENTS)]
+    assert [finding.ledger.relpath for finding in broken] == [holdout]
     assert broken[0].fault is not None
     assert "git add" in broken[0].fault
 

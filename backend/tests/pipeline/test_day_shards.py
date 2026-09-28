@@ -301,10 +301,10 @@ MOVED: Final = (
     ("backend/utilities/empty_column_census.py", "day_files(root / ledger.root)", "shard_files("),
 )
 
-#: The two ledgers that keep the day-file walk, and the reader that walks each.
-#: `state/published/` and `state/visual-prunes/` are not moving, and
-#: `day_partition.day_files` refusing a directory is the tripwire that catches a
-#: twelfth tree arriving without a plan.
+#: The one ledger that keeps the day-file walk, and the reader that walks it.
+#: `state/published/` is not moving, and `day_partition.day_files` refusing a
+#: directory is the tripwire that catches a twelfth tree arriving without a plan.
+#: `state/visual-prunes/` was the second until it moved under `state/raw/`.
 #:
 #: The reader is called rather than read, so what is checked is that the refusal
 #: still reaches a caller - a walk swapped for one that skips what it cannot
@@ -316,7 +316,6 @@ KEPT: Final = (
             state_dir, today=None, within_days=UNBOUNDED_WINDOW
         ),
     ),
-    (LedgerName.VISUAL_PRUNES, ledger.load_visual_prunes),
 )
 
 

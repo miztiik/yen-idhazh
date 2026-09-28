@@ -1,11 +1,13 @@
 """What one cleanup pass over the rendered visuals found, took, and left behind.
 
-`state/visual-prunes/YYYY/MM/DD.csv`. One row per run of `idhazh prune-state`,
-appended after the day is committed. Read whole - "is the backlog shrinking" has
-no time bound - so the day layout buys the read nothing, and it is there for what
-it buys a writer instead: two runs collide on a file only when they are the same
-day. `idhazh.ledger` owns that trade and states it
-(`docs/architecture/contracts/schemas.md`).
+`state/raw/visual-prunes/YYYY/MM/DD/<file_id>.parquet`. One row per run of
+`idhazh prune-state`, written through the ledger door after the day is
+committed. Read whole - "is the backlog shrinking" has no time bound - so the
+day layout buys the read nothing, and it is there for what it buys a writer
+instead: every writer holds a file of its own, so two runs never write one
+path. `idhazh.ledger` owns that trade and states it
+(`docs/architecture/contracts/schemas.md`). The CSV methods below read the day
+files this ledger was committed as before it moved there.
 
 **`skipped_by_fuse` is the field this row exists for.** `deleted` is capped by
 `retention.max_deletes_per_run`, so it reads the same on a run that cleared its
