@@ -1,6 +1,6 @@
 # Config
 
-**Last Updated**: 2026-09-23
+**Last Updated**: 2026-09-27
 
 Where tunable behaviour lives, and the rule that separates a knob from an identifier. Config-driven with sane defaults is a project principle ([principles.md](principles.md), Guardrail #6): a fresh clone runs on the defaults, and no threshold, cap or source list is hardcoded in code.
 
@@ -26,7 +26,7 @@ Measured 2026-09-17, before the rule was enforced: `idhazh.json` did not name **
 
 ## Where a knob is written up
 
-Seven pages, one question each. Arrive at the one holding your question and stop.
+Eight pages, one question each. Arrive at the one holding your question and stop.
 
 | Page | The question it answers |
 | --- | --- |
@@ -37,6 +37,7 @@ Seven pages, one question each. Arrive at the one holding your question and stop
 | [config/source-lifecycle.md](config/source-lifecycle.md) | When a run stops asking a feed, when an address is retired, and what keeps a link out |
 | [config/run-limits.md](config/run-limits.md) | Whether a number is a guard, an alarm or a limit - the run shape, the job bounds and the page ceilings |
 | [config/retention-ages.md](config/retention-ages.md) | Which instruments run, and how long what they write is kept |
+| [config/idhazh-gardener.md](config/idhazh-gardener.md) | What the gardener may delete and rewrite, how each of its tasks is declared, and what the loader refuses |
 
 **No individual knob is described on this page.** A knob written up here is the first line of the page this split removed.
 
@@ -61,6 +62,7 @@ Knobs, by the surface they tune:
  ([evaluation.md](evaluation.md#comparable-domain-samples)).
 - **Logging** - the level, plus one flag per kind of record the pipeline builds about itself ([telemetry.md](telemetry.md)). The two are unrelated: the flags decide which records exist, the level decides how loud the logger that prints them is.
 - **Observability** - which instruments run, how often the scorer runs, and how long a ledger stays at full grain ([config/retention-ages.md](config/retention-ages.md)).
+- **Gardener** - how many shards a wake splits into and how many times a shard may push, in `config/idhazh_gardener.json`, and one declaration per task under `config/gardener/` ([config/idhazh-gardener.md](config/idhazh-gardener.md)).
 - **Console** - the telemetry viewport's default window, today anchor, pan step,
  zoom factor, minimum denominator for rate bars, and chart height ([config/appearance.md](config/appearance.md)).
 

@@ -1,0 +1,13 @@
+{
+  "dry_run": false,
+  "kind": "compaction",
+  "ledger": "gardener",
+  "lifecycle_status": "active",
+  "max_deletes_per_run": null,
+  "owns": [
+    "state/compact/gardener"
+  ],
+  "window": {
+    "unit": "forever"
+  }
+}

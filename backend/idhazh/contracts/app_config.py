@@ -44,13 +44,13 @@ from idhazh.contracts.knobs.council import CouncilConfig
 from idhazh.contracts.knobs.evaluation import DriftConfig, EvaluationConfig
 from idhazh.contracts.knobs.extract import ElementsConfig, ExtractConfig
 from idhazh.contracts.knobs.finetune import FinetuneConfig, ReferenceDatasetConfig
+from idhazh.contracts.knobs.gardener import PruneConfig
 from idhazh.contracts.knobs.ledger import LedgerConfig
 from idhazh.contracts.knobs.model_server import ModelServerConfig
 from idhazh.contracts.knobs.models import SUPERSEDED_MODELS_NAMES, ModelsConfig
 from idhazh.contracts.knobs.observability import LoggingConfig, ObservabilityConfig
 from idhazh.contracts.knobs.page_weight import PageWeightConfig
 from idhazh.contracts.knobs.placement import AssembleConfig, LensWeightsConfig, PlacementConfig
-from idhazh.contracts.knobs.prune import PruneConfig
 from idhazh.contracts.knobs.removed import refuse_a_removed_knob
 from idhazh.contracts.knobs.retention import RetentionConfig
 from idhazh.contracts.knobs.run import RunConfig
