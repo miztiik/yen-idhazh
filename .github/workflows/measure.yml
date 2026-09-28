@@ -554,8 +554,11 @@ jobs:
             lscpu -p=CPU,CORE,SOCKET,NODE
           } | tee backend/var/runtime-sweep/hardware.txt
 
+      # `.[parquet]` rather than `.`: `idhazh plan` below reads every retirement
+      # through the ledger door and can file one, and the door's files are
+      # parquet.
       - name: Install
-        run: pip install -e .
+        run: pip install -e ".[parquet]"
 
       # The same key the raw case wrote, so this job restores what that job
       # already paid for. A miss here is a second download of the same bytes,
@@ -689,7 +692,8 @@ jobs:
             --config backend/var/candidate-config \
             --date "$DATE" \
             --cap "$CORPUS_CAP" \
-            --execution "${{ github.run_id }}"
+            --execution "${{ github.run_id }}" \
+            --commit "${GITHUB_SHA}"
           python3 backend/utilities/runtime_sweep.py freeze-corpus \
             --config backend/var/candidate-config \
             --offset "$RUNTIME_CORPUS_OFFSET" \

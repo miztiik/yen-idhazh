@@ -5,13 +5,15 @@ month stem is a filename, so one predicate settles it. A day is a path of three
 segments, so the question is a walk: which entries the tree may hold, which it
 refuses, and which days a window of `n` days names.
 
-Two collections read a day tree today - `state/published/` and
-`state/visual-prunes/` - and they read it through one private helper inside
-`ledger`. More state ledgers are moving to this grain, so the helper comes out
-here before it is imported from seven places. That is the shape
+Two collections read a day tree when this module was written - `state/published/`
+and `state/visual-prunes/` - and they read it through one private helper inside
+`ledger`. More state ledgers were moving to this grain, so the helper came out
+here before it was imported from seven places. That is the shape
 `month_partition` was created on 2026-09-08 to end: three directories each
 carrying their own answer to "is this name a month", and one file left alone in
-one ledger and deleted in another.
+one ledger and deleted in another. The cleanup record has since moved under
+`state/raw/`, where a day is a folder of writer files that `ledger/raw_files.py`
+walks, so `state/published/` is the reader left.
 
 **Nothing inside a day tree is skipped.** A name this cannot place stops the
 read. A glob answers "what matched" and says nothing about what did not, so a

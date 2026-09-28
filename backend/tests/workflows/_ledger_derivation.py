@@ -58,6 +58,17 @@ LEDGER_ALIAS: Final = ledger.__name__.rsplit(".", 1)[-1]
 
 WRITER_CALL: Final = re.compile(rf"\b{LEDGER_ALIAS}\.((?:append|write)_[a-z_]+)\(")
 
+#: The door every raw-and-compact ledger is written through, and the pattern a
+#: call to it matches. The door is generic over the vocabulary, so which ledger a
+#: call fills is read from that call's own `ledger=` argument.
+PERSIST: Final = ledger.persist.__name__
+PERSIST_CALL: Final = re.compile(rf"\b{LEDGER_ALIAS}\.{PERSIST}\(")
+
+#: The name `cli.main` keeps the command line in, and the attribute a package it
+#: hands that line to names its own verb with.
+LINE_NAME: Final = "words"
+HANDOVER_WORD: Final = "VERB"
+
 
 # A sink that takes a path is a thing that writes a file, so the sink classes are
 # read out of the module that declares them rather than named here: a second one
@@ -332,8 +343,52 @@ def _sink_ledgers() -> dict[str, str]:
     return resolved
 
 
+def _handover_verb(test: ast.expr) -> str | None:
+    """The verb a hand-over branch of `cli.main` answers to, or `None` for any other branch.
+
+    `telemetry` and `gardener` hand the rest of the line to their own package
+    before the parser is built, so their branches compare the line's first word
+    rather than `args.stage`. The word is read from the handed-to module's own
+    `VERB` and never spelled here. A branch that compares the first word any
+    other way fails by name, because a verb this cannot map is a module no job
+    can be charged with.
+    """
+    compared_all = test.values if isinstance(test, ast.BoolOp) else [test]
+    for compared in compared_all:
+        if not (isinstance(compared, ast.Compare) and isinstance(compared.left, ast.Subscript)):
+            continue
+        first = compared.left
+        if not (
+            isinstance(first.value, ast.Name)
+            and first.value.id == LINE_NAME
+            and isinstance(first.slice, ast.Constant)
+            and first.slice.value == 0
+        ):
+            continue
+        word = compared.comparators[0] if len(compared.comparators) == 1 else None
+        handed = (
+            getattr(cli, word.value.id, None)
+            if isinstance(word, ast.Attribute)
+            and isinstance(word.value, ast.Name)
+            and word.attr == HANDOVER_WORD
+            else None
+        )
+        verb = getattr(handed, HANDOVER_WORD, None)
+        assert isinstance(compared.ops[0], ast.Eq) and isinstance(handed, ModuleType), (
+            f"cli.main hands the line over on `{ast.unparse(compared)}`, which this "
+            f"derivation cannot map to a verb. Compare {LINE_NAME}[0] with the handed-to "
+            f"module's own {HANDOVER_WORD}."
+        )
+        assert isinstance(verb, str), f"{handed.__name__}.{HANDOVER_WORD} is not a word"
+        return verb
+    return None
+
+
 def _branch_verbs(branch: ast.If) -> list[str]:
-    """The `args.stage` values one branch of `cli.main` answers to."""
+    """The `args.stage` values one branch of `cli.main` answers to, or its hand-over verb."""
+    handed = _handover_verb(branch.test)
+    if handed is not None:
+        return [handed]
     if not isinstance(branch.test, ast.Compare):
         return []
     subject = branch.test.left
@@ -415,6 +470,54 @@ def _sinks_opened_by(module: ModuleType) -> set[str]:
     return set(SINK_CALL.findall(inspect.getsource(module)))
 
 
+def _persisted_in(source: str, where: str) -> set[str]:
+    """The ledgers one module's source hands to `ledger.persist`, as the paths a job stages.
+
+    Read from each call's own `ledger=` argument, because the door fills
+    whichever ledger its caller names. A call that names none is refused by
+    name: a write this cannot follow is a ledger no job can be charged with.
+    """
+    ledgers = _ledgers()
+    found: set[str] = set()
+    for call in ast.walk(ast.parse(source)):
+        if not (
+            isinstance(call, ast.Call)
+            and isinstance(call.func, ast.Attribute)
+            and call.func.attr == PERSIST
+            and isinstance(call.func.value, ast.Name)
+            and call.func.value.id == LEDGER_ALIAS
+        ):
+            continue
+        named = {
+            member
+            for keyword in call.keywords
+            if keyword.arg == "ledger"
+            for member in _ledgers_named_in(keyword.value)
+        }
+        assert named, (
+            f"{where} calls {LEDGER_ALIAS}.{PERSIST} on line {call.lineno} and names no "
+            "LedgerName in its ledger= argument, so this test cannot say which ledger it "
+            "fills. Name the ledger at the call."
+        )
+        found |= {ledgers[member.value] for member in named}
+    return found
+
+
+def _persisted_by(module: ModuleType) -> set[str]:
+    """The ledgers this module files rows into through the door."""
+    return _persisted_in(inspect.getsource(module), module.__name__)
+
+
+def _persisted_ledgers() -> dict[str, set[str]]:
+    """Every pipeline module that files rows through the door -> the ledgers it fills.
+
+    Read from the package's own files, so what this costs grows with the code
+    rather than with the archive (CLAUDE.md Guardrail #12).
+    """
+    filled = {name: _persisted_in(source, name) for name, source in _package_sources().items()}
+    return {name: ledgers for name, ledgers in filled.items() if ledgers}
+
+
 def _reachable_modules() -> dict[str, set[ModuleType]]:
     """CLI verb -> the modules its own branch enters, and the ones those call.
 
@@ -435,8 +538,9 @@ def _reachable_modules() -> dict[str, set[ModuleType]]:
 def _verb_ledgers() -> dict[str, dict[str, str]]:
     """CLI verb -> ledger -> the sentence that says why that verb writes it.
 
-    A ledger writer and a file sink are both writes, and a ledger filled either way
-    is a ledger the job that runs the verb has to stage.
+    A ledger writer, a file sink and a call to the ledger door are all writes,
+    and a ledger filled any of those ways is a ledger the job that runs the verb
+    has to stage.
     """
     ledgers = _writer_ledgers()
     sunk = _sink_ledgers()
@@ -465,6 +569,11 @@ def _verb_ledgers() -> dict[str, dict[str, str]]:
                 charged.setdefault(verb, {})[sunk[opener]] = (
                     f"`python -m idhazh {verb}` reaches {module.__name__}, "
                     f"which opens a file sink on {opener}()"
+                )
+            for ledger_path in sorted(_persisted_by(module)):
+                charged.setdefault(verb, {})[ledger_path] = (
+                    f"`python -m idhazh {verb}` reaches {module.__name__}, "
+                    f"which files rows through ledger.{PERSIST}"
                 )
     return charged
 
@@ -517,3 +626,46 @@ def _compacted_ledgers() -> dict[str, str]:
         assert shared, f"{which.value} folds two dates to paths with nothing in common"
         found[shared] = which.value
     return found
+
+
+def _door_calls() -> frozenset[str]:
+    """Every name on `idhazh.ledger` whose call reads or writes a file under the two roots.
+
+    The door's own functions, the raw reader's, and every public reader that
+    reads through the raw reader - found in their own sources, so a reader that
+    moves onto the door joins this set the day it does, and nothing here names
+    one.
+    """
+    door = importlib.import_module(ledger.persist.__module__)
+    raw_reader = importlib.import_module(ledger.load_current_rows.__module__)
+    through = re.compile(rf"\b{raw_reader.__name__.rsplit('.', 1)[-1]}\.[a-z_]+\(")
+    names: set[str] = set()
+    for name, value in vars(ledger).items():
+        if name.startswith("_") or not callable(value):
+            continue
+        if getattr(value, "__module__", None) in (door.__name__, raw_reader.__name__):
+            names.add(name)
+            continue
+        try:
+            source = inspect.getsource(value)
+        except (OSError, TypeError):
+            continue
+        if through.search(source):
+            names.add(name)
+    return frozenset(names)
+
+
+def _door_verbs() -> dict[str, set[str]]:
+    """CLI verb -> the modules it reaches that read or write a ledger through the door.
+
+    A verb that only reads a retirement still needs the engine: the read opens a
+    parquet file whatever the verb does with the row afterwards.
+    """
+    calls = _door_calls()
+    pattern = re.compile(rf"\b{LEDGER_ALIAS}\.(?:{'|'.join(sorted(calls))})\(")
+    touched: dict[str, set[str]] = {}
+    for verb, reachable in _reachable_modules().items():
+        for module in reachable:
+            if pattern.search(inspect.getsource(module)):
+                touched.setdefault(verb, set()).add(module.__name__)
+    return touched

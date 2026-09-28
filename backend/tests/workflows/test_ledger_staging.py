@@ -19,11 +19,17 @@ the registry. The trace tree's module stays in the derivation for its sink: a si
 is opened on a path helper, and the `*_relpath` helper beside it is how the sink
 half names the ledger it fills.
 
-A ledger is filled two ways and both count here. A ledger takes an `append_*` or a
-`write_*` call; the trace tree takes a file sink opened on its own path helper, and
-a sink is still something a run writes and a job must stage. The three hand-written
+A ledger is filled three ways and all three count here. A ledger takes an
+`append_*` or a `write_*` call; the trace tree takes a file sink opened on its own
+path helper, and a sink is still something a run writes and a job must stage; and
+a ledger under `state/raw/` takes a call to the ledger door, `ledger.persist`,
+which names the ledger in its own `ledger=` argument. The three hand-written
 lists this replaced were each scoped to one source file, so a second writer in a
 second file bought a third list rather than failing anything.
+
+The derivation itself lives in `_ledger_derivation.py` beside this file, because
+the check that every job reaching the door installs its engine reads the same
+answer.
 
 A writer says which ledger it fills by naming it. Most name one `LedgerName` in
 their own body. One is generic over the vocabulary and takes the name from its
@@ -59,6 +65,7 @@ from ._harness import (
     _load_workflows,
 )
 from ._ledger_derivation import (
+    PERSIST_CALL,
     SINK_CALL,
     SINK_CLASSES,
     WRITER_CALL,
@@ -67,6 +74,7 @@ from ._ledger_derivation import (
     _ledger_publics,
     _ledgers,
     _package_sources,
+    _persisted_ledgers,
     _reachable_modules,
     _sink_ledgers,
     _verb_ledgers,
@@ -87,10 +95,10 @@ TRIAL_WORKFLOW: Final = "measure.yml"
 
 
 # A ledger whose entry ships ahead of the thing that fills it, and what will fill
-# it. Guardrail #3 puts the shape and the address in first, and
-# `state/feed-retirements.csv` is the precedent: it was registered for settlement
-# one commit before the plan stage wrote a row into it, so that two stale
-# checkouts could not leave one address retired twice from the very first row.
+# it. Guardrail #3 puts the shape and the address in first, and the feed
+# retirements were the precedent: registered for settlement one commit before the
+# plan stage wrote a row into them, so that two stale checkouts could not leave
+# one address retired twice from the very first row.
 #
 # Each of these waits on the council, whose tenant module is resolved from config
 # at call time - so with no slug registered nothing runs it, and the module behind
@@ -163,11 +171,6 @@ LEDGERS_AN_OWNER_WRITES: Final[Mapping[str, str]] = MappingProxyType(
         "state/score-archive": (
             "idhazh.evals.archive, called by retention.prune_scores from "
             "`python -m idhazh prune-state` the first time a month of scores ages out"
-        ),
-        "state/raw/gardener": (
-            "idhazh.gardener.runner, one record per shard through ledger.persist, which "
-            "backend/utilities/gardener_publish.py stages file by file and pushes itself - "
-            "backend/tests/gardener/test_runner.py reads the record back off origin"
         ),
     }
 )
@@ -262,6 +265,7 @@ def test_every_store_is_filled_by_a_writer_this_test_can_follow() -> None:
     written = {ledger_path for filled in _writer_ledgers().values() for ledger_path in filled}
     written |= set(_sink_ledgers().values())
     written |= set(_compacted_ledgers())
+    written |= {ledger_path for filled in _persisted_ledgers().values() for ledger_path in filled}
 
     assert ledgers, "no ledger is declared anywhere, so nothing here is checked"
     assert SINK_CLASSES, (
@@ -333,7 +337,7 @@ def test_every_module_that_writes_a_store_is_reached_by_a_cli_verb() -> None:
     writing = {
         name
         for name, source in _package_sources().items()
-        if WRITER_CALL.search(source) or SINK_CALL.search(source)
+        if WRITER_CALL.search(source) or SINK_CALL.search(source) or PERSIST_CALL.search(source)
     }
 
     unknown = sorted(set(MODULES_ONLY_A_TENANT_REACHES) - writing)

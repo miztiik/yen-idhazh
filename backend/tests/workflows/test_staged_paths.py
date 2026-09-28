@@ -7,6 +7,7 @@ import json
 import re
 import subprocess
 import sys
+from pathlib import Path
 from typing import cast
 
 import pytest
@@ -188,15 +189,15 @@ def test_the_fold_stages_state_whole_because_two_of_its_stores_appear_late() -> 
     folded and the other the first time a month is archived. Naming either in
     the commit step would abort `git add` under `set -euo pipefail` on every run
     before that day, and take the sibling ledgers staged in the same call with
-    it. Row 1 solved the same problem for `state/feed-retirements.csv` by
+    it. The feed retirements solved the same problem, while they were a CSV, by
     committing a header-only file; there is no header-only form of a directory,
     so the answer here is to stage `state`, which is always there.
 
-    `state/visual-prunes/` is the third ledger this call covers and it needs no
-    change here either. It moved from a flat file to a day tree on 2026-09-08,
-    so a run now writes a path its own checkout did not carry - and staging
-    `state` whole already reaches it, which is why that move needed nothing in
-    this step.
+    The cleanup record is the third ledger this call covers and it needs no
+    change here either. Every run writes a file of its own under
+    `state/raw/visual-prunes/`, a path its own checkout did not carry - and
+    staging `state` whole already reaches it, which is why moving that record
+    needed nothing in this step.
 
     What this no longer asserts is that the two late ledgers are absent from the
     checkout. Staging `state` whole is correct whether or not they have appeared
@@ -208,7 +209,8 @@ def test_the_fold_stages_state_whole_because_two_of_its_stores_appear_late() -> 
     staged = COMMIT_STAGED_PATHS["fold"]
 
     assert "state" in staged
-    assert ledger.relpath(LedgerName.VISUAL_PRUNES, SUBSTITUTED_DATE).split("/")[0] in staged
+    cleanup_root = ledger.raw_root(Path(ledger.STATE_DIRNAME), LedgerName.VISUAL_PRUNES)
+    assert cleanup_root.parts[0] in staged
     for late in ("item-health-summary", "score-archive"):
         assert f"state/{late}" not in staged, (
             f"state/{late} appears only once production writes it, so naming it here "
@@ -254,8 +256,8 @@ def test_every_path_the_day_stages_exists_in_a_fresh_checkout() -> None:
     Every path the step names is asked of the working tree, so a root added to
     the list without a committed file in it fails here rather than on the runner.
     The console payload roots are the five that still have a producer: each ships
-    with the shard the producer wrote, which is the same pattern
-    `state/feed-retirements.csv` takes. `scores` and `feed-health` were two more
+    with the shard the producer wrote, which is the same pattern a seeded header
+    takes. `scores` and `feed-health` were two more
     until 2026-09-16, and they are why the list is derived from
     `series.PUBLISHED_ROOTS` rather than written out here - a root deleted in one
     place has to leave the staging call in the same commit, or the next run's
@@ -296,23 +298,15 @@ def test_every_path_the_plan_stages_exists_in_a_fresh_checkout() -> None:
     heads behind. Naming the directory answers this test's own rule at the same
     time: `state` is in every checkout, and a collection inside it need not be.
 
-    `state/feed-retirements.csv` is named for a reason of its own that outlived
-    the staging list: almost no run writes a row and every run reads the file,
-    so it ships with its header rather than appearing the day a retirement
-    happens.
+    The feed retirements needed a header-only file of their own while they were
+    a CSV, because every run read the file and almost none wrote to it. They
+    moved under `state/raw/` on 2026-09-28, where a folder that is not there yet
+    reads as no retirements at all, so the seed went with them.
     """
     named = COMMIT_STAGED_PATHS["plan"]
     assert named == [ledger.STATE_DIRNAME]
     for relative in named:
         assert (REPO_ROOT / relative).exists(), f"{relative} must be in a fresh checkout"
-    tracked = subprocess.run(
-        ["git", "ls-files", "--error-unmatch", ledger.relpath(LedgerName.FEED_RETIREMENTS)],
-        cwd=REPO_ROOT,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    assert tracked.returncode == 0, tracked.stderr.strip()
 
 
 def test_the_corpus_is_not_union_merged() -> None:
