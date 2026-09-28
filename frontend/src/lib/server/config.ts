@@ -664,6 +664,8 @@ interface RawConfig {
 	evaluation?: Partial<EvaluationConfig>;
 	observability?: Partial<ObservabilityConfig>;
 	visuals?: Partial<VisualsConfig>;
+	/** The one `ledger` knob the site reads. */
+	ledger?: { engine_extension_repository?: string };
 	/** Where the merge line's own block sits. Nested under `same_story` rather
 	 * than flat, because a knob whose legal value depends on another knob's value
 	 * belongs where a validator can see both. */
@@ -963,6 +965,13 @@ export function committedWeights(): { cosine_weight: number } {
  */
 export function visualsConfig(): VisualsConfig {
 	return { min_chart_points: raw().visuals?.min_chart_points ?? VISUALS_DEFAULTS.min_chart_points };
+}
+
+/** Where the query engine downloads its add-ons; `''` leaves the engine's built-in address.
+ *  The page's `connect-src` reads the same key in `asset-base.js`, so one edit moves both. */
+export function engineExtensionRepository(): string {
+	const value = raw().ledger?.engine_extension_repository;
+	return typeof value === 'string' ? value : '';
 }
 
 export function inferenceConfig(): InferenceConfig {

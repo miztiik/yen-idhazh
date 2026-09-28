@@ -17,9 +17,10 @@
  * nothing and says why only in a console the reader will never open.
  *
  * **What opening it widens, stated rather than implied.** `connect-src` gains
- * one origin for the drawings valve and, since 2026-09-10, the origins the
- * encoder's failover leg reaches - every one of them computed here from our own
- * config at build time. No payload field, no model output and no fetched text
+ * one origin for the drawings valve, since 2026-09-10 the origins the encoder's
+ * failover leg reaches, and since 2026-09-28 the one the query engine downloads
+ * its add-ons from - every one of them computed here from our own config at
+ * build time. No payload field, no model output and no fetched text
  * can reach any of them (Guardrail #11), and `'self'` stays first in the list, so
  * every request the page already makes is unaffected.
  *
@@ -151,4 +152,23 @@ export function encoderOrigins() {
 		}
 	}
 	return origins;
+}
+
+/**
+ * The origin the query engine downloads its add-ons from, for `connect-src`.
+ *
+ * `ledger.engine_extension_repository`, the same key the engine is told. The
+ * engine checks each add-on's signature before loading it, which is what makes
+ * this origin safe to admit (owner ruling, 2026-09-28).
+ *
+ * @returns {string[]}
+ */
+export function engineOrigins() {
+	if (!existsSync(CONFIG_FILE)) return [];
+	try {
+		const value = JSON.parse(readFileSync(CONFIG_FILE, 'utf8'))?.ledger?.engine_extension_repository;
+		return typeof value === 'string' && value ? [new URL(value).origin] : [];
+	} catch {
+		return [];
+	}
 }

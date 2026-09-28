@@ -12,7 +12,7 @@ const FILES: Record<Exclude<FrontendGroup, 'console'>, readonly string[]> = {
 		'appearance-config', 'archive-scope', 'asset-base', 'chart-vocabulary', 'day-list', 'day-metrics', 'day-search',
 		'day-shards',
 		'extraction-trend', 'extraction-window', 'frame',
-		'glance-and-rank', 'holdout', 'holdout-domain', 'memory-held', 'merge-line', 'model-cards',
+		'glance-and-rank', 'holdout', 'holdout-domain', 'ledger-door', 'memory-held', 'merge-line', 'model-cards',
 		'one-pass-reductions',
 		'preview-port',
 		'processor-lost', 'prompt-reuse',

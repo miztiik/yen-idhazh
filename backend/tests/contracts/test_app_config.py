@@ -24,6 +24,7 @@ from idhazh.contracts.knobs.collect import CollectConfig
 from idhazh.contracts.knobs.console import ConsoleConfig
 from idhazh.contracts.knobs.council import CouncilConfig
 from idhazh.contracts.knobs.evaluation import EvaluationConfig
+from idhazh.contracts.knobs.ledger import LedgerConfig
 from idhazh.contracts.knobs.model_server import ModelServerConfig, is_loopback, resolve_base_url
 from idhazh.contracts.knobs.models import ModelsConfig
 from idhazh.contracts.knobs.observability import LoggingConfig, LogLevel, ObservabilityConfig
@@ -257,6 +258,28 @@ def test_an_address_a_run_can_use_is_taken_and_tidied() -> None:
     )
     assert ModelServerConfig(base_url="http://10.0.0.5:9001/").base_url == "http://10.0.0.5:9001"
     assert ModelServerConfig(base_url="https://a-box:8443").base_url == "https://a-box:8443"
+
+
+@pytest.mark.parametrize(
+    "declared",
+    [
+        "http://mirror.example",
+        "https://mirror.example/",
+        "https://mirror.example/x?y=1",
+        "https://mirror.example/it's",
+    ],
+)
+def test_an_add_on_address_the_engine_cannot_join_onto_is_refused(declared: str) -> None:
+    """The engine appends `/<version>/<platform>/<name>`, and the value lands in a `SET` statement."""
+    with pytest.raises(ValidationError, match=r"engine_extension_repository"):
+        LedgerConfig(engine_extension_repository=declared)
+
+
+def test_a_fresh_clone_fetches_add_ons_from_duckdbs_own_host() -> None:
+    """The engine's own default, and a mirror under a path is taken as written."""
+    assert LedgerConfig().engine_extension_repository == "https://extensions.duckdb.org"
+    mirror = "https://mirror.example/duckdb"
+    assert LedgerConfig(engine_extension_repository=mirror).engine_extension_repository == mirror
 
 
 @pytest.mark.parametrize(

@@ -13,7 +13,7 @@ backend/idhazh/contracts/*.py <- Pydantic models. HAND-WRITTEN. The source of tr
  |
  +--> Contract.json_schema() <- computed on demand. Nothing writes it to disk.
  |
- +--> six names copied by hand into two frontend modules, bound by two tests.
+ +--> a few names copied by hand into three frontend modules, each bound by a test.
 ```
 
 To change a persisted shape you edit the Pydantic model. Where the frontend copies something, you edit the copy in the same change, and the two tests below fail if you do not.
@@ -22,7 +22,7 @@ To change a persisted shape you edit the Pydantic model. Where the frontend copi
 
 ## What the frontend carries
 
-**Two modules import a contract shape, and both type it by hand.** `frontend/src/lib/server/config.ts` declares `ConsolePanelGroup`; `frontend/src/lib/server/host-fingerprint.ts` declares `HostFingerprintRow` and the two closed sets `SERVER_JOB` and `WATCHED_FLAG`. What each field means stays on the Pydantic model, which is the one place it is written.
+**Three modules type a contract shape by hand.** `frontend/src/lib/server/config.ts` declares `ConsolePanelGroup`; `frontend/src/lib/server/host-fingerprint.ts` declares `HostFingerprintRow` and the two closed sets `SERVER_JOB` and `WATCHED_FLAG`. What each field means stays on the Pydantic model, which is the one place it is written.
 
 **A closed vocabulary is copied as a frozen array, and the union its members form.**
 
@@ -46,15 +46,18 @@ The union alone cannot be tested against at run time, and a reader that has to n
 
 **An optional field is copied optional.** Pydantic marks a field with a default as not required, so `cpu_model?: string | null` is what the contract says: the key may be absent, and present-but-null is the reading nobody took. A reader that fills every key says so by deriving from the copied type - `Required<HostFingerprintRow>` - rather than by declaring a second interface.
 
+**The query door carries a copy of the compact index, and the stamp it reads.** `frontend/src/lib/data/compact-index.ts` declares `CompactEntry` and `CompactIndex` by hand, because the door runs in a browser that fetches `state/compact/<ledger>/index/<period>.json` and cannot import the Pydantic model. Beside them sit `COMPACT_INDEX_STAMP`, the `CompactIndex` stamp this build reads, and `COMPACT_PERIODS`. **The stamp rule is the backend's own**: an index stamped at that stamp or older is read when the fields the door acts on pass its guard, and a newer one is refused with both stamps in the console, because only a build at least that new knows what the shape means. The door's rules are [../publishing/how-the-query-door-answers-a-panel.md](../publishing/how-the-query-door-answers-a-panel.md).
+
 ## What holds the copy in step
 
-Three tests in `backend/tests/contracts/`, each named for what it proves.
+Four tests in `backend/tests/contracts/`, each named for what it proves.
 
 | File | What it proves |
 | --- | --- |
 | `test_frontend_field_set.py` | the hand-written `HostFingerprintRow` names exactly the columns the Pydantic one declares, in the same order, with the same TypeScript type for each. Types are computed from `json_schema()` by a narrow mapper that refuses a node kind it has not met, so a field with an unfamiliar shape fails rather than passes |
 | `test_frontend_vocabularies.py` | `SERVER_JOB` and `WATCHED_FLAG` hold exactly their Python enums' members, in order |
 | `test_frontend_console_lists.py` | five console lists still name what their contracts declare - the eval panel's column map, the settings vocabulary, the doubt reasons, the bandwidth margin and the prompt-reuse column grammar |
+| `test_frontend_index_shapes.py` | the query door's `CompactEntry` and `CompactIndex` copy each field with the contract's type in its order, by the same kind of narrow mapper; `COMPACT_INDEX_STAMP` is `CompactIndex.schema_version()`; `COMPACT_PERIODS` is `Period`; every ledger the door may query is a `LedgerName`; and the cell it filters days on is the ledger's own date cell |
 
 A fourth, `test_no_generated_layer.py`, refuses the generated trees coming back one file at a time.
 
@@ -85,6 +88,7 @@ A JSON Schema is a good interchange format and a poor authoring format: it canno
 | `backend/idhazh/contracts/<name>.py` | One module per persisted shape. |
 | `frontend/src/lib/server/host-fingerprint.ts` | The hand copy of `HostFingerprintRow`, `ServerJob` and `WatchedFlag`. |
 | `frontend/src/lib/server/config.ts` | The hand copy of `ConsolePanelGroup`. |
+| `frontend/src/lib/data/compact-index.ts` | The hand copy of `CompactEntry` and `CompactIndex`, and the stamp the query door reads. |
 | `frontend/src/lib/payload/types.ts` | The published payload's TypeScript shapes, mirroring `DigestDay`. Hand-written, and bound by nothing. |
 
 The shapes, and where each one lives once written:

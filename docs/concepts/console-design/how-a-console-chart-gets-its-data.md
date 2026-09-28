@@ -1,6 +1,6 @@
 # How a console chart gets its data
 
-**Last Updated**: 2026-09-24
+**Last Updated**: 2026-09-28
 
 Seven rules about where a panel's bytes come from, and what a panel may never do to
 get them. **They are settled by what the formats do, not by a benchmark**, and none
@@ -78,6 +78,10 @@ engine stops being replaceable the moment a second module imports it, and a read
 that lives in fifteen panels is fifteen places to change when the collection's layout
 moves. It also makes the swap in rule 3 a decision somebody can take later rather
 than a rewrite they have to justify.
+
+That module is the query door, and what it does with a request - the four answers,
+which files a span reads, the stamp it reads and the one engine build - is
+[../../architecture/publishing/how-the-query-door-answers-a-panel.md](../../architecture/publishing/how-the-query-door-answers-a-panel.md).
 
 ### 5. A columnar format is read by column
 

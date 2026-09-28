@@ -2,7 +2,7 @@ import { sveltekit } from '@sveltejs/kit/vite';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vite';
 import { assetBaseUrl, encoderSource } from './asset-base.js';
-import { assistConfig, uiConfig } from './src/lib/server/config';
+import { assistConfig, engineExtensionRepository, uiConfig } from './src/lib/server/config';
 
 export default defineConfig({
 	plugins: [tailwindcss(), sveltekit()],
@@ -54,6 +54,8 @@ export default defineConfig({
 		// document, because only `assist/loader.ts` reads it. That keeps roughly 600
 		// bytes of hex out of the page-weight ceiling the archive document is
 		// measured against, and out of its `__data.json` twin.
-		__ENCODER_SOURCE__: JSON.stringify(encoderSource())
+		__ENCODER_SOURCE__: JSON.stringify(encoderSource()),
+		// Where the query engine downloads its add-ons; `connect-src` admits the same origin.
+		__ENGINE_EXTENSION_REPOSITORY__: JSON.stringify(engineExtensionRepository())
 	}
 });

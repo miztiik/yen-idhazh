@@ -56,7 +56,12 @@ const ENGINE_PACKAGE = '@duckdb/duckdb-wasm';
 const ENGINE_MODULE = 'frontend/src/lib/data/engine.ts';
 /** The two entry points of the query door, and where they are exported from. */
 const DOOR_CALLS = ['slice', 'sliceFromDisk'];
-const DOOR_MODULE = /(^|\/)data\/ledger(\.ts)?$/;
+const DOOR_MODULE = /(^|\/)(data\/ledger|server\/ledger-disk)(\.ts)?$/;
+/** The door's modules, the one a panel may import, and the one a build-time reader may. */
+const DOOR_DIRECTORY = 'frontend/src/lib/data/';
+const PANEL_DOOR = 'frontend/src/lib/data/ledger';
+const DISK_DOOR = 'frontend/src/lib/server/ledger-disk';
+const SERVER_DIRECTORY = 'frontend/src/lib/server/';
 
 interface Listed {
 	name: string;
@@ -139,6 +144,17 @@ function names(pkg: string, specifier: string): boolean {
 	return specifier === pkg || specifier.startsWith(`${pkg}/`);
 }
 
+/** The repository path a specifier names, without its extension, or null for a
+ * package. `$lib` is the only alias this tree uses. */
+function landsOn(entry: Source, specifier: string): string | null {
+	const target = specifier.startsWith('$lib/')
+		? path.join(source, 'lib', specifier.slice('$lib/'.length))
+		: specifier.startsWith('.')
+			? path.resolve(path.dirname(entry.file), specifier)
+			: null;
+	return target === null ? null : relative(target).replace(/\.(ts|js)$/, '');
+}
+
 test.describe('THE ORACLE: every chart type is written down, and nothing has left the house style', () => {
 	test('every listed type has its module, and every module is listed', () => {
 		const types = typesOnThePage();
@@ -185,12 +201,41 @@ test.describe('THE ORACLE: every chart type is written down, and nothing has lef
 		expect(found, 'd3 is a maths library here: Svelte owns the DOM, dayTicks owns the dates and tokens.css owns the colour').toEqual([]);
 	});
 
-	test('the query engine has one importer at most, and it is the engine module', () => {
+	test('the query engine has one importer, and it is the engine module', () => {
 		const importers = sources()
 			.filter((entry) => importsOf(entry).some((specifier) => names(ENGINE_PACKAGE, specifier)))
 			.map((entry) => relative(entry.file));
-		expect(importers.length, `more than one module imports the engine: ${importers.join(', ')}`).toBeLessThanOrEqual(1);
-		for (const importer of importers) expect(importer).toBe(ENGINE_MODULE);
+		expect(importers, 'a second importer is a second place to change when the engine moves').toEqual([ENGINE_MODULE]);
+	});
+
+	test('a panel reaches the door through ledger.ts and nothing deeper', () => {
+		const deeper = sources()
+			.filter(({ file }) => !relative(file).startsWith(DOOR_DIRECTORY) && !relative(file).startsWith(SERVER_DIRECTORY))
+			.flatMap((entry) =>
+				importsOf(entry)
+					.map((specifier) => landsOn(entry, specifier))
+					.filter((target): target is string => target !== null && target.startsWith(DOOR_DIRECTORY) && target !== PANEL_DOOR)
+					.map((target) => `${relative(entry.file)} imports ${target}`)
+			);
+		expect(deeper, 'only ledger.ts binds the door to the published site; a deeper module lets a panel name a path').toEqual([]);
+	});
+
+	test('sliceFromDisk has one home, and only a build-time reader imports it', () => {
+		const homes = sources()
+			.filter(({ scripts }) => scripts.some((script) => /export (async )?function sliceFromDisk\b/.test(script)))
+			.map(({ file }) => relative(file));
+		expect(homes).toEqual([`${DISK_DOOR}.ts`]);
+		const importers = sources()
+			.filter((entry) => importsOf(entry).some((specifier) => landsOn(entry, specifier) === DISK_DOOR))
+			.map(({ file }) => relative(file));
+		const outside = importers.filter((file) => !file.startsWith(SERVER_DIRECTORY));
+		expect(outside, 'a panel never reads the disk: it calls slice()').toEqual([]);
+		if (importers.length === 0) {
+			test.info().annotations.push({
+				type: 'vacuous',
+				description: 'No build-time reader calls sliceFromDisk yet; this walk bites from the first one that does.'
+			});
+		}
 	});
 
 	test('every call to the query door names its columns and closes its date range', () => {

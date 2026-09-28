@@ -211,6 +211,7 @@
   "ledger": {
     "compression_compact": "zstd",
     "compression_raw": "snappy",
+    "engine_extension_repository": "https://extensions.duckdb.org",
     "format": "parquet",
     "published": []
   },
