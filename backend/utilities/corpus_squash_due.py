@@ -14,7 +14,6 @@ What that file says decides the answer:
 | --- | --- |
 | There is no file | Due. The squash has never run |
 | `last_run` is a day, or null | Due once `every_days` have passed that day. Null never ran |
-| No `last_run`; `pruned_date` is a day or null | The same, read from `last_run`'s old name |
 | Anything else | Exit non-zero and print no `due` |
 
 **A stamp this cannot read is not "due".** The two ways to be wrong are different
@@ -23,10 +22,10 @@ again and `git blame` loses its range. A false "not due" delays one squash by on
 wake. So a key that is missing, a value that is not a day, or a file that is not
 JSON ends this program before it prints an answer, and the job stops there.
 
-**`pruned_date` is read here and in `CorpusMeta` alike**, because this program
-cannot import the contract. Both prefer `last_run` when a file carries the two,
-and a test holds them to the same keys and the same preference. They are removed
-together or not at all.
+**`last_run` is spelled here and in `CorpusMeta` alike**, because this program
+cannot import the contract, and a test holds the two to the same key. Its old
+name, `pruned_date`, is read by neither: a file that spells only that names no
+`last_run`, and ends this program like any other stamp it cannot read.
 
 A squash whose declaration is not `active` is never due, forced or not:
 `lifecycle_status` is the gardener's off switch, and `dry_run` is not.
@@ -46,9 +45,8 @@ FORCE_ENV = "FORCE"
 #: The squash's declaration, under the config root.
 DECLARATION = Path("gardener") / "corpus-squash.json"
 
-#: The field the day is read from, then the name it had before.
+#: The field the day is read from.
 LAST_RUN_KEY = "last_run"
-LEGACY_LAST_RUN_KEY = "pruned_date"
 
 #: The one status that runs.
 ACTIVE = "active"
@@ -101,10 +99,9 @@ def last_run(meta: object) -> date | None:
     """
     if not isinstance(meta, dict):
         raise ValueError("the file is not a JSON object")
-    for key in (LAST_RUN_KEY, LEGACY_LAST_RUN_KEY):
-        if key in meta:
-            return _a_day(key, meta[key])
-    raise ValueError(f"the file names neither {LAST_RUN_KEY} nor {LEGACY_LAST_RUN_KEY}")
+    if LAST_RUN_KEY not in meta:
+        raise ValueError(f"the file names no {LAST_RUN_KEY}")
+    return _a_day(LAST_RUN_KEY, meta[LAST_RUN_KEY])
 
 
 def read_last_run(path: Path) -> date | None:
