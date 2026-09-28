@@ -1,7 +1,7 @@
 """One rule for every `state/` day tree, held to by every reader of one.
 
-The day-side twin of `retention/test_telemetry_fold.py::test_the_month_readers
-_all_agree_on_what_a_month_is`, which found three month readers disagreeing on
+The day-side twin of `gardener/tasks/test_telemetry_aggregate_task.py::test_the_month
+_readers_all_agree_on_what_a_month_is`, which found three month readers disagreeing on
 2026-09-08 and one file left alone in one ledger and deleted in another.
 
 **Behaviour rather than identity.** Asserting that two names point at one
