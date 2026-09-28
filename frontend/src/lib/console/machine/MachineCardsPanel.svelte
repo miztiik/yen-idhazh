@@ -19,7 +19,7 @@
 </script>
 
 <div
-	data-readout-none="one card per machine, nothing shared"
+	data-readout-none="one card per machine, and every bar prints its reading in words; agreed with Susan"
 	data-machine-cards={machines.runId}
 	data-machine-record={machines.record}
 >

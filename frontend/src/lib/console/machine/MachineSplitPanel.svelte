@@ -12,7 +12,10 @@
 	let { split }: { split: SplitByMachine } = $props();
 </script>
 
-<div data-readout-none="one row per machine, no shared column" data-machine-split={split.runId}>
+<div
+	data-readout-none="one card per machine, and every split prints both halves and its total; agreed with Susan"
+	data-machine-split={split.runId}
+>
 	<Panel
 		heading="h3"
 		id="reading-against-writing"

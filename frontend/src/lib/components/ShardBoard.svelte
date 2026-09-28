@@ -110,7 +110,7 @@
 	data-shard-board-memory-scale={board.memoryScaleBytes}
 	data-shard-board-swap-known={board.swapKnown}
 	data-panel-question="what is broken"
-	data-readout-none="one row per shard, and every figure on a row is printed beside its bar"
+	data-readout-none="one row per shard, and every figure its bars draw is printed on the row; agreed with Susan"
 >
 	{#if board.empty}
 		<p class="board-note" data-shard-board-empty>
@@ -222,9 +222,6 @@
 						<div
 							class="track"
 							role="img"
-							title="Shard {row.shard}: {seconds(row.readSeconds)} reading, {seconds(
-								row.writeSeconds
-							)} writing."
 							aria-label="Shard {row.shard} spent {seconds(row.readSeconds)} reading and {seconds(
 								row.writeSeconds
 							)} writing, {seconds(row.modelSeconds)} in the model altogether."
@@ -261,12 +258,7 @@
 							Neither rate was measured on this shard.
 						</p>
 					{:else}
-						<span
-							class="rate-line"
-							title="Shard {row.shard} read at {rate(
-								row.readTokensPerSecond
-							)} prompt tokens a second."
-						>
+						<span class="rate-line">
 							<span
 								class="rate-track"
 								role="img"
@@ -277,10 +269,7 @@
 								<span class="seg read" style="inline-size: {row.readRateWidth}"></span>
 							</span>
 						</span>
-						<span
-							class="rate-line"
-							title="Shard {row.shard} wrote at {rate(row.writeTokensPerSecond)} tokens a second."
-						>
+						<span class="rate-line">
 							<span
 								class="rate-track"
 								role="img"
@@ -328,16 +317,12 @@
 								: `Load reached ${row.loadMax.toFixed(2)}, and this run did not record the host's core count - so whether that is a queue cannot be said.`}
 						</span>
 					{:else}
-						<span
-							class="load"
-							data-shard-cell="load"
-							title="Shard {row.shard} reached a one-minute load of {rate(row.loadMax)} on {row.cores} cores."
-						>
+						<span class="load" data-shard-cell="load">
 							<TargetBar
 								marks={row.load}
 								label="Shard {row.shard} load"
 								valueText={rate(row.loadMax)}
-								targetText="load, against {row.cores} {row.cores === 1
+								targetText="one-minute load, against {row.cores} {row.cores === 1
 									? 'core'
 									: 'cores'} - past that the work is queueing"
 								emptyNote="This shard recorded no load."
@@ -363,7 +348,7 @@
 					<!-- A typical item and the worst one on one track. Two bars each for
 					     memory and CPU would be four bars a row, and eighty across a run
 					     of twenty shards. -->
-					<p class="range-line" title="Shard {row.shard} memory: {spread(row.memory, gib)}.">
+					<p class="range-line">
 						<span class="cell-label" data-shard-name="memory" aria-hidden="true">Memory</span>
 						{#if row.memory.empty}
 							<span class="absent" data-shard-figure="memory">No memory reading</span>
@@ -384,7 +369,7 @@
 							</span>
 						{/if}
 					</p>
-					<p class="range-line" title="Shard {row.shard} processor: {spread(row.cpu, percent, ' busy')}.">
+					<p class="range-line">
 						<span class="cell-label" data-shard-name="cpu-range" aria-hidden="true">
 							Processor busy
 						</span>
@@ -414,10 +399,7 @@
 					     and every other figure on its row reads as normal while it does.
 					     An empty mark here is a shard that ran before the ledger split
 					     the two, never a host that took nothing. -->
-					<p
-						class="range-line"
-						title="Shard {row.shard} stolen: {spread(row.stolen, percent, ' of the interval')}."
-					>
+					<p class="range-line">
 						<span class="cell-label" data-shard-name="stolen-range" aria-hidden="true">
 							Given to another tenant
 						</span>
@@ -480,7 +462,7 @@
 					     list. A typical item and the worst one, never a total - each
 					     item's wait covers the queue ahead of it, so adding them counts
 					     that queue once per item. -->
-					<p class="range-line" title="Shard {row.shard} queue: {spread(row.queue, seconds)}.">
+					<p class="range-line">
 						<span class="cell-label" data-shard-name="queue" aria-hidden="true">Queued</span>
 						{#if row.queue.empty}
 							<span class="absent" data-shard-figure="queue">No queue reading on this shard</span>

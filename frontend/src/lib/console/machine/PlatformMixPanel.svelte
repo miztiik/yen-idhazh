@@ -39,7 +39,9 @@
 <div
 	data-windowed="machine-fleet"
 	data-window-days={windowDays}
-	data-readout-none={fleet.drawBars ? undefined : 'a list of counts has no column'}
+	data-readout-none={fleet.drawBars
+		? undefined
+		: 'no chart is drawn here, only counts in a list; agreed with Susan'}
 >
 	<Panel
 		heading="h3"

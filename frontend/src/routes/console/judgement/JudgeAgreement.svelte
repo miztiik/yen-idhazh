@@ -157,7 +157,7 @@
 		data-readout-columns={count > 0 ? count : undefined}
 		data-readout-none={count > 0
 			? undefined
-			: 'no pair has been read twice, so there is no column to read'}
+			: 'no pair has been read twice, so there is no column to read; agreed with Susan'}
 	>
 		<div use:observeWidth={(next) => (measured = next)}>
 			<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
