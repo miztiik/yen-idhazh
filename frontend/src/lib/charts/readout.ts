@@ -226,6 +226,23 @@ export function factsOf(
 	};
 }
 
+/** A record chart's records, each fact keeping room for the widest reading any
+ * record gives it, so stepping from one record to the next does not reflow the
+ * strip or change the panel's height. */
+export function recordsOf(records: readonly ReadoutFacts[]): ReadoutFacts[] {
+	const widest = new Map<string, number>();
+	for (const record of records) {
+		for (const fact of record.facts) {
+			const length = (fact.value ?? record.notMeasured).length;
+			widest.set(fact.label, Math.max(widest.get(fact.label) ?? 0, length));
+		}
+	}
+	return records.map((record) => ({
+		...record,
+		facts: record.facts.map((fact) => ({ ...fact, reserve: widest.get(fact.label) ?? 0 }))
+	}));
+}
+
 /** How wide the readout strip under a plot may be, as an inline style.
  *
  * The strip sits below the plot, so it cannot cover a mark whatever its width.
@@ -531,6 +548,122 @@ export function pointerReadout(
 			// The window moved, so the mark this index named may be gone. Holding
 			// the index would print one article's numbers under another's mark.
 			if (at !== null && at > next.marks.length - 1) select(null);
+		},
+		destroy() {
+			for (const [type, handler] of bound) events.removeEventListener(type, handler);
+		}
+	};
+}
+
+/** Which arrow keys step the marks of a chart drawn as elements.
+ *
+ * `row` is one line of marks - tiles along a date, bars along a strip - and
+ * Left and Right step it. `list` is one mark a line, and Up and Down step it.
+ * A number is a grid that many marks wide: Left and Right step along a line,
+ * Up and Down move a whole line. Keys the layout has no use for are left to
+ * the page, which scrolls on them. */
+export type MarkWalk = 'row' | 'list' | number;
+
+export interface MarkReadoutOptions {
+	/** How many marks carry `data-readout-at`, numbered in reading order. */
+	count: number;
+	walk: MarkWalk;
+	/** Which mark is selected now, or null for the resting one. */
+	onSelect: (index: number | null) => void;
+	/** The mark picked elsewhere, taken as this chart's own position. */
+	selected?: number | null;
+}
+
+/** Report which mark of a chart drawn as elements - a tile, a square, a row -
+ * the reader is pointing at, has stepped to or has tapped.
+ *
+ * A chart drawn in SVG answers a pointer by the nearest column. One drawn as
+ * elements answers by the mark under the pointer, because its marks wrap onto
+ * several lines, and nearest by x would pick a tile on the wrong line. Every
+ * mark carries `data-readout-at` with its index; the element the action is on
+ * is the chart's one tab stop, never a stop per mark. A tap sets a mark and it
+ * stays set; a mouse leaving, Escape, or focus leaving the chart returns the
+ * strip to rest.
+ */
+export function markReadout(
+	node: HTMLElement,
+	options: MarkReadoutOptions
+): { update: (next: MarkReadoutOptions) => void; destroy: () => void } {
+	let current = options;
+	let at: number | null = options.selected ?? null;
+
+	const select = (next: number | null) => {
+		if (next === at) return;
+		at = next;
+		current.onSelect(next);
+	};
+
+	const markOf = (target: EventTarget | null): number | null => {
+		if (!(target instanceof Element)) return null;
+		const mark = target.closest('[data-readout-at]');
+		if (mark === null || !node.contains(mark)) return null;
+		const index = Number(mark.getAttribute('data-readout-at'));
+		return Number.isInteger(index) && index >= 0 && index < current.count ? index : null;
+	};
+
+	const track = (event: PointerEvent) => {
+		const index = markOf(event.target);
+		if (index !== null) select(index);
+	};
+
+	/** Only a mouse leaving clears: a lifted thumb raises the same event, and
+	 * clearing there would blank the strip before it could be read. */
+	const leave = (event: PointerEvent) => {
+		if (event.pointerType === 'mouse') select(null);
+	};
+
+	const enter = () => {
+		if (at === null && current.count > 0) select(0);
+	};
+
+	const away = (event: FocusEvent) => {
+		if (event.relatedTarget instanceof Node && node.contains(event.relatedTarget)) return;
+		select(null);
+	};
+
+	const step = (event: KeyboardEvent) => {
+		const last = current.count - 1;
+		if (last < 0) return;
+		const from = at ?? 0;
+		const walk = current.walk;
+		const across = walk !== 'list';
+		const down = walk === 'list' ? 1 : typeof walk === 'number' ? walk : 0;
+		let next: number | null;
+		if (across && event.key === 'ArrowLeft') next = Math.max(0, from - 1);
+		else if (across && event.key === 'ArrowRight') next = Math.min(last, from + 1);
+		else if (down > 0 && event.key === 'ArrowUp') next = from - down >= 0 ? from - down : from;
+		else if (down > 0 && event.key === 'ArrowDown') next = from + down <= last ? from + down : from;
+		else if (event.key === 'Home') next = 0;
+		else if (event.key === 'End') next = last;
+		else if (event.key === 'Escape') next = null;
+		else return;
+		event.preventDefault();
+		event.stopPropagation();
+		select(next);
+	};
+
+	const events: EventTarget = node;
+	const bound: [string, EventListener][] = [
+		['pointermove', track as EventListener],
+		['pointerdown', track as EventListener],
+		['pointerleave', leave as EventListener],
+		['focusin', enter],
+		['focusout', away as EventListener],
+		['keydown', step as EventListener],
+		['click', track as EventListener]
+	];
+	for (const [type, handler] of bound) events.addEventListener(type, handler);
+
+	return {
+		update(next: MarkReadoutOptions) {
+			current = next;
+			if (next.selected !== undefined) at = next.selected;
+			if (at !== null && at > next.count - 1) select(null);
 		},
 		destroy() {
 			for (const [type, handler] of bound) events.removeEventListener(type, handler);
