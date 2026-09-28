@@ -29,7 +29,7 @@ Runtime build `b10598`, temperature 0.2, `ubuntu-latest`. Every shard is its own
 job, so the sixteen jobs drew sixteen machines independently. **What each draw
 got, and what it did with it:**
 
-| Arm | Shard | Machine | Job min | Replies | In tok | Out tok | Out tok/s |
+| Candidate | Shard | Machine | Job min | Replies | In tok | Out tok | Out tok/s |
 | --- | ---: | --- | ---: | ---: | ---: | ---: | ---: |
 | Ornith-1.5-9B | 0 | EPYC 7763 | 71 | 6 | 44,711 | 5,384 | 1.60 |
 | Ornith-1.5-9B | 1 | EPYC 7763 | 118 | 6 | 67,389 | 5,202 | 0.79 |
@@ -63,16 +63,16 @@ never the decode rate.
 | Xeon 8573C | 1 |
 
 **The draw decided the Gemma comparison before a token was decoded.** The
-no-head arm drew the two newest chips in the pool - a 9V74 and a 9V45 - and the
-+head arm drew neither. Those two shards are the fastest and third-fastest rows
-in the table. An arm that draws better hardware finishes faster whatever the
+no-head candidate drew the two newest chips in the pool - a 9V74 and a 9V45 - and the
++head candidate drew neither. Those two shards are the fastest and third-fastest rows
+in the table. A candidate that draws better hardware finishes faster whatever the
 draft head does, which is why the apparent head penalty on this page is not a
 reading of the head.
 
-**One chip is not one speed either.** Hold the arm AND the processor model
+**One chip is not one speed either.** Hold the candidate AND the processor model
 fixed, and shards still disagree, because each shard read different articles:
 
-| Arm | On EPYC 7763 | Slowest to fastest |
+| Candidate | On EPYC 7763 | Slowest to fastest |
 | --- | --- | ---: |
 | Ornith-1.5-9B | 0.79, 1.60, 1.71 | **2.2x** |
 | Gemma +head | 4.47, 4.90, 5.34 | 1.19x |
@@ -82,10 +82,10 @@ fixed, and shards still disagree, because each shard read different articles:
 does**, at least on Ornith. A comparison that controls for the chip and not for
 the corpus has controlled for the smaller of the two.
 
-**That is why most of this page cannot compare one arm's speed against
+**That is why most of this page cannot compare one candidate's speed against
 another's.** Two machines reporting one processor model already differ by 8.8
 percent ([the-processor-lottery.md](the-processor-lottery.md)); these differ by
-model, and by article. The speed figures below are readings of an arm on a
+model, and by article. The speed figures below are readings of a candidate on a
 machine on a corpus, not a ranking.
 
 ## The gates
@@ -123,7 +123,7 @@ Per model call, first returned repeat of each article. `out tok/s` is completion
 tokens over the whole call's wall clock, so it includes the time spent reading
 the prompt - it is a floor on the decode rate, never the decode rate.
 
-| Article | Arm | in tok | out tok | seconds | out tok/s |
+| Article | Candidate | in tok | out tok | seconds | out tok/s |
 | --- | --- | --- | --- | --- | --- |
 | `ai-6hxj0kekw2kvvgga` | Ornith | 13,677 | 487 | 972 | 0.50 |
 | | Gemma +head | 17,971 | 4,615 | 1,251 | 3.69 |
@@ -149,20 +149,20 @@ the prompt - it is a floor on the decode rate, never the decode rate.
 
 Qwen with thinking on returned no row for any article.
 
-**No article was read by all four arms.** Each dispatch planned independently
-and each arm lost different articles to fetch failures, so the overlap is 7
-articles between the two Gemma arms and 4 between Ornith and Gemma.
+**No article was read by all four candidates.** Each dispatch planned independently
+and each candidate lost different articles to fetch failures, so the overlap is 7
+articles between the two Gemma candidates and 4 between Ornith and Gemma.
 
 ## What a token buys
 
-| Arm | out tokens, median | published words, median | tokens per published word |
+| Candidate | out tokens, median | published words, median | tokens per published word |
 | --- | --- | --- | --- |
 | Ornith-1.5-9B | 587 | 92 | 6.4 |
 | Gemma-4-E4B +head | 4,692 | 110 | 42.7 |
 | Gemma-4-E4B no head | 5,033 | 111 | 45.3 |
 
 **This is the largest difference on the page and it is not a speed reading**, so
-the processor lottery does not touch it. Both Gemma arms emit roughly seven
+the processor lottery does not touch it. Both Gemma candidates emit roughly seven
 times the tokens Ornith does to publish a summary of the same length, on the
 same call, against the same schema. The leakage gate saw no reasoning channel
 and no think block, so whatever those tokens are, they are inside the structured
@@ -183,22 +183,22 @@ and `summary_decode_ms` are filled from the server's own `timings` by the
 `ItemRecorder` that `two_calls_one_item` accepts - and `stages/qualify.py` calls
 that function without a recorder.
 
-So the split below is a **least-squares fit** over every returned call of an arm,
+So the split below is a **least-squares fit** over every returned call of a candidate,
 solving `seconds = prompt/prefill_rate + completion/decode_rate`. It is an
 estimate in the Guardrail #10 sense and it is labelled one.
 
-| Arm | calls | prefill tok/s | decode tok/s | fit quality |
+| Candidate | calls | prefill tok/s | decode tok/s | fit quality |
 | --- | --- | --- | --- | --- |
 | Ornith-1.5-9B | 23 | 17 | 23.1 | R2 0.274 |
 | Gemma-4-E4B +head | 21 | 43 | 7.5 | R2 0.912 |
 | Gemma-4-E4B no head | 23 | 25 | 15.3 | R2 0.840 |
 | Qwen thinking | 0 | - | - | no call returned |
 
-**Only the two Gemma rows are worth reading, and only within an arm.** Ornith's
+**Only the two Gemma rows are worth reading, and only within a candidate.** Ornith's
 fit explains a quarter of its variance, which means the model behind it is wrong
-for that arm - most likely because its calls vary in ways prompt and completion
-length do not capture. Each arm's calls are also spread over three or four
-different processors, so a cross-arm comparison of these rates is the lottery
+for that candidate - most likely because its calls vary in ways prompt and completion
+length do not capture. Each candidate's calls are also spread over three or four
+different processors, so a cross-candidate comparison of these rates is the lottery
 again.
 
 **The measurement that would settle it** is passing an `ItemRecorder` into the
@@ -208,13 +208,13 @@ collecting them.
 
 ## What the draft head did here, which is nothing readable
 
-Comparing the two Gemma arms on the 7 articles both read gives the head a
+Comparing the two Gemma candidates on the 7 articles both read gives the head a
 29 percent penalty. **That number is the processor lottery and must not be
 quoted.** Only one of the seven article pairs drew the same processor in both
-arms, and on that pair the head costs 6 percent - inside the 8.8 percent two
+candidates, and on that pair the head costs 6 percent - inside the 8.8 percent two
 machines of one model differ by anyway. The per-shard draw above says the same
-thing from the other direction: the no-head arm drew the 9V74 and the 9V45, the
-+head arm drew neither.
+thing from the other direction: the no-head candidate drew the 9V74 and the 9V45, the
++head candidate drew neither.
 
 | Article | +head processor | no-head processor | +head tok/s | no-head tok/s |
 | --- | --- | --- | --- | --- |
@@ -239,7 +239,7 @@ Three findings survive the lottery because none of them is a speed reading.
 **Gemma spells numerals out as words.** On the Huawei story it wrote "the Ascend
 nine six zero DT chip", "late two thousand twenty-seven" and "one hundred sixty
 thousand", where Ornith wrote "Ascend 960DT" and "2027" from the same article.
-Both Gemma arms did it, on every article carrying a model number or a year. This
+Both Gemma candidates did it, on every article carrying a model number or a year. This
 is a reader-facing defect and no gate on the page catches it.
 
 **Gemma opens by describing the document rather than the news.** "The provided
@@ -248,7 +248,7 @@ summaries. A reader came for the story.
 
 **Faithfulness swings hard on one article.** The Federal Reserve story scored
 0.950 with the draft head and 0.267 without it, on the same weights. The Huawei
-story scored 0.947 from Ornith, 0.327 and 0.218 from the two Gemma arms.
+story scored 0.947 from Ornith, 0.327 and 0.218 from the two Gemma candidates.
 
 One pair, whole, for the Huawei story:
 
@@ -261,7 +261,7 @@ One pair, whole, for the Huawei story:
 > Ascend nine six zero DT chip, originally slated for commercial availability in
 > late two thousand twenty-seven, will now be launched in the first quarter.
 
-**A defect these runs found that belongs to no model.** Every arm wrote
+**A defect these runs found that belongs to no model.** Every candidate wrote
 `Huawei`, a byte that is not ASCII, then `s` where the source had a possessive
 apostrophe - the same corruption on `world` and `company` and `Apple`. That is
 a right single quote mis-decoded during extraction, and all three models copied
@@ -282,9 +282,9 @@ because repository text is ASCII only; the affected summaries are in the
 
 ## What it does not settle
 
-- Which model to adopt. The corpus was a third of the floor, so no arm's
+- Which model to adopt. The corpus was a third of the floor, so no candidate's
   faithfulness mean rests on enough articles to rank them.
-- Any speed comparison between arms, or the draft head's price.
+- Any speed comparison between candidates, or the draft head's price.
 - What Gemma emits in the 4,500 tokens that are not the summary.
 
 ## The records behind this page

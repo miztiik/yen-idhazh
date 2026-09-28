@@ -127,6 +127,8 @@ gh pr view <n> --repo <owner/repo> --json files --jq '[.files[].path]'
 
 Run the `gh pr view` one before every merge. To recover without a force push (`CLAUDE.md` section 8): branch again off `origin/main` in a fresh worktree, `git cherry-pick` your own commit, confirm the diff lists only your files, push, open a new pull request, close the old one, then `git push origin --delete <old-branch>`.
 
+**That `gh pr view` lists at most 100 files, and it does not say it stopped.** On a pull request that changed 156 files it returned 100, so every file past the hundredth was missing from the check with no warning. Past that size, ask git instead: `git diff --name-only origin/main...origin/<branch>`.
+
 **`git grep` for a conflict marker MISSES one sitting in a working file mid-merge.** It reads the index and the stage entries, not the unmerged file on disk, so `git grep "^<<<<<<<"` reports nothing while a file still carries a marker - and the first thing to notice it is a linter, complaining about a syntax error on a line nobody wrote. Scan the filesystem instead, re-count after every edit pass because a truncated dump of a file hides a hunk, and let the linter be the second opinion rather than the first:
 
 ```powershell
@@ -192,6 +194,8 @@ Every file already present means the branch is redundant. Close it with a commen
 git log --oneline HEAD..origin/main            # usually one squash commit, and it is the one to check
 git diff --stat origin/main HEAD -- <path>    # after the merge: only your own edits may remain
 ```
+
+**The child often needs no merge at all, so ask before resolving anything.** Conflicts come from lines both sides changed differently, and from a file both sides added with different content; a change that arrives identically from both sides merges clean. On 2026-09-28 the base of a pair had only modified files, none created, and its child reported `MERGEABLE CLEAN` a minute after the base squash-merged, then squash-merged with no update. `git merge-tree --write-tree --name-only HEAD origin/main` answers first without touching the worktree; exit 0 means there is nothing to resolve.
 
 ## Reading the tree with `git grep`
 
@@ -280,6 +284,8 @@ gh pr view <n> --repo <owner/repo> --json mergeable,mergeStateStatus --jq '.merg
 gh api "repos/<owner>/<repo>/commits/<sha>/check-runs" --jq '.check_runs[]|.name+"="+.status+"/"+(.conclusion//"-")'
 ```
 
+**An empty run id turns `gh run watch $id` into a bare one.** A `gh run list` that failed with `unexpected EOF` left `$id` empty, and the watch then sat on the interactive run picker, waiting for a choice nobody could make. Refuse an empty id before watching: `if (-not $id) { throw 'no run id' }`.
+
 **`gh pr checks --watch` answers about the run it already knew about.** Called within seconds of a push it reports the PREVIOUS run's conclusions as `pass` - observed immediately after updating a branch. Bind the question to the head commit (`gh pr view <n> --json headRefOid`), and read an empty result as "not registered yet", which is a different answer from `pass`.
 
 **`gh pr checks` exit codes: 8 while anything is pending, 0 when every check is green, 1 when one failed.** It also prints `no checks reported` for about a minute after a push. A job can report `status: in_progress` with `conclusion: success` while the run is complete, so a settle loop keyed on exit 0 polls for ever - key it on `gh run view <id> --json status,conclusion` instead.
@@ -366,7 +372,7 @@ if ($checks.Count -gt 0 -and $pending.Count -eq 0) {... }
 
 **A plan asserting its parallel rows touch different files is making a claim, not stating a fact.** A 33-row plan stated the rule outright and was wrong on its first wave: three rows shared one stylesheet and three components, two more shared one config file, and a sixth needed a component that a row in a later group had not created yet. The evidence was in the plan the whole time, because the rows' own `Files touched` lists disagreed with the sentence above them. Diff the lists; never trust the sentence.
 
-**A plan can be rewritten under the agent executing it, and the copy in your worktree will not say so.** Five rows of a live plan were collapsed into a new plan by a parallel session while three of its pull requests were in flight; the executing agent found out only because merging `origin/main` into a branch raised a conflict in the Reckoner, and the incoming side carried `COLLAPSED` in five status cells. The new plan had also **corrected** the old one - a row said a 900 s readiness wait would drop to 2 s, where the right change was a 2 s check in front of a wait that must not move, because a cold model load legitimately takes 284 to 447 s. An agent that had implemented the row as written would have shipped a benchmark arm that calls a healthy server dead. **Re-read the row from `origin/main` at dispatch, not from the worktree you cut earlier**, and when a row's own numbers disagree with the tree, treat the tree as the authority and say what you corrected.
+**A plan can be rewritten under the agent executing it, and the copy in your worktree will not say so.** Five rows of a live plan were collapsed into a new plan by a parallel session while three of its pull requests were in flight; the executing agent found out only because merging `origin/main` into a branch raised a conflict in the Reckoner, and the incoming side carried `COLLAPSED` in five status cells. The new plan had also **corrected** the old one - a row said a 900 s readiness wait would drop to 2 s, where the right change was a 2 s check in front of a wait that must not move, because a cold model load legitimately takes 284 to 447 s. An agent that had implemented the row as written would have shipped a benchmark step that calls a healthy server dead. **Re-read the row from `origin/main` at dispatch, not from the worktree you cut earlier**, and when a row's own numbers disagree with the tree, treat the tree as the authority and say what you corrected.
 
 ## See also
 

@@ -10,7 +10,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 
 ## Execution handover (zero-context cold start)
 
-A paste-ready brief for an agent that picks this plan up with no prior context. [execute-a-plan.md](../docs/how-to/execute-a-plan.md) is the canonical contract; this brief adds only what this plan's run has learned. Written 2026-09-27, about 20:10 UTC, and brought up to date 2026-09-28, about 12:15 UTC, when the first owner handed over after row 5 merged, and about 14:00 UTC, when the second owner's dispatch checks on row 7 added deviations 96 to 101 and row 12.
+A paste-ready brief for an agent that picks this plan up with no prior context. [execute-a-plan.md](../docs/how-to/execute-a-plan.md) is the canonical contract; this brief adds only what this plan's run has learned. Written 2026-09-27, about 20:10 UTC, and brought up to date 2026-09-28, about 12:15 UTC, when the first owner handed over after row 5 merged, about 14:00 UTC, when the second owner's dispatch checks on row 7 added deviations 96 to 101 and row 12, and about 17:30 UTC, after row 7 merged.
 
 ```text
 You are the OWNER of TODO/20260924-50-idhazh-gardener-plan.md. You have no prior context.
@@ -23,25 +23,28 @@ STEP 0 - COLD START. Read CLAUDE.md, docs/how-to/execute-a-plan.md, docs/how-to/
 and docs/how-to/run-the-gates.md. Then read this plan's section 0, section 1 (the Status
 Reckoner, the only tracker) and each row just before you dispatch it.
 
-STEP 1 - ADOPT OR CLOSE. Run git worktree list, gh pr list and git branch -r. At handover
-nothing of this plan was in flight: rows 1, 2, 3, 4, 5, 6 and 11 had merged (#1127, #1131,
-#1142, #1139, #1145, #1141, #1136), row 10 is collapsed, and no plan-50 worktree was left.
+STEP 1 - ADOPT OR CLOSE. Run git worktree list, gh pr list and git branch -r. At the last
+update nothing of this plan was in flight: rows 1 to 7 and 11 had merged (#1127, #1131,
+#1142, #1139, #1145, #1141, #1151, #1136), row 10 is collapsed, and the only plan-50
+worktree left was the owner's own, p50own, which holds no unpushed work.
 Section 0's three plan-54 reads ran before row 5 and all three came back empty.
 
-STEP 2 - DISPATCH. Row 7 is ready now: rows 5 and 11 have merged. Read deviations 8, 23,
-43 and 69 before you brief it, and 96 to 101, which the second owner's dispatch checks
-added on 2026-09-28: they take the CSV fold out of row 7, add the backend reader, and ship
-the three compactions report-only. Nothing else is ready, so the pool runs one wide until
-row 7's worker REPORTS. Refill a slot on a report, never on a merge. Two workers started
-together return together (deviation 94).
-  after rows 6, 7    row 8. It PAUSES at ESCALATE trigger 1, before the commit that
+STEP 2 - DISPATCH. Row 8 is ready now: rows 6 and 7 have merged. Row 7 merged on
+2026-09-28 at 17:22 UTC as #1151, and its findings are deviations 96 to 113. The pool
+runs one wide until row 8's worker REPORTS, because nothing else is ready. Refill a slot
+on a report, never on a merge. Two workers started together return together (deviation 94).
+  now                row 8. It PAUSES at ESCALATE trigger 1, before the commit that
                      removes the pruned_date alias. Read deviations 14, 15, 17, 24, 55,
-                     81, 86, 90 and 98 first: each hands row 8 work a row before it left
-  after row 7        row 9. It also needs plan 51's row 7, the query door, merged. Both
-                     rows that one waits on have merged (#1137, #1136), but it had not
-                     started on 2026-09-28. Row 9 also fires ESCALATE trigger 5, which is
-                     a person's pick. If either is open when row 9 is next, surface it to
-                     the person (CLAUDE.md section 0c). Do not build sliceFromDisk() here
+                     81, 86, 90, 98, 110 and 114 to 117 first: each hands row 8 work a
+                     row before it left. It deletes prune.yml, so it merges only after
+                     the squash's first live run (WATCH below) and never while a
+                     prune.yml run is queued or running
+  after row 7        row 9. It also needs plan 51's row 7, the query door, merged. That
+                     row was in flight on 2026-09-28 (worktree p51r7). Row 9 also fires
+                     ESCALATE trigger 5, which is a person's pick, and deviation 112 is a
+                     rename it owes before `scores` moves. If either is open when row 9 is
+                     next, surface it to the person (CLAUDE.md section 0c). Do not build
+                     sliceFromDisk() here
   after rows 7, 8    row 12. Its design question is written in the row; settle it by
                      debate at dispatch. It edits digest.yml, so it needs a merge window
 
@@ -65,7 +68,9 @@ execute-a-plan.md.
 
 WATCH, whoever owns the plan on the day:
   2026-09-29 onward  the corpus squash is due. prune.yml wakes at 23:37 UTC, and its runs
-                     have started about two hours late. This is the first live run of
+                     start about two hours late (deviation 117), so the first due run is
+                     the one created about 01:30 to 02:00 UTC on 2026-09-29. This is the
+                     first live run of
                      backend/utilities/corpus_history.py: it should record the run and
                      push without force, because no commit is old enough (deviation 54)
   about 2026-10-29   the first squash that rewrites history replays six September merge
@@ -180,6 +185,22 @@ Every place where the tree, or a ruling, departs from the text further down. A w
 | 99 | 4, 7 | Section 5.9.5: `compact_after_hours`, "30 gives thirty hours"; rejected alternative 10 keeps six hours open | The knob becomes `compact_after_days`: `int`, `ge=1`, default `1`. `schedule.is_eligible` takes days. Only whole days keep the wake time out of which days qualify (CLAUDE.md section 2, deviation 23); six hours would make the wake time an input just as thirty does. No alias: nothing reads the knob yet, and config files are outside CLAUDE.md section 11 (owner, 2026-09-21). Do not copy section 5.3's 23:59 table row: 23 h 59 min have passed at that wake, not 24 h | Fowler and Carmack, 2026-09-28 |
 | 100 | 7 | Decision 4: a day below the watermark that has raw files again is compacted again from the union | The ledger door stamps every row with its writer's `unit_id` and `attempt`. A compact file written through it unchanged would carry the compaction's identity and lose the rows' own, so a re-run's attempt 2 would sit beside attempt 1 instead of replacing it. A compact file keeps each row's original identity columns, so `ledger/persist.py` joins row 7's file list. A re-compaction keeps the highest attempt per `unit_id` first, then the first row per key. Test: compact attempt 1, add an attempt 2 that files fewer rows, compact again, and compare with settling both raw files | Fowler and Carmack, 2026-09-28 |
 | 101 | 7 | Row 7's file list | Row 2 already put the four `.gitattributes` lines and the four `paths.py` builders on main, so row 7 writes none of them. `backend/tests/workflows/test_digest_workflow.py` does not exist, and after deviation 96 row 7 edits no workflow | Found at dispatch |
+| 102 | 7 | Section 5.3: list every eligible raw day, then run the daily period, then the monthly one | Each pass drops what the windows no longer keep, then folds finished months, then takes due days, and a day's listing is written only when that day is taken. A shard refuses a file it both wrote and deleted, and the planned order does exactly that on a catch-up pass | Carmack; Fowler agreed, 2026-09-28 |
+| 103 | 7 | Two modules: `_index_day.py` lists a raw day and writes its index, `compaction.py` does the rest | `compaction.py` holds `KIND` and `run`. Beside it, `_daily_period.py`, `_monthly_period.py` and `_compact_tree.py`, which holds every change a pass decides before anything touches disk; `_index_day.py` only builds the listing. The registry test also accepts a module named after its task kind | Fowler, 2026-09-28 |
+| 104 | 7, 9 | Deviation 100: `ledger/persist.py` changes, shape Fowler's call | `persist` writes raw files only, and lost its `tier`, `period` and `built_from` arguments. New `persist_period` writes a compact file and keeps each row's original writer identity, and refuses a row whose own `attempt` or `unit_id` differs from its writer's. The door also gained `render_period`, `load_stored` and a declared row-identity type. `docs/architecture/contracts/persistence.md` says so | Fowler, 2026-09-28 |
+| 105 | 7 | Deviation 100: the highest attempt per `unit_id`, then the first row per key | Per unit, only the latest file of its highest attempt counts. Without the "latest file" part, a job that wrote one unit twice in one attempt kept both copies, and an existing test caught it. `raw_files.py` holds the one merge rule, and `pick_current_files` is deleted | Fowler, 2026-09-28 |
+| 106 | 7 | (not in the plan) | `ledger/keys.py` holds a table that pairs each ledger with its row type and its key. The `gardener` ledger's key is date, `run_id` and task | Fowler, 2026-09-28 |
+| 107 | 7 | Section 5.9.5: a compaction carries the base `window` and `max_deletes_per_run`, and `daily_keep_days` is `ge=1` | A compaction's `window` is fixed to forever and its delete limit to none, in the type itself. `daily_keep_days` is at least 31, one more than the 30 days GitHub allows a re-run. A raw file that lands in a month already folded is refused and left for a person | Fowler; Carmack, 2026-09-28 |
+| 108 | 7 | Section 5.2 and deviation 32: load refuses a `daily_keep_days` that leaves less than a whole month before `monthly_window` begins | That refusal is deleted. `monthly_window` counts from the day a month is folded, so the gap it guarded cannot occur. The monthly period holds exactly its window of months on every UTC day, tested across 2027 and 2028 | Fowler and Carmack, 2026-09-28 |
+| 109 | 7 | Decision 10: a first run starts at the watermark plus one, bounded by `max_periods_per_run` | A first pass starts on the 1st of a month, from the same function that decides which months are kept. Days and months each get `max_periods_per_run`, and days a re-run wrote into again count first. Raw days in a month already past the window are deleted rather than folded; no such month exists today | Carmack and Fowler, 2026-09-28 |
+| 110 | 7 | Section 3's diagrams move unchanged | Redrawn to show the tree after row 7: nothing schedules the gardener yet, `prune.yml` runs the corpus squash alone, the CSV fold still runs in `digest.yml`, every task is report-only, and the reader is `ledger/ledger_files.py`, not the browser. Row 8 redraws them when it schedules the garden | Deviation 96, 2026-09-28 |
+| 111 | 7 | Row 7's file list | Also touched: `backend/idhazh/config.py`, `ledger/keys.py`, `ledger/rows.py`, `ledger/__init__.py`, `test_task_registry.py`, `test_gardener_config.py`, `_ledger_derivation.py`, `test_ledger_door_jobs.py`, `persistence.md` and `docs/reference/agent-notes/browser.md`. `docs/reference/github-actions.md` was not: nothing it states changed | Found at build |
+| 112 | 9 | (not in the plan) | `scores` rows carry an `attempt` field of their own, and since deviation 104 the door refuses a row whose own `attempt` differs from its writer's. One of the two needs a new name before row 9 moves `scores` onto the door; `persistence.md` says so | Row 7's worker, 2026-09-28 |
+| 113 | 7 | (another plan) | Plan 51's freshness paragraph said `compact_after_hours: 24`, and read as if compact files would appear on their own. It now says `compact_after_days: 1` (deviation 99), and one added sentence says every compaction ships report-only until a person turns it on (deviation 98). Corrected on main by this plan's owner | Plan owner, 2026-09-28 |
+| 114 | 8 | Oracle: `fetch-depth: 0` appears in exactly one job of one workflow, the history job's second checkout | `ci.yml` already takes two full clones, at its lines 64 and 111, in jobs that never push. The rule's own reason is a job that commits paying for a clone it does not use, so it binds jobs that commit or push: among those, only the history job's second checkout takes `fetch-depth: 0` | Found at dispatch |
+| 115 | 8 | Three places name `prune.yml` and move with it: `pages.yml`'s upstream-workflow list, `docs/reference/github-actions.md` and the workflow harness tests | `pages.yml` does not name it: its `workflow_run` list is `[CI, Content refresh]`. Those that do are `docs/reference/github-actions.md`, `backend/tests/workflows/_harness.py`, `test_prune_push.py`, `test_staged_paths.py`, `test_triggers.py`, and a comment in `backend/tests/retention/test_score_ledger.py` | Found at dispatch |
+| 116 | 8 | File list: `backend/idhazh/gardener/tasks/github_collections.py` (new) and `backend/tests/gardener/tasks/test_github_collections.py`; trigger 2 names `push_rewritten_history.py` | The task module is `tasks/collection.py`, holding only `KIND` and `run`, and the GitHub code stays in `gardener/github_collections.py`, already tested by `backend/tests/gardener/test_github_collections.py` (deviation 14). The tip-moved refusal that trigger 2 guards now lives in `backend/utilities/corpus_history.py` (deviation 45) | Found at dispatch |
+| 117 | 8 | Section 5.9.11 and `prune.yml`'s header: a scheduled run starts 40 to 70 minutes after its cron minute (n=3, 2026-08-23 and 24) | Measured 2026-09-28: the last ten scheduled `prune.yml` runs (cron 23:37) were each created 112 to 139 minutes late, at 01:29 to 01:56 UTC. Over the same five days the last digest run of each day ended between 00:00 and 00:52 UTC, and the first began no earlier than 07:38. So a 00:40 wake starts about 02:30 to 03:00 and its force push lands by about 03:50, inside the gap on either model. Not trigger 4: section 4 holds no drift figure, and the chain fits. Row 8 restates the window derivation (decision 8) with these readings | Plan owner's measurement, 2026-09-28 |
 
 ## 0. Operating contract
 
@@ -240,7 +261,7 @@ Every place where the tree, or a ruling, departs from the text further down. A w
 | 4 | The gardener: registry, config, schedule, record, commit loop | 2 | C | DONE | p50r4 | #1139 | p50-r4-worker |
 | 5 | Every prune pass becomes a gardener task | 3, 4 | E | DONE | p50r5 | #1145 | p50-r5-worker |
 | 6 | The corpus squash becomes Python | 4 | D | DONE | p50r6 | #1141 | p50-r6-worker |
-| 7 | One compaction task a ledger, two compact periods, and the diagrams move into the page | 5, 11 | F | PENDING | - | - | - |
+| 7 | One compaction task a ledger, two compact periods, and the diagrams move into the page | 5, 11 | F | DONE | p50r7 | #1151 | p50-r7-worker |
 | 8 | `prune.yml` becomes `idhazh-gardener.yml`, and the whole garden is scheduled | 6, 7 | G | PENDING | - | - | - |
 | 9 | The three ledgers the console's routes read become parquet | 7, and plan 51's row titled **The query door module and its two entry points** | H | PENDING | - | - | - |
 | 10 | `span-rollup` becomes parquet | - | - | **COLLAPSED** | - | - | - |
@@ -345,145 +366,7 @@ state/compact/gardener/index/daily.json
 
 ## 3. The shape this plan builds
 
-**This diagram is the plan's copy and it is expected to move.** It is drawn to the Mermaid contract in [docs/reference/documentation-structure.md](../docs/reference/documentation-structure.md) so it can be lifted unchanged; row 7 lifts it into the architecture page and this section becomes a link (Guardrail #4).
-
-```mermaid
-%%{init: {"theme": "base", "themeVariables": {"background": "#0f1117", "primaryColor": "#222834", "primaryTextColor": "#e6e9f0", "primaryBorderColor": "#4b5468", "lineColor": "#8b93a7", "textColor": "#e6e9f0", "clusterBkg": "#1a1e27", "clusterBorder": "#3a4254", "titleColor": "#e6e9f0", "edgeLabelBackground": "#1a1e27", "fontSize": "14px"}}}%%
-flowchart TB
-  CRON["schedule, once a day"]
-
-  subgraph OPS["Idhazh Gardener - idhazh-gardener.yml"]
-    PLAN["plan<br/>standard library only, before any install<br/>reads the config and nothing else"]
-    ANY{"any active task?"}
-    IDLE["no run-tasks job runs"]
-    TEND["run-tasks<br/>5 shards, every active task in exactly one<br/>fail-fast false, max-parallel 5"]
-    RUN["for each task in the shard:<br/>select, report, delete"]
-    OWNED{"every path a task wrote or deleted<br/>inside that task's owns?"}
-    OUTSIDE["exit 2<br/>the ownership claim is wrong"]
-    LANDED{"this job's record<br/>already on origin/main?"}
-    REAPPLY["reset --mixed origin/main<br/>re-stage the same files<br/>written_paths and deleted_paths"]
-    PUSHED{"push accepted?"}
-    OK["exit 0"]
-    LOST["exit 3<br/>attempts exhausted, nothing written"]
-    HIST["history<br/>needs: run-tasks<br/>reads corpus.meta.json, then squashes and force-pushes"]
-  end
-
-  subgraph TREE["The committed tree - state/"]
-    RAW[("state/raw/ledger/YYYY/MM/DD/file_id.parquet")]
-    RIDX[("state/raw/ledger/index/YYYY-MM-DD.json")]
-    COMPACT[("state/compact/ledger/daily, monthly")]
-    WM[("watermark.json, one for each period")]
-  end
-
-  CRON --> PLAN
-  PLAN --> ANY
-  ANY -->|"no"| IDLE
-  ANY -->|"yes"| TEND
-  TEND --> RUN
-  RUN --> OWNED
-  OWNED -->|"no"| OUTSIDE
-  OWNED -->|"yes"| LANDED
-  LANDED -->|"yes"| OK
-  LANDED -->|"no"| REAPPLY
-  REAPPLY --> RAW
-  REAPPLY --> PUSHED
-  PUSHED -->|"yes"| OK
-  PUSHED -->|"no, attempts left"| LANDED
-  PUSHED -->|"no, attempts gone"| LOST
-  OK --> HIST
-  WM -->|"read by its own compaction"| RUN
-  REAPPLY --> RAW
-  RAW -->|"the compaction task lists it"| RIDX
-  RIDX -->|"then compacts it"| COMPACT
-  COMPACT --> WM
-
-  classDef stage fill:#222834,stroke:#4b5468,stroke-width:1px,color:#e6e9f0;
-  classDef decision fill:#11141c,stroke:#5b6477,stroke-width:1.5px,color:#ffffff;
-  classDef yes fill:#176032,stroke:#2ea04f,stroke-width:1.5px,color:#ffffff;
-  classDef no fill:#a32020,stroke:#d23b3b,stroke-width:1.5px,color:#ffffff;
-  classDef warn fill:#7a5400,stroke:#c08a12,stroke-width:1.5px,color:#ffffff;
-  classDef ledger fill:#1b3a5c,stroke:#2d6ca3,stroke-width:1.5px,color:#ffffff;
-  classDef sysOps fill:#1a1e27,stroke:#8b93a7,stroke-width:1.5px,color:#c8cdd8;
-  classDef sysPublish fill:#1a1e27,stroke:#3f8fb8,stroke-width:1.5px,color:#a5d6ea;
-
-  class CRON,PLAN,TEND,RUN,REAPPLY,HIST stage;
-  class ANY,OWNED,LANDED,PUSHED decision;
-  class OK yes;
-  class OUTSIDE,LOST no;
-  class IDLE warn;
-  class RAW,COMPACT,RIDX,WM ledger;
-  class OPS sysOps;
-  class TREE sysPublish;
-```
-
-**`digest.yml` is not on the picture, and that is the point.** It runs five times a day and writes today; every gardener window is strictly in the past, so no task can touch what a running job just wrote. Section 5 turns that from an arrangement into a load-time refusal.
-
-### How a row travels from a writer to a reader
-
-The diagram above answers which jobs run and how a push is landed. This one answers how a row moves between tiers, which is a different question and so is a different picture.
-
-```mermaid
-%%{init: {"theme": "base", "themeVariables": {"background": "#0f1117", "primaryColor": "#222834", "primaryTextColor": "#e6e9f0", "primaryBorderColor": "#4b5468", "lineColor": "#8b93a7", "textColor": "#e6e9f0", "clusterBkg": "#1a1e27", "clusterBorder": "#3a4254", "titleColor": "#e6e9f0", "edgeLabelBackground": "#1a1e27", "fontSize": "14px"}}}%%
-flowchart TB
-  subgraph REFRESH["Content refresh - digest.yml"]
-    W1["work shard 01"]
-    W2["work shard 02"]
-    W3["work shard 03"]
-    WN["a later run, and a re-run,<br/>no concurrency group"]
-  end
-
-RAWF[("raw/ledger/YYYY/MM/DD/file_id.parquet<br/>write-once, many writers")]
-
-  subgraph GARDEN["Idhazh Gardener - idhazh-gardener.yml"]
-    IDXJOB["compaction, step 1<br/>lists every eligible raw day<br/>the only writer of a day list"]
-    GATE{"a whole day ended<br/>since that day ended?"}
-    HOLD["leave it, ask at the next wake"]
-    CD["compaction, step 2: daily"]
-    CM["compaction, step 3: monthly"]
-  end
-
-  RIDXF[("raw/ledger/index/YYYY-MM-DD.json")]
-  DAILY[("compact/ledger/daily/YYYY/MM/DD.parquet<br/>and daily/watermark.json")]
-  MONTHLY[("compact/ledger/monthly/YYYY/MM.parquet<br/>and monthly/watermark.json")]
-  CIDXF[("compact/ledger/index/daily.json,<br/>monthly.json")]
-  READER["the browser, at view time"]
-
-  W1 --> RAWF
-  W2 --> RAWF
-  W3 --> RAWF
-  WN --> RAWF
-  RAWF --> GATE
-  GATE -->|"no, a run may still be writing"| HOLD
-  GATE -->|"yes, today minus two or older"| IDXJOB
-  IDXJOB --> RIDXF
-  RIDXF -->|"one day at a time, from the watermark"| CD
-  CD -->|"data first, watermark last"| DAILY
-  DAILY -->|"every day of the month older than daily_keep_days"| CM
-  CM --> MONTHLY
-  CD --> CIDXF
-  CM --> CIDXF
-  MONTHLY --> READER
-  DAILY --> READER
-  CIDXF --> READER
-
-  classDef stage fill:#222834,stroke:#4b5468,stroke-width:1px,color:#e6e9f0;
-  classDef decision fill:#11141c,stroke:#5b6477,stroke-width:1.5px,color:#ffffff;
-  classDef warn fill:#7a5400,stroke:#c08a12,stroke-width:1.5px,color:#ffffff;
-  classDef ledger fill:#1b3a5c,stroke:#2d6ca3,stroke-width:1.5px,color:#ffffff;
-  classDef sysOps fill:#1a1e27,stroke:#8b93a7,stroke-width:1.5px,color:#c8cdd8;
-  classDef sysPublish fill:#1a1e27,stroke:#3f8fb8,stroke-width:1.5px,color:#a5d6ea;
-
-  class W1,W2,W3,WN,IDXJOB,CD,CM,READER stage;
-  class GATE decision;
-  class HOLD warn;
-  class RAWF,RIDXF,DAILY,MONTHLY,CIDXF ledger;
-  class REFRESH sysPublish;
-  class GARDEN sysOps;
-```
-
-**A day is read once `compact_after_hours` have passed since that day ended.** The elapsed time is measured in code against the day's own end instant in UTC - 00:00 on the day after - and never against where the wake happened to fall. At the default 24 the newest eligible day is two days back, and **every wake time in the UTC day returns that same answer**, which is why the cron sits at `40 0 * * *`, just after the boundary rather than just before it. Section 5.3 works the arithmetic and carries the oracle that proves the wake cannot move it.
-
-**Every step is resumable and none of them reconciles anything.** A compaction takes one day at a time, writes that day's file, rewrites the index, then advances the watermark. Two days missed produce two files. A run that dies in the middle leaves the watermark behind the truth, so the next wake redoes that one day and no more. The opposite order - watermark first - would leave a day in no period and in no index, gone with no error and no test able to see it.
+**Both diagrams moved into the architecture page in row 7, drawn as the gardener stands rather than as planned**: [../docs/architecture/publishing/idhazh-gardener.md](../docs/architecture/publishing/idhazh-gardener.md) carries the job graph in its section on a wake, and how a row travels from a writer to a reader in its section on the compaction. The plan keeps a link, not a copy, because two pictures of one job graph disagree the first time the workflow changes (row 7 decision 12, Guardrail #4).
 
 ## 4. What was measured, 2026-09-24
 

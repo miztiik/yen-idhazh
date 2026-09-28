@@ -16,7 +16,9 @@ row-group statistics then let a reader skip a whole file without decompressing
 anything. The door writes those as columns on every row; everything else is
 footer only, where it is provenance a person reads after the fact and costs
 nothing per row. The measurement behind that line is in
-`docs/architecture/contracts/persistence.md`.
+`docs/architecture/contracts/persistence.md`. `RowIdentity` declares those
+columns: the cells every row carries about the writer that first filed it,
+which a compact file keeps as they were.
 
 Every instant here is UTC: `written_at_ms` is epoch milliseconds and `covers` is
 a UTC day or month (CLAUDE.md section 2).
@@ -38,6 +40,7 @@ from idhazh.contracts.base import (
     ChangelogEntry,
     CommitSha,
     Contract,
+    DateStamp,
     Model,
     PeriodStamp,
     RunId,
@@ -164,11 +167,51 @@ class WriterIdentity(Model):
     )
 
 
+#: A version 5 UUID in its canonical lower-case spelling: a row's `unit_id` cell.
+_UNIT_ID_PATTERN: Final = (
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+)
+
+
+class RowIdentity(Model):
+    """The seven cells the ledger door stamps on every row: which writer filed it, and which try.
+
+    Columns rather than footer keys, because a query groups on them: a union
+    keeps the highest `attempt` per `unit_id`, and a bad run is traced by
+    filtering on `run_id`. A row whose own contract declares one of these names
+    carries its own value there. A compact file keeps every row's cells as the
+    raw file that first held it had them, never the compaction's, so a re-run
+    that lands after a day was compacted can still replace its first attempt.
+    """
+
+    ledger: LedgerName = Field(description="The ledger the row was filed into.")
+    covers: DateStamp = Field(
+        description="The UTC day the raw file that first held the row covers."
+    )
+    run_id: RunId = Field(description="The run that filed the row.")
+    attempt: int = Field(
+        ge=1, description="Which try at that run filed it. The union keeps the highest."
+    )
+    job: ServerJob = Field(description="The workflow job that filed the row.")
+    shard: int = Field(ge=0, description="Which shard of that job, from 0.")
+    unit_id: Annotated[str, StringConstraints(pattern=_UNIT_ID_PATTERN)] = Field(
+        description=(
+            "The work unit the row belongs to, as the raw file's `unit_id` spells it. "
+            "The same for every attempt at that unit."
+        )
+    )
+
+
 class FileEnvelope(Contract):
     """What one ledger file holds, written inside the file so its name is never parsed."""
 
     __schema_stem__: ClassVar[str] = "file-envelope"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-28",
+            change="built_from is filled for the first time, on each file the compaction writes.",
+            why="A compact file says how many files it read, so its rebuild can be checked.",
+        ),
         ChangelogEntry(
             version="2026-09-25",
             change="Initial shape: the keys a raw or compact ledger file carries about itself.",

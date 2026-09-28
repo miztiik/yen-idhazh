@@ -1029,7 +1029,7 @@ recorded as a truncated summary, naming the wrong cause. Removing it does not
 remove that failure; it changes what it looks like - the answer span's prompt is
 span one's plus what span one wrote, so an unclosed block fails the item on the
 window instead. An entry that declares a marker the model does not write is
-therefore a whole-arm failure rather than a slow item, which is why the marker is
+therefore a whole-setup failure rather than a slow item, which is why the marker is
 derived from the entry's own recorded reply openings rather than guessed.
 
 **The chat route runs one span and the runtime owns the split**, because the

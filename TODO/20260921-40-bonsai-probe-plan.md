@@ -75,7 +75,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
   - the qualification gate, for the build-identity refusal in decision 6
   - `docs/reference/ci-model-runtime.md`
 - **Acceptance gates:** local - `python -m pytest backend/tests/contracts -q`, and `python -c "from idhazh import config; config.load('config')"` against a pointer set to the new file; CI - full suite. ESCALATE triggers 1 and 2 apply.
-- **Oracle:** the entry loads through `idhazh.config.load`, which runs the marker check against the sanitizer's pattern families, and the architecture the entry declares equals the architecture in the weights' own header. **And the release address the installer resolves is byte-identical to today's for every model that names no runtime, and is the fork's address for the one that does** - both arms assert a string and download nothing. All three are answerable without the model server. What it cannot settle: whether the summaries are any good, or how fast it decodes - those need row #7.
+- **Oracle:** the entry loads through `idhazh.config.load`, which runs the marker check against the sanitizer's pattern families, and the architecture the entry declares equals the architecture in the weights' own header. **And the release address the installer resolves is byte-identical to today's for every model that names no runtime, and is the fork's address for the one that does** - both halves assert a string and download nothing. All three are answerable without the model server. What it cannot settle: whether the summaries are any good, or how fast it decodes - those need row #7.
 - **Tasks, in order:**
   1. Read the incumbent's peak server memory from the committed item health ledger, so the fit arithmetic starts from a measurement rather than a recollection.
   2. Pin the weights: repository, revision, file, digest and byte count, taken from the published file rather than from the card's prose.
@@ -115,7 +115,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
   - `backend/tests/workflows/test_pipeline_tests_workflow.py`
   - `docs/how-to/run-the-gates.md`
 - **Acceptance gates:** local - `python -m pytest backend/tests/workflows -q`, and `pipeline_draw.py plan` run against two addresses absent from `config/pipeline-tests.json`; CI - full suite.
-- **Oracle:** `plan` builds a valid run plan from two addresses that appear nowhere in `config/pipeline-tests.json`, and with the input empty the workflow draws exactly what it draws today. The first arm fails on the base tree, which is the defect the row exists for. What it cannot settle: whether the named addresses are fetchable - a dead address degrades that item and records why, which is the pipeline's existing behaviour.
+- **Oracle:** `plan` builds a valid run plan from two addresses that appear nowhere in `config/pipeline-tests.json`, and with the input empty the workflow draws exactly what it draws today. The first half fails on the base tree, which is the defect the row exists for. What it cannot settle: whether the named addresses are fetchable - a dead address degrades that item and records why, which is the pipeline's existing behaviour.
 - **Decisions:**
 
  | # | Decision | Authority |

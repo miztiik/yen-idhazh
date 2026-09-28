@@ -15,13 +15,13 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | Field | Value |
 | --- | --- |
 | Why this plan exists | Every gate in the group is machine judgement, and nothing has checked the machine against a person. This is the ground truth: whether a visual a human would keep is the visual the machine kept. It **gates nothing** - no publish decision reads a label - and that is deliberate |
-| Hard scope - in | The review harness as a build artifact; `label_source` and `model_id` on the label contract; absolute and pairwise review modes; weight fitting with its four guardrails and its release rule; the timed comprehension arm with its validity conditions; the four-phase operating manual |
+| Hard scope - in | The review harness as a build artifact; `label_source` and `model_id` on the label contract; absolute and pairwise review modes; weight fitting with its four guardrails and its release rule; the timed comprehension setup with its validity conditions; the four-phase operating manual |
 | Hard scope - out | Any label feeding a publish decision. Pooling machine verdicts with human ones. Summary faithfulness labelling by a model - that stays human-only. Shipping `review/` with the site |
 | ESCALATE triggers | 1. A label reaches a publish gate. 2. Machine and human verdicts land in one ledger. 3. Weight fitting is proposed without all four guardrails - **a fitter without them is a number that moves every month with no way to separate improvement from noise.** 4. `components_version` and `weight_version` would move in the same release |
 | Chosen strategy | Build the surface, then the contract that keeps machine and human apart, then the modes, then the fitting - each with the guardrail that makes it honest rather than merely present |
 | Execution | `autonomous orchestrator per docs/how-to/execute-a-plan.md. Parallel N = 4.` |
 
-**The risk this plan carries and does not hide.** As of the source document's own measurement, **0 of 60 drawn rows carried a human label.** Two advisors proposed deferring the fitter, the pairwise page and the timed arm on exactly that ground and were overruled on scope. The labelling capacity is therefore the standing risk, and the four-phase manual in row 6 is what makes it visible rather than discovered late.
+**The risk this plan carries and does not hide.** As of the source document's own measurement, **0 of 60 drawn rows carried a human label.** Two advisors proposed deferring the fitter, the pairwise page and the timed setup on exactly that ground and were overruled on scope. The labelling capacity is therefore the standing risk, and the four-phase manual in row 6 is what makes it visible rather than discovered late.
 
 ---
 
@@ -40,7 +40,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 
 ## 2. Row #1 - A place to look at a visual, that never ships with the site
 
-- **Scope:** `review/` renders - published, rejected, config-B and the `none` arm - produced as a build artifact.
+- **Scope:** `review/` renders - published, rejected, config-B and the `none` setup - produced as a build artifact.
 - **Files touched:** `review/**` (gitignored), `backend/utilities/review_queue.py` (new), `.github/workflows/**`, `.gitignore`, `docs/concepts/adaptive-pruning.md` (the register row), `docs/concepts/evaluation.md`
 - **Acceptance gates:** `ruff`; `mypy --strict`; the full suite; `shellcheck`; one dispatch producing the artifact; `idhazh site-weight` unchanged.
 - **Oracle:** After a build, `review/` exists on the runner and **nothing under `frontend/public/` or `frontend/build/` references it** - asserted by a path scan, because the failure mode is a review surface quietly becoming a published one.
@@ -53,7 +53,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | 2 | Three of the source document's mechanisms were written for a **shipped** review surface and are now moot: excluding it from indexing, from sitemaps and from feeds. **Saying so is what stops a plan-doc implementing them** | 12.14 G44 |
 | 3 | The reviewer now has to obtain the artifact, and how - artifact download, local build, or a manual dispatch - is this row's call. It was left unstated when the surface moved | 12.14 G44 |
 | 4 | Ingestion still needs a source, and the source moved with the surface. A scheduled job validates and appends to the append-only ledger | 12.14 G44 |
-| 5 | All four populations are queued: published, rejected, config-B and the `none` arm | Section 12.7 |
+| 5 | All four populations are queued: published, rejected, config-B and the `none` setup | Section 12.7 |
 
 ### Rejected alternatives
 
@@ -145,19 +145,19 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 
 ## 6. Row #5 - Did the reader actually understand it faster
 
-- **Scope:** The timed comprehension arm and its validity conditions.
+- **Scope:** The timed comprehension setup and its validity conditions.
 - **Files touched:** `review/**`, `backend/utilities/review_queue.py`, `backend/idhazh/contracts/label_row.py`, `backend/tests/**`, `docs/concepts/evaluation.md`
 - **Acceptance gates:** `ruff`; `mypy --strict`; export + drift; the full suite.
-- **Oracle:** Every question in the arm is derived from the **elements**, and a question derived from the visual is refused by the generator. **A timed arm whose questions are written from the visual measures nothing while still producing a number.**
+- **Oracle:** Every question in the setup is derived from the **elements**, and a question derived from the visual is refused by the generator. **A timed setup whose questions are written from the visual measures nothing while still producing a number.**
 
 ### Decisions
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | The question is authored from the elements, never from the visual. That is the condition the whole arm rests on | 12.13 G38, P.5.4.3 |
+| 1 | The question is authored from the elements, never from the visual. That is the condition the whole setup rests on | 12.13 G38, P.5.4.3 |
 | 2 | It is called **offline paired evaluation**, never A/B testing. That names a mechanism Guardrail #1 forbids, and the numbers would eventually be quoted as if readers produced them | Row 66 |
-| 3 | The standing arm is visual against no-visual; a config comparison rides on top | P.D9, P.L16 |
-| 4 | The `none` arm carries a **floor above zero** and a frozen window, so it cannot be quietly switched off | P.D10 |
+| 3 | The standing setup is visual against no-visual; a config comparison rides on top | P.D9, P.L16 |
+| 4 | The `none` setup carries a **floor above zero** and a frozen window, so it cannot be quietly switched off | P.D10 |
 | 5 | `human_visual_gain` gets a home here. It is one of only eight human measures and the one asking whether comprehension materially improved | 12.13 G39 |
 | 6 | Evaluation cost is reported separately, with a sample-rate cap enforced inside the shard budget | P.R15 |
 
@@ -165,7 +165,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 
 | # | Option | Why rejected | Authority |
 | --- | --- | --- | --- |
-| 1 | Ask reviewers whether the visual helped | A preference, not comprehension. The whole point of a timed arm is that it measures something the reviewer cannot introspect | Andre |
+| 1 | Ask reviewers whether the visual helped | A preference, not comprehension. The whole point of a timed setup is that it measures something the reviewer cannot introspect | Andre |
 
 ---
 

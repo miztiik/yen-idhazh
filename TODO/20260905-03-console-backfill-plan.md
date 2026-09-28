@@ -73,7 +73,7 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 
 - **Scope:** The console draws per-item read time, write time and token counts, including how much of the prompt was reused from cache.
 - **Files touched:** `frontend/src/routes/console/**`, `frontend/src/lib/console/**`, `frontend/src/lib/charts/series.ts`, `frontend/tests/console-*.spec.ts`, `docs/architecture/publishing/frontend.md`
-- **Acceptance gates:** `npm run check` 0/0; build; `bundle-gate`; the browser suite on the canary build; the section 12 smoke including the data-absent arm.
+- **Acceptance gates:** `npm run check` 0/0; build; `bundle-gate`; the browser suite on the canary build; the section 12 smoke including the data-absent check.
 - **Oracle:** Each drawn figure is re-derived independently from the committed projection inside the spec and compared to the drawn attribute. **A spec that compares a drawn mark against the label printed beside it is a consistency check, not an oracle** - both come from one number.
 
 ### Decisions
@@ -81,7 +81,7 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 | # | Decision | Authority |
 | --- | --- | --- |
 | 1 | Cache reuse is drawn as a share, and the share is named in words beside it. `0.72 to 0.90` means nothing to an operator without "roughly three quarters of the prompt was not re-read" | CLAUDE.md section 0b |
-| 2 | The degraded arm is a truncated ledger under `STATE_ROOT` or `TELEMETRY_ROOT`, never an aborted request - the console fetches nothing at runtime at the default window, so an abort arm is a null result | Recorded behaviour |
+| 2 | The degraded check is a truncated ledger under `STATE_ROOT` or `TELEMETRY_ROOT`, never an aborted request - the console fetches nothing at runtime at the default window, so an abort check is a null result | Recorded behaviour |
 
 ### Rejected alternatives
 

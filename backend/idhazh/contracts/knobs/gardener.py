@@ -322,7 +322,12 @@ DEFAULT_DAILY_KEEP_DAYS: Final = 45
 DEFAULT_MONTHLY_WINDOW_MONTHS: Final = 13
 DEFAULT_MAX_PERIODS_PER_RUN: Final = 8
 DEFAULT_MAX_RAW_FILES_PER_PERIOD: Final = 2000
-DEFAULT_COMPACT_AFTER_HOURS: Final = 24
+DEFAULT_COMPACT_AFTER_DAYS: Final = 1
+
+#: How many days after a workflow run GitHub still lets it be re-run. A re-run
+#: writes into the day its run first wrote, so a month must stay open to it for
+#: at least this long. GitHub's number, not a knob: nothing here can move it.
+GITHUB_RERUN_DAYS: Final = 30
 
 
 def _default_monthly_window() -> Window:
@@ -330,9 +335,26 @@ def _default_monthly_window() -> Window:
 
 
 class CompactionPolicy(_Declared):
-    """A task that rolls one ledger's raw files into its daily and monthly periods."""
+    """A task that rolls one ledger's raw files into its daily and monthly periods.
+
+    Its two periods are its retention, so the two keys every other task uses to
+    bound what it deletes are fixed here: `window` is `forever` and
+    `max_deletes_per_run` is null.
+    """
 
     kind: Literal[TaskKind.COMPACTION]
+    window: ForeverWindow = Field(
+        description=(
+            "Always forever. How far back the ledger reaches is daily_keep_days and "
+            "monthly_window, so a second window here would be a number nothing reads."
+        )
+    )
+    max_deletes_per_run: None = Field(
+        description=(
+            "Always null. A pass absorbs a period whole or not at all, and a ceiling "
+            "could stop it with a month half absorbed."
+        )
+    )
     ledger: LedgerName = Field(
         description=(
             "The ledger this task compacts. Typed rather than read off the file's name, "
@@ -343,41 +365,47 @@ class CompactionPolicy(_Declared):
         default=DEFAULT_RAW_INDEX_KEEP_DAYS,
         ge=1,
         description=(
-            "How long one raw day's listing survives. Never shorter than daily_keep_days, "
-            "or a daily file loses the index it would be rebuilt from."
+            "How many days after a UTC day ends its raw listing survives. Never shorter "
+            "than daily_keep_days, or a daily file loses the index it would be rebuilt from."
         ),
     )
     daily_keep_days: int = Field(
         default=DEFAULT_DAILY_KEEP_DAYS,
-        ge=1,
+        ge=GITHUB_RERUN_DAYS + 1,
         description=(
-            "How old every day of a month must be before the month is absorbed into its "
-            "monthly file. The daily period holds between this and 31 days more."
+            "How many days after a UTC month ends it is absorbed into its monthly file. "
+            "The daily period holds between this and 31 days more. At least one more "
+            "than the 30 days GitHub allows a re-run, so no re-run lands in a closed month."
         ),
     )
     monthly_window: Window = Field(
         default_factory=_default_monthly_window,
         description=(
-            "How long a monthly file survives. With daily_keep_days it is how far back "
-            "the ledger reaches once it files this way."
+            "How long a monthly file survives once its month is absorbed. Month M goes "
+            "at the instant month M plus this window is absorbed, so the period holds "
+            "exactly this many months, and the ledger reaches back daily_keep_days more."
         ),
     )
     max_periods_per_run: int = Field(
         default=DEFAULT_MAX_PERIODS_PER_RUN,
         ge=1,
-        description="The most periods one pass compacts before it stops for the next wake.",
+        description=(
+            "The most days, and separately the most months, one pass compacts before "
+            "it stops for the next wake."
+        ),
     )
     max_raw_files_per_period: int = Field(
         default=DEFAULT_MAX_RAW_FILES_PER_PERIOD,
         ge=1,
         description="The most raw files one period may be built from in one pass.",
     )
-    compact_after_hours: int = Field(
-        default=DEFAULT_COMPACT_AFTER_HOURS,
+    compact_after_days: int = Field(
+        default=DEFAULT_COMPACT_AFTER_DAYS,
         ge=1,
         description=(
-            "How many whole hours after a UTC day ends before that day may be compacted, "
-            "measured from 00:00 UTC on the day after it."
+            "How many whole days after a UTC day ends before that day may be compacted, "
+            "measured from 00:00 UTC on the day after it. Whole days, so every wake of "
+            "one UTC day finds the same days eligible."
         ),
     )
 

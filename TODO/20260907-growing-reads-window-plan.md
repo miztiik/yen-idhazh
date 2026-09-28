@@ -213,7 +213,7 @@ Rows 1, 2, 3, 10 and 11 are disjoint and run together. Rows 4 to 7 are strictly 
 - **Scope:** `load_published` reads the flat `state/published.csv` **and** any `state/published/YYYY/MM/DD.csv`, returning the union with the earliest date per address. No writer changes, no behaviour changes. This row exists so rows 5 and 6 cannot lose a row.
 - **Files:** `backend/idhazh/ledger/__init__.py`, `backend/tests/test_ledger.py`
 - **Gates:** local - `ruff`, `mypy --strict`, the shared test selector. CI - full suite.
-- **Oracle:** five arms over built fixtures - flat only, days only, both with disjoint addresses, both holding the same address on different dates (the earlier wins), and a stem that is not a date (raises).
+- **Oracle:** five checks over built fixtures - flat only, days only, both with disjoint addresses, both holding the same address on different dates (the earlier wins), and a stem that is not a date (raises).
 
 | # | Decision | Authority |
 | --- | --- | --- |
@@ -254,7 +254,7 @@ Rows 1, 2, 3, 10 and 11 are disjoint and run together. Rows 4 to 7 are strictly 
 - **Scope:** `load_published` gains `today` and `within_days`, drops the flat-file fallback, and reads the day files its cover names. Every doc that describes the old shape moves in the same commit.
 - **Files:** `backend/idhazh/ledger/__init__.py`, `backend/idhazh/cli.py`, `backend/idhazh/contracts/seen.py`, `backend/idhazh/contracts/digest_day.py`, `schemas/published-row.schema.json`, `schemas/digest-day.schema.json`, `backend/tests/test_ledger.py`, `backend/tests/test_plan.py`, `backend/tests/test_discover.py`, `backend/tests/pipeline/`, and 13 docs: `docs/architecture/contracts/schemas.md`, `docs/architecture/sources/freshness.md`, `docs/architecture/publishing/layout.md`, `docs/architecture/sources/discovery.md`, `docs/concepts/partitions.md`, `docs/concepts/pipeline-loop.md`, `docs/concepts/evaluation.md`, `docs/how-to/run-the-pipeline.md`, `docs/reference/pipeline-cost.md`, `docs/reference/data-growth.md`, `docs/reference/repository-layout.md`, `docs/architecture/sources/item-health.md`, `AGENTS.md`
 - **Gates:** local - `ruff`, `mypy --strict`, the shared test selector, the contract drift gate. CI - full suite.
-- **Oracle:** with the committed config the mapping is **equal cell-for-cell to what it returned before this plan started** - the guarantee is untouched, which is the whole point of shipping `-1`. A second arm sets 120 over a built fixture spanning six months and proves the older day files are not opened, by counting file reads rather than by timing them.
+- **Oracle:** with the committed config the mapping is **equal cell-for-cell to what it returned before this plan started** - the guarantee is untouched, which is the whole point of shipping `-1`. A second check sets 120 over a built fixture spanning six months and proves the older day files are not opened, by counting file reads rather than by timing them.
 
 | # | Decision | Authority |
 | --- | --- | --- |
@@ -320,7 +320,7 @@ Rows 1, 2, 3, 10 and 11 are disjoint and run together. Rows 4 to 7 are strictly 
 - **Scope:** `cli.stage_validate_days` parses and validates every published day against both shapes on every scheduled publication - 426 files and 23.02 MB today.
 - **Files:** `backend/idhazh/cli.py`, `backend/idhazh/contracts/` (the receipt shape), `schemas/`, `backend/tests/pipeline/`, `backend/tests/contracts/`
 - **Gates:** local - `ruff`, `mypy --strict`, the shared test selector, the contract drift gate. CI - full suite.
-- **Oracle:** three arms - a new day is validated fully; an unchanged day with an unchanged validator is not opened; and changing the validator identity invalidates every receipt so the whole archive is validated once.
+- **Oracle:** three checks - a new day is validated fully; an unchanged day with an unchanged validator is not opened; and changing the validator identity invalidates every receipt so the whole archive is validated once.
 
 | # | Decision | Authority |
 | --- | --- | --- |

@@ -437,7 +437,7 @@ test.describe('the machines this run drew', () => {
  *
  * The three states themselves are asserted over built rows in
  * `console-machine-cards.spec.ts`. The canary holds one of them - a day the
- * record answered for - and it is the arm that proves the binding.
+ * record answered for - and it is the check that proves the binding.
  */
 test.describe('the machine record names which state it is in', () => {
 	const STATES = ['recorded', 'off', 'lost', 'none'];
@@ -578,7 +578,7 @@ test.describe('what a run reads against what it writes', () => {
 			await expect(board.locator('[data-chart]')).toHaveCount(0);
 			return;
 		}
-		// The other arm: a run the ledger timed draws, and the count grain is
+		// The other half: a run the ledger timed draws, and the count grain is
 		// never taken down with the clock.
 		await expect(board.locator('[data-work-absent="seconds"]')).toHaveCount(0);
 		await expect(board.locator('[data-chart]')).toHaveCount(1);
@@ -671,7 +671,7 @@ test.describe('what this would have cost somewhere else', () => {
 		const board = page.locator(PANEL).locator('[data-cost-shape]');
 		const split = await board.getAttribute('data-cost-split');
 		expect(['drawn', 'printed']).toContain(split);
-		// Whichever arm it took, the measurement it took it on is on the page.
+		// Whichever branch it took, the measurement it took it on is on the page.
 		const measured = await board.getAttribute('data-cost-thinnest-pct');
 		expect(Number(measured)).toBeGreaterThan(0);
 		await expect(board.locator('[data-cost-measured]')).toContainText(measured ?? 'no measurement');

@@ -91,7 +91,7 @@ def test_every_fetched_weight_is_checked_before_anything_reads_it() -> None:
     A converted job is derived rather than listed, because what would be listed
     is the same four step names four times: the check is one call to a verb, and
     what it checks is the declaration rather than a filename somebody typed.
-    The four arms still spelling their own download keep their written rows,
+    The four jobs still spelling their own download keep their written rows,
     because each of those names a different digest source.
 
     No check carries an `if:`, on purpose. A restored cache entry is the one
@@ -131,7 +131,7 @@ def test_every_fetched_weight_is_checked_before_anything_reads_it() -> None:
         assert "if" not in check, f"{named}: a restored cache is what most needs checking"
 
 
-def test_no_arm_starts_measuring_before_it_knows_which_model_answered() -> None:
+def test_no_step_starts_measuring_before_it_knows_which_model_answered() -> None:
     """The Oracle. A number is about a model only if that model produced it.
 
     `validate.yml` has asked `/v1/models` since it was written. `measure.yml`
@@ -140,7 +140,7 @@ def test_no_arm_starts_measuring_before_it_knows_which_model_answered() -> None:
     is a Guardrail #10 failure that no gate would have caught, because every
     number in the report would be internally consistent and wrong.
 
-    Discovery is over every step that waits for `/health`, so an arm added later
+    Discovery is over every step that waits for `/health`, so a step added later
     is held to the same rule whether or not anybody remembered it. The drift this
     catches has run in both directions: `test_model_server_jobs` records the last
     time it was `validate.yml` that nobody diffed.
@@ -305,7 +305,7 @@ def test_a_daily_run_refuses_a_draft_head_that_declares_only_half_of_itself(
     the fetch step, downloaded the head, and only then failed inside
     `sha256sum --check` on a line with nothing to check - which reports "no
     properly formatted checksum lines found" and names neither the entry nor
-    the field. The two measurement arms have always used `if draft and`.
+    the field. The two measurement steps have always used `if draft and`.
 
     The absent case is the one this must not break: no committed entry declares
     a head today, and a guard that refused `{}` would take down every run this
@@ -536,7 +536,7 @@ def test_a_declared_draft_head_is_published_and_named_in_the_cache_key(
 
     A key that named only the target served a complete-looking entry with the
     draft head missing, and llama-server exits at load rather than at fetch - so
-    the arm that restored it spent a runner hour and measured nothing.
+    the job that restored it spent a runner hour and measured nothing.
     """
     draft = {
         "repo": "publisher/Model-GGUF",
@@ -818,7 +818,7 @@ def test_no_job_that_reaches_the_shared_download_pastes_a_value_the_reader_publi
     the action's own reader step is a producer inside this set, and the steps
     that start the server and probe its health are its consumers.
 
-    It says nothing about `measure.yml`'s own paste sites. Those four arms reach
+    It says nothing about `measure.yml`'s own paste sites. Those four jobs reach
     neither the shared action nor the shared download, so they are not in this
     set at all, and the file is plan 46's.
     """

@@ -135,7 +135,7 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 - **Scope:** An offline write-critique-revise loop bounded by `finetune.prompt_iterations`, judged by two judges and **gated by the deterministic scorers**, run on a developer machine or a manual dispatch.
 - **Files touched:** `backend/utilities/prompt_loop.py` (new), `backend/idhazh/prompts/summarize.txt`, `backend/idhazh/evals/metrics.py`, `config/idhazh.json`, `CLAUDE.md` (section 0a amendment), `backend/tests/test_prompt_loop.py`, `docs/concepts/evaluation.md`, `docs/how-to/**`
 - **Acceptance gates:** `ruff`; `mypy --strict`; export + drift; the full suite; the loop run end to end on the committed canary corpus with no network.
-- **Oracle:** A candidate prompt is promoted **only** when it beats the incumbent on `unsupported_number`, `lead_missing` and `hedge_dropped` over the frozen set. A run where the model judge prefers a candidate the deterministic suite refuses must end with the incumbent still in place, and that arm is asserted.
+- **Oracle:** A candidate prompt is promoted **only** when it beats the incumbent on `unsupported_number`, `lead_missing` and `hedge_dropped` over the frozen set. A run where the model judge prefers a candidate the deterministic suite refuses must end with the incumbent still in place, and that half is asserted.
 
 ### Decisions
 

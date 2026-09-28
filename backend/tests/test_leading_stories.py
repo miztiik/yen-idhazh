@@ -304,7 +304,7 @@ def test_a_story_that_has_been_running_ranks_below_one_that_broke_today() -> Non
 
 
 def test_the_same_pair_with_the_decay_switched_off_is_ordered_as_it_was() -> None:
-    """The revert arm: `freshness_decay_at_scale` of 1.0 restores the old order.
+    """The revert half: `freshness_decay_at_scale` of 1.0 restores the old order.
 
     One edit to one line puts the higher stored score back on top, which is
     what this block did before the curve existed.
@@ -363,7 +363,7 @@ def test_the_weights_bind_and_the_top_story_is_not_the_top_rank_score() -> None:
 
 
 def test_every_weight_but_the_rank_score_at_zero_is_todays_order() -> None:
-    """The revert arm, and it is what makes the composite safe to land.
+    """The revert half, and it is what makes the composite safe to land.
 
     With the two other terms weighted zero the score is the plan-time number,
     which is exactly what this block sorted on before it was a sum.

@@ -131,7 +131,7 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 
 - **Scope:** A console panel over the rollup: time per stage per shard, and the unattributed residual beside it.
 - **Files touched:** `frontend/src/lib/server/payload.ts`, `frontend/src/routes/console/machine/**`, `frontend/tests/console-machine-*.spec.ts`, `config/idhazh.json` (the ceiling this grows), `docs/architecture/publishing/frontend.md`
-- **Acceptance gates:** `npm run check`; build; `bundle-gate`; the browser suite; the section 12 smoke including a truncated-ledger arm.
+- **Acceptance gates:** `npm run check`; build; `bundle-gate`; the browser suite; the section 12 smoke including a truncated-ledger check.
 - **Oracle:** The drawn residual is re-derived in the spec from the committed rollup and compared to the drawn attribute, and the panel's named empty state is reached by a rollup truncated to its header.
 
 ### Decisions
