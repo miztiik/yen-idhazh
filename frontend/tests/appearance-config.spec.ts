@@ -163,14 +163,14 @@ for (const key of pipelineOwned) expect(handed).not.toContain(key);
 /** The keys the `console` block carries that no console page is handed.
  *
  * Whatever `consoleConfig()` returns is inlined into all five prerendered
- * console documents, and the running order is read by each route for itself,
- * so it may not ride along. Named rather than counted, as the assist block's
- * are.
+ * console documents. The running order is read by each route for itself, and
+ * two knobs are read by the sufficiency specs alone, so none of the three may
+ * ride along. Named rather than counted, as the assist block's are.
  */
 test.describe('the console block a page is handed', () => {
-	const NOT_HANDED = ['panel_groups'];
+	const NOT_HANDED = ['panel_groups', 'judged_panel_ids', 'plot_min_fill_share'];
 
-	test('carries none of the keys only a route reads for itself', () => {
+	test('carries none of the keys only a route or the gate specs read', () => {
 		const onDisk = (
 			JSON.parse(readFileSync(join(REPO, 'config', 'appearance.json'), 'utf8')) as {
 				console: Record<string, unknown>;

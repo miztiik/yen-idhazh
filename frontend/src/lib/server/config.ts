@@ -728,7 +728,10 @@ type DigestBlock = Partial<UiConfig> &
 	Partial<Record<(typeof BUILD_ONLY_KEYS)[number], number>>;
 
 /** The `console` block: everything `ConsoleConfig` holds, plus the running
- * order, which `consoleConfig()` deliberately leaves out of what it inlines. */
+ * order, which `consoleConfig()` deliberately leaves out of what it inlines.
+ * The block also carries `judged_panel_ids` and `plot_min_fill_share`, which
+ * only the sufficiency specs read, straight from the file - so no type here
+ * names them and `consoleConfig()` leaves them out too. */
 type ConsoleBlock = Partial<ConsoleConfig> & { panel_groups?: PanelGroups };
 
 interface RawAppearance {
