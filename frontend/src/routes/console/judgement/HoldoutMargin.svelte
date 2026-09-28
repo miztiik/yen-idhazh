@@ -21,8 +21,15 @@
 	 * **The tinted zone is what tomorrow can fold.** A mark inside it clears the
 	 * line today and would not after one day's legal fall, which is the fact the
 	 * figure alone cannot carry.
+	 *
+	 * **Every mark reads into a record strip under the plot.** A dot is one pair,
+	 * a chip is the pairs off one edge of the scale, and the strip below is the
+	 * pairs read as one story. None of them shares a column with another, so a
+	 * pointer, a tap or an arrow key picks one at a time, left to right.
 	 */
 	import { chartWidth, frame, linearAxis, observeWidth, tickAnchor } from '$lib/charts/frame';
+	import { factsOf, markReadout, recordsOf, type ReadoutFacts } from '$lib/charts/readout';
+	import ChartReadout from '$lib/components/ChartReadout.svelte';
 	import Panel from '$lib/components/Panel.svelte';
 	import {
 		agreedNote,
@@ -58,7 +65,8 @@
 		weights,
 		scored,
 		height,
-		width
+		width,
+		readoutMaxShare
 	}: {
 		/** The marks that set a floor - every pair read as two different stories.
 		 * The pairs read as one story reach the page as `agreedScores` and no
@@ -87,6 +95,8 @@
 		scored: ScoredHoldout | null;
 		height: number;
 		width: number;
+		/** `chart.readout_max_share`. */
+		readoutMaxShare: number;
 	} = $props();
 
 	/** How far under a dot its own label sits, and how far under that the row
@@ -141,8 +151,8 @@
 		agreedAt !== null && agreedAt.max >= domain[0] && agreedAt.min <= domain[1]
 	);
 	/** The two marks that carry a label: the closest call and the one with the
-	 * most room. The rest carry a title, because four strings inside one row of
-	 * dots is four strings nobody reads. */
+	 * most room. The rest read into the strip under the plot, because four
+	 * strings inside one row of dots is four strings nobody reads. */
 	const labelled = $derived(
 		new Set([drawn[0]?.score, drawn[drawn.length - 1]?.score].filter((score) => score !== undefined))
 	);
@@ -165,6 +175,103 @@
 			'mark far from the line is off it rather than pinned to a place it is not.'
 		);
 	}
+
+	/** How many marked pairs sit off one edge of the scale, as a chip's record
+	 * names them. The reason a mark is off the scale is said under the plot. */
+	function offCount(off: HoldoutMark[], side: string): string {
+		return `${off.length} marked ${off.length === 1 ? 'pair scores' : 'pairs score'} ${side} this scale`;
+	}
+
+	function offScores(off: HoldoutMark[]): string {
+		return off.map((mark) => mark.score.toFixed(4)).join(', ');
+	}
+
+	/** One thing a pointer, a tap or a key can land on, in reading order: the
+	 * chip off the low edge, the dots left to right, the chip off the high edge,
+	 * then the strip of pairs read as one story on the row below. */
+	type HoldoutPoint =
+		| { kind: 'dot'; key: string; mark: HoldoutMark }
+		| { kind: 'off'; key: string; side: 'low' | 'high'; off: HoldoutMark[] }
+		| { kind: 'agreed'; key: string };
+
+	const points = $derived<HoldoutPoint[]>([
+		...(offLow.length > 0 ? [{ kind: 'off' as const, key: 'off-low', side: 'low' as const, off: offLow }] : []),
+		...[...drawn]
+			.sort((left, right) => left.score - right.score)
+			.map((mark) => ({ kind: 'dot' as const, key: `dot:${mark.leftTitle}|${mark.rightTitle}`, mark })),
+		...(offHigh.length > 0
+			? [{ kind: 'off' as const, key: 'off-high', side: 'high' as const, off: offHigh }]
+			: []),
+		...(agreedAt !== null ? [{ kind: 'agreed' as const, key: 'agreed' }] : [])
+	]);
+	/** Which point each mark is, so a mark carries the index its record sits at. */
+	const pointAt = $derived(new Map(points.map((point, index) => [point.key, index])));
+
+	/** What each mark says to a screen reader: the sentence its tooltip carried. */
+	function pointName(point: HoldoutPoint): string {
+		if (point.kind === 'dot') {
+			return `${point.mark.leftTitle} against ${point.mark.rightTitle}, scoring ${point.mark.score.toFixed(4)}`;
+		}
+		if (point.kind === 'off') {
+			return `${offCount(point.off, point.side === 'low' ? 'below' : 'above')}, at ${offScores(point.off)}`;
+		}
+		if (agreedAt === null) return '';
+		return agreedOnScale
+			? `${agreedScores.length} pairs read as one story, running ${agreedAt.min.toFixed(4)} to ${agreedAt.max.toFixed(4)}, middle ${agreedAt.median.toFixed(4)}`
+			: `${agreedScores.length} pairs read as one story, all of them off this scale, running ${agreedAt.min.toFixed(4)} to ${agreedAt.max.toFixed(4)}`;
+	}
+
+	/** Each point's record: every word its name says, and what it means for the
+	 * line. A panel with nothing marked still prints one record saying so. */
+	const records = $derived.by((): ReadoutFacts[] => {
+		const four = (value: number) => value.toFixed(4);
+		const built = points.map((point) => {
+			if (point.kind === 'dot') {
+				return factsOf(
+					`${point.mark.leftTitle} against ${point.mark.rightTitle}`,
+					[
+						{ label: 'Scoring', value: point.mark.score, format: four },
+						{
+							label: 'Against the line',
+							value:
+								point.mark.score >= applied
+									? 'at or above it, so the line merges this pair'
+									: 'below it, so the pair stays two stories'
+						},
+						{ label: 'Marked', value: point.mark.markedOn === '' ? null : point.mark.markedOn }
+					],
+					'not recorded'
+				);
+			}
+			if (point.kind === 'off') {
+				return factsOf(
+					offCount(point.off, point.side === 'low' ? 'below' : 'above'),
+					[{ label: 'At', value: offScores(point.off) }],
+					'not recorded'
+				);
+			}
+			const range = agreedAt === null ? null : `${four(agreedAt.min)} to ${four(agreedAt.max)}`;
+			return factsOf(
+				agreedOnScale
+					? `${agreedScores.length} pairs read as one story`
+					: `${agreedScores.length} pairs read as one story, all of them off this scale`,
+				[
+					{ label: 'Running', value: range },
+					...(agreedOnScale && agreedAt !== null
+						? [{ label: 'Middle', value: agreedAt.median, format: four }]
+						: []),
+					{ label: 'Below the line', value: agreedBelow, format: String }
+				],
+				'not recorded'
+			);
+		});
+		return built.length > 0
+			? recordsOf(built)
+			: [factsOf('Nothing has been marked yet, so there is no pair to read', [], 'not recorded')];
+	});
+
+	/** The point a pointer, a tap or a key has picked, or null for the first. */
+	let picked = $state<number | null>(null);
 </script>
 
 <Panel
@@ -176,7 +283,7 @@
 		data-holdout
 		data-holdout-state={reading}
 		data-holdout-tone={tone}
-		data-readout-none="one score axis with no column to share, so each dot carries its own title and each row prints its ends in words"
+		data-readout-records={records.length}
 		data-holdout-domain={`${domain[0].toFixed(4)},${domain[1].toFixed(4)}`}
 		data-holdout-zone={`${zone[0].toFixed(4)},${zone[1].toFixed(4)}`}
 		data-holdout-margin={outcome.margin === null ? '' : marginDistance(outcome.margin)}
@@ -207,13 +314,23 @@
 		{/if}
 
 		<div use:observeWidth={(next) => (measured = next)}>
+			<!-- One tab stop for every mark, never one per dot: Left and Right step
+			     them in reading order, Escape returns to the first. -->
+			<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 			<svg
-				class="block max-w-full overflow-visible"
+				class="block max-w-full overflow-visible focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
 				width={box.width}
 				height={box.height}
 				viewBox={`0 0 ${box.width} ${box.height}`}
-				role="img"
+				role="group"
+				tabindex="0"
 				aria-label={`Where the merge line sits against the pairs a person marked as two stories. ${holdoutNote(outcome, reading, marked, applied)} ${agreedNote(agreedScores, applied)}`}
+				use:markReadout={{
+					count: points.length,
+					walk: 'row',
+					onSelect: (index) => (picked = index),
+					selected: picked
+				}}
 			>
 				<!-- The zone first, so every mark and both rules sit on top of it. A
 				     mark inside it clears the line today and would not after one day's
@@ -315,20 +432,20 @@
 				</text>
 
 				{#each drawn as mark (mark.leftTitle + mark.rightTitle)}
+					{@const point = { kind: 'dot' as const, key: `dot:${mark.leftTitle}|${mark.rightTitle}`, mark }}
 					<circle
 						cx={at(mark.score)}
 						cy={markY}
 						r="5"
 						fill={mark.score >= applied ? 'var(--fill-low)' : 'var(--chart-4)'}
-						stroke="var(--color-surface)"
+						stroke={picked === pointAt.get(point.key) ? 'var(--color-text)' : 'var(--color-surface)'}
 						stroke-width="1.5"
+						role="img"
+						aria-label={pointName(point)}
+						data-readout-at={pointAt.get(point.key)}
 						data-holdout-dot={mark.score.toFixed(4)}
 						data-holdout-dot-side={mark.score >= applied ? 'wrong' : 'clear'}
-					>
-						<title
-							>{mark.leftTitle} against {mark.rightTitle}, scoring {mark.score.toFixed(4)}</title
-						>
-					</circle>
+					/>
 					{#if labelled.has(mark.score)}
 						<text
 							x={at(mark.score)}
@@ -345,6 +462,12 @@
 
 				{#each [{ off: offLow, x: box.left, side: 'low' }, { off: offHigh, x: box.right, side: 'high' }] as edge (edge.side)}
 					{#if edge.off.length > 0}
+						{@const point = {
+							kind: 'off' as const,
+							key: `off-${edge.side}`,
+							side: edge.side as 'low' | 'high',
+							off: edge.off
+						}}
 						<!-- A mark off the scale is counted at the edge it left, never
 						     pinned to a place it is not. -->
 						<rect
@@ -353,11 +476,12 @@
 							width="4"
 							height="14"
 							fill="var(--chart-4)"
+							role="img"
+							aria-label={pointName(point)}
+							data-readout-at={pointAt.get(point.key)}
 							data-holdout-offscale={edge.side}
 							data-holdout-offscale-count={edge.off.length}
-						>
-							<title>{offNote(edge.off, edge.side === 'low' ? 'below' : 'above')}</title>
-						</rect>
+						/>
 					{/if}
 				{/each}
 
@@ -385,14 +509,12 @@
 						stroke="var(--chart-1)"
 						stroke-width="6"
 						stroke-linecap="butt"
+						role="img"
+						aria-label={pointName({ kind: 'agreed', key: 'agreed' })}
+						data-readout-at={pointAt.get('agreed')}
 						data-holdout-strip={`${agreedAt.min.toFixed(4)},${agreedAt.max.toFixed(4)}`}
 						data-holdout-strip-below={agreedBelow}
-					>
-						<title
-							>{agreedScores.length} pairs read as one story, running {agreedAt.min.toFixed(4)}
-							to {agreedAt.max.toFixed(4)}, middle {agreedAt.median.toFixed(4)}</title
-						>
-					</line>
+					/>
 					{#if !outside(agreedAt.median)}
 						<circle
 							cx={at(agreedAt.median)}
@@ -412,13 +534,11 @@
 						width="4"
 						height="6"
 						fill="var(--chart-1)"
+						role="img"
+						aria-label={pointName({ kind: 'agreed', key: 'agreed' })}
+						data-readout-at={pointAt.get('agreed')}
 						data-holdout-strip-offscale={agreedAt.max < domain[0] ? 'low' : 'high'}
-					>
-						<title
-							>{agreedScores.length} pairs read as one story, all of them off this scale, running
-							{agreedAt.min.toFixed(4)} to {agreedAt.max.toFixed(4)}</title
-						>
-					</rect>
+					/>
 				{/if}
 
 				{#each xAxis.ticks as tick, index (tick)}
@@ -435,6 +555,17 @@
 				{/each}
 			</svg>
 		</div>
+
+		<!-- Under the plot: the one mark a reader is on, every word its old tooltip
+		     said and what it means for the line. -->
+		<ChartReadout
+			readout={records[picked ?? 0] ?? null}
+			resting={picked === null}
+			name="holdout"
+			maxShare={readoutMaxShare}
+			restingNote=", the first mark"
+			hint="Point at a dot, an edge chip or the strip below them to read it. Left and Right step through them, Escape returns to the first."
+		/>
 
 		<p class="reading" data-holdout-note>{holdoutNote(outcome, reading, marked, applied)}</p>
 		<p class="reading" data-holdout-agreed={agreedScores.length}>

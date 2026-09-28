@@ -383,6 +383,23 @@ test('the newest day draws one square a run, on the same ramp as the run strip',
 			? 0
 			: Number((await overflow.getAttribute('data-band-runs-more')) ?? 0);
 	expect(squares.length + more, 'the row and the sentence count different runs').toBe(runs);
+
+	// Every verdict is also said in one line under the row, grouped, so a thumb
+	// and a keyboard read what a pointer on a ten-pixel square would. No square
+	// keeps a native tooltip, which only a mouse reaches.
+	const grouped = new Map<string, number>();
+	for (const square of squares) {
+		const said = /^Run \d+ (.+)$/.exec(square.label)?.[1] ?? square.label;
+		grouped.set(said, (grouped.get(said) ?? 0) + 1);
+	}
+	const line = await page.locator('[data-band-runs-said]').innerText();
+	for (const [said, count] of grouped) {
+		const verb = count > 1 && said.startsWith('is ') ? `are ${said.slice(3)}` : said;
+		expect(line, `the grouped line misses "${said}"`).toContain(
+			`${count} ${count === 1 ? 'run' : 'runs'} ${verb}`
+		);
+	}
+	await expect(page.locator('[data-band-fact="verdict"] [data-band-run][title]')).toHaveCount(0);
 });
 
 test('THE ORACLE: the band is the same three facts on every route, and no window moves it', async ({

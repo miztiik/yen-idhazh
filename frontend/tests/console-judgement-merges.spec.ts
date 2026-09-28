@@ -187,15 +187,17 @@ test.describe('the panel prints the column under the pointer', () => {
 		await page.waitForTimeout(200);
 
 		// One strip under one chart, and the two marks it draws in the order it
-		// draws them: the column, then the dot standing on it.
+		// draws them - the column, then the dot standing on it - with the day's
+		// group count between them, which the column's sentence names.
 		await expect(page.locator(STRIP)).toHaveCount(1);
 		expect(await stripRows(page), 'the strip does not print the chart it sits under').toEqual([
 			'Merged',
+			'Groups',
 			'Biggest group'
 		]);
 	});
 
-	test('a column that folded nothing still prints both rows, with its denominator', async ({
+	test('a column that folded nothing still prints every row, with its denominator', async ({
 		page
 	}) => {
 		await open(page);
@@ -205,12 +207,11 @@ test.describe('the panel prints the column under the pointer', () => {
 		}
 
 		// The columns in the order they are drawn, which is the order the strip
-		// steps through. The published count is in the column's own title, so no
-		// new attribute is minted to read it.
+		// steps through, with each day's published count.
 		const drawn = await page.locator('[data-merge-day]').evaluateAll((nodes) =>
 			nodes.map((node) => ({
 				merges: Number(node.getAttribute('data-merge-count') ?? '0'),
-				title: node.querySelector('title')?.textContent ?? ''
+				published: Number(node.getAttribute('data-merge-published') ?? '0')
 			}))
 		);
 
@@ -224,10 +225,11 @@ test.describe('the panel prints the column under the pointer', () => {
 			if (index > 0) await page.keyboard.press('ArrowRight');
 			await page.waitForTimeout(120);
 
-			// Both rows at every column. A row that disappears at zero makes the
-			// reader compare a two-row strip with a one-row strip.
-			expect(await stripRows(page), `column ${index} did not print both rows`).toEqual([
+			// Every row at every column. A row that disappears at zero makes the
+			// reader compare a three-row strip with a two-row strip.
+			expect(await stripRows(page), `column ${index} did not print every row`).toEqual([
 				'Merged',
+				'Groups',
 				'Biggest group'
 			]);
 
@@ -236,10 +238,9 @@ test.describe('the panel prints the column under the pointer', () => {
 				/^(no story published|\d+ of \d+ published)$/
 			);
 
-			const published = drawn[index].title.match(/(\d+) stories (published|were published)/);
-			if (drawn[index].merges === 0 && published !== null) {
+			if (drawn[index].merges === 0 && drawn[index].published > 0) {
 				expect(merged, `a column that folded nothing dropped its denominator`).toBe(
-					`0 of ${published[1]} published`
+					`0 of ${drawn[index].published} published`
 				);
 			}
 		}

@@ -349,16 +349,20 @@ test.describe('the pairs a person marked apart', () => {
 		expect(narrow.width).toBeLessThan(wide.width);
 	});
 
-	test('the panel says why it has no column to point at', async ({ page }) => {
+	test('the panel reads one mark at a time in a strip under its plot', async ({ page }) => {
 		await open(page);
 
-		// One score axis and no day column. The panel says so rather than leaving a
-		// reader unable to tell a decision from an omission.
-		const reason = (await page.locator(PANEL).getAttribute('data-readout-none')) ?? '';
-		expect(reason.trim().split(/\s+/).length, `the reason reads "${reason}"`).toBeGreaterThanOrEqual(
-			5
-		);
-		expect(reason).toContain('no column to share');
+		// One score axis and no day column, so no mark shares a column with
+		// another: each dot, each edge chip and the one-story strip is a record,
+		// and the strip under the plot prints the one a reader is on.
+		const records = Number((await page.locator(PANEL).getAttribute('data-readout-records')) ?? 0);
+		expect(records, 'the panel declares no record to read').toBeGreaterThan(0);
+		await expect(page.locator(PANEL)).not.toHaveAttribute('data-readout-none', /.*/);
+		await expect(
+			page.locator(`${PANEL} [data-readout="holdout"] [data-readout-subject]`)
+		).toHaveCount(1);
+		// No mark keeps a native tooltip: its words are its name and the strip's.
+		await expect(page.locator(`${PANEL} svg title`)).toHaveCount(0);
 	});
 
 	test('the strip prints its middle, so the circle is readable without a pointer', async ({

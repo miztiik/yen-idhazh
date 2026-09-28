@@ -16,7 +16,6 @@
 		chartWidth,
 		coverage,
 		coverageRegions,
-		coverageRegionTitle,
 		coverageSentence,
 		dayColumnX,
 		dayColumns,
@@ -25,6 +24,7 @@
 		linearAxis,
 		MARGIN,
 		MODEL_RULE_ROW,
+		MODEL_RULE_NOTE,
 		modelRules,
 		modelRuleTitle,
 		MODEL_RULE_LABEL,
@@ -301,6 +301,8 @@
 			<!-- Stated, not omitted. A chart that draws no rule and says nothing about
 			     it is indistinguishable from one where the rule was forgotten. -->
 			<span data-model-rule-empty="band-distance">{noModelRuleNote(split.length)}</span>
+		{:else}
+			<span data-model-rule-note="band-distance">{MODEL_RULE_NOTE}</span>
 		{/if}
 	</p>
 
@@ -331,7 +333,9 @@
 				}}
 			>
 				<!-- The span nothing summarised, drawn before the guide and the columns so
-				     the tint sits under every mark. -->
+				     the tint sits under every mark. It carries no words of its own: the
+				     note above says what the tint is, and the strip says of each day in it
+				     that nothing was summarised. -->
 				{#each emptySpans as span (span.from)}
 					<rect
 						x={px(span.x)}
@@ -341,9 +345,7 @@
 						fill="var(--color-surface-sunken)"
 						data-coverage-empty={span.from}
 						data-coverage-empty-to={span.to}
-					>
-						<title>{coverageRegionTitle(span)}</title>
-					</rect>
+					/>
 				{/each}
 				{#if guide !== null}
 					<line
@@ -377,10 +379,10 @@
 						stroke="var(--chart-change)"
 						stroke-width="1.5"
 						stroke-dasharray="3 3"
+						role="img"
+						aria-label={modelRuleTitle(rule.date)}
 						data-model-rule-line={rule.date}
-					>
-						<title>{modelRuleTitle(rule.date)}</title>
-					</line>
+					/>
 					<text
 						x={px(rule.x) + 3}
 						y={box.top + 9}
@@ -434,13 +436,14 @@
 					{#each split as day, index (day.date)}
 						{#if day.items > 0}
 							<g
+								role="img"
+								aria-label={columnTitle(day)}
 								data-band-day={day.date}
 								data-band-inside={day.inside}
 								data-band-short={day.short}
 								data-band-long={day.long}
 								data-band-items={day.items}
 							>
-								<title>{columnTitle(day)}</title>
 								{#each PARTS as part, position (part.place)}
 									{#if day[part.place] > 0}
 										<rect

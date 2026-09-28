@@ -49,7 +49,6 @@
 		chartWidth,
 		coverage,
 		coverageRegions,
-		coverageRegionTitle,
 		coverageSentence,
 		dayColumns,
 		dayColumnX,
@@ -58,6 +57,7 @@
 		logAxis,
 		MARGIN,
 		MODEL_RULE_ROW,
+		MODEL_RULE_NOTE,
 		modelRules,
 		modelRuleTitle,
 		MODEL_RULE_LABEL,
@@ -391,6 +391,8 @@
 			<!-- Stated, not omitted. A chart that draws no rule and says nothing about
 			     it is indistinguishable from one where the rule was forgotten. -->
 			<span data-model-rule-empty="timings">{noModelRuleNote(calendar.length)}</span>
+		{:else}
+			<span data-model-rule-note="timings">{MODEL_RULE_NOTE}</span>
 		{/if}
 	</p>
 
@@ -427,7 +429,9 @@
 				<!-- The span nothing timed, drawn before everything else so the tint sits
 				     under the grid and never over a mark. A tint rather than a hatch: a
 				     hatch is a pattern a reader stops to decode, and this one only says
-				     that no measurement reached here. -->
+				     that no measurement reached here. It carries no words of its own: the
+				     note above says what the tint is, and the strip says of each day in it
+				     that nothing was timed. -->
 				{#each emptySpans as span (span.from)}
 					<rect
 						x={span.x}
@@ -437,9 +441,7 @@
 						fill="var(--color-surface-sunken)"
 						data-coverage-empty={span.from}
 						data-coverage-empty-to={span.to}
-					>
-						<title>{coverageRegionTitle(span)}</title>
-					</rect>
+					/>
 				{/each}
 				{#each scale.ticks as tick (tick)}
 					<line
@@ -497,10 +499,10 @@
 						stroke="var(--chart-change)"
 						stroke-width="1.5"
 						stroke-dasharray="3 3"
+						role="img"
+						aria-label={modelRuleTitle(rule.date)}
 						data-model-rule-line={rule.date}
-					>
-						<title>{modelRuleTitle(rule.date)}</title>
-					</line>
+					/>
 					<text
 						x={rule.x + 3}
 						y={box.top + 9}

@@ -31,7 +31,7 @@ import { BANDS } from '../bands';
 import { readoutOf, type Readout } from '../charts/readout';
 import { bandFor, grouped, type SummaryBand } from '../charts/series';
 import type { StackRule, StackSeries } from '../charts/stacked';
-import { dayMonth } from '../format';
+import { dayMonth, shortDate } from '../format';
 
 /** One surface on the console that answers for at least one ledger column.
  *
@@ -539,7 +539,7 @@ export function matchColumns(days: readonly EvalDay[]): Readout {
 	const percent = (value: number) => `${value}%`;
 	return readoutOf({
 		type: 'dateSeries',
-		columns: days.map((day) => day.date),
+		columns: days.map((day) => shortDate(day.date)),
 		series: [
 			{
 				label: 'Half scored above',

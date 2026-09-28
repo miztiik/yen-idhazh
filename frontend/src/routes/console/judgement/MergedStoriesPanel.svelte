@@ -129,11 +129,12 @@
 		}))
 	);
 
-	/** Both marks at one column, in the order they are drawn.
+	/** Both marks at one column, in the order they are drawn, with the day's group
+	 * count between them.
 	 *
-	 * Both entries print at every column, including a column where the count is
-	 * zero. An entry that disappears makes the reader compare a two-entry strip
-	 * with a one-entry strip. */
+	 * Every entry prints at every column, including a column where the count is
+	 * zero. An entry that disappears makes the reader compare a three-entry strip
+	 * with a two-entry strip. */
 	const readout = $derived(
 		readoutOf({
 			type: 'dateSeries',
@@ -149,6 +150,12 @@
 						`${merges} of ${drawn[column]?.published ?? 0} published`
 				},
 				{
+					label: 'Groups',
+					swatch: null,
+					values: drawn.map((day) => (day.groups === 0 ? 'none formed' : day.groups)),
+					format: (groups: number) => plural(groups, 'group', 'groups')
+				},
+				{
 					label: 'Biggest group',
 					swatch: 'var(--chart-2)',
 					values: drawn.map((day) => (day.largest === 0 ? 'none formed' : day.largest)),
@@ -161,12 +168,13 @@
 	);
 	const count = $derived(readout.columns.length);
 
+	/** A day's sentence, kept on its marks as their name. Every word of it is in
+	 * the strip at that day. */
 	function columnTitle(day: MergeDay): string {
-		if (day.published === 0) return `${dayMonth(day.date)} - no story was published.`;
-		if (day.merges === 0) {
-			return `${dayMonth(day.date)} - none of the ${day.published} stories published was grouped with another.`;
-		}
-		return `${dayMonth(day.date)} - ${plural(day.merges, 'story', 'stories')} folded into another, in ${plural(day.groups, 'group', 'groups')}. The biggest held ${day.largest}. ${day.published} stories were published.`;
+		const on = dayMonth(day.date);
+		if (day.published === 0) return `${on}: no story was published.`;
+		if (day.merges === 0) return `${on}: none of the ${day.published} published was merged.`;
+		return `${on}: ${day.merges} of ${day.published} published merged, in ${plural(day.groups, 'group', 'groups')}. The biggest group was ${plural(day.largest, 'story', 'stories')}.`;
 	}
 </script>
 
@@ -250,11 +258,13 @@
 				{:else}
 					{#each bars as column (column.date)}
 						<g
+							role="img"
+							aria-label={columnTitle(column.day)}
 							data-merge-day={column.date}
 							data-merge-count={column.day.merges}
 							data-merge-largest={column.day.largest}
+							data-merge-published={column.day.published}
 						>
-							<title>{columnTitle(column.day)}</title>
 							{#if column.height > 0}
 								<rect
 									x={column.x}

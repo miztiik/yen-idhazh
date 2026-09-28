@@ -21,7 +21,7 @@
 // Relative, not `$lib`: the browser suite imports this module in plain Node,
 // where no Vite alias exists to resolve one.
 import { readoutOf, type Readout } from '../charts/readout';
-import { dayMonth } from '../format';
+import { dayMonth, shortDate } from '../format';
 import { grouped } from '../charts/series';
 import type { StackSeries } from '../charts/stacked';
 import type { ChartToken } from '../charts/theme';
@@ -183,7 +183,7 @@ export function reasonsDrawn(days: readonly ReasonDay[]): DoubtReason[] {
 export function reasonColumns(days: readonly ReasonDay[]): Readout {
 	return readoutOf({
 		type: 'dateSeries',
-		columns: days.map((day) => day.date),
+		columns: days.map((day) => shortDate(day.date)),
 		series: reasonsDrawn(days).map((reason) => ({
 			label: reason.label,
 			swatch: `var(${reason.token})`,

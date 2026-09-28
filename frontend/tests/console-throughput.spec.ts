@@ -297,7 +297,10 @@ test('a day whose model differs from the day before it draws a rule', async ({ p
 	if (expected.length === 0) return;
 
 	// The rule says which two models, so the step is attributable rather than
-	// merely marked.
-	const first = page.locator(`[data-throughput-swap="${rules[0]}"] title`);
-	await expect(first).toHaveText(/Model changed from .+ to .+ on \d{4}-\d{2}-\d{2}\./);
+	// merely marked. It is the rule's name, and the strip says it on that day.
+	const first = page.locator(`[data-throughput-swap="${rules[0]}"]`);
+	await expect(first).toHaveAttribute(
+		'aria-label',
+		/Model changed from .+ to .+ on \d{1,2} \w{3} \d{4}\./
+	);
 });

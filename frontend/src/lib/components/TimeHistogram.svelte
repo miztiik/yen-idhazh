@@ -205,9 +205,12 @@
 	 */
 	const shownEdges = $derived(thinLabels(edges, AXIS_LABEL_PX, AXIS_LABEL_GAP_PX));
 
+	/** One band's sentence, kept on its bar as its name. Every word of it is in the
+	 * strip at that band: the heading names the band, the bar's entry the count,
+	 * and the curve's entry what share was done by the band's end. */
 	function barTitle(bin: Distribution['bins'][number]): string {
 		const span = bin.from === 0 ? 'under 1 second' : `${bin.from} to ${bin.to} seconds`;
-		return `${plural(bin.n, noun, nouns)} ${verb} in ${span}. ${bin.throughPct}% of the ${times.n} were done by ${bin.to} seconds.`;
+		return `${plural(bin.n, noun, nouns)} ${verb} in ${span}. ${bin.throughPct}% of the ${times.n} done by then.`;
 	}
 
 	const description = $derived(
@@ -240,13 +243,13 @@
 					label: `${verb.charAt(0).toUpperCase()}${verb.slice(1)} in this band`,
 					swatch: 'var(--chart-1)',
 					values: bars.map((bar) => bar.bin.n),
-					format: (value: number) => String(value)
+					format: (value: number) => plural(value, noun, nouns)
 				},
 				{
 					label: 'Done by then',
 					swatch: 'var(--chart-3)',
 					values: bars.map((bar) => bar.bin.throughPct),
-					format: (value: number) => `${value}%`
+					format: (value: number) => `${value}% of the ${times.n}`
 				}
 			],
 			notMeasured: `No ${noun} was ${verb} in this band`,
@@ -324,8 +327,12 @@
 			{/each}
 
 			{#each bars as bar (bar.bin.from)}
-				<g data-hist-bin={bar.bin.from} data-hist-bin-n={bar.bin.n}>
-					<title>{barTitle(bar.bin)}</title>
+				<g
+					role="img"
+					aria-label={barTitle(bar.bin)}
+					data-hist-bin={bar.bin.from}
+					data-hist-bin-n={bar.bin.n}
+				>
 					<rect
 						x={round(bar.x + 1)}
 						y={round(bar.y)}

@@ -18,6 +18,7 @@
 	import { daysBetween, type TimeWindow } from '$lib/charts/viewport';
 	import ChartReadout from '$lib/components/ChartReadout.svelte';
 	import Panel from '$lib/components/Panel.svelte';
+	import { shortDate } from '$lib/format';
 	import TargetBar from '$lib/components/TargetBar.svelte';
 	import { grouped } from '$lib/charts/series';
 	import { countedDays, gateNeeds, silentTail, type JudgeDay } from '$lib/console/merge-line';
@@ -76,7 +77,7 @@
 	const readout = $derived(
 		readoutOf({
 			type: 'tileStrip',
-			columns: squares.map((square) => square.date),
+			columns: squares.map((square) => shortDate(square.date)),
 			series: [
 				{
 					label: 'The record',

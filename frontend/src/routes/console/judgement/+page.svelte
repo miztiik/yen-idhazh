@@ -155,6 +155,7 @@
 		scored={data.holdout.scored}
 		height={data.console.chart_height}
 		width={data.console.chart_width}
+		readoutMaxShare={data.chart.readout_max_share}
 	/>
 
 	<h2 class="console-h2">What the model made of each article</h2>

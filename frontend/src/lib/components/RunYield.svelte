@@ -33,7 +33,6 @@
 		chartWidth,
 		coverage,
 		coverageRegions,
-		coverageRegionTitle,
 		dayTicks,
 		frame,
 		linearAxis,
@@ -53,6 +52,7 @@
 		type RunYieldLoad
 	} from '$lib/charts/run-yield';
 	import { grouped } from '$lib/charts/series';
+	import { shortDate } from '$lib/format';
 
 	let {
 		load,
@@ -137,9 +137,11 @@
 		return Math.max(value > 0 ? 1 : 0, volume.scale(0) - volume.scale(value));
 	}
 
+	/** One bar's sentence, kept on the bar as its name, with the day spelled the
+	 * way the strip under the chart heads it. */
 	function barTitle(column: RunYieldDay, entry: (typeof YIELD_SERIES)[number]): string {
 		const value = yieldCount(column, entry.key);
-		return `${column.date}: ${grouped(value)} ${entry.label.toLowerCase()}`;
+		return `${shortDate(column.date)}: ${grouped(value)} ${entry.label.toLowerCase()}`;
 	}
 
 	const planned = $derived(plannedDays(load.columns));
@@ -172,10 +174,11 @@
 	 * bare percentage - a share with no denominator invites a trend that is not
 	 * there. */
 	function sentence(column: RunYieldDay): string {
+		const day = shortDate(column.date);
 		if (column.yield === null) {
-			return `${column.date}: no article was planned`;
+			return `${day}: no article was planned`;
 		}
-		return `${column.date}: ${grouped(column.published)} published of the ${grouped(column.planned)} planned, ${grouped(column.failed)} failed, share published ${yieldPercent(column.yield)}`;
+		return `${day}: ${grouped(column.published)} published of the ${grouped(column.planned)} planned, ${grouped(column.failed)} failed, share published ${yieldPercent(column.yield)}`;
 	}
 
 	/** Each unbroken run of the line, placed in this frame's pixels. Where the
@@ -238,7 +241,9 @@
 			}}
 		>
 			<!-- The span nothing was planned on, drawn before the grid so the tint sits
-			     under every mark rather than over one. -->
+			     under every mark rather than over one. It carries no words of its own:
+			     the panel says what the tint is, and the strip says of each day in it
+			     that nothing was planned. -->
 			{#each emptySpans as span (span.from)}
 				<rect
 					x={span.x}
@@ -248,9 +253,7 @@
 					fill="var(--color-surface-sunken)"
 					data-coverage-empty={span.from}
 					data-coverage-empty-to={span.to}
-				>
-					<title>{coverageRegionTitle(span)}</title>
-				</rect>
+				/>
 			{/each}
 			{#if guide !== null}
 				<line
@@ -312,10 +315,11 @@
 							width={barWidth}
 							height={barHeight(yieldCount(column, entry.key))}
 							fill="var({entry.token})"
+							role="img"
+							aria-label={barTitle(column, entry)}
 							data-run-bar={entry.key}
-						>
-							<title>{barTitle(column, entry)}</title>
-						</rect>
+							data-run-bar-day={column.date}
+						/>
 					{/if}
 				{/each}
 			{/each}
@@ -359,10 +363,10 @@
 						cy={rateY(column.yield)}
 						r="2.5"
 						fill="var({YIELD_LINE_TOKEN})"
+						role="img"
+						aria-label={sentence(column)}
 						data-yield-mark={column.date}
-					>
-						<title>{sentence(column)}</title>
-					</circle>
+					/>
 				{/if}
 			{/each}
 		</svg>

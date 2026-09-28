@@ -118,30 +118,36 @@
 			.length
 	);
 
+	/** A day's two readings, as its strip prints them and as its marks name them:
+	 * every word of the sentence is in the strip at that day. */
 	const readout = $derived(
 		readoutOf({
 			type: 'dateSeries',
 			columns: marks.map((mark) => dayMonth(mark.day.date)),
 			series: [
 				{
-					label: 'Disagreed with itself',
+					label: 'Disagreed with the second reading',
 					swatch: 'var(--chart-1)',
 					values: marks.map((mark) => mark.day.disagreementRate),
 					format: (rate: number, column: number) =>
-						`${percent(rate)} of ${marks[column]?.day.pairsJudged ?? 0}`
+						`${percent(rate)} of ${marks[column]?.day.pairsJudged ?? 0} pairs`
 				},
 				{
 					label: 'Could not tell',
 					swatch: 'var(--chart-3)',
 					values: marks.map((mark) => mark.day.unclearRate),
 					format: (rate: number, column: number) =>
-						`${percent(rate)} of ${marks[column]?.day.pairsJudged ?? 0}`
+						`${percent(rate)} of ${marks[column]?.day.pairsJudged ?? 0} pairs`
 				}
 			],
 			notMeasured: 'No pair was read twice on this day',
 			resting: 'last'
 		})
 	);
+
+	function daySentence(day: (typeof marks)[number]['day']): string {
+		return `${dayMonth(day.date)}: ${percent(day.disagreementRate)} of ${day.pairsJudged} pairs disagreed with the second reading, and ${percent(day.unclearRate)} could not tell.`;
+	}
 	const count = $derived(readout.columns.length);
 </script>
 
@@ -238,13 +244,12 @@
 				{/if}
 
 				{#each marks as mark (mark.date)}
-					<g data-agreement-day={mark.date} data-agreement-judged={mark.day.pairsJudged}>
-						<title
-							>{dayMonth(mark.day.date)} - {percent(mark.day.disagreementRate)} of {mark.day
-								.pairsJudged} pairs disagreed with their own second reading, and {percent(
-								mark.day.unclearRate
-							)} could not tell.</title
-						>
+					<g
+						role="img"
+						aria-label={daySentence(mark.day)}
+						data-agreement-day={mark.date}
+						data-agreement-judged={mark.day.pairsJudged}
+					>
 						<circle cx={mark.x} cy={mark.disagreeY} r="2.5" fill="var(--chart-1)" />
 						<circle cx={mark.x} cy={mark.unclearY} r="2.5" fill="var(--chart-3)" />
 					</g>

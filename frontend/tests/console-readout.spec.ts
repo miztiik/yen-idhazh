@@ -261,19 +261,37 @@ test.describe('the readout is the default', () => {
 		test(`no mark inside a chart on ${route} carries a native tooltip`, async ({ page }) => {
 			// A `title` is the browser's own tooltip: no key reaches it, no thumb
 			// reaches it and no theme styles it. Every one a chart carried moved
-			// into that chart's strip. A title outside a chart - a link, a badge -
-			// is not a mark, and is not this rule's business.
+			// into that chart's strip. An SVG `<title>` element is the same tooltip
+			// under another name, so it is counted too. A title outside a chart - a
+			// link, a badge - is not a mark, and is not this rule's business.
 			await open(page, route);
 			const titled = await page.evaluate(
 				(OWNER) =>
-					[...document.querySelectorAll(OWNER)].flatMap((owner) =>
-						[owner, ...owner.querySelectorAll('[title]')]
+					[...document.querySelectorAll(OWNER)].flatMap((owner) => [
+						...[owner, ...owner.querySelectorAll('[title]')]
 							.filter((node) => node.hasAttribute('title'))
-							.map((node) => `${node.tagName.toLowerCase()}: ${node.getAttribute('title')}`)
-					),
+							.map((node) => `${node.tagName.toLowerCase()}: ${node.getAttribute('title')}`),
+						...[...owner.querySelectorAll('title')].map(
+							(node) => `svg <title>: ${(node.textContent ?? '').trim()}`
+						)
+					]),
 				OWNER
 			);
 			expect(titled, 'these chart marks still carry a native tooltip').toEqual([]);
+		});
+
+		test(`every strip on ${route} heads a day the way a reader spells it`, async ({ page }) => {
+			// A strip heads its column with the reader's spelling of a day, `27 Sep
+			// 2026`, never the ledger's, `2026-09-27`. A run id opens with a date and
+			// is not one, so `2026-09-27-1` passes.
+			await open(page, route);
+			const headings = await page
+				.locator('[data-surface="operator"] [data-readout] [data-readout-day]')
+				.evaluateAll((nodes) => nodes.map((node) => (node.textContent ?? '').trim()));
+			expect(
+				headings.filter((heading) => /^\d{4}-\d{2}-\d{2}(?![-\d])/.test(heading)),
+				'these strips head a day in the ledger spelling'
+			).toEqual([]);
 		});
 
 		test(`every mark a strip reads on ${route} has every word of its name in that strip`, async ({

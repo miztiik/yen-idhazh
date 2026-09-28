@@ -14,7 +14,7 @@
  */
 
 import { grouped } from '../charts/series';
-import { dayMonth } from '../format';
+import { dayMonth, shortDate } from '../format';
 
 /** The two fields the count reads. A published item carries far more; taking
  * only these two keeps a test fixture to two keys a row. */
@@ -338,7 +338,9 @@ export function countedDays(
 		date,
 		state,
 		said,
-		title: `${date}: ${said}`
+		// The day spelled the way the strip under the squares heads it, so the
+		// square's name and the strip read one day one way.
+		title: `${shortDate(date)}: ${said}`
 	});
 	return dates.map((date) => {
 		const row = byDate.get(date);

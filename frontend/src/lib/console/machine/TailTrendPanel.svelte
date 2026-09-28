@@ -23,6 +23,7 @@
 		modelRuleRow,
 		modelRuleTitle,
 		MODEL_RULE_LABEL,
+		MODEL_RULE_NOTE,
 		modelRules,
 		noModelRuleNote,
 		observeWidth,
@@ -284,10 +285,10 @@
 								stroke="var(--chart-change)"
 								stroke-width="1.5"
 								stroke-dasharray="3 3"
+								role="img"
+								aria-label={modelRuleTitle(rule.date, namesMoved(movedOn.get(rule.date) ?? []))}
 								data-model-rule-line={rule.date}
-							>
-								<title>{modelRuleTitle(rule.date, namesMoved(movedOn.get(rule.date) ?? []))}</title>
-							</line>
+							/>
 							<text
 								x={rule.x + 3}
 								y={tailBox(0).top + 9}
@@ -349,6 +350,10 @@
 			{#if tailRules.length === 0 && tailRuns.length > 1}
 				<p class="reads">
 					<span data-model-rule-empty="machine-latency">{noModelRuleNote(days)}</span>
+				</p>
+			{:else if tailRules.length > 0}
+				<p class="reads">
+					<span data-model-rule-note="machine-latency">{MODEL_RULE_NOTE}</span>
 				</p>
 			{/if}
 

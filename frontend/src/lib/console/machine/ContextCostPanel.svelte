@@ -21,6 +21,7 @@
 		modelRuleRow,
 		modelRuleTitle,
 		MODEL_RULE_LABEL,
+		MODEL_RULE_NOTE,
 		modelRules,
 		noModelRuleNote,
 		observeWidth
@@ -221,7 +222,9 @@
 
 						<!-- The limit is a rule and never a bar. A limit is a line a
 						     series approaches; a bar beside a bar invites the reader to
-						     compare two lengths and forget which one is the ceiling. -->
+						     compare two lengths and forget which one is the ceiling. What it
+						     means is one fact about the whole chart rather than about a run,
+						     so the panel's note says it in words, under the title. -->
 						<line
 							x1={contextBox.left}
 							x2={contextBox.right}
@@ -230,11 +233,7 @@
 							stroke="var(--chart-marker)"
 							stroke-width="1.5"
 							data-context-limit={limit}
-						>
-							<title>
-								{`The server was given a ${grouped(limit)}-token limit. One call cannot cross this line.`}
-							</title>
-						</line>
+						/>
 						<text
 							x={contextBox.right}
 							y={contextAtY(limit) - 4}
@@ -255,10 +254,10 @@
 								stroke="var(--chart-change)"
 								stroke-width="1.5"
 								stroke-dasharray="3 3"
+								role="img"
+								aria-label={modelRuleTitle(rule.date, namesMoved(movedOn.get(rule.date) ?? []))}
 								data-model-rule-line={rule.date}
-							>
-								<title>{modelRuleTitle(rule.date, namesMoved(movedOn.get(rule.date) ?? []))}</title>
-							</line>
+							/>
 							<text
 								x={rule.x + 3}
 								y={contextBox.top + 9}
@@ -356,9 +355,25 @@
 				/>
 			</div>
 
+			<!-- What the limit rule means, said once for the whole chart. It is one
+			     fact about every run rather than about one of them, so it is a
+			     sentence here and not a line the strip repeats on every column. A
+			     span where the limit moved names both limits further down instead,
+			     so this never names one limit for runs that had another. -->
+			{#if cost.limits.length === 1}
+				<p class="reads" data-context-limit-note>
+					The server was given a {grouped(limit)}-token limit, and one call cannot cross the line
+					drawn at it.
+				</p>
+			{/if}
+
 			{#if contextRules.length === 0 && contextRuns.length > 1}
 				<p class="reads">
 					<span data-model-rule-empty="machine-context">{noModelRuleNote(days)}</span>
+				</p>
+			{:else if contextRules.length > 0}
+				<p class="reads">
+					<span data-model-rule-note="machine-context">{MODEL_RULE_NOTE}</span>
 				</p>
 			{/if}
 

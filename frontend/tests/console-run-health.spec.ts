@@ -633,7 +633,7 @@ function readAlignment() {
 	const centre = new Map<string, number>();
 	const barArea = new Map<string, number>();
 	for (const bar of svg.querySelectorAll('rect[data-run-bar]')) {
-		const date = (bar.querySelector('title')?.textContent ?? '').slice(0, 10);
+		const date = bar.getAttribute('data-run-bar-day') ?? '';
 		const box = bar.getBoundingClientRect();
 		barArea.set(date, (barArea.get(date) ?? 0) + box.width * box.height);
 		if (bar.getAttribute('data-run-bar') === 'planned') centre.set(date, box.left + 1.5 * box.width);

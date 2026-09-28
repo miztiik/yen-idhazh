@@ -549,6 +549,15 @@ export function noModelRuleNote(days: number): string {
 	return `Nothing changed about how the summaries are written inside these ${days} ${days === 1 ? 'day' : 'days'}.`;
 }
 
+/** What a dashed rule means, said once under a chart that draws one.
+ *
+ * The rule's own name says which day and what moved, and the strip says so on
+ * that day; this says what the line divides, in the place a chart with no rule
+ * says it drew none. A hairline is not a thing a reader can point at, so the
+ * meaning cannot live only on the rule.
+ */
+export const MODEL_RULE_NOTE = `A dashed rule marked "${MODEL_RULE_LABEL}" is a day a new model, prompt or setting started, and everything left of it was written by the one before it.`;
+
 /** Below this share of a window's days, a chart states the span nothing
  * measured instead of letting its marks pile against one edge.
  *
@@ -665,15 +674,6 @@ export function coverageRegions(
 		});
 	}
 	return regions;
-}
-
-/** What one tinted span says to anybody who points at it. */
-export function coverageRegionTitle(region: CoverageRegion): string {
-	const span =
-		region.from === region.to
-			? shortDate(region.from)
-			: `${shortDate(region.from)} to ${shortDate(region.to)}`;
-	return `Nothing was measured over ${span}. The span is drawn because it happened, not because it was quiet.`;
 }
 
 /** The item clause of a coverage sentence, where the chart counts items too.

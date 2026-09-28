@@ -28,6 +28,7 @@
 		type Margin
 	} from '$lib/charts/frame';
 	import { pointerReadout, readoutMarks, readoutOf } from '$lib/charts/readout';
+	import { shortDate } from '$lib/format';
 	import ChartReadout from './ChartReadout.svelte';
 	import type { RunLength } from '../../routes/console/model/+page.server';
 
@@ -163,12 +164,24 @@
 		}))
 	);
 
+	/** What a run with no article length says in place of an ask, in the strip and
+	 * in the run's own sentence alike. */
+	const NO_ASK = 'no article in it recorded a length';
+
+	/** One run's sentence, kept on its marks as their name. Every word of it is in
+	 * the strip at that run: the run id names the day, so the date is not said a
+	 * second time. */
 	function sentence(run: RunLength): string {
 		const asked =
 			run.askLow === null || run.askHigh === null
-				? 'No article in it recorded a length, so no ask can be read.'
+				? `${NO_ASK.charAt(0).toUpperCase()}${NO_ASK.slice(1)}.`
 				: `Asked for ${run.askLow} to ${run.askHigh} words.`;
-		return `Run ${run.runId} on ${run.date}${run.model === null ? '' : `, ${run.model}`}: ${run.items} summaries, shortest ${run.low} words, middle ${run.median}, longest ${run.high}. ${asked}`;
+		return `Run ${run.runId}${run.model === null ? '' : `, ${run.model}`}: ${run.items} summaries, shortest ${run.low} words, middle ${run.median}, longest ${run.high}. ${asked}`;
+	}
+
+	/** What a model rule says, on the rule and in the strip on the run it opens. */
+	function swapSentence(swap: { model: string; date: string }): string {
+		return `The model changed to ${swap.model} on ${shortDate(swap.date)}.`;
 	}
 
 	const description = $derived(
@@ -199,11 +212,25 @@
 					label: 'Asked for',
 					swatch: null,
 					values: runs.map((run) =>
-						run.askLow === null || run.askHigh === null ? null : run.askLow
+						run.askLow === null || run.askHigh === null ? NO_ASK : run.askLow
 					),
 					format: (low: number, column: number) => `${low} to ${runs[column]?.askHigh} words`
+				},
+				{
+					label: 'Model',
+					swatch: null,
+					values: runs.map((run) => run.model),
+					format: String
 				}
 			],
+			// The rule is drawn between two runs; its sentence prints on the run it
+			// opens, so stepping the runs with a key meets it without a pointer.
+			events: {
+				lines: runs.map((run) => {
+					const swap = swaps.find((one) => one.runId === run.runId);
+					return swap === undefined ? [] : [{ label: swapSentence(swap), value: '', swatch: null }];
+				})
+			},
 			notMeasured: 'not recorded',
 			resting: 'last'
 		});
@@ -279,10 +306,10 @@
 					y2={box.bottom}
 					stroke="var(--color-text-tertiary)"
 					stroke-dasharray="3 3"
+					role="img"
+					aria-label={swapSentence(swap)}
 					data-run-swap={swap.date}
-				>
-					<title>The model changed to {swap.model} on {swap.date}.</title>
-				</line>
+				/>
 			{/each}
 
 			{#if guide !== null}
@@ -299,13 +326,14 @@
 
 			{#each placed as column (column.run.runId)}
 				<g
+					role="img"
+					aria-label={sentence(column.run)}
 					data-run-length={column.run.runId}
 					data-run-low={column.run.low}
 					data-run-median={column.run.median}
 					data-run-high={column.run.high}
 					data-run-items={column.run.items}
 				>
-					<title>{sentence(column.run)}</title>
 					<line
 						x1={round(column.x)}
 						x2={round(column.x)}
