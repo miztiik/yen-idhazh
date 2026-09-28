@@ -216,6 +216,7 @@
 				start={view.start}
 				end={view.end}
 				windowDays={view.days}
+				readoutMaxShare={data.chart.readout_max_share}
 			/>
 		{:else if id === 'memory-held'}
 			<MemoryHeldPanel
@@ -268,9 +269,15 @@
 					{windowDays}
 					markedAt={data.processorLostThresholds.marked}
 					namedAt={data.processorLostThresholds.named}
+					readoutMaxShare={data.chart.readout_max_share}
 				/>
 			{:else if id === 'disk-reads'}
-				<DiskReadsPanel reads={view.diskReads} days={view.days} {windowDays} />
+				<DiskReadsPanel
+					reads={view.diskReads}
+					days={view.days}
+					{windowDays}
+					readoutMaxShare={data.chart.readout_max_share}
+				/>
 		{:else if id === 'machine-cards'}
 			<MachineCardsPanel machines={data.machines} />
 		{:else if id === 'platform-mix'}
