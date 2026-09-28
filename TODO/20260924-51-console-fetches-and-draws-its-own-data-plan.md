@@ -87,12 +87,11 @@ straight to the trunk is such a commit. GitHub's own squash merges carry the sam
 offset; that is defect 48, and it is not this plan's to fix.
 
 OPEN FOR THE PERSON. Ask in one message, in the shape CLAUDE.md section 0c gives:
-  1. A name on row 4's decision 6: the flow chart's layout is our own arithmetic on
-     d3-shape rather than the d3-sankey library, and Guardrail #8 makes writing our own
-     a person's call. The reasons and sizes are on the vocabulary page it names.
-  2. Whether a /console/query page gets a plan of its own. Row 7 builds no page: the
+  1. Whether a /console/query page gets a plan of its own. Row 7 builds no page: the
      door is a module a chart calls. Plan 50 records a query page as its own plan, and
      inside this plan it would fire ESCALATE trigger 1, a tenth prerendered route.
+  The owner answered the other question on 2026-09-28: d3-sankey lays the flow out
+  (deviation 13).
 ```
 
 ### Deviations and owner rulings to date
@@ -113,6 +112,7 @@ Only what no row records. Each row's own departures are in its decisions and its
 | 10 | 7 | Section 2.2's `SliceResult` | `ok` and `quiet` also carry `through`, the newest day compacted or `null`, so a panel can say how far its data reaches; a span wholly after that day is `quiet`. Row 7's decision 14 | Carmack and Fowler, 2026-09-28 |
 | 11 | 7, 8 | Row 7 asserts in `console-cold-load.spec.ts` that the engine is not first-load | No page loads the door until row 8, so that assertion could not fail in row 7. The bundle gate's new entry, proved by a deliberate static import, is row 7's witness, and the cold-load assertion moves to row 8. Row 7's decision 18 | Carmack, 2026-09-28 |
 | 12 | 7, 8 | Decision 2 and section 2.2: the engine is fetched once, and a daily file is cached for ever | Measured 2026-09-28 on the live site: Pages sends `Cache-Control: max-age=600` and an `ETag` built from the deploy time and the size (`"6aba5aa3-152"` on a 338-byte file deployed at 12:16:35 UTC). So an unchanged file is sent again after every deploy, several times a day, and the engine's 8.2 MB (compressed) is paid once a deploy rather than once. Row 8 decides how the device keeps it | Plan owner, measured 2026-09-28 |
+| 13 | 4 | Decision 6: the flow's layout is our own arithmetic on `d3-shape`, and `d3-sankey` is not taken | d3-sankey 0.12.3 lays the flow out. The flow keeps two rules of its own on top of it: each node sits in the column of its depth, so a drop stays beside its stage, and each column is stacked again from the shared top edge. The owner put the added weight at about 2 KB gzipped and asked for no measurement. The vocabulary page carries the reasons | Owner, 2026-09-28 |
 
 ## 0. Operating contract
 
@@ -448,7 +448,7 @@ Susan's starting set, 2026-09-26. **It is a starting set, not a closed one** (ow
 | 1 | `d3-array` | binning, quantiles, extent | installed |
 | 2 | `d3-scale` | every scale above | installed |
 | 3 | `d3-shape` | `line` and `stack` for type 2, `area` and `curveBumpX` for type 8 | **added 2026-09-27** at 3.2.0 |
-| 4 | `d3-sankey` | type 8 only | **considered and not taken, 2026-09-27** (Fowler, Susan and Carmack). A straight funnel has no crossings, merges or loops, which are what it solves; it installs older second copies of `d3-array`, `d3-shape` and `d3-path`; and the bundle gate weighs pages and data files, not scripts, so it could never have been the check. The reasons and the measured sizes are in the vocabulary page's design rationale |
+| 4 | `d3-sankey` | type 8's layout | **added 2026-09-28 at 0.12.3** (owner; deviation 13). It was considered and not taken on 2026-09-27 (Fowler, Susan and Carmack): a straight funnel has no crossings, merges or loops, and it installs older second copies of `d3-array`, `d3-shape` and `d3-path`. The owner took it for Guardrail #8 at about 2 KB gzipped. The flow keeps its own two rules on top of the library's layout; the reasons are in the vocabulary page's design rationale |
 | 5 | `d3-axis` | - | **refused.** It would fork the measured label-thinning rule `dayTicks` owns, and that rule exists because four console axes once drew their dates on top of each other |
 | 6 | `d3-selection`, `d3-transition` | - | **refused.** Svelte owns the DOM |
 | 7 | `d3-scale-chromatic` | - | **refused.** Colour comes from `--chart-1` to `--chart-8` and the tint tokens. A library ramp collides with the confidence ramp within a month |
@@ -777,7 +777,7 @@ Ruled by Susan on 2026-09-24. The complaint: the Hardware route is fifteen panel
   - `frontend/src/lib/charts/d3/` - the directory this row creates, which no other row in either plan touches: `scale.ts`, `axis.ts`, `ordered-colour.ts`, `motion.ts`, `empty.ts` with `EmptyState.svelte`, its drawing half, and **one `.ts` module per chart type, plus one `.svelte` component for each type section 2.6 does not give an existing component**, named exactly as section 2.6 names them. `rankedList`, `paired` and `overlapTimeline` get their `.ts` only (corrected 2026-09-27 to match section 2.6); `RankedList.svelte`, `SwapDots.svelte` and `RunTimelinePanel.svelte` keep their props until the row that first draws each from its geometry
   - `frontend/src/lib/console/waiting.ts` (`too-few` and `tooFewSentence`, the floor-missed state the personas ruled on 2026-09-27; the one vocabulary `empty.ts` re-exports)
   - `frontend/scripts/test-groups.ts`, `frontend/scripts/doc-test-inputs.ts`, `frontend/scripts/test-scope.ts`, `frontend/scripts/tests/test-scope.test.mjs` (the new spec joins the logic group, and an edit to the vocabulary page buys that spec rather than reading as documentation only)
-  - `frontend/package.json`, `frontend/package-lock.json` (`d3-shape`; `d3-sankey` considered and not taken, 2026-09-27 - section 2.6)
+  - `frontend/package.json`, `frontend/package-lock.json` (`d3-shape`; `d3-sankey` considered and not taken, 2026-09-27 - section 2.6; added 2026-09-28 by the owner's ruling, deviation 13)
   - `docs/concepts/console-design/the-mark-shapes-a-panel-may-reach-for.md` (the starting types join the five marks, the page says marks sit inside types, and **the page is the list a new type is added to**, with Susan's ruling beside it)
   - `frontend/tests/chart-vocabulary.spec.ts` (new: every chart-type module under `frontend/src/lib/charts/d3/` is listed on the vocabulary page and every listed type has its module; the single-engine-importer walk section 2.5 refusal 1 names; and gate 10's columns-not-ledgers walk, which is vacuous until a panel queries in rows 7 and 8)
 - **Acceptance gates:** local `npm --prefix frontend run test:changed -- --list` then the selected checks, and `python backend/utilities/doc_load.py` before and after. CI runs the full suite. **The check on a package that lands is its measured compressed weight, recorded on the vocabulary page** - corrected 2026-09-27, because `ci.yml`'s bundle gate weighs pages and data files and scans first-load code for banned names, and weighs no script (Carmack).
@@ -791,7 +791,7 @@ Ruled by Susan on 2026-09-24. The complaint: the Hardware route is fifteen panel
   | 3 | Four packages are refused by name - the axis, selection, transition and colour-ramp ones - so nobody re-argues them. Each would fork a rule this console already owns | Susan, section 2.6 |
   | 4 | **Nine types to start, and the list grows.** Susan adds a type when a panel needs one; the list lives on the vocabulary page and the test keeps the page and the code in step. It is not an escalation | Owner, 2026-09-27, giving the call to Susan |
   | 5 | **The hatch is a builder that takes its angle from the panel, with no default.** Row 8 mints `console.absent_hatch_degrees` beside its first reader | Fowler, Susan and Carmack, 2026-09-27 |
-  | 6 | **The flow's layout is our own arithmetic on `d3-shape`, and `d3-sankey` is not taken.** Guardrail #8 makes writing our own a person's call; the reasons and the measured sizes are on the vocabulary page for that person to sign | Fowler, Susan and Carmack, 2026-09-27 |
+  | 6 | **The flow's layout is d3-sankey's, and the funnel's two rules are applied on top of it** (re-ruled 2026-09-28; this row first wrote the layout itself on `d3-shape`). Each node sits in the column of its depth, and each column is stacked again from the shared top edge after the library runs. Guardrail #8 made writing our own a person's call, and the owner took the library at about 2 KB gzipped. Deviation 13 | Owner, 2026-09-28, overturning Fowler, Susan and Carmack, 2026-09-27 |
   | 7 | **A floor missed is `too-few`, every floor is an argument with no default, and `paired` refuses one row at a time** | Fowler, Susan and Carmack, 2026-09-27 |
 
 - **Rejected alternatives:**
