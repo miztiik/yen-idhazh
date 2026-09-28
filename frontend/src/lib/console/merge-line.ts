@@ -309,7 +309,10 @@ export type FoldState = 'fitted' | 'filling' | 'held' | 'silent';
 export interface FoldSquare {
 	date: string;
 	state: FoldState;
-	/** The sentence the square carries, so colour is never the only signal. */
+	/** What the record did with the day, in words: the entry the readout prints. */
+	said: string;
+	/** The whole sentence, day included: the square's accessible name, so colour
+	 * is never the only signal. */
 	title: string;
 }
 
@@ -331,22 +334,18 @@ export function countedDays(
 	gatesMet: boolean
 ): FoldSquare[] {
 	const byDate = new Map(rows.map((row) => [row.date, row]));
+	const square = (date: string, state: FoldState, said: string): FoldSquare => ({
+		date,
+		state,
+		said,
+		title: `${date}: ${said}`
+	});
 	return dates.map((date) => {
 		const row = byDate.get(date);
-		if (row === undefined) {
-			return { date, state: 'silent', title: `${date}: no run recorded anything.` };
-		}
-		if (row.heldReason === 'none') {
-			return { date, state: 'fitted', title: `${date}: a line was fitted.` };
-		}
-		if (!gatesMet) {
-			return { date, state: 'filling', title: `${date}: the record was still filling.` };
-		}
-		return {
-			date,
-			state: 'held',
-			title: `${date}: nothing was fitted. ${heldInWords(row.heldReason)}.`
-		};
+		if (row === undefined) return square(date, 'silent', 'no run recorded anything.');
+		if (row.heldReason === 'none') return square(date, 'fitted', 'a line was fitted.');
+		if (!gatesMet) return square(date, 'filling', 'the record was still filling.');
+		return square(date, 'held', `nothing was fitted. ${heldInWords(row.heldReason)}.`);
 	});
 }
 

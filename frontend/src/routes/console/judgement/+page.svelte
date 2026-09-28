@@ -131,6 +131,7 @@
 			minimumAboveLine: data.similarity.minimum_above_line
 		}}
 		{viewport}
+		readoutMaxShare={data.chart.readout_max_share}
 	/>
 
 	<VerdictSplit
