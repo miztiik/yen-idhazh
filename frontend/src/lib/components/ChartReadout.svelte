@@ -11,9 +11,11 @@
 	 *
 	 * The strip may be as wide as its plot, `chart.readout_max_share` of it. A
 	 * share under one wrapped the entries on a phone while the plot still had
-	 * room, which is the tall block this layout replaced. Each value keeps the room
-	 * its widest reading needs, so stepping from column to column does not reflow
-	 * the strip or change the panel's height.
+	 * room, which is the tall block this layout replaced. From the small
+	 * breakpoint up, each value keeps the room its widest reading needs, so
+	 * stepping from column to column does not reflow the strip or change the
+	 * panel's height. On a phone that room can be wider than the strip itself,
+	 * so there it is not kept.
 	 *
 	 * It is the legend as well. A separate legend would print each series colour
 	 * and label a second time, and one fact drawn twice is how two of them drift.
@@ -124,15 +126,23 @@
 			{view.heading}{view.resting ? restingNote : ''}
 		</dt>
 		{#each view.entries as entry, index (`${index}:${entry.label}`)}
-			<div class="flex min-w-0 items-center gap-1.5" data-readout-row={entry.label}>
+			<!-- An entry wider than the strip wraps inside itself, value under label,
+			     rather than pushing the page sideways. The room a value keeps for its
+			     widest reading is kept from the small breakpoint up: on a phone that
+			     room is wider than the strip, and a strip that scrolls the page
+			     sideways costs more than one that reflows as the reader steps. -->
+			<div
+				class="flex min-w-0 max-w-full flex-wrap items-center gap-x-1.5"
+				data-readout-row={entry.label}
+			>
 				{#if entry.swatch}
 					<span class="size-3 shrink-0 rounded-sm" style="background: {entry.swatch}"></span>
 				{/if}
 				<dd>{entry.label}</dd>
 				{#if entry.value !== ''}
 					<dd
-						class="tabular-nums text-text-secondary"
-						style={entry.reserve > 0 ? `min-inline-size: ${entry.reserve}ch` : undefined}
+						class="tabular-nums text-text-secondary sm:min-w-(--readout-reserve)"
+						style={entry.reserve > 0 ? `--readout-reserve: ${entry.reserve}ch` : undefined}
 					>
 						{entry.value}
 					</dd>

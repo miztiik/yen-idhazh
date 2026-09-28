@@ -244,9 +244,12 @@ column - four series or one - and the rules are not negotiable per chart:
  reader compares are printed once rather than twice.
 - **As wide as the plot, with its entries side by side.** `chart.readout_max_share`
  is 1: the strip may take the whole width of the plot above it, and its entries
- lie along one line and wrap only when the next one does not fit. Each value
- keeps the room its widest reading needs, so an entry does not shift sideways as
- the pointer moves from `9` to `1,204`. A share of the plot and not a pixel
+ lie along one line and wrap only when the next one does not fit. From the small
+ breakpoint up, each value keeps the room its widest reading needs, so an entry
+ does not shift sideways as the pointer moves from `9` to `1,204`. On a phone
+ that room is not kept: a value's widest reading plus its label can be wider
+ than a 360 px screen, and a strip that pushes the page sideways costs more than
+ one that reflows as the reader steps. A share of the plot and not a pixel
  count, so the rule holds at every window width.
 - **A vertical guide down the hovered column**, across every series.
 - **Reachable by keyboard.** Left and Right step, Home and End jump, Escape

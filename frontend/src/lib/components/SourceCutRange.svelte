@@ -327,6 +327,17 @@
 					data-range-max={row.source.lengths.max}
 					data-range-past={row.marks.past ? 'yes' : 'no'}
 				>
+					<!-- The whole row answers a pointer, not only its ink: a source whose
+					     three lengths are one word count draws a single dot, and a thumb
+					     between its name and that dot would otherwise land on nothing. -->
+					<rect
+						x="0"
+						y={px(row.top)}
+						width={box.width}
+						height={pitch}
+						fill="transparent"
+						data-readout-hit
+					/>
 					<!-- Beside the plot where the frame can hold the widest name, above it
 					     where it cannot. A name is a source id and there is no shorter true
 					     form of it, so the gutter moves rather than the word. -->

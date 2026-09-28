@@ -353,6 +353,16 @@
 					data-polarity={measure.polarity}
 					data-movement-verdict={verdict(measure)}
 				>
+					<!-- The whole row answers a pointer, not only its ink: between the
+					     label and the two dots there is nothing painted to land on. -->
+					<rect
+						x="0"
+						y={round(top)}
+						width={box.width}
+						height={pitch}
+						fill="transparent"
+						data-readout-hit
+					/>
 					<text
 						x={stacked ? box.left : box.left - GUTTER_GAP}
 						y={stacked ? top + STACK_NAME_Y : y + 3}

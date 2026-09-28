@@ -574,19 +574,20 @@ export interface MarkReadoutOptions {
 	selected?: number | null;
 }
 
-/** Report which mark of a chart drawn as elements - a tile, a square, a row -
- * the reader is pointing at, has stepped to or has tapped.
+/** Report which mark of a chart of records - a tile, a square, a row - the
+ * reader is pointing at, has stepped to or has tapped.
  *
- * A chart drawn in SVG answers a pointer by the nearest column. One drawn as
- * elements answers by the mark under the pointer, because its marks wrap onto
- * several lines, and nearest by x would pick a tile on the wrong line. Every
+ * A chart whose marks share a column answers a pointer by the nearest column.
+ * A chart of records answers by the mark under the pointer, because its marks
+ * wrap onto several lines or stack down a list, and nearest by x would pick a
+ * mark on the wrong line. It may be drawn in HTML or in SVG. Every
  * mark carries `data-readout-at` with its index; the element the action is on
  * is the chart's one tab stop, never a stop per mark. A tap sets a mark and it
  * stays set; a mouse leaving, Escape, or focus leaving the chart returns the
  * strip to rest.
  */
 export function markReadout(
-	node: HTMLElement,
+	node: HTMLElement | SVGElement,
 	options: MarkReadoutOptions
 ): { update: (next: MarkReadoutOptions) => void; destroy: () => void } {
 	let current = options;
