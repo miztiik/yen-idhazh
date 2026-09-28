@@ -1,6 +1,6 @@
 # Feed Health and Quarantine
 
-**Last Updated**: 2026-09-20
+**Last Updated**: 2026-09-28
 What every feed did on every run, where that record lives, and how a run decides on its own to stop asking a dead source. Nothing on this page ever edits `config/sources.json`: a person owns the source list, and a run owns the evidence about it.
 
 ## From item outcome to feed rest or retirement
@@ -60,7 +60,7 @@ Monthly shards, because a read looks back 31 days - just enough that a quarantin
 
 **Older than the oldest month kept, never merely outside a window.** `--date` takes whatever it is handed, so a run given a date in the past draws a smaller window and every shard since falls outside it. Deleting below the window's floor instead means a back-dated run deletes less rather than deleting the shard the next quarantine reads.
 
-**`state/feed-retirements.csv` is never a candidate.** It sits beside this directory rather than in it, and it carries no time window at all: one row is one address a server reported permanently gone. The evidence that retired an address lives in shards this prune is entitled to delete, so the record has to outlive them - a run that forgot it would start asking a dead address again on the day the last 410 row aged out.
+**`state/raw/feed-retirements/` is never a candidate.** It is not in this directory, and it carries no time window at all: one row is one address a server reported permanently gone. The evidence that retired an address lives in shards this prune is entitled to delete, so the record has to outlive them - a run that forgot it would start asking a dead address again on the day the last 410 row aged out.
 
 **The step ships in dry run.** It logs every file a live run would remove and removes none of them, because `.github/workflows/prune.yml` force-pushes `main` on a schedule and a state file deleted here stops being recoverable from history once that prune passes over it (`CLAUDE.md` section 8). Turning the deletion on is a one-line commit taken after a scheduled run has printed the list. Measured on this checkout on 2026-09-02: a live run removes nothing today, and the first files it would take are the day files under `state/feed-health/2026/08/` on **2027-10-01**. Reading committed files against a fixed calendar is deterministic, so the spread is zero.
 
@@ -139,12 +139,16 @@ not about today.
 
 ## A run may rest a feed; only an address is ever retired automatically
 
-`state/feed-retirements.csv` is where a run files an address the server has
+`state/raw/feed-retirements/` is where a run files an address the server has
 reported permanently gone. One row is one endpoint: the feed, the endpoint key,
 the day, the run that decided, the cause, and the runs whose results evidence
-it. It ships with its header and no rows, because the plan job's commit step
-stages every path it owns in one call and a path that is not in the checkout
-aborts the whole step ([../contracts/schemas.md](../contracts/schemas.md)).
+it. One function files it, `source_health.file_retirements`, which both the
+plan job and the assemble job call. It writes one file per day of retirements
+through the ledger door, under the day the addresses were retired, and it drops
+an address the ledger already holds, so a retry files nothing twice
+([../contracts/persistence.md](../contracts/persistence.md#moving-a-ledger-onto-the-door)).
+`ledger.load_retirements` reads every file and keeps the first row of each
+address.
 
 **`http_410` was the only cause the enum admitted until 2026-09-17**, and that
 clause was not a starting point. A 403, a 404, a paywall, a transient failure
@@ -358,7 +362,7 @@ they yield`.
 | --- | --- | --- |
 | Permission | What did the site's own `robots.txt` say? | `robots_outcome` on the health row |
 | Reading | Is the address answering now? | `discover.streak` and `discover.resting` |
-| Retirement | Has a run stopped asking this address for good? | `state/feed-retirements.csv` |
+| Retirement | Has a run stopped asking this address for good? | `state/raw/feed-retirements/` |
 | Publishing record | What has it been offered, and what did it publish? | `state/item-health/` |
 
 **No column combines two of them.** A single credibility score across the four

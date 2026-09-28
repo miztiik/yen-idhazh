@@ -83,7 +83,6 @@ from idhazh.stages import (
     compact,
     decide,
     harvest,
-    prune_stamp,
     prune_state,
     qualify,
     qualify_canaries,
@@ -143,7 +142,6 @@ STAGES: Final[tuple[str, ...]] = (
     "harvest",
     "compact",
     "rebuild-score-index",
-    "prune-stamp",
     "prune-state",
     "run",
     "validate",
@@ -651,10 +649,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         return 0
 
-    if args.stage == "prune-stamp":
-        # Above the fetcher for the same reason: it rewrites one committed field.
-        return prune_stamp.stage_prune_stamp(corpus_dir=args.corpus_dir, date=args.date or _today())
-
     if args.stage == "council-shard":
         # Above the fetcher because a hosted unit reads committed files and posts
         # to loopback. Starting a fetcher here would read every host's robots.txt
@@ -720,6 +714,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             retention_config=settings.app.retention,
             lens_weights=settings.app.lens_weights,
             run_id=plan_stage._run_id(pruned_on, args.execution),
+            commit_sha=args.commit,
             today=date_type.fromisoformat(pruned_on),
             dry_run=args.dry_run,
         )
@@ -795,7 +790,12 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.stage in ("plan", "run"):
         plan = plan_stage.stage_plan(
-            date, settings=settings, fetcher=read_url, cap=args.cap, execution=args.execution
+            date,
+            settings=settings,
+            commit_sha=args.commit,
+            fetcher=read_url,
+            cap=args.cap,
+            execution=args.execution,
         )
         atomic_write.write_atomic(common._plan_path(date), plan.to_json())
         common.LOG.info("planned date=%s items=%s feeds=%s", date, len(plan.items), plan.feeds_read)

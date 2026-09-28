@@ -14,22 +14,18 @@ from typing import NamedTuple
 
 from idhazh import day_partition
 from idhazh.contracts.council_shard_outcome import CouncilShardOutcome
-from idhazh.contracts.feed_retirement import FeedRetirementRow
 from idhazh.contracts.fitted_similarity_threshold import FittedSimilarityThreshold
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.story_similarity_pair import StorySimilarityPair
-from idhazh.contracts.visual_prune import VisualPruneRow
 from idhazh.ledger import paths
 from idhazh.ledger.csv_file import CsvContract, _read_rows
 from idhazh.ledger.keys import (
     _PREFERENCES,
     COUNCIL_SHARD_OUTCOME_KEY,
-    FEED_RETIREMENT_KEY,
     FITTED_SIMILARITY_THRESHOLD_CARRIED,
     STORY_SIMILARITY_PAIR_CARRIED,
     STORY_SIMILARITY_PAIR_KEY,
     STORY_SIMILARITY_THRESHOLD_KEY,
-    VISUAL_PRUNE_KEY,
 )
 
 
@@ -69,9 +65,6 @@ def keyed_paths(state_dir: Path, *, date: str | None) -> list[KeyedLedger]:
     write it, not because it is old, so the bound does not weaken as a run gets
     slower or crosses midnight.
 
-    The two flat ledgers are named on both covers. They are one file each, so
-    settling them costs the same on a fresh clone and on a five-year archive.
-
     `state/seen/` is the one that is deliberately absent. It has no key at all:
     `load_seen` folds a second sight by keeping the earliest, so a repeat costs
     bytes and never moves an age.
@@ -85,48 +78,26 @@ def keyed_paths(state_dir: Path, *, date: str | None) -> list[KeyedLedger]:
     What settles two of their rows at read time is `day_shards.settled_rows`,
     which is where it always decided - this pass only ever rewrote the file.
 
-    `state/feed-retirements.csv` is listed before anything writes it, because the
-    settlement runs over whatever it finds and a missing file settles to nothing.
-    Registering it with the shape rather than with its first writer is what stops
-    two stale checkouts leaving one address retired twice.
-
-    `state/visual-prunes/` is listed for the same reason and needs it more: the
-    step that writes it commits through a call that names no settlement command,
-    so the pass that settles it is a later run's, over the merged file. It moved
-    to a day tree on 2026-09-08 and moved with it from the flat set to the dated
-    one, which is the cover this whole docstring already describes - a run wrote
-    only its own day, so only its own day can hold the repeat. What that costs is
-    stated rather than implied: a repeat the last run of a day leaves behind is
-    now settled by the operator's full pass rather than by tomorrow's first run.
+    The feed retirements and the visual cleanup record left for the same reason
+    when they moved under `state/raw/`: every writer holds its own file there
+    too, and their readers keep one row per key as they read
+    (`ledger/raw_files.py`).
 
     `state/content-similarity-judge/fitted-thresholds/` is registered before
-    anything writes it, for the reason `state/feed-retirements.csv` was: the settlement
-    runs over whatever it finds, a missing file settles to nothing, and
-    registering the shape rather than its first writer is what stops two stale
-    checkouts leaving one date fitted twice. Its sibling `scored-pairs/` joins on
-    the same terms: `run_id` is in its key, so what settles there is a second
-    attempt at one execution and never a second run of the day.
+    anything writes it: the settlement runs over whatever it finds, a missing
+    file settles to nothing, and registering the shape rather than its first
+    writer is what stops two stale checkouts leaving one date fitted twice. Its
+    sibling `scored-pairs/` joins on the same terms: `run_id` is in its key, so
+    what settles there is a second attempt at one execution and never a second
+    run of the day.
 
     `state/llm-council/shard-outcomes/` joined on 2026-09-21 with its writer. Its
     key carries `judge_id` as well as the run and the unit, because one council
     run has one run id and a night hosting two tenants would otherwise file two
     tenants' unit 0 under the same three cells.
     """
-    flat: list[KeyedLedger] = [
-        KeyedLedger(
-            paths.path(state_dir, LedgerName.FEED_RETIREMENTS),
-            FEED_RETIREMENT_KEY,
-            FeedRetirementRow,
-        ),
-    ]
     if date is not None:
         return [
-            *flat,
-            KeyedLedger(
-                paths.path(state_dir, LedgerName.VISUAL_PRUNES, date),
-                VISUAL_PRUNE_KEY,
-                VisualPruneRow,
-            ),
             KeyedLedger(
                 paths.path(state_dir, LedgerName.CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS, date),
                 STORY_SIMILARITY_THRESHOLD_KEY,
@@ -146,13 +117,6 @@ def keyed_paths(state_dir: Path, *, date: str | None) -> list[KeyedLedger]:
             ),
         ]
     return [
-        *flat,
-        *(
-            KeyedLedger(file, VISUAL_PRUNE_KEY, VisualPruneRow)
-            for file in day_partition.day_files(
-                paths.tree_root(state_dir, LedgerName.VISUAL_PRUNES)
-            )
-        ),
         *(
             KeyedLedger(
                 file,
@@ -191,10 +155,11 @@ def drop_repeated_rows(path: Path, key: tuple[str, ...]) -> int:
     reads the committed file the job checked out, and `actions/checkout` pins a
     job to the commit its run was triggered at - so a second execution of the
     same work cannot see rows the first one pushed after that commit. Its append
-    lands them again. On the two day trees that still carry a union merge driver
-    - `state/published/` and `state/visual-prunes/` - git then concatenates both
-    sides line by line, which is the right answer for two runs writing different
-    rows and exactly the wrong one for two attempts writing the same row.
+    lands them again. On a tree that still carries a union merge driver -
+    `state/published/` is one, and `path_classes.UNION_SAFE` lists the rest -
+    git then concatenates both sides line by line, which is the right answer for
+    two runs writing different rows and exactly the wrong one for two attempts
+    writing the same row.
     Everywhere else under `state/` that driver went on 2026-09-19 and the second
     push conflicts at the rebase instead. Measured on this
     repository 2026-08-31: run `2026-08-29-3` holds six counter rows for four

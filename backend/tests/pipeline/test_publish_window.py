@@ -640,6 +640,7 @@ def test_two_runs_that_start_before_either_publishes_cannot_share_a_run_id(
         return stage_plan(
             date,
             settings=settings,
+            commit_sha="a" * 40,
             fetcher=lambda _url: FetchResult(outcome=FetchOutcome.TRANSIENT, detail="offline"),
             now=lambda: "2026-08-21T09:00:00Z",
             execution=execution,

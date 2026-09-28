@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, Final
 
 import pytest
 from gardener._garden import GARDENER_FIXTURES, a_config
@@ -70,11 +70,41 @@ def a_compaction(ledger: str, **changes: Any) -> dict[str, Any]:
 
 MONTHS = {"unit": "months", "value": 14}
 
+#: The declarations that ship live, each beside the decision that put it there.
+#: Every other declaration ships `dry_run: true`: a task earns its first deletion
+#: from a person reading its records, never from the change that added it.
+LIVE_BY_DECISION: Final = {
+    "corpus-squash": (
+        "the squash has run live since 2026-08-28 by owner decision (CLAUDE.md "
+        "section 8), so its declaration transcribes a live squash rather than starting one"
+    ),
+}
 
-def test_the_committed_gardener_config_loads_with_no_task() -> None:
+
+def test_the_committed_gardener_config_loads_with_the_corpus_squash_alone() -> None:
     settings = config.load_gardener()
     assert (settings.config.attempts, settings.config.shards) == (6, 5)
-    assert dict(settings.tasks) == {}
+    assert set(settings.tasks) == {"corpus-squash"}
+    assert isinstance(settings.tasks["corpus-squash"], HistoryPolicy)
+
+
+def test_a_declaration_ships_in_dry_run_unless_a_named_decision_put_it_live() -> None:
+    """The review gate on onboarding: a new task deletes nothing until a person has read it.
+
+    Held over the committed tree rather than over one change, because a test
+    cannot see which change added a file. So every declaration is `dry_run: true`
+    except the ones named above, and turning one live is an edit to that list - a
+    line a reviewer reads, with its reason beside it.
+    """
+    tasks = config.load_gardener().tasks
+    assert tasks, "nothing is declared, so this checks nothing"
+    for name, policy in tasks.items():
+        assert policy.dry_run is (name not in LIVE_BY_DECISION), (
+            f"config/gardener/{name}.json ships dry_run {str(policy.dry_run).lower()}. A "
+            "declaration ships in dry run, and one goes live only by a decision named in "
+            "LIVE_BY_DECISION with its reason"
+        )
+    assert set(LIVE_BY_DECISION) <= set(tasks), "an exception names a task nobody declares"
 
 
 def test_attempts_at_or_below_shards_is_refused_naming_both() -> None:
@@ -96,6 +126,16 @@ def test_each_declaration_is_read_by_the_member_its_kind_names(tmp_path: Path) -
 def test_a_key_that_belongs_to_another_member_is_refused_by_name(tmp_path: Path) -> None:
     message = refused(a_garden(tmp_path, seen=fixture("seen", every_days=30)))
     assert "config/gardener/seen.json is refused" in message and "every_days" in message
+
+
+@pytest.mark.parametrize("window", [MONTHS, {"unit": "forever"}])
+def test_a_history_window_is_whole_days_and_nothing_else(
+    tmp_path: Path, window: dict[str, Any]
+) -> None:
+    """The squash counts back whole days from 00:00 UTC, so a month would be read as a day."""
+    assert "config/gardener/history.json is refused" in refused(
+        a_garden(tmp_path, history=fixture("history", window=window))
+    )
 
 
 @pytest.mark.parametrize(

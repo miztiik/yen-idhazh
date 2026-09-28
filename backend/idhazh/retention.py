@@ -30,7 +30,7 @@ Three rules the prune obeys, each one a way this goes wrong otherwise:
   error.
 - **A fuse.** An off-by-one in a date parse must not eat the archive, so no run
   may delete more than a configured number of files.
-- **A record.** Every pass appends one row to `state/visual-prunes.csv`, and that
+- **A record.** Every pass files one row under `state/raw/visual-prunes/`, and that
   row carries `skipped_by_fuse` beside `deleted`. The fuse caps `deleted`, so on
   its own it is the same number on a run that finished its backlog and on one
   that could not get near it. Only the pair says which, and the pass runs and
@@ -72,7 +72,7 @@ why that pass walks the published tree rather than the shards it just folded.
 `observability.feed_health_keep_months` has a reader - and inventing one would
 persist a shape nothing consumes, for ever. The ledger files by day and that
 age is a month, so the prune takes a month's day files whole and names each one
-it removed. `state/feed-retirements.csv` sits beside that directory and is never
+it removed. `state/raw/feed-retirements/` is never
 a candidate: it carries no time window at all, and a run that forgot a retired
 address would start asking a dead one again.
 
@@ -912,7 +912,7 @@ def prune_feed_health(
     than deleting the live day. That is the rule `prune_seen` states at length
     and it is the same rule here.
 
-    `state/feed-retirements.csv` is not in this directory and is never a
+    `state/raw/feed-retirements/` is not in this directory and is never a
     candidate. It carries no time window: one row is one address a server said
     was gone, and a run that forgot it would start asking a dead address again.
     """

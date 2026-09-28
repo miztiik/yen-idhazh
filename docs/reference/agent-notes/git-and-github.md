@@ -1,6 +1,6 @@
 # Agent Notes - Git and GitHub
 
-**Last Updated**: 2026-09-27
+**Last Updated**: 2026-09-28
 
 Traps in `git`, worktrees, merges and the `gh` CLI. Index and scope:
 [../agent-notes.md](../agent-notes.md).
@@ -86,6 +86,8 @@ git merge-tree --write-tree --name-only HEAD origin/main   # exit 0 means no con
 `git merge-tree` answers without touching the worktree, so it is also the cheapest way to find out whether a fetch has made a merge you already resolved conflict again.
 
 **Local `main` is often behind on purpose.** When the shared checkout is dirty with work that overlaps incoming commits, `git merge --ff-only` aborts. That is correct. Do not force it.
+
+**`git merge` will not start while the index holds a staged change, even a deletion of a path the merge never touches.** It says `Your local changes to the following files would be overwritten by merge` and names the staged path, which reads as a conflict that is not there. Unstaged edits to other files do not stop it. Unstage the path with `git restore --staged -- <path>`, merge, and stage it again; the file stays deleted in the worktree throughout. Hit on 2026-09-28 with a staged `git rm` waiting for its commit.
 
 **A killed `git push -u` can land the push and skip the `-u`.** The tool cuts the command with no output and exit 1, which reads like a failed push, while the branch is on the remote at the right sha and only the upstream config is missing. Read the remote before concluding anything:
 
@@ -193,7 +195,7 @@ A module imported only by tests and by `backend/utilities/` is built and unwired
 
 ## Ledgers under merge
 
-**A header migration cannot survive a rebase on a path that carries a union merge driver.** Three still do - `state/published/**/*.csv`, `state/visual-prunes/**/*.csv` and `state/seen/**/*.csv` - and every other head under `state/` lost one on 2026-09-19. Union merge keeps every line from both sides - right for an append-only ledger, wrong for a file whose every line changed. One merge produced 4,349 data rows where 2,232 were expected, and the tell was a data row whose `run_id` cell read `run_id`. Do not resolve by hand:
+**A header migration cannot survive a rebase on a path that carries a union merge driver.** `path_classes.UNION_SAFE` lists the trees that still do - among them `state/published/**/*.csv` and `state/seen/**/*.csv`; `state/visual-prunes/**/*.csv` lost its driver on 2026-09-28, when it moved under `state/raw/`, and every other head under `state/` lost one on 2026-09-19. Union merge keeps every line from both sides - right for an append-only ledger, wrong for a file whose every line changed. One merge produced 4,349 data rows where 2,232 were expected, and the tell was a data row whose `run_id` cell read `run_id`. Do not resolve by hand:
 
 ```powershell
 git checkout origin/main -- state/scores.csv

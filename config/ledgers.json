@@ -158,10 +158,10 @@
       "ledgers": [
         {
           "name": "feed-retirements",
-          "grain": "flat",
-          "prefix": [],
-          "stem": "feed-retirements",
-          "suffix": ".csv"
+          "grain": "raw-and-compact",
+          "prefix": ["feed-retirements"],
+          "stem": null,
+          "suffix": null
         }
       ]
     },
@@ -173,10 +173,10 @@
       "ledgers": [
         {
           "name": "visual-prunes",
-          "grain": "day",
+          "grain": "raw-and-compact",
           "prefix": ["visual-prunes"],
           "stem": null,
-          "suffix": ".csv"
+          "suffix": null
         }
       ]
     },

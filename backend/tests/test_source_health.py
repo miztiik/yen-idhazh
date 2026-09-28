@@ -5,9 +5,9 @@ network, no clock, no file. That is the point of the module under test - a rule
 that decides whether an address is asked again has to be checkable without
 standing up a run.
 
-The one exception is the last section. Two stale checkouts appending the same
-retirement is a fact about a file and a merge driver, so it is proved against a
-file.
+The one exception is the last section. The retirement ledger's one writer
+files through the ledger door, and two stale checkouts filing one address is a
+fact about files, so both are proved against files.
 """
 
 from __future__ import annotations
@@ -17,6 +17,7 @@ from pathlib import Path
 import pytest
 
 from idhazh import ledger
+from idhazh.contracts.base import ServerJob
 from idhazh.contracts.feed_health import (
     FeedHealthRow,
     FetchOutcome,
@@ -24,6 +25,7 @@ from idhazh.contracts.feed_health import (
     derive_endpoint_key,
 )
 from idhazh.contracts.feed_retirement import FeedRetirementRow, RetirementCause
+from idhazh.contracts.file_envelope import WriterIdentity
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.sources import FeedDef
 from idhazh.contracts.taxonomy import LifecycleStatus, SourceTier
@@ -436,64 +438,109 @@ def test_the_floor_comes_from_the_argument() -> None:
     assert source_health.feed_reliability(rows, floor=0.2) == 0.2
 
 
-# --- two stale checkouts, one address ----------------------------------------
+# --- the one writer, and two stale checkouts ---------------------------------
 
 
-def retirement(feed_id: str = "trade-press", key: str = KEY) -> FeedRetirementRow:
+def retirement(
+    feed_id: str = "trade-press", key: str = KEY, *, on: str = DATE, run: int = 6
+) -> FeedRetirementRow:
     return FeedRetirementRow(
         version=FeedRetirementRow.schema_version(),
         feed_id=feed_id,
         endpoint_key=key,
-        retired_on=DATE,
-        decided_by_run=f"{DATE}-6",
+        retired_on=on,
+        decided_by_run=f"{DATE}-{run}",
         cause=RetirementCause.HTTP_410,
         evidence_run_ids=tuple(f"{DATE}-{n}" for n in range(1, RETIRE_AFTER + 1)),
     )
 
 
-def test_two_stale_checkouts_filing_one_address_settle_to_one_row(tmp_path: Path) -> None:
-    """One address filed twice settles to one row, whatever stacked the second line.
+def plan_identity(run: int = 6, *, attempt: int = 1) -> WriterIdentity:
+    """The plan stage's writer identity for one run, the one a 410 retirement carries."""
+    return WriterIdentity(
+        run_id=f"{DATE}-{run}",
+        attempt=attempt,
+        job=ServerJob.PLAN,
+        shard=0,
+        producer="stages.plan",
+        git_sha="a" * 40,
+    )
 
-    Both jobs read a checkout frozen at the commit their run was triggered at,
-    so neither can see the row the other pushed, and both file the same address.
-    The settlement is `FEED_RETIREMENT_KEY` plus `drop_repeated_rows`, and the
-    first row wins because there is nothing to choose between: a retirement is
-    permanent, and a second row for one address says nothing the first did not.
+
+def test_the_one_writer_files_under_the_day_it_retired_and_says_so(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """One call, one file under the retirement's own day, one warning line per row."""
+    with caplog.at_level("WARNING"):
+        filed = source_health.file_retirements(tmp_path, [retirement()], plan_identity())
+
+    assert filed == [retirement()]
+    written = ledger.list_raw_files(tmp_path, LedgerName.FEED_RETIREMENTS)
+    assert [held.envelope.covers for held in written] == [DATE]
+    assert written[0].envelope.identity == plan_identity()
+    assert ledger.load_retirements(tmp_path) == [retirement()]
+    assert "feed endpoint retired id=trade-press cause=http_410 runs=5 days=0" in caplog.text
+    assert "file=state/raw/feed-retirements/2026/09/02/" in caplog.text
+
+
+def test_the_writer_files_nothing_for_an_address_the_ledger_already_holds(tmp_path: Path) -> None:
+    """A retirement is permanent for one address, so the second call files nothing."""
+    source_health.file_retirements(tmp_path, [retirement()], plan_identity(6))
+
+    assert source_health.file_retirements(tmp_path, [retirement(run=7)], plan_identity(7)) == []
+    assert len(ledger.list_raw_files(tmp_path, LedgerName.FEED_RETIREMENTS)) == 1
+
+
+def test_two_rows_for_one_address_in_one_call_file_one(tmp_path: Path) -> None:
+    """Two feeds configured at one address are one fact, so only the first row is filed."""
+    twin = retirement(feed_id="trade-press-mirror")
+
+    filed = source_health.file_retirements(tmp_path, [retirement(), twin], plan_identity())
+
+    assert [row.feed_id for row in filed] == ["trade-press"]
+    assert [row.feed_id for row in ledger.load_retirements(tmp_path)] == ["trade-press"]
+
+
+def test_two_stale_checkouts_filing_one_address_read_back_as_the_first(tmp_path: Path) -> None:
+    """Two runs that could not see each other both file one address, and one row is read.
+
+    Each job reads a checkout frozen at the commit its run was triggered at, so
+    neither can see the file the other pushed, and each files its own. Both
+    files are there after the push; the reader keeps the earlier retirement.
+    They are written newest first, so a reader that took directory order or
+    write order would keep the wrong one.
     """
-    path = ledger.path(tmp_path, LedgerName.FEED_RETIREMENTS)
-    assert ledger.append_retirements(tmp_path, [retirement()]) == 1
+    later = retirement(on="2026-09-03", run=9)
+    earlier = retirement(on=DATE, run=6)
+    for row, run in ((later, 9), (earlier, 6)):
+        ledger.persist(
+            tmp_path,
+            [row],
+            ledger=LedgerName.FEED_RETIREMENTS,
+            covers=row.retired_on,
+            identity=plan_identity(run),
+        )
 
-    # The stacked copy, spelled the way a line-wise concatenation makes it: the
-    # other side's line appended to ours, header and all already agreed.
-    merged = path.read_text(encoding="utf-8")
-    path.write_text(merged + merged.splitlines()[1] + "\n", encoding="utf-8")
-    assert len(path.read_text(encoding="utf-8").splitlines()) == 3
-
-    assert ledger.drop_repeated_rows(path, ledger.FEED_RETIREMENT_KEY) == 1
-
-    rows = ledger.load_retirements(tmp_path)
-    assert len(rows) == 1
-    assert rows[0].endpoint_key == KEY
+    assert ledger.load_retirements(tmp_path) == [earlier]
 
 
-def test_appending_an_address_already_on_the_ledger_gains_nothing(tmp_path: Path) -> None:
-    """The one-checkout half of the same guarantee."""
-    assert ledger.append_retirements(tmp_path, [retirement()]) == 1
-    assert ledger.append_retirements(tmp_path, [retirement()]) == 0
-    assert len(ledger.load_retirements(tmp_path)) == 1
-
-
-def test_a_retirement_row_that_no_longer_parses_is_skipped(tmp_path: Path) -> None:
-    """The safe direction: an unreadable row costs one request to a dead address.
+def test_a_retirement_file_that_cannot_be_read_is_skipped(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """The safe direction: an unreadable file costs one request to a dead address.
 
     The next run reads the same evidence and files it again. Refusing to start
-    would cost the reader the day.
+    would cost the reader the day, so the file is skipped and named.
     """
-    ledger.append_retirements(tmp_path, [retirement()])
-    path = ledger.path(tmp_path, LedgerName.FEED_RETIREMENTS)
-    with path.open("a", encoding="utf-8", newline="") as handle:
-        handle.write(f"{FeedRetirementRow.schema_version()},trade,not-a-key,1999,x,http_410,r\n")
-    assert len(ledger.load_retirements(tmp_path)) == 1
+    source_health.file_retirements(tmp_path, [retirement()], plan_identity())
+    folder = ledger.list_raw_files(tmp_path, LedgerName.FEED_RETIREMENTS)[0].path.parent
+    (folder / "torn.parquet").write_bytes(b"PAR1 and nothing after it")
+
+    with caplog.at_level("WARNING"):
+        rows = ledger.load_retirements(tmp_path)
+
+    assert [row.endpoint_key for row in rows] == [KEY]
+    assert "torn.parquet" in caplog.text
 
 
 def test_reading_a_ledger_that_was_never_written_is_empty(tmp_path: Path) -> None:
