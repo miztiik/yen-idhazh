@@ -1,14 +1,14 @@
 {
   "compaction_lag_days": 0,
   "covers_through": "2026-09-27",
-  "generated_at": "2026-09-27T21:31:47Z",
+  "generated_at": "2026-09-27T23:59:50Z",
   "months": [
     "2026-08",
     "2026-09"
   ],
   "routes": [
     {
-      "carries": "The model spent 40 h 15 m of this.",
+      "carries": "The model spent 48 h 3 m of this.",
       "description": "Did the runs work, and what each stage cost.",
       "href": "/console/",
       "id": "pipelines",
@@ -17,25 +17,25 @@
       "worst": "26 feeds resting"
     },
     {
-      "carries": "This day ran in 4 runs, 1.66x apart on read speed.",
+      "carries": "This day ran in 5 runs, 1.98x apart on read speed.",
       "description": "What the model wrote, how long it took, and what it got wrong.",
       "href": "/console/model/",
       "id": "model",
       "label": "Summaries",
       "severity": 3,
-      "worst": "30 items failed"
+      "worst": "36 items failed"
     },
     {
-      "carries": "272 articles on this day.",
+      "carries": "309 articles on this day.",
       "description": "The hardware the model ran on, and how much it varied between runs.",
       "href": "/console/machine/",
       "id": "machine",
       "label": "Hardware",
       "severity": 2,
-      "worst": "24 runs cannot be read"
+      "worst": "25 runs cannot be read"
     },
     {
-      "carries": "26 summaries were marked \"not sure\" on this day.",
+      "carries": "28 summaries were marked \"not sure\" on this day.",
       "description": "What the model made of each article, and where we disagreed.",
       "href": "/console/judgement/",
       "id": "judgement",
@@ -55,12 +55,12 @@
   ],
   "rows_uncompacted": 0,
   "size": {
-    "articles_to_cap": 338199,
-    "bytes": 33473837,
-    "cap_fraction": 0.031174940057098866,
-    "left_mb": 992.0768613815308,
+    "articles_to_cap": 338171,
+    "bytes": 33559012,
+    "cap_fraction": 0.03125426545739174,
+    "left_mb": 991.9956321716309,
     "measured_days": 36,
-    "sentence": "31.9 MB of the 1 GB limit - room for about 338,000 more articles."
+    "sentence": "32.0 MB of the 1 GB limit - room for about 338,000 more articles."
   },
   "verdict": {
     "date": "2026-09-27",
@@ -82,9 +82,13 @@
       {
         "health": "amber",
         "label": "Run 4 is worth a look"
+      },
+      {
+        "health": "amber",
+        "label": "Run 5 is worth a look"
       }
     ],
-    "sentence": "2026-09-27 ran 4 runs and published 288 of 318 planned items. 30 items failed."
+    "sentence": "2026-09-27 ran 5 runs and published 360 of 396 planned items. 36 items failed."
   },
   "version": "2026-09-23",
   "worst": {
