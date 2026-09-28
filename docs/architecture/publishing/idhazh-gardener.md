@@ -26,9 +26,9 @@ two lookups: the module named for the task (hyphens become underscores), else
 the module named for its kind. A config value never names a module, so text in
 a file cannot choose which code runs (Guardrail #11).
 
-**Today the folder holds no module and `config/gardener/` does not exist**, so
-every command below answers "no tasks". The first tasks arrive with their
-modules.
+**The folder is the only count.** `config/gardener/` says how many tasks there
+are, and nothing else does: a task joins when its declaration and its module
+land together, and the pre-flight below refuses either one arriving alone.
 
 ## A wake, in order
 

@@ -57,10 +57,15 @@ def runner_garden() -> dict[str, TaskPolicy]:
     return declared(*sorted((GARDENER_FIXTURES / "runner").glob("*.json")))
 
 
-def test_the_shipped_package_declares_the_corpus_squash_alone() -> None:
-    """Row by row, tasks arrive with their modules. The history task is the first."""
+def test_every_shipped_module_is_named_for_a_declaration_of_the_kind_it_serves() -> None:
+    """Tasks arrive with their modules. The folder says how many, never a number here."""
     shipped = registry.discover()
-    assert set(shipped) == {"corpus_squash"}
+    tasks = config.load_gardener().tasks
+    assert shipped, "no task module ships"
+    for stem, held in shipped.items():
+        name = stem.replace("_", "-")
+        assert name in tasks, f"tasks/{stem}.py is named for no declaration"
+        assert held.kind is TaskKind(tasks[name].kind), f"tasks/{stem}.py serves another kind"
     assert shipped["corpus_squash"].kind is TaskKind.HISTORY
 
 

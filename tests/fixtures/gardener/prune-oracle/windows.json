@@ -1,0 +1,16 @@
+{
+  "collect.seen_window_days": 90,
+  "lens_weights.window_days": 30,
+  "observability.feed_health_keep_months": 14,
+  "observability.host_fingerprint_keep_months": 14,
+  "observability.item_health_aggregate_keep_months": null,
+  "observability.item_health_full_grain_months": 14,
+  "observability.public_telemetry_keep_months": 14,
+  "observability.score_archive_keep_months": null,
+  "observability.scores_full_grain_months": 14,
+  "observability.trace_window_days": 7,
+  "retention.dry_run": true,
+  "retention.image_months": 13,
+  "retention.max_deletes_per_run": 200,
+  "retention.trial_state_days": 90
+}

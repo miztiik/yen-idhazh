@@ -104,16 +104,16 @@ def test_a_run_task_line_the_router_cannot_run_is_refused(
 def test_a_task_no_shipped_module_serves_exits_2_before_it_runs(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """The shipped task folder is empty, so a declared task has nothing to run it yet."""
+    """No shipped module is named for the task or for its kind, so nothing can run it."""
     quiet_git(tmp_path, monkeypatch)
-    _, checkout = an_origin(tmp_path, {"state/seen/.keep": ""})
-    config_dir = a_config(checkout, GARDENER_FIXTURES / "garden" / "seen.json")
+    _, checkout = an_origin(tmp_path, {"state/old-days/.keep": ""})
+    config_dir = a_config(checkout, GARDENER_FIXTURES / "runner" / "old-days.json")
 
     code = cli.main(
         [
             "gardener",
             "run-task",
-            "seen",
+            "old-days",
             *RUN,
             "--git-sha",
             SHA,
@@ -125,7 +125,7 @@ def test_a_task_no_shipped_module_serves_exits_2_before_it_runs(
     )
 
     assert code == EXIT_INTEGRITY
-    assert "config/gardener/seen.json is served by no module" in capsys.readouterr().out
+    assert "config/gardener/old-days.json is served by no module" in capsys.readouterr().out
 
 
 def test_the_landing_utility_takes_the_same_line_and_reads_the_commit_itself(
@@ -133,14 +133,14 @@ def test_the_landing_utility_takes_the_same_line_and_reads_the_commit_itself(
 ) -> None:
     """One parser builds both lines, so a line one accepts the other accepts, less the commit."""
     quiet_git(tmp_path, monkeypatch)
-    _, checkout = an_origin(tmp_path, {"state/seen/.keep": ""})
-    config_dir = a_config(checkout, GARDENER_FIXTURES / "garden" / "seen.json")
+    _, checkout = an_origin(tmp_path, {"state/old-days/.keep": ""})
+    config_dir = a_config(checkout, GARDENER_FIXTURES / "runner" / "old-days.json")
 
     code = gardener_publish.main(
-        ["seen", *RUN, "--repo-root", str(checkout), "--config", str(config_dir)]
+        ["old-days", *RUN, "--repo-root", str(checkout), "--config", str(config_dir)]
     )
 
     assert code == EXIT_INTEGRITY
-    assert "config/gardener/seen.json is served by no module" in capsys.readouterr().out
+    assert "config/gardener/old-days.json is served by no module" in capsys.readouterr().out
     with pytest.raises(SystemExit):
-        gardener_publish.main(["seen", *RUN, "--git-sha", SHA, "--config", str(config_dir)])
+        gardener_publish.main(["old-days", *RUN, "--git-sha", SHA, "--config", str(config_dir)])

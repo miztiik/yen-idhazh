@@ -81,11 +81,11 @@ LIVE_BY_DECISION: Final = {
 }
 
 
-def test_the_committed_gardener_config_loads_with_the_corpus_squash_alone() -> None:
+def test_the_committed_gardener_config_loads_and_the_squash_is_its_one_history_task() -> None:
     settings = config.load_gardener()
     assert (settings.config.attempts, settings.config.shards) == (6, 5)
-    assert set(settings.tasks) == {"corpus-squash"}
-    assert isinstance(settings.tasks["corpus-squash"], HistoryPolicy)
+    history = [name for name, policy in settings.tasks.items() if isinstance(policy, HistoryPolicy)]
+    assert history == ["corpus-squash"]
 
 
 def test_a_declaration_ships_in_dry_run_unless_a_named_decision_put_it_live() -> None:
