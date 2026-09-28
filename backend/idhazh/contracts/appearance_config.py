@@ -394,16 +394,17 @@ class ChartConfig(Model):
         ),
     )
     readout_max_share: float = Field(
-        default=0.33,
+        default=1.0,
         gt=0.0,
         le=1.0,
         description=(
             "The widest the readout strip under a plot may be, as a share of that "
             "plot. The strip sits below the plot rather than over it, so it cannot "
-            "cover a mark at any width; the cap is what stops it becoming a paragraph "
-            "beside a chart a reader is glancing at. Measured 2026-08-29, the floating "
-            "box this replaced covered 88 to 121px of a 220px plot - 40 to 55 percent "
-            "of the chart it was explaining."
+            "cover a mark at any width, and its entries lie side by side and wrap "
+            "only when the next one does not fit. A share under one wrapped them "
+            "on a phone while the plot still had room - 0.33 left 119px of a "
+            "394px plot and stacked every entry on its own line - so the strip "
+            "may be as wide as its plot."
         ),
     )
     palette: ChartPalette = Field(

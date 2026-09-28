@@ -64,7 +64,7 @@
 		noRuleReason,
 		width,
 		height,
-		readoutMaxShare = 0.33
+		readoutMaxShare = 1
 	}: {
 		times: Distribution;
 		/** What this instance is of, so a page with two can tell them apart. */

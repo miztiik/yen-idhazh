@@ -1,4 +1,7 @@
 import { expect, test } from '@playwright/test';
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { bandShares } from '../src/lib/charts/frame';
 import { readoutCapStyle } from '../src/lib/charts/readout';
@@ -13,6 +16,14 @@ import {
 	scoresWithoutCounters
 } from '../src/lib/console/recording';
 
+/** `chart.readout_max_share`, read off the committed config inside the test
+ * that uses it, so a malformed file fails one test rather than the module. */
+function readoutMaxShare(): number {
+	const config = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'config', 'appearance.json');
+	return (JSON.parse(readFileSync(config, 'utf8')) as { chart: { readout_max_share: number } }).chart
+		.readout_max_share;
+}
+
 /** Chart chrome, and the states a panel is in when the ledger has no answer.
  *
  * Two rules are under test and they are the whole of both rows.
@@ -23,9 +34,9 @@ import {
  * on every chart of every route that draws one with a readout strip.
  *
  * **A chart that plots more than one series prints them together.** A fixed
- * strip below the plot, capped at a share of it, reachable by an arrow key. A
- * tooltip is never the only place a value appears: a tooltip needs a hover, and
- * a hover is not a thing a thumb can do.
+ * strip below the plot, as wide as the plot at most, its entries side by side,
+ * reachable by an arrow key. A tooltip is never the only place a value
+ * appears: a tooltip needs a hover, and a hover is not a thing a thumb can do.
  */
 
 // `/console/voices/` is NOT here, and that is a decision rather than an
@@ -293,32 +304,50 @@ for (const route of ROUTES) {
 		expect(named.filter((one) => one.text.length === 0)).toEqual([]);
 	});
 
-	test(`every readout strip on ${route} stays inside its cap`, async ({ page }) => {
+	test(`every readout strip on ${route} stays inside its cap and lays its entries side by side`, async ({
+		page
+	}) => {
 		await page.goto(route, { waitUntil: 'domcontentloaded' });
 
 		const strips = page.locator('[data-readout]');
 		const count = await strips.count();
 		expect(count, 'the route prints at least one readout').toBeGreaterThan(0);
+		const cap = readoutMaxShare();
 
 		for (let at = 0; at < count; at += 1) {
 			const strip = strips.nth(at);
-			// The measured defect was a readout box taking 40 to 55 percent of the
-			// chart it explained. The cap is a share, so it holds at every width.
-			//
-			// Either spelling of the same share. The server writes `33.00%` and
-			// Svelte's client-side setter normalises it to `33%`, so since
+			// Either spelling of the same share. The server writes `100.00%` and
+			// Svelte's client-side setter normalises it to `100%`, so since
 			// 2026-09-09 - when the console started drawing charts from rows it
 			// fetches, and their strips are created in the browser - one page
-			// carries both. The number is what this checks; the line below is
-			// where the cap is actually proved.
+			// carries both. The number is what this checks.
 			const style = await strip.getAttribute('style');
 			expect(style, 'the strip carries its own cap').toMatch(/max-width: \d+(\.\d+)?%/);
 			const share = Number((style ?? '').replace(/[^\d.]/g, ''));
-			expect(share).toBeLessThanOrEqual(33);
+			expect(share).toBeLessThanOrEqual(cap * 100 + 0.005);
 
 			// Below the plot, never over it. A strip that floats can cover the mark
 			// it is explaining, and a floating box that dodges moves it instead.
 			await expect(strip).toHaveCSS('position', 'static');
+
+			// The defect this layout replaced: a cap of a third of the plot left a
+			// phone's strip 119 px wide and stacked every entry on a line of its
+			// own. An entry may start a new line only where it would not have
+			// fitted on the line before it.
+			const early = await strip.evaluate((node) => {
+				const room = node.getBoundingClientRect().right;
+				const gap = parseFloat(getComputedStyle(node).columnGap) || 0;
+				const boxes = [...node.querySelectorAll(':scope > [data-readout-row]')].map((entry) =>
+					entry.getBoundingClientRect()
+				);
+				return boxes.filter(
+					(box, index) =>
+						index > 0 &&
+						box.top > boxes[index - 1].top + 1 &&
+						boxes[index - 1].right + gap + box.width <= room + 1
+				).length;
+			});
+			expect(early, 'an entry went to a new line while it fitted on the last one').toBe(0);
 		}
 	});
 

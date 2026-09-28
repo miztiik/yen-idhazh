@@ -56,7 +56,7 @@
 		readout = null,
 		readoutName = '',
 		noReadout = '',
-		readoutMaxShare = 0.33,
+		readoutMaxShare = 1,
 		restingNote = ', the newest column',
 		hint = 'Point at a column to read it. Left and Right step through them, Escape returns to the newest.',
 		grid = { left: 48, right: 12 },

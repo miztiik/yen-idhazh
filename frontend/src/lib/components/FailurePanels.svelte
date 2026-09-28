@@ -58,7 +58,7 @@
 		selectedCode,
 		onSelect,
 		tickDensity,
-		readoutMaxShare = 0.33
+		readoutMaxShare = 1
 	}: {
 		rows: TelemetryRow[];
 		window: TimeWindow;

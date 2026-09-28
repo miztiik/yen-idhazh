@@ -1,13 +1,19 @@
 <script lang="ts">
-	/** The strip a chart prints its hovered column into.
+	/** The strip a chart prints its hovered column or record into.
 	 *
 	 * One implementation, because two charts had grown their own and a third
 	 * would have made three. Every rule the row settled lives here rather than in
 	 * each chart: the strip sits **below** the plot and never over it, so it
 	 * cannot cover a mark at any width; it prints **every series at one column**,
-	 * so comparing four series costs one hover rather than four; and it is
-	 * **capped at `chart.readout_max_share` of the plot**, because a reader
-	 * glancing at a chart reads a short column of values and not a paragraph.
+	 * so comparing four series costs one hover rather than four; and its entries
+	 * **lie side by side**, wrapping to a new line only when the next one does not
+	 * fit - never one entry per line stacked under the chart.
+	 *
+	 * The strip may be as wide as its plot, `chart.readout_max_share` of it. A
+	 * share under one wrapped the entries on a phone while the plot still had
+	 * room, which is the tall block this layout replaced. Each value keeps the room
+	 * its widest reading needs, so stepping from column to column does not reflow
+	 * the strip or change the panel's height.
 	 *
 	 * It is the legend as well. A separate legend would print each series colour
 	 * and label a second time, and one fact drawn twice is how two of them drift.
@@ -48,62 +54,89 @@
 		label: string;
 		value: string;
 		swatch: string | null;
+		/** The characters the widest reading of this entry needs, or zero. */
+		reserve: number;
+	}
+
+	/** The widest of a series' readings, so the strip keeps room for it. */
+	function widest(values: readonly (string | null)[], missing: string): number {
+		return values.reduce((most, value) => Math.max(most, (value ?? missing).length), 0);
 	}
 
 	/** What the strip prints: a heading and its entries, in either shape. */
-	const view = $derived.by((): { heading: string; resting: boolean; entries: Entry[] } | null => {
-		if (readout === null) return null;
-		if ('subject' in readout) {
+	const view = $derived.by(
+		(): { shape: 'columns' | 'record'; heading: string; resting: boolean; entries: Entry[] } | null => {
+			if (readout === null) return null;
+			if ('subject' in readout) {
+				return {
+					shape: 'record',
+					heading: readout.subject,
+					resting,
+					entries: readout.facts.map((fact) => ({
+						label: fact.label,
+						value: fact.value ?? readout.notMeasured,
+						swatch: fact.swatch,
+						reserve: fact.reserve ?? 0
+					}))
+				};
+			}
+			if (readout.columns.length === 0) return null;
+			const column = Math.min(readout.columns.length - 1, Math.max(0, at ?? readout.resting));
+			const measured = readout.series.some((one) => one.values[column] !== null);
+			const series: Entry[] = measured
+				? readout.series.map((one) => ({
+						label: one.note === undefined ? one.label : `${one.label} (${one.note})`,
+						value: one.values[column] ?? readout.notMeasured,
+						swatch: one.swatch,
+						reserve: widest(one.values, readout.notMeasured)
+					}))
+				: [{ label: readout.notMeasured, value: '', swatch: null, reserve: 0 }];
+			const events = readout.events[column] ?? [];
+			const none: Entry[] =
+				events.length === 0 && readout.eventsNone !== ''
+					? [{ label: readout.eventsNone, value: '', swatch: null, reserve: 0 }]
+					: [];
 			return {
-				heading: readout.subject,
-				resting,
-				entries: readout.facts.map((fact) => ({
-					label: fact.label,
-					value: fact.value ?? readout.notMeasured,
-					swatch: fact.swatch
-				}))
+				shape: 'columns',
+				heading: readout.columns[column],
+				resting: at === null,
+				entries: [...series, ...events.map((line) => ({ ...line, reserve: 0 })), ...none]
 			};
 		}
-		if (readout.columns.length === 0) return null;
-		const column = Math.min(readout.columns.length - 1, Math.max(0, at ?? readout.resting));
-		const measured = readout.series.some((one) => one.values[column] !== null);
-		const series: Entry[] = measured
-			? readout.series.map((one) => ({
-					label: one.note === undefined ? one.label : `${one.label} (${one.note})`,
-					value: one.values[column] ?? readout.notMeasured,
-					swatch: one.swatch
-				}))
-			: [{ label: readout.notMeasured, value: '', swatch: null }];
-		const events = readout.events[column] ?? [];
-		const none: Entry[] =
-			events.length === 0 && readout.eventsNone !== ''
-				? [{ label: readout.eventsNone, value: '', swatch: null }]
-				: [];
-		return {
-			heading: readout.columns[column],
-			resting: at === null,
-			entries: [...series, ...events, ...none]
-		};
-	});
+	);
 </script>
 
 {#if view}
 	<dl
-		class="mt-3 text-[0.75rem] text-text-tertiary"
+		class="mt-3 flex flex-wrap items-baseline gap-x-4 gap-y-1 text-[0.75rem] text-text-tertiary"
 		style={readoutCapStyle(maxShare)}
 		data-readout={name}
+		data-readout-shape={view.shape}
 		aria-live="polite"
 	>
-		<dt class="font-semibold text-text-secondary" data-readout-day>
+		<!-- The heading takes a line of its own, so the entries after it start at
+		     the same place on every column and the eye does not hunt for them. -->
+		<dt
+			class="basis-full font-semibold text-text-secondary"
+			data-readout-day={view.shape === 'columns' ? '' : undefined}
+			data-readout-subject={view.shape === 'record' ? '' : undefined}
+		>
 			{view.heading}{view.resting ? restingNote : ''}
 		</dt>
-		{#each view.entries as row, index (`${index}:${row.label}`)}
-			<div class="mt-1 flex items-center gap-2" data-readout-row={row.label}>
-				{#if row.swatch}
-					<span class="size-3 shrink-0 rounded-sm" style="background: {row.swatch}"></span>
+		{#each view.entries as entry, index (`${index}:${entry.label}`)}
+			<div class="flex min-w-0 items-center gap-1.5" data-readout-row={entry.label}>
+				{#if entry.swatch}
+					<span class="size-3 shrink-0 rounded-sm" style="background: {entry.swatch}"></span>
 				{/if}
-				<dd class="grow">{row.label}</dd>
-				<dd class="tabular-nums text-text-secondary">{row.value}</dd>
+				<dd>{entry.label}</dd>
+				{#if entry.value !== ''}
+					<dd
+						class="tabular-nums text-text-secondary"
+						style={entry.reserve > 0 ? `min-inline-size: ${entry.reserve}ch` : undefined}
+					>
+						{entry.value}
+					</dd>
+				{/if}
 			</div>
 		{/each}
 	</dl>

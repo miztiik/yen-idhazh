@@ -6,9 +6,10 @@
  * own span, so the control above it could read 30 days over a plot drawing 6.
  *
  * Measured on the built canary console page 2026-08-30, at the default 30-day
- * preset over 4 stages: 6 date labels where there was 1 span string, 9 marks
- * across 3 lines where there were 0, and a readout 0.330 of the plot wide
- * against a cap of 0.33 - the box it replaced measured 0.40 to 0.55. Every
+ * preset over 4 stages: 6 date labels where there was 1 span string, and 9
+ * marks across 3 lines where there were 0. The strip under them was then a
+ * third of the plot wide and stacked its entries; it now takes the plot's
+ * width and lays them side by side. Every
  * count here is read off a fact the chart publishes about itself rather than
  * written down, so growing the fixture or moving the window cannot turn an
  * assertion into a tautology or a false failure.
@@ -290,9 +291,22 @@ test.describe('the timing chart on the page', () => {
 			return readout.getBoundingClientRect().width / svg.getBoundingClientRect().width;
 		});
 		expect(share, 'the strip must have a laid-out width to measure').not.toBeNull();
-		// A strip below the plot cannot occlude a mark at any width. The cap is
-		// what stops it becoming a paragraph beside a chart being glanced at.
+		// A strip below the plot cannot occlude a mark at any width, and it may be
+		// as wide as the plot and no wider.
 		expect(share ?? 1).toBeLessThanOrEqual(knobs().readout_max_share + 0.005);
+		// Its entries share a line at a desktop width. One entry to a line under a
+		// wide plot is the tall block the cap of a third used to force.
+		const lines = await strip.evaluate(
+			(node) =>
+				new Set(
+					[...node.querySelectorAll(':scope > [data-readout-row]')].map((entry) =>
+						Math.round(entry.getBoundingClientRect().top)
+					)
+				).size
+		);
+		const entries = await strip.locator(':scope > [data-readout-row]').count();
+		expect(entries, 'the strip prints its stages').toBeGreaterThan(1);
+		expect(lines, 'every entry sat on a line of its own').toBeLessThan(entries);
 	});
 
 	test('the keyboard reaches every column and the guide follows it', async ({ page }) => {

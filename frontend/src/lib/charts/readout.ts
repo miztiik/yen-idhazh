@@ -113,6 +113,10 @@ export interface ReadoutFact {
 	/** Null prints the record's not-measured word. */
 	value: string | null;
 	swatch: string | null;
+	/** The characters the widest reading of this fact needs across the chart's
+	 * records, so stepping from one record to the next does not reflow the
+	 * strip. Set by `recordsOf`. */
+	reserve?: number;
 }
 
 /** The record shape, for a chart whose hover describes one thing - a row, a

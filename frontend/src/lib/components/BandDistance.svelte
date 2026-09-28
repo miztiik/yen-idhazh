@@ -60,7 +60,7 @@
 		width,
 		tickDensity,
 		outlierRows,
-		readoutMaxShare = 0.33,
+		readoutMaxShare = 1,
 		modelChanges = []
 	}: {
 		points: CompressionPoint[];

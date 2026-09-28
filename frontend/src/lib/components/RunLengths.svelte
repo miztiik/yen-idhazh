@@ -36,7 +36,7 @@
 		width,
 		height,
 		tickDensity,
-		readoutMaxShare = 0.33
+		readoutMaxShare = 1
 	}: {
 		/** Oldest first. The chart reads left to right. */
 		runs: RunLength[];
