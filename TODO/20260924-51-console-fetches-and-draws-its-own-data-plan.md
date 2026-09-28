@@ -8,6 +8,109 @@
 
 Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delegates a row where delegation pays; keep parallel N = 2 rows in flight, refilling a slot as a worker returns and never waiting on a merge; serialise merges and re-check each branch against the advanced main; run the browser and build gates one at a time behind the shared gate lock (execute-a-plan.md, "the workers are parallel; the machine is not"); consult a persona only where two answers would lead to different code; AUTO-merge on green gates where no ESCALATE trigger fired; honor the ESCALATE triggers in section 0.
 
+## Execution handover (zero-context cold start)
+
+A paste-ready brief for an agent that picks this plan up with no prior context. [execute-a-plan.md](../docs/how-to/execute-a-plan.md) is the canonical contract; this brief adds only what this plan's run has learned. Written 2026-09-28, about 13:50 UTC, when the first owner handed over after row 5 merged.
+
+```text
+You are the OWNER of TODO/20260924-51-console-fetches-and-draws-its-own-data-plan.md.
+You have no prior context. Execution is AUTHORIZED (owner, 2026-09-27): deliver it end
+to end with a running pool, settle any ambiguity by debate (two or more personas from
+.github/agents/, asked in parallel, converging on one ruling), record every deviation in
+the table below, and stop only on an ESCALATE trigger (section 0).
+
+STEP 0 - COLD START. Read CLAUDE.md, AGENTS.md, docs/how-to/execute-a-plan.md,
+docs/how-to/ship-a-pr.md, docs/how-to/run-the-gates.md, and docs/reference/agent-notes.md
+with its four pages. This machine is Windows and agents share its terminals: start every
+command with a tag of your own and a Set-Location to your own checkout, and send long
+output to a file under %TEMP%, then read the file. Then read this plan's section 0,
+section 1 (the Status Reckoner, the only tracker), section 2.2, and each row just before
+you dispatch it.
+
+STEP 1 - ADOPT OR CLOSE. Run git worktree list, gh pr list and git branch -vv. At
+handover nothing of this plan was in flight. Rows 1, 2, 4, 5 and 6 had merged (#1138,
+#1140, #1137, #1143, #1144), and so had #1146, this run's tool notes and defects 38 to
+47. Three checkouts are left, each with its pull request merged, its remote branch gone
+and its tree clean: p51clock (#1100), p51r5 (#1143) and p51docs (#1146). Sweep them as
+the closing section of execute-a-plan.md says. The folder yen-idhazh.worktrees/p51r2 is
+no longer a worktree: a language server held six files in its node_modules, so delete it
+once they are free. The local branches of rows 1, 2, 4 and 6 show ": gone"; prune them.
+
+STEP 2 - DISPATCH. Row 7 is ready now: row 4 (#1137) and plan 50's row 11 (#1136) have
+merged, and the owner ruled on 2026-09-28 that this plan builds it, as its decision 8
+says. Mark it IN-FLIGHT on the trunk before you cut its branch: plan 50's row 9 waits on
+it, and plan 50's owner reads that line. Nothing else is ready, so the pool runs one wide.
+Settle four things before you brief row 7:
+  a. Plan 50's paragraph "What a reader does with a stamp it does not know" asks the
+     door to compare each index's version with the one the bundle was built with and,
+     on a mismatch, to draw unreachable with both stamps in the console and fetch
+     nothing. Row 7's text does not say so.
+  b. Where the engine's .wasm files are served from, and what they add to the 1 GB
+     site. Nobody has measured it, and the package ships more than one build. Carmack
+     rules.
+  c. frontend/svelte.config.js already allows WebAssembly, and workers from the site
+     itself and from blob:. An engine served from any other origin widens that policy.
+  d. Plan 50's compaction is not built yet, so the fixture ledger in
+     tests/fixtures/ledger-door/ cannot come from it. Its indexes must validate against
+     backend/idhazh/contracts/ledger_index.py.
+  after row 7 merges       tell the person that plan 50's row 9 no longer waits on
+                           this plan.
+  after plan 50's rows     row 3. Row 2's text says row 3 must date the completeness
+  7 and 9 merge            sentence from the newest compacted day, not from
+                           generated_at, but row 3's file list does not name
+                           frontend/src/lib/console/completeness.ts. Settle it at
+                           dispatch.
+  after rows 3 and 7       row 8. Get Susan's ruling on defect 38 first: does speed or
+                           placement count decide which machines are left without a
+                           colour? Defect 39 rides on it. Row 8's file list also misses
+                           two things other text gives it: defect 44 says row 8 moves
+                           MemoryBoard.svelte onto absentHatch, and row 5's decision 21
+                           says the row that first puts a house-style component on a
+                           route removes its <title>. Settle both at dispatch.
+
+STEP 3 - GATES. A worker runs `npm --prefix frontend run test:changed -- --list`, then
+only its row's named acceptance gates, then pushes and reports. CI is the one full-suite
+run (CLAUDE.md section 9). A worker keeps a running report in a file under %TEMP% from
+its first push on (execute-a-plan.md): row 5's first worker ran out of room mid-row, and
+its pushed draft is what let the row be finished rather than done again.
+
+STEP 4 - MERGE. GitHub refuses auto-merge on this repository, so merge by hand when CI
+is green: gh pr merge <N> --repo miztiik/yen-idhazh --squash --delete-branch, run from
+outside the repository, then confirm with gh pr view <N> --json state,mergeCommit. Just
+after main moves, GitHub reports mergeable as UNKNOWN: ask again rather than update the
+branch. A worker call blocks you until that worker returns, so merge every green pull
+request before you start the next worker; row 2's waited an hour. If two open pull
+requests each stamp their own Reckoner line, the second conflicts on this file: merge
+origin/main into its branch, keep both lines and push. Never rebase and force-push.
+
+STEP 5 - CLOSE. When every row is DONE, follow the closing section of
+execute-a-plan.md. File one defect this run found and did not file: GitHub writes every
+squash-merge commit on main with a +02:00 clock offset (all 39 such commits among main's
+last 200), and so does a commit made on this machine without TZ=UTC set. CLAUDE.md
+section 2 says a commit time is UTC.
+
+OPEN FOR THE PERSON. Ask in one message, in the shape CLAUDE.md section 0c gives:
+  1. A name on row 4's decision 6: the flow chart's layout is our own arithmetic on
+     d3-shape rather than the d3-sankey library, and Guardrail #8 makes writing our own
+     a person's call. The reasons and sizes are on the vocabulary page it names.
+  2. Whether a /console/query page gets a plan of its own. Row 7 builds no page: the
+     door is a module a chart calls. Plan 50 records a query page as its own plan, and
+     inside this plan it would fire ESCALATE trigger 1, a tenth prerendered route.
+```
+
+### Deviations and owner rulings to date
+
+Only what no row records. Each row's own departures are in its decisions and its "Corrected" and "found in execution" notes, and the side-by-side run of rows 5 and 6 is in section 1.
+
+| # | Row | The plan said | What is true, and why | Authority |
+| --- | --- | --- | --- | --- |
+| 1 | 1, 2, 4 | Parallel N = 2 | Rows 1, 2 and 4 ran three-wide. They shared no file, and the owner asked for parallel work | Plan owner, 2026-09-27 |
+| 2 | all | AUTO-merge on green gates | GitHub refuses auto-merge on this repository, so every row merged by hand, as plan 50's deviation 12 found | Found at merge |
+| 3 | - | A change reaches main through a pull request | #1133 brought a retired word into an agent note, and main's retired-word test went red. The one-word fix went straight to main (9c7df2d09), so every open branch could go green | Plan owner, 2026-09-27 |
+| 4 | 2, 6 | The owner merges each row as its gates go green | A worker call blocks the owner until it returns, so row 2's pull request waited about an hour with its gates green. Row 6 merged row 2's branch into its own to move on, and a helper agent merged row 6 | Plan owner, 2026-09-28 |
+| 5 | 5 | One worker delivers a row | Row 5's first worker ran out of room and returned a draft with five browser tests failing. The owner chose to finish it on the same branch, and a second worker did | Owner, 2026-09-28 |
+| 6 | 7 | This plan builds row 7 (decision 8) | On 2026-09-27 the owner's words were read as handing row 7 to plan 50's owner, so the row sat unstarted after it was ready. The owner ruled on 2026-09-28 that this plan builds it | Owner, 2026-09-28 |
+
 ## 0. Operating contract
 
 | Field | Value |
