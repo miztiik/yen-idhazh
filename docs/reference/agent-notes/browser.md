@@ -37,6 +37,10 @@ await page.evaluate( => ({ hidden: document.hidden, state: document.visibilitySt
 
 **Under load it may refuse to connect at all**, timing out at 30 s with `browserType.connectOverCDP: Timeout 30000ms exceeded` on every following call, which reads as a broken build rather than a busy host. Do not keep retrying; drive Chromium yourself from `frontend/`, which also drives layout, so every quirk above stops applying.
 
+**A `file://` page outside a trusted folder answers `403`, `File does not reside within a trusted folder`**, so a scratch page under `%TEMP%` never loads and reads as a broken page. Serve its folder instead - `python -m http.server 8765 --bind 127.0.0.1 --directory <folder>` in a terminal of its own - open `http://127.0.0.1:8765/<page>`, and kill that terminal after. A `data:` URL loads too, for a page short enough to type.
+
+**Mermaid clips long labels here**, because it measures each label before this browser has laid anything out, so a box comes out narrower than its text. The diagrams already on `main` clip the same way (2026-09-28), so a clipped label here is not a defect in the diagram. Count nodes, classes and boxes through the DOM, and read widths on the pull request's own rendering.
+
 ## Waiting and routing
 
 **A count taken straight after `goto` or `reload` measures the shell, not the day.** One document answers every dated address, so the stories arrive when the day's fetch resolves - after the load event - and whether a one-shot count finds them is a property of the machine. `service-worker.spec.ts` passed on a Windows box three runs out of three and took `main` red on `ubuntu-latest` with `Expected: 8, Received: 0`. Wait for the page's own `data-payload-state` to read `ready` through `frontend/tests/support/day-ready.ts`, and write the assertion so it retries:

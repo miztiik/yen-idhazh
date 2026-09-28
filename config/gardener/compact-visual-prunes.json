@@ -1,0 +1,14 @@
+{
+  "dry_run": true,
+  "kind": "compaction",
+  "ledger": "visual-prunes",
+  "lifecycle_status": "active",
+  "max_deletes_per_run": null,
+  "owns": [
+    "state/raw/visual-prunes",
+    "state/compact/visual-prunes"
+  ],
+  "window": {
+    "unit": "forever"
+  }
+}

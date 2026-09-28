@@ -1,0 +1,123 @@
+"""What one pass of a ledger's compaction does, in which order, and what its record says.
+
+One task a ledger, declared as `config/gardener/compact-<ledger>.json` and
+served by this module through its kind, so a ledger joins the compaction with
+one declaration and no Python. A pass runs four steps in one process, and the
+shard lands all of them in one commit:
+
+1. the month files the monthly window no longer keeps are dropped;
+2. the raw listings past `raw_index_keep_days`, and raw days past the monthly
+   window, are dropped;
+3. every month that is done is absorbed into its month file;
+4. every raw day that is due is taken into its daily file.
+
+**Drops first and days last, because no pass may write a path it deletes.** The
+shard that lands a pass refuses a path it both wrote and deleted, and a pass
+that did either would stall every wake after it. In this order a month absorbs
+daily files earlier wakes wrote, never one this pass wrote, and a month whose
+last days this pass compacts is absorbed at the next wake instead.
+
+**Every rule is whole days after a period's own end**, so the pass measures
+from 00:00 UTC on the wake's own UTC day and gets the answer any instant of
+that day would (CLAUDE.md section 2).
+
+**A dry run does all of the work and changes nothing.** It reads every file,
+settles the rows, builds each file in memory, and reports every path a live
+pass would write and delete, so the list a person reads before turning a
+compaction live is the list the live pass carries out.
+
+**What the record says.** `taken` is every file the pass deleted, or would
+have; `written` every file it wrote, or would have. `bytes_freed` is what the
+deletes free and is never netted against the writes: the net is `bytes_freed`
+minus the `bytes` of the index entries the pass wrote. `seen` counts every raw
+day folder listed and every file read or weighed, so the listing's growth while
+a compaction stays dry shows in each record. A day or month refused ends the
+pass `failed` at that period, and the task exits 1 while every other step it
+took still lands; a budget running out ends it at `ceiling`.
+"""
+
+from __future__ import annotations
+
+from idhazh.contracts.knobs.gardener import TaskKind
+from idhazh.gardener.context import TaskContext
+from idhazh.gardener.one_at_a_time import Pass
+
+KIND = TaskKind.COMPACTION
+
+
+def run(context: TaskContext) -> Pass:
+    """Drop what the windows no longer keep, absorb the months that are done, take the days."""
+    import logging
+    from datetime import UTC, datetime, time
+    from pathlib import Path
+
+    from idhazh.contracts.collection_prune import StopReason
+    from idhazh.contracts.file_envelope import WriterIdentity
+    from idhazh.contracts.knobs.gardener import CompactionPolicy
+    from idhazh.gardener import schedule
+    from idhazh.gardener.tasks import _daily_period, _monthly_period
+    from idhazh.gardener.tasks._compact_tree import CompactTree
+
+    policy = context.policy
+    if not isinstance(policy, CompactionPolicy):
+        raise ValueError(f"the compaction task was handed a {policy.kind} declaration")
+    now = datetime.combine(context.today, time.min, tzinfo=UTC)
+    stamp = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    identity = WriterIdentity(
+        run_id=context.run_id,
+        attempt=context.attempt,
+        job=context.job,
+        shard=context.shard,
+        producer=__name__.partition(".")[2],
+        git_sha=context.git_sha,
+    )
+    tree = CompactTree.read(context.state_dir, policy.ledger)
+    first_kept = _monthly_period.first_kept_month(
+        now=now, daily_keep_days=policy.daily_keep_days, window=policy.monthly_window
+    )
+    stops = (
+        *_monthly_period.drop(tree, first_kept=first_kept),
+        *_daily_period.drop(tree, policy, now=now, first_kept=first_kept),
+        *_monthly_period.absorb(tree, policy, now=now, stamp=stamp, identity=identity),
+        *_daily_period.compact(
+            tree, policy, now=now, stamp=stamp, identity=identity, first_kept=first_kept
+        ),
+    )
+    if not policy.dry_run:
+        tree.apply()
+
+    def shown(path: Path) -> str:
+        return path.relative_to(context.repo_root).as_posix()
+
+    taken = tree.taken(shown)
+    stop = next((held for held in stops if held.because is StopReason.FAILED), None) or next(
+        (held for held in stops if held.because is StopReason.CEILING), None
+    )
+    outcome = Pass(
+        collection=policy.ledger.value,
+        since=None,
+        until=schedule.newest_eligible(now=now, after_days=policy.compact_after_days).isoformat(),
+        ceiling=None,
+        dry_run=policy.dry_run,
+        seen=tree.seen(),
+        selected=len(taken),
+        taken=taken,
+        written=tree.written(shown),
+        bytes_freed=tree.freed(),
+        stopped_because=StopReason.EXHAUSTED if stop is None else stop.because,
+        resume_from=None if stop is None else stop.resume_from,
+    )
+    logging.getLogger(__name__).info(
+        "compaction of %s%s: %s files written, %s deleted, %s bytes freed, daily through %s, "
+        "monthly through %s, stopped %s",
+        policy.ledger.value,
+        " (dry run)" if policy.dry_run else "",
+        len(outcome.written),
+        len(outcome.taken),
+        outcome.bytes_freed,
+        tree.daily_through or "nothing yet",
+        tree.monthly_through or "nothing yet",
+        outcome.stopped_because.value
+        + (f" at {outcome.resume_from}" if outcome.resume_from else ""),
+    )
+    return outcome

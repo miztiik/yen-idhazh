@@ -58,15 +58,29 @@ def runner_garden() -> dict[str, TaskPolicy]:
 
 
 def test_every_shipped_module_is_named_for_a_declaration_of_the_kind_it_serves() -> None:
-    """Tasks arrive with their modules. The folder says how many, never a number here."""
+    """Tasks arrive with their modules. The folder says how many, never a number here.
+
+    A module is named for one declaration, or for its kind when it serves every
+    declaration of that kind that has no module of its own - the compaction is
+    one module for every ledger it compacts.
+    """
     shipped = registry.discover()
     tasks = config.load_gardener().tasks
     assert shipped, "no task module ships"
     for stem, held in shipped.items():
         name = stem.replace("_", "-")
-        assert name in tasks, f"tasks/{stem}.py is named for no declaration"
-        assert held.kind is TaskKind(tasks[name].kind), f"tasks/{stem}.py serves another kind"
+        if name in tasks:
+            assert held.kind is TaskKind(tasks[name].kind), f"tasks/{stem}.py serves another kind"
+            continue
+        assert stem == held.kind.value, f"tasks/{stem}.py is named for no declaration"
+        served = [
+            other
+            for other, policy in tasks.items()
+            if registry.bind(other, TaskKind(policy.kind), shipped) is held
+        ]
+        assert served, f"tasks/{stem}.py is named for its kind and serves no declaration"
     assert shipped["corpus_squash"].kind is TaskKind.HISTORY
+    assert shipped["compaction"].kind is TaskKind.COMPACTION
 
 
 def test_finding_the_tasks_loads_no_heavy_library() -> None:

@@ -14,10 +14,12 @@ and writes nothing into a paused or retired family. `write_item_health_summary`
 does not ask: it folds rows already recorded, and the ageing step reads that
 fold back before it deletes anything.
 
-Two readers here read a ledger that lives under `state/raw/` rather than in a
-CSV tree - `load_retirements` and `load_visual_prunes` - and both read it through
-`ledger/raw_files.py`, which keeps one file per work unit. Their writers are not
-here at all: a producer hands those rows to `persist` itself.
+Two readers here read a ledger that lives under `state/raw/` and
+`state/compact/` rather than in a CSV tree - `load_retirements` and
+`load_visual_prunes` - and both read it through `ledger/ledger_files.py`, which
+reads the monthly files, then the daily files, then the raw days no compact
+index names, each date from exactly one of them. Their writers are not here at
+all: a producer hands those rows to `persist` itself.
 """
 
 from __future__ import annotations
@@ -43,7 +45,7 @@ from idhazh.contracts.seen import PublishedRow, SeenRow
 from idhazh.contracts.span_rollup import SpanRollupRow
 from idhazh.contracts.story_similarity_pair import StorySimilarityPair
 from idhazh.contracts.visual_prune import VisualPruneRow
-from idhazh.ledger import lifecycle, paths, raw_files
+from idhazh.ledger import ledger_files, lifecycle, paths
 from idhazh.ledger.csv_file import (
     CsvRecord,
     _read_rows,
@@ -57,12 +59,10 @@ from idhazh.ledger.keys import (
     COUNCIL_SHARD_OUTCOME_KEY,
     DATE_CELL,
     FEED_HEALTH_KEY,
-    FEED_RETIREMENT_KEY,
     ITEM_HEALTH_KEY,
     SPAN_ROLLUP_KEY,
     STORY_SIMILARITY_PAIR_KEY,
     STORY_SIMILARITY_THRESHOLD_KEY,
-    VISUAL_PRUNE_KEY,
     _refuse_outside_day_trees,
 )
 from idhazh.ledger.settle import drop_repeated_rows
@@ -277,9 +277,12 @@ def load_retirements(state_dir: Path) -> list[FeedRetirementRow]:
 
     Cover: -1, unbounded on purpose. A retirement is permanent, so any cover in
     days would forget the oldest ones and the run would ask a dead server again.
+    What bounds it is the compaction: a retirement older than the `monthly_window`
+    `config/gardener/compact-feed-retirements.json` declares is deleted with its
+    month, and its feed is fetched again.
     """
-    return raw_files.load_current_rows(
-        state_dir, LedgerName.FEED_RETIREMENTS, model=FeedRetirementRow, key=FEED_RETIREMENT_KEY
+    return ledger_files.load_ledger_rows(
+        state_dir, LedgerName.FEED_RETIREMENTS, model=FeedRetirementRow
     )
 
 
@@ -450,8 +453,8 @@ def load_visual_prunes(state_dir: Path) -> list[VisualPruneRow]:
     gives: this ledger is a report, and refusing to start because an old report
     cannot be read would cost a reader the day.
     """
-    return raw_files.load_current_rows(
-        state_dir, LedgerName.VISUAL_PRUNES, model=VisualPruneRow, key=VISUAL_PRUNE_KEY
+    return ledger_files.load_ledger_rows(
+        state_dir, LedgerName.VISUAL_PRUNES, model=VisualPruneRow
     )
 
 
