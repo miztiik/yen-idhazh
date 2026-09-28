@@ -294,13 +294,14 @@ The entries lie along one line across the whole plot and wrap only when the next
 one does not fit, and `chart.readout_max_share` went from 0.33 to 1. The layout
 and the cap were one change: entries set not to wrap inside a 119 px strip
 overflow it instead. Measured the same day on the real build, on all five
-console routes in both themes: at 390 the plots are 306 to 358 px wide and 25 of
-the 32 strips take more than one line; at 768, 17 do; at 1440, 12 do. In every
-one of them no entry started a new line where it would have fit on the line
-before. **What a narrow window still costs**: the strips with eight or nine
-entries - the run health, the run timeline, the time split - read as a short
-column of pairs at 390 rather than one line, and every number in them is still
-present, prerendered and keyboard-reachable. The two guards that pinned the cap
+console routes in both themes, 32 strips a width: at 360 px 25 of them take more
+than one line, at 390 px 22 do, at 768 px 10 do, and at 1440 px 3 do - the run
+health, the run timeline and the time split, whose eight or nine entries need
+1,350 to 2,354 px on one line. No entry anywhere started a new line where it
+would have fit on the line before, and no page scrolled sideways. **What a
+narrow window still costs**: those long strips read as a short column of pairs
+on a phone rather than one line, and every number in them is still present,
+prerendered and keyboard-reachable. The two guards that pinned the cap
 moved with it on purpose, not as a side effect:
 [../../../frontend/tests/console-chrome.spec.ts](../../../frontend/tests/console-chrome.spec.ts)
 now holds each strip inside the configured share and refuses an entry that
