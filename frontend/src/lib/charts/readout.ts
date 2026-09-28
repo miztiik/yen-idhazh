@@ -671,3 +671,39 @@ export function markReadout(
 		}
 	};
 }
+
+/** One pick on a chart of lines stacked a row each: which line, and which of
+ * its columns. */
+export interface GridPick {
+	row: number;
+	column: number;
+}
+
+/** Where a key moves a pick on a chart of lines stacked a row each - a ledger
+ * that draws one line a row, every line one column a day.
+ *
+ * The keys follow the layout: Up and Down move to the line above or below and
+ * keep the day, Left and Right step along the line, Home and End jump to its
+ * ends, and Escape returns to rest, which is null. A key the layout has no use
+ * for is undefined, and is left to the page, which scrolls on it. The chart is
+ * one tab stop for all of its lines; the pointer picks a line by the line it is
+ * on and a column by x, through each line's own `pointerReadout`.
+ */
+export function gridStep(
+	key: string,
+	from: GridPick,
+	rows: number,
+	columns: number
+): GridPick | null | undefined {
+	if (rows < 1 || columns < 1) return undefined;
+	const row = Math.min(rows - 1, Math.max(0, from.row));
+	const column = Math.min(columns - 1, Math.max(0, from.column));
+	if (key === 'ArrowUp') return { row: Math.max(0, row - 1), column };
+	if (key === 'ArrowDown') return { row: Math.min(rows - 1, row + 1), column };
+	if (key === 'ArrowLeft') return { row, column: Math.max(0, column - 1) };
+	if (key === 'ArrowRight') return { row, column: Math.min(columns - 1, column + 1) };
+	if (key === 'Home') return { row, column: 0 };
+	if (key === 'End') return { row, column: columns - 1 };
+	if (key === 'Escape') return null;
+	return undefined;
+}

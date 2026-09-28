@@ -269,17 +269,6 @@ test('both movement colours are readable as text, in both themes', async ({ page
 
 type Rendered = { body: string; css: string };
 
-/** A no-op component, as a module the emitted server JS can import.
- *
- * `KpiCard` imports `Chart.svelte` for the one trend shape these cases do not
- * use, and plain Node compiles an imported `.svelte` file without the
- * TypeScript preprocessor - so the import fails on a `type` specifier inside a
- * component this test never renders. Stubbing the child keeps every binding
- * defined and cannot change what is measured: none of the cases below passes a
- * `trendSvg`, so the chart branch is never reached.
- */
-const CHILD_STUB = 'data:text/javascript,export default function(){}';
-
 async function renderer(name: string): Promise<(props: Record<string, unknown>) => Rendered> {
 	const filename = path.join(frontend, 'src', 'lib', 'components', `${name}.svelte`);
 	const source = readFileSync(filename, 'utf8');
@@ -288,7 +277,7 @@ async function renderer(name: string): Promise<(props: Record<string, unknown>) 
 	const built = path.join(frontend, 'test-results', 'rendered');
 	mkdirSync(built, { recursive: true });
 	const module = path.join(built, `${name}.polarity.server.mjs`);
-	writeFileSync(module, result.js.code.replace(/'[^']*\.svelte'/g, `'${CHILD_STUB}'`), 'utf8');
+	writeFileSync(module, result.js.code, 'utf8');
 	const loaded = await import(pathToFileURL(module).href);
 	return (props) => ({ body: render(loaded.default, { props }).body, css: result.css?.code ?? '' });
 }

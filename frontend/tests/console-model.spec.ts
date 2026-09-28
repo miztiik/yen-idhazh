@@ -346,17 +346,28 @@ test.describe('the swap rule, rendered', () => {
 
 	/** The component on its own. The canary fixture ran one model start to
 	 * finish, so no swap reaches the built page and the rule has to be measured
-	 * where one can be made to exist. */
+	 * where one can be made to exist. The strip it prints is compiled for real
+	 * beside it, because plain Node cannot import a `.svelte` file. */
 	test.beforeAll(async () => {
-		const filename = path.join(frontend, 'src', 'lib', 'components', 'Sparkline.svelte');
-		const source = readFileSync(filename, 'utf8');
-		const pre = await preprocess(source, vitePreprocess(), { filename });
-		const result = compile(pre.code, { generate: 'server', filename, name: 'Sparkline' });
 		mkdirSync(built, { recursive: true });
+		const compiled = async (name: string) => {
+			const filename = path.join(frontend, 'src', 'lib', 'components', `${name}.svelte`);
+			const pre = await preprocess(readFileSync(filename, 'utf8'), vitePreprocess(), { filename });
+			return compile(pre.code, { generate: 'server', filename, name });
+		};
+		const strip = await compiled('ChartReadout');
+		writeFileSync(path.join(built, 'ChartReadout.server.mjs'), strip.js.code, 'utf8');
+		const result = await compiled('Sparkline');
 		const module = path.join(built, 'Sparkline.server.mjs');
-		writeFileSync(module, result.js.code, 'utf8');
+		writeFileSync(
+			module,
+			result.js.code
+				.split(`'$lib/components/ChartReadout.svelte'`)
+				.join(`'./ChartReadout.server.mjs'`),
+			'utf8'
+		);
 		const loaded = await import(pathToFileURL(module).href);
-		const css = result.css?.code ?? '';
+		const css = (strip.css?.code ?? '') + (result.css?.code ?? '');
 		draw = (props) => ({ body: render(loaded.default, { props }).body, css });
 	});
 
@@ -369,17 +380,26 @@ test.describe('the swap rule, rendered', () => {
 		);
 	}
 
+	/** A card's line: five days from 23 August 2026, each value beside its date. */
+	const readings = (values: readonly number[]) =>
+		values.map((value, index) => ({ date: `2026-08-${23 + index}`, value }));
+	const card = {
+		label: 'a series',
+		series: { label: 'Time to write one', format: (value: number) => String(value) },
+		strip: { name: 'model-card-test', maxShare: 1, hint: '' }
+	};
+
 	test('the rule lands on the point the swap names, not beside it', async ({ page }) => {
-		const marks = sparklineMarks([4, 9, 2, 7, 5]);
+		const marks = sparklineMarks(readings([4, 9, 2, 7, 5]));
 		await show(
 			page,
 			draw({
+				...card,
 				marks,
-				label: 'a series',
 				width: 188,
 				height: 36,
 				// The third drawn day is the first day on the new model.
-				rules: [{ at: 2 / 4, label: 'The model changed to b on 2026-08-27.' }]
+				rules: [{ point: 2, label: 'The model changed to b on 25 Aug 2026.' }]
 			})
 		);
 
@@ -392,7 +412,8 @@ test.describe('the swap rule, rendered', () => {
 				.map((pair) => Number(pair.split(',')[0]));
 			return {
 				x: Number(rule?.getAttribute('x1')),
-				title: rule?.querySelector('title')?.textContent ?? '',
+				name: rule?.getAttribute('aria-label') ?? '',
+				titles: svg?.querySelectorAll('title').length ?? -1,
 				point: points[2],
 				points: points.length
 			};
@@ -403,21 +424,46 @@ test.describe('the swap rule, rendered', () => {
 		// places when the drawn width changes.
 		expect(measured.x).toBeCloseTo(measured.point, 2);
 		// A date and an id. An arrow or a delta here would claim the swap caused
-		// whatever the line then did, and no committed figure says that.
-		expect(measured.title).toBe('The model changed to b on 2026-08-27.');
-		expect(measured.title).not.toMatch(/%|faster|slower|up |down /);
+		// whatever the line then did, and no committed figure says that. It is the
+		// rule's name, never a native tooltip.
+		expect(measured.name).toBe('The model changed to b on 25 Aug 2026.');
+		expect(measured.name).not.toMatch(/%|faster|slower|up |down /);
+		expect(measured.titles).toBe(0);
+	});
+
+	test("the swap's sentence prints in the strip on its own day, and room is kept for it", async ({
+		page
+	}) => {
+		const marks = sparklineMarks(readings([4, 9, 2, 7, 5]));
+		await show(
+			page,
+			draw({
+				...card,
+				marks,
+				rules: [{ point: 2, label: 'The model changed to b on 25 Aug 2026.' }]
+			})
+		);
+		// At rest the strip is on the newest day, which the model did not change
+		// on - so the sentence is held as room, laid out and never read.
+		const strip = page.locator('[data-readout="model-card-test"]');
+		await expect(strip.locator('[data-readout-day]')).toHaveText('27 Aug 2026');
+		expect(await strip.innerText()).not.toContain('The model changed');
+		await expect(strip.locator('[data-readout-held]')).toHaveCount(1);
+		await expect(strip.locator('[data-readout-held]')).toHaveAttribute('aria-hidden', 'true');
 	});
 
 	test('no swap draws no rule, and nothing to draw draws neither', async ({ page }) => {
-		await show(page, draw({ marks: sparklineMarks([3, 6, 4]), label: 'a series', rules: [] }));
+		await show(page, draw({ ...card, marks: sparklineMarks(readings([3, 6, 4])), rules: [] }));
 		await expect(page.locator('[data-sparkline-rule]')).toHaveCount(0);
 		await expect(page.locator('polyline')).toHaveCount(1);
+		// No rule anywhere, so no room is held for one.
+		await expect(page.locator('[data-readout-held]')).toHaveCount(0);
 
 		// One point is a dot, and a rule across a dot says the ground moved under
 		// nothing.
 		await show(
 			page,
-			draw({ marks: sparklineMarks([3]), label: 'a series', rules: [{ at: 0.5, label: 'x' }] })
+			draw({ ...card, marks: sparklineMarks(readings([3])), rules: [{ point: 0, label: 'x' }] })
 		);
 		await expect(page.locator('[data-sparkline-rule]')).toHaveCount(0);
 		await expect(page.locator('polyline')).toHaveCount(0);

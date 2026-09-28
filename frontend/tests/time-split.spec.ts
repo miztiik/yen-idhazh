@@ -198,7 +198,8 @@ test('the strip prints every band with its share', () => {
 
 	const strip = timeSplitColumns(days);
 
-	expect(strip.columns).toEqual(['2026-09-14']);
+	// The day in the reader's spelling, the one every strip heads a column with.
+	expect(strip.columns).toEqual(['14 Sep 2026']);
 	expect(strip.series.map((one) => one.label)).toEqual(TIME_BANDS.map((band) => band.label));
 	expect(strip.series[0].values[0]).toBe('100 ms, 13%');
 	// Bound to the band and never to its size, so a colour cannot move when the

@@ -13,7 +13,7 @@
 
 import type { EChartsOption } from 'echarts';
 import type { RunSummary } from '$lib/server/payload';
-import { dayMonth } from '../format';
+import { dayMonth, shortDate } from '../format';
 import { readoutOf, type Readout } from './readout';
 import { sparklineMarks, type SparklineMarks } from './sparkline';
 import { stacked, type StackShape } from './stacked';
@@ -101,6 +101,19 @@ function trim(value: number): string {
 	return String(Number(value.toFixed(1)));
 }
 
+/** Minutes per published visual as the page prints them, to a tenth. One
+ * formatter for the verdict, the target bar's figure and the line's strip, so
+ * the three cannot spell one figure two ways. */
+export function minutesText(minutes: number): string {
+	return minutes.toFixed(1);
+}
+
+/** Coverage as the page prints it, a whole percent - the same one formatter for
+ * the verdict, the bar and the line. */
+export function coverageText(coverage: number): string {
+	return `${Math.round(coverage)}%`;
+}
+
 /** The two clauses of the verdict, joined.
  *
  * Each clause names its figure, its threshold and which side of it the figure
@@ -118,13 +131,13 @@ function verdictOf(
 	const cost =
 		minutes === null
 			? `The median day has no minutes on record over these ${days} days`
-			: `The median day spends ${minutes.toFixed(1)} minutes per visual, ` +
+			: `The median day spends ${minutesText(minutes)} minutes per visual, ` +
 				`${minutes > thresholds.minutesTarget ? 'past' : 'inside'} the ` +
 				`${trim(thresholds.minutesTarget)} that retires chart drawing`;
 	const reach =
 		coverage === null
 			? 'no day published anything to put a visual on'
-			: `puts a visual on ${Math.round(coverage)}% of what it published, ` +
+			: `puts a visual on ${coverageText(coverage)} of what it published, ` +
 				`${coverage < thresholds.coveragePct ? 'below' : 'above'} the ` +
 				`${trim(thresholds.coveragePct)}% floor`;
 	return `${cost}, and ${reach}.`;
@@ -144,15 +157,17 @@ export function chartRule(
 	windowDays: number
 ): ChartRule {
 	const narrow = windowDays < thresholds.ruleDays;
-	const ordered = [...days].sort((a, b) => a.date.localeCompare(b.date));
-	const costs = narrow
-		? []
-		: ordered.map((d) => d.minutesPerChart).filter((m): m is number => m !== null);
-	const reach = narrow
-		? []
-		: ordered.map(coverageOf).filter((c): c is number => c !== null);
-	const minutes = middleOf(costs);
-	const coverage = middleOf(reach);
+	const ordered = narrow ? [] : [...days].sort((a, b) => a.date.localeCompare(b.date));
+	// Each day's reading with its date beside it, so the line and its strip
+	// drop a day nobody measured together and cannot name the wrong day.
+	const minutesTrend = sparklineMarks(
+		ordered.map((day) => ({ date: day.date, value: day.minutesPerChart }))
+	);
+	const coverageTrend = sparklineMarks(
+		ordered.map((day) => ({ date: day.date, value: coverageOf(day) }))
+	);
+	const minutes = middleOf(minutesTrend.values);
+	const coverage = middleOf(coverageTrend.values);
 
 	return {
 		narrow,
@@ -160,10 +175,10 @@ export function chartRule(
 		coverage,
 		minutesMarks: targetMarks(minutes, thresholds.minutesTarget, 'lower-is-better'),
 		coverageMarks: targetMarks(coverage, thresholds.coveragePct, 'higher-is-better'),
-		minutesTrend: sparklineMarks(costs),
-		coverageTrend: sparklineMarks(reach),
-		minutesDays: costs.length,
-		coverageDays: reach.length,
+		minutesTrend,
+		coverageTrend,
+		minutesDays: minutesTrend.values.length,
+		coverageDays: coverageTrend.values.length,
 		verdict: verdictOf(minutes, coverage, thresholds, windowDays)
 	};
 }
@@ -475,7 +490,7 @@ export function timeSplitChart(days: readonly TimeSplitDay[], shape: StackShape 
 export function timeSplitColumns(days: readonly TimeSplitDay[]): Readout {
 	return readoutOf({
 		type: 'dateSeries',
-		columns: days.map((day) => day.date),
+		columns: days.map((day) => shortDate(day.date)),
 		series: TIME_BANDS.map((band, index) => ({
 			label: band.label,
 			swatch: `var(${TIME_TOKENS[index % TIME_TOKENS.length]})`,
@@ -500,7 +515,7 @@ export function failureMixColumns(series: readonly StageFailureSeries[]): Readou
 	const dates = series[0]?.days.map((d) => d.date) ?? [];
 	return readoutOf({
 		type: 'dateSeries',
-		columns: dates,
+		columns: dates.map((date) => shortDate(date)),
 		series: series.map((stage, position) => ({
 			label: stage.label,
 			swatch: `var(${MIX_TOKENS[position % MIX_TOKENS.length]})`,

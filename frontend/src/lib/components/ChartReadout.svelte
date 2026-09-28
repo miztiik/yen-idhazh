@@ -11,11 +11,11 @@
 	 *
 	 * The strip may be as wide as its plot, `chart.readout_max_share` of it. A
 	 * share under one wrapped the entries on a phone while the plot still had
-	 * room, which is the tall block this layout replaced. From the small
-	 * breakpoint up, each value keeps the room its widest reading needs, so
-	 * stepping from column to column does not reflow the strip or change the
-	 * panel's height. On a phone that room can be wider than the strip itself,
-	 * so there it is not kept.
+	 * room, which is the tall block this layout replaced. Each value keeps the
+	 * room its widest reading needs, so stepping from column to column does not
+	 * reflow the strip or change the panel's height - and never more room than
+	 * the strip is wide, so on a phone a value whose widest reading would not
+	 * fit takes the strip's width instead of pushing the page sideways.
 	 *
 	 * It is the legend as well. A separate legend would print each series colour
 	 * and label a second time, and one fact drawn twice is how two of them drift.
@@ -24,7 +24,12 @@
 	 * with JavaScript off still gets one column's numbers in words - which is
 	 * what makes the hover an addition rather than the only way to read a value.
 	 */
-	import { readoutCapStyle, type Readout, type ReadoutFacts } from '$lib/charts/readout';
+	import {
+		readoutCapStyle,
+		type Readout,
+		type ReadoutFacts,
+		type ReadoutLine
+	} from '$lib/charts/readout';
 
 	let {
 		readout,
@@ -33,7 +38,8 @@
 		maxShare,
 		resting = false,
 		restingNote = '',
-		hint = 'Point at a column to read it. Left and Right step through them, Escape returns to the newest.'
+		hint = 'Point at a column to read it. Left and Right step through them, Escape returns to the newest.',
+		eventRoom = false
 	}: {
 		/** What `readoutOf` or `factsOf` built. Null draws nothing at all. */
 		readout: Readout | ReadoutFacts | null;
@@ -49,7 +55,14 @@
 		 * column strip knows this from `at`. */
 		resting?: boolean;
 		restingNote?: string;
+		/** How to drive the strip, in one sentence under it. Empty prints none,
+		 * for a strip whose page says it once for several - eleven cards in one
+		 * grid would otherwise print one sentence eleven times. */
 		hint?: string;
+		/** Keep room on every column for as many event lines as the busiest
+		 * column prints, so stepping onto the one day that has a line does not
+		 * grow the strip and push everything under it down. */
+		eventRoom?: boolean;
 	} = $props();
 
 	interface Entry {
@@ -58,6 +71,9 @@
 		swatch: string | null;
 		/** The characters the widest reading of this entry needs, or zero. */
 		reserve: number;
+		/** Room held for an event line this column does not have: laid out, never
+		 * seen and never read out. */
+		held?: boolean;
 	}
 
 	/** The widest of a series' readings, so the strip keeps room for it. */
@@ -94,23 +110,54 @@
 					}))
 				: [{ label: readout.notMeasured, value: '', swatch: null, reserve: 0 }];
 			const events = readout.events[column] ?? [];
+			// A column nothing measured already says so in one sentence, so it does
+			// not say "nothing" a second time in the events' own words. An event
+			// that did happen on it - a setting moved on a day nobody measured -
+			// still prints.
 			const none: Entry[] =
-				events.length === 0 && readout.eventsNone !== ''
+				measured && events.length === 0 && readout.eventsNone !== ''
 					? [{ label: readout.eventsNone, value: '', swatch: null, reserve: 0 }]
+					: [];
+			// The widest whole line any column prints - its label and its value -
+			// held once for each line this column is short of the busiest. A column
+			// with its own "none" sentence already holds a line, so it holds nothing
+			// more.
+			const most = eventRoom ? Math.max(0, ...readout.events.map((lines) => lines.length)) : 0;
+			const roomiest = readout.events
+				.flat()
+				.reduce<ReadoutLine | null>(
+					(best, line) =>
+						best === null || line.label.length + line.value.length > best.label.length + best.value.length
+							? line
+							: best,
+					null
+				);
+			const held: Entry[] =
+				readout.eventsNone === '' && roomiest !== null
+					? Array.from({ length: Math.max(0, most - events.length) }, () => ({
+							label: roomiest.label,
+							value: roomiest.value,
+							swatch: roomiest.swatch,
+							reserve: 0,
+							held: true
+						}))
 					: [];
 			return {
 				shape: 'columns',
 				heading: readout.columns[column],
 				resting: at === null,
-				entries: [...series, ...events.map((line) => ({ ...line, reserve: 0 })), ...none]
+				entries: [...series, ...events.map((line) => ({ ...line, reserve: 0 })), ...none, ...held]
 			};
 		}
 	);
 </script>
 
 {#if view}
+	<!-- A container, so a value's kept room can be capped at the strip's own
+	     width. The strip already takes its plot's width rather than its
+	     contents', so being one changes nothing it draws. -->
 	<dl
-		class="mt-3 flex flex-wrap items-baseline gap-x-4 gap-y-1 text-[0.75rem] text-text-tertiary"
+		class="@container mt-3 flex flex-wrap items-baseline gap-x-4 gap-y-1 text-[0.75rem] text-text-tertiary"
 		style={readoutCapStyle(maxShare)}
 		data-readout={name}
 		data-readout-shape={view.shape}
@@ -128,12 +175,15 @@
 		{#each view.entries as entry, index (`${index}:${entry.label}`)}
 			<!-- An entry wider than the strip wraps inside itself, value under label,
 			     rather than pushing the page sideways. The room a value keeps for its
-			     widest reading is kept from the small breakpoint up: on a phone that
-			     room is wider than the strip, and a strip that scrolls the page
-			     sideways costs more than one that reflows as the reader steps. -->
+			     widest reading is capped at the strip's width: on a phone that
+			     reading can be wider than the strip, and a strip that scrolls the
+			     page sideways costs more than one value that reflows. -->
 			<div
 				class="flex min-w-0 max-w-full flex-wrap items-center gap-x-1.5"
-				data-readout-row={entry.label}
+				class:held={entry.held}
+				aria-hidden={entry.held ? 'true' : undefined}
+				data-readout-row={entry.held ? undefined : entry.label}
+				data-readout-held={entry.held ? '' : undefined}
 			>
 				{#if entry.swatch}
 					<span class="size-3 shrink-0 rounded-sm" style="background: {entry.swatch}"></span>
@@ -141,7 +191,7 @@
 				<dd>{entry.label}</dd>
 				{#if entry.value !== ''}
 					<dd
-						class="tabular-nums text-text-secondary sm:min-w-(--readout-reserve)"
+						class="min-w-[min(var(--readout-reserve),100cqi)] tabular-nums text-text-secondary"
 						style={entry.reserve > 0 ? `--readout-reserve: ${entry.reserve}ch` : undefined}
 					>
 						{entry.value}
@@ -150,5 +200,16 @@
 			</div>
 		{/each}
 	</dl>
-	<p class="mt-2 text-[0.75rem] text-text-tertiary" data-readout-hint={name}>{hint}</p>
+	{#if hint !== ''}
+		<p class="mt-2 text-[0.75rem] text-text-tertiary" data-readout-hint={name}>{hint}</p>
+	{/if}
 {/if}
+
+<style>
+	/* Laid out so the strip keeps its height, never seen and never read out. A
+	   rule of its own rather than a utility, so the strip holds its room
+	   wherever it is drawn. */
+	.held {
+		visibility: hidden;
+	}
+</style>

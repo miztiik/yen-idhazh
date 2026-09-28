@@ -78,8 +78,7 @@
 		readout?: Readout | null;
 		readoutName?: string;
 		/** Why this chart has no strip, in words, where `readout` has no column.
-		 * Left blank only where an enclosing element already says it - a card's
-		 * trend line is declared once by the card, not once per card. */
+		 * Left blank only where an enclosing element already says it. */
 		noReadout?: string;
 		/** `chart.readout_max_share`. */
 		readoutMaxShare?: number;

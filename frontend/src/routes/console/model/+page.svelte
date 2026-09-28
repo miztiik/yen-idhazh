@@ -111,6 +111,27 @@
 		return value === null ? '-' : `${value}%`;
 	}
 
+	/** How each column's value prints, keyed the way `SERIES` reads it.
+	 *
+	 * One formatter a column, read by the card's figure, the table's cell and
+	 * the card's strip alike, so one number is never spelled two ways on the
+	 * page. A day with no answer prints a dash in the cells and is left off the
+	 * line, so none of these is handed a null.
+	 */
+	const FORMAT: Record<string, (value: number) => string> = {
+		summaries: count,
+		'not-sure': count,
+		unsupported: count,
+		hedge: count,
+		part: count,
+		'part-pct': percent,
+		copied: percent,
+		'per-item': (ms) => whole(ms, 1000),
+		minutes: (ms) => whole(ms, 60_000),
+		'too-long': count,
+		failed: count
+	};
+
 	/** Every column of the model table, in the order it is printed.
 	 *
 	 * The label and the sentence under it live together, so a column cannot be
@@ -183,31 +204,22 @@
 	/** One day's printed cells, in the order `COLUMNS` names them.
 	 *
 	 * Built here rather than spelled out in the markup so a header and its column
-	 * cannot drift apart, which is the way a table starts lying.
+	 * cannot drift apart, which is the way a table starts lying. Each cell reads
+	 * its value through `SERIES` and prints it through `FORMAT`, the same pair a
+	 * card's line and strip read.
 	 */
 	function cells(day: ModelDay): { key: string; text: string; aside?: string }[] {
-		return [
-			{ key: 'summaries', text: count(day.summaries) },
-			{ key: 'not-sure', text: count(day.notSure) },
-			{ key: 'unsupported', text: count(day.unsupportedNumbers) },
-			{ key: 'hedge', text: count(day.hedgeDropped) },
-			{ key: 'part', text: count(day.readInPart) },
-			{ key: 'part-pct', text: percent(day.readInPartPct) },
-			{ key: 'copied', text: percent(day.copiedPct) },
+		return SERIES_KEYS.map((key) => {
+			const value = SERIES[key](day);
+			const text = value === null ? '-' : FORMAT[key](value);
 			// The second figure is only carried where the day cut something, because
 			// a dash under every other day would be a column of absences pretending
 			// to be a split.
-			{
-				key: 'per-item',
-				text: whole(day.perItemMs, 1000),
-				...(day.perItemCutMs === null
-					? {}
-					: { aside: `${whole(day.perItemCutMs, 1000)} when cut short` })
-			},
-			{ key: 'minutes', text: whole(day.totalMs, 60_000) },
-			{ key: 'too-long', text: count(day.refusedForLength) },
-			{ key: 'failed', text: count(day.failed) }
-		];
+			if (key === 'per-item' && day.perItemCutMs !== null) {
+				return { key, text, aside: `${FORMAT[key](day.perItemCutMs)} when cut short` };
+			}
+			return { key, text };
+		});
 	}
 
 	/** What each column counts, day by day.
@@ -573,7 +585,8 @@
 					the {windowDays} days ending there, and a dashed rule across one is a day the model
 					changed. The percentage beside it is the change from the start of that line to its
 					end, coloured green where the measure went the way we want and red where it did not;
-					a measure nobody has agreed a direction for says "no target" instead.
+					a measure nobody has agreed a direction for says "no target" instead. Point at a card's
+					line to read a day. Left and Right step days, Escape returns to the newest.
 				</p>
 
 				<div class="auto-grid mt-4" style="--auto-grid-min: {CARD_MIN_PX}px" data-model-cards>
@@ -587,9 +600,18 @@
 							polarity={card.polarity}
 						>
 							{#snippet trend()}
+								<!-- The grid's lead says how to read a line, once: eleven copies
+								     of one sentence would push each card's figures away from the
+								     number they explain. -->
 								<Sparkline
 									marks={card.trend.marks}
 									rules={card.trend.rules}
+									series={{ label: card.label, format: FORMAT[card.key] }}
+									strip={{
+										name: `model-card-${card.key}`,
+										maxShare: data.chart.readout_max_share,
+										hint: ''
+									}}
 									width={SPARK_WIDTH_PX}
 									height={data.chart.sparkline_height_px}
 									label="{card.label}, over the {windowDays} days ending {newestModelDay?.date}"

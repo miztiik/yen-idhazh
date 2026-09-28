@@ -25,6 +25,7 @@
 	 * everything the browser is given.
 	 */
 	import { rank, tailSentence, type Rankable, type RankedDisplay } from '$lib/charts/rank';
+	import { gridStep, type GridPick } from '$lib/charts/readout';
 	import {
 		failedRows,
 		failureLedger,
@@ -33,8 +34,9 @@
 		sourceLosses,
 		type TelemetryRow
 	} from '$lib/charts/series';
-	import { sparklineMarks } from '$lib/charts/sparkline';
-	import type { TimeWindow } from '$lib/charts/viewport';
+	import { sparklineMarks, sparklineReadout } from '$lib/charts/sparkline';
+	import { daysInWindow, type TimeWindow } from '$lib/charts/viewport';
+	import ChartReadout from './ChartReadout.svelte';
 	import RankedList from './RankedList.svelte';
 	import Sparkline from './Sparkline.svelte';
 
@@ -43,7 +45,8 @@
 		window,
 		selectedCode,
 		max,
-		sourceMax
+		sourceMax,
+		readoutMaxShare
 	}: {
 		rows: TelemetryRow[];
 		window: TimeWindow;
@@ -52,6 +55,8 @@
 		/** How many sources the ranking draws before its tail sentence -
 		 * `console.source_rows`. */
 		sourceMax: number;
+		/** `chart.readout_max_share`. */
+		readoutMaxShare: number;
 	} = $props();
 
 	let selectedCause = $state<string | null>(null);
@@ -127,11 +132,84 @@
 	// A trend is built only where the ranking drew its cause. `ranked` caps and
 	// reorders `ledger.causes`, and the snippet is handed a drawn row, so a
 	// sparkline for a capped-off cause is a line nothing renders. Keyed by cause,
-	// which is what the snippet looks a row up by.
+	// which is what the snippet looks a row up by. `daily` holds one count for
+	// each day of the window, so each count takes that day's date.
+	const days = $derived(daysInWindow(window));
 	const dailyByCause = $derived(new Map(ledger.causes.map((cause) => [cause.key, cause.daily])));
 	const trends = $derived(
-		new Map(ranked.rows.map((row) => [row.key, sparklineMarks(dailyByCause.get(row.key) ?? [])]))
+		new Map(
+			ranked.rows.map((row) => [
+				row.key,
+				sparklineMarks(
+					(dailyByCause.get(row.key) ?? []).map((value, index) => ({ date: days[index], value }))
+				)
+			])
+		)
 	);
+	/** Which drawn row each cause is, so a line knows the row it reports for. */
+	const rowOf = $derived(new Map(ranked.rows.map((row, index) => [row.key, index])));
+
+	/** The row and the day the ledger's lines have picked, or null for rest: the
+	 * worst cause on the newest day, which is the one reading most worth seeing
+	 * without a tap. One pick for every line, so only one row reads at a time. */
+	let trendPick = $state<GridPick | null>(null);
+	const trendColumns = $derived(trends.get(ranked.rows[0]?.key ?? '')?.dates.length ?? 0);
+	const trendDrawn = $derived(
+		ranked.rows.length > 0 && [...trends.values()].some((marks) => !marks.empty)
+	);
+	/** The one strip under the ledger: the picked row's line, built by the same
+	 * function a line on its own prints its strip with. */
+	const trendReadout = $derived.by(() => {
+		const row = ranked.rows[trendPick?.row ?? 0];
+		const marks = row === undefined ? undefined : trends.get(row.key);
+		if (row === undefined || marks === undefined || marks.empty) return null;
+		return sparklineReadout(
+			marks,
+			{ label: row.key, format: (value) => `${grouped(value)} ${failureWord(value)}` },
+			[]
+		);
+	});
+
+	// A new window is a new set of days, so a pick into the old one is dropped.
+	$effect(() => {
+		void window.start;
+		void window.end;
+		trendPick = null;
+	});
+
+	/** A row's line reports every change: a day, or null when the pointer left. */
+	function pointAt(key: string, column: number | null): void {
+		const row = rowOf.get(key);
+		trendPick = row === undefined || column === null ? null : { row, column };
+	}
+
+	/** The ledger's one tab stop for all of its lines. Keys that land on a row's
+	 * own button belong to that button, so only the stop itself answers them. */
+	function stepTrend(event: KeyboardEvent): void {
+		if (event.target !== event.currentTarget) return;
+		const next = gridStep(
+			event.key,
+			trendPick ?? { row: 0, column: 0 },
+			ranked.rows.length,
+			trendColumns
+		);
+		if (next === undefined) return;
+		event.preventDefault();
+		// The ledger sits inside the viewport control, which pans on the same two
+		// arrows; one step through the days must not also move the window.
+		event.stopPropagation();
+		trendPick = next;
+	}
+
+	function enterTrend(event: FocusEvent): void {
+		if (event.target === event.currentTarget && trendPick === null && trendColumns > 0) {
+			trendPick = { row: 0, column: 0 };
+		}
+	}
+
+	function leaveTrend(event: FocusEvent): void {
+		if (event.target === event.currentTarget) trendPick = null;
+	}
 
 	const sourceEntries = $derived<Rankable<RankedDisplay>[]>(
 		losses.sources.map((source) => ({
@@ -195,25 +273,64 @@
 		the items behind it.
 	</p>
 
-	<div class="mt-3" data-failure-ledger>
-		<RankedList
-			caption="Failure causes in this window, most failures first"
-			{ranked}
-			maxText="{grouped(ranked.max)} {failureWord(ranked.max)}"
-			measured={ledger.rows > 0}
-			unmeasuredNote="Nothing was recorded in this window."
-			emptyNote="No item failed in this window."
-			{tail}
-			selectedKey={selectedCause}
-			onSelect={pickCause}
+	<!-- Every row's line reads into the one strip under the ledger, which prints
+	     the row the reader pointed at: ten strips under ten rows would print one
+	     date ten times and break the one-line rows that make this a ranking. -->
+	<div
+		class="mt-3"
+		data-failure-ledger
+		data-readout-columns={trendDrawn && trendReadout !== null ? trendColumns : undefined}
+	>
+		<!-- One tab stop for every row's line. Up and Down step causes and Left and
+		     Right step days; each row's own button is a stop of its own. -->
+		<!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
+		<div
+			class="failure-trends"
+			role="group"
+			aria-label="Failures a day for each cause across this window"
+			tabindex={trendDrawn ? 0 : undefined}
+			onkeydown={trendDrawn ? stepTrend : undefined}
+			onfocusin={trendDrawn ? enterTrend : undefined}
+			onfocusout={trendDrawn ? leaveTrend : undefined}
 		>
-			{#snippet trend(row)}
-				<Sparkline
-					marks={trends.get(row.key) ?? sparklineMarks([])}
-					label="Failures a day for {row.key} across this window"
-				/>
-			{/snippet}
-		</RankedList>
+			<RankedList
+				caption="Failure causes in this window, most failures first"
+				{ranked}
+				maxText="{grouped(ranked.max)} {failureWord(ranked.max)}"
+				measured={ledger.rows > 0}
+				unmeasuredNote="Nothing was recorded in this window."
+				emptyNote="No item failed in this window."
+				{tail}
+				selectedKey={selectedCause}
+				onSelect={pickCause}
+			>
+				{#snippet trend(row)}
+					<Sparkline
+						marks={trends.get(row.key) ?? sparklineMarks([])}
+						label="Failures a day for {row.key} across this window"
+						series={{
+							label: row.key,
+							format: (value) => `${grouped(value)} ${failureWord(value)}`
+						}}
+						strip={{
+							onSelect: (column) => pointAt(row.key, column),
+							selected: trendPick !== null && trendPick.row === rowOf.get(row.key)
+								? trendPick.column
+								: null
+						}}
+					/>
+				{/snippet}
+			</RankedList>
+		</div>
+		{#if trendDrawn && trendReadout !== null}
+			<ChartReadout
+				readout={trendReadout}
+				at={trendPick?.column ?? null}
+				name="failure-trends"
+				maxShare={readoutMaxShare}
+				hint="Point at a cause's line to read a day. Up and Down step causes, Left and Right step days, Escape returns to the worst cause on the newest day."
+			/>
+		{/if}
 	</div>
 
 	<h3 class="mt-8 text-[0.9375rem] font-semibold text-text">Which sources lost the most</h3>
@@ -326,4 +443,15 @@
 		{/if}
 	</details>
 </section>
+
+<style>
+	.failure-trends {
+		border-radius: var(--radius-md);
+	}
+
+	.failure-trends:focus-visible {
+		outline: 2px solid var(--color-focus);
+		outline-offset: 2px;
+	}
+</style>
 

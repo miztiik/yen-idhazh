@@ -63,13 +63,15 @@
 	import { movementVerdict } from '$lib/charts/theme';
 	import type { TargetSense } from '$lib/charts/targetbar';
 	import Chart from '$lib/charts/Chart.svelte';
-	import { readoutOf } from '$lib/charts/readout';
+	import { pointerReadout, readoutMarks, readoutOf, type Readout } from '$lib/charts/readout';
 	import { chartFlow, FLOW_HEIGHT } from '$lib/charts/chart-flow';
 	import { extractionTrend, extractionTrendColumns } from '$lib/charts/extraction-trend';
 	import {
 		chartRule,
+		coverageText,
 		failureMix,
 		failureMixColumns,
+		minutesText,
 		publishedSkyline,
 		publishingHorizon,
 		siteCost,
@@ -80,6 +82,7 @@
 		type SkylineBar
 	} from '$lib/charts/glance';
 	import type { StackShape } from '$lib/charts/stacked';
+	import ChartReadout from '$lib/components/ChartReadout.svelte';
 	import ShapeSwitch from '$lib/components/ShapeSwitch.svelte';
 	import Sparkline from '$lib/components/Sparkline.svelte';
 	import Viewport from '$lib/components/Viewport.svelte';
@@ -497,6 +500,8 @@
 
 	/** The card's trend slot, in CSS pixels. */
 	const SKYLINE = { width: 220, height: 34 };
+	/** The bars' one colour, and so the swatch their strip prints as its key. */
+	const SKYLINE_FILL = 'var(--chart-3)';
 
 	/** A day that published one chart against a busiest of forty is a fortieth
 	 * of the box, which draws as nothing at all. A hairline floor keeps a quiet
@@ -504,6 +509,36 @@
 	function barHeight(bar: SkylineBar): number {
 		return bar.published === 0 ? 0 : Math.max(1, bar.height * SKYLINE.height);
 	}
+
+	/** The day each card's bars have picked, by measure, or null for the newest.
+	 * The page keeps it because one snippet draws both cards, and a snippet
+	 * keeps no state of its own. */
+	let skylinePick = $state<Record<string, number | null>>({ articles: null, visuals: null });
+
+	/** A skyline's strip: one column a day, and that day's count printed by the
+	 * formatter the card's own figure uses. The card's figure is the window's
+	 * total and the strip rests on the newest day, so the heading is what says
+	 * which of the two a number is. */
+	function skylineReadout(strip: Skyline, noun: string): Readout {
+		return readoutOf({
+			type: 'dateSeries',
+			columns: strip.bars.map((bar) => shortDate(bar.date)),
+			series: [
+				{
+					label: noun,
+					swatch: SKYLINE_FILL,
+					values: strip.bars.map((bar) => bar.published),
+					format: (value) => grouped(value)
+				}
+			],
+			notMeasured: 'Nothing was published on this day.',
+			resting: 'newest'
+		});
+	}
+
+	/** How a line on its own says it is read, under its strip. */
+	const SPARK_HINT =
+		'Point at the line to read a day. Left and Right step days, Escape returns to the newest.';
 
 	/** The day `Run health` has picked, on its chart or on its squares, or null
 	 * for the newest. One value for both figures, so they cannot show two days. */
@@ -655,33 +690,57 @@
 
 	     One snippet draws both strips. Two copies would agree on the day they
 	     were written and drift on the first day either was tuned, and the pair
-	     is only readable while both are one bar a day at the same pitch. -->
+	     is only readable while both are one bar a day at the same pitch.
+
+	     The bars read into a strip under them: a pointer, a tap or an arrow key
+	     names a day and its count. The strip prints no hint of its own, because
+	     the section's lead says it once for both cards. -->
 	{#snippet skylineBars(strip: Skyline, measure: string, noun: string)}
-		<svg
-			class="block"
-			width={SKYLINE.width}
-			height={SKYLINE.height}
-			viewBox="0 0 {SKYLINE.width} {SKYLINE.height}"
-			role="img"
-			aria-label="{noun} each day over {windowDays} days, {grouped(strip.total)} over the window, {grouped(
-				strip.busiest
-			)} on the busiest day"
-			data-published-measure={measure}
-			data-published-days={strip.bars.length}
-			data-published-total={strip.total}
-		>
-			{#each strip.bars as bar (bar.date)}
-				<rect
-					x={(bar.x * SKYLINE.width).toFixed(2)}
-					width={(bar.width * SKYLINE.width).toFixed(2)}
-					y={(SKYLINE.height - barHeight(bar)).toFixed(2)}
-					height={barHeight(bar).toFixed(2)}
-					fill="var(--chart-3)"
-					data-published-bar={bar.date}
-					data-published={bar.published}
-				/>
-			{/each}
-		</svg>
+		{@const readout = skylineReadout(strip, noun)}
+		{@const at = skylinePick[measure] ?? null}
+		<div data-readout-columns={readout.columns.length}>
+			<!-- One tab stop for the bars, never one per day. -->
+			<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+			<svg
+				class="block focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+				width={SKYLINE.width}
+				height={SKYLINE.height}
+				viewBox="0 0 {SKYLINE.width} {SKYLINE.height}"
+				role="img"
+				tabindex="0"
+				aria-label="{noun} each day over {windowDays} days, {grouped(strip.total)} over the window, {grouped(
+					strip.busiest
+				)} on the busiest day"
+				data-published-measure={measure}
+				data-published-days={strip.bars.length}
+				data-published-total={strip.total}
+				use:pointerReadout={{
+					marks: readoutMarks(strip.bars.map((bar) => (bar.x + bar.width / 2) * SKYLINE.width)),
+					width: SKYLINE.width,
+					onSelect: (index) => (skylinePick[measure] = index)
+				}}
+			>
+				{#each strip.bars as bar, index (bar.date)}
+					<rect
+						x={(bar.x * SKYLINE.width).toFixed(2)}
+						width={(bar.width * SKYLINE.width).toFixed(2)}
+						y={(SKYLINE.height - barHeight(bar)).toFixed(2)}
+						height={barHeight(bar).toFixed(2)}
+						fill={SKYLINE_FILL}
+						opacity={at === null || at === index ? 1 : 0.45}
+						data-published-bar={bar.date}
+						data-published={bar.published}
+					/>
+				{/each}
+			</svg>
+			<ChartReadout
+				{readout}
+				{at}
+				name="published-{measure}"
+				maxShare={data.chart.readout_max_share}
+				hint=""
+			/>
+		</div>
 	{/snippet}
 	{#snippet articleBars()}{@render skylineBars(articleSkyline, 'articles', 'Articles published')}{/snippet}
 	{#snippet visualBars()}{@render skylineBars(visualSkyline, 'visuals', 'Visuals published')}{/snippet}
@@ -711,6 +770,9 @@
 	<!-- Six questions, six shapes. A different chart per question is the point:
 	     one shape repeated is what made this page read as a single instrument. -->
 	<h2 class="console-h2">At a glance</h2>
+	<p class="mt-1 text-[0.8125rem] text-text-tertiary" data-glance-hint>
+		Point at a card's bars to read a day. Left and Right step days, Escape returns to the newest.
+	</p>
 	<div class="auto-grid mt-4" style="--auto-grid-min: 17rem" data-glance>
 		<!-- Articles first. Visuals published is a fraction of it, and a fraction
 		     reads as one only when the denominator is beside it. -->
@@ -1269,12 +1331,18 @@
 							<TargetBar
 								marks={rule.minutesMarks}
 								label="Minutes per visual"
-								valueText={rule.minutes === null ? '-' : rule.minutes.toFixed(1)}
+								valueText={rule.minutes === null ? '-' : minutesText(rule.minutes)}
 								targetText="Retired above {thresholds.minutesTarget}, on the median day."
 								emptyNote="No minutes are on record for these {windowDays} days."
 							/>
 							<Sparkline
 								marks={rule.minutesTrend}
+								series={{ label: 'Minutes per visual', format: minutesText }}
+								strip={{
+									name: 'chart-minutes',
+									maxShare: data.chart.readout_max_share,
+									hint: SPARK_HINT
+								}}
 								width={220}
 								height={30}
 								label="Minutes per visual, day by day, over {rule.minutesDays} measured days"
@@ -1285,12 +1353,18 @@
 							<TargetBar
 								marks={rule.coverageMarks}
 								label="Published articles with a visual"
-								valueText={rule.coverage === null ? '-' : `${Math.round(rule.coverage)}%`}
+								valueText={rule.coverage === null ? '-' : coverageText(rule.coverage)}
 								targetText="Retired below {thresholds.coveragePct}%, on the median day."
 								emptyNote="No day in these {windowDays} days published anything to put a visual on."
 							/>
 							<Sparkline
 								marks={rule.coverageTrend}
+								series={{ label: 'Articles with a visual', format: coverageText }}
+								strip={{
+									name: 'chart-coverage',
+									maxShare: data.chart.readout_max_share,
+									hint: SPARK_HINT
+								}}
 								width={220}
 								height={30}
 								label="Share of published articles carrying a visual, day by day, over {rule.coverageDays} measured days"
@@ -1308,8 +1382,10 @@
 				     shape a 360px column can hold. Both are built from one `chartFlow`
 				     call, so they cannot report two different flows.
 				     The list is markup over the same steps, but it shows only below the
-				     breakpoint - so above it, where the diagram is the one shape, an
-				     empty box points at the day-by-day table further down instead. -->
+				     breakpoint, or where the diagram cannot draw at all - no script, or an
+				     engine that never downloaded - so it is never a second shape beside a
+				     drawn diagram. While the diagram is loading, its box points at the
+				     day-by-day table further down instead. -->
 				<div class="panel mt-4" data-flow="chart">
 					<Chart
 						svg=""
@@ -1317,7 +1393,7 @@
 						width={data.console.chart_width}
 						height={FLOW_HEIGHT}
 						label="Where items go between the visual planner reaching one and a visual being published, across the window. Every drop leaves the flow as its own branch, and a branch is as wide as the number of items in it."
-						noReadout="a flow between stages, so there is no column two branches share"
+						noReadout="a flow between stages, so there is no column two branches share, and every stage and every branch prints its count and share beside its node; agreed with Susan"
 						numbersNote={`Open "Show these figures day by day" below for each stage's count on every day.`}
 					/>
 				</div>
@@ -1342,6 +1418,23 @@
 						</li>
 					{/each}
 				</ol>
+				<!-- The one fact the diagram's hover box said and no label does: what a
+				     share is a share of. Said once, under both shapes, so it holds at
+				     every width. -->
+				<p class="mt-2 text-[0.8125rem] text-text-tertiary" data-flow-shares>
+					Every share is of the items the visual planner reached.
+				</p>
+				<!-- With no script the diagram never draws, so the list takes its place
+				     at every width. Reached by attribute and element, for the reason
+				     `FilterBar` records: a `<noscript>` rule cannot outrank a scoped
+				     class on its own. -->
+				<noscript>
+					<style>
+						[data-flow='chart'] + ol[data-flow-steps] {
+							display: block;
+						}
+					</style>
+				</noscript>
 			{:else if data.flowNote}
 				<p class="panel mt-4 text-[0.8125rem] text-text-tertiary" data-flow="none">{data.flowNote}</p>
 			{/if}
@@ -1700,6 +1793,14 @@ display: none;
 margin-block-start: var(--space-4);
 padding: var(--space-4);
 list-style: none;
+}
+
+/* Where the engine never downloaded, the diagram never draws, so the list takes
+   its place at every width and is still the one shape on the screen. Never while
+   the diagram is loading: the box says so, and the list would become a second
+   shape the moment the diagram lands. */
+[data-flow='chart']:has(:global([data-chart-pending='failed'])) + .flow-steps {
+display: block;
 }
 
 .flow-step + .flow-step {
