@@ -244,13 +244,15 @@ column - four series or one - and the rules are not negotiable per chart:
  reader compares are printed once rather than twice.
 - **As wide as the plot, with its entries side by side.** `chart.readout_max_share`
  is 1: the strip may take the whole width of the plot above it, and its entries
- lie along one line and wrap only when the next one does not fit. From the small
- breakpoint up, each value keeps the room its widest reading needs, so an entry
- does not shift sideways as the pointer moves from `9` to `1,204`. On a phone
- that room is not kept: a value's widest reading plus its label can be wider
- than a 360 px screen, and a strip that pushes the page sideways costs more than
- one that reflows as the reader steps. A share of the plot and not a pixel
- count, so the rule holds at every window width.
+ lie along one line and wrap only when the next one does not fit. Each value
+ keeps the room its widest reading needs, so an entry does not shift sideways as
+ the pointer moves from `9` to `1,204` - and never more room than the strip is
+ wide. The strip is a CSS container and the reserve is capped at its width, so on
+ a phone a value whose widest reading would not fit takes the strip's width
+ rather than pushing the page sideways, and every value that does fit keeps its
+ room at every width. Measured 2026-09-28: an uncapped reserve pushed `/evals/`
+ and the console 31 px sideways at 360 px. A share of the plot and not a pixel
+ count, so the rule holds at every window width. Susan, 2026-09-28.
 - **A vertical guide down the hovered column**, across every series.
 - **Reachable by keyboard.** Left and Right step, Home and End jump, Escape
  returns to rest. **A tooltip is never the only place a value appears**: a
@@ -327,17 +329,31 @@ and the panel never changes size. A tap selects a record and leaves it
 selected, because a thumb cannot hover. Such a chart carries
 `data-readout-records` with the count.
 
-**No chart mark carries a `title` attribute.** A native tooltip needs a mouse
-held still over the mark: a thumb cannot raise it, a keyboard cannot raise it,
-and on a 7 px square it covers the neighbours being compared. Every figure and
-every word such a tooltip held now sits in its chart's strip, and the sentence
-stays on the mark as its accessible name. On 2026-09-28, before this rule, the
-canary console carried 130 of them inside charts across the five routes.
+**No chart mark carries a `title` attribute or an SVG `<title>`.** A native
+tooltip needs a mouse held still over the mark: a thumb cannot raise it, a
+keyboard cannot raise it, and on a 7 px square it covers the neighbours being
+compared. Every figure and every word such a tooltip held now sits in its
+chart's strip, and the sentence stays on the mark as its accessible name. On
+2026-09-28, before this rule, the canary console carried 130 of them inside
+charts across the five routes, and 28 SVG `<title>` elements in 14 files.
+
+**A trend line in a card or a list row reads into a strip too.** A KPI card's
+line prints its strip inside the card, with no hint of its own: the card grid's
+lead says once how to read a line, because eleven copies of one sentence push
+each card's figures away from the number they explain. A card keeps room for its
+model-change line on every day, so stepping onto the change does not push the
+grid down. The failure ledger's row lines read into one strip under the ledger,
+which prints the row the reader pointed at; the ledger is one tab stop for every
+line, Up and Down step causes, Left and Right step days, and Escape returns to
+the worst cause on the newest day. Susan, 2026-09-28.
 
 A chart with nothing to hover gets no strip - one target bar, a card per machine
 that prints its own readings, a split that prints both halves and its total, a
-chart with no rows in it yet. A strip there would print what the reader is
-already looking at. **That is a decision, so it is
+chart with no rows in it yet, a flow whose every stage and branch prints its
+count and share beside its node, a bar a day whose every part is printed in the
+key under it, a span per request that prints its low, middle and high under it,
+and a weight bar a feed whose weight is printed on its row. A strip there would
+print what the reader is already looking at. **That is a decision, so it is
 written down where the chart is, and it is not the author's alone**: such a
 chart carries `data-readout-none` with the reason in words, closing
 `; agreed with Susan`. A reason the design review never saw is the old failure
@@ -350,7 +366,9 @@ are the same chart on screen.
 enumerates every drawn chart on the five console routes - every `svg`, every
 `role="img"` and every mark a strip reads - and fails on one that declares none
 of the three. It fails on a declared chart with no strip, on a swatch drawn
-inside a chart that has one, and on a `title` anywhere inside a declared chart.
+inside a chart that has one, on a `title` attribute or an SVG `<title>` anywhere
+inside a declared chart, and on a strip that heads a day in the ledger's
+spelling, `2026-09-27`, rather than the reader's, `27 Sep 2026`.
 It points at every named mark and fails when a figure or a word of four letters
 or more in that mark's name is missing from the strip. It holds a reason to five
 words and to Susan's agreement, because `none` passes an attribute check and

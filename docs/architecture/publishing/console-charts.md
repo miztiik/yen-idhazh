@@ -227,12 +227,22 @@ numbers before they could be read.
 The `<svg>` takes `tabindex="0"` and the marks take none: Left and Right step,
 Home and End jump, Escape closes. A tab stop per data point is a trap rather
 than access - the committed ledger draws 2,541 of them. A chart of records does
-the same with one stop per chart, and its arrow keys follow its layout. The
-`<title>` elements stay as each mark's accessible name and are never the
-publication: nothing a readout alone can tell you is needed to read either
-chart, which is also the whole no-JavaScript answer. Susan ruled on 2026-09-28
-that an SVG `<title>` is a mouse-only tooltip too, so its words move into the
-strip as well; 25 of them in 13 files had not moved at that date.
+the same with one stop per chart, and its arrow keys follow its layout.
+
+**No console chart draws an SVG `<title>`.** Susan ruled on 2026-09-28 that a
+`<title>` is a mouse-only tooltip too, so each one's sentence moved onto its mark
+as the accessible name (`role="img"` and `aria-label`), and every figure and
+every word of four letters or more in it is printed in the strip at that mark.
+Three kinds of mark say their words somewhere other than the strip, because
+what they carried is one fact about a whole chart rather than about a column: a
+tinted span nothing measured, whose meaning the chart's coverage note already
+prints and each day of which the strip calls not measured; the context-limit
+line and the merge line's holdout zone, whose sentences are printed once under
+their charts; and a dashed model-change rule, whose meaning is one shared
+sentence printed beside the chart's "nothing changed" sentence whenever a rule
+is drawn. The four house-style components under `$lib/charts/d3/` still draw a
+`<title>`; no route renders them yet, and the tooltip test counts `<title>`
+elements, so the first row that puts one on a route has to add its strip.
 
 **The stage-timing chart takes one of the two, and it is a strip below the plot
 rather than a box over it.** A floating box was measured on 2026-08-29 at 88 to
@@ -265,19 +275,20 @@ heading anchors on the end of the string.** Five specs matched it with
 `toContainText`, which is a substring test, and all five passed for as long as
 the defect was live.
 
-**The throughput candle's readout moved below its plot on 2026-08-30, and it is
-no longer `caption` verbatim.** It was a box over the plot carrying the
-`<title>` sentence unchanged, on the rule that one day gets one sentence rather
-than two. That box is the one measured above, and this strip is bounded by the
-same `chart.readout_max_share`. `caption` closes with a run list that grows
-with the day's run count, so it is the one clause with no bound, and at a third
-of the plot it wrapped to four lines per series. The strip is a `<dl>` printing
-the day, then one row per series carrying the median and the extent - every
-series at once, so comparing read against write costs no second hover. It rests
-on the newest day rather than opening blank, so pointing at the chart never
-changes the room it takes and never moves the marks under the pointer. The
-`<title>` keeps every word, including the middle half the box already draws, and
-the run count stays in the verdict line under the legend.
+**The throughput candle's readout moved below its plot on 2026-08-30, and since
+2026-09-28 it prints every word of the candle's sentence.** It was a box over
+the plot carrying the `<title>` sentence unchanged, then a strip that printed
+only the median and the extent, because at a third of the plot the run list
+wrapped to four lines per series. With the strip as wide as the plot and the
+`<title>` gone, the strip prints the day, then one entry per series - median,
+middle half, slowest and fastest - then the day's item count, then one entry a
+run with both of its rates side by side - `run 2` beside `read 14.90, write
+5.60` - its day dropped because the heading prints it. Every series is printed at once, so
+comparing read against write costs no second hover. The run entries grow with
+the day's run count, so the strip holds room for the busiest day's entries on
+every day and does not change height as a reader steps. It rests on the newest
+day rather than opening blank, so pointing at the chart never moves the marks
+under the pointer. Susan, 2026-09-28.
 
 The strip's shape is not this chart's own. `dayTicks` and `dayColumnX` in
 [frontend/src/lib/charts/frame.ts](../../../frontend/src/lib/charts/frame.ts)
@@ -342,8 +353,9 @@ Then it says where the chart's numbers are in words. A chart with a readout
 strip gets "The newest day's numbers are below." from the component, because the
 strip rests on the newest day. A chart without one passes `numbersNote`. The
 flow diagram's points at the day-by-day table further down: its stepped list
-shows only below the page's stacking breakpoint, and so never beside the
-diagram's box. The three sentences are one fact about one download, true of
+shows only below the page's stacking breakpoint, or at every width where the
+diagram cannot draw at all - no script, or an engine that never downloaded - and
+so never beside a drawn diagram. The three sentences are one fact about one download, true of
 every chart at once, so no page passes its own.
 
 **The sentence goes when a mark lands, and not one step before.** `hydrate` in
