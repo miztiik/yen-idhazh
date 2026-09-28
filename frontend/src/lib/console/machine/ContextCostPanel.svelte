@@ -21,12 +21,12 @@
 		modelRuleRow,
 		modelRuleTitle,
 		MODEL_RULE_LABEL,
+		MODEL_RULE_NOTE,
 		modelRules,
 		noModelRuleNote,
-		observeWidth,
-		pointerReadout,
-		readoutMarks
+		observeWidth
 	} from '$lib/charts/frame';
+	import { pointerReadout, readoutMarks } from '$lib/charts/readout';
 	import {
 		namesMoved,
 		namesMovedShort,
@@ -76,7 +76,18 @@
 	// The four shapes below are a function of the RUNS alone, so a resize reuses
 	// them and only a new span rebuilds them.
 	const contextDates = $derived(firstOfDay(contextRuns));
-	const contextData = $derived(contextColumns(contextRuns, limit, cost.percentile));
+	// One set membership a column, built once a span, in place of a scan of the
+	// rule list a column. The set holds a boundary DAY's date and every run of
+	// that day carries it, so all its columns take the rule.
+	const contextData = $derived(
+		contextColumns(contextRuns, limit, cost.percentile, {
+			lines: contextRuns.map((run) =>
+				contextBoundaries.has(run.date)
+					? [modelRuleRow(namesMovedShort(movedOn.get(run.date) ?? []))]
+					: []
+			)
+		})
+	);
 	const contextBoundaries = $derived(boundaryDates(modelChanges, contextDates));
 	/** The domain the plot is drawn against. Zero-anchored, and the limit is one
 	 * of its bounds, so the ceiling is a line on the plot rather than a number
@@ -111,21 +122,6 @@
 	const contextRules = $derived(modelRules(modelChanges, contextDates, contextX));
 	/** The words for one date, or none where the record could not name them. */
 	const movedOn = $derived(settingsByDate(moved));
-	const contextStrip = $derived(
-		contextData.map((column, index) => ({
-			...column,
-			x: contextX[index] ?? 0,
-			// One set membership a column, built once a span, in place of a scan of
-			// the rule list a column. The set holds a boundary DAY's date and every
-			// run of that day carries it, so all its columns take the rule.
-			rows: contextBoundaries.has(contextRuns[index]?.date ?? '')
-				? [
-						...column.rows,
-						modelRuleRow(namesMovedShort(movedOn.get(contextRuns[index]?.date ?? '') ?? []))
-					]
-				: column.rows
-		}))
-	);
 	/** Days this span covers, that a setting moved on, and that no run here
 	 * measured. The rule and the absence are both drawn: a setting that moved on
 	 * a day nobody was measuring is what makes a before-and-after unsafe, and a
@@ -138,11 +134,7 @@
 				!contextRuns.some((run) => run.date === one.date)
 		)
 	);
-	const contextMarks = $derived(readoutMarks(contextStrip));
-	const contextResting = $derived(contextStrip.at(-1) ?? null);
-	const contextReadout = $derived(
-		contextAt === null ? contextResting : (contextStrip[contextAt] ?? contextResting)
-	);
+	const contextMarks = $derived(readoutMarks(contextRuns.map((_, index) => contextX[index] ?? 0)));
 	/** Two polylines, built once each rather than per mark. */
 	function line(values: readonly (number | null)[]): string {
 		return values
@@ -190,7 +182,7 @@
 			<div
 				class="plot"
 				data-context-window={limit}
-				data-readout-columns={contextStrip.length}
+				data-readout-columns={contextData.columns.length}
 			>
 				<div use:observeWidth={(px) => (contextWidth = px)}>
 					<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
@@ -230,7 +222,9 @@
 
 						<!-- The limit is a rule and never a bar. A limit is a line a
 						     series approaches; a bar beside a bar invites the reader to
-						     compare two lengths and forget which one is the ceiling. -->
+						     compare two lengths and forget which one is the ceiling. What it
+						     means is one fact about the whole chart rather than about a run,
+						     so the panel's note says it in words, under the title. -->
 						<line
 							x1={contextBox.left}
 							x2={contextBox.right}
@@ -239,11 +233,7 @@
 							stroke="var(--chart-marker)"
 							stroke-width="1.5"
 							data-context-limit={limit}
-						>
-							<title>
-								{`The server was given a ${grouped(limit)}-token limit. One call cannot cross this line.`}
-							</title>
-						</line>
+						/>
 						<text
 							x={contextBox.right}
 							y={contextAtY(limit) - 4}
@@ -264,10 +254,10 @@
 								stroke="var(--chart-change)"
 								stroke-width="1.5"
 								stroke-dasharray="3 3"
+								role="img"
+								aria-label={modelRuleTitle(rule.date, namesMoved(movedOn.get(rule.date) ?? []))}
 								data-model-rule-line={rule.date}
-							>
-								<title>{modelRuleTitle(rule.date, namesMoved(movedOn.get(rule.date) ?? []))}</title>
-							</line>
+							/>
 							<text
 								x={rule.x + 3}
 								y={contextBox.top + 9}
@@ -356,18 +346,34 @@
 					</svg>
 				</div>
 				<ChartReadout
-					readout={contextReadout}
+					readout={contextData}
+					at={contextAt}
 					name="context"
 					maxShare={chart.readout_max_share}
-					resting={contextAt === null}
 					restingNote=", the last run"
 					hint="Point at a run to read it. Left and Right step through them, Escape returns to the last."
 				/>
 			</div>
 
+			<!-- What the limit rule means, said once for the whole chart. It is one
+			     fact about every run rather than about one of them, so it is a
+			     sentence here and not a line the strip repeats on every column. A
+			     span where the limit moved names both limits further down instead,
+			     so this never names one limit for runs that had another. -->
+			{#if cost.limits.length === 1}
+				<p class="reads" data-context-limit-note>
+					The server was given a {grouped(limit)}-token limit, and one call cannot cross the line
+					drawn at it.
+				</p>
+			{/if}
+
 			{#if contextRules.length === 0 && contextRuns.length > 1}
 				<p class="reads">
 					<span data-model-rule-empty="machine-context">{noModelRuleNote(days)}</span>
+				</p>
+			{:else if contextRules.length > 0}
+				<p class="reads">
+					<span data-model-rule-note="machine-context">{MODEL_RULE_NOTE}</span>
 				</p>
 			{/if}
 

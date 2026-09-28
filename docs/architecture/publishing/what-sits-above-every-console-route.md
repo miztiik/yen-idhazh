@@ -297,6 +297,13 @@ above all five route panels, so they cannot disagree about which route is worst.
 A browser-build derivation was rejected; see
 [console-payloads.md](console-payloads.md).
 
+**Each run square names its verdict, and the words after the squares say every
+verdict at once**, grouped - `2 runs ran clean, 1 run failed` - so a thumb and a
+keyboard read what a pointer on a 10 px square would, and no square carries a
+`title`. The words sit on the squares' own line, which costs the band about 6 px
+where a line of its own cost 20 and put it over its 130 px line at 1440. Susan,
+2026-09-28.
+
 **The band has to stay short, and three changes are what keep it short.**
 Measured 2026-09-01 at bf37eeef it ran 340px on a desktop and 586px on a phone -
 69 percent of an 844px viewport. The window control moved out, the site-size fact

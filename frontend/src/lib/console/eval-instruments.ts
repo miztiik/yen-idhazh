@@ -28,10 +28,10 @@
  */
 
 import { BANDS } from '../bands';
-import type { DayReadout } from '../charts/frame';
+import { readoutOf, type Readout } from '../charts/readout';
 import { bandFor, grouped, type SummaryBand } from '../charts/series';
 import type { StackRule, StackSeries } from '../charts/stacked';
-import { dayMonth } from '../format';
+import { dayMonth, shortDate } from '../format';
 
 /** One surface on the console that answers for at least one ledger column.
  *
@@ -535,30 +535,36 @@ export function matchNotes(days: readonly EvalDay[]): string[] {
 	return days.map((day) => `${grouped(day.matched)} summaries checked`);
 }
 
-export function matchColumns(days: readonly EvalDay[]): DayReadout[] {
-	return days.map((day) => ({
-		x: 0,
-		date: day.date,
-		rows: [
+export function matchColumns(days: readonly EvalDay[]): Readout {
+	const percent = (value: number) => `${value}%`;
+	return readoutOf({
+		type: 'dateSeries',
+		columns: days.map((day) => shortDate(day.date)),
+		series: [
 			{
 				label: 'Half scored above',
-				value: `${day.matchMid}%`,
-				colour: 'var(--chart-6)'
+				swatch: 'var(--chart-6)',
+				values: days.map((day) => day.matchMid),
+				format: percent
 			},
 			{
 				label: 'A quarter scored below',
-				value: `${day.matchLow}%`,
-				colour: 'var(--chart-7)'
+				swatch: 'var(--chart-7)',
+				values: days.map((day) => day.matchLow),
+				format: percent
 			},
 			{
 				label: 'Summaries checked',
-				value: grouped(day.matched),
-				// No colour: nothing on the plot is this row's mark. A swatch here
+				// No swatch: nothing on the plot is this entry's mark. A swatch here
 				// would be a key to a series that was never drawn.
-				colour: ''
+				swatch: null,
+				values: days.map((day) => day.matched),
+				format: (value: number) => grouped(value)
 			}
-		]
-	}));
+		],
+		notMeasured: 'No summary was checked on this day',
+		resting: 'last'
+	});
 }
 
 /** What the whole window holds, so a sentence never re-walks the days itself. */

@@ -196,15 +196,15 @@ test('the strip prints every band with its share', () => {
 	const rows = [fullyTimed({ date: '2026-09-14' })];
 	const days = timeSplit(rows, { start: '2026-09-14', end: '2026-09-14' });
 
-	const columns = timeSplitColumns(days);
+	const strip = timeSplitColumns(days);
 
-	expect(columns).toHaveLength(1);
-	expect(columns[0].date).toBe('2026-09-14');
-	expect(columns[0].rows.map((row) => row.label)).toEqual(TIME_BANDS.map((band) => band.label));
-	expect(columns[0].rows[0].value).toBe('100 ms, 13%');
+	// The day in the reader's spelling, the one every strip heads a column with.
+	expect(strip.columns).toEqual(['14 Sep 2026']);
+	expect(strip.series.map((one) => one.label)).toEqual(TIME_BANDS.map((band) => band.label));
+	expect(strip.series[0].values[0]).toBe('100 ms, 13%');
 	// Bound to the band and never to its size, so a colour cannot move when the
 	// mix does.
-	expect(new Set(columns[0].rows.map((row) => row.colour)).size).toBe(TIME_BANDS.length);
+	expect(new Set(strip.series.map((one) => one.swatch)).size).toBe(TIME_BANDS.length);
 });
 
 test('a day that timed nothing prints milliseconds and no share', () => {
@@ -212,8 +212,8 @@ test('a day that timed nothing prints milliseconds and no share', () => {
 	// is a number nobody measured.
 	const days = timeSplit([], { start: '2026-09-14', end: '2026-09-14' });
 
-	const columns = timeSplitColumns(days);
+	const strip = timeSplitColumns(days);
 
-	expect(columns[0].rows.every((row) => row.value === '0 ms')).toBe(true);
+	expect(strip.series.every((one) => one.values[0] === '0 ms')).toBe(true);
 	expect(timeSplitChart(days).empty).toBe(true);
 });

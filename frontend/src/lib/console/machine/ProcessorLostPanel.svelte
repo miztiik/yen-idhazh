@@ -13,6 +13,8 @@
 	 * host gave elsewhere as our own work.
 	 */
 	import Panel from '$lib/components/Panel.svelte';
+	import ChartReadout from '$lib/components/ChartReadout.svelte';
+	import { factsOf, markReadout, recordsOf } from '$lib/charts/readout';
 	import { grouped } from '$lib/charts/series';
 	import {
 		BUSY_HELD_BOTH_BEFORE,
@@ -27,7 +29,8 @@
 		days,
 		windowDays,
 		markedAt,
-		namedAt
+		namedAt,
+		readoutMaxShare
 	}: {
 		span: ProcessorLostSpan;
 		/** The newest run's shards. A snapshot: a window is a span and a span
@@ -40,6 +43,8 @@
 		/** `console.processor_lost_pct_named` - the share at which the headline
 		 * names the day. */
 		namedAt: number;
+		/** `chart.readout_max_share`. */
+		readoutMaxShare: number;
 	} = $props();
 
 	/** Which of the three sentences the span earns.
@@ -61,9 +66,55 @@
 		}
 		return `${tile.label}: no article went over ${markedAt}%, out of ${grouped(tile.from)} that recorded it.`;
 	}
+
+	/** One record a tile, days first and then the newest run's shards, in the
+	 * order a reader meets them. */
+	const tiles = $derived([...span.days, ...run.shards]);
+	const records = $derived(
+		recordsOf(
+			tiles.map((tile) =>
+				factsOf(
+					tile.label,
+					tile.state === 'unrecorded'
+						? [
+								{
+									label: tile.outOf === 1 ? 'Article' : 'Articles',
+									value: `${grouped(tile.outOf)}, none of which recorded what the host gave elsewhere`
+								}
+							]
+						: [
+								{
+									label: 'At its worst',
+									value:
+										tile.state === 'marked'
+											? `one article was kept off the processor for ${tile.says} of an interval`
+											: `no article went over ${markedAt}%`
+								},
+								{ label: 'Out of', value: `${grouped(tile.from)} that recorded it` }
+							],
+					'not recorded'
+				)
+			)
+		)
+	);
+
+	/** The tile a pointer, a key or a tap has picked, or null for the resting one:
+	 * the day the verdict names, else the newest day. */
+	let picked = $state<number | null>(null);
+	const resting = $derived.by(() => {
+		const named = span.named === null ? -1 : span.days.findIndex((tile) => tile.key === span.named?.key);
+		return named >= 0 ? named : Math.max(0, span.days.length - 1);
+	});
 </script>
 
-<div data-windowed="machine-processor-lost" data-window-days={windowDays}>
+<div
+	data-windowed="machine-processor-lost"
+	data-window-days={windowDays}
+	data-readout-records={tiles.length > 0 ? tiles.length : undefined}
+	data-readout-none={tiles.length > 0
+		? undefined
+		: 'no article ran in these days and the newest run left no row, so there is no tile to read; agreed with Susan'}
+>
 	<Panel
 		heading="h3"
 		id="processor-lost"
@@ -85,6 +136,21 @@
 			{/if}
 		</p>
 
+		<!-- One tab stop for both rows of tiles. Left and Right step along a row,
+		     Up and Down move between the day row and the shard row. -->
+		<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+		<div
+			class="grains"
+			tabindex="0"
+			role="group"
+			aria-label="The share of the processor lost, one tile a day and one a shard of the newest run. Arrow keys read a tile, Escape returns to rest."
+			use:markReadout={{
+				count: tiles.length,
+				walk: span.days.length > 0 ? span.days.length : 'row',
+				onSelect: (index) => (picked = index),
+				selected: picked
+			}}
+		>
 		<div class="grain" data-processor-lost-grain="day">
 			<p class="grain-name">
 				By day<span class="unit"
@@ -97,15 +163,17 @@
 				</p>
 			{:else}
 				<ul class="tiles">
-					{#each span.days as tile (tile.key)}
+					{#each span.days as tile, index (tile.key)}
 						<li
+							data-readout-at={index}
+							data-readout-picked={picked === index ? 'yes' : undefined}
 							data-processor-lost-tile={tile.key}
 							data-processor-lost-state={tile.state}
 							data-processor-lost-pct={tile.worstPct ?? ''}
 							data-processor-lost-from={tile.from}
 							data-processor-lost-outof={tile.outOf}
 							class={tile.state}
-							title={title(tile)}
+							aria-label={title(tile)}
 						>
 							<span class="key">{tile.short}</span>
 							<span class="says">{tile.state === 'unrecorded' ? '' : tile.says}</span>
@@ -132,15 +200,17 @@
 				</p>
 			{:else}
 				<ul class="tiles">
-					{#each run.shards as tile (tile.key)}
+					{#each run.shards as tile, index (tile.key)}
 						<li
+							data-readout-at={span.days.length + index}
+							data-readout-picked={picked === span.days.length + index ? 'yes' : undefined}
 							data-processor-lost-shard={tile.key}
 							data-processor-lost-state={tile.state}
 							data-processor-lost-pct={tile.worstPct ?? ''}
 							data-processor-lost-from={tile.from}
 							data-processor-lost-outof={tile.outOf}
 							class={tile.state}
-							title={title(tile)}
+							aria-label={title(tile)}
 						>
 							<span class="key">{tile.short}</span>
 							<span class="says">{tile.state === 'unrecorded' ? '' : tile.says}</span>
@@ -149,6 +219,18 @@
 				</ul>
 			{/if}
 		</div>
+		</div>
+
+		{#if tiles.length > 0}
+			<ChartReadout
+				readout={records[picked ?? resting] ?? null}
+				resting={picked === null}
+				name="processor-lost"
+				maxShare={readoutMaxShare}
+				restingNote={span.named === null ? ', the newest day' : ', the day named above'}
+				hint="Point at a tile to read it. Left and Right step along a row, Up and Down move between days and shards, Escape returns to rest."
+			/>
+		{/if}
 
 		<!-- Printed on the panel and not filed in a doc. A reader comparing this
 		     month against last month is comparing two different measurements, and
@@ -269,5 +351,16 @@
 		border-inline-start: 2px solid var(--color-rule);
 		font-size: var(--text-sm);
 		color: var(--color-text-secondary);
+	}
+	/* The tile the strip below is reading. An outline, so it cannot be mistaken
+	   for the filled tile that marks a loss. */
+	.tiles > li[data-readout-picked] {
+		outline: 2px solid var(--color-focus);
+		outline-offset: 1px;
+	}
+
+	.grains:focus-visible {
+		outline: 2px solid var(--color-focus);
+		outline-offset: 4px;
 	}
 </style>

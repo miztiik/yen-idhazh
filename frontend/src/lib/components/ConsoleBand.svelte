@@ -37,6 +37,29 @@
 		amber: 'var(--fill-medium)',
 		red: 'var(--fill-low)'
 	};
+
+	/** The runs' verdicts in one line, grouped: how many runs said each thing, in
+	 * the order the first of each said it.
+	 *
+	 * A square's words are its run's number and its verdict - "Run 2 failed" -
+	 * and the number is already the square's place in the row, so the group
+	 * keeps what follows it. The line is what a thumb and a keyboard read: a
+	 * square's own words need a pointer on a square ten pixels wide. */
+	const verdictLine = $derived.by(() => {
+		const groups = new Map<string, number>();
+		for (const run of band.verdict.runs) {
+			const said = /^Run \d+ (.+)$/.exec(run.label)?.[1] ?? run.label;
+			groups.set(said, (groups.get(said) ?? 0) + 1);
+		}
+		return [...groups]
+			.map(([said, count]) => {
+				// The verdict is written for one run, so a group of several takes the
+				// plural verb it opens with.
+				const verb = count > 1 && said.startsWith('is ') ? `are ${said.slice(3)}` : said;
+				return `${count} ${count === 1 ? 'run' : 'runs'} ${verb}`;
+			})
+			.join(', ');
+	});
 </script>
 
 <section class="band" aria-label="The latest day, the worst thing and site size" data-console-band>
@@ -57,15 +80,17 @@
 			{#if band.verdict.runs.length > 0}
 				<!-- One square a run, in the order they ran. It says what the sentence
 				     cannot: whether one run ate every failure or all five limped. Every
-				     square names its verdict in words, so the colour is never the only
-				     signal. -->
+				     square names its verdict in words, and the words after the squares
+				     say every verdict at once, so the colour is never the only signal
+				     and a pointer is never the only way to read one. They sit on the
+				     squares' own line because they describe the squares, and a line of
+				     their own would cost the band's height on every console route. -->
 				<p class="runs" data-band-runs={band.verdict.runs.length}>
 					{#each band.verdict.runs as run, index (index)}
 						<span
 							class="run"
 							role="img"
 							style="background: {FILL[run.health]}"
-							title={run.label}
 							aria-label={run.label}
 							data-band-run={run.health}
 						></span>
@@ -75,6 +100,7 @@
 							>+{band.verdict.moreRuns}</span
 						>
 					{/if}
+					<span class="runs-said" data-band-runs-said>{verdictLine}</span>
 				</p>
 			{/if}
 		</div>
@@ -183,6 +209,16 @@
 		font-size: var(--text-xs);
 		line-height: 1;
 		color: var(--color-text-tertiary);
+	}
+
+	/* The squares sit in the middle of the words' line, and the words stand
+	   further from the last square than the squares stand from each other, so
+	   the row reads as squares, then what they say. */
+	.runs-said {
+		margin-inline-start: var(--space-2);
+		font-size: var(--text-xs);
+		line-height: var(--leading-xs);
+		color: var(--color-text-secondary);
 	}
 
 	.track {

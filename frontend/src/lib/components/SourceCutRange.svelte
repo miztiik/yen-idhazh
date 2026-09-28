@@ -28,18 +28,45 @@
 		type Margin
 	} from '$lib/charts/frame';
 	import { capLabel, grouped, rangeMarks } from '$lib/charts/series';
+	import { factsOf, markReadout, recordsOf } from '$lib/charts/readout';
+	import ChartReadout from './ChartReadout.svelte';
 	import type { CapPoint, SourceCut } from '../../routes/console/voices/+page.server';
 
 	let {
 		rows,
 		caps,
-		width
+		width,
+		readoutMaxShare
 	}: {
 		rows: SourceCut[];
 		/** Every cut point in the window, oldest first. Empty draws no rule. */
 		caps: CapPoint[];
 		width: number;
+		/** `chart.readout_max_share`. */
+		readoutMaxShare: number;
 	} = $props();
+
+	/** The row a pointer, a key or a tap has picked, or null for the first. */
+	let picked = $state<number | null>(null);
+
+	/** One record a source: its cut count and the three lengths its row draws,
+	 * which are printed nowhere else. */
+	const records = $derived(
+		recordsOf(
+			rows.map((source) =>
+				factsOf(
+					source.sourceId,
+					[
+						{ label: 'Cut', value: `${source.cut} of ${source.articles} articles` },
+						{ label: 'Shortest article', value: `${grouped(source.lengths.min)} words` },
+						{ label: 'Middle', value: `${grouped(source.lengths.median)} words` },
+						{ label: 'Longest', value: `${grouped(source.lengths.max)} words` }
+					],
+					'not recorded'
+				)
+			)
+		)
+	);
 
 	/** The row label, and the count on the line under it. */
 	const NAME_PX = 11;
@@ -182,16 +209,27 @@
 <div
 	class="plot"
 	data-source-cuts="range"
-	data-readout-none="one row per source, so a pointer is already on the row a strip would print"
+	data-readout-records={rows.length > 0 ? rows.length : undefined}
+	data-readout-none={rows.length > 0
+		? undefined
+		: 'no source has an article in this window, so there is no row to read; agreed with Susan'}
 >
 	<div use:observeWidth={(next) => (measured = next)}>
+		<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 		<svg
-			class="block max-w-full"
+			class="block max-w-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
 			width={box.width}
 			height={box.height}
 			viewBox={`0 0 ${box.width} ${box.height}`}
-			role="img"
-			aria-label="Article length by source, against the cut point"
+			role="group"
+			tabindex="0"
+			aria-label="Article length by source, against the cut point. Up and Down read a source, Escape returns to the first."
+			use:markReadout={{
+				count: rows.length,
+				walk: 'list',
+				onSelect: (index) => (picked = index),
+				selected: picked
+			}}
 			data-source-cuts-layout={stacked ? 'stacked' : 'beside'}
 			data-source-cuts-pitch={pitch}
 			data-source-cuts-plot={px(box.innerWidth)}
@@ -276,16 +314,30 @@
 				</text>
 			{/each}
 
-			{#each placed as row (row.source.sourceId)}
+			{#each placed as row, index (row.source.sourceId)}
 				{@const y = trackY(row.top)}
 				<g
+					role="img"
+					aria-label={sentence(row.source)}
+					data-readout-at={index}
+					data-readout-picked={picked === index ? 'yes' : undefined}
 					data-source-cut={row.source.sourceId}
 					data-range-min={row.source.lengths.min}
 					data-range-median={row.source.lengths.median}
 					data-range-max={row.source.lengths.max}
 					data-range-past={row.marks.past ? 'yes' : 'no'}
 				>
-					<title>{sentence(row.source)}</title>
+					<!-- The whole row answers a pointer, not only its ink: a source whose
+					     three lengths are one word count draws a single dot, and a thumb
+					     between its name and that dot would otherwise land on nothing. -->
+					<rect
+						x="0"
+						y={px(row.top)}
+						width={box.width}
+						height={pitch}
+						fill="transparent"
+						data-readout-hit
+					/>
 					<!-- Beside the plot where the frame can hold the widest name, above it
 					     where it cannot. A name is a source id and there is no shorter true
 					     form of it, so the gutter moves rather than the word. -->
@@ -345,6 +397,19 @@
 			{/each}
 		</svg>
 	</div>
+
+	{#if rows.length > 0}
+		<!-- Under the plot, never over it: the three lengths of the row a reader is
+		     on, which the plot draws and prints nowhere else. -->
+		<ChartReadout
+			readout={records[picked ?? 0] ?? null}
+			resting={picked === null}
+			name="source-cuts"
+			maxShare={readoutMaxShare}
+			restingNote=", the first source"
+			hint="Point at a source to read it. Up and Down step through the sources, Escape returns to the first."
+		/>
+	{/if}
 
 	<ul class="key" data-source-cuts="key">
 		<li><span class="swatch swatch-range"></span>shortest to longest article, dot at the middle one</li>

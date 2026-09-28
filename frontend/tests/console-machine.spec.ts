@@ -977,7 +977,7 @@ test.describe('the counterfactual cost, once it has a shape', () => {
 		]);
 		expect((drawn.series as { stack?: string }[]).every((one) => one.stack === 'cost')).toBe(true);
 		// The strip is the key, so it carries the same two in the same order.
-		expect(costColumns(shapes, 'daily', RATE.currency)[0].rows.map((row) => row.label)).toEqual([
+		expect(costColumns(shapes, 'daily', RATE.currency).series.map((one) => one.label)).toEqual([
 			'Reading the prompts',
 			'Writing the answers'
 		]);

@@ -14,20 +14,26 @@
 	 * looks at the same shape every morning and only the marks change.
 	 */
 	import Panel from '$lib/components/Panel.svelte';
+	import ChartReadout from '$lib/components/ChartReadout.svelte';
 	import { gib } from '$lib/charts/machine';
+	import { markReadout, readoutOf } from '$lib/charts/readout';
 	import { grouped } from '$lib/charts/series';
 	import type { DiskReadDay, DiskReads } from '$lib/console/machine/disk-reads';
+	import { shortDate } from '$lib/format';
 
 	let {
 		reads,
 		days,
-		windowDays
+		windowDays,
+		readoutMaxShare
 	}: {
 		reads: DiskReads;
 		/** Days the span covers, for the prose. */
 		days: number;
 		/** The preset the control is on, for the window check. */
 		windowDays: number;
+		/** `chart.readout_max_share`. */
+		readoutMaxShare: number;
 	} = $props();
 
 	/** The tallest bar on the read strip. Every bar is a share of it, so one
@@ -109,17 +115,73 @@
 	const excluded = $derived(reads.days.reduce((total, day) => total + day.excluded, 0));
 
 	function readTitle(day: DiskReadDay): string {
-		if (day.reads === null) return `${day.date}: nothing counted it`;
-		return `${day.date}: ${grouped(day.reads)} waits over ${day.counted} articles`;
+		if (day.reads === null) return `${shortDate(day.date)}: nothing counted it`;
+		return `${shortDate(day.date)}: ${grouped(day.reads)} waits over ${day.counted} articles`;
 	}
 
 	function copiesTitle(day: DiskReadDay): string {
-		if (day.copiesFell === null) return `${day.date}: no reading`;
-		return `${day.date}: ${gib(day.copiesHigh)} down to ${gib(day.copiesLow)}`;
+		if (day.copiesFell === null) return `${shortDate(day.date)}: no reading`;
+		return `${shortDate(day.date)}: ${gib(day.copiesHigh)} down to ${gib(day.copiesLow)}`;
 	}
+
+	/** The fill a day's read tile is drawn in, and its state in words, so the
+	 * strip names the colour rather than leaving it to be learned. */
+	const STATE: Record<DiskReadDay['state'], { fill: string | null; words: string }> = {
+		unrecorded: { fill: null, words: 'nothing counted whether the model waited' },
+		quiet: { fill: 'var(--fill-high)', words: 'the model never waited on the disk' },
+		fired: { fill: 'var(--fill-low)', words: 'the model waited on the disk' }
+	};
+
+	/** The day a pointer, a key or a tap has picked, or null for the resting one. */
+	let picked = $state<number | null>(null);
+
+	/** Both tracks at one day. It rests on the worst day the finding names, and on
+	 * the newest day where nothing fired. */
+	const readout = $derived(
+		readoutOf({
+			type: 'tileStrip',
+			columns: reads.days.map((day) => shortDate(day.date)),
+			series: [
+				{
+					label: 'Waits for the disk',
+					swatch: null,
+					values: reads.days.map((day) => day.reads ?? 'nothing counted it'),
+					format: (waits: number, column: number) =>
+						`${grouped(waits)} waits over ${reads.days[column]?.counted ?? 0} articles`
+				},
+				{
+					label: 'Disk copies fell',
+					swatch: 'var(--fill-medium)',
+					values: reads.days.map((day) => (day.copiesFell === null ? 'no reading' : day.copiesHigh)),
+					format: (high: number, column: number) =>
+						`${gib(high)} down to ${gib(reads.days[column]?.copiesLow ?? null)}`
+				}
+			],
+			events: {
+				lines: reads.days.map((day) => [
+					{ label: 'That day', value: STATE[day.state].words, swatch: STATE[day.state].fill }
+				])
+			},
+			notMeasured: 'No article left a row on this day',
+			resting:
+				reads.worst === null
+					? 'last'
+					: Math.max(
+							0,
+							reads.days.findIndex((day) => day.date === reads.worst?.date)
+						)
+		})
+	);
 </script>
 
-<div data-windowed="machine-disk-reads" data-window-days={windowDays}>
+<div
+	data-windowed="machine-disk-reads"
+	data-window-days={windowDays}
+	data-readout-columns={reads.days.length > 0 ? reads.days.length : undefined}
+	data-readout-none={reads.days.length > 0
+		? undefined
+		: 'no article in these days left a row, so there is no day to read; agreed with Susan'}
+>
 	<Panel
 		heading="h3"
 		id="disk-reads"
@@ -135,16 +197,33 @@
 			</p>
 		{/if}
 
-		<div class="strip">
+		<!-- One tab stop for both tracks: a day is one column across the two, so
+		     pointing at either tile of a day, or stepping with Left and Right,
+		     reads that day in the strip below. -->
+		<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+		<div
+			class="strip"
+			tabindex="0"
+			role="group"
+			aria-label="Waits for the disk and disk copies, one day a column. Left and Right read a day, Escape returns to rest."
+			use:markReadout={{
+				count: reads.days.length,
+				walk: 'row',
+				onSelect: (index) => (picked = index),
+				selected: picked
+			}}
+		>
 			<ol class="track" data-disk-read-track aria-label="Waits for the disk, one tile a day">
-				{#each reads.days as day (day.date)}
+				{#each reads.days as day, index (day.date)}
 					<li
 						class="tile {day.state}"
+						data-readout-at={index}
+						data-readout-picked={picked === index ? 'yes' : undefined}
 						data-disk-read-day={day.date}
 						data-disk-read-state={day.state}
 						data-disk-reads={day.reads ?? ''}
 						data-disk-read-counted={day.counted}
-						title={readTitle(day)}
+						aria-label={readTitle(day)}
 					>
 						<span class="mark" style="block-size: {readShare(day)}%"></span>
 					</li>
@@ -157,14 +236,16 @@
 				data-disk-copies-track
 				aria-label="How far the machine's disk copies fell, the same days"
 			>
-				{#each reads.days as day (day.date)}
+				{#each reads.days as day, index (day.date)}
 					<li
 						class="tile {day.copiesFell === null ? 'unrecorded' : 'copies'}"
+						data-readout-at={index}
+						data-readout-picked={picked === index ? 'yes' : undefined}
 						data-disk-copies-day={day.date}
 						data-disk-copies-fell={day.copiesFell === null ? '' : day.copiesFell.toFixed(4)}
 						data-disk-copies-high={day.copiesHigh ?? ''}
 						data-disk-copies-low={day.copiesLow ?? ''}
-						title={copiesTitle(day)}
+						aria-label={copiesTitle(day)}
 					>
 						<span class="mark" style="block-size: {copiesShare(day)}%"></span>
 					</li>
@@ -175,6 +256,17 @@
 						.date} to {reads.days[reads.days.length - 1].date}{/if}
 			</p>
 		</div>
+
+		{#if reads.days.length > 0}
+			<ChartReadout
+				{readout}
+				at={picked}
+				name="disk-reads"
+				maxShare={readoutMaxShare}
+				restingNote={reads.worst === null ? ', the newest day' : ', the worst day'}
+				hint="Point at a day to read both tracks. Left and Right step through the days, Escape returns to the worst."
+			/>
+		{/if}
 
 		<p class="aside" data-disk-read-pinning={pinning}>{pinningSays}</p>
 
@@ -272,5 +364,15 @@
 		font-size: var(--text-sm);
 		line-height: var(--leading-sm);
 		color: var(--color-text-secondary);
+	}
+	/* The day the strip below is reading, on both tracks at once. */
+	.tile[data-readout-picked] {
+		outline: 1px solid var(--color-focus);
+		outline-offset: 1px;
+	}
+
+	.strip:focus-visible {
+		outline: 2px solid var(--color-focus);
+		outline-offset: 2px;
 	}
 </style>

@@ -121,7 +121,7 @@
 >
 	<div
 		data-verdict-split
-		data-readout-none="two population ranges on one score axis, so there is no column to share, and each range prints its lowest, middle and highest in words"
+		data-readout-none="two population ranges on one score axis, so there is no column to share, and each range prints its lowest, middle and highest in words; agreed with Susan"
 		data-verdict-line={reads(applied)}
 		data-verdict-days={record?.daysCounted ?? 0}
 	>

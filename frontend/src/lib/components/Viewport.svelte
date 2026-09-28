@@ -164,6 +164,7 @@
 				{selectedCode}
 				max={config.failure_list_max}
 				sourceMax={config.source_rows}
+				{readoutMaxShare}
 			/>
 		</div>
 	</div>

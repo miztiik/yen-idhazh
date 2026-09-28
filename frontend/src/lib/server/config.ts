@@ -637,7 +637,7 @@ const CHART_DEFAULTS: ChartConfig = {
 	height_px: 220,
 	width_px: 760,
 	hover_readout: true,
-	readout_max_share: 0.33,
+	readout_max_share: 1,
 	palette: 'categorical',
 	tick_density: 6,
 	sparkline_height_px: 36

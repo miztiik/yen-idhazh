@@ -16,7 +16,6 @@
 		chartWidth,
 		coverage,
 		coverageRegions,
-		coverageRegionTitle,
 		coverageSentence,
 		dayColumnX,
 		dayColumns,
@@ -25,16 +24,14 @@
 		linearAxis,
 		MARGIN,
 		MODEL_RULE_ROW,
+		MODEL_RULE_NOTE,
 		modelRules,
 		modelRuleTitle,
 		MODEL_RULE_LABEL,
 		noModelRuleNote,
-		notMeasuredRow,
-		observeWidth,
-		pointerReadout,
-		readoutMarks,
-		type DayReadout
+		observeWidth
 	} from '$lib/charts/frame';
+	import { pointerReadout, readoutMarks, readoutOf } from '$lib/charts/readout';
 	import ChartReadout from './ChartReadout.svelte';
 	import { rank, tailSentence, type Rankable, type RankedDisplay } from '$lib/charts/rank';
 	import {
@@ -51,7 +48,7 @@
 		type UnplottedDay
 	} from '$lib/charts/series';
 	import { daysBetween, type TimeWindow } from '$lib/charts/viewport';
-	import { dayMonth } from '$lib/format';
+	import { dayMonth, plural } from '$lib/format';
 	import RankedList from './RankedList.svelte';
 
 	let {
@@ -63,7 +60,7 @@
 		width,
 		tickDensity,
 		outlierRows,
-		readoutMaxShare = 0.33,
+		readoutMaxShare = 1,
 		modelChanges = []
 	}: {
 		points: CompressionPoint[];
@@ -230,9 +227,14 @@
 		split.map((day) => PARTS.map((_, position) => segment(day, position)))
 	);
 
+	/** A day's count with its noun, spelt one way by the column's name and by the
+	 * strip, so pointing at a column prints every word the name says. */
+	function summaries(count: number): string {
+		return plural(count, 'summary', 'summaries');
+	}
+
 	function columnTitle(day: BandDay): string {
-		const noun = day.items === 1 ? 'summary' : 'summaries';
-		return `${dayMonth(day.date)} - ${day.items} ${noun}: ${day.inside} inside the band, ${day.short} shorter, ${day.long} longer.`;
+		return `${dayMonth(day.date)} - ${summaries(day.items)}: ${day.inside} inside the band, ${day.short} shorter, ${day.long} longer.`;
 	}
 
 	/** The column a pointer or an arrow key has picked. */
@@ -240,36 +242,36 @@
 
 	/** All three parts of a day, printed together. A stack is the shape where
 	 * reading one band off the middle is hardest, and the two bands that ride on
-	 * top are the ones anybody acts on. */
-	const columns = $derived<DayReadout[]>(
-		split.map((day, index) => ({
-			x: centres[index],
-			date: dayMonth(day.date),
-			rows:
-				day.items > 0
-					? [
-							...PARTS.map((part) => ({
-								label: part.text,
-								value: String(day[part.place]),
-								colour: part.colour
-							})),
-							{ label: 'Summaries that day', value: String(day.items), colour: '' },
-							// The rule is a mark on the plot and a line in the strip, so a reader
-							// stepping the days with an arrow key meets it without a pointer.
-							...(changedOn.has(day.date) ? [MODEL_RULE_ROW] : [])
-						]
-					: [
-							// Four zeros here would say every summary of the day landed
-							// nowhere, and no summary was written at all.
-							notMeasuredRow('Nothing was summarised on this day'),
-							...(changedOn.has(day.date) ? [MODEL_RULE_ROW] : [])
-						]
-		}))
+	 * top are the ones anybody acts on. A day with no summary reads null in every
+	 * part: four zeros there would say every summary of the day landed nowhere,
+	 * and no summary was written at all. */
+	const readout = $derived(
+		readoutOf({
+			type: 'dateSeries',
+			columns: split.map((day) => dayMonth(day.date)),
+			series: [
+				...PARTS.map((part) => ({
+					label: part.text,
+					swatch: part.colour,
+					values: split.map((day) => (day.items > 0 ? day[part.place] : null)),
+					format: (value: number) => String(value)
+				})),
+				{
+					label: 'Written that day',
+					swatch: null,
+					values: split.map((day) => (day.items > 0 ? day.items : null)),
+					format: summaries
+				}
+			],
+			// The rule is a mark on the plot and a line in the strip, so a reader
+			// stepping the days with an arrow key meets it without a pointer.
+			events: { lines: split.map((day) => (changedOn.has(day.date) ? [MODEL_RULE_ROW] : [])) },
+			notMeasured: 'Nothing was summarised on this day',
+			resting: 'last'
+		})
 	);
-	const marks = $derived(readoutMarks(columns));
-	const at = $derived(selected ?? (columns.length === 0 ? null : columns.length - 1));
-	const readout = $derived(at === null ? null : (columns[at] ?? null));
-	const guide = $derived(selected === null ? null : (columns[selected]?.x ?? null));
+	const marks = $derived(readoutMarks(centres));
+	const guide = $derived(selected === null ? null : (centres[selected] ?? null));
 </script>
 
 <section
@@ -304,13 +306,15 @@
 			<!-- Stated, not omitted. A chart that draws no rule and says nothing about
 			     it is indistinguishable from one where the rule was forgotten. -->
 			<span data-model-rule-empty="band-distance">{noModelRuleNote(split.length)}</span>
+		{:else}
+			<span data-model-rule-note="band-distance">{MODEL_RULE_NOTE}</span>
 		{/if}
 	</p>
 
 	<div
 		class="mt-4 rounded-md border border-rule bg-surface p-3"
 		data-band-distance
-		data-readout-columns={columns.length}
+		data-readout-columns={readout.columns.length}
 		data-band-domain={tallest}
 		data-model-rule="yes"
 		data-model-rule-name="band-distance"
@@ -334,7 +338,9 @@
 				}}
 			>
 				<!-- The span nothing summarised, drawn before the guide and the columns so
-				     the tint sits under every mark. -->
+				     the tint sits under every mark. It carries no words of its own: the
+				     note above says what the tint is, and the strip says of each day in it
+				     that nothing was summarised. -->
 				{#each emptySpans as span (span.from)}
 					<rect
 						x={px(span.x)}
@@ -344,9 +350,7 @@
 						fill="var(--color-surface-sunken)"
 						data-coverage-empty={span.from}
 						data-coverage-empty-to={span.to}
-					>
-						<title>{coverageRegionTitle(span)}</title>
-					</rect>
+					/>
 				{/each}
 				{#if guide !== null}
 					<line
@@ -380,10 +384,10 @@
 						stroke="var(--chart-change)"
 						stroke-width="1.5"
 						stroke-dasharray="3 3"
+						role="img"
+						aria-label={modelRuleTitle(rule.date)}
 						data-model-rule-line={rule.date}
-					>
-						<title>{modelRuleTitle(rule.date)}</title>
-					</line>
+					/>
 					<text
 						x={px(rule.x) + 3}
 						y={box.top + 9}
@@ -437,13 +441,14 @@
 					{#each split as day, index (day.date)}
 						{#if day.items > 0}
 							<g
+								role="img"
+								aria-label={columnTitle(day)}
 								data-band-day={day.date}
 								data-band-inside={day.inside}
 								data-band-short={day.short}
 								data-band-long={day.long}
 								data-band-items={day.items}
 							>
-								<title>{columnTitle(day)}</title>
 								{#each PARTS as part, position (part.place)}
 									{#if day[part.place] > 0}
 										<rect
@@ -505,9 +510,9 @@
 		     console prints - see `ChartReadout.svelte` for the rules it holds. -->
 		<ChartReadout
 			{readout}
+			at={selected}
 			name="band-distance"
 			maxShare={readoutMaxShare}
-			resting={selected === null}
 			restingNote=", the newest day"
 			hint="Point at a day to read all three parts. Left and Right step through the days, Escape returns to the newest."
 		/>

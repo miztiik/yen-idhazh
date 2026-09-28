@@ -211,15 +211,19 @@ test('the tail of the ranking is a number, never another page of rows', async ({
 	if (hidden > 0) await expect(more).toHaveText(new RegExp(`^${hidden} more`));
 });
 
-test('the matrix says why it has no hover strip', async ({ page }) => {
+test('the matrix declares one strip for all its squares', async ({ page }) => {
 	await page.goto(ROUTE);
 	const table = page.locator('[data-retiring="table"]');
 	test.skip((await table.count()) === 0, 'the canary published no source census');
 
-	// The reason belongs to the matrix, not to each source's own strip. One
-	// copy per source is the same sentence, and the console-wide scan reads
-	// every copy.
-	const reason = await table.getAttribute('data-readout-none');
-	expect(reason ?? '').not.toBe('');
-	expect(await page.locator('[data-retiring-strip][data-readout-none]').count()).toBe(0);
+	// Every square is one source on one day, read in the one strip under the
+	// table. The declaration belongs to the table, not to each source's row:
+	// one strip per source is the same strip once per source.
+	const records = Number(await table.getAttribute('data-readout-records'));
+	expect(records).toBeGreaterThan(0);
+	expect(
+		await page
+			.locator('[data-retiring-strip][data-readout-records], [data-retiring-strip][data-readout-none]')
+			.count()
+	).toBe(0);
 });

@@ -8,7 +8,7 @@ import { render } from 'svelte/server';
 import { rank, tailSentence, percentOf } from '../src/lib/charts/rank';
 import type { RankedDisplay } from '../src/lib/charts/rank';
 import { targetBar, targetGeometry, targetMarks } from '../src/lib/charts/targetbar';
-import { sparkline, sparklineMarks, sparklineShape } from '../src/lib/charts/sparkline';
+import { sparklineMarks, sparklineShape } from '../src/lib/charts/sparkline';
 
 /**
  * A ranked list that draws a plausible but wrong bar is the failure worth a
@@ -35,16 +35,34 @@ const built = path.join(
 
 type Rendered = { body: string; css: string };
 
-async function renderer(name: string): Promise<(props: Record<string, unknown>) => Rendered> {
-	const filename = path.join(frontend, 'src', 'lib', 'components', `${name}.svelte`);
-	const source = readFileSync(filename, 'utf8');
-	const pre = await preprocess(source, vitePreprocess(), { filename });
-	const result = compile(pre.code, { generate: 'server', filename, name });
+/** A component compiled to a server module, with each child component it names
+ * compiled for real beside it and its import pointed at that copy. Plain Node
+ * cannot import a `.svelte` file, and a stub would render a strip as nothing. */
+async function renderer(
+	name: string,
+	children: readonly string[] = []
+): Promise<(props: Record<string, unknown>) => Rendered> {
 	mkdirSync(built, { recursive: true });
+	const compiled = async (component: string) => {
+		const filename = path.join(frontend, 'src', 'lib', 'components', `${component}.svelte`);
+		const pre = await preprocess(readFileSync(filename, 'utf8'), vitePreprocess(), { filename });
+		return compile(pre.code, { generate: 'server', filename, name: component });
+	};
+	let css = '';
+	for (const child of children) {
+		const result = await compiled(child);
+		writeFileSync(path.join(built, `${child}.server.mjs`), result.js.code, 'utf8');
+		css += result.css?.code ?? '';
+	}
+	const result = await compiled(name);
+	let code = result.js.code;
+	for (const child of children) {
+		code = code.split(`'$lib/components/${child}.svelte'`).join(`'./${child}.server.mjs'`);
+	}
 	const module = path.join(built, `${name}.server.mjs`);
-	writeFileSync(module, result.js.code, 'utf8');
+	writeFileSync(module, code, 'utf8');
 	const loaded = await import(pathToFileURL(module).href);
-	const css = result.css?.code ?? '';
+	css += result.css?.code ?? '';
 	return (props) => ({ body: render(loaded.default, { props }).body, css });
 }
 
@@ -250,9 +268,18 @@ test.describe('the target geometry', () => {
 	});
 });
 
+/** A line's readings, one a day from 1 September 2026, the way a caller hands
+ * them over: each value beside its date. */
+function readings(values: readonly (number | null)[]) {
+	return values.map((value, index) => ({
+		date: `2026-09-${String(index + 1).padStart(2, '0')}`,
+		value
+	}));
+}
+
 test.describe('the sparkline shape', () => {
 	test('the points fill the drawn extent, not a domain anchored at zero', () => {
-		const s = sparklineMarks([980, 1000, 990]);
+		const s = sparklineMarks(readings([980, 1000, 990]));
 		expect(s.empty).toBe(false);
 		expect(s.min).toBe(980);
 		expect(s.max).toBe(1000);
@@ -264,7 +291,7 @@ test.describe('the sparkline shape', () => {
 	});
 
 	test('a flat series sits on the middle line, not on an edge', () => {
-		const s = sparklineMarks([7, 7, 7]);
+		const s = sparklineMarks(readings([7, 7, 7]));
 		expect(s.points.every((p) => p.y === 0.5)).toBe(true);
 		expect(s.movement).toBeCloseTo(0, 10);
 	});
@@ -274,14 +301,13 @@ test.describe('the sparkline shape', () => {
 		expect(sparklineMarks([]).points).toEqual([]);
 	});
 
-	test('the markup line and the chart line report the same movement', () => {
-		for (const series of [[100, 110, 130], [200, 150], [0, 5]]) {
-			const chart = sparkline(series);
-			const markup = sparklineShape(series);
-			expect(markup.movement).toBe(chart.movement);
-			expect(markup.rising).toBe(chart.rising);
-			expect(markup.empty).toBe(chart.empty);
-		}
+	test('a reading nobody took is dropped with its date, never drawn as a zero', () => {
+		const s = sparklineMarks(readings([4, null, 6]));
+		expect(s.values).toEqual([4, 6]);
+		// The date goes with the value, so the strip cannot head 6 with the
+		// second day's date.
+		expect(s.dates).toEqual(['2026-09-01', '2026-09-03']);
+		expect(s.points).toHaveLength(2);
 	});
 });
 
@@ -466,20 +492,65 @@ test.describe('the sparkline, rendered', () => {
 	let draw: (props: Record<string, unknown>) => Rendered;
 
 	test.beforeAll(async () => {
-		draw = await renderer('Sparkline');
+		draw = await renderer('Sparkline', ['ChartReadout']);
 	});
 
+	const series = { label: 'extract timeout', format: (value: number) => `${value} failures` };
+	const own = { name: 'test-line', maxShare: 1, hint: '' };
+
 	test('one drawn point for every day in the series', async ({ page }) => {
-		const series = [3, 1, 8, 8, 2, 5, 9];
-		await show(page, draw({ marks: sparklineMarks(series), label: 'extract timeout, daily count' }));
+		const values = [3, 1, 8, 8, 2, 5, 9];
+		await show(
+			page,
+			draw({
+				marks: sparklineMarks(readings(values)),
+				label: 'extract timeout, daily count',
+				series,
+				strip: own
+			})
+		);
 		const points = await page.locator('polyline').getAttribute('points');
-		expect((points ?? '').trim().split(/\s+/)).toHaveLength(series.length);
+		expect((points ?? '').trim().split(/\s+/)).toHaveLength(values.length);
 		await expect(page.locator('[data-sparkline="line"]')).toHaveAttribute('aria-label', 'extract timeout, daily count');
 	});
 
+	test('a line on its own prints its strip, resting on the newest day', async ({ page }) => {
+		await show(
+			page,
+			draw({ marks: sparklineMarks(readings([3, 1, 8])), label: 'x', series, strip: own })
+		);
+		// One column per drawn day, declared on the element that holds the strip.
+		await expect(page.locator('[data-readout-columns]')).toHaveAttribute('data-readout-columns', '3');
+		await expect(page.locator('[data-readout="test-line"] [data-readout-day]')).toHaveText('3 Sep 2026');
+		await expect(page.locator('[data-readout="test-line"] [data-readout-row="extract timeout"]')).toContainText(
+			'8 failures'
+		);
+		// The line is the one tab stop, and an empty hint prints no sentence.
+		await expect(page.locator('svg[data-sparkline="line"]')).toHaveAttribute('tabindex', '0');
+		await expect(page.locator('[data-readout-hint]')).toHaveCount(0);
+	});
+
+	test('a line in a list prints no strip and is no tab stop of its own', async ({ page }) => {
+		await show(
+			page,
+			draw({
+				marks: sparklineMarks(readings([3, 1, 8])),
+				label: 'x',
+				series,
+				strip: { onSelect: () => {}, selected: 1 }
+			})
+		);
+		await expect(page.locator('[data-readout]')).toHaveCount(0);
+		await expect(page.locator('[data-readout-columns]')).toHaveCount(0);
+		await expect(page.locator('svg[data-sparkline="line"]')).not.toHaveAttribute('tabindex', /.*/);
+		// The list's pick comes back in, so the row being read marks its day.
+		await expect(page.locator('[data-sparkline-at="1"]')).toHaveCount(1);
+	});
+
 	test('nothing to draw keeps the row height and draws no line', async ({ page }) => {
-		await show(page, draw({ marks: sparklineMarks([4]), label: 'x' }));
+		await show(page, draw({ marks: sparklineMarks(readings([4])), label: 'x', series, strip: own }));
 		await expect(page.locator('polyline')).toHaveCount(0);
+		await expect(page.locator('[data-readout]')).toHaveCount(0);
 		const box = await page.locator('[data-sparkline="empty"]').boundingBox();
 		expect(box?.width).toBe(96);
 		expect(box?.height).toBe(22);

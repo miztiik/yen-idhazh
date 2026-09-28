@@ -10,7 +10,8 @@
  */
 
 import type { EChartsOption } from 'echarts';
-import { dayMonth } from '../format';
+import { dayMonth, shortDate } from '../format';
+import { readoutOf, type Readout } from './readout';
 import { paint } from './theme';
 
 /** One measured day, in the two counts the trend draws. */
@@ -107,13 +108,17 @@ export function extractionTrend(days: readonly ExtractionDay[]): ExtractionTrend
 }
 
 /** Both series at one day, for the strip under the plot. */
-export function extractionTrendColumns(days: readonly ExtractionDay[]) {
-	return SERIES.map((series) => ({
-		label: series.name,
-		colour: `var(${series.token})`,
-		value: (index: number) => {
-			const day = days[index];
-			return day === undefined ? '-' : String(series.of(day));
-		}
-	}));
+export function extractionTrendColumns(days: readonly ExtractionDay[]): Readout {
+	return readoutOf({
+		type: 'dateSeries',
+		columns: days.map((day) => shortDate(day.date)),
+		series: SERIES.map((series) => ({
+			label: series.name,
+			swatch: `var(${series.token})`,
+			values: days.map((day) => series.of(day)),
+			format: (value: number) => String(value)
+		})),
+		notMeasured: 'Nothing was extracted on this day',
+		resting: 'last'
+	});
 }

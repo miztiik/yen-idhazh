@@ -38,19 +38,22 @@
 	 * line however many days moved, because a line a day is the smear the charts
 	 * refuse for the same reason.
 	 */
+	import ChartReadout from './ChartReadout.svelte';
 	import {
 		gib,
 		RUNNER_MEMORY_BYTES,
 		type MemoryBoardView,
 		type RangeMark
 	} from '$lib/charts/machine';
+	import { factsOf, markReadout, recordsOf } from '$lib/charts/readout';
 	import { namesMoved, type SettingsMoved } from '$lib/console/settings-moved';
 	import { grouped } from '$lib/charts/series';
 
 	let {
 		board,
 		moved = [],
-		windowDays
+		windowDays,
+		readoutMaxShare
 	}: {
 		board: MemoryBoardView;
 		/** Every day inside the page's span the run record says a setting moved on,
@@ -60,9 +63,63 @@
 		moved?: readonly SettingsMoved[];
 		/** How far back the page looked, which is what bounds the days above. */
 		windowDays: number;
+		/** `chart.readout_max_share`. */
+		readoutMaxShare: number;
 	} = $props();
 
 	const tightestItem = $derived(board.items.find((item) => item.tightest) ?? null);
+
+	/** The item a pointer, a key or a tap has picked, or null for the resting
+	 * one - the tightest item, which is the one the lead names. */
+	let picked = $state<number | null>(null);
+	const resting = $derived(Math.max(0, board.items.findIndex((item) => item.tightest)));
+
+	/** What an item's mark is, in one sentence: its accessible name, and every
+	 * word of it is also in the strip. */
+	function itemTitle(item: MemoryBoardView['items'][number]): string {
+		return `${item.itemId}: ${
+			item.headroom.empty
+				? 'no kernel reading'
+				: `${gib(item.headroom.floorBytes)} left at its worst and ${gib(item.headroom.endBytes)} when it ended`
+		}.`;
+	}
+
+	/** One record an item: what the kernel had left at its worst and at its end,
+	 * what the two processes held when it ended, and the queue it left. */
+	const records = $derived(
+		recordsOf(
+			board.items.map((item) =>
+				factsOf(
+					item.itemId,
+					[
+						{ label: 'On shard', value: String(item.shard) },
+						{
+							label: 'Left at its worst',
+							value:
+								item.headroom.floorBytes === null
+									? 'no kernel reading'
+									: gib(item.headroom.floorBytes)
+						},
+						{
+							label: 'Left when it ended',
+							value: item.headroom.endBytes === null ? null : gib(item.headroom.endBytes)
+						},
+						{
+							label: 'Model server held',
+							value: item.serverEndBytes === null ? null : gib(item.serverEndBytes)
+						},
+						{
+							label: 'Worker held',
+							value: item.workerBytes === null ? null : gib(item.workerBytes)
+						},
+						{ label: 'Load', value: item.load === null ? null : item.load.toFixed(2) },
+						{ label: 'Processor', value: busyText(item.busy) }
+					],
+					'not recorded'
+				)
+			)
+		)
+	);
 
 	/** A bracket's length against the larger of the two brackets, never against
 	 * the machine's total. */
@@ -115,7 +172,10 @@
 	data-memory-busy-low={board.busySpan.median ?? ''}
 	data-memory-busy-high={board.busySpan.max ?? ''}
 	data-panel-question="what is broken"
-	data-readout-none="every figure drawn here is printed beside its own track"
+	data-readout-records={board.empty ? undefined : board.items.length}
+	data-readout-none={board.empty
+		? 'no item of this run recorded its memory, so there is no item to read; agreed with Susan'
+		: undefined}
 >
 	{#if board.empty}
 		<p class="note" data-memory-board-empty="all">
@@ -193,6 +253,22 @@
 			</div>
 		</dl>
 
+		<!-- One tab stop for every item mark on the board: the kernel track and
+		     the load track below it are the same items, so a pointer on either,
+		     or Left and Right, reads one item in the strip under them. -->
+		<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+		<div
+			class="items"
+			tabindex="0"
+			role="group"
+			aria-label="The run's items. Left and Right read an item, Escape returns to the tightest."
+			use:markReadout={{
+				count: board.items.length,
+				walk: 'row',
+				onSelect: (index) => (picked = index),
+				selected: picked
+			}}
+		>
 		<p class="track-name" id="left-name">What the kernel had left: worst, then at the end</p>
 		{#if board.headroomFrom === 0}
 			<p class="note absent" data-memory-track-empty="headroom">
@@ -206,11 +282,15 @@
 				A resident-set mark says what a process held; it does not say what was still free.
 			</p>
 		{:else}
-			<div class="strip" role="img" aria-labelledby="left-name">
-				{#each board.items as item (item.itemId)}
+			<div class="strip" aria-labelledby="left-name">
+				{#each board.items as item, index (item.itemId)}
 					<span
 						class="mark"
 						class:tightest={item.tightest}
+						role="img"
+						aria-label={itemTitle(item)}
+						data-readout-at={index}
+						data-readout-picked={picked === index ? 'yes' : undefined}
 						data-memory-item={item.itemId}
 						data-memory-item-shard={item.shard}
 						data-memory-item-server-end={item.serverEndBytes ?? ''}
@@ -220,11 +300,6 @@
 						data-memory-item-recovered={item.headroom.recoveredBytes ?? ''}
 						data-memory-item-load={item.load ?? ''}
 						data-memory-item-tightest={String(item.tightest)}
-						title="{item.itemId}: {item.headroom.empty
-							? 'no kernel reading'
-							: `${gib(item.headroom.floorBytes)} left at its worst and ${gib(
-									item.headroom.endBytes
-								)} when it ended`}."
 					>
 						{#if item.headroom.empty}
 							<span class="bar absent-bar"></span>
@@ -353,8 +428,13 @@
 			</p>
 		{:else}
 			<div class="strip" role="img" aria-labelledby="load-name">
-				{#each board.items as item (item.itemId)}
-					<span class="mark" class:tightest={item.tightest}>
+				{#each board.items as item, index (item.itemId)}
+					<span
+						class="mark"
+						class:tightest={item.tightest}
+						data-readout-at={index}
+						data-readout-picked={picked === index ? 'yes' : undefined}
+					>
 						{#if item.load === null}
 							<span class="bar absent-bar"></span>
 						{:else}
@@ -387,6 +467,18 @@
 				</div>
 			</dl>
 		{/if}
+		</div>
+
+		<!-- Under the item tracks, never over them: every figure of the item a
+		     reader is on, including the queue and what each process held. -->
+		<ChartReadout
+			readout={records[picked ?? resting] ?? null}
+			resting={picked === null}
+			name="memory-board"
+			maxShare={readoutMaxShare}
+			restingNote=", the tightest item"
+			hint="Point at an item to read it. Left and Right step through the items, Escape returns to the tightest."
+		/>
 
 		<!-- Decision 1: the mark comes off the page and stays in the ledger, and
 		     the surface that would have drawn it is where that is said. -->
@@ -587,5 +679,15 @@
 		overflow: hidden;
 		clip-path: inset(50%);
 		white-space: nowrap;
+	}
+	/* The item the strip below is reading, on both of its tracks. */
+	.mark[data-readout-picked] {
+		outline: 1px solid var(--color-focus);
+		outline-offset: 1px;
+	}
+
+	.items:focus-visible {
+		outline: 2px solid var(--color-focus);
+		outline-offset: 4px;
 	}
 </style>

@@ -84,7 +84,10 @@
 				</p>
 			{/if}
 
-			<ul class="requests">
+			<ul
+				class="requests"
+				data-readout-none="one span per request and measure, and each prints its low, middle, high and item count in words under it; agreed with Susan"
+			>
 				{#each measured as request (request.name)}
 					{@const reuseSpan = request.reuse}
 					{@const readSpan = request.read}

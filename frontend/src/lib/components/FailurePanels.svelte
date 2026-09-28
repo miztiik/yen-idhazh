@@ -36,21 +36,18 @@
 		chartWidth,
 		coverage,
 		coverageRegions,
-		coverageRegionTitle,
 		coverageSentence,
 		dayTicks,
 		frame,
 		linearAxis,
-		notMeasuredRow,
-		observeWidth,
-		pointerReadout,
-		readoutMarks,
-		type DayReadout
+		observeWidth
 	} from '$lib/charts/frame';
+	import { pointerReadout, readoutMarks, readoutOf } from '$lib/charts/readout';
 	import ChartReadout from './ChartReadout.svelte';
 	import { failureLoad, type FailurePoint, type FailureStage } from '$lib/charts/glance';
 	import { failureSeries, grouped, type TelemetryRow } from '$lib/charts/series';
 	import { daysBetween, type TimeWindow } from '$lib/charts/viewport';
+	import { shortDate } from '$lib/format';
 
 	let {
 		rows,
@@ -61,7 +58,7 @@
 		selectedCode,
 		onSelect,
 		tickDensity,
-		readoutMaxShare = 0.33
+		readoutMaxShare = 1
 	}: {
 		rows: TelemetryRow[];
 		window: TimeWindow;
@@ -235,16 +232,24 @@
 		return Math.max(1, volume.scale(start) - volume.scale(end));
 	}
 
+	/** What a band is, in the words the strip prints it under. */
+	function bandWords(key: string, label: string): string {
+		if (key === 'finished') return 'Finished';
+		if (key === 'skipped') return 'Never fetched';
+		return `Failed at ${label}`;
+	}
+
+	/** One band's sentence, kept on the band as its name. Every word of it is in
+	 * the strip at that day: the band's own row, and the day's planned count. */
 	function bandTitle(index: number, band: number): string {
 		const column = load.columns[index];
 		const entry = column.bands[band];
-		const what =
-			entry.key === 'finished'
-				? 'finished'
-				: entry.key === 'skipped'
-					? 'were never fetched'
-					: `failed at ${entry.label}`;
-		return `${column.date}: ${grouped(entry.value)} of ${grouped(column.planned)} ${what}`;
+		return `${shortDate(column.date)}: ${grouped(entry.value)} of ${grouped(column.planned)} ${bandWords(entry.key, entry.label).toLowerCase()}`;
+	}
+
+	/** How a stage's rate prints, with the count it is a share of beside it. */
+	function rateText(rate: number, reached: number): string {
+		return `${percent(rate)} failed of the ${grouped(reached)} that reached it`;
 	}
 
 	const headline = $derived(
@@ -258,37 +263,67 @@
 	/** The column a pointer or an arrow key has picked. */
 	let selected = $state<number | null>(null);
 
+	/** Every band any column draws, in the order the stack draws them. A band is
+	 * drawn only on a day it is not zero, so a planned day without it reads zero
+	 * rather than going missing from the strip. */
+	const bandsDrawn = $derived.by(() => {
+		const seen = new Map<string, { key: string; label: string; token: string }>();
+		for (const column of load.columns) {
+			for (const band of column.bands) {
+				if (seen.has(band.key)) continue;
+				seen.set(band.key, {
+					key: band.key,
+					label: bandWords(band.key, band.label),
+					token: band.token
+				});
+			}
+		}
+		return [...seen.values()];
+	});
+
 	/** Where the day's items stopped, and every stage's rate, at one column. Two
 	 * quantities on two axes is the shape where reading them together by eye is
-	 * hardest, and it is the whole reason both are drawn. */
-	const columns = $derived<DayReadout[]>(
-		load.columns.map((column, index) => ({
-			x: centre(index),
-			date: column.date,
-			rows:
-				column.planned > 0
-					? [
-							...column.bands.map((band) => ({
-								label: band.key === 'finished' ? 'Finished' : band.label,
-								value: grouped(band.value),
-								colour: `var(${band.token})`
-							})),
-							...load.stages.map((stage) => ({
-								label: `${stage.label} rate`,
-								value:
-									stage.points[index]?.rate == null
-										? 'too few'
-										: percent(stage.points[index].rate ?? 0),
-								colour: `var(${stage.token})`
-							}))
-						]
-					: [notMeasuredRow('No item was planned on this day')]
-		}))
+	 * hardest, and it is the whole reason both are drawn. The day's planned count
+	 * leads, because every band is a share of it and every rate names what it is
+	 * a share of. */
+	const readout = $derived(
+		readoutOf({
+			type: 'dateSeries',
+			columns: load.columns.map((column) => shortDate(column.date)),
+			series: [
+				{
+					label: 'Planned that day',
+					swatch: null,
+					values: load.columns.map((column) => (column.planned > 0 ? column.planned : null)),
+					format: (value: number) => grouped(value)
+				},
+				...bandsDrawn.map((band) => ({
+					label: band.label,
+					swatch: `var(${band.token})`,
+					values: load.columns.map((column) =>
+						column.planned > 0
+							? (column.bands.find((one) => one.key === band.key)?.value ?? 0)
+							: null
+					),
+					format: (value: number) => grouped(value)
+				})),
+				...load.stages.map((stage) => ({
+					label: `${stage.label} rate`,
+					swatch: `var(${stage.token})`,
+					values: load.columns.map((column, index) =>
+						column.planned > 0 ? (stage.points[index]?.rate ?? 'too few') : null
+					),
+					format: (rate: number, column: number) =>
+						rateText(rate, stage.points[column]?.reached ?? 0)
+				}))
+			],
+			notMeasured: 'No item was planned on this day',
+			resting: 'last'
+		})
 	);
-	const marks = $derived(readoutMarks(columns));
-	const at = $derived(selected ?? (columns.length === 0 ? null : columns.length - 1));
-	const readout = $derived(at === null ? null : (columns[at] ?? null));
-	const guide = $derived(selected === null ? null : (columns[selected]?.x ?? null));
+	const centres = $derived(load.columns.map((_, index) => centre(index)));
+	const marks = $derived(readoutMarks(centres));
+	const guide = $derived(selected === null ? null : (centres[selected] ?? null));
 </script>
 
 <section
@@ -338,7 +373,7 @@
 		     would leave the check with nothing to measure. -->
 		<figure
 			class="mt-4"
-			data-readout-columns={columns.length}
+			data-readout-columns={readout.columns.length}
 			data-readout-fetched="yes"
 			use:observeWidth={(value) => (measured = value)}
 		>
@@ -359,7 +394,9 @@
 				}}
 			>
 				<!-- The span nothing was planned on, drawn before the grid so the tint sits
-				     under every mark rather than over one. -->
+				     under every mark rather than over one. It carries no words of its own:
+				     the note above says what the tint is, and the strip says of each day
+				     in it that nothing was planned. -->
 				{#each emptySpans as span (span.from)}
 					<rect
 						x={span.x}
@@ -369,9 +406,7 @@
 						fill="var(--color-surface-sunken)"
 						data-coverage-empty={span.from}
 						data-coverage-empty-to={span.to}
-					>
-						<title>{coverageRegionTitle(span)}</title>
-					</rect>
+					/>
 				{/each}
 				{#if guide !== null}
 					<line
@@ -444,10 +479,10 @@
 							width={barWidth}
 							height={bandHeight(index, position)}
 							fill="var({band.token})"
+							role="img"
+							aria-label={bandTitle(index, position)}
 							data-band={band.key}
-						>
-							<title>{bandTitle(index, position)}</title>
-						</rect>
+						/>
 					{/each}
 				{/each}
 
@@ -491,14 +526,10 @@
 								cy={rateY(point.rate)}
 								r="2"
 								fill="var({stage.token})"
+								role="img"
+								aria-label="{shortDate(point.date)}: {stage.label} {rateText(point.rate, point.reached)}"
 								data-rate-mark={stage.stage}
-							>
-								<title
-									>{point.date}: {stage.label} failed {percent(point.rate)} of the {grouped(
-										point.reached
-									)} that reached it</title
-								>
-							</circle>
+							/>
 						{/if}
 					{/each}
 				{/each}
@@ -507,9 +538,9 @@
 			     this console prints - see `ChartReadout.svelte` for the rules. -->
 			<ChartReadout
 				{readout}
+				at={selected}
 				name="failure-rate"
 				maxShare={readoutMaxShare}
-				resting={selected === null}
 				restingNote=", the newest day"
 				hint="Point at a day to read where its items stopped and every stage's rate. Left and Right step through the days, Escape returns to the newest."
 			/>

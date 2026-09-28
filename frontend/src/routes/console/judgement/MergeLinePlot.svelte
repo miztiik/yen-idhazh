@@ -36,11 +36,9 @@
 		dayTicks,
 		frame,
 		linearAxis,
-		observeWidth,
-		pointerReadout,
-		readoutMarks,
-		type DayReadout
+		observeWidth
 	} from '$lib/charts/frame';
+	import { pointerReadout, readoutMarks, readoutOf } from '$lib/charts/readout';
 	import { daysBetween, type TimeWindow } from '$lib/charts/viewport';
 	import ChartReadout from '$lib/components/ChartReadout.svelte';
 	import Panel from '$lib/components/Panel.svelte';
@@ -161,47 +159,70 @@
 			.map((run) => run.join(' '))
 	);
 
-	const columns = $derived<DayReadout[]>(
-		marks.map((mark) => ({
-			x: mark.x,
-			date: dayMonth(mark.day.date),
-			rows: [
-				{ label: 'Applied', value: reads(mark.day.applied), colour: 'var(--chart-1)' },
+	/** What the line did on a day, in the words the strip prints it under. */
+	function lineDid(day: LineDay): string {
+		if (day.heldReason !== 'none') return 'stayed where it was';
+		if (day.clampKind === 'none') return 'moved to what the evidence asked for';
+		return 'was held back from what the evidence asked for';
+	}
+
+	const readout = $derived(
+		readoutOf({
+			type: 'dateSeries',
+			columns: marks.map((mark) => dayMonth(mark.day.date)),
+			series: [
+				{
+					label: 'Applied',
+					swatch: 'var(--chart-1)',
+					values: marks.map((mark) => mark.day.applied),
+					format: reads
+				},
 				{
 					label: 'Proposed',
-					value: mark.day.proposed === null ? 'nothing was fitted' : reads(mark.day.proposed),
-					colour: 'var(--chart-2)'
+					swatch: 'var(--chart-2)',
+					values: marks.map((mark) => mark.day.proposed ?? 'nothing was fitted'),
+					format: reads
+				},
+				{
+					label: 'The line',
+					swatch: null,
+					values: marks.map((mark) => lineDid(mark.day)),
+					format: String
 				}
-			]
-		}))
+			],
+			notMeasured: 'No line was fitted on this day',
+			resting: 'last'
+		})
 	);
-	const resting = $derived(selected === null);
-	const readout = $derived(columns.length === 0 ? null : columns[selected ?? columns.length - 1]);
+	const count = $derived(readout.columns.length);
 
+	/** A day's sentence, kept on its marks as their name. Every word of it is in
+	 * the strip at that day: what the line did, and the two readings. */
 	function columnTitle(day: LineDay): string {
+		const on = dayMonth(day.date);
 		if (day.heldReason !== 'none') {
-			return `${dayMonth(day.date)} - nothing was fitted. The line stayed at ${reads(day.applied)}.`;
+			return `${on}: nothing was fitted, so the line ${lineDid(day)}, applied ${reads(day.applied)}.`;
 		}
 		if (day.clampKind === 'none') {
-			return `${dayMonth(day.date)} - the line moved to ${reads(day.applied)}, which is what the evidence asked for.`;
+			return `${on}: the line ${lineDid(day)}, applied ${reads(day.applied)}.`;
 		}
-		return `${dayMonth(day.date)} - the evidence asked for ${reads(day.proposed ?? day.applied)} and the line was held at ${reads(day.applied)}.`;
+		return `${on}: the line ${lineDid(day)}, proposed ${reads(day.proposed ?? day.applied)} and applied ${reads(day.applied)}.`;
 	}
 </script>
 
 <Panel
 	title="Where the merge line sits"
-	note={`The solid line is the score two stories had to reach that day to be read as one story. The dotted line is what the evidence asked for. The shaded band at each day is as far as the line was allowed to fall in one day.${holdoutZone === null ? '' : ' The tinted strip across the plot is where the pairs a person marked as two stories sit.'}`}
+	note={`The solid line is the score two stories had to reach that day to be read as one story. The dotted line is what the evidence asked for. The shaded band at each day is as far as the line was allowed to fall in one day.${holdoutZone === null || markedApart === null ? '' : ` The tinted strip across the plot is where the ${markedApart.count} pairs a person marked as two stories sit: they score ${markedApart.low.toFixed(4)} to ${markedApart.high.toFixed(4)}, the strip is the part of that inside this plot, and a line inside it merges one of them.`}`}
 >
 	<div
 		data-windowed="merge-line"
 		data-window-days={windowDays}
 		data-line-domain={`${corridor[0]},${corridor[1]}`}
 		data-line-days={drawn.length}
-		data-readout-columns={columns.length > 0 ? columns.length : undefined}
-		data-readout-none={columns.length > 0
+		data-readout-columns={count > 0 ? count : undefined}
+		data-readout-none={count > 0
 			? undefined
-			: 'no day has fitted a line, so there is no column to read'}
+			: 'no day has fitted a line, so there is no column to read; agreed with Susan'}
 	>
 		<div use:observeWidth={(next) => (measured = next)}>
 			<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
@@ -214,7 +235,7 @@
 				tabindex="0"
 				aria-label="The merge line a day, on the whole range a fitted line may take"
 				use:pointerReadout={{
-					marks: readoutMarks(columns),
+					marks: readoutMarks(marks.map((mark) => mark.x)),
 					width: box.width,
 					onSelect: (index) => (selected = index)
 				}}
@@ -231,7 +252,9 @@
 				{#if holdoutZone !== null}
 					<!-- The line walking down into this strip is a pair a person read as
 					     two stories being folded into one. Drawn as a region rather than
-					     one rule a mark: four rules inside ten pixels is one grey smear. -->
+					     one rule a mark: four rules inside ten pixels is one grey smear.
+					     What it holds is one fact about the whole plot rather than about a
+					     day, so the panel's note says it in words, figures and all. -->
 					<rect
 						x={box.left}
 						y={px(yAxis.scale(holdoutZone.high))}
@@ -240,14 +263,7 @@
 						fill="var(--tint-bad)"
 						data-line-holdout={`${holdoutZone.low.toFixed(4)},${holdoutZone.high.toFixed(4)}`}
 						data-line-holdout-count={holdoutZone.count}
-					>
-						<title
-							>{holdoutZone.count} pairs a person read as two stories, scoring {holdoutZone.low.toFixed(
-								4
-							)} to {holdoutZone.high.toFixed(4)}. A line inside this strip merges one of
-							them.</title
-						>
-					</rect>
+					/>
 					<text
 						x={box.left + 4}
 						y={px(yAxis.scale(holdoutZone.high)) - 4}
@@ -336,16 +352,17 @@
 
 					{#each marks as mark (mark.date)}
 						<g
+							role="img"
+							aria-label={columnTitle(mark.day)}
 							data-line-day={mark.date}
 							data-line-clamp={mark.day.clampKind}
 							data-line-held={mark.day.heldReason}
 							data-line-applied={reads(mark.day.applied)}
 							data-line-proposed={mark.day.proposed === null ? '' : reads(mark.day.proposed)}
 						>
-							<title>{columnTitle(mark.day)}</title>
 							{#if mark.day.heldReason !== 'none'}
 								<!-- A square on the date axis, so a held day is findable without
-								     reading every tooltip. Grey, because a held day is not a
+								     stepping through every day. Grey, because a held day is not a
 								     failure and painting it in the low band would teach an
 								     operator to ignore the low band. -->
 								<rect
@@ -385,9 +402,9 @@
 
 		<ChartReadout
 			{readout}
+			at={selected}
 			name="merge-line"
 			maxShare={readoutMaxShare}
-			{resting}
 			restingNote=", the newest day"
 		/>
 

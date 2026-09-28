@@ -14,8 +14,11 @@
 	 * expected, so the colour still means something when it does.
 	 */
 	import { targetMarks } from '$lib/charts/targetbar';
+	import { markReadout, readoutOf } from '$lib/charts/readout';
 	import { daysBetween, type TimeWindow } from '$lib/charts/viewport';
+	import ChartReadout from '$lib/components/ChartReadout.svelte';
 	import Panel from '$lib/components/Panel.svelte';
+	import { shortDate } from '$lib/format';
 	import TargetBar from '$lib/components/TargetBar.svelte';
 	import { grouped } from '$lib/charts/series';
 	import { countedDays, gateNeeds, silentTail, type JudgeDay } from '$lib/console/merge-line';
@@ -24,13 +27,16 @@
 		days,
 		dates,
 		gates,
-		viewport
+		viewport,
+		readoutMaxShare
 	}: {
 		days: JudgeDay[];
 		/** Every date the window spans, including the ones nothing recorded. */
 		dates: string[];
 		gates: { minimumNegatives: number; minimumDays: number; minimumAboveLine: number };
 		viewport: TimeWindow;
+		/** `chart.readout_max_share`. */
+		readoutMaxShare: number;
 	} = $props();
 
 	const windowDays = $derived(daysBetween(viewport.start, viewport.end));
@@ -62,6 +68,33 @@
 				return 'var(--color-surface-sunken)';
 		}
 	}
+
+	/** The day a pointer, a key or a tap has picked, or null for the newest. */
+	let picked = $state<number | null>(null);
+
+	/** One square a day, printed in words with the fill it is drawn in. It rests
+	 * on the newest day, which is what the record holds now. */
+	const readout = $derived(
+		readoutOf({
+			type: 'tileStrip',
+			columns: squares.map((square) => shortDate(square.date)),
+			series: [
+				{
+					label: 'The record',
+					swatch: null,
+					values: squares.map((square) => square.said),
+					format: (value: number) => String(value)
+				}
+			],
+			events: {
+				lines: squares.map((square) => [
+					{ label: 'Square', value: square.state, swatch: fill(square.state) }
+				])
+			},
+			notMeasured: 'no run recorded anything.',
+			resting: 'last'
+		})
+	);
 </script>
 
 <Panel
@@ -72,7 +105,6 @@
 		data-windowed="record-gates"
 		data-window-days={windowDays}
 		data-gates-met={met ? 'yes' : 'no'}
-		data-readout-none="three values against three thresholds, and all six are already in words"
 	>
 		<div class="bars">
 			{#each needs as need (need.label)}
@@ -87,16 +119,52 @@
 			{/each}
 		</div>
 
-		<div class="strip" data-counted-strip data-counted-squares={squares.length}>
-			{#each squares as square (square.date)}
-				<span
-					class="square"
-					style={`background: ${fill(square.state)}`}
-					data-counted-day={square.date}
-					data-counted-state={square.state}
-					title={square.title}
-				><span class="sr-only">{square.title}</span></span>
-			{/each}
+		<!-- The squares wrap onto several lines, so a pointer reads the square
+		     under it rather than the nearest one across; one tab stop for all. -->
+		<div
+			data-readout-columns={squares.length > 0 ? squares.length : undefined}
+			data-readout-none={squares.length > 0
+				? undefined
+				: 'the window spans no day, so there is no square to read; agreed with Susan'}
+		>
+			<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+			<div
+				class="strip"
+				data-counted-strip
+				data-counted-squares={squares.length}
+				tabindex="0"
+				role="group"
+				aria-label="What the record did with each day. Left and Right read a day, Escape returns to the newest."
+				use:markReadout={{
+					count: squares.length,
+					walk: 'row',
+					onSelect: (index) => (picked = index),
+					selected: picked
+				}}
+			>
+				{#each squares as square, index (square.date)}
+					<span
+						class="square"
+						style={`background: ${fill(square.state)}`}
+						role="img"
+						aria-label={square.title}
+						data-readout-at={index}
+						data-readout-picked={picked === index ? 'yes' : undefined}
+						data-counted-day={square.date}
+						data-counted-state={square.state}
+					></span>
+				{/each}
+			</div>
+			{#if squares.length > 0}
+				<ChartReadout
+					{readout}
+					at={picked}
+					name="record-gates"
+					maxShare={readoutMaxShare}
+					restingNote=", the newest day"
+					hint="Point at a square to read its day. Left and Right step through the days, Escape returns to the newest."
+				/>
+			{/if}
 		</div>
 
 		<p class="gates-note">
@@ -152,19 +220,20 @@
 		border-radius: 2px;
 	}
 
-	.sr-only {
-		position: absolute;
-		width: 1px;
-		height: 1px;
-		overflow: hidden;
-		clip: rect(0 0 0 0);
-		white-space: nowrap;
-	}
-
 	.gates-note {
 		margin: var(--space-3) 0 0;
 		font-size: var(--text-sm);
 		line-height: var(--leading-sm);
 		color: var(--color-text-secondary);
+	}
+	/* The day the strip below is reading. */
+	.square[data-readout-picked] {
+		outline: 2px solid var(--color-focus);
+		outline-offset: 1px;
+	}
+
+	.strip:focus-visible {
+		outline: 2px solid var(--color-focus);
+		outline-offset: 3px;
 	}
 </style>
