@@ -48,7 +48,7 @@
 		type UnplottedDay
 	} from '$lib/charts/series';
 	import { daysBetween, type TimeWindow } from '$lib/charts/viewport';
-	import { dayMonth } from '$lib/format';
+	import { dayMonth, plural } from '$lib/format';
 	import RankedList from './RankedList.svelte';
 
 	let {
@@ -227,9 +227,14 @@
 		split.map((day) => PARTS.map((_, position) => segment(day, position)))
 	);
 
+	/** A day's count with its noun, spelt one way by the column's name and by the
+	 * strip, so pointing at a column prints every word the name says. */
+	function summaries(count: number): string {
+		return plural(count, 'summary', 'summaries');
+	}
+
 	function columnTitle(day: BandDay): string {
-		const noun = day.items === 1 ? 'summary' : 'summaries';
-		return `${dayMonth(day.date)} - ${day.items} ${noun}: ${day.inside} inside the band, ${day.short} shorter, ${day.long} longer.`;
+		return `${dayMonth(day.date)} - ${summaries(day.items)}: ${day.inside} inside the band, ${day.short} shorter, ${day.long} longer.`;
 	}
 
 	/** The column a pointer or an arrow key has picked. */
@@ -252,10 +257,10 @@
 					format: (value: number) => String(value)
 				})),
 				{
-					label: 'Summaries that day',
+					label: 'Written that day',
 					swatch: null,
 					values: split.map((day) => (day.items > 0 ? day.items : null)),
-					format: (value: number) => String(value)
+					format: summaries
 				}
 			],
 			// The rule is a mark on the plot and a line in the strip, so a reader

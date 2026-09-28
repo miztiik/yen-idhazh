@@ -6,6 +6,7 @@ import { compile, preprocess } from 'svelte/compiler';
 import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
 import { render } from 'svelte/server';
 import { sparklineMarks } from '../src/lib/charts/sparkline';
+import { shortDate } from '../src/lib/format';
 import { CONSOLE_MODEL_LABELS_PAGE } from '../scripts/doc-test-inputs';
 
 /**
@@ -196,6 +197,41 @@ test.describe('the eleven measures, as cards', () => {
 			).trim();
 			expect(figure, `${column.key} does not print the newest day's cell`).toBe(
 				await cellText(page, newest, column.key)
+			);
+		}
+	});
+
+	test("a card's strip rests on the newest day and prints the card's own figure", async ({
+		page
+	}) => {
+		// The figure on a card and the strip under its line are spelt by one
+		// formatter, so where the newest day is measured the strip at rest prints
+		// exactly what the card does. Two formatters, or a strip that dropped the
+		// figure, fail here. Only a card whose newest day is not measured is
+		// skipped: every drawn line owes its strip, so a card whose line stopped
+		// printing one fails rather than dropping out of the check.
+		await page.goto('/console/model/');
+		const day = shortDate(await newestDay(page));
+		const read = await page.locator(`${CARDS} [data-kpi]`).evaluateAll((cards) =>
+			cards.map((node) => ({
+				label: node.getAttribute('data-kpi') ?? '',
+				figure: (node.querySelector('[data-kpi-value]')?.textContent ?? '').trim(),
+				drawn: node.querySelector('[data-sparkline="line"]') !== null,
+				heading: node.querySelector('[data-readout] [data-readout-day]')?.textContent?.trim() ?? null,
+				values: [...node.querySelectorAll('[data-readout] [data-readout-row] dd')].map((value) =>
+					(value.textContent ?? '').trim()
+				)
+			}))
+		);
+		expect(read, 'the scan found no cards').toHaveLength(11);
+
+		const checked = read.filter((entry) => entry.drawn && entry.figure !== '-');
+		expect(checked.length, 'no card drew a line over a measured newest day').toBeGreaterThan(0);
+		for (const entry of checked) {
+			expect(entry.heading, `${entry.label} draws a line with no strip under it`).not.toBeNull();
+			expect(entry.heading, `${entry.label}'s strip does not rest on the newest day`).toBe(day);
+			expect(entry.values, `${entry.label}'s strip does not print the card's figure`).toContain(
+				entry.figure
 			);
 		}
 	});

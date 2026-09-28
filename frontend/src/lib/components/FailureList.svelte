@@ -275,11 +275,14 @@
 
 	<!-- Every row's line reads into the one strip under the ledger, which prints
 	     the row the reader pointed at: ten strips under ten rows would print one
-	     date ten times and break the one-line rows that make this a ranking. -->
+	     date ten times and break the one-line rows that make this a ranking. The
+	     rows are drawn from the month the page fetches, so the strip arrives with
+	     them and is never in the prerendered document. -->
 	<div
 		class="mt-3"
 		data-failure-ledger
 		data-readout-columns={trendDrawn && trendReadout !== null ? trendColumns : undefined}
+		data-readout-fetched="yes"
 	>
 		<!-- One tab stop for every row's line. Up and Down step causes and Left and
 		     Right step days; each row's own button is a stop of its own. -->

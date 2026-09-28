@@ -31,6 +31,7 @@
 	import { factsOf, markReadout, recordsOf, type ReadoutFacts } from '$lib/charts/readout';
 	import ChartReadout from '$lib/components/ChartReadout.svelte';
 	import Panel from '$lib/components/Panel.svelte';
+	import { shortDate } from '$lib/format';
 	import {
 		agreedNote,
 		belowLine,
@@ -238,7 +239,10 @@
 									? 'at or above it, so the line merges this pair'
 									: 'below it, so the pair stays two stories'
 						},
-						{ label: 'Marked', value: point.mark.markedOn === '' ? null : point.mark.markedOn }
+						{
+							label: 'Marked',
+							value: point.mark.markedOn === '' ? null : shortDate(point.mark.markedOn)
+						}
 					],
 					'not recorded'
 				);

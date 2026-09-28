@@ -131,11 +131,20 @@ async function chartsOn(page: Page): Promise<DeclaredChart[]> {
 							// A mark that names itself is data, not a key. The run squares
 							// under the chart of articles published against planned are spans
 							// in the colours the readout's run rows print, and each carries
-							// its own accessible name; a key swatch carries none.
-							.filter(
-								(el) => !(el.getAttribute('role') === 'img' && el.hasAttribute('aria-label'))
-							)
-							.filter((el) => !el.hasAttribute('data-readout-at'))
+							// its own accessible name; a key swatch carries none. A fill drawn
+							// inside such a mark is part of it too - the disk-read tiles paint
+							// each day's bar as an empty span inside the tile that names the
+							// day. Only a mark with no named mark inside it counts, so a whole
+							// drawing that names itself cannot hide a key.
+							.filter((el) => {
+								const mark = el.closest('[role="img"][aria-label], [data-readout-at]');
+								return (
+									mark === null ||
+									mark === owner ||
+									!owner.contains(mark) ||
+									mark.querySelector('[role="img"][aria-label], [data-readout-at]') !== null
+								);
+							})
 							.filter((el) => {
 								const box = el.getBoundingClientRect();
 								return box.width > 0 && box.width <= 28 && box.height > 0 && box.height <= 28;
