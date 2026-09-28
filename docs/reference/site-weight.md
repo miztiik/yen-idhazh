@@ -20,6 +20,42 @@ names a machine - what they name instead is the runtime, because node's zlib and
 python's `gzip` disagree by about 2 percent on the same file and that difference
 is real.
 
+## What the query engine adds to the site, and what Pages sends again, 2026-09-28
+
+The console's query door reads the committed ledgers in the browser with one
+engine build ([../architecture/publishing/how-the-query-door-answers-a-panel.md](../architecture/publishing/how-the-query-door-answers-a-panel.md)).
+Its files are emitted into the site and fetched only when a panel first reads
+data, never on a page's first load. **The site as built today carries none of
+them, because no page calls the door yet.** Rows 1 and 2 are files of
+`@duckdb/duckdb-wasm@1.33.1-dev57.0`, copied into the site byte for byte; rows 3
+and 4 are as the bundler emits them, measured in a build where one page called the
+door. gzip -5 from node v24.12.0's zlib:
+
+| # | File | Raw bytes | gzip -5 | Shipped |
+| --- | --- | ---: | ---: | --- |
+| 1 | `duckdb-eh.wasm`, the engine | 35,913,747 | 8,206,920 | yes |
+| 2 | `duckdb-browser-eh.worker.js`, the worker that runs it | 773,223 | 190,354 | yes |
+| 3 | `duckdb-browser.mjs`, the calls a page makes, bundled with the `apache-arrow` code it imports | 200,072 | 47,146 | yes, one lazy chunk |
+| 4 | the door's engine module, and two one-line modules holding the wasm's and the worker's addresses | 2,498 | 1,362 | yes, three lazy chunks |
+| 5 | `wasm_eh/parquet.duckdb_extension.wasm`, the parquet reader | 3,218,307 | 747,651 | **no** - the engine downloads it from DuckDB's own host the first time a query needs it (owner ruling, 2026-09-28) |
+| 6 | `duckdb-mvp.wasm`, the build for browsers without exception handling | 41,325,187 | - | no |
+
+**Against the 1 GiB cap**, from the 99,781,515-byte site of 2026-09-27
+(`pages.yml`, `du -sb build`): rows 1 to 4 take it to 136,671,055 bytes, 12.7
+percent of the cap. Row 5 never reaches the site. Row 6 would have added 41.3 MB
+more for browsers from before 2022, which is why one build ships.
+
+**A reader pays the engine once a deploy, not once.** Measured on the live site on
+2026-09-28 at 15:48 UTC: `favicon.svg` answered `Cache-Control: max-age=600`,
+`Last-Modified: Mon, 28 Sep 2026 12:16:35 GMT` and `ETag: "6aba5aa3-152"`. The
+ETag is the file's last-modified time and its size in hex - `0x6aba5aa3` is
+12:16:35 UTC that day and `0x152` is 338 bytes - and every file carries the same
+last-modified, the deploy's. So every deploy changes every file's validator, and
+a file that did not change is sent again after each deploy: about 8.4 MB of
+engine on a reader's first data panel after it. The parquet add-on, 0.52 MB with
+brotli, comes from DuckDB's host, which our deploys do not touch. How the device
+keeps the engine across deploys is the first panel's decision.
+
 ## What a published day adds in rendered visuals, 2026-09-13
 
 **A published day adds 25.5 rendered visuals weighing 324,580 bytes, so a

@@ -28,6 +28,9 @@ declare global {
 		deadlineMs: number;
 	};
 
+	/** `ledger.engine_extension_repository`: where the query engine downloads its add-ons. */
+	const __ENGINE_EXTENSION_REPOSITORY__: string;
+
 	namespace App {}
 }
 

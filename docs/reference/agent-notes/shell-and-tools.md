@@ -90,6 +90,8 @@ if (-not (Get-Command shellcheck -ErrorAction SilentlyContinue)) { 'shellcheck A
 
 The tag finds the fault and does not get the answer back, so have the command write its result to a file and read the file with `Get-Content` - a lost return then costs one read rather than a re-run.
 
+**A sync call can also run in a terminal that is not yours, including a person's.** On 2026-09-28 one ran in the owner's own terminal and hung there, and ending it meant killing a terminal a person had opened; the person's own command in it had already finished. A sync call cannot name the terminal it runs in. Open one private terminal in async mode and send every later command to it by its id.
+
 **Re-issue only after checking whether the first copy is running.** Three launches each reported nothing and all three ran, so three builds wrote one shared output directory and the byte gate measured a half-written tree.
 
 **`Set-Location -LiteralPath` to a path that does not exist fails, and the rest of the line still runs** - in the previous directory, which under parallel agents is often a sibling's worktree, and the tag above does not catch it because the tag prints first. Gate on `$PWD` in the same line, so exit 9 means the command never ran rather than ran somewhere else:

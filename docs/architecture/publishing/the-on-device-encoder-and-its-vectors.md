@@ -1,6 +1,6 @@
 # The on-device encoder, and what its vectors promise
 
-**Last Updated**: 2026-09-23
+**Last Updated**: 2026-09-28
 
 On-device search only means anything if the runner and the reader's tab compute
 the same numbers from the same words. Four things hold that: the day names the
@@ -42,7 +42,7 @@ Four things make it check rather than look like it checks.
 - **The manifest is checked against the committed weights on every build**, not on a reader's device. A manifest that drifted from the bytes would discard every set a browser fetched and leave no trace except readers with no search. The same test hashes the five files.
 - **An incomplete block turns the leg off rather than half on.** `encoderSource` in [frontend/asset-base.js](../../../frontend/asset-base.js) answers the empty block unless a URL, a revision, a non-empty manifest and a deadline are all present, so a config edit cannot widen `connect-src` without also committing what the bytes must hash to.
 
-**`connect-src` ships as `'self' https://huggingface.co https://us.aws.cdn.hf.co`.** Three sources, every one derived from `config/idhazh.json` by the same module the fetch reads, so the CSP half and the fetch half cannot disagree. The CDN is listed because a browser checks a redirect target: measured 2026-09-09 from the live Pages origin, 15 reads of 15, the four small files answer on the base host and the 23 MB of weights answers 302 to that CDN. Listing the base host alone would pass the small files and block the model, which is the worst of both.
+**`connect-src` ships as `'self' https://huggingface.co https://us.aws.cdn.hf.co https://extensions.duckdb.org`.** The middle two are this page's, derived from `config/idhazh.json` by the same module the fetch reads, so the CSP half and the fetch half cannot disagree; the last is the query engine's add-on host, owned by [how-the-query-door-answers-a-panel.md](how-the-query-door-answers-a-panel.md). The CDN is listed because a browser checks a redirect target: measured 2026-09-09 from the live Pages origin, 15 reads of 15, the four small files answer on the base host and the 23 MB of weights answers 302 to that CDN. Listing the base host alone would pass the small files and block the model, which is the worst of both.
 
 **A GitHub Release asset cannot serve this**, which is why the second origin is the hub rather than a copy we publish. Measured the same day: no `Access-Control-Allow-Origin` on any hop, 15 refusals in 15 attempts.
 

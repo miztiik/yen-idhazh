@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 /**
- * Three checks over a finished build: no encoder on the first-load path, no
- * capped page over the weight ceiling config/idhazh.json sets for it, and no
- * fetched payload over its own.
+ * Three checks over a finished build: no encoder and no query engine on the
+ * first-load path, no capped page over the weight ceiling config/idhazh.json
+ * sets for it, and no fetched payload over its own.
  *
- * The encoder rule is that nothing downloads or executes before a reader
- * clicks. A dynamic `import()` is what keeps that true, and a dynamic import is
+ * The first-load rule is that neither library downloads or executes before a
+ * page needs it. A dynamic `import()` is what keeps that true, and a dynamic import is
  * one careless edit away from becoming a static one. Nothing about that edit
  * looks wrong in review - the page still works, it just costs every reader of
  * every page a multi-megabyte library they never asked for.
@@ -53,19 +53,29 @@
  * So all three promises are checked mechanically rather than remembered.
  */
 
-import { readdirSync, readFileSync, statSync } from 'node:fs';
-import { join, posix, relative, resolve, sep } from 'node:path';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { dirname, join, posix, relative, resolve, sep } from 'node:path';
 import { gzipSync } from 'node:zlib';
+import ts from 'typescript';
 
 const BUILD = 'build';
 const ROOT = 'build/_app/immutable';
 
-// Directories a browser loads before any reader gesture: the entry point and
-// the route modules. Anything under chunks/ is only fetched when something
-// imports it, which for the encoder means after a click.
+// Directories whose modules a browser loads before any reader gesture: the
+// entry point and the route modules. A chunk one of them imports statically is
+// fetched with it, so the check follows every static import from these; a
+// chunk reached only through `import()` is fetched when that line runs.
 const EAGER = ['entry', 'nodes'];
 
-const FORBIDDEN = ['@huggingface/transformers', 'onnxruntime-web', 'ort-wasm'];
+// What each lazy library leaves in a chunk it is bundled into. The encoder is
+// named by its own package and its runtime's files. The query engine is named
+// by the package name its bundled code carries, and by the assets a static
+// `?url` import of its wasm or its worker leaves behind: Vite names an asset
+// `<name>-<hash><ext>`, so an entry spelling the whole filename would never match.
+const FORBIDDEN = {
+	encoder: ['@huggingface/transformers', 'onnxruntime-web', 'ort-wasm'],
+	'query engine': ['@duckdb/duckdb-wasm', 'duckdb-eh', 'duckdb-browser-eh.worker']
+};
 
 function filesUnder(directory) {
 	let found = [];
@@ -78,32 +88,54 @@ function filesUnder(directory) {
 	return found;
 }
 
-const offenders = [];
+/** The files one built module imports statically - `import ... from` and `export ... from`. */
+function staticImports(file) {
+	const tree = ts.createSourceFile(file, readFileSync(file, 'utf8'), ts.ScriptTarget.Latest, false, ts.ScriptKind.JS);
+	return tree.statements.flatMap((statement) =>
+		(ts.isImportDeclaration(statement) || ts.isExportDeclaration(statement)) &&
+		statement.moduleSpecifier !== undefined &&
+		ts.isStringLiteral(statement.moduleSpecifier) &&
+		statement.moduleSpecifier.text.startsWith('.')
+			? [join(dirname(file), statement.moduleSpecifier.text)]
+			: []
+	);
+}
+
+const firstLoad = new Set();
 for (const area of EAGER) {
 	const directory = join(ROOT, area);
-	let files;
 	try {
-		files = filesUnder(directory);
+		for (const file of filesUnder(directory)) firstLoad.add(file);
 	} catch {
 		console.error(`bundle gate: ${directory} is missing - was the site built?`);
 		process.exit(1);
 	}
-	for (const file of files) {
-		const source = readFileSync(file, 'utf8');
-		for (const symbol of FORBIDDEN) {
-			if (source.includes(symbol)) offenders.push(`${file} carries ${symbol}`);
+}
+for (const file of firstLoad) {
+	for (const next of staticImports(file)) if (existsSync(next)) firstLoad.add(next);
+}
+
+const offenders = [];
+for (const file of firstLoad) {
+	const source = readFileSync(file, 'utf8');
+	for (const [library, symbols] of Object.entries(FORBIDDEN)) {
+		for (const symbol of symbols) {
+			if (source.includes(symbol)) offenders.push(`${file} carries ${symbol} (the ${library})`);
 		}
 	}
 }
 
 if (offenders.length > 0) {
-	console.error('bundle gate FAILED - the encoder is on the first-load path:');
+	console.error('bundle gate FAILED - a library that must load on demand is on the first-load path:');
 	for (const line of offenders) console.error(`  ${line}`);
-	console.error('\nThe assist library must only be reached through a dynamic import().');
+	console.error(
+		'\nThe encoder and the query engine must only be reached through a dynamic import(): the encoder' +
+			'\nfrom the assist loader, the query engine from src/lib/data/ledger.ts.'
+	);
 	process.exit(1);
 }
 
-console.log('bundle gate: the first-load bundle carries no encoder.');
+console.log(`bundle gate: the first-load bundle (${firstLoad.size} modules) carries no encoder and no query engine.`);
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
