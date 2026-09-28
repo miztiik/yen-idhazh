@@ -25,20 +25,24 @@ is real.
 The console's query door reads the committed ledgers in the browser with one
 engine build ([../architecture/publishing/how-the-query-door-answers-a-panel.md](../architecture/publishing/how-the-query-door-answers-a-panel.md)).
 Its files are emitted into the site and fetched only when a panel first reads
-data, never on a page's first load. Sizes of the files in
-`@duckdb/duckdb-wasm@1.33.1-dev57.0`, gzip -5 from node v24.12.0's zlib:
+data, never on a page's first load. **The site as built today carries none of
+them, because no page calls the door yet.** Rows 1 and 2 are files of
+`@duckdb/duckdb-wasm@1.33.1-dev57.0`, copied into the site byte for byte; rows 3
+and 4 are as the bundler emits them, measured in a build where one page called the
+door. gzip -5 from node v24.12.0's zlib:
 
 | # | File | Raw bytes | gzip -5 | Shipped |
 | --- | --- | ---: | ---: | --- |
 | 1 | `duckdb-eh.wasm`, the engine | 35,913,747 | 8,206,920 | yes |
 | 2 | `duckdb-browser-eh.worker.js`, the worker that runs it | 773,223 | 190,354 | yes |
-| 3 | `duckdb-browser.mjs`, the calls a page makes | 32,000 | 8,390 | yes, bundled into a lazy chunk |
-| 4 | `wasm_eh/parquet.duckdb_extension.wasm`, the parquet reader | 3,218,307 | 747,651 | **not yet** - the pinned build does not link it, and how it is delivered is undecided |
-| 5 | `duckdb-mvp.wasm`, the build for browsers without exception handling | 41,325,187 | - | no |
+| 3 | `duckdb-browser.mjs`, the calls a page makes, bundled with the `apache-arrow` code it imports | 200,072 | 47,146 | yes, one lazy chunk |
+| 4 | the door's engine module, and two one-line modules holding the wasm's and the worker's addresses | 2,498 | 1,362 | yes, three lazy chunks |
+| 5 | `wasm_eh/parquet.duckdb_extension.wasm`, the parquet reader | 3,218,307 | 747,651 | **not yet** - the pinned build does not link it, and how it is delivered is undecided |
+| 6 | `duckdb-mvp.wasm`, the build for browsers without exception handling | 41,325,187 | - | no |
 
 **Against the 1 GiB cap**, from the 99,781,515-byte site of 2026-09-27
-(`pages.yml`, `du -sb build`): rows 1 to 3 take it to 136,500,485 bytes, 12.7
-percent of the cap; row 4 would take it to 139,718,792 bytes, 13.0 percent. Row 5
+(`pages.yml`, `du -sb build`): rows 1 to 4 take it to 136,671,055 bytes, 12.7
+percent of the cap; row 5 would take it to 139,889,362 bytes, 13.0 percent. Row 6
 would have added 41.3 MB more for browsers from before 2022, which is why one
 build ships.
 

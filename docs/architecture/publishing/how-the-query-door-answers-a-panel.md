@@ -121,16 +121,39 @@ is in [../../reference/site-weight.md](../../reference/site-weight.md).
 
 **None of it is first-load.** `ledger.ts` reaches the engine only through a
 dynamic `import()`, and the engine reaches its package, its wasm and its worker
-the same way.
+the same way. `frontend/scripts/bundle-gate.mjs` holds that: it follows every
+static import from each page's own module, and fails when a file on that path
+carries the package's name or the name of its wasm or its worker. It names the
+file, not the page.
+
+Checked 2026-09-28 against a build with three deliberate edits, reverted
+afterwards: a static import of the package into the archive page; the same, plus
+a static `?url` import of the wasm, into the evals page; and a `slice()` call from
+the front page. That build broke in its prerender (next paragraph), so the gate
+read the browser output the break leaves whole. It failed on two files - the chunk
+holding the package, and a one-line chunk holding the wasm's address - and neither
+is on the front page's static path. Neither is a page's own module either, so the
+gate as it stood before this change, which read only those, passed the same build.
+
+**A static import of the package breaks the build before the gate runs.** In the
+prerender the package resolves to its Node build, which mistakes the prerender's
+worker thread for its own and throws `TypeError: Cannot destructure property 'mod'
+of 'R.workerData' as it is undefined` from `duckdb-node.cjs`. The message names
+neither the page nor the rule, so this paragraph is where a search for it lands.
 
 **The worker starts from a `blob:` bootstrap** that imports the same-origin worker
 file by absolute URL. A worker started from a same-origin URL takes its policy from
 its own response headers, and Pages sends none, so it would run with no
-`connect-src` at all; a `blob:` worker inherits the page's policy.
+`connect-src` at all; a `blob:` worker inherits the page's policy. Measured
+2026-09-28 on the built archive page in Chromium: a `blob:` worker's fetch to a
+third-party host was refused under `connect-src`, and its fetch to the site's own
+origin answered 200.
 
 **At build time** the engine's Node half loads the package's blocking Node build
 and reads its wasm from the installed package. The build's name is held in a
-variable the browser bundler cannot follow, so no browser chunk carries it.
+variable the browser bundler cannot follow, so the Node half's own few lines ride
+in the browser's engine chunk - 2,287 bytes with both halves - and none of the
+Node build does.
 
 **No statement may fetch code.** The engine's automatic extension install and load
 are switched off in both halves, so no query can reach a third-party host.
@@ -144,7 +167,8 @@ the engine otherwise downloads from `extensions.duckdb.org` the first time a que
 needs it. Measured 2026-09-28 on a Windows developer machine, Node 24.12.0: the
 newest stable release, 1.32.0 (DuckDB 1.4.3), is the same.
 
-Two consequences. In a browser the page's `connect-src 'self'` refuses that host.
+Two consequences. In a browser the page's `connect-src`, which names this site and
+the two hosts the encoder downloads its model from, refuses that host.
 In Node the blocking build loads an extension only over HTTP or from a cache it
 keeps under the user's home directory, and pointed at a file on disk it waits for
 ever instead of failing. So until the file is delivered from this site's own
