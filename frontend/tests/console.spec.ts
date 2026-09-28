@@ -577,10 +577,13 @@ test('a square says what happened without a mouse', async ({ page }) => {
 	await page.goto('/console/');
 
 	// The colour alone is not the answer. Anyone who cannot see the difference
-	// between amber and red still has to be able to read the run.
+	// between amber and red still has to be able to read the run - and a native
+	// tooltip is not how, because it needs a mouse held still over a 7px square.
+	// The words are the square's name and are printed in the strip under it.
 	const first = page.locator(`[data-day="${DAY}"] [data-health]`).first();
 	await expect(first).toHaveAttribute('aria-label', new RegExp(`^Run 1 on ${shortDate(DAY)}: `));
-	await expect(first).toHaveAttribute('title', /succeeded/);
+	await expect(first).toHaveAttribute('aria-label', /succeeded/);
+	expect(await first.getAttribute('title')).toBeNull();
 });
 
 test('the run that read only the start of an article says so on its own square', async ({

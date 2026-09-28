@@ -333,7 +333,9 @@ for (const route of ROUTES) {
 			// The defect this layout replaced: a cap of a third of the plot left a
 			// phone's strip 119 px wide and stacked every entry on a line of its
 			// own. An entry may start a new line only where it would not have
-			// fitted on the line before it.
+			// fitted on the line before it. A new line is read from where the entry
+			// starts, not from its top: the strip aligns entries on their baseline,
+			// so two on one line can sit a few pixels apart vertically.
 			const early = await strip.evaluate((node) => {
 				const room = node.getBoundingClientRect().right;
 				const gap = parseFloat(getComputedStyle(node).columnGap) || 0;
@@ -343,7 +345,7 @@ for (const route of ROUTES) {
 				return boxes.filter(
 					(box, index) =>
 						index > 0 &&
-						box.top > boxes[index - 1].top + 1 &&
+						box.left <= boxes[index - 1].left + 1 &&
 						boxes[index - 1].right + gap + box.width <= room + 1
 				).length;
 			});
