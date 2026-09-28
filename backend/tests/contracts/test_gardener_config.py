@@ -367,6 +367,33 @@ def test_a_compaction_is_named_for_its_ledger(tmp_path: Path) -> None:
     assert "call it compact-gardener.json" in refused(config_dir)
 
 
+def test_a_collection_task_is_named_for_its_collection(tmp_path: Path) -> None:
+    """A collection task owns no folder, so its name is what keeps one collection to one task."""
+    misnamed = fixture("workflow-artifacts", collection="workflow-runs")
+    message = refused(a_garden(tmp_path, workflow_artifacts=misnamed))
+    assert "workflow-artifacts.json prunes workflow-runs" in message
+    assert "call it workflow-runs.json" in message
+
+
+@pytest.mark.parametrize("window", [MONTHS, {"unit": "forever"}])
+def test_a_collection_window_is_whole_days_and_nothing_else(
+    tmp_path: Path, window: dict[str, Any]
+) -> None:
+    """GitHub dates a member by its day and the pass counts whole days back from the wake."""
+    declared = fixture("workflow-artifacts", window=window)
+    assert "config/gardener/workflow-artifacts.json is refused" in refused(
+        a_garden(tmp_path, workflow_artifacts=declared)
+    )
+
+
+def test_a_collection_outside_the_vocabulary_is_refused(tmp_path: Path) -> None:
+    """The collection is a closed word, so a file cannot point the task at anything else."""
+    declared = fixture("workflow-artifacts", collection="workflow-caches")
+    assert "config/gardener/workflow-artifacts.json is refused" in refused(
+        a_garden(tmp_path, workflow_artifacts=declared)
+    )
+
+
 def test_a_compaction_keeps_its_raw_listings_as_long_as_its_daily_period(tmp_path: Path) -> None:
     config_dir = a_garden(
         tmp_path, compact_gardener=a_compaction("gardener", raw_index_keep_days=30)

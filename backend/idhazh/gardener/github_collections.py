@@ -17,14 +17,16 @@ way `idhazh.fetch` takes its connection class.
 
 **Standard library HTTP, deliberately** (Guardrail #8). `idhazh.fetch` already
 reads the open web with `urllib.request`, so the house pattern exists and this
-adds no dependency for a utility an operator runs on demand. The beneficiary
-`httpx` or `requests` would have is connection pooling across a few dozen
-requests, which is worth nothing here: a pass does at most `ceiling` deletes and
-each one is a round trip to a rate-limited API.
+adds no dependency for the two gardener tasks that call it once a wake. The
+beneficiary `httpx` or `requests` would have is connection pooling across a few
+dozen requests, which is worth nothing here: a pass does at most `ceiling`
+deletes and each one is a round trip to a rate-limited API.
 
-**The token comes from the environment and never reaches a log record**
-(section 1b). It is read once, put in one header, and never returned, printed or
-put in an error message.
+**The token and the repository come from the environment, and the token never
+reaches a log record** (section 1b). Actions sets both for the step that runs the
+gardener's collection tasks, and the token acts on that one repository alone, so
+the two cannot disagree. The token is read once, put in one header, and never
+returned, printed or put in an error message.
 """
 
 from __future__ import annotations
@@ -40,12 +42,13 @@ from typing import Any, Final, Protocol
 from idhazh.contracts.knobs.gardener import PrunableCollection
 from idhazh.gardener.one_at_a_time import Collection, Member
 
-#: The environment variable the token arrives in. Actions sets it; an operator
-#: running this by hand exports it. Named as a constant so the failure message
-#: can say which variable without the value ever being near it.
+#: The environment variable the token arrives in. Actions sets it on the step
+#: that runs the collection tasks; an operator running one by hand exports it.
+#: Named as a constant so the failure message can say which variable without
+#: the value ever being near it.
 TOKEN_ENV: Final = "GITHUB_TOKEN"
 
-#: The variable Actions sets to `owner/name`. A run inside CI needs no `--repo`.
+#: The variable Actions sets to `owner/name` for every run.
 REPO_ENV: Final = "GITHUB_REPOSITORY"
 
 API_ROOT: Final = "https://api.github.com"
@@ -55,7 +58,7 @@ API_ROOT: Final = "https://api.github.com"
 PAGE_SIZE: Final = 100
 
 #: `owner/name`, and nothing that could steer a URL somewhere else. A repository
-#: slug reaches this module from a command line or from CI, and it is
+#: slug reaches this module from the environment, and it is
 #: interpolated into a URL - so it is validated as an identity rather than
 #: trusted as text (Guardrail #11).
 _REPO_PATTERN: Final = re.compile(r"^[A-Za-z0-9._-]{1,100}/[A-Za-z0-9._-]{1,100}$")
@@ -85,8 +88,8 @@ class RestApi:
     def __init__(self, repo: str, *, token: str | None = None) -> None:
         if not _REPO_PATTERN.fullmatch(repo):
             raise ValueError(
-                f"--repo takes owner/name, not {repo!r}. It is interpolated into an "
-                "API address, so it is checked as an identity rather than trusted"
+                f"a repository is named owner/name, not {repo!r}. It is interpolated into "
+                "an API address, so it is checked as an identity rather than trusted"
             )
         secret = token if token is not None else os.environ.get(TOKEN_ENV)
         if not secret:
@@ -123,6 +126,21 @@ class RestApi:
             if refusal.code == 404:
                 return
             raise
+
+
+def api_of_this_repository() -> RestApi:
+    """The API for the repository this run belongs to, as Actions names it.
+
+    A missing repository is refused the way a missing token is, by the name of
+    the variable to set: the task that asked fails, and its siblings still run.
+    """
+    repo = os.environ.get(REPO_ENV, "")
+    if not repo:
+        raise ValueError(
+            f"{REPO_ENV} is not set, so no repository is named. Actions sets it for every "
+            "run; a person running a collection task by hand exports it as owner/name"
+        )
+    return RestApi(repo)
 
 
 def _pages(api: Api, route: str, key: str) -> Iterator[dict[str, Any]]:

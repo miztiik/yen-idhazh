@@ -34,23 +34,15 @@ def test_the_gardener_is_a_verb_the_router_lists() -> None:
     assert "gardener" in cli.STAGES
 
 
-def test_the_retired_cleanup_verb_points_at_the_tasks_and_runs_nothing(
+def test_the_retired_cleanup_verb_is_gone_now_the_gardener_workflow_runs_its_tasks(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """An old command line, every flag it carried, is answered with where each pass went."""
-    old = ["--date", "2026-09-27", "--execution", "1", "--commit", SHA, "--dry-run"]
-
-    assert cli.main([cli.RETIRED_CLEANUP_VERB, *old]) == 2
-
-    said = capsys.readouterr()
-    assert said.out == ""
-    assert "config/gardener/<task>.json" in said.err
-    assert "python -m idhazh gardener run-task NAME --run-id RUN_ID --attempt N --git-sha SHA" in (
-        said.err
-    )
-    assert "python backend/utilities/gardener_publish.py NAME --run-id RUN_ID --attempt N" in (
-        said.err
-    )
+    """`prune-state` only said where its passes went, until a workflow ran them. One does now."""
+    assert "prune-state" not in cli.STAGES
+    with pytest.raises(SystemExit) as refused:
+        cli.main(["prune-state", "--date", "2026-09-27"])
+    assert refused.value.code == 2
+    assert "invalid choice: 'prune-state'" in capsys.readouterr().err
 
 
 def test_list_tasks_prints_one_line_a_task(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:

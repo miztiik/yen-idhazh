@@ -209,7 +209,7 @@ Avoid (broad / lossy / history-rewriting):
 - Amending pushed commits
 - Leaving a merged PR's remote branch undeleted or its `: gone]` local tracking branches unpruned.
 
-**The standing exception is `.github/workflows/prune.yml`.** It squashes commits older than the `window` of `config/gardener/corpus-squash.json` and force-pushes `main`, every `every_days` of that same declaration. The standing exception exists because the corpus commits article text (section 0a) and git history is append-only, so deleting a row does not delete its bytes - the only way to bound the repository is to rewrite the range those bytes are in.
+**The standing exception is the `history` job of `.github/workflows/idhazh-gardener.yml`.** It squashes commits older than the `window` of `config/gardener/corpus-squash.json` and force-pushes `main`, every `every_days` of that same declaration. The workflow's other jobs push without force, and the exception does not reach them. The standing exception exists because the corpus commits article text (section 0a) and git history is append-only, so deleting a row does not delete its bytes - the only way to bound the repository is to rewrite the range those bytes are in.
 
 **The exception does not cover forcing over another run.** The job reads origin's tip again immediately before the push and refuses if it moved, because a force push replaces the whole ref and would delete a commit that landed while the squash ran. A refused prune writes no stamp, so it is due again at the next daily wake - it costs one day, not one cadence. Owner decision, 2026-09-22.
 

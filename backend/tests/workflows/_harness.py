@@ -78,20 +78,11 @@ EXPECTED_WORKFLOWS: Final = {
         "Pages publication",
         frozenset({"workflow_run", "workflow_dispatch"}),
     ),
-    "prune.yml": ("Corpus prune", frozenset({"schedule", "workflow_dispatch"})),
+    "idhazh-gardener.yml": ("Idhazh Gardener", frozenset({"schedule", "workflow_dispatch"})),
     "validate.yml": ("Model validation", frozenset({"workflow_dispatch"})),
 }
 
 CONTENT_REFRESH_UTC_HOURS: Final = (2, 6, 10, 14, 18)
-
-# What the platform and the pipeline cost the clock, measured on `ubuntu-latest`
-# over 2026-08-23/24, n=3: a scheduled run starts 40 to 70 minutes after its cron
-# minute, then takes 164 to 184 minutes end to end
-# (docs/architecture/sources/freshness.md). A schedule that has to miss a digest
-# run derives its span from these two, rather than naming an hour.
-SCHEDULED_START_DRIFT_MINUTES: Final = (40, 70)
-
-CONTENT_REFRESH_RUN_MINUTES: Final = (164, 184)
 
 # Every `workflow_dispatch` input in the repository, and the evidence that its
 # value is shaped before anything acts on it. Discovery is closed-world, so a
@@ -141,7 +132,7 @@ DISPATCH_INPUT_SHAPES: Final[dict[tuple[str, str], str]] = {
     ("measure.yml", "model_speed_case"): DISPATCH_CHOICE,
     ("measure.yml", "target"): DISPATCH_CHOICE,
     ("measure.yml", "threads"): "^[1-9][0-9]*$",
-    ("prune.yml", "force"): DISPATCH_BOOLEAN,
+    ("idhazh-gardener.yml", "force"): DISPATCH_BOOLEAN,
     ("validate.yml", "candidate_models_file"): DISPATCH_READ_BY_NAME,
     ("validate.yml", "corpus_per_shard"): "^[1-9][0-9]{0,3}$",
     ("validate.yml", "job_budget_minutes"): "^[1-9][0-9]{0,3}$",
@@ -645,6 +636,10 @@ PRUNE_PUSH_CALL: Final = (
 #: The history job's due check, which runs on a shallow checkout before any
 #: install and decides whether the full clone happens at all.
 SQUASH_DUE_MODULE: Final = REPO_ROOT / "backend" / "utilities" / "corpus_squash_due.py"
+
+#: The gardener's plan job's one program: it splits the tasks into shards on a
+#: checkout of two folders, before anything of this project is installed.
+GARDENER_PLAN_MODULE: Final = REPO_ROOT / "backend" / "utilities" / "gardener_shards.py"
 
 #: The step the `plan` job exists for. The catch-up above runs ahead of it: a
 #: fold that refuses a row ends the job, and a refusal that lands after the feed

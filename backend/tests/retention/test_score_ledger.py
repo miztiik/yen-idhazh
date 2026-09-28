@@ -338,7 +338,8 @@ def test_a_month_shaped_name_beside_the_day_tree_is_refused_rather_than_archived
     `2025-13.csv` was archived into `state/score-archive/` and then deleted here,
     while `prune_feed_health` - reading the strict rule - left the same name
     alone. Nothing in this repository writes `2025-13.csv`, so nothing could have
-    said afterwards what was in it, and `prune.yml` force-pushes `main`.
+    said afterwards what was in it, and the gardener's history job force-pushes
+    `main`.
 
     **The day tree closes it harder than the strict month rule did.** A
     month-shaped name at the root of a day tree is a name

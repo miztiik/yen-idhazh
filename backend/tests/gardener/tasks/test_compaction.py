@@ -364,6 +364,7 @@ def test_the_record_row_a_pass_makes_is_one_the_gardener_ledger_accepts(tmp_path
         context=context_for("compact-visual-prunes", root, today=date(2026, 9, 23)),
         duration_ms=0,
         work_ended_at="2026-09-23T00:41:00Z",
+        cone_bytes=None,
     )
 
     assert outcome.bytes_freed == sum(sizes[path] for path in outcome.taken) > 0
