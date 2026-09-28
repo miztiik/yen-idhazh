@@ -24,6 +24,7 @@ from pydantic import Field
 
 from idhazh import ledger
 from idhazh.contracts.base import ChangelogEntry, Contract, DateStamp, RunId, ServerJob
+from idhazh.contracts.collection_prune import CollectionPruneRow
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.feed_retirement import FeedRetirementRow
 from idhazh.contracts.file_envelope import (
@@ -367,20 +368,39 @@ def test_a_contract_with_no_date_files_under_covers(tmp_path: Path) -> None:
     assert [ledger.read_envelope(path).covers for path in written] == ["2026-09-24"]
 
 
-def test_a_compact_write_covers_its_period_and_says_so(tmp_path: Path) -> None:
+def _filed_raw(
+    state: Path, rows: list[Contract], *, covers: str = "2026-09-24"
+) -> list[ledger.StoredRow[Contract]]:
+    """Rows as raw files hold them: filed through the door, read back beside their identity."""
+    written = ledger.persist(
+        state, rows, ledger=LedgerName.VISUAL_PRUNES, covers=covers, identity=_identity()
+    )
+    return ledger.load_stored(written, model=type(rows[0]))
+
+
+def test_a_compact_write_covers_its_period_and_keeps_every_rows_own_identity(
+    tmp_path: Path,
+) -> None:
+    """The oracle for a re-run after compaction: each row keeps the writer that filed it.
+
+    The envelope names the compaction, which wrote the file. The rows keep the
+    `unit_id` and `attempt` their raw file gave them, so a second attempt that
+    lands after the day was compacted can still replace the first.
+    """
     template = _every_column_rows()[1]
     rows: list[Contract] = [
         template.model_copy(update={"date": day}) for day in ("2026-08-01", "2026-08-31")
     ]
+    stored = _filed_raw(tmp_path / "raw-side", rows)
 
-    (written,) = ledger.persist(
+    written = ledger.persist_period(
         tmp_path,
-        rows,
+        stored,
+        model=EveryColumn,
         ledger=LedgerName.VISUAL_PRUNES,
+        period=Period.MONTHLY,
         covers="2026-08",
         identity=_identity(job=ServerJob.RUN_TASKS),
-        tier=Tier.COMPACT,
-        period=Period.MONTHLY,
         built_from=31,
     )
     envelope = ledger.read_envelope(written)
@@ -391,55 +411,82 @@ def test_a_compact_write_covers_its_period_and_says_so(tmp_path: Path) -> None:
         Period.MONTHLY,
         31,
     )
+    assert envelope.identity.job is ServerJob.RUN_TASKS
     assert ledger.load([written], model=EveryColumn) == rows
+    kept = ledger.load_stored([written], model=EveryColumn)
+    assert [held.identity for held in kept] == [held.identity for held in stored]
+    assert {held.identity.job for held in kept} == {ServerJob.ASSEMBLE}
 
 
-def test_a_compact_write_refuses_a_row_outside_the_period_it_covers(tmp_path: Path) -> None:
+def test_a_compact_write_refuses_a_row_filed_outside_the_period_it_covers(tmp_path: Path) -> None:
     """A compact write replaces the whole period, so a stray row would overwrite a finished one."""
     template = _every_column_rows()[0]
     rows: list[Contract] = [
         template.model_copy(update={"date": day}) for day in ("2026-08-31", "2026-09-01")
     ]
+    stored = _filed_raw(tmp_path / "raw-side", rows)
 
-    with pytest.raises(ValueError, match=r"handed rows dated \['2026-09-01'\]"):
-        ledger.persist(
+    with pytest.raises(ValueError, match=r"filed under \['visual-prunes 2026-09-01'\]"):
+        ledger.persist_period(
             tmp_path,
-            rows,
+            stored,
+            model=EveryColumn,
             ledger=LedgerName.VISUAL_PRUNES,
+            period=Period.MONTHLY,
             covers="2026-08",
             identity=_identity(),
-            tier=Tier.COMPACT,
-            period=Period.MONTHLY,
+            built_from=2,
         )
-    assert not any(tmp_path.rglob("*.parquet"))
+    assert not (tmp_path / "compact").exists()
+
+
+def test_a_period_that_held_nothing_is_still_a_file_with_every_column(tmp_path: Path) -> None:
+    """A quiet day gets a zero-row file, so the model is passed rather than read off a row."""
+    built = ledger.render_period(
+        tmp_path,
+        [],
+        model=VisualPruneRow,
+        ledger=LedgerName.VISUAL_PRUNES,
+        period=Period.DAILY,
+        covers="2026-09-06",
+        identity=_identity(job=ServerJob.RUN_TASKS),
+        built_from=0,
+    )
+
+    assert not built.path.exists(), "rendering writes nothing"
+    columns = pyarrow.parquet.read_schema(pyarrow.BufferReader(built.data)).names
+    assert set(VisualPruneRow.model_fields) - {"version"} <= set(columns)
+    assert {"unit_id", "attempt", "covers"} <= set(columns)
+    assert parquet.read(built.data)[1] == []
+
+
+def test_a_row_naming_another_try_than_its_writer_is_refused(tmp_path: Path) -> None:
+    """The union ranks on `attempt`, so a row's own may not contradict the writer that files it."""
+    (row,) = _fixture_rows(CollectionPruneRow)[:1]
+    assert isinstance(row, CollectionPruneRow)
+    mismatched = row.model_copy(update={"attempt": 1})
+
+    with pytest.raises(ValueError, match="a row names attempt 1 and its writer is 2"):
+        ledger.persist(
+            tmp_path,
+            [mismatched],
+            ledger=LedgerName.GARDENER,
+            covers=mismatched.date,
+            identity=_identity(attempt=2, job=ServerJob.RUN_TASKS),
+        )
+    assert not tmp_path.exists() or not any(tmp_path.rglob("*.*"))
 
 
 @pytest.mark.parametrize(
-    ("tier", "period", "covers", "built_from", "refusal"),
+    ("covers", "refusal"),
     [
-        (Tier.COMPACT, None, "2026-09-24", None, "persist needs a period"),
-        (Tier.RAW, Period.DAILY, "2026-09-24", None, "takes no period"),
-        (Tier.RAW, None, "2026-09-24", 3, "carries no built_from"),
-        (Tier.RAW, None, "2026-09", None, "is not the shape a raw file covers"),
-        (Tier.COMPACT, Period.DAILY, "2026-09", None, "is not the shape a compact daily"),
-        (Tier.COMPACT, Period.MONTHLY, "2026-09-24", None, "is not the shape a compact monthly"),
+        ("2026-09", "is not the shape a raw file covers"),
+        ("24 September", "is not the shape a raw file covers"),
     ],
-    ids=[
-        "compact-without-period",
-        "raw-with-period",
-        "raw-with-built-from",
-        "raw-covering-a-month",
-        "daily-covering-a-month",
-        "monthly-covering-a-day",
-    ],
+    ids=["raw-covering-a-month", "raw-covering-no-day"],
 )
-def test_a_shape_the_tier_cannot_take_is_refused_before_anything_is_written(
-    tier: Tier,
-    period: Period | None,
-    covers: str,
-    built_from: int | None,
-    refusal: str,
-    tmp_path: Path,
+def test_a_raw_write_refuses_a_period_that_is_not_a_day_before_anything_is_written(
+    covers: str, refusal: str, tmp_path: Path
 ) -> None:
     with pytest.raises(ValueError, match=refusal):
         ledger.persist(
@@ -448,9 +495,31 @@ def test_a_shape_the_tier_cannot_take_is_refused_before_anything_is_written(
             ledger=LedgerName.VISUAL_PRUNES,
             covers=covers,
             identity=_identity(),
-            tier=tier,
+        )
+    assert not any(tmp_path.rglob("*.*"))
+
+
+@pytest.mark.parametrize(
+    ("period", "covers", "refusal"),
+    [
+        (Period.DAILY, "2026-09", "is not the shape a compact daily"),
+        (Period.MONTHLY, "2026-09-24", "is not the shape a compact monthly"),
+    ],
+    ids=["daily-covering-a-month", "monthly-covering-a-day"],
+)
+def test_a_compact_write_refuses_a_period_of_the_wrong_shape_before_anything_is_written(
+    period: Period, covers: str, refusal: str, tmp_path: Path
+) -> None:
+    with pytest.raises(ValueError, match=refusal):
+        ledger.persist_period(
+            tmp_path,
+            [],
+            model=EveryColumn,
+            ledger=LedgerName.VISUAL_PRUNES,
             period=period,
-            built_from=built_from,
+            covers=covers,
+            identity=_identity(),
+            built_from=0,
         )
     assert not any(tmp_path.rglob("*.*"))
 
@@ -494,14 +563,15 @@ def test_the_format_and_both_compressions_come_from_the_ledger_block(
     (raw,) = ledger.persist(
         tmp_path, rows, ledger=LedgerName.VISUAL_PRUNES, covers="2026-09-24", identity=_identity()
     )
-    (compact,) = ledger.persist(
+    compact = ledger.persist_period(
         tmp_path,
-        rows,
+        ledger.load_stored([raw], model=EveryColumn),
+        model=EveryColumn,
         ledger=LedgerName.VISUAL_PRUNES,
+        period=Period.DAILY,
         covers="2026-09-24",
         identity=_identity(),
-        tier=Tier.COMPACT,
-        period=Period.DAILY,
+        built_from=1,
     )
 
     assert raw.suffix == ".parquet"

@@ -157,11 +157,15 @@ bounded input cannot answer the question.
 
 **A retirement is permanent.** `ledger.load_retirements` declares `-1`. Any cover
 in days would forget the oldest, and the run would ask a dead server again
-tomorrow.
+tomorrow. Its ledger is bounded instead, by `compact-feed-retirements` once that
+task runs live: a month of retirements goes 60 months after it, and an address
+retired that long ago is asked for once more, then retired again if it is still
+gone.
 
 **A report about a whole series has no time bound.** `ledger.load_visual_prunes`
 answers *is the picture backlog shrinking*, which is a question about every pass
-on record.
+on record. Its ledger is bounded by `compact-visual-prunes` once that runs live,
+at 13 month files and 45 to 76 day files.
 
 **A rolling window is already bounded, by its writer.** `corpus.read_rows` is
 unbounded in code and bounded by design: `roll` evicts the oldest on every
@@ -233,6 +237,7 @@ reads are here and not how many. These are `backend/`'s;
 | `evals.retrieval.load_index_corpus`, live | the newest shards of the same directory | `assist.search_months` and `assist.search_min_days`, the two knobs `readScope` in `search.ts` reads. Newest-first, so it is at most `months + 1` shards whatever the archive holds |
 | the gardener's `counterfactual-scores` task | day files of `state/counterfactual-scores/` | `lens_weights.window_days`, committed at 30. It walks the tree to find what to delete, so its cost falls as it works - a day it deletes is a day no later run opens. The walk is what bounds the collection: the ledger gains rows on every run and nothing else takes any away |
 | `stages.assemble._earlier_days` | `digest.json` of the published days the same-story window can still reach | `assemble.same_story_window_hours`, committed at 36, which is `ceil(hours / 24)` days - one. The dates are named by date arithmetic, never by a directory walk, so it is one file open on the thousandth day and on the third. A bounded fixture cannot answer its question: whether this morning's story is one an earlier PUBLISHED day already carried, which only that day's own payload holds the vectors for. 0 reads nothing |
+| the gardener's compaction, taking days and months | the raw files of each day a pass takes, the day file a re-run's day already has, and the day files of each month it absorbs | `max_periods_per_run`, committed at 8: at most that many days, and separately that many months, a pass, with the days a re-run wrote into counted first. A day it takes is a day no later pass opens again, unless a re-run writes into it |
 
 ### A cover that is not a clock
 
@@ -249,13 +254,14 @@ reads are here and not how many. These are `backend/`'s;
 | `evals.retrieval.index_months` | one listing of `frontend/public/assist/index/` | the shards' own names. The question is which months exist, and a file answers it without being opened. The eval's knob check used to load every shard to learn the same thing |
 | `gardener_publish.Checkout.committed_folders`, which the `trials` task's folders come from | one `git ls-tree -d --name-only HEAD -- state/ <each owned folder>` over the object database, no `-r` | the folders directly under `state/` plus one entry per owned folder, never a file. It grows only when a family or a task is added, not with the rows any of them hold. A bounded input cannot answer it: "what under `state/` does nothing claim" is a question about every child of `state/`, and a wake whose checkout is empty for this task can only ask the commit |
 | the `trials` task's walk of each folder the listing hands it | every file under the trial trees - today `state/pipeline-tests/` alone | the trial trees and nothing else, and its own window empties them: what it walks is what the last 90 days of trial runs wrote, and a tree it empties is removed whole |
+| the compaction's listing of a ledger's days, `raw_files.raw_days` and `raw_files.listed_days` | the day folder names under `state/raw/<ledger>/` and the file names under its `index/`, never a file's contents | the raw days not compacted yet, and the listings `raw_index_keep_days` keeps, committed at 90. A live compaction empties both as it goes, so it names about two raw days and 90 listings. One that only reports names every raw day the ledger has, and each record's `candidates_seen` shows that count growing. A bounded input cannot answer it: which days hold rows nothing has compacted is a question about every day folder |
 
 ### Unbounded, and it says so
 
 | Read | What it opens | Why no cover |
 | --- | --- | --- |
-| `ledger.load_retirements` | every raw file under `state/raw/feed-retirements/` | a retirement is permanent; forget one and the run asks a dead server again. It lists every day folder and opens every file in it, so it grows with the retirements filed rather than with the archive - one file per day a retirement happened, and none on the days nothing retired |
-| `ledger.load_visual_prunes` | every raw file under `state/raw/visual-prunes/` | the report is about the whole series. One file per run, so this read opens about 1,825 more files a year until compaction folds closed days; no scheduled job calls it today |
+| `ledger.load_retirements` | the two compact indexes of `feed-retirements`, every month and day file they name, and the raw files of the days neither names | a retirement is permanent within its ledger; forget one and the run asks a dead server again. The ledger is bounded instead: once `compact-feed-retirements` runs live this is at most 60 month files, 45 to 76 day files and the raw days not compacted yet. Until then no index exists, and it reads every raw file - one file per day a retirement happened, and none on the days nothing retired |
+| `ledger.load_visual_prunes` | the same three kinds of file of `visual-prunes` | the report is about the whole series. Once `compact-visual-prunes` runs live it is at most 13 month files and 45 to 76 day files; until then it opens one raw file per run, about 1,825 more files a year; no scheduled job calls it today |
 | `corpus.read_rows` | `corpus/corpus.jsonl` | already rolling, capped at `finetune.corpus_rows` |
 | `contracts.base.Contract.read` | one payload | a validator cannot skip what it has not read |
 | `publication_checks.run_publication_checks` | every committed `digest.json` under `frontend/public/digest/` | a published day is frozen, but the contracts it is read through are not, so any day can stop matching on a commit that changes a shape. The receipt that used to skip an unchanged day was decommissioned on 2026-09-27: it settled a day on a recorded payload LENGTH, which let a receipt earned over one tree pass a same-length day in another. Measured 44 MB/s (2026-09-08), so the 727-day horizon reads in 30-60 s on the runner |

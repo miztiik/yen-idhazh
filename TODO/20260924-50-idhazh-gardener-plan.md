@@ -240,7 +240,7 @@ Every place where the tree, or a ruling, departs from the text further down. A w
 | 4 | The gardener: registry, config, schedule, record, commit loop | 2 | C | DONE | p50r4 | #1139 | p50-r4-worker |
 | 5 | Every prune pass becomes a gardener task | 3, 4 | E | DONE | p50r5 | #1145 | p50-r5-worker |
 | 6 | The corpus squash becomes Python | 4 | D | DONE | p50r6 | #1141 | p50-r6-worker |
-| 7 | One compaction task a ledger, two compact periods, and the diagrams move into the page | 5, 11 | F | PENDING | - | - | - |
+| 7 | One compaction task a ledger, two compact periods, and the diagrams move into the page | 5, 11 | F | DONE | p50r7 | #1151 | p50-r7-worker |
 | 8 | `prune.yml` becomes `idhazh-gardener.yml`, and the whole garden is scheduled | 6, 7 | G | PENDING | - | - | - |
 | 9 | The three ledgers the console's routes read become parquet | 7, and plan 51's row titled **The query door module and its two entry points** | H | PENDING | - | - | - |
 | 10 | `span-rollup` becomes parquet | - | - | **COLLAPSED** | - | - | - |
@@ -345,145 +345,7 @@ state/compact/gardener/index/daily.json
 
 ## 3. The shape this plan builds
 
-**This diagram is the plan's copy and it is expected to move.** It is drawn to the Mermaid contract in [docs/reference/documentation-structure.md](../docs/reference/documentation-structure.md) so it can be lifted unchanged; row 7 lifts it into the architecture page and this section becomes a link (Guardrail #4).
-
-```mermaid
-%%{init: {"theme": "base", "themeVariables": {"background": "#0f1117", "primaryColor": "#222834", "primaryTextColor": "#e6e9f0", "primaryBorderColor": "#4b5468", "lineColor": "#8b93a7", "textColor": "#e6e9f0", "clusterBkg": "#1a1e27", "clusterBorder": "#3a4254", "titleColor": "#e6e9f0", "edgeLabelBackground": "#1a1e27", "fontSize": "14px"}}}%%
-flowchart TB
-  CRON["schedule, once a day"]
-
-  subgraph OPS["Idhazh Gardener - idhazh-gardener.yml"]
-    PLAN["plan<br/>standard library only, before any install<br/>reads the config and nothing else"]
-    ANY{"any active task?"}
-    IDLE["no run-tasks job runs"]
-    TEND["run-tasks<br/>5 shards, every active task in exactly one<br/>fail-fast false, max-parallel 5"]
-    RUN["for each task in the shard:<br/>select, report, delete"]
-    OWNED{"every path a task wrote or deleted<br/>inside that task's owns?"}
-    OUTSIDE["exit 2<br/>the ownership claim is wrong"]
-    LANDED{"this job's record<br/>already on origin/main?"}
-    REAPPLY["reset --mixed origin/main<br/>re-stage the same files<br/>written_paths and deleted_paths"]
-    PUSHED{"push accepted?"}
-    OK["exit 0"]
-    LOST["exit 3<br/>attempts exhausted, nothing written"]
-    HIST["history<br/>needs: run-tasks<br/>reads corpus.meta.json, then squashes and force-pushes"]
-  end
-
-  subgraph TREE["The committed tree - state/"]
-    RAW[("state/raw/ledger/YYYY/MM/DD/file_id.parquet")]
-    RIDX[("state/raw/ledger/index/YYYY-MM-DD.json")]
-    COMPACT[("state/compact/ledger/daily, monthly")]
-    WM[("watermark.json, one for each period")]
-  end
-
-  CRON --> PLAN
-  PLAN --> ANY
-  ANY -->|"no"| IDLE
-  ANY -->|"yes"| TEND
-  TEND --> RUN
-  RUN --> OWNED
-  OWNED -->|"no"| OUTSIDE
-  OWNED -->|"yes"| LANDED
-  LANDED -->|"yes"| OK
-  LANDED -->|"no"| REAPPLY
-  REAPPLY --> RAW
-  REAPPLY --> PUSHED
-  PUSHED -->|"yes"| OK
-  PUSHED -->|"no, attempts left"| LANDED
-  PUSHED -->|"no, attempts gone"| LOST
-  OK --> HIST
-  WM -->|"read by its own compaction"| RUN
-  REAPPLY --> RAW
-  RAW -->|"the compaction task lists it"| RIDX
-  RIDX -->|"then compacts it"| COMPACT
-  COMPACT --> WM
-
-  classDef stage fill:#222834,stroke:#4b5468,stroke-width:1px,color:#e6e9f0;
-  classDef decision fill:#11141c,stroke:#5b6477,stroke-width:1.5px,color:#ffffff;
-  classDef yes fill:#176032,stroke:#2ea04f,stroke-width:1.5px,color:#ffffff;
-  classDef no fill:#a32020,stroke:#d23b3b,stroke-width:1.5px,color:#ffffff;
-  classDef warn fill:#7a5400,stroke:#c08a12,stroke-width:1.5px,color:#ffffff;
-  classDef ledger fill:#1b3a5c,stroke:#2d6ca3,stroke-width:1.5px,color:#ffffff;
-  classDef sysOps fill:#1a1e27,stroke:#8b93a7,stroke-width:1.5px,color:#c8cdd8;
-  classDef sysPublish fill:#1a1e27,stroke:#3f8fb8,stroke-width:1.5px,color:#a5d6ea;
-
-  class CRON,PLAN,TEND,RUN,REAPPLY,HIST stage;
-  class ANY,OWNED,LANDED,PUSHED decision;
-  class OK yes;
-  class OUTSIDE,LOST no;
-  class IDLE warn;
-  class RAW,COMPACT,RIDX,WM ledger;
-  class OPS sysOps;
-  class TREE sysPublish;
-```
-
-**`digest.yml` is not on the picture, and that is the point.** It runs five times a day and writes today; every gardener window is strictly in the past, so no task can touch what a running job just wrote. Section 5 turns that from an arrangement into a load-time refusal.
-
-### How a row travels from a writer to a reader
-
-The diagram above answers which jobs run and how a push is landed. This one answers how a row moves between tiers, which is a different question and so is a different picture.
-
-```mermaid
-%%{init: {"theme": "base", "themeVariables": {"background": "#0f1117", "primaryColor": "#222834", "primaryTextColor": "#e6e9f0", "primaryBorderColor": "#4b5468", "lineColor": "#8b93a7", "textColor": "#e6e9f0", "clusterBkg": "#1a1e27", "clusterBorder": "#3a4254", "titleColor": "#e6e9f0", "edgeLabelBackground": "#1a1e27", "fontSize": "14px"}}}%%
-flowchart TB
-  subgraph REFRESH["Content refresh - digest.yml"]
-    W1["work shard 01"]
-    W2["work shard 02"]
-    W3["work shard 03"]
-    WN["a later run, and a re-run,<br/>no concurrency group"]
-  end
-
-RAWF[("raw/ledger/YYYY/MM/DD/file_id.parquet<br/>write-once, many writers")]
-
-  subgraph GARDEN["Idhazh Gardener - idhazh-gardener.yml"]
-    IDXJOB["compaction, step 1<br/>lists every eligible raw day<br/>the only writer of a day list"]
-    GATE{"a whole day ended<br/>since that day ended?"}
-    HOLD["leave it, ask at the next wake"]
-    CD["compaction, step 2: daily"]
-    CM["compaction, step 3: monthly"]
-  end
-
-  RIDXF[("raw/ledger/index/YYYY-MM-DD.json")]
-  DAILY[("compact/ledger/daily/YYYY/MM/DD.parquet<br/>and daily/watermark.json")]
-  MONTHLY[("compact/ledger/monthly/YYYY/MM.parquet<br/>and monthly/watermark.json")]
-  CIDXF[("compact/ledger/index/daily.json,<br/>monthly.json")]
-  READER["the browser, at view time"]
-
-  W1 --> RAWF
-  W2 --> RAWF
-  W3 --> RAWF
-  WN --> RAWF
-  RAWF --> GATE
-  GATE -->|"no, a run may still be writing"| HOLD
-  GATE -->|"yes, today minus two or older"| IDXJOB
-  IDXJOB --> RIDXF
-  RIDXF -->|"one day at a time, from the watermark"| CD
-  CD -->|"data first, watermark last"| DAILY
-  DAILY -->|"every day of the month older than daily_keep_days"| CM
-  CM --> MONTHLY
-  CD --> CIDXF
-  CM --> CIDXF
-  MONTHLY --> READER
-  DAILY --> READER
-  CIDXF --> READER
-
-  classDef stage fill:#222834,stroke:#4b5468,stroke-width:1px,color:#e6e9f0;
-  classDef decision fill:#11141c,stroke:#5b6477,stroke-width:1.5px,color:#ffffff;
-  classDef warn fill:#7a5400,stroke:#c08a12,stroke-width:1.5px,color:#ffffff;
-  classDef ledger fill:#1b3a5c,stroke:#2d6ca3,stroke-width:1.5px,color:#ffffff;
-  classDef sysOps fill:#1a1e27,stroke:#8b93a7,stroke-width:1.5px,color:#c8cdd8;
-  classDef sysPublish fill:#1a1e27,stroke:#3f8fb8,stroke-width:1.5px,color:#a5d6ea;
-
-  class W1,W2,W3,WN,IDXJOB,CD,CM,READER stage;
-  class GATE decision;
-  class HOLD warn;
-  class RAWF,RIDXF,DAILY,MONTHLY,CIDXF ledger;
-  class REFRESH sysPublish;
-  class GARDEN sysOps;
-```
-
-**A day is read once `compact_after_hours` have passed since that day ended.** The elapsed time is measured in code against the day's own end instant in UTC - 00:00 on the day after - and never against where the wake happened to fall. At the default 24 the newest eligible day is two days back, and **every wake time in the UTC day returns that same answer**, which is why the cron sits at `40 0 * * *`, just after the boundary rather than just before it. Section 5.3 works the arithmetic and carries the oracle that proves the wake cannot move it.
-
-**Every step is resumable and none of them reconciles anything.** A compaction takes one day at a time, writes that day's file, rewrites the index, then advances the watermark. Two days missed produce two files. A run that dies in the middle leaves the watermark behind the truth, so the next wake redoes that one day and no more. The opposite order - watermark first - would leave a day in no period and in no index, gone with no error and no test able to see it.
+**Both diagrams moved into the architecture page in row 7, drawn as the gardener stands rather than as planned**: [../docs/architecture/publishing/idhazh-gardener.md](../docs/architecture/publishing/idhazh-gardener.md) carries the job graph in its section on a wake, and how a row travels from a writer to a reader in its section on the compaction. The plan keeps a link, not a copy, because two pictures of one job graph disagree the first time the workflow changes (row 7 decision 12, Guardrail #4).
 
 ## 4. What was measured, 2026-09-24
 

@@ -8,13 +8,22 @@ the next ledger's migration a change of call site rather than a change of
 design. `identity.producer` is the one field a call site must get right: it is
 what keeps two producers of one ledger apart inside `unit_id`.
 
+**One write a tier.** `persist` files new rows under `state/raw/` and stamps
+each with the writer's identity. `persist_period` files one compact period
+under `state/compact/` from rows that already carry the identity their raw file
+gave them, and keeps it: a compact file says which writer first filed each row,
+never that the compaction did, so a re-run's second attempt can still replace
+its first after the day was compacted. `render_period` builds that same file and
+writes nothing, for a pass that only reports.
+
 Two formats behind one door: parquet, and JSON lines a person can read in a
 pull request. `ledger/parquet.py` is the only module that imports the engine, and
 it is imported inside the functions that need it, so importing the ledger never
 loads pyarrow. The write is `atomic_write.write_atomic_bytes` and nothing else,
 so a half-written file is never visible under its own name.
 
-`load` is the inverse of `persist` and nothing else. It does not remove
+`load` is the inverse of `persist` and nothing else, and `load_stored` is the
+same read with each row's identity cells kept beside it. Neither removes
 duplicates: a union over several attempts at one work unit keeps the highest
 `attempt` per `unit_id`, and that settlement is a reader's job, not the door's.
 
@@ -24,11 +33,15 @@ Every instant here is UTC (CLAUDE.md section 2).
 from __future__ import annotations
 
 import hashlib
+import uuid
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from functools import cache
 from pathlib import Path
 from typing import Any, Final
+
+from pydantic import ValidationError
 
 from idhazh import atomic_write, config
 from idhazh.contracts.app_config import AppConfig
@@ -38,6 +51,7 @@ from idhazh.contracts.file_envelope import (
     FileEnvelope,
     Format,
     Period,
+    RowIdentity,
     Tier,
     WriterIdentity,
     covers_fits,
@@ -45,7 +59,7 @@ from idhazh.contracts.file_envelope import (
 from idhazh.contracts.knobs.ledger import LedgerConfig
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.ledger import arrow_schema, filenames, json_lines, lifecycle
-from idhazh.ledger.arrow_schema import Column, ColumnType
+from idhazh.ledger.arrow_schema import Column
 from idhazh.ledger.keys import DATE_CELL
 from idhazh.ledger.paths import compact_path, raw_path
 
@@ -56,20 +70,33 @@ _APP_CONFIG_FILENAME: Final = "idhazh.json"
 #: apart without trusting a suffix: a format literal, fixed by the parquet spec.
 _PARQUET_MAGIC: Final = b"PAR1"
 
-#: The envelope keys that are also a column on every row, because a query filters
-#: or groups on them: a union keeps the highest `attempt` per `unit_id`, and a
-#: bad run is traced by filtering on `run_id`. A contract field of the same name
-#: is the column instead, so a row's own value is never overwritten; the
-#: envelope still carries the writer's.
-_IDENTITY_COLUMNS: Final[tuple[Column, ...]] = (
-    Column("ledger", ColumnType.STRING, nullable=False),
-    Column("covers", ColumnType.STRING, nullable=False),
-    Column("run_id", ColumnType.STRING, nullable=False),
-    Column("attempt", ColumnType.INT64, nullable=False),
-    Column("job", ColumnType.STRING, nullable=False),
-    Column("shard", ColumnType.INT64, nullable=False),
-    Column("unit_id", ColumnType.STRING, nullable=False),
-)
+#: The envelope keys that are also a column on every row, declared once by
+#: `RowIdentity`: a union keeps the highest `attempt` per `unit_id`, and a bad
+#: run is traced by filtering on `run_id`. A contract field of the same name is
+#: the column instead, so a row's own value is never overwritten; the envelope
+#: still carries the writer's.
+_IDENTITY_COLUMNS: Final[tuple[Column, ...]] = arrow_schema.columns_of(RowIdentity)
+
+#: The identity cells a row's own contract may not contradict, because the
+#: union ranks and groups on them: a row carrying another try than its writer's
+#: would be kept or dropped for a try that never wrote it.
+_RANKED_CELLS: Final = ("attempt", "unit_id")
+
+
+@dataclass(frozen=True, slots=True)
+class StoredRow[C: Contract]:
+    """One row as a ledger file holds it: the identity cells beside the contract's own."""
+
+    identity: RowIdentity
+    row: C
+
+
+@dataclass(frozen=True, slots=True)
+class PeriodFile:
+    """One compact period's file, built: where it goes and every byte of it."""
+
+    path: Path
+    data: bytes
 
 
 @cache
@@ -79,20 +106,10 @@ def _knobs() -> LedgerConfig:
     return AppConfig.from_json(text).ledger
 
 
-def _refuse_a_shape_the_tier_cannot_take(
-    *, tier: Tier, period: Period | None, covers: str, built_from: int | None
+def _refuse_a_period_the_tier_cannot_take(
+    covers: str, *, tier: Tier, period: Period | None
 ) -> None:
-    """A compact file names its period and a raw one does not, and `covers` fits it."""
-    if tier is Tier.COMPACT and period is None:
-        raise ValueError(
-            "a compact file covers one daily or monthly period, so persist needs a period"
-        )
-    if tier is Tier.RAW and period is not None:
-        raise ValueError(
-            "a raw file is filed under the day its rows name, so persist takes no period for it"
-        )
-    if tier is Tier.RAW and built_from is not None:
-        raise ValueError("a raw file was read from nothing, so it carries no built_from")
+    """`covers` is a day for a raw or daily file, and a month for a monthly one."""
     if not covers_fits(covers, tier=tier, period=period):
         raise ValueError(
             f"covers {covers!r} is not the shape a {tier.value} "
@@ -110,38 +127,21 @@ def _one_contract(rows: Sequence[Contract]) -> type[Contract]:
     return model
 
 
-def _routed(
-    rows: Sequence[Contract], *, model: type[Contract], tier: Tier, covers: str
+def _by_day(
+    rows: Sequence[Contract], *, model: type[Contract], covers: str
 ) -> dict[str, list[Contract]]:
-    """Each row under the period it belongs to.
+    """Each row under the day it belongs to.
 
-    On the raw tier a row is filed under the day its own `date` cell names, so
-    rows a run left behind three days ago land under that day rather than under
-    today, and a call holding three days writes three files. A contract with no
-    date cell files under `covers`. On the compact tier a write replaces the
-    whole period file, so `covers` is a promise: a row outside it is refused
-    rather than allowed to overwrite a finished period with a fragment.
+    A row is filed under the day its own `date` cell names, so rows a run left
+    behind three days ago land under that day rather than under today, and a
+    call holding three days writes three files. A contract with no date cell
+    files under `covers`.
     """
     dated = DATE_CELL in model.model_fields
-    if tier is Tier.RAW:
-        grouped: dict[str, list[Contract]] = {}
-        for row in rows:
-            grouped.setdefault(getattr(row, DATE_CELL) if dated else covers, []).append(row)
-        return grouped
-    if dated:
-        outside = sorted(
-            {
-                getattr(row, DATE_CELL)
-                for row in rows
-                if not str(getattr(row, DATE_CELL)).startswith(covers)
-            }
-        )
-        if outside:
-            raise ValueError(
-                f"a compact file covering {covers} was handed rows dated {outside}. A compact "
-                "write replaces the whole period, so every row must fall inside it"
-            )
-    return {covers: list(rows)}
+    grouped: dict[str, list[Contract]] = {}
+    for row in rows:
+        grouped.setdefault(getattr(row, DATE_CELL) if dated else covers, []).append(row)
+    return grouped
 
 
 def _compression(fmt: Format, tier: Tier, knobs: LedgerConfig) -> Compression:
@@ -159,9 +159,20 @@ def _columns(model: type[Contract]) -> tuple[Column, ...]:
     )
 
 
-def _write_one(
-    state_dir: Path,
-    batch: Sequence[Contract],
+def _unit(ledger: LedgerName, covers: str, identity: WriterIdentity) -> uuid.UUID:
+    """The work unit one writer's file for one period records."""
+    return filenames.unit_id(
+        ledger=ledger,
+        covers=covers,
+        run_id=identity.run_id,
+        job=identity.job,
+        shard=identity.shard,
+        producer=identity.producer,
+    )
+
+
+def _rendered(
+    stored: Sequence[Mapping[str, Any]],
     *,
     model: type[Contract],
     ledger: LedgerName,
@@ -173,32 +184,14 @@ def _write_one(
     fmt: Format,
     compression: Compression,
     written_at_ms: int,
-) -> Path:
-    """One period's file: identifiers minted, envelope assembled, bytes written whole."""
-    unit = filenames.unit_id(
-        ledger=ledger,
-        covers=covers,
-        run_id=identity.run_id,
-        job=identity.job,
-        shard=identity.shard,
-        producer=identity.producer,
-    )
+) -> tuple[uuid.UUID, bytes]:
+    """One file's bytes: identifiers minted, envelope assembled, rows rendered.
+
+    Returns the minted `file_id` beside the bytes, because a raw file is named
+    by it and a compact one is named by its period.
+    """
+    unit = _unit(ledger, covers, identity)
     name = filenames.file_id(unit=unit, attempt=identity.attempt, written_at_ms=written_at_ms)
-    stamped: dict[str, Any] = {
-        "ledger": ledger.value,
-        "covers": covers,
-        "run_id": identity.run_id,
-        "attempt": identity.attempt,
-        "job": identity.job.value,
-        "shard": identity.shard,
-        "unit_id": str(unit),
-    }
-    stored = [stamped | row.model_dump(mode="json") for row in batch]
-    if tier is Tier.RAW:
-        target = raw_path(state_dir, ledger, covers, name, fmt=fmt)
-    else:
-        assert period is not None  # refused above when absent
-        target = compact_path(state_dir, ledger, period, covers, fmt=fmt)
     if fmt is Format.PARQUET:
         from idhazh.ledger import parquet
 
@@ -223,13 +216,28 @@ def _write_one(
         built_from=built_from,
     ).as_metadata()
     if fmt is Format.PARQUET:
-        payload = parquet.render(
+        return name, parquet.render(
             _columns(model), stored, envelope=envelope, compression=compression
         )
-    else:
-        payload = json_lines.render(stored, envelope=envelope)
-    atomic_write.write_atomic_bytes(target, payload)
-    return target
+    return name, json_lines.render(stored, envelope=envelope)
+
+
+def _refuse_a_row_that_names_another_try(
+    stamped: Mapping[str, Any], own: Sequence[Mapping[str, Any]], *, where: str
+) -> None:
+    """A row's own `attempt` or `unit_id` is its writer's, or none at all.
+
+    A union keeps the highest attempt per unit, so a row naming another try
+    would be kept or dropped for a try that never wrote it.
+    """
+    for cells in own:
+        for cell in _RANKED_CELLS:
+            if cell in cells and cells[cell] != stamped[cell]:
+                raise ValueError(
+                    f"{where}: a row names {cell} {cells[cell]!r} and its writer is "
+                    f"{stamped[cell]!r}. A row may not name another try than the one "
+                    "that files it"
+                )
 
 
 def persist(
@@ -239,59 +247,159 @@ def persist(
     ledger: LedgerName,
     covers: PeriodStamp,
     identity: WriterIdentity,
-    tier: Tier = Tier.RAW,
-    period: Period | None = None,
-    built_from: int | None = None,
     fmt: Format | None = None,
 ) -> list[Path]:
-    """Write these rows and return where they went, one path per period they cover.
+    """File these new rows under `state/raw/` and return where they went, one path per day.
 
     `state_dir` is the state root the caller writes under - `common.STATE_ROOT`
     for a stage, which a trial run and the test suite both redirect. `covers` is
-    the period a row is routed to rather than a promise about the batch on the
-    raw tier, and the one period the file covers on the compact tier. `period`
-    is required on the compact tier and refused on the raw one. `fmt` of `None`
-    means `config/idhazh.json`'s `ledger.format`, and nothing else.
+    the day a row with no date cell of its own is filed under; a row that has one
+    is filed under the day it names. `fmt` of `None` means `config/idhazh.json`'s
+    `ledger.format`, and nothing else.
 
-    A raw write into a paused or retired family from a pipeline job writes
-    nothing and returns an empty list, with one warning. A compact write and a
-    write from a job in `MAINTENANCE_JOBS` are never skipped: each files rows
-    again that were already recorded.
+    A write into a paused or retired family from a pipeline job writes nothing
+    and returns an empty list, with one warning. A write from a job in
+    `MAINTENANCE_JOBS` is never skipped: it files rows again that were already
+    recorded.
 
-    The paths come back ascending by the period each file covers, never by path
-    string.
+    Every file is built before the first is written, so a row refused on its
+    third day leaves no file for the first two. The paths come back ascending by
+    the day each file covers, never by path string.
     """
-    _refuse_a_shape_the_tier_cannot_take(
-        tier=tier, period=period, covers=covers, built_from=built_from
-    )
+    _refuse_a_period_the_tier_cannot_take(covers, tier=Tier.RAW, period=None)
     if not rows:
         return []
     model = _one_contract(rows)
-    records_new_rows = tier is Tier.RAW and identity.job not in MAINTENANCE_JOBS
-    if records_new_rows and not lifecycle.accepts_new_rows(ledger, len(rows)):
+    if identity.job not in MAINTENANCE_JOBS and not lifecycle.accepts_new_rows(
+        ledger, len(rows)
+    ):
         return []
     knobs = _knobs()
     chosen = knobs.format if fmt is None else fmt
-    compression = _compression(chosen, tier, knobs)
+    compression = _compression(chosen, Tier.RAW, knobs)
     written_at_ms = int(datetime.now(UTC).timestamp() * 1000)
-    grouped = _routed(rows, model=model, tier=tier, covers=covers)
-    return [
-        _write_one(
-            state_dir,
-            grouped[filed_under],
+    built: list[tuple[Path, bytes]] = []
+    for day, batch in sorted(_by_day(rows, model=model, covers=covers).items()):
+        stamped = {
+            "ledger": ledger.value,
+            "covers": day,
+            "run_id": identity.run_id,
+            "attempt": identity.attempt,
+            "job": identity.job.value,
+            "shard": identity.shard,
+            "unit_id": str(_unit(ledger, day, identity)),
+        }
+        own = [row.model_dump(mode="json") for row in batch]
+        _refuse_a_row_that_names_another_try(stamped, own, where=f"{ledger.value} {day}")
+        name, data = _rendered(
+            [stamped | cells for cells in own],
             model=model,
             ledger=ledger,
-            covers=filed_under,
+            covers=day,
             identity=identity,
-            tier=tier,
-            period=period,
-            built_from=built_from,
+            tier=Tier.RAW,
+            period=None,
+            built_from=None,
             fmt=chosen,
             compression=compression,
             written_at_ms=written_at_ms,
         )
-        for filed_under in sorted(grouped)
-    ]
+        built.append((raw_path(state_dir, ledger, day, name, fmt=chosen), data))
+    for target, data in built:
+        atomic_write.write_atomic_bytes(target, data)
+    return [target for target, _ in built]
+
+
+def _inside(day: str, covers: str) -> bool:
+    """Whether a raw day falls inside a compact period: the day itself, or a day of the month."""
+    return day == covers or day.startswith(f"{covers}-")
+
+
+def render_period[C: Contract](
+    state_dir: Path,
+    rows: Sequence[StoredRow[C]],
+    *,
+    model: type[C],
+    ledger: LedgerName,
+    period: Period,
+    covers: PeriodStamp,
+    identity: WriterIdentity,
+    built_from: int,
+) -> PeriodFile:
+    """One compact period's file, built in memory and written nowhere.
+
+    `rows` keep the identity their raw file gave them, and the file keeps it
+    too; `identity` is the compaction's own, and it goes in the envelope, which
+    says who wrote this file. `model` is passed rather than read off a row, so a
+    period that held nothing still becomes a file with every column. A compact
+    file replaces its whole period, so every row must have been filed inside
+    it, into this ledger - one that was not is refused rather than allowed to
+    overwrite a finished period with a stranger's row.
+    """
+    _refuse_a_period_the_tier_cannot_take(covers, tier=Tier.COMPACT, period=period)
+    strays = sorted({type(held.row).__name__ for held in rows if type(held.row) is not model})
+    if strays:
+        raise TypeError(f"one file holds rows of one contract, and {model.__name__} met {strays}")
+    outside = sorted(
+        {
+            f"{held.identity.ledger.value} {held.identity.covers}"
+            for held in rows
+            if held.identity.ledger is not ledger or not _inside(held.identity.covers, covers)
+        }
+    )
+    if outside:
+        raise ValueError(
+            f"a compact {ledger.value} file covering {covers} was handed rows filed under "
+            f"{outside}. A compact write replaces the whole period, so every row must have "
+            "been filed inside it"
+        )
+    knobs = _knobs()
+    compression = _compression(knobs.format, Tier.COMPACT, knobs)
+    _, data = _rendered(
+        [held.identity.model_dump(mode="json") | held.row.model_dump(mode="json") for held in rows],
+        model=model,
+        ledger=ledger,
+        covers=covers,
+        identity=identity,
+        tier=Tier.COMPACT,
+        period=period,
+        built_from=built_from,
+        fmt=knobs.format,
+        compression=compression,
+        written_at_ms=int(datetime.now(UTC).timestamp() * 1000),
+    )
+    return PeriodFile(compact_path(state_dir, ledger, period, covers, fmt=knobs.format), data)
+
+
+def persist_period[C: Contract](
+    state_dir: Path,
+    rows: Sequence[StoredRow[C]],
+    *,
+    model: type[C],
+    ledger: LedgerName,
+    period: Period,
+    covers: PeriodStamp,
+    identity: WriterIdentity,
+    built_from: int,
+) -> Path:
+    """Write one compact period's file whole, and return where it went.
+
+    `render_period`, then one atomic write. Never skipped for a paused family:
+    it files rows again that were already recorded, and skipping it after its
+    sources were deleted would lose them while the run reported success.
+    """
+    built = render_period(
+        state_dir,
+        rows,
+        model=model,
+        ledger=ledger,
+        period=period,
+        covers=covers,
+        identity=identity,
+        built_from=built_from,
+    )
+    atomic_write.write_atomic_bytes(built.path, built.data)
+    return built.path
 
 
 def _opened(path: Path) -> tuple[FileEnvelope, list[dict[str, Any]]]:
@@ -332,17 +440,18 @@ def read_envelope(path: Path) -> FileEnvelope:
     return _opened(path)[0]
 
 
-def load[C: Contract](paths: Sequence[Path], *, model: type[C]) -> list[C]:
-    """Read these files back as rows of one contract, in the order the paths give.
+def load_stored[C: Contract](paths: Sequence[Path], *, model: type[C]) -> list[StoredRow[C]]:
+    """Read these files back as rows of one contract, each beside its identity cells.
 
-    A file written under a newer shape of `model` than this build declares is
-    refused, naming the file, the stamp it holds and the stamp this build reads:
-    only a build at least that new knows what those rows mean. The identity
-    columns the door added are dropped, and every row is validated by `model`.
+    In the order the paths give, and each file's rows in file order. A file
+    written under a newer shape of `model` than this build declares is refused,
+    naming the file, the stamp it holds and the stamp this build reads: only a
+    build at least that new knows what those rows mean. A row whose cells either
+    shape refuses is refused naming its file.
     """
     wanted = model.schema_version()
     added = {column.name for column in _IDENTITY_COLUMNS} - set(model.model_fields)
-    rows: list[C] = []
+    held: list[StoredRow[C]] = []
     for path in paths:
         envelope, stored = _opened(path)
         if envelope.row_schema_version > wanted:
@@ -351,8 +460,27 @@ def load[C: Contract](paths: Sequence[Path], *, model: type[C]) -> list[C]:
                 f"{model.__name__} rows written under {envelope.row_schema_version}, and this "
                 f"build reads {model.__name__} {wanted}. Read it with a build at least as new"
             )
-        rows.extend(
-            model.model_validate({key: value for key, value in cells.items() if key not in added})
-            for cells in stored
-        )
-    return rows
+        try:
+            held.extend(
+                StoredRow(
+                    identity=RowIdentity.model_validate(
+                        {column.name: cells.get(column.name) for column in _IDENTITY_COLUMNS}
+                    ),
+                    row=model.model_validate(
+                        {key: value for key, value in cells.items() if key not in added}
+                    ),
+                )
+                for cells in stored
+            )
+        except ValidationError as refusal:
+            raise ValueError(f"{path.name} holds a row this build refuses: {refusal}") from refusal
+    return held
+
+
+def load[C: Contract](paths: Sequence[Path], *, model: type[C]) -> list[C]:
+    """Read these files back as rows of one contract, in the order the paths give.
+
+    `load_stored` with the identity cells dropped: every row is validated by
+    `model` and the door's own columns are left behind.
+    """
+    return [held.row for held in load_stored(paths, model=model)]

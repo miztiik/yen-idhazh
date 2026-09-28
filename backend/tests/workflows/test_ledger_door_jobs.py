@@ -22,7 +22,13 @@ from typing import Final
 import pytest
 
 from ._harness import _load_workflows, _mapping, _stage_invocations, _steps
-from ._ledger_derivation import _door_verbs, _job_verbs, _persisted_by, _reachable_modules
+from ._ledger_derivation import (
+    _door_calls,
+    _door_verbs,
+    _job_verbs,
+    _persisted_by,
+    _reachable_modules,
+)
 
 pytestmark = pytest.mark.workflow
 
@@ -32,6 +38,16 @@ ENGINE_INSTALL: Final = re.compile(r"pip install -e \"?\.\[[a-z0-9_,-]*\bparquet
 
 #: The flag a writing verb takes the commit on.
 COMMIT_FLAG: Final = "--commit"
+
+
+def test_the_two_readers_of_a_door_ledger_are_door_calls() -> None:
+    """A derived list that shrinks fails nothing, so its two known members are named here.
+
+    Both readers moved from the raw reader to the whole-ledger reader, and a
+    derivation that followed only the first would drop them in silence - and
+    with them every job whose verb reads a retirement.
+    """
+    assert {"load_retirements", "load_visual_prunes"} <= _door_calls()
 
 
 def _writing_verbs() -> dict[str, set[str]]:

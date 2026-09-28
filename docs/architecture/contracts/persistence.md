@@ -28,9 +28,12 @@ Six builders in `backend/idhazh/ledger/paths.py` are the only code that spells t
 ## The door
 
 ```python
-persist(state_dir, rows, *, ledger, covers, identity, tier=Tier.RAW,
-        period=None, built_from=None, fmt=None) -> list[Path]
+persist(state_dir, rows, *, ledger, covers, identity, fmt=None) -> list[Path]
+persist_period(state_dir, rows, *, model, ledger, period, covers, identity,
+               built_from) -> Path
+render_period(...) -> PeriodFile      # the same file, built and written nowhere
 load(paths, *, model) -> list[rows]
+load_stored(paths, *, model) -> list[StoredRow]
 read_envelope(path) -> FileEnvelope
 ```
 
@@ -39,16 +42,16 @@ A producer hands over its rows, the ledger, the period and its writer identity. 
 | Argument | What it means |
 | --- | --- |
 | `state_dir` | the state root: `common.STATE_ROOT` for a stage |
-| `covers` | on the raw tier, the day a row with no `date` field is filed under - every other row goes under the day its own `date` names, so a call holding three days writes three files. On the compact tier, the one period the file covers: a row outside it is refused, because a compact write replaces the whole period and a stray would overwrite a finished one |
-| `tier`, `period` | `period` is required on the compact tier and refused on the raw one, and it must match `covers`: daily needs `YYYY-MM-DD`, monthly needs `YYYY-MM` |
-| `built_from` | on a compact file, how many files were read to make it. Refused on raw |
+| `covers` | the day a row with no `date` field is filed under - every other row goes under the day its own `date` names, so a call holding three days writes three files |
 | `fmt` | `None` means `config/idhazh.json`'s `ledger.format`, and nothing else |
 
-The paths come back ascending by the period each file covers, never by path string. An empty call writes nothing and returns an empty list.
+The paths come back ascending by the day each file covers, never by path string. An empty call writes nothing and returns an empty list. Every file is built before the first is written, so a row refused on its third day leaves no file for the first two.
 
-**A raw write into a paused or retired family from a pipeline job writes nothing**, returns an empty list and logs one warning, through `ledger.accepts_new_rows` ([ledger-registry.md](ledger-registry.md)). A compact-tier write and a write from `migrate`, `run-tasks` or `history` - the members of `MAINTENANCE_JOBS` beside `ServerJob` - are never skipped, because each files rows again that were already recorded.
+**`persist` writes raw files only; a compaction writes a compact file through `persist_period`.** Its rows come from `load_stored` and each keeps the identity cells its raw file gave it - `ledger`, `covers`, `run_id`, `attempt`, `job`, `shard` and `unit_id`, declared once as `RowIdentity` in `backend/idhazh/contracts/file_envelope.py`. So a compact file says which writer first filed each row, never that the compaction did, and a re-run's second attempt can still replace its first after the day was compacted. The compaction's own identity goes in the envelope, which says who wrote the file. `covers` is the one period the file covers - `YYYY-MM-DD` for daily, `YYYY-MM` for monthly - and a row filed outside it, or into another ledger, is refused, because a compact write replaces the whole period and a stray would overwrite a finished one. `model` is passed rather than read off a row, so a period that held nothing is still a file with every column, and `built_from` records how many files were read to make it. `render_period` builds the same file and writes nothing, which is what a dry run reports from.
 
-**`load` is the inverse of `persist` and nothing else.** It reads each file's container from the file's own first bytes, never from its suffix, and refuses a file whose envelope names a different writer. It refuses a file written under a newer shape of the contract than this build declares, naming the file, the stamp it holds and the stamp this build reads. It does not remove duplicates: choosing which files are current is the reader's half, in [Reading a raw ledger](#reading-a-raw-ledger).
+**A raw write into a paused or retired family from a pipeline job writes nothing**, returns an empty list and logs one warning, through `ledger.accepts_new_rows` ([ledger-registry.md](ledger-registry.md)). A `persist_period` write, and a raw write from `migrate`, `run-tasks` or `history` - the members of `MAINTENANCE_JOBS` beside `ServerJob` - are never skipped, because each files rows again that were already recorded.
+
+**`load` is the inverse of `persist` and nothing else.** It reads each file's container from the file's own first bytes, never from its suffix, and refuses a file whose envelope names a different writer. It refuses a file written under a newer shape of the contract than this build declares, naming the file, the stamp it holds and the stamp this build reads. `load_stored` is the same read with each row's identity cells kept beside it. Neither removes duplicates: choosing which rows are current is the reader's half, in [Reading a raw ledger](#reading-a-raw-ledger).
 
 ## The two identifiers
 
@@ -61,31 +64,46 @@ The paths come back ascending by the period each file covers, never by path stri
 | Seeded from | ledger, covers, run, job, shard, producer | the write clock in epoch milliseconds, then a hash of `unit_id`, attempt and that clock |
 | Same across two attempts | yes | no |
 
-**A union over any set of files keeps, for each `unit_id`, the rows of the highest `attempt`.** GitHub re-runs a failed job into the original run id, so the re-run's files share their `unit_id` with the first attempt's and the first attempt drops out. A re-run replaces its attempt rather than adding to it. `attempt` is only in `file_id` and `producer` only in `unit_id`; put `attempt` into `unit_id` and both attempts would survive the union. Within one millisecond the order of two `file_id`s is arbitrary.
+**A union over any set of files keeps, for each `unit_id`, the rows of one file: the last file holding its highest `attempt`.** GitHub re-runs a failed job into the original run id, so the re-run's files share their `unit_id` with the first attempt's and the first attempt drops out. A re-run replaces its attempt rather than adding to it, and one attempt that wrote a unit twice is its later write. `attempt` is only in `file_id` and `producer` only in `unit_id`; put `attempt` into `unit_id` and both attempts would survive the union. Within one millisecond the order of two `file_id`s is arbitrary.
+
+**The union reads `attempt` and `unit_id` from each row's own cells, not from the file's envelope**, because a compact file holds rows of many units and many attempts under one envelope. So the door refuses a row whose own `attempt` or `unit_id` is not its writer's: the union would keep or drop it for a try that never wrote it.
 
 ## Reading a raw ledger
 
-`backend/idhazh/ledger/raw_files.py` is the reader's half of the union above, written once so no reader invents its own. Three calls:
+`backend/idhazh/ledger/raw_files.py` is the reader's half of the union above, written once so no reader invents its own:
 
 | Call | What it answers |
 | --- | --- |
-| `list_raw_files(state_dir, ledger)` | every file under `raw/<ledger>/<YYYY>/<MM>/<DD>/` whose envelope this build can read, oldest first |
-| `pick_current_files(state_dir, ledger)` | for each `unit_id`, the file of its highest attempt |
-| `load_current_rows(state_dir, ledger, model=, key=)` | the current files' rows, oldest first, keeping the first row of each `key` |
+| `list_raw_files(state_dir, ledger, days=None)` | every file under `raw/<ledger>/<YYYY>/<MM>/<DD>/` whose envelope this build can read, oldest first; `days` names the only days to open |
+| `read_day_files(state_dir, ledger, day)` | one day's files, oldest first, or a `ValueError` naming the first one it cannot read - for the compaction, which deletes what it read and so may not skip a file |
+| `raw_days(state_dir, ledger)`, `listed_days(state_dir, ledger)` | which days have a raw folder holding something, and which have a listing under `index/`, from folder and file names alone |
+| `settle_rows(files, key)` | the current rows of a union, each file's rows passed on their own, oldest file first: one file's rows per `unit_id`, then the first row of each `key` |
+| `load_current_rows(state_dir, ledger, model=, key=, days=None)` | the raw files' rows, settled |
 
 **Oldest first is an explicit sort, read from each file's envelope**: the day it covers, then `written_at_ms`, then `file_id`. A directory listing agrees today only because a `file_id` starts with its clock, and a reader that leaned on it would change its answer the day the name grammar did. Every file in a day folder is read whatever its suffix, because `ledger.format` may be JSON lines, and `index/` beside the years is passed over, because a listing is not a row.
 
-**The first row of a key wins**, because the two ledgers that read this way keep one record per key: a retirement per `endpoint_key`, and a cleanup pass per `(date, run_id)`. Two stale checkouts can each file one address, as two work units, and the earlier one is kept. A key that declares a winner rule of its own in `ledger/keys.py` is refused, because this reader would apply the wrong one.
+**The first row of a key wins**, because the three ledgers that read this way keep one record per key: a retirement per `endpoint_key`, a cleanup pass per `(date, run_id)`, and a gardener task's pass per `(date, run_id, task)`. Two stale checkouts can each file one address, as two work units, and the earlier one is kept. A key that declares a winner rule of its own in `ledger/keys.py` is refused, because this reader would apply the wrong one.
 
-**A file this build cannot read is skipped, with one warning that names it**: a newer row shape, a row today's model refuses, a file that is not a ledger file, or one whose envelope names another ledger or another day than the folder it sits in. Only `ValueError` is caught. A missing parquet engine raises `ImportError`, and that stops the run, because skipping every file for it would read as a ledger with no history. For the retirements the direction is the safe one: a skipped file costs one request to an address that is probably still gone, and the next run files it again.
+**A file this build cannot read is skipped, with one warning that names it**: a newer row shape, a row today's model refuses, a file that is not a ledger file, or one whose envelope names another ledger or another day than the folder it sits in. Only `ValueError` is caught. A missing parquet engine raises `ImportError`, and that stops the run, because skipping every file for it would read as a ledger with no history. For the retirements the direction is the safe one: a skipped file costs one request to an address that is probably still gone, and the next run files it again. **The compaction never skips**: `read_day_files` stops that day, because a file it could not read would be deleted unread.
 
-The walk reads every day a ledger has a folder for. The two ledgers that read this way ask about their whole history, so a window would answer a different question; [growing-reads.md](../../concepts/growing-reads.md) lists both.
+## Reading a whole ledger
+
+**A ledger the compaction tends is read from three kinds of file, and each date from exactly one.** `backend/idhazh/ledger/ledger_files.py` asks the two compact indexes what exists: a date whose month `index/monthly.json` names is read from that month's file; else a date `index/daily.json` names is read from that day's file; else it is read from that day's raw files. The raw files of a day an index already names are a re-run's, waiting for the next compaction, and are not read. A date both indexes name is read from its month, with a warning, so a pass that stopped between writing a month and deleting its days cannot count a row twice.
+
+| Call | What it answers |
+| --- | --- |
+| `list_ledger_files(state_dir, ledger)` | every source a ledger is read from, oldest first - one compact file, or one raw day's files - and the holes |
+| `load_ledger_rows(state_dir, ledger, model=)` | the rows of every source, settled once by `settle_rows`. `model` and the key come from the door table in `ledger/keys.py`, so a reader cannot settle a ledger by another ledger's rule |
+
+**A hole is served and reported.** From the first day the compact periods cover to the newest day `index/daily.json` names, every day must be named. A day that is not is a hole: its rows went somewhere no reader finds them. It is logged by name, and any raw files it still has are read. An index this build cannot read is read as absent, with a warning, so the reader serves the raw files it can still find rather than nothing.
+
+`ledger.load_retirements` and `ledger.load_visual_prunes` read this way and keep their signatures. Both ask about their ledger's whole history, so a window would answer a different question, and [growing-reads.md](../../concepts/growing-reads.md) lists both.
 
 ## The envelope inside the file
 
 **A filename carries identity, never meaning.** What a file holds is written inside it, as `FileEnvelope` (`backend/idhazh/contracts/file_envelope.py`): the parquet footer's key-value metadata, or the first line of a JSON-lines file. Every value is a string, `attempt` and `shard` are zero-padded to two digits, and `period` and `built_from` are absent on a raw file. `row_count` is not a key: the parquet footer carries it already.
 
-**A key is also a column only when a query filters or groups on it.** Row-group statistics let a reader skip a whole file on such a column without decompressing it. Measured 2026-09-24: a column that never varies costs about 250 bytes whatever the row count, so the eight identity columns cost about 2,000 bytes - 26 percent of a 3-row raw file, 6 percent of a 420-row month file. The columns are the row's own `version`, then `ledger`, `covers`, `run_id`, `attempt`, `job`, `shard` and `unit_id`. **A contract field of the same name as one of them is that column instead**, so a row's own value is never overwritten, and the envelope still carries the writer's. Three contracts due to move declare such a field today: `HostFingerprintRow` its `run_id`, `job` and `shard`, `VisualPruneRow` its `run_id`, and `EvalRow` its `run_id` and an `attempt` of its own - so for `scores` the union has to rank on the envelope's `attempt`, never the column's.
+**A key is also a column only when a query filters or groups on it.** Row-group statistics let a reader skip a whole file on such a column without decompressing it. Measured 2026-09-24: a column that never varies costs about 250 bytes whatever the row count, so the eight identity columns cost about 2,000 bytes - 26 percent of a 3-row raw file, 6 percent of a 420-row month file. The columns are the row's own `version`, then `ledger`, `covers`, `run_id`, `attempt`, `job`, `shard` and `unit_id`. **A contract field of the same name as one of them is that column instead**, so a row's own value is never overwritten, and the envelope still carries the writer's. Three contracts due to move declare such a field today: `HostFingerprintRow` its `run_id`, `job` and `shard`, `VisualPruneRow` its `run_id`, and `EvalRow` its `run_id` and an `attempt` of its own. **That last one stops `scores` at the door until one of the two is renamed**: the union ranks on each row's `attempt` cell, so the door refuses an `EvalRow` whose own `attempt` is not the attempt of the job that files it.
 
 `content_sha256` is taken over the rows as canonical JSON lines whatever the container, so a copy can be proven a copy after a rename.
 
@@ -171,6 +189,8 @@ The jobs that install it share `setup-python`'s pip cache key with the jobs that
 **A JSON-lines file records `none` for compression.** The key says what was done to the file, never what the config asked for; a reader that picked a decompressor from a false value would fail on every JSON file.
 
 **The door ships before any committed byte moves.** Moving a ledger's committed data is one-way, and keeping it out of the change that lays the door lets either be reverted alone.
+
+**2026-09-28: the union ranks on each row, and a compact file keeps each row's writer.** A compact file holds many work units under one envelope, so ranking on the file's `attempt` would rank the compaction rather than the writers. Each row keeps the identity cells its raw file gave it, the one settlement - `raw_files.settle_rows` - reads them, and the door refuses a row whose own cells contradict its writer's. The file-level pick it replaced is gone, so a raw union and a compact rebuild cannot disagree (Fowler).
 
 ## See also
 

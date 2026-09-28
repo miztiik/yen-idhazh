@@ -367,18 +367,28 @@ def test_a_compaction_is_named_for_its_ledger(tmp_path: Path) -> None:
     assert "call it compact-gardener.json" in refused(config_dir)
 
 
+def test_a_compaction_keeps_its_raw_listings_as_long_as_its_daily_period(tmp_path: Path) -> None:
+    config_dir = a_garden(
+        tmp_path, compact_gardener=a_compaction("gardener", raw_index_keep_days=30)
+    )
+    assert "raw index must outlive the daily period" in refused(config_dir)
+
+
 @pytest.mark.parametrize(
-    ("changes", "refusal"),
+    ("changes", "field"),
     [
-        ({"raw_index_keep_days": 30}, "raw index must outlive the daily period"),
-        ({"monthly_window": {"unit": "months", "value": 2}}, "less than one whole month"),
+        ({"window": {"unit": "days", "value": 90}}, "window"),
+        ({"max_deletes_per_run": 50}, "max_deletes_per_run"),
+        ({"daily_keep_days": 30}, "daily_keep_days"),
     ],
+    ids=["a-window-nothing-reads", "a-ceiling-that-halves-a-month", "a-month-a-re-run-can-reach"],
 )
-def test_a_compaction_keeps_its_own_periods_in_order(
-    tmp_path: Path, changes: dict[str, Any], refusal: str
+def test_a_compaction_carries_no_second_window_no_ceiling_and_no_month_a_re_run_reaches(
+    tmp_path: Path, changes: dict[str, Any], field: str
 ) -> None:
-    config_dir = a_garden(tmp_path, compact_gardener=a_compaction("gardener", **changes))
-    assert refusal in refused(config_dir)
+    """Two periods are its retention, a period goes whole, and a re-run lands for 30 days."""
+    message = refused(a_garden(tmp_path, compact_gardener=a_compaction("gardener", **changes)))
+    assert "config/gardener/compact-gardener.json is refused" in message and field in message
 
 
 def published(config_dir: Path, *ledgers: str) -> Path:
@@ -395,7 +405,7 @@ def published(config_dir: Path, *ledgers: str) -> Path:
     [
         ({"monthly_window": {"unit": "forever"}}, "may not keep its month files forever"),
         (
-            {"daily_keep_days": 1, "monthly_window": {"unit": "days", "value": 40}},
+            {"daily_keep_days": 31, "monthly_window": {"unit": "days", "value": 40}},
             "would have days no file holds",
         ),
         ({"monthly_window": {"unit": "months", "value": 13}}, None),

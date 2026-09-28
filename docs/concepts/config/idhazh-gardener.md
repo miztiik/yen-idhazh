@@ -26,8 +26,9 @@ naming both values.
 ## One declaration a task
 
 A task is named by its file: `config/gardener/seen.json` declares the task
-`seen`. A missing `config/gardener/` means no tasks. Eleven ship today: ten
-`retention` tasks and `corpus-squash`, the one `history` task (below).
+`seen`. A missing `config/gardener/` means no tasks. Fourteen ship today: ten
+`retention` tasks, three `compaction` tasks (below) and `corpus-squash`, the one
+`history` task (below).
 **There is no index file and no `name` key**, so a task can never be listed under
 one name and filed under another.
 
@@ -49,7 +50,7 @@ Each kind adds its own keys, and a key on the wrong kind is refused by name:
 | --- | --- |
 | `retention` | `series`, one window per series, for two tasks alone: `telemetry-aggregate` keeps `full-grain`, `aggregate` and `public-copy`, and `scores` keeps `full-grain` and `archive` |
 | `collection` | none yet |
-| `compaction` | `ledger` (required); `raw_index_keep_days` (90), `daily_keep_days` (45), `monthly_window` (13 months), `max_periods_per_run` (8), `max_raw_files_per_period` (2000), `compact_after_hours` (24) |
+| `compaction` | `ledger` (required); `raw_index_keep_days` (90), `daily_keep_days` (45), `monthly_window` (13 months), `max_periods_per_run` (8), `max_raw_files_per_period` (2000), `compact_after_days` (1). Its `window` is always `{unit: forever}` and its `max_deletes_per_run` always `null`: the two periods are how far back it keeps, and `max_periods_per_run` is its budget |
 | `history` | `every_days`, how many whole days apart two rewrites may run. Its `window` is whole days and nothing else, because the squash cuts history at 00:00 UTC on the day that many days back |
 
 ## The retention declarations that ship
@@ -72,6 +73,20 @@ Why each tree gets the age it has is
 | `trials` | everything under `state` that no other task owns and no ledger claims | 90 days | nothing reads a trial's rows, and 90 days is the artifact retention used everywhere else |
 | `digest-fragments` | `state/digest-fragments` | 390 days | 30 days times `retention.image_months`, the window the archive page states; past it a run's block of a day is a second copy nothing reads |
 | `visual-prune` | `frontend/public/digest` | 390 days, at most 200 files a pass | the same stated window. It deletes rendered charts only, and files a report of every pass into `visual-prunes` |
+
+## The compaction declarations that ship
+
+Each moves one ledger's rows out of its raw files into one file a day and then
+one file a month, and deletes what it moved. How a pass runs is
+[../../architecture/publishing/idhazh-gardener.md](../../architecture/publishing/idhazh-gardener.md#the-compaction).
+Each ships `dry_run: true`, and each owns its ledger's two folders,
+`state/raw/<ledger>` and `state/compact/<ledger>`.
+
+| Task | Ledger | Keeps | Why |
+| --- | --- | --- | --- |
+| `compact-gardener` | `gardener`, the gardener's own record | the defaults: day files for 45 to 76 days, then 13 month files | no task limited this ledger before it moved, so nothing sets a floor, and the owner kept the defaults (2026-09-27) |
+| `compact-visual-prunes` | `visual-prunes`, the picture cleanup's report of every pass | the defaults | the same |
+| `compact-feed-retirements` | `feed-retirements`, the addresses the pipeline stopped fetching | day files for 45 to 76 days, then 60 month files | a retirement the window deletes is a feed the pipeline asks for again, so it keeps five years (owner, 2026-09-27). The price: an address retired more than 60 months ago is asked for once more, and is retired again if it is still gone |
 
 ## The history declaration: `corpus-squash`
 
@@ -118,7 +133,8 @@ names the file an operator edits and the rule it broke.
 | `series` on any other task | One task keeps several series |
 | A compaction not called `compact-<ledger>` | One compaction a ledger, found by name |
 | `raw_index_keep_days` below `daily_keep_days` | The daily period may still need the index to rebuild a file |
-| A `monthly_window` that leaves less than one whole month after `daily_keep_days` | A month absorbed that late would go before a reader reached it |
+| A compaction whose `window` is not `{unit: forever}`, or whose `max_deletes_per_run` is not `null` | Its two periods are how far back it keeps and `max_periods_per_run` is its budget. A second window would be a number nothing reads, and a ceiling could stop a month half absorbed |
+| `daily_keep_days` below 31 | GitHub lets a failed run be re-run for 30 days, into the day it first wrote, so a month absorbed sooner could still be reached by one |
 | A ledger in `ledger.published` whose compaction keeps its months forever | A reader's first request would grow with the archive |
 | A published ledger whose two periods reach back less than the widest `console.window_presets` | The widest span the console offers would have days no file holds |
 | A compaction reaching back less far than the task that limited its ledger before it moved | The two periods are the ledger's retention now, and a shorter pair silently cuts it |
@@ -135,7 +151,7 @@ and 428 days depending on where they fall. So a window that deletes is counted a
 the fewest days its months can hold, and a window that is needed at the most,
 and the answer never depends on the day the build ran. The same unit against the
 same unit compares the numbers. The period pair reaches back `daily_keep_days`
-plus its `monthly_window`, and "one whole month" is 31 days (Fowler and Carmack).
+plus its `monthly_window` (Fowler and Carmack).
 
 **2026-09-27: a compaction's floor is the task that limited the ledger.** Once a
 ledger moves under the two roots, the task that kept its old tree is retired and
@@ -158,6 +174,20 @@ moved key left in the app config is refused by name, pointing at its
 declaration, rather than read as a second spelling somebody has to hold in
 step. `retention.image_months` stays where it is, because the archive page
 states it to a reader, and the loader holds both picture windows to it (Fowler).
+
+**2026-09-28: a compaction's month window leaves no gap to refuse.** The loader
+used to refuse a `monthly_window` that left less than one whole month after
+`daily_keep_days`, because a window counted from a month's end could drop the
+month before it was absorbed. The window now counts from the month's absorption -
+month M goes when the month `monthly_window` later is absorbed - so a month is
+always absorbed before it can go, and the rule went with the gap it guarded
+(Fowler and Carmack).
+
+**2026-09-28: a compaction has no window and no ceiling of its own.** `window` and
+`max_deletes_per_run` are fixed on the type, to forever and null, rather than
+left for a declaration to set. A compaction never read either: its two periods
+are how far back it keeps, and `max_periods_per_run` is its budget. A value there
+would be a second spelling of a number that lives in another key (Fowler).
 
 ## See also
 

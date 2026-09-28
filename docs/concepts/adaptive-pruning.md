@@ -350,8 +350,10 @@ a raster family would move every row of the arithmetic above at once.
 adaptive pruning.** "Intelligent" claims a property that code reading a date does
 not have. "Compaction" is this repository's own word for merging segments into a
 day head and day heads into a month file - `idhazh compact`, and
-`retention.compact_month` one level up - so taking it for deletion by age would
-be one word for two operations (O9, `CLAUDE.md` section 0b).
+`retention.compact_month` one level up, and the gardener's `compaction` tasks,
+which merge a door ledger's raw files into day files and day files into month
+files - so taking it for deletion by age would be one word for two operations
+(O9, `CLAUDE.md` section 0b).
 
 **The register carries no test, and that is a decision rather than an omission.**
 Three shapes were available. A walk of `state/`, `corpus/` and

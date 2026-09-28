@@ -273,10 +273,6 @@ _DAYS_A_PICTURE_MONTH: Final = 30
 #: therefore not keep less than `observability.public_machine_keep_months`.
 _MACHINE_SOURCE_TASK: Final = "host-fingerprint"
 
-#: The longest a calendar month runs, in days. A gap measured in "one whole
-#: month" is measured at the month that is hardest to fit.
-_LONGEST_MONTH_DAYS: Final = 31
-
 _TASK_POLICY: Final[TypeAdapter[TaskPolicy]] = TypeAdapter(TaskPolicy)
 _A_TASK_NAME: Final = re.compile(SLUG_PATTERN)
 
@@ -687,7 +683,9 @@ def _refuse_a_compaction_that_cuts_its_ledger(
     """Once a ledger is compacted its two periods are its retention, so they must reach.
 
     The pair reaches back `daily_keep_days` plus `monthly_window`, counted at the
-    fewest days those months can hold.
+    fewest days those months can hold: a month file lives `monthly_window` after
+    its month is absorbed, and a month is absorbed `daily_keep_days` after it
+    ends, so no pair of the two can leave a day in no period.
     """
     where = f"config/{GARDENER_TASKS_DIR}/{name}.json"
     ledger = policy.ledger
@@ -703,13 +701,6 @@ def _refuse_a_compaction_that_cuts_its_ledger(
             "daily period, which may still need it to rebuild a daily file"
         )
     monthly_kept = _days_kept(policy.monthly_window)
-    if monthly_kept is not None and monthly_kept < policy.daily_keep_days + _LONGEST_MONTH_DAYS:
-        raise ValueError(
-            f"{where} keeps daily_keep_days {policy.daily_keep_days} and monthly_window "
-            f"{_spelled(policy.monthly_window)}, which leaves less than one whole month "
-            "between them. A month absorbed that late would be deleted before a reader "
-            "could reach it, a gap no period covers"
-        )
     reach = None if monthly_kept is None else policy.daily_keep_days + monthly_kept
     if ledger in app.ledger.published:
         if reach is None:

@@ -1,9 +1,13 @@
-"""What makes two rows of one ledger the same record, and which day tree declares it.
+"""What makes two rows of one ledger the same record, and which contract reads one.
 
 A key is a fact about a ledger, so it is written once and read by every pass that
 settles one: the append that runs from the commit step, the fold a reader takes
 over a day directory, and the compaction. A second copy of a key is how two
 readers start disagreeing about what one file holds.
+
+Two tables pair a key with the contract that reads a row: one for the CSV day
+trees, and one for the ledgers the door in `ledger/persist.py` files under
+`state/raw/` and `state/compact/`.
 
 Where a ledger's file lives is a different question with its own home, which is
 why `paths` imports nothing from here and this module imports nothing from it.
@@ -14,12 +18,15 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Final, NamedTuple
 
+from idhazh.contracts.base import Contract
+from idhazh.contracts.collection_prune import CollectionPruneRow
 from idhazh.contracts.counterfactual_score import CounterfactualScoreRow
 from idhazh.contracts.eval_row import (
     DROPPED_CELLS as DROPPED_EVAL_CELLS,
 )
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.feed_health import FeedHealthRow, supersedes
+from idhazh.contracts.feed_retirement import FeedRetirementRow
 from idhazh.contracts.fitted_similarity_threshold import (
     DROPPED_CELLS as DROPPED_FIT_CELLS,
 )
@@ -32,6 +39,7 @@ from idhazh.contracts.story_similarity_pair import (
     DROPPED_CELLS as DROPPED_PAIR_CELLS,
 )
 from idhazh.contracts.validation_row import ValidationRow
+from idhazh.contracts.visual_prune import VisualPruneRow
 
 if TYPE_CHECKING:
     # The row protocol is a typing fact here and never a value, so it is read at
@@ -141,6 +149,13 @@ STORY_SIMILARITY_PAIR_KEY: Final = ("date", "run_id", "pair_key", "judged_by_run
 #: in curated config must not make its dead address eligible again, and editing
 #: that feed's URL already produces a different key.
 FEED_RETIREMENT_KEY: Final = ("endpoint_key",)
+
+
+#: What makes two gardener rows the same record. One task, one wake, one row: in
+#: one run a task runs in exactly one job and one shard, so neither cell is in
+#: the key - with them, a shard split that ran one task twice would keep both
+#: rows. A re-run's first attempt is already gone by then, through its work unit.
+COLLECTION_PRUNE_KEY: Final = ("date", "run_id", "task")
 
 
 #: What makes two council rows the same record. `judge_id` is in the key and a
@@ -330,3 +345,42 @@ def segment_carried(ledger: LedgerName) -> frozenset[str]:
     """The retired headings this ledger's reader can still place."""
     _refuse_outside_day_trees(ledger)
     return _TREE_SHAPES[ledger].carried
+
+
+class _DoorShape(NamedTuple):
+    """One door ledger's answer to "what settles two of its rows, and who reads one"."""
+
+    key: tuple[str, ...]
+    model: type[Contract]
+
+
+#: What settles two rows of each ledger the door files under the two roots, and
+#: the contract that reads one. The compaction settles a period by it and the
+#: reader in `ledger/ledger_files.py` settles a whole ledger by it, so the two
+#: cannot disagree about which row of a key survives.
+_DOOR_SHAPES: Final[dict[LedgerName, _DoorShape]] = {
+    LedgerName.GARDENER: _DoorShape(COLLECTION_PRUNE_KEY, CollectionPruneRow),
+    LedgerName.VISUAL_PRUNES: _DoorShape(VISUAL_PRUNE_KEY, VisualPruneRow),
+    LedgerName.FEED_RETIREMENTS: _DoorShape(FEED_RETIREMENT_KEY, FeedRetirementRow),
+}
+
+
+def _door_shape(ledger: LedgerName) -> _DoorShape:
+    """This ledger's row of the door table, or a refusal naming it."""
+    held = _DOOR_SHAPES.get(ledger)
+    if held is None:
+        raise ValueError(
+            f"{ledger.value} has no key and no row contract in the door table in "
+            "idhazh/ledger/keys.py, so nothing can settle or read its files"
+        )
+    return held
+
+
+def door_contract(ledger: LedgerName) -> type[Contract]:
+    """The contract one row of this door ledger is read by."""
+    return _door_shape(ledger).model
+
+
+def door_key(ledger: LedgerName) -> tuple[str, ...]:
+    """What makes two rows of this door ledger the same record."""
+    return _door_shape(ledger).key

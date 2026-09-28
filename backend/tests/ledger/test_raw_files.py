@@ -21,7 +21,7 @@ import pytest
 
 from idhazh import ledger
 from idhazh.contracts.base import ServerJob
-from idhazh.contracts.file_envelope import Format, WriterIdentity
+from idhazh.contracts.file_envelope import Format, RowIdentity, WriterIdentity
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.visual_prune import VisualPruneRow
 
@@ -117,12 +117,10 @@ def test_the_highest_attempt_at_a_unit_is_the_one_read_whatever_was_written_last
     tmp_path: Path,
 ) -> None:
     """A re-run replaces its attempt. The second attempt is written first here on purpose."""
-    second = filed(tmp_path, a_pass(before=200), attempt=2)
+    filed(tmp_path, a_pass(before=200), attempt=2)
     filed(tmp_path, a_pass(before=100), attempt=1)
 
-    current = ledger.pick_current_files(tmp_path, WHICH)
-
-    assert [held.path for held in current] == [second]
+    assert len(ledger.list_raw_files(tmp_path, WHICH)) == 2
     assert [row.payload_bytes_before for row in ledger.load_visual_prunes(tmp_path)] == [200]
 
 
@@ -131,7 +129,7 @@ def test_two_runs_of_one_day_are_two_units_and_both_are_read(tmp_path: Path) -> 
     filed(tmp_path, a_pass(run="1"))
     filed(tmp_path, a_pass(run="2"))
 
-    assert len(ledger.pick_current_files(tmp_path, WHICH)) == 2
+    assert len(ledger.load_visual_prunes(tmp_path)) == 2
 
 
 def test_a_json_lines_file_is_read_like_a_parquet_one(tmp_path: Path) -> None:
@@ -184,3 +182,90 @@ def test_a_key_that_declares_a_preference_is_refused_before_anything_is_read(
         ledger.load_current_rows(
             tmp_path, WHICH, model=VisualPruneRow, key=ledger.FEED_HEALTH_KEY
         )
+
+
+# --- the settlement, over rows written out literally --------------------------------
+
+#: Two work units, spelled the way the door stamps a `unit_id` cell.
+UNIT_A: Final = "7b2f1c84-0e5a-53d1-9c40-1f8b6a2e4d07"
+UNIT_B: Final = "0c9d2e71-4a6b-5f30-8e12-3d4c5b6a7980"
+
+
+def held(unit: str, attempt: int, *, run: str, before: int) -> ledger.StoredRow[VisualPruneRow]:
+    """One row as a file holds it: the identity cells a writer stamped, and the row."""
+    return ledger.StoredRow(
+        identity=RowIdentity(
+            ledger=WHICH,
+            covers=A_DAY,
+            run_id=f"{A_DAY}-{run}",
+            attempt=attempt,
+            job=ServerJob.ASSEMBLE,
+            shard=0,
+            unit_id=unit,
+        ),
+        row=a_pass(run=run, before=before),
+    )
+
+
+def test_settling_keeps_the_highest_attempt_of_each_unit_in_the_order_given() -> None:
+    """Attempt 2 filed one row where attempt 1 filed two, and still replaces both."""
+    first_try = [held(UNIT_A, 1, run="1", before=100), held(UNIT_A, 1, run="3", before=300)]
+    other = held(UNIT_B, 1, run="2", before=200)
+    second_try = held(UNIT_A, 2, run="1", before=111)
+
+    settled = ledger.settle_rows([first_try, [other], [second_try]], ledger.VISUAL_PRUNE_KEY)
+
+    assert settled == [other, second_try]
+
+
+def test_one_attempt_that_wrote_a_unit_twice_is_its_later_file() -> None:
+    """Two files at one attempt of one unit: the later file's rows, and only those."""
+    earlier_file = [held(UNIT_A, 1, run="1", before=100), held(UNIT_A, 1, run="3", before=300)]
+    later_file = [held(UNIT_A, 1, run="1", before=150)]
+
+    settled = ledger.settle_rows([earlier_file, later_file], ledger.VISUAL_PRUNE_KEY)
+
+    assert settled == later_file
+
+
+def test_settling_keeps_the_first_row_of_a_key_two_units_both_filed() -> None:
+    """Two runs that are not attempts at one unit, filing one key: the first filed wins."""
+    earlier = held(UNIT_A, 1, run="1", before=100)
+    later = held(UNIT_B, 1, run="1", before=999)
+
+    assert ledger.settle_rows([[earlier], [later]], ledger.VISUAL_PRUNE_KEY) == [earlier]
+
+
+def test_settling_refuses_a_key_with_a_preference_of_its_own() -> None:
+    with pytest.raises(ValueError, match="declares a preference"):
+        ledger.settle_rows([], ledger.FEED_HEALTH_KEY)
+
+
+# --- what the compaction reads: one day, strictly ---------------------------------
+
+
+def test_one_days_files_are_read_strictly_and_a_stray_is_refused_by_name(tmp_path: Path) -> None:
+    """The compaction deletes what it read, so a file it cannot read stops the day."""
+    written = filed(tmp_path, a_pass())
+    assert [one.path for one in ledger.read_day_files(tmp_path, WHICH, A_DAY)] == [written]
+    stray = written.parent / "notes.txt"
+    stray.write_text("not a ledger file\n", encoding="ascii")
+
+    with pytest.raises(ValueError, match=r"raw/visual-prunes/2026/09/06/notes\.txt cannot be read"):
+        ledger.read_day_files(tmp_path, WHICH, A_DAY)
+    assert ledger.read_day_files(tmp_path, WHICH, NEXT_DAY) == []
+
+
+def test_the_days_a_ledger_holds_raw_files_for_and_the_days_it_has_listings_for(
+    tmp_path: Path,
+) -> None:
+    """Folder names only: an emptied day is not a raw day, and a listing is named by its day."""
+    filed(tmp_path, a_pass(on=A_DAY))
+    emptied = filed(tmp_path, a_pass(on=NEXT_DAY))
+    emptied.unlink()
+    listing = ledger.raw_index_path(tmp_path, WHICH, A_DAY)
+    listing.parent.mkdir(parents=True)
+    listing.write_text("{}", encoding="ascii")
+
+    assert ledger.raw_days(tmp_path, WHICH) == [A_DAY]
+    assert ledger.listed_days(tmp_path, WHICH) == [A_DAY]

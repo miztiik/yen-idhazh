@@ -645,19 +645,24 @@ def _compacted_ledgers() -> dict[str, str]:
 def _door_calls() -> frozenset[str]:
     """Every name on `idhazh.ledger` whose call reads or writes a file under the two roots.
 
-    The door's own functions, the raw reader's, and every public reader that
-    reads through the raw reader - found in their own sources, so a reader that
-    moves onto the door joins this set the day it does, and nothing here names
-    one.
+    The door's own functions, the raw reader's, the whole-ledger reader's, and
+    every public reader that reads through one of them - found in their own
+    sources, so a reader that moves onto the door joins this set the day it
+    does, and nothing here names one. Each module is found from a function the
+    package exports, never from its name spelled here.
     """
-    door = importlib.import_module(ledger.persist.__module__)
-    raw_reader = importlib.import_module(ledger.load_current_rows.__module__)
-    through = re.compile(rf"\b{raw_reader.__name__.rsplit('.', 1)[-1]}\.[a-z_]+\(")
+    door_modules = {
+        importlib.import_module(exported.__module__)
+        for exported in (ledger.persist, ledger.load_current_rows, ledger.load_ledger_rows)
+    }
+    held = {module.__name__ for module in door_modules}
+    aliases = sorted(module.__name__.rsplit(".", 1)[-1] for module in door_modules)
+    through = re.compile(rf"\b(?:{'|'.join(aliases)})\.[a-z_]+\(")
     names: set[str] = set()
     for name, value in vars(ledger).items():
         if name.startswith("_") or not callable(value):
             continue
-        if getattr(value, "__module__", None) in (door.__name__, raw_reader.__name__):
+        if getattr(value, "__module__", None) in held:
             names.add(name)
             continue
         try:

@@ -28,7 +28,7 @@ from idhazh.contracts.content_similarity_judge_metrics import ContentSimilarityJ
 from idhazh.contracts.council_shard_outcome import CouncilShardOutcome
 from idhazh.contracts.day_metrics import DayMetrics
 from idhazh.contracts.feed_retirement import FeedRetirementRow
-from idhazh.contracts.file_envelope import Period, Tier, WriterIdentity
+from idhazh.contracts.file_envelope import Period, RowIdentity, Tier, WriterIdentity
 from idhazh.contracts.fitted_similarity_threshold import FittedSimilarityThreshold
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.ledger_name import LedgerName
@@ -315,17 +315,49 @@ def test_the_door_writes_into_a_paused_family_for_maintenance_and_the_compact_ti
     """
     row = _first(VisualPruneRow)
     _pause(monkeypatch, _family_of(LedgerName.VISUAL_PRUNES))
-
-    with caplog.at_level(logging.WARNING, logger="idhazh"):
-        written = ledger.persist(
-            tmp_path / "state",
-            [row],
+    unit = ledger.unit_id(
+        ledger=LedgerName.VISUAL_PRUNES,
+        covers=row.date,
+        run_id=A_RUN,
+        job=ServerJob.ASSEMBLE,
+        shard=0,
+        producer="tests.ledger",
+    )
+    filed = ledger.StoredRow(
+        identity=RowIdentity(
             ledger=LedgerName.VISUAL_PRUNES,
             covers=row.date,
-            identity=_identity(job),
-            tier=tier,
-            period=Period.DAILY if tier is Tier.COMPACT else None,
-        )
+            run_id=A_RUN,
+            attempt=1,
+            job=ServerJob.ASSEMBLE,
+            shard=0,
+            unit_id=str(unit),
+        ),
+        row=row,
+    )
+
+    with caplog.at_level(logging.WARNING, logger="idhazh"):
+        if tier is Tier.RAW:
+            written = ledger.persist(
+                tmp_path / "state",
+                [row],
+                ledger=LedgerName.VISUAL_PRUNES,
+                covers=row.date,
+                identity=_identity(job),
+            )
+        else:
+            written = [
+                ledger.persist_period(
+                    tmp_path / "state",
+                    [filed],
+                    model=VisualPruneRow,
+                    ledger=LedgerName.VISUAL_PRUNES,
+                    period=Period.DAILY,
+                    covers=row.date,
+                    identity=_identity(job),
+                    built_from=1,
+                )
+            ]
 
     assert [path.is_file() for path in written] == [True]
     assert not [r for r in caplog.records if SKIPPED in r.getMessage()]
