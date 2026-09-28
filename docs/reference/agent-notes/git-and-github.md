@@ -87,6 +87,8 @@ git merge-tree --write-tree --name-only HEAD origin/main   # exit 0 means no con
 
 **Local `main` is often behind on purpose.** When the shared checkout is dirty with work that overlaps incoming commits, `git merge --ff-only` aborts. That is correct. Do not force it.
 
+**`git merge` will not start while the index holds a staged change, even a deletion of a path the merge never touches.** It says `Your local changes to the following files would be overwritten by merge` and names the staged path, which reads as a conflict that is not there. Unstaged edits to other files do not stop it. Unstage the path with `git restore --staged -- <path>`, merge, and stage it again; the file stays deleted in the worktree throughout. Hit on 2026-09-28 with a staged `git rm` waiting for its commit.
+
 **A killed `git push -u` can land the push and skip the `-u`.** The tool cuts the command with no output and exit 1, which reads like a failed push, while the branch is on the remote at the right sha and only the upstream config is missing. Read the remote before concluding anything:
 
 ```powershell
