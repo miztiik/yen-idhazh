@@ -30,11 +30,8 @@ you dispatch it.
 STEP 1 - ADOPT OR CLOSE. Run git worktree list, gh pr list and git branch -vv. At
 handover nothing of this plan was in flight. Rows 1, 2, 4, 5 and 6 had merged (#1138,
 #1140, #1137, #1143, #1144), and so had #1146, this run's tool notes and defects 38 to
-47. Three checkouts are left, each with its pull request merged, its remote branch gone
-and its tree clean: p51clock (#1100), p51r5 (#1143) and p51docs (#1146). Sweep them as
-the closing section of execute-a-plan.md says. The folder yen-idhazh.worktrees/p51r2 is
-no longer a worktree: a language server held six files in its node_modules, so delete it
-once they are free. The local branches of rows 1, 2, 4 and 6 show ": gone"; prune them.
+47. This run's worktrees, local branches and leftover folders were all swept on
+2026-09-28, so any plan 51 checkout you find was made after the handover.
 
 STEP 2 - DISPATCH. Row 7 is ready now: row 4 (#1137) and plan 50's row 11 (#1136) have
 merged, and the owner ruled on 2026-09-28 that this plan builds it, as its decision 8
