@@ -302,7 +302,17 @@ def test_a_replay_that_conflicts_is_aborted_and_nothing_is_pushed(
     history.add("2026-05-02T09:00:00Z", "the side's line", {"docs/line.md": "side\n"})
     git(history.author, "checkout", "--quiet", "main")
     history.add("2026-05-01T09:00:00Z", "main's line", {"docs/line.md": "main\n"})
-    subprocess.run(["git", "merge", "--quiet", "side"], cwd=history.author, check=False, capture_output=True)
+    conflicted = subprocess.run(
+        ["git", *SEED_IDENTITY, "merge", "--quiet", "side"],
+        cwd=history.author,
+        env=os.environ | {"GIT_AUTHOR_DATE": _epoch("2026-05-03T09:00:00Z")},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert conflicted.returncode != 0 and (history.author / ".git" / "MERGE_HEAD").is_file(), (
+        f"the two sides had to stop the merge on a conflict: {conflicted.stderr}"
+    )
     write(history.author / "docs" / "line.md", "both\n")
     dated_git(history.author, "2026-05-03T09:00:00Z", "add", "--all")
     dated_git(history.author, "2026-05-03T09:00:00Z", "commit", "--quiet", "--no-edit")
