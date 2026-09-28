@@ -120,15 +120,19 @@ async function addTab(page: Page): Promise<void> {
 
 /** Tabs added one at a time until the row cannot hold them, so the list has to
  * scroll. How many that takes depends on how wide today's tabs are, which is
- * why it is counted rather than fixed. */
+ * why it is counted rather than fixed. A list that wraps instead stops the
+ * count too, and the one-row check then says so. */
 async function addTabsUntilTheListScrolls(page: Page): Promise<number> {
 	for (let added = 1; added <= 12; added += 1) {
 		await addTab(page);
-		const scrolls = await page.evaluate(() => {
+		const full = await page.evaluate(() => {
 			const list = document.querySelector('[data-console-nav] ul') as HTMLElement;
-			return list.scrollWidth > list.clientWidth;
+			const tops = [...list.querySelectorAll('[data-console-tab]')].map((tab) =>
+				Math.round(tab.getBoundingClientRect().top)
+			);
+			return list.scrollWidth > list.clientWidth || new Set(tops).size > 1;
 		});
-		if (scrolls) return added;
+		if (full) return added;
 	}
 	throw new Error('twelve more tabs still fitted one row, so the list never had to scroll');
 }
@@ -169,6 +173,9 @@ for (const { name, grow, mustScroll } of CASES) {
 		// One row: every tab starts at one height, the control sits inside the
 		// strip's own band, and the strip is shorter than two tabs stacked.
 		expect(new Set(at.tabs.map((tab) => tab.top)).size, 'the tabs stand on more than one row').toBe(1);
+		// And one height: the active route's rule is each tab's bottom edge, so a
+		// shorter tab - one with no worst state - would float it above the others.
+		expect(new Set(at.tabs.map((tab) => tab.height)).size, 'the tabs are not one height').toBe(1);
 		const tallest = Math.max(...at.tabs.map((tab) => tab.height));
 		expect(at.height, `the stuck strip is ${at.height}px, two rows of ${tallest}px tabs`).toBeLessThan(
 			2 * tallest

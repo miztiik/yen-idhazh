@@ -119,6 +119,7 @@
 	   9rem cleared 360 and still stacked five deep at 320, which is the same
 	   defect one screen narrower. */
 	.tab-slot {
+		display: flex;
 		flex: 1 1 8rem;
 		min-inline-size: 0;
 	}
@@ -126,8 +127,12 @@
 	/* The whole block is the target, not the word at the top of it. The touch
 	   target is the 2.75rem floor, so the padding pays for looks and not for
 	   reach - and the three rows of tabs above the band on a phone is where every
-	   pixel of it is charged three times. */
+	   pixel of it is charged three times. It fills its slot, which is as tall as
+	   the row, so the active route's rule sits on one line under every tab - a
+	   tab with no worst state included. */
 	.tab {
+		flex: 1 1 auto;
+		min-inline-size: 0;
 		display: flex;
 		flex-direction: column;
 		gap: 2px;
