@@ -85,6 +85,32 @@ def owned_tree(context: TaskContext, tree: Path) -> Path | None:
     return tree if relative in context.owned_folders else None
 
 
+def whole_months_before(tree: Path | None, first_month: str | None) -> list[Aged]:
+    """Every file of every month older than `first_month`, month by month, oldest first.
+
+    For a ledger that files by day under a window counted in months: a month
+    goes whole or not at all, because `day_shards.shards_by_month` groups the
+    files each month holds.
+    """
+    from idhazh import day_shards
+    from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
+
+    if tree is None or first_month is None:
+        return []
+    by_month = day_shards.shards_by_month(tree, days=UNBOUNDED_WINDOW)
+    return [
+        Aged(path=path, day=day_shards.date_of(path))
+        for month in sorted(by_month)
+        if month < first_month
+        for path in by_month[month]
+    ]
+
+
+def first_day_of(month: str | None) -> date | None:
+    """The first day of a `YYYY-MM` month, or None for no month at all."""
+    return None if month is None else date.fromisoformat(f"{month}-01")
+
+
 def take_files(
     context: TaskContext,
     aged: Iterable[Aged],
