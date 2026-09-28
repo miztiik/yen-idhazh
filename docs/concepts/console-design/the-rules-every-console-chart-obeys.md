@@ -334,7 +334,7 @@ tooltip needs a mouse held still over the mark: a thumb cannot raise it, a
 keyboard cannot raise it, and on a 7 px square it covers the neighbours being
 compared. Every figure and every word such a tooltip held now sits in its
 chart's strip, and the sentence stays on the mark as its accessible name. On
-2026-09-28, before this rule, the canary console carried 130 of them inside
+2026-09-28, before this rule, the canary console carried 121 of them inside
 charts across the five routes, and 28 SVG `<title>` elements in 14 files.
 
 **A trend line in a card or a list row reads into a strip too.** A KPI card's
