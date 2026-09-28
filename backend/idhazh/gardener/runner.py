@@ -31,7 +31,9 @@ caller that could not read it is refused before any task runs.
 every file it wrote is checked, on a dry run too, because the check is over the
 selection rather than over what was deleted. A path outside is exit 2, and
 nothing is handed on to land. A collection task is checked on what it wrote
-alone: what it takes lives on GitHub, not in this repository.
+alone: what it takes lives on GitHub, not in this repository. A report a task
+files through the ledger door, into a ledger its declaration `appends_to`, is
+held to that ledger and the wake's day instead, and it lands on a dry run too.
 
 **One record per shard, always.** Every task adds its row, a dry run included,
 so a shard of nothing but dry runs still writes one file and still lands it.
@@ -289,6 +291,35 @@ def _refuse_a_path_outside(ran: _Ran, tasks: Mapping[str, TaskPolicy]) -> None:
         )
 
 
+def _refuse_an_append_outside(ran: _Ran, today: str) -> None:
+    """Every report a task filed is a fresh raw file of a ledger it declared, under the wake's day.
+
+    Held the way the shard's own record is held, because it is the same kind of
+    write: one new file the ledger door named, which can overwrite nothing.
+    """
+    context = ran.context
+    for appended in ran.outcome.appended:
+        path = context.repo_root / appended
+        for which in context.policy.appends_to:
+            try:
+                expected = ledger.raw_path(
+                    context.state_dir,
+                    which,
+                    today,
+                    uuid.UUID(path.stem),
+                    fmt=Format(path.suffix.removeprefix(".")),
+                )
+            except ValueError:
+                continue
+            if expected == path:
+                break
+        else:
+            raise ShardRefusedError(
+                f"{ran.name} filed {appended}, which is not a report of a ledger it appends "
+                "to under today's day. Nothing is staged"
+            )
+
+
 def _record(
     ran: Sequence[_Ran], *, state_dir: Path, today: str, identity: WriterIdentity, ended: str
 ) -> Path:
@@ -391,6 +422,7 @@ def run(
             )
             done = _run_one(name, bound[name], context, resolved[name])
             _refuse_a_path_outside(done, settings.tasks)
+            _refuse_an_append_outside(done, today.isoformat())
             ran.append(done)
         ended = clock().strftime(_INSTANT)
         record = _record(
@@ -406,11 +438,13 @@ def run(
     live = [each for each in ran if not each.context.policy.dry_run]
     recorded = record.relative_to(repo_root).as_posix()
     wrote = {path for each in live for path in each.outcome.written}
+    # A report lands dry run or not: it is what a dry run exists to produce.
+    reported = {path for each in ran for path in each.outcome.appended}
     landing = Shard(
         index=shard,
         task_names=tuple(names),
         record_path=recorded,
-        written_paths=frozenset({recorded, *wrote}),
+        written_paths=frozenset({recorded, *wrote, *reported}),
         deleted_paths=frozenset(
             path
             for each in live

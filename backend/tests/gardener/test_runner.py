@@ -188,6 +188,51 @@ def test_a_task_that_reaches_outside_what_it_owns_stops_the_shard_before_anythin
     assert git(checkout, "status", "--porcelain", "--", "state") == ""
 
 
+#: One folder for each fixture task that files a report, so each owns something.
+REPORT_FILES = {"state/reporter/.keep": "", "state/astray/.keep": "", "state/late/.keep": ""}
+
+#: Where a report filed on the wake's day sits, up to the name the ledger door mints.
+TODAY_S_REPORTS = "state/raw/visual-prunes/2026/09/27/"
+
+
+def test_a_report_filed_into_a_ledger_the_task_appends_to_lands_on_a_dry_run(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A report is what a dry run is for, so it lands while every deletion is held back."""
+    origin, checkout, settings = a_garden(tmp_path, monkeypatch, "report", REPORT_FILES)
+    assert settings.tasks["reporter"].dry_run
+
+    outcome, _ = ran(("reporter",), settings, checkout, "garden_tasks_report", monkeypatch)
+
+    assert outcome.exit_code == EXIT_OK
+    assert outcome.landing is not None
+    reports = sorted(
+        path for path in outcome.landing.written_paths if path.startswith(TODAY_S_REPORTS)
+    )
+    assert len(reports) == 1, outcome.landing.written_paths
+    assert on_origin(origin, reports[0]) is not None, "the report was filed and never landed"
+
+
+@pytest.mark.parametrize("name", ["astray", "late"])
+def test_a_report_outside_the_ledgers_a_task_appends_to_today_stops_the_shard(
+    name: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A ledger the declaration never names, or a day that is not the wake's, is refused."""
+    origin, checkout, settings = a_garden(tmp_path, monkeypatch, "report", REPORT_FILES)
+    before = commits_on(origin)
+
+    outcome, said = ran((name,), settings, checkout, "garden_tasks_report", monkeypatch)
+
+    assert outcome.exit_code == EXIT_INTEGRITY
+    assert outcome.record is None, "a record was written for a shard that filed astray"
+    assert any(
+        f"{name} filed state/raw/visual-prunes/" in line
+        and "which is not a report of a ledger it appends to under today's day" in line
+        for line in said
+    ), said
+    assert commits_on(origin) == before
+
+
 def test_a_folder_the_commit_holds_and_the_checkout_lacks_fails_its_task(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

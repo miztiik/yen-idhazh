@@ -103,6 +103,15 @@ no ledger family or ledger root claims. A collection task is checked on what it
 wrote alone: what it takes lives on GitHub. The record the shard writes is the
 one write no task owns.
 
+**A report a task files is held to the ledger it appends to, not to what it
+owns.** A declaration's `appends_to` names the ledgers a task may file a report
+of its own into, through the ledger door: `visual-prune` files one
+`visual-prunes` row a pass, whatever it found. Each report must be a fresh raw
+file of one of those ledgers under the wake's day, or the shard stops before
+anything is staged, the way it stops for a path outside what a task owns. A
+report lands on a dry run too, because what a dry run found is the thing it
+exists to report; every deletion it named is still held back.
+
 ## The record
 
 One record per shard, always. Every task adds its row - a
@@ -121,7 +130,8 @@ working and began to publish. A slow push is therefore never read as a slow task
 `backend/utilities/gardener_publish.py` is the only code that pushes. It is the
 entry point a shard runs: it reads the commit the checkout is at, calls the
 runner, and lands the `Shard` the runner hands back - the record, every path the
-shard's live tasks wrote and deleted, and the commit message. Each attempt
+shard's live tasks wrote and deleted, every report any of its tasks filed, and
+the commit message. Each attempt
 fetches `main`, resets the index to it with `--mixed`, stages exactly those
 writes and deletions, checks what it staged, commits as
 `miztiik <miztiik@users.noreply.github.com>` and pushes. A lost push waits a

@@ -1,4 +1,9 @@
-"""Which pictures may be deleted, how are they found, and what does a run say it left?"""
+"""Which pictures may be deleted, how are they found, and what does a run say it left?
+
+A pass is the gardener's `visual-prune` task, run through its shipped
+declaration with only the knobs a test names changed, and what it says is the
+row it filed through the ledger door.
+"""
 
 from __future__ import annotations
 
@@ -12,14 +17,14 @@ from typing import Any, Final
 
 import pytest
 
-from idhazh import ledger, retention
+from idhazh import ledger, site_weight
 from idhazh.contracts.base import ITEM_ID_PATTERN
 from idhazh.contracts.knobs.collect import CollectConfig
 from idhazh.contracts.knobs.observability import ObservabilityConfig
 from idhazh.contracts.knobs.retention import RetentionConfig
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.visual_prune import VisualPruneRow
-from idhazh.retention import oldest_visual, prune, prune_row, visuals_older_than
+from idhazh.retention import oldest_visual, prune, visuals_older_than
 from idhazh.site_weight import SiteSize, measure
 from idhazh.stages.prune_state import stage_prune_state
 
@@ -27,6 +32,7 @@ from ._trees import (
     PRUNE_RUN_ID,
     site,
 )
+from ._visual_prune import pruned, published, window
 
 
 def test_only_visuals_are_candidates(tmp_path: Path) -> None:
@@ -61,12 +67,12 @@ def test_the_day_s_own_payloads_are_never_candidates(tmp_path: Path) -> None:
 
 def test_an_enabled_policy_keeps_both_of_the_day_s_own_payloads(tmp_path: Path) -> None:
     """The prune runs for real, and the two files it may never touch are still there."""
-    root = site(tmp_path, {"2020-01-01": ["old-0000000003.json"]})
+    root = published(tmp_path, {"2020-01-01": ["old-0000000003.json"]})
     (root / "2020" / "01" / "01" / "run.json").write_text('{"n": 1}', encoding="utf-8")
 
-    result = prune(root, RetentionConfig(image_months=6, dry_run=False), date(2026, 8, 21))
+    row = pruned(root, date(2026, 8, 21), window=window(6), dry_run=False)
 
-    assert result.deleted == 1
+    assert row.deleted == 1
     assert not (root / "2020" / "01" / "01" / "old-0000000003.json").exists()
     assert (root / "2020" / "01" / "01" / "digest.json").exists()
     assert (root / "2020" / "01" / "01" / "run.json").exists()
@@ -78,31 +84,30 @@ def test_a_recent_day_is_never_a_candidate(tmp_path: Path) -> None:
 
 
 def test_a_dry_run_reports_without_deleting(tmp_path: Path) -> None:
-    root = site(tmp_path, {"2020-01-01": ["old-0000000003.webp"]})
-    config = RetentionConfig(image_months=6, dry_run=True)
-    result = prune(root, config, date(2026, 8, 21))
-    assert result.considered == 1
-    assert result.deleted == 0
+    root = published(tmp_path, {"2020-01-01": ["old-0000000003.webp"]})
+    row = pruned(root, date(2026, 8, 21), window=window(6), dry_run=True)
+    assert row.candidates_found == 1
+    assert row.deleted == 0
     assert (root / "2020" / "01" / "01" / "old-0000000003.webp").exists()
 
 
 def test_an_enabled_policy_deletes_the_old_visual_and_keeps_the_day(tmp_path: Path) -> None:
-    root = site(tmp_path, {"2020-01-01": ["old-0000000003.webp"]})
-    config = RetentionConfig(image_months=6, dry_run=False)
-    result = prune(root, config, date(2026, 8, 21))
-    assert result.deleted == 1
+    root = published(tmp_path, {"2020-01-01": ["old-0000000003.webp"]})
+    row = pruned(root, date(2026, 8, 21), window=window(6), dry_run=False)
+    assert row.deleted == 1
     assert not (root / "2020" / "01" / "01" / "old-0000000003.webp").exists()
     assert (root / "2020" / "01" / "01" / "digest.json").exists(), "the day survives its picture"
 
 
 def test_the_fuse_caps_what_one_run_can_delete(tmp_path: Path) -> None:
     """An off-by-one in a date parse must not eat the archive."""
-    root = site(tmp_path, {"2020-01-01": [f"p-{n:010d}.webp" for n in range(10)]})
-    config = RetentionConfig(image_months=6, dry_run=False, max_deletes_per_run=3)
-    result = prune(root, config, date(2026, 8, 21))
-    assert result.deleted == 3
-    assert result.fuse_tripped
-    assert result.considered == 10
+    root = published(tmp_path, {"2020-01-01": [f"p-{n:010d}.webp" for n in range(10)]})
+    row = pruned(
+        root, date(2026, 8, 21), window=window(6), dry_run=False, max_deletes_per_run=3
+    )
+    assert row.deleted == 3
+    assert row.fuse_tripped
+    assert row.candidates_found == 10
 
 
 #: The first published day of the trees the four tests below run against. They
@@ -323,18 +328,17 @@ def test_the_run_reports_the_backlog_the_fuse_left_behind(tmp_path: Path) -> Non
     A run that deleted 200 and skipped 0 has cleared its backlog. A run that
     deleted 200 and skipped 100 has not. `deleted` is 200 in both.
     """
-    root = site(tmp_path, {"2020-01-01": [f"p-{n:010d}.webp" for n in range(300)]})
-    config = RetentionConfig(image_months=6, dry_run=False)
-    assert config.max_deletes_per_run == 200
+    root = published(tmp_path, {"2020-01-01": [f"p-{n:010d}.webp" for n in range(300)]})
 
-    result = prune(root, config, date(2026, 8, 21))
+    row = pruned(root, date(2026, 8, 21), window=window(6), dry_run=False)
 
-    assert result.deleted == config.max_deletes_per_run
-    assert result.skipped_by_fuse == 100, "the 100 the fuse would not let this run reach"
-    assert result.fuse_tripped
-    assert result.deleted + result.skipped_by_fuse == result.considered == 300
+    assert row.max_deletes_per_run == 200, "the shipped fuse, not a scaled-down one"
+    assert row.deleted == row.max_deletes_per_run
+    assert row.skipped_by_fuse == 100, "the 100 the fuse would not let this run reach"
+    assert row.fuse_tripped
+    assert row.deleted + row.skipped_by_fuse == row.candidates_found == 300
 
-    finished = prune(root, config, date(2026, 8, 21))
+    finished = pruned(root, date(2026, 8, 21), window=window(6), dry_run=False)
     assert finished.deleted == 100
     assert finished.skipped_by_fuse == 0, "a second pass clears what the first could not"
     assert not finished.fuse_tripped
@@ -351,16 +355,15 @@ def test_a_dry_run_reports_the_same_backlog_it_would_have_left(tmp_path: Path) -
     against 300 found is a run that reported, and it is readable off the numbers
     without cross-referencing the `dry_run` cell.
     """
-    root = site(tmp_path, {"2020-01-01": [f"p-{n:010d}.webp" for n in range(300)]})
-    config = RetentionConfig(image_months=6, dry_run=True)
+    root = published(tmp_path, {"2020-01-01": [f"p-{n:010d}.webp" for n in range(300)]})
 
-    result = prune(root, config, date(2026, 8, 21))
+    row = pruned(root, date(2026, 8, 21), window=window(6), dry_run=True)
 
-    assert result.dry_run
-    assert result.deleted == 0
-    assert result.considered == 300
-    assert result.skipped_by_fuse == 100, "the fuse's own count, unchanged by the pretending"
-    assert result.deleted + result.skipped_by_fuse < result.considered
+    assert row.dry_run
+    assert row.deleted == 0
+    assert row.candidates_found == 300
+    assert row.skipped_by_fuse == 100, "the fuse's own count, unchanged by the pretending"
+    assert row.deleted + row.skipped_by_fuse < row.candidates_found
     assert len(list(root.rglob("*.webp"))) == 300
 
 
@@ -392,15 +395,14 @@ def test_the_bytes_are_the_files_that_actually_left_the_tree(
     really holds - is kept by the last line here, and by
     `test_the_after_total_counts_only_the_files_that_actually_left` below.
     """
-    root = site(tmp_path, {"2020-01-01": ["a-0000000001.webp", "b-0000000002.webp"], "2026-08-20": ["new-0000000004.webp"]})
-    config = RetentionConfig(image_months=6, dry_run=False)
+    root = published(tmp_path, {"2020-01-01": ["a-0000000001.webp", "b-0000000002.webp"], "2026-08-20": ["new-0000000004.webp"]})
 
-    result = prune(root, config, date(2026, 8, 21))
+    row = pruned(root, date(2026, 8, 21), window=window(6), dry_run=False)
 
-    assert result.deleted == 2
-    assert result.bytes_reclaimed == 2000, "the two 1,000-byte pictures and nothing else"
-    assert result.bytes_before - result.bytes_after == result.bytes_reclaimed
-    assert result.bytes_after == measure(root).bytes_used
+    assert row.deleted == 2
+    assert row.bytes_reclaimed == 2000, "the two 1,000-byte pictures and nothing else"
+    assert row.payload_bytes_before - row.payload_bytes_after == row.bytes_reclaimed
+    assert row.payload_bytes_after == measure(root).bytes_used
 
 
 def test_a_prune_reaches_its_after_total_without_walking_the_tree_again(
@@ -412,7 +414,7 @@ def test_a_prune_reaches_its_after_total_without_walking_the_tree_again(
     had just removed the files, so it had their sizes. Counted rather than timed,
     because the cost this row is about is what gets read.
     """
-    root = site(tmp_path, {"2020-01-01": ["a-0000000001.webp", "b-0000000002.webp"], "2026-08-20": ["new-0000000004.webp"]})
+    root = published(tmp_path, {"2020-01-01": ["a-0000000001.webp", "b-0000000002.webp"], "2026-08-20": ["new-0000000004.webp"]})
     walked = 0
     unpatched = measure
 
@@ -421,12 +423,12 @@ def test_a_prune_reaches_its_after_total_without_walking_the_tree_again(
         walked += 1
         return unpatched(*args, **kwargs)
 
-    monkeypatch.setattr(retention, "measure", counted)
-    result = prune(root, RetentionConfig(image_months=6, dry_run=False), date(2026, 8, 21))
+    monkeypatch.setattr(site_weight, "measure", counted)
+    row = pruned(root, date(2026, 8, 21), window=window(6), dry_run=False)
 
-    assert result.deleted == 2
+    assert row.deleted == 2
     assert walked == 1, "the tree is read once and the after-total retracts what left it"
-    assert result.bytes_after == unpatched(root).bytes_used
+    assert row.payload_bytes_after == unpatched(root).bytes_used
 
 
 def test_the_after_total_counts_only_the_files_that_actually_left(
@@ -439,7 +441,7 @@ def test_the_after_total_counts_only_the_files_that_actually_left(
     the pass retracts a file only once the file is gone, and one that stayed is
     charged to neither number.
     """
-    root = site(tmp_path, {"2020-01-01": ["a-0000000001.webp", "b-0000000002.webp"], "2026-08-20": ["new-0000000004.webp"]})
+    root = published(tmp_path, {"2020-01-01": ["a-0000000001.webp", "b-0000000002.webp"], "2026-08-20": ["new-0000000004.webp"]})
     stubborn = root / "2020" / "01" / "01" / "b-0000000002.webp"
     unpatched = Path.unlink
 
@@ -448,12 +450,12 @@ def test_the_after_total_counts_only_the_files_that_actually_left(
             unpatched(self, *args, **kwargs)
 
     monkeypatch.setattr(Path, "unlink", refuse)
-    result = prune(root, RetentionConfig(image_months=6, dry_run=False), date(2026, 8, 21))
+    row = pruned(root, date(2026, 8, 21), window=window(6), dry_run=False)
     monkeypatch.undo()
 
     assert stubborn.exists(), "the fixture has to leave one file behind or it proves nothing"
-    assert result.bytes_reclaimed == 1000, "one picture left the tree, not the two it tried"
-    assert result.bytes_after == measure(root).bytes_used
+    assert row.bytes_reclaimed == 1000, "one picture left the tree, not the two it tried"
+    assert row.payload_bytes_after == measure(root).bytes_used
 
 
 def test_the_oldest_picture_kept_says_whether_the_policy_has_caught_up(tmp_path: Path) -> None:
@@ -462,35 +464,35 @@ def test_the_oldest_picture_kept_says_whether_the_policy_has_caught_up(tmp_path:
     None is a different fact from "the oldest one is recent", and a stand-in date
     would read like the second.
     """
-    root = site(tmp_path, {"2020-01-01": ["old-0000000003.webp"], "2026-08-20": ["new-0000000004.webp"]})
-    config = RetentionConfig(image_months=6, dry_run=False)
+    root = published(tmp_path, {"2020-01-01": ["old-0000000003.webp"], "2026-08-20": ["new-0000000004.webp"]})
 
-    result = prune(root, config, date(2026, 8, 21))
+    row = pruned(root, date(2026, 8, 21), window=window(6), dry_run=False)
 
-    assert result.cutoff_date is not None
-    assert result.oldest_kept == date(2026, 8, 20)
-    assert result.oldest_kept >= result.cutoff_date, "nothing older than the line is left"
+    assert row.cutoff_date is not None
+    assert row.oldest_kept == "2026-08-20"
+    assert row.oldest_kept >= row.cutoff_date, "nothing older than the line is left"
 
-    text_only = site(tmp_path / "text", {"2026-08-20": []})
-    assert prune(text_only, config, date(2026, 8, 21)).oldest_kept is None
+    text_only = published(tmp_path / "text", {"2026-08-20": []})
+    after = pruned(text_only, date(2026, 8, 21), window=window(6), dry_run=False)
+    assert after.oldest_kept is None
 
 
-def test_a_switched_off_policy_still_reports_the_tree_it_looked_at(tmp_path: Path) -> None:
-    """What ships today. A report of "nothing to do" is not a row worth skipping.
+def test_a_window_of_forever_still_reports_the_tree_it_looked_at(tmp_path: Path) -> None:
+    """A report of "nothing to do" is not a row worth skipping.
 
     A ledger written only on the runs that deleted something has no baseline, so
     the first row would arrive on the day the policy started working and there
     would be nothing to compare it against.
     """
-    root = site(tmp_path, {"2020-01-01": ["old-0000000003.webp"]})
+    root = published(tmp_path, {"2020-01-01": ["old-0000000003.webp"]})
 
-    result = prune(root, RetentionConfig(), date(2026, 8, 21))
+    row = pruned(root, date(2026, 8, 21), window=window(-1))
 
-    assert result.cutoff_date is None, "a disabled policy draws no line"
-    assert result.considered == 0
-    assert result.skipped_by_fuse == 0
-    assert result.oldest_kept == date(2020, 1, 1), "the backlog is still reported"
-    assert result.bytes_before == result.bytes_after == measure(root).bytes_used
+    assert row.cutoff_date is None, "a window of forever draws no line"
+    assert row.candidates_found == 0
+    assert row.skipped_by_fuse == 0
+    assert row.oldest_kept == "2020-01-01", "the backlog is still reported"
+    assert row.payload_bytes_before == row.payload_bytes_after == measure(root).bytes_used
 
 
 def test_the_row_carries_the_policy_that_produced_it(tmp_path: Path) -> None:
@@ -499,19 +501,13 @@ def test_the_row_carries_the_policy_that_produced_it(tmp_path: Path) -> None:
     The policy is on the row rather than looked up, because config moves and a
     row read a year later has to say which policy it was written under.
     """
-    root = site(tmp_path, {"2020-01-01": [f"p-{n:010d}.webp" for n in range(300)]})
-    config = RetentionConfig(image_months=6, dry_run=False)
+    root = published(tmp_path, {"2020-01-01": [f"p-{n:010d}.webp" for n in range(300)]})
 
-    row = prune_row(
-        prune(root, config, date(2026, 8, 21)),
-        config,
-        date_stamp="2026-08-21",
-        run_id=PRUNE_RUN_ID,
-    )
+    row = pruned(root, date(2026, 8, 21), window=window(6), dry_run=False)
 
     assert row.policy_months == 6
     assert row.max_deletes_per_run == 200
-    assert row.cutoff_date == "2026-02-22", "six 30-day months back from 2026-08-21"
+    assert row.cutoff_date == "2026-02-22", "180 days back from 2026-08-21"
     assert row.candidates_found == 300
     assert row.deleted == 200
     assert row.skipped_by_fuse == 100
@@ -640,9 +636,9 @@ def test_a_directory_that_is_not_a_date_is_left_alone(tmp_path: Path) -> None:
     directory - and none of them is the prune's business. Inside a year the rule
     inverts, because inside a year the layout is ours: see the fault test above.
     """
-    stray = tmp_path / "assets" / "brand"
+    stray = published(tmp_path, {}) / "assets" / "brand"
     stray.mkdir(parents=True)
     (stray / "logo.svg").write_bytes(b"x" * 10)
-    config = RetentionConfig(image_months=1, dry_run=False)
-    assert prune(tmp_path, config, date(2026, 8, 21)).deleted == 0
+    row = pruned(stray.parents[1], date(2026, 8, 21), window=window(1), dry_run=False)
+    assert row.deleted == 0
     assert (stray / "logo.svg").exists()

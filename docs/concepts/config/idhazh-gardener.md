@@ -41,12 +41,13 @@ Every declaration carries these keys, whatever its kind:
 | `dry_run` | `bool`, no default | True reports what a live pass would take and takes nothing |
 | `max_deletes_per_run` | a count, or `null` | The most one pass deletes. `null` is no ceiling and `0` is a survey. A collection pruned through GitHub's API spends a request a delete, so `null` there can use up the token's hourly allowance on one backlog |
 | `owns` or `owns_everything_else_under` | a list of folders | Exactly one of the two. `owns` names repository-relative folders; the second is the complement: every folder under its roots that no other task owns and no ledger family claims |
+| `appends_to` | a list of ledger names, default `[]` | The ledgers a task files a report of its own into, through the ledger door: one new raw file under the wake's day, on a dry run too, because a report is what a dry run is for. Appending is not owning: the door mints each file's name, so it can overwrite nothing, and the runner refuses a report anywhere else before anything is staged |
 
 Each kind adds its own keys, and a key on the wrong kind is refused by name:
 
 | Kind | Its own keys |
 | --- | --- |
-| `retention` | `series`, one window per series, for `telemetry-aggregate` alone |
+| `retention` | `series`, one window per series, for `scores` and `telemetry-aggregate` alone |
 | `collection` | none yet |
 | `compaction` | `ledger` (required); `raw_index_keep_days` (90), `daily_keep_days` (45), `monthly_window` (13 months), `max_periods_per_run` (8), `max_raw_files_per_period` (2000), `compact_after_hours` (24) |
 | `history` | `every_days`, how many whole days apart two rewrites may run. Its `window` is whole days and nothing else, because the squash cuts history at 00:00 UTC on the day that many days back |
