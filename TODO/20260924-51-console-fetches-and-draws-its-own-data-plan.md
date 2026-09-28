@@ -39,17 +39,22 @@ settled by Carmack and Fowler before dispatch - row 7's decisions 10 to 18 and
 deviations 7 to 12 - and its parquet reader by the owner (deviations 14 and 15).
 The person was told the same evening that plan 50's row 9 no longer waits on this
 plan, and that its readers import sliceFromDisk() from frontend/src/lib/server/.
-Nothing is ready now. Row 3 needs packed files of its three ledgers on main, and row
-8 needs row 3 (deviation 16). Measured on main at e5a0f8718: state/compact/ does not
-exist, the three ledgers are still CSV, and every packing task is report-only.
-  after packed files of    row 3. They reach main by the route the person picks in
-  the three ledgers are    OPEN FOR THE PERSON below, and never before plan 50's row
-  on main                  9 merges. Row 2's text says row 3 must date the
+Row 9 is ready now; it needs only row 7. Row 3 needs packed files of its three
+ledgers on main, and row 8 needs rows 3 and 9 (deviations 16 and 17). Measured on
+main at e5a0f8718: state/compact/ does not exist, the three ledgers are still CSV,
+and every packing task is report-only.
+  now                      row 9. Settle its one open question at dispatch, with
+                           Carmack and Fowler: whether an index is kept for the
+                           page's life.
+  after packed files of    row 3. They reach main by whatever route plan 50 and the
+  the three ledgers are    person take - this plan asks nothing of plan 50
+  on main                  (deviation 18) - and never before plan 50's row 9
+                           merges. Row 2's text says row 3 must date the
                            completeness sentence from the newest compacted day, not
                            from generated_at, but row 3's file list does not name
                            frontend/src/lib/console/completeness.ts. Settle it at
                            dispatch.
-  after rows 3 and 7       row 8. Get Susan's ruling on defect 38 first: does speed or
+  after rows 3, 7 and 9    row 8. Get Susan's ruling on defect 38 first: does speed or
                            placement count decide which machines are left without a
                            colour? Defect 39 rides on it. Row 8's file list also misses
                            two things other text gives it: defect 44 says row 8 moves
@@ -87,18 +92,10 @@ for it (docs/reference/agent-notes/git-and-github.md), and a plan-doc stamp push
 straight to the trunk is such a commit. GitHub's own squash merges carry the same
 offset; that is defect 48, and it is not this plan's to fix.
 
-OPEN FOR THE PERSON. Asked on 2026-09-28 at about 21:30 UTC, in the shape CLAUDE.md
-section 0c gives, and not yet answered:
-  1. How packed files of item-health, scores and host-fingerprint first reach main.
-     Plan 50's row 9 ships their three packing tasks report-only, and every reader it
-     moves reads packed files only (plan 50 deviations 132 and 133). The choices put
-     to the person: row 9's one-time migration packs every finished day itself and
-     the tasks stay report-only; or the three tasks go live in row 9's pull request
-     with max_periods_per_run raised from 8; or they onboard report-only, and four
-     console routes show "missing" until they go live. The plan owner recommended
-     the first.
-  Answered on 2026-09-28: plan 55 is the query page's own plan, and d3-sankey lays the
-  flow out (deviation 13).
+OPEN FOR THE PERSON. Nothing. The person answered on 2026-09-28: plan 55 is the query
+page's own plan; d3-sankey lays the flow out (deviation 13); and this plan leaves plan
+50's plan alone (deviation 18), so how packed files first reach main is plan 50's
+question and the person's, not this plan's.
 ```
 
 ### Deviations and owner rulings to date
@@ -122,7 +119,9 @@ Only what no row records. Each row's own departures are in its decisions and its
 | 13 | 4 | Decision 6: the flow's layout is our own arithmetic on `d3-shape`, and `d3-sankey` is not taken | d3-sankey 0.12.3 lays the flow out. The flow keeps two rules of its own on top of it: each node sits in the column of its depth, so a drop stays beside its stage, and each column is stacked again from the shared top edge. The owner put the added weight at about 2 KB gzipped and asked for no measurement. The vocabulary page carries the reasons | Owner, 2026-09-28 |
 | 14 | 7 | Decision 11 as set at dispatch: the engine is pinned exactly at `1.33.1-dev57.0` | The engine takes a caret range like every other dependency, and the test is the guard: the door's oracle runs against whatever version is installed, so an upgrade that changed a behaviour turns it red on the pull request that raised the version, which a pin would only have delayed. Plan 55 takes the engine the same way | Owner, 2026-09-28 |
 | 15 | 7 | Row 7's scope: no config change. Its ESCALATE note: host the parquet add-on on this site, checked against a digest, with the native engine for the Node half | The engine downloads its parquet add-on from DuckDB's own host, as it does on any site. One config value, `ledger.engine_extension_repository`, tells the engine where and gives the page's `connect-src` that one origin. The door's oracle downloads the add-on once on a fresh machine, which is the one exception to "no test touches the network". The owner ruled that the trust-boundary guardrail does not apply to this download and that the guardrail's text stays as it is | Owner, 2026-09-28 |
-| 16 | 3, 8 | Row 3 depends on plan 50's rows 7 and 9 | Row 3 also needs packed files of its three ledgers on main. Its decision 5 sets each ceiling from a built index, and no index exists until something packs a day. Plan 50's row 9 ships the three packing tasks report-only (plan 50 deviation 98), so row 3 cannot start the day row 9 merges unless packed files reach main another way. Row 9 also misses two readers of these ledgers, `evalRows()` and `itemHealthRows()` in `payload.ts` (plan 50 deviation 132). The person was asked how packed files first reach main (OPEN FOR THE PERSON) | Plan owner, measured on main at e5a0f8718, 2026-09-28 |
+| 16 | 3, 8 | Row 3 depends on plan 50's rows 7 and 9 | Row 3 also needs packed files of its three ledgers on main. Its decision 5 sets each ceiling from a built index, and no index exists until something packs a day. Plan 50's row 9 ships the three packing tasks report-only (plan 50 deviation 98), so row 3 cannot start the day row 9 merges unless packed files reach main another way. Row 9 also misses two readers of these ledgers, `evalRows()` and `itemHealthRows()` in `payload.ts` (plan 50 deviation 132). The person was asked how packed files first reach main, and ruled that this plan leaves plan 50's plan alone (deviation 18) | Plan owner, measured on main at e5a0f8718, 2026-09-28 |
+| 17 | 8, 9 | Plan 52 handed its door work to row 7: a cache for the page's life, one registration a file, and `ledgerReach` (plan 52, "Found while planning", item 2) | Row 7 merged without it, so it is row 9. Row 8 waits on it, because plan 52 asks for it before any panel calls the door | Plan owner, 2026-09-28 |
+| 18 | - | (not in the plan) | The person ruled that this plan leaves plan 50's plan alone, because its owner is busy. This plan's owner had added two lines there that evening, plan 50's deviations 132 and 133, and plan 50's owner has since numbered its own next line after them, so they stay and nothing more is changed there. Plan 50's row 9 now carries the two readers deviation 16 names, so this plan does not take them, and how packed files first reach main is plan 50's question and the person's | Owner, 2026-09-28 |
 
 ## 0. Operating contract
 
@@ -174,7 +173,8 @@ Only what no row records. Each row's own departures are in its decisions and its
 | 5 | One readout strip, every chart, and hover a keyboard can reach | 1, 4 | C | DONE | p51r5 | #1143 | p51-r5-worker |
 | 6 | The ten sufficiency gates and the panel capture group | 4, 5 | C | DONE | p51r6 | #1144 | p51-r6-worker |
 | 7 | The query door module and its two entry points | 4; plan 50's row titled "The index and watermark shapes are declared" | C | DONE | p51r7 | #1154 | p51-r7-worker |
-| 8 | One panel end to end: the browser fetches the ledger and draws it in d3 | 1, 2, 3, 4, 5, 6, 7 | D | PENDING | - | - | - |
+| 8 | One panel end to end: the browser fetches the ledger and draws it in d3 | 1, 2, 3, 4, 5, 6, 7, 9 | D | PENDING | - | - | - |
+| 9 | The door keeps what it fetched for the page's life, and says how far a ledger reaches | 7 | C | PENDING | - | - | - |
 
 **Readiness is the file-disjointness test, not the group letter** (execute-a-plan.md). The letters record which rows the author believed independent; the `Files touched` lists are the fact, and the shared-file notes below are why three depends-on edges exist that the letters do not show.
 
@@ -195,6 +195,8 @@ Only what no row records. Each row's own departures are in its decisions and its
 **Row 3 publishes; it migrates nothing and triggers no compaction.** Plan 50 migrates the ledgers and owns every compaction trigger and its eligibility rule. Row 3 adds the copy step, the allow-list, the ceiling and the test that binds a panel's ledger to that list. It reverts to nothing.
 
 **Row 8 is the proof and lands last.** It rewrites `fleet.ts` into a d3 draw, wires the panel to the query door, and joins the capture group, so it shares `fleet.ts`, `PlatformMixPanel.svelte` and `host-fingerprint.ts` with row 1 and the query door with row 7, and cannot run beside them.
+
+**Row 9 is the door work plan 52 handed this plan, which row 7 merged without** (deviation 17). It needs only row 7, so it is the one row ready while rows 3 and 8 wait on plan 50. Row 8 waits on it, because plan 52 asks for it before any panel calls the door.
 
 ## 2. The contracts
 
@@ -1078,12 +1080,42 @@ given and predicts nothing about the next job. Darker bars are faster machines.
   | 4 | A `beside` readout placement for the wide viewport | It was justified only by a pixel measurement of empty desktop space, and it forks the shared readout contract row 5 just unified | Zero; costs the single readout contract | Susan |
   | 5 | Keep the machine ramp categorical | It cannot carry speed, which is the panel's whole point; the reader could not tell a fast machine from a slow one by colour | Zero; costs the panel its lede | Susan |
 
+---
+
+### Row #9 - The door keeps what it fetched for the page's life, and says how far a ledger reaches
+
+- **Scope:** the door work plan 52 handed this plan (its section "Found while planning, handed to the plans that own them", item 2), which row 7 merged without. Three changes to the query door, and none to what a panel asks it or gets back:
+  - **`ledgerReach(ledger)`** in `frontend/src/lib/data/ledger.ts`, with the signature plan 52 section 2.3 gives: `Promise<{state: 'ok'; first: DateStamp; through: DateStamp} | {state: 'quiet'} | {state: 'missing'} | {state: 'unreachable'; at: DateStamp}>`. It reads `daily.json` and `monthly.json`, starts no engine, and gives one answer a ledger for the page's life. Plan 52's window code anchors a route's span on it.
+  - **A data file is fetched once for the page's life**, keyed by its path and the version its index entry names. Row 7 already passes that key: `ByteSource.data(path, version)`, where the version is the entry's rows and bytes.
+  - **A file is registered with the engine once**, under a name made from that key, and **every name sits under one directory, `door/`**. Today each slice registers its files under fresh names and drops them when it ends.
+
+  **Why now.** Plan 52 counted one route at 30 days: about 590 requests and up to 14 copies of one window without the cache, about 62 requests and one copy with it (Carmack). Its route rows ask one window from up to fifteen queries a route, and changing how the door spends requests after a panel calls it would move that panel's numbers under it. **No page, no panel.**
+- **Files touched:** `frontend/src/lib/data/ledger.ts`, `frontend/src/lib/data/slice-reader.ts`, `frontend/src/lib/data/slice-query.ts` (the engine takes a key with each file), `frontend/src/lib/data/engine.ts` (the names and how long a registration lives), `frontend/src/lib/server/ledger-disk.ts` if the build-time reader shares the change, `frontend/tests/ledger-door.spec.ts`, `docs/architecture/publishing/how-the-query-door-answers-a-panel.md`
+- **Acceptance gates:** `npm --prefix frontend run test:changed -- --list`, then the selected checks. CI runs the full suite. No browser smoke: this row draws nothing.
+- **Oracle:** **each file crosses the network once and enters the engine once.** Over the fixture ledger, with a byte source and an engine that count what they are asked: two slices over overlapping spans fetch each data file once and register it once; a file whose index entry names a new version is fetched and registered again; every registered name starts with `door/`; and `ledgerReach` answers the first and newest day the two indexes name, or `missing`, `quiet` or `unreachable` wherever `slice()` would, with no engine started. It cannot settle whether a route is fast enough; plan 52's row titled **The query door, measured at the console's real volume** does.
+- **Settle at dispatch** (Carmack and Fowler): row 7 wrote that an index is never read from a cache, because file selection acts on what it says, and plan 52 asks for each index to be kept for the page's life. Which one holds for a tab left open across a deploy is the open question, and the build-time reader's answer may differ from the browser's.
+- **Decisions:**
+
+  | # | Decision | Authority |
+  | --- | --- | --- |
+  | 1 | **This row lands before any panel calls the door**, so row 8 waits on it (deviation 17) | Plan 52, found while planning, item 2 |
+  | 2 | **Every registered name sits under `door/`.** Plan 55's seal belongs to the whole engine, not to one connection: measured 2026-09-28, a seal set from one connection refused a file outside the allowed directory on a second. A tab keeps one engine across console pages, so once plan 55's page has sealed it, a panel file outside `door/` would read nothing. Choosing the directory costs nothing here, because this row renames the files anyway | Plan owner, measured 2026-09-28 (plan 55 section 2.6) |
+  | 3 | **A column-shaped result, a "newest N days" ask and a structured aggregate are not in this row.** Plan 52 names them as the fixes for a miss in its measurement row, so they wait for that reading | Plan 52 section 2.10 |
+
+- **Rejected alternatives:**
+
+  | # | Option | Why rejected | What it would cost to take | Authority |
+  | --- | --- | --- | --- | --- |
+  | 1 | Leave the cache to plan 52's window code | A second cache in front of the door, and plan 55's page, which does not use that code, would pay the full cost | Zero; costs one cache a caller | Plan owner |
+  | 2 | Let plan 52 fall back to asking `slice()` for today to learn a ledger's newest day | By plan 52's own estimate, a 90-day window then reads `unreachable` until about 31 October | Zero; costs the console its longest window for a month | Plan 52 section 2.3 |
+
 ## Dependent plans
 
 - `TODO/20260924-50-idhazh-gardener-plan.md`. Row 3 waits on its rows titled **One compaction task a ledger, two compact periods, and the diagrams move into the page** and **The three ledgers the console's routes read become parquet**. In the other direction, plan 50's row titled **The three ledgers the console's routes read become parquet** waits on this plan's row 7, titled **The query door module and its two entry points** - and row 7 depends only on row 4 and on plan 50's index-shapes row, neither of which reaches that migration, so row 7 lands first and the two pointers resolve without a cycle. **Plan 50 also owns two things this plan relies on**: its compaction writes one row per record, so the door never merges; and its migration row moves today's build-time readers onto row 7's `sliceFromDisk()`, which lives under `frontend/src/lib/server/` (deviation 9), and adds no export of its own. Nothing else in that plan is a predecessor here.
 - `TODO/20260926-54-check-publication-plan.md`. Its run-yield chart landed on `DayReadout` (#1117) and now shares one readout with the run squares in `Run health`; row 5 converts that readout, built in `routes/console/RunHealthPanel.svelte`, with every other chart. Nothing here waits on plan 54.
-- **[`20260926-52-fifty-panels-move-and-six-projections-go-plan.md`](20260926-52-fifty-panels-move-and-six-projections-go-plan.md), a placeholder and not yet a plan**, takes over after row 8. **The panel-by-panel verdict table Susan ruled now lives in plan 52** - all fifty-one panels, each KEEP, REDRAW, REPLACE, DELETE or NEW, with the columns each queries and the chart it becomes. Many of the redraws and new panels exist only because the browser can now query the ledger. One row per route; each row moves that route's panels to the query door and **deletes the projection under `frontend/public/` that fed them**. Rows 4 to 8 here exist to make that plan cheap, not to be it.
+- **[`20260926-52-fifty-panels-move-and-six-projections-go-plan.md`](20260926-52-fifty-panels-move-and-six-projections-go-plan.md)** takes over after row 8, in thirteen rows. Its route rows wait on rows 3 and 8 here, and its window code reads `ledgerReach` from row 9. **The panel-by-panel verdict table Susan ruled now lives in plan 52** - all fifty-one panels, each KEEP, REDRAW, REPLACE, DELETE or NEW, with the columns each queries and the chart it becomes. Many of the redraws and new panels exist only because the browser can now query the ledger. One row per route; each row moves that route's panels to the query door and **deletes the projection under `frontend/public/` that fed them**. Rows 4 to 8 here exist to make that plan cheap, not to be it.
 - **The old charts are evidence of an old limit, not a decision to preserve** (Susan). They were drawn against what a build-time projection could carry - a narrow, pre-summed slice of the columns - so columns of real answers sat unread on every run: why an article was chosen, why a fetch was slow, what the source answered, how old the news was, whether a summary was cut off and reported as a success, which rule refused a reply, and whether a trend moved because of the model or because somebody changed a setting. Plan 52 draws them.
+- [`20260928-55-one-page-queries-every-ledger-plan.md`](20260928-55-one-page-queries-every-ledger-plan.md). Its row 3 edits the door's own files and needs row 9's `door/` names for its seal, so it runs after row 9; its row 4 extends row 3's copy step, so it runs after row 3. Nothing here waits on it.
 - `TODO/20260823-known-defects-plan.md`, defect 33, closes in row 1's pull request.
 
 ## See also
