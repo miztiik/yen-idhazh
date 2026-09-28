@@ -17,15 +17,46 @@
 	 * **It took a fourth and a fifth route on 2026-09-12, and the basis is what
 	 * moved.** At `14rem` one tab filled a 360px phone, so five would have stood
 	 * five deep directly above the band.
+	 *
+	 * **From `frame.breakpoints_px[1]` up it is one row, however many routes
+	 * there are.** The strip sticks to the top of the screen there, and a stuck
+	 * strip that wrapped would cover a second row of every screen. So the list
+	 * scrolls sideways when the tabs are wider than the row, no label is
+	 * shortened to make them fit, and the list opens with the band's worst route
+	 * in view - the one fact on the strip the band cannot give once the band has
+	 * scrolled away.
 	 */
+	import { onMount } from 'svelte';
 	import { base } from '$app/paths';
 	import type { ConsoleRoute, RouteId } from '$lib/console/band';
 
-	let { routes, active }: { routes: ConsoleRoute[]; active: RouteId } = $props();
+	let {
+		routes,
+		active,
+		worst = null
+	}: {
+		routes: ConsoleRoute[];
+		active: RouteId;
+		/** The route the band names as worst, or null when nothing is. */
+		worst?: RouteId | null;
+	} = $props();
+
+	let list = $state<HTMLUListElement>();
+
+	onMount(() => {
+		if (list === undefined || worst === null) return;
+		if (list.scrollWidth <= list.clientWidth) return;
+		const tab = list.querySelector(`[data-console-tab="${worst}"]`);
+		if (tab === null) return;
+		const shown = list.getBoundingClientRect();
+		const box = tab.getBoundingClientRect();
+		if (box.right > shown.right) list.scrollLeft += box.right - shown.right;
+		else if (box.left < shown.left) list.scrollLeft -= shown.left - box.left;
+	});
 </script>
 
 <nav class="console-nav" aria-label="Console sections" data-console-nav>
-	<ul class="tabs">
+	<ul class="tabs" bind:this={list}>
 		{#each routes as route (route.id)}
 			<li class="tab-slot">
 				<a
@@ -38,10 +69,21 @@
 				>
 					<span class="tab-head">
 						<span class="tab-label">{route.label}</span>
-						{#if route.worst}
+						{#if route.worst || route.id === worst}
 							<!-- No health colour, ever. Green, amber and red on a label
-							     would say a route is failing, and a route is a noun. -->
-							<span class="tab-worst" data-console-tab-worst={route.id}>{route.worst}</span>
+							     would say a route is failing, and a route is a noun. The
+							     worst of them says so in a word instead, and says it at
+							     the top of the page too, so nothing reflows when the strip
+							     sticks. -->
+							<span class="tab-state"
+								>{#if route.id === worst}<span
+										class="tab-worst-mark"
+										data-console-tab-worst-mark>{route.worst ? 'Worst:' : 'Worst'}</span
+									>{' '}{/if}{#if route.worst}<span
+										class="tab-worst"
+										data-console-tab-worst={route.id}>{route.worst}</span
+									>{/if}</span
+							>
 						{/if}
 					</span>
 					<span class="tab-line">{route.description}</span>
@@ -52,9 +94,13 @@
 </nav>
 
 <style>
+	/* The rule the tabs stand on. From the wide breakpoint up it moves to the
+	   strip, which is one row with the days control, so the line runs under both.
+	   It is the reading item's own hairline, which is the stronger of the two
+	   rules on the dark ground. */
 	.console-nav {
-		margin-top: var(--space-4);
-		border-block-end: 1px solid var(--color-rule);
+		min-inline-size: 0;
+		border-block-end: 1px solid var(--item-edge);
 	}
 
 	.tabs {
@@ -73,6 +119,7 @@
 	   9rem cleared 360 and still stacked five deep at 320, which is the same
 	   defect one screen narrower. */
 	.tab-slot {
+		display: flex;
 		flex: 1 1 8rem;
 		min-inline-size: 0;
 	}
@@ -80,8 +127,12 @@
 	/* The whole block is the target, not the word at the top of it. The touch
 	   target is the 2.75rem floor, so the padding pays for looks and not for
 	   reach - and the three rows of tabs above the band on a phone is where every
-	   pixel of it is charged three times. */
+	   pixel of it is charged three times. It fills its slot, which is as tall as
+	   the row, so the active route's rule sits on one line under every tab - a
+	   tab with no worst state included. */
 	.tab {
+		flex: 1 1 auto;
+		min-inline-size: 0;
 		display: flex;
 		flex-direction: column;
 		gap: 2px;
@@ -97,6 +148,13 @@
 
 	.tab:hover {
 		background: var(--color-surface);
+	}
+
+	/* Inside the tab rather than around it: from the wide breakpoint up the list
+	   scrolls sideways, and a scrolling list clips whatever reaches past it. */
+	.tab:focus-visible {
+		outline: 2px solid var(--color-focus);
+		outline-offset: -2px;
 	}
 
 	/* The one thing that differs between routes: a 3px rule from the categorical
@@ -126,6 +184,15 @@
 		color: var(--color-text-secondary);
 	}
 
+	/* The one word that tells the band's worst route from the others, in weight
+	   and the main text colour rather than in a verdict colour. */
+	.tab-worst-mark {
+		font-size: var(--text-xs);
+		line-height: var(--leading-xs);
+		font-weight: 600;
+		color: var(--color-text);
+	}
+
 	/* Hidden by default and shown from the wide breakpoint, which is the one
 	   three other components already use. Below it a tab is too narrow to carry
 	   a sentence: measured 2026-09-12 off the built page, at 800px each tab is
@@ -143,9 +210,57 @@
 		color: var(--color-text-tertiary);
 	}
 
+	/* The value matches `frame.breakpoints_px[1]` in `config/appearance.json`; a
+	   media query cannot read a custom property, which is the one place this
+	   duplication is unavoidable. */
 	@media (min-width: 1024px) {
+		.console-nav {
+			border-block-end: 0;
+		}
+
+		/* One row at every count of tabs. A tab keeps the width the longer of its
+		   label and its worst state needs and shares whatever the row has left, and
+		   when the row has nothing left the list scrolls rather than wrapping or
+		   shortening a label. */
+		.tabs {
+			flex-wrap: nowrap;
+			overflow-x: auto;
+			overscroll-behavior-x: contain;
+			scrollbar-width: thin;
+		}
+
+		.tab-slot {
+			flex: 1 1 0;
+			min-inline-size: max-content;
+		}
+
+		/* The worst state stands on its own line under the label, never broken
+		   inside the phrase, so a tab is as wide as the longer line rather than as
+		   both side by side. Measured 2026-09-27 off the built page: side by side,
+		   the landing route showed four of five tabs whole at every width from
+		   1366 to 1920; stacked, all five from 1366. What it costs is one line of
+		   every tab's height. */
+		.tab-head {
+			flex-direction: column;
+			align-items: flex-start;
+			gap: 0;
+		}
+
+		.tab-state {
+			white-space: nowrap;
+		}
+
+		/* The description takes the width its tab already has and never widens
+		   it, so a tab is as wide as its label and its worst state and no wider. */
 		.tab-line {
 			display: block;
+			contain: inline-size;
 		}
+	}
+
+	/* While the strip is stuck the description goes. It is the anchor's `title`,
+	   and it is back the moment the strip returns to the top. */
+	:global([data-console-strip-stuck='yes']) .tab-line {
+		display: none;
 	}
 </style>

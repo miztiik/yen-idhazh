@@ -79,6 +79,21 @@ class ConsoleConfig(Model):
         default=TodayAnchor.RIGHT,
         description="Where today sits in the initial viewport when enough history exists.",
     )
+    completeness_grace_days: int = Field(
+        default=1,
+        ge=1,
+        description=(
+            "How many whole UTC days the day the console's record was written may "
+            "trail the reader's own UTC day before the sentence under the tab strip "
+            "stops saying how complete the record is and says how many days are "
+            "missing. One, because a run finishes at least once a day: a record "
+            "from yesterday is what a morning before the first run looks like, and "
+            "one from the day before that means a whole day passed with nothing "
+            "recorded. It decides only when the count is said, never what it "
+            "counts - the count is the whole days between the record's day and "
+            "today, so at least one, which is why zero is refused."
+        ),
+    )
     pan_days: int = Field(default=7, ge=1, description="Days moved by one arrow-key pan.")
     zoom_factor: float = Field(default=1.5, gt=1.0)
     min_window_days: int = Field(
