@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { CONSOLE_WIDTHS, CONSOLE_WINDOW_HEIGHT } from './support/console-widths';
 
 /**
  * THE ORACLE for one date axis: no two dates touch, and none is cut off.
@@ -33,7 +34,6 @@ const ROUTES = [
 	'/console/judgement/',
 	'/console/voices/'
 ];
-const WIDTHS = [1440, 768, 390];
 
 /** Which routes draw a date axis of their own.
  *
@@ -97,14 +97,14 @@ async function labelsOn(page: Page): Promise<Label[]> {
 }
 
 async function load(page: Page, route: string, width: number): Promise<void> {
-	await page.setViewportSize({ width, height: 900 });
+	await page.setViewportSize({ width, height: CONSOLE_WINDOW_HEIGHT });
 	await page.goto(route);
 	// The server draws at `chart.width_px` and the client redraws once it has
 	// measured the column. Reading before that measures the wrong axis.
 	await page.waitForTimeout(700);
 }
 
-for (const width of WIDTHS) {
+for (const width of CONSOLE_WIDTHS) {
 	test.describe(`the date axis at ${width}px`, () => {
 		for (const route of ROUTES) {
 			test(`THE ORACLE: no two dates touch and none is cut off on ${route}`, async ({ page }) => {

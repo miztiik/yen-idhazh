@@ -153,6 +153,8 @@ await expect(page.locator(`[data-window-preset="${DEFAULT_DAYS}"] input`)).toBeE
 
 **`locator.screenshot` on a console panel times out on "waiting for element to be stable"**, because something above it is still settling and the wait is for the whole page. Scroll it into view inside an `evaluate`, wait once, then take a VIEWPORT screenshot - the element form failed twice at 10 s on `/console/model/` where the viewport one returned immediately.
 
+**A `page.screenshot` clip that runs past the window is cut to the window with no error.** Only a clip wholly outside the window fails; one that overhangs it comes back short and looks deliberate, so a tall panel at 390 loses its bottom - which is where its readout strip sits. `fullPage` avoids the cut by painting the whole page for every shot. The panel captures instead grow the window until the clip fits, and then read the image's own size back: a PNG names its width and height in bytes 16 to 23, so `image.readUInt32BE(16)` and `image.readUInt32BE(20)` against the clip is the whole check (`frontend/tests/panel-captures.spec.ts`).
+
 **Walking the reading page's pager runs past the test timeout.** `Show N more` adds twelve stories and re-renders the list, so a 627-story day is 52 clicks over a list that grows to 627 nodes - 1.3 minutes on a quiet machine and past the 180 s timeout on a loaded one, for a comparison the control's own label answers in one read. Read the label.
 
 **Playwright prints the code frame from disk and runs the version loaded at collection**, so after an edit the frame and the behaviour can disagree. Re-run rather than reasoning about the frame.

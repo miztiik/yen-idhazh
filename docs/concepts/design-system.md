@@ -1,6 +1,6 @@
 # Design System
 
-**Last Updated**: 2026-09-27
+**Last Updated**: 2026-09-28
 The visual vocabulary of the published surface: the state-driven styling pattern, design tokens, the restrained motion set, and the icon rule. This is the shared language the [chrome](ui-shell.md) and every [item](digest.md) speak; the concrete token file lands with the design-system code row, and this page fixes the vocabulary that row builds to. The bounds are owned by Jony ([../../.github/agents/jony.agent.md](../../.github/agents/jony.agent.md)).
 
 **A rule is here if it binds a token or a bound the whole site resolves.** A rule about one named console panel - how a figure is worded, ranked, tinted or drawn there - is in [console-design.md](console-design.md), which reads this page's vocabulary and adds no token of its own.
@@ -458,15 +458,36 @@ Authority: Jony, plan row #13. The geometry is measured in a browser and never r
 
 A surface fails review for being **insufficient**, exactly as it fails for being over-built. This is stated because the opposite was: every review persona this project had was a veto, so the surface converged on the minimum that passed all of them, and nobody's job was to say it was not enough.
 
-The checks, applied to any reader-facing surface:
+**There are ten gates.** Gates 1 to 4 bind any surface, reader-facing or operator-facing, and gate 5 binds any drawing on one. Gates 6 to 10 bind a drawing on the console, because they ask about a trend over days, a ledger column, the readout strip and the query door, and only the console has those.
 
-- **Does it use the screen it is on?** Measured 2026-08-28: the digest used 40.6 percent of a 1536px viewport and had two responsive breakpoints in the entire site, one of which changed padding.
-- **Does it separate figure from ground?** A page with one surface colour and no elevation is a page where nothing is in front of anything.
-- **Is there one thing the eye lands on first?** If everything is the same weight, the page has no order to read it in.
-- **Does it look like it was made this year?** Not a matter of fashion. A surface that looks abandoned is read as abandoned, and the judgement transfers to the summaries.
-- **Can a reader make its comparison in two seconds?** A drawing names one comparison before it draws, and it is the comparison rather than the subject: "peak memory" is a subject, "how near 16 GiB the worst shard got, against the rest" is a comparison. Write it as a sentence with the word "against" in it - one that cannot take an "against" is a number looking for a home rather than a drawing. Two seconds is what a glance is worth, so a figure whose comparison only arrives after a paragraph has not been drawn yet. Susan, 2026-09-17; the chart rules that follow from it are in [console-design.md](console-design.md).
+| # | Gate | What decides it | What fails it |
+| --- | --- | --- | --- |
+| 1 | **Does it use the screen it is on?** | How much of the panel's content width sits under at least one drawn plot, at 390, 768 and 1440 px. Covered width, so two small charts side by side fill a panel together and two thin ones at opposite edges do not pass as one wide one | A share under `console.plot_min_fill_share` at any width, or a panel that draws no plot, so no share is printed |
+| 2 | **Does it separate figure from ground?** | The colour each surface lands on screen as, with every see-through layer blended onto what is behind it: the page around the panel, the panel, and the ground under each plot | A panel the same colour as the page around it, or a plot drawn on a ground that is not the panel's own |
+| 3 | **Is there one thing the eye lands on first?** | Exactly one element carries `data-lede`, and it is the largest thing in the panel: its type size against every other visible word, or, where it is a mark with no words, its area against every other filled mark | No lede, two, or one that something else in the panel is as large as |
+| 4 | **Does it look like it was made this year?** | A reviewer, reading the component and its pictures | A native `title=` tooltip on a mark; a bare table of numbers with no shape beside it; a control that is a `<select>` or a verb button where a two-state radio is the rule |
+| 5 | **Can a reader make its comparison in two seconds?** | Exactly one element carries `data-comparison`, and its sentence has the word "against" in it. A mix over time - a stacked series of counts or shares - declares `data-comparison="composition"` instead, and passes only where its stacked bars show two fills or more; the page that owns the panel then says in a `## Design rationale` line why it compares nothing | No declaration, two, or a sentence with no "against" that is not a mix over time |
+| 6 | **Does a trend carry its confounders?** | Every trend over days declares `data-model-rule` on itself or on the element that holds it. `yes` draws the settings-change rule, or says in visible words that no setting changed inside the span; `no` says why in five words or more | A trend with no declaration, or one that says `yes` and draws neither the rule nor the sentence. A line that moved because somebody changed a setting looks exactly like a line that moved because the work got worse |
+| 7 | **Does every column it draws have a reader?** | `backend/tests/contracts/test_column_readers.py` | A column drawn while its name is still in `UNREAD_CELLS` |
+| 8 | **Are its four nothings told apart?** | The panel is drawn waiting, quiet, missing and unreachable, and what a sighted reader sees in each - the visible words, and the colour of the box that stands in for the chart - is compared | Any two of the four drawn as the same picture. A quiet pipeline and a broken fetch must never look alike |
+| 9 | **Is the strip declared?** | `frontend/tests/console-readout.spec.ts` | A chart that declares none of the readout attributes, or a declared strip that is not drawn |
+| 10 | **Does it query columns, not ledgers?** | `frontend/tests/chart-vocabulary.spec.ts`, over every call to the query door | A call that names no columns, or leaves its date range open |
 
-A surface that fails one of these ships only with a `## Design rationale` entry saying why. `CLAUDE.md` section 9 carries the Definition-of-Done line; Susan ([../../.github/agents/susan.agent.md](../../.github/agents/susan.agent.md)) rules them.
+Two of the gates carry the measurement that made them. Gate 1: on 2026-08-28 the digest used 40.6 percent of a 1536px viewport and had two responsive breakpoints in the entire site, one of which changed padding. Gate 5: "peak memory" is a subject, and "how near 16 GiB the worst shard got, against the rest" is a comparison. A sentence that cannot take an "against" is a number looking for a home rather than a drawing, and a figure whose comparison only arrives after a paragraph has not been drawn yet, because two seconds is what a glance is worth. Susan, 2026-09-17; the chart rules that follow from it are in [console-design.md](console-design.md).
+
+**Six of the ten are arithmetic, so a spec decides them.** Gates 1, 2, 3, 5, 6 and 8 are `frontend/tests/panel-sufficiency.spec.ts`, and the measuring is in `frontend/tests/support/panel-gates.ts`: one function reads a drawn panel into plain numbers and words, and one pure function per gate judges them, so a share printed beside a picture is the share a gate judged. Gates 7, 9 and 10 are the tests the table names. Gate 4 is a reviewer.
+
+**The specs judge an opt-in list, `console.judged_panel_ids`, and it is empty until a panel is redrawn.** Gates 3, 5 and 6 read `data-lede`, `data-comparison` and `data-model-rule`, and most panels carry none of them, so judging the whole console would be red on the day the gates landed - and a gate that is red on arrival is a gate people learn to skip. A panel joins the list in the pull request that redraws it. The contract refuses a judged id that no console route draws, and one named twice. Until then a test-only panel, `frontend/tests/fixtures/panels/WitnessPanel.svelte`, built from the real `Panel` and `DateSeries`, proves every spec'd gate passes a good panel and fails one bad panel per gate, and that each bad panel fails its own gate and no other.
+
+**Gate 8 needs a way to put a real panel into each of its nothings.** The sufficiency spec keeps one driver per judged panel id, and it refuses a judged id with no driver by name, so a panel cannot join the list and skip the gate that tells a quiet day from a broken fetch.
+
+### Gate 4 is read from pictures
+
+Every panel in `console.panel_groups` that its route draws with an id is pictured at the three widths in both themes, and at the narrowest width in dark once more with every data request its route made refused - the one way to see a broken fetch without a second build, and taken only where the route asks for data after it arrives, because a route that fetches nothing has no broken fetch to show. The Pipelines route draws its sections with no panel id yet, so its panels are not pictured until each section is one addressed panel. `frontend/tests/panel-captures.spec.ts` takes the pictures and CI uploads them; the files, the artefact and when a run takes them are in [../how-to/run-the-gates.md](../how-to/run-the-gates.md). Nothing compares pixels: a committed picture goes red when a runner's fonts differ from the machine that took it, and it is a binary file the history prune rewrites on a schedule.
+
+**The 390 dark picture decides.** It is the narrowest, the least tested, and the theme nobody checks. A reviewer who cannot say the panel's comparison sentence after two seconds of looking at it fails the panel, whatever the attribute says. **A 390 picture that is the 1440 picture with everything smaller fails too**: a panel that only works at one width has not been drawn, it has been positioned.
+
+A surface that fails a gate ships only with a `## Design rationale` entry saying why. `CLAUDE.md` section 9 carries the Definition-of-Done line; Susan ([../../.github/agents/susan.agent.md](../../.github/agents/susan.agent.md)) rules them.
 
 **And a veto costs something.** A ruling that removes must name what the reader loses. "Remove before adding" is a good instinct and a bad rule when it is free: a removal that states only what was removed is not a ruling and does not bind ([../../CLAUDE.md](../../CLAUDE.md) section 14).
 
@@ -746,6 +767,33 @@ case for the engine was that it buys a pointer readout, and `frame.ts` already
 had one covering mouse, pen, touch and keyboard - two of the four charts were
 simply never wired to it.
 
+**A plot gets no ground of its own, and gate 2 fails one that has.** The plan
+that wrote the ten gates had gate 4 fail "a plot with no tint or elevation
+separating it from the panel". Susan struck that clause on 2026-09-28, because a
+tint under a plot is paid for by every mark drawn on it. The ratios are
+arithmetic over the committed hex values, the same way
+[a fill is not a text colour](#a-fill-is-not-a-text-colour) computes its own: in
+light, `--fill-medium` reads 3.26:1 on the panel and 2.89:1 on
+`--color-surface-sunken`, which takes it under the 3:1 floor a fill has to
+clear; the chart grid falls from 1.20:1 to 1.07:1, which is no line at all; and
+in dark, the chart axis falls from 3.2:1 on the panel to 2.76:1 on the neutral
+tint. The separation a plot needs is the panel's against the page, and that is
+the pair gate 2 measures. Fowler agreed.
+
+**Gate 6 reads the declaration `DateSeries` already makes.** The same plan named
+a new attribute, `data-settings-rule`. `DateSeries` already declares
+`data-model-rule`, with the rule's name and the sentence it draws when no setting
+changed inside the span, so a second attribute would be a second answer to one
+question, free to disagree with the first. Fowler and Susan, 2026-09-28.
+
+**Gate 1 measures covered width.** The widest single plot fails a panel of two
+small charts that fill its width between them, and the span from the leftmost
+plot to the rightmost passes two thin charts at opposite edges; covered width is
+the only one of the three that asks whether the width is used. Susan,
+2026-09-28. `console.plot_min_fill_share` (0.85) is an estimate: no judged panel
+has printed a share yet, and the shares the first judged panels print are the
+measurement that would move it.
+
 ### The footer ships as one row of links, and it fails two sufficiency checks
 
 **On 2026-09-09 the footer lost three of its four blocks and gained nothing.**
@@ -753,14 +801,14 @@ What is left is the three links: Archive, Console, Source code. This entry
 exists because that surface fails the gate above, and `CLAUDE.md` section 9 says
 a surface that fails ships only with the reason written down.
 
-Two of the four checks fail. **Nothing lands first** - three links of one weight
-in one row have no order to be read in. And **it does not look like it was made
-this year**: a bare link strip under a hairline is the plainest footer a page
+Two of the gates fail. **Nothing lands first** (gate 3) - three links of one
+weight in one row have no order to be read in. And **it does not look like it was
+made this year** (gate 4): a bare link strip under a hairline is the plainest footer a page
 can have, and it is the exact "thin, cold, unloved" shape Susan exists to catch
 ([../../.github/agents/susan.agent.md](../../.github/agents/susan.agent.md)).
 Measured 2026-09-09 in Chromium at 1280x900 on the canary build, the same on all
 five routes that have a footer: the block is **102 px tall and holds three
-links**, against 3 blocks and 2 paragraphs before. The other two checks pass -
+links**, against 3 blocks and 2 paragraphs before. Gates 1 and 2 pass -
 the footer uses the width of the frame it sits in, and the top rule plus
 `--color-text-tertiary` still hold it away from the reading surface.
 

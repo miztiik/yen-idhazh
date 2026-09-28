@@ -20,6 +20,8 @@ test('every frontend spec belongs to exactly one group', () => {
 	assert.equal(new Set(assigned).size, discovered.length);
 	assert.equal(groupForSpec('console-machine-data.spec.ts'), 'console');
 	assert.equal(groupForSpec('frame.spec.ts'), 'logic');
+	assert.equal(groupForSpec('panel-captures.spec.ts'), 'panels');
+	assert.equal(groupForSpec('panel-sufficiency.spec.ts'), 'panels');
 });
 
 test('a new unowned spec fails the inventory instead of disappearing', () => {
@@ -62,7 +64,7 @@ test('unknown inputs and backend subpackages fail toward full coverage', () => {
 test('documentation alone starts no code suite and cannot hide a mixed edit', () => {
 	assert.deepEqual(selectPaths(['docs/reference/pipeline-cost.md', 'TODO/a-plan.md']).groups, []);
 	const mixed = selectPaths(['docs/a.md', 'frontend/src/routes/console/+page.svelte']);
-	assert.deepEqual(mixed.groups, ['logic', 'console', 'publishing']);
+	assert.deepEqual(mixed.groups, ['logic', 'console', 'panels', 'publishing']);
 	assert.equal(mixed.reasons.length, 2);
 });
 
@@ -137,44 +139,53 @@ test('contract and config changes include both languages and revalidate the arch
 });
 
 //: A change, and what the `scope` job has to buy for it on a pull request: the
-//: browser half at all, and the operator console's own specs inside it. The
-//: backend rows are the trap the allow-list exists to avoid - a module the
-//: canary day is built through, and a fixture the attack text is read from, can
-//: move a published page without touching `frontend/`.
+//: browser half at all, the operator console's own specs inside it, and the
+//: panel captures and gates. The backend rows are the trap the allow-list exists
+//: to avoid - a module the canary day is built through, and a fixture the attack
+//: text is read from, can move a published page without touching `frontend/`.
 const PULL_REQUEST_SCOPE = [
 	// The console's own files, the only thing that buys its specs before merge.
-	['frontend/src/routes/console/+page.svelte', true, true],
-	['frontend/src/lib/console/window.ts', true, true],
-	['frontend/src/lib/components/ConsoleNav.svelte', true, true],
-	['frontend/src/lib/server/console-shell.ts', true, true],
-  ['frontend/tests/console-voices-feeds.spec.ts', true, true],
+	['frontend/src/routes/console/+page.svelte', true, true, true],
+	['frontend/src/lib/console/window.ts', true, true, true],
+	['frontend/src/lib/components/ConsoleNav.svelte', true, true, true],
+	['frontend/src/lib/server/console-shell.ts', true, true, true],
+	// A console spec moves no panel's picture.
+	['frontend/tests/console-voices-feeds.spec.ts', true, true, false],
 	// The harness itself, which has to prove itself on every group it selects.
-	['frontend/package.json', true, true],
-	['frontend/package-lock.json', true, true],
-	['frontend/scripts/test-groups.ts', true, true],
-	['.github/workflows/ci.yml', true, true],
-	// Reaches a published page, but not the console before merge.
-	['frontend/src/lib/charts/engine.ts', true, false],
-	['frontend/src/lib/components/KpiCard.svelte', true, false],
-	['frontend/src/lib/server/payload.ts', true, false],
-	['frontend/src/app.html', true, false],
-	['frontend/src/styles/tokens.css', true, false],
-	['frontend/src/routes/+layout.svelte', true, false],
-	['frontend/src/routes/[date]/+page.svelte', true, false],
-	['frontend/src/lib/assist/loader.ts', true, false],
-	['config/idhazh.json', true, false],
-	['backend/idhazh/contracts/item_health.py', true, false],
-	['backend/utilities/build_canary_day.py', true, false],
-	['backend/idhazh/render/write.py', true, false],
-	['backend/idhazh/sanitize.py', true, false],
-	['tests/fixtures/canaries/fake-system-delimiter.json', true, false],
-	['unknown-area/module.ts', true, false],
+	['frontend/package.json', true, true, true],
+	['frontend/package-lock.json', true, true, true],
+	['frontend/scripts/test-groups.ts', true, true, true],
+	['.github/workflows/ci.yml', true, true, true],
+	// What every panel is drawn from, which buys the pictures but not the console.
+	['frontend/tests/panel-captures.spec.ts', true, false, true],
+	['frontend/tests/fixtures/panels/WitnessPanel.svelte', true, false, true],
+	['frontend/tests/support/panel-gates.ts', true, false, true],
+	['frontend/src/lib/components/Panel.svelte', true, false, true],
+	['frontend/src/lib/components/ChartReadout.svelte', true, false, true],
+	['frontend/src/lib/charts/d3/DateSeries.svelte', true, false, true],
+	['frontend/src/lib/charts/engine.ts', true, false, true],
+	['frontend/src/styles/tokens.css', true, false, true],
+	['config/appearance.json', true, false, true],
+	// Reaches a published page, but neither the console nor its pictures before merge.
+	['frontend/src/lib/components/KpiCard.svelte', true, false, false],
+	['frontend/src/lib/server/payload.ts', true, false, false],
+	['frontend/src/app.html', true, false, false],
+	['frontend/src/routes/+layout.svelte', true, false, false],
+	['frontend/src/routes/[date]/+page.svelte', true, false, false],
+	['frontend/src/lib/assist/loader.ts', true, false, false],
+	['config/idhazh.json', true, false, false],
+	['backend/idhazh/contracts/item_health.py', true, false, false],
+	['backend/utilities/build_canary_day.py', true, false, false],
+	['backend/idhazh/render/write.py', true, false, false],
+	['backend/idhazh/sanitize.py', true, false, false],
+	['tests/fixtures/canaries/fake-system-delimiter.json', true, false, false],
+	['unknown-area/module.ts', true, false, false],
 	// Cannot reach a page at all.
-	['frontend/tests/frame.spec.ts', false, false],
-	['docs/reference/pipeline-cost.md', false, false],
-	['backend/tests/test_discover.py', false, false],
-	['backend/idhazh/discover.py', false, false],
-	['TODO/some-plan.md', false, false]
+	['frontend/tests/frame.spec.ts', false, false, false],
+	['docs/reference/pipeline-cost.md', false, false, false],
+	['backend/tests/test_discover.py', false, false, false],
+	['backend/idhazh/discover.py', false, false, false],
+	['TODO/some-plan.md', false, false, false]
 ];
 
 test('a pull request buys the console specs only for the console or the harness', () => {
@@ -182,6 +193,12 @@ test('a pull request buys the console specs only for the console or the harness'
 		const answer = ciAnswer([path], true);
 		assert.equal(answer.browser, browser, path);
 		assert.equal(answer.console, console_, path);
+	}
+});
+
+test('a pull request buys the panel pictures for the console, the harness, and what every panel is drawn from', () => {
+	for (const [path, , , panels] of PULL_REQUEST_SCOPE) {
+		assert.equal(ciAnswer([path], true).panels, panels, path);
 	}
 });
 
@@ -224,8 +241,9 @@ test('only a change that can invalidate a committed day re-reads every day', () 
 });
 
 test('the console half is never bought without the browser half', () => {
-	for (const [path, browser, console_] of PULL_REQUEST_SCOPE) {
+	for (const [path, browser, console_, panels] of PULL_REQUEST_SCOPE) {
 		assert.ok(!console_ || browser, `${path} asks for the console with no job`);
+		assert.ok(!panels || browser, `${path} asks for the panel pictures with no job`);
 	}
 });
 
@@ -236,9 +254,11 @@ test('a merge to main runs every group, which is what the deferral leans on', ()
 	const merged = ciAnswer(['full-ci-run'], false);
 	assert.equal(merged.browser, true);
 	assert.equal(merged.console, true);
+	assert.equal(merged.panels, true);
 	const unresolved = ciAnswer(['unresolved-change-base'], true);
 	assert.equal(unresolved.browser, true);
 	assert.equal(unresolved.console, true);
+	assert.equal(unresolved.panels, true);
 });
 
 test('one reaching path in a mixed change still buys the browser suite', () => {
@@ -248,9 +268,11 @@ test('one reaching path in a mixed change still buys the browser suite', () => {
 	);
 	assert.equal(mixed.browser, true);
 	assert.equal(mixed.console, false);
+	assert.equal(mixed.panels, false);
 	const withConsole = ciAnswer(['docs/a.md', 'frontend/src/routes/console/+page.svelte'], true);
 	assert.equal(withConsole.browser, true);
 	assert.equal(withConsole.console, true);
+	assert.equal(withConsole.panels, true);
 });
 
 test('changed paths include commits, staged, unstaged, untracked and both rename sides', () => {

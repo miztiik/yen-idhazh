@@ -50,6 +50,9 @@
     "feed_rows": 10,
     "fleet_min_rows": 160,
     "fleet_top_kinds": 4,
+    "judged_panel_ids": [
+      "platform-mix"
+    ],
     "machine_colour_stops": 7,
     "max_window_days": 366,
     "min_attempts_for_rate": 5,
@@ -119,6 +122,7 @@
         }
       ]
     },
+    "plot_min_fill_share": 0.8,
     "precision_axis_multiple": 10.0,
     "processor_lost_pct_marked": 1.0,
     "processor_lost_pct_named": 10.0,

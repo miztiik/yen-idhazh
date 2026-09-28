@@ -2,7 +2,7 @@ import { readdirSync } from 'node:fs';
 import { basename } from 'node:path';
 
 export const FRONTEND_GROUPS = [
-	'logic', 'reader', 'offline', 'console', 'archive', 'model-search', 'publishing'
+	'logic', 'reader', 'offline', 'console', 'panels', 'archive', 'model-search', 'publishing'
 ] as const;
 
 export type FrontendGroup = (typeof FRONTEND_GROUPS)[number];
@@ -31,6 +31,10 @@ const FILES: Record<Exclude<FrontendGroup, 'console'>, readonly string[]> = {
 	// Alone, because it rewrites the kill switch the whole served site shares and
 	// `reading-page` installs the worker that reads it. See `playwright.config.ts`.
 	offline: ['service-worker'],
+	// The console's panels as a reviewer sees them, and the gates a selector can
+	// decide about them. Apart from `console` so a change to what every panel is
+	// drawn from can buy these two without the console's hundreds of tests.
+	panels: ['panel-captures', 'panel-sufficiency'],
 	archive: ['archive', 'archive-calendar'],
 	'model-search': ['search'],
 	publishing: [
@@ -50,7 +54,7 @@ export function groupForSpec(filename: string): FrontendGroup | undefined {
 
 export function groupedSpecs(directory: string): Record<FrontendGroup, string[]> {
 	const groups: Record<FrontendGroup, string[]> = {
-		logic: [], reader: [], offline: [], console: [], archive: [], 'model-search': [], publishing: []
+		logic: [], reader: [], offline: [], console: [], panels: [], archive: [], 'model-search': [], publishing: []
 	};
 	for (const filename of readdirSync(directory, { recursive: true, encoding: 'utf8' })
 		.filter((name) => name.endsWith('.spec.ts')).map((name) => name.replaceAll('\\', '/')).sort()) {

@@ -490,6 +490,11 @@ class AppearanceConfig(Contract):
     __schema_stem__: ClassVar[str] = "appearance-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-28",
+            change="console.judged_panel_ids and console.plot_min_fill_share, additive.",
+            why="The sufficiency gates judge an opt-in list of panels against a fill floor.",
+        ),
+        ChangelogEntry(
             version="2026-09-27",
             change="console.completeness_grace_days, additive, default 1.",
             why="The console says its record has stopped once a whole UTC day has none.",
@@ -503,11 +508,6 @@ class AppearanceConfig(Contract):
             version="2026-09-21T23:00",
             change="console.panel_groups.machine names prompt-reuse where it named prompt-cache.",
             why="The panel now reads one span a request rather than one column a day.",
-        ),
-        ChangelogEntry(
-            version="2026-09-21T19:00",
-            change="console.panel_groups.machine gains the processor-lost panel.",
-            why="A busy figure cannot be read without the share the host gave elsewhere.",
         ),
         ChangelogEntry(
             version="2026-08-29",
