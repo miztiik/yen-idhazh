@@ -1,6 +1,6 @@
 # Why a losing push should rebuild rather than rebase
 
-**Last Updated**: 2026-09-23
+**Last Updated**: 2026-09-28
 
 Ten jobs of one run push to one branch, so losing the push race is ordinary and
 not a fault. [committing.md](committing.md) owns the loop those jobs run today.
@@ -49,7 +49,8 @@ path cannot make `pyproject.toml` conflict.
 **All three `actions/checkout@v6` steps in `digest.yml` take the default depth.**
 The default is `fetch-depth: 1`: one commit, no history. The clone knows the tip
 it was handed and nothing before it. For contrast, `ci.yml` sets `fetch-depth: 0`
-twice and `prune.yml` sets it on both its checkouts. `digest.yml` sets it nowhere.
+twice and the `history` job of `idhazh-gardener.yml` sets it on both its
+checkouts. `digest.yml` sets it nowhere.
 
 The sequence, with real times from the run:
 
@@ -250,7 +251,7 @@ it, and needs one named exception to land.
 | --- | --- | --- | --- |
 | B1 | Two jobs of one run pushing at once | No | A4, A5, A6, A7, A8 |
 | B2 | A job racing a person's pull request merging | **Yes.** #1080 squash-merged 19 s after checkout | A4, A5, A6, A7 - not A8 |
-| B3 | A job racing `prune.yml` force-pushing history | Not this failure, same shape, and it will happen | A4, A5, A6, A7 |
+| B3 | A job racing the `history` job of `idhazh-gardener.yml` force-pushing history | Not this failure, same shape, and it will happen | A4, A5, A6, A7 |
 
 ### Two changes that are worth making and do not fix this
 

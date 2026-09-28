@@ -157,22 +157,7 @@ Two ledgers moved on 2026-09-28, producer and reader together: `state/feed-retir
 
 Each writer names the commit its run checked out, which is why `idhazh plan` takes `--commit` as `idhazh assemble` always did and a gardener run takes `--git-sha`, and every workflow job that reaches either ledger installs `.[parquet]`. A test holds both: `backend/tests/workflows/test_ledger_door_jobs.py`.
 
-**The committed CSV moved once, through `backend/utilities/migrate_csv.py`.** It reads the CSV, writes one file per day through the door, reads each file back field for field and cell for cell against the CSV row it came from, and only then deletes the CSV. Nothing is deleted until every day of every ledger asked for is proven, and a row that does not read back removes what the run wrote.
-
-```
-python backend/utilities/migrate_csv.py --state-dir state --run-id <YYYY-MM-DD-NNNN>
-       --git-sha <sha> [--ledger feed-retirements|visual-prunes] [--check]
-```
-
-| Exit | Meaning |
-| --- | --- |
-| 0 | every source CSV moved, or there was none; a second run exits 0 and writes nothing |
-| 1 | a row did not read back, or `--check` found a CSV left; no CSV was deleted |
-| 2 | a file for the same work unit exists and holds other rows; neither is discarded, and a person decides |
-
-Every file it writes carries `job=migrate`, `attempt=1`, `shard=0` and `producer=utilities.migrate_csv`, so a second run **with the first `--run-id`** mints the same `unit_id` and the same `content_sha256` for each day and leaves a matching file alone. A new run id is a new work unit for every day: the check that catches a disagreement never fires, and every day is written twice. `--git-sha` may differ between runs, because it is in neither identifier. The module is deleted once `--check` exits 0 on `main` and no run that checked out the CSV layout can still push; its removal condition is on its own first lines.
-
-**A CSV day file that lands after the move is migrated by running it again.** A digest run checks out the commit it was created at, so a run started before the move appends to a CSV its own checkout still holds. If that push reaches `main` after the move, the day file comes back beside its parquet, and a second migration with the first `--run-id` moves it. A day the first migration did not see is a new unit and is simply written. A day it did see, which the late run grew, exits 2: the CSV now holds every row of that day, so delete that day's file under `state/raw/visual-prunes/` and run the migration again, and it writes the whole day from the CSV.
+**The committed CSV moved once, on 2026-09-28, through a one-shot migration.** It read the CSV, wrote one file per day through the door, read each file back field for field and cell for cell against the CSV row it came from, and only then deleted the CSV. The files it wrote carry `job=migrate`, `attempt=1`, `shard=0` and `producer=utilities.migrate_csv`, which is why `ServerJob` keeps `migrate`: a reader names those files' writer from it. No CSV of either ledger is left on `main`, and a run that checked out the CSV layout cannot push its append over the deleted file, so the program had nothing left to move and was deleted on 2026-09-28; git history holds it.
 
 ## What it costs to install
 

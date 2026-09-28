@@ -107,7 +107,7 @@ links to it, or serves it. Two
 consequences follow and neither is hidden. This repository is public, so those
 bytes are readable by anyone. And because git history is append-only, bounding
 the repository means rewriting history - which is what
-`.github/workflows/prune.yml` does, and why section 8 carries exactly one
+the `history` job of `.github/workflows/idhazh-gardener.yml` does, and why section 8 carries exactly one
 force-push exception. See
 [../how-to/fine-tune-a-model.md](../how-to/fine-tune-a-model.md).
 

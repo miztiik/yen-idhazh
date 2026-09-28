@@ -8,7 +8,8 @@ shard checks before and after its tasks run, how its one record lands on
 `main` however many shards race it, and how its compaction task moves a
 ledger's rows from raw files into day and month files. What each knob means is
 [../../concepts/config/idhazh-gardener.md](../../concepts/config/idhazh-gardener.md);
-the workflow that wakes it is not written yet.
+the workflow that wakes it is `.github/workflows/idhazh-gardener.yml`, once a
+day at 00:40 UTC or when a person dispatches it.
 
 ## What runs
 
@@ -33,14 +34,15 @@ land together, and the pre-flight below refuses either one arriving alone.
 
 ## A wake, in order
 
-| Step | Who | What it does |
-| --- | --- | --- |
-| 1 | `backend/utilities/gardener_shards.py` | Splits the active tasks into shards and prints the plan. Standard library only, reads `config/` alone |
-| 2 | `backend/utilities/gardener_publish.py --shard N` | Reads the commit the checkout is at, loads the declarations through the typed loader, finds the modules, and runs the pre-flight |
-| 3 | the runner | Runs every task of the shard, one after another, timing each |
-| 4 | the runner | Holds every path each task touched to what that task owns |
-| 5 | the runner | Writes the shard's one record through `ledger.persist`, and hands back what to land |
-| 6 | `gardener_publish.publish` | Stages exactly what the shard wrote and deleted, commits, pushes, and tries again on a newer tip if it lost |
+| Step | Job | Who | What it does |
+| --- | --- | --- | --- |
+| 1 | `plan` | `backend/utilities/gardener_shards.py` | Splits the active tasks into shards and prints the plan. Standard library only, reads `config/` alone |
+| 2 | `run-tasks`, one job a shard | `backend/utilities/gardener_publish.py --shard N` | Reads the commit the checkout is at, weighs the folders the shard owns at that commit, loads the declarations through the typed loader, finds the modules, and runs the pre-flight |
+| 3 | `run-tasks` | the runner | Runs every task of the shard, one after another, timing each |
+| 4 | `run-tasks` | the runner | Holds every path each task touched to what that task owns |
+| 5 | `run-tasks` | the runner | Writes the shard's one record through `ledger.persist`, and hands back what to land |
+| 6 | `run-tasks` | `gardener_publish.publish` | Stages exactly what the shard wrote and deleted, commits, pushes, and tries again on a newer tip if it lost |
+| 7 | `history` | `backend/utilities/corpus_squash_due.py`, then `backend/utilities/corpus_history.py` | Once every shard has passed, or none ran: reads whether the corpus squash is due and, on a due day, squashes the old history and force-pushes `main` |
 
 **The split is round-robin over sorted names.** Every task the matrix runs - an
 active one whose kind is not `history`, which has a job of its own - is sorted by
@@ -52,8 +54,11 @@ thousand, so counting folders would balance nothing.
 
 **A shard checks out the folders its tasks own**, joined into one
 newline-separated string (`cone`) because that is what a sparse checkout reads.
-A task that owns everything else under a root adds no folder: it reads what it
-needs from git.
+A task that owns everything else under a root adds no folder to the plan's cone,
+because only the commit can say what that is: `gardener_publish.py` reads those
+folders off the commit and adds them to a sparse checkout, in one download,
+before any task runs. A folder a declaration names is never added that way: one
+the checkout lacks means the plan was wrong, and its task fails.
 
 **A task is handed the folders it walks, and never lists `state/` itself.**
 `gardener_publish.py` reads, in one `git ls-tree` with no recursion, which of
@@ -75,34 +80,38 @@ and `backend/tests/contracts/test_gardener_plan.py` holds them to it and to the
 `GardenerPlan` model. With no task for the matrix the payload is the empty
 shape, on one line:
 `{"any_active_task":false,"matrix":{"include":[]},"shard_count":0,"shards":[]}`.
+The workflow reads three of those keys - `any_active_task`, `shard_count` and
+`matrix` - and `backend/tests/contracts/test_gardener_plan_matrix.py` fails if
+it reads a key the model does not declare.
 
-**The job graph, as it stands.** No workflow schedules the shards yet, so a wake
-is a person running the two utilities. The corpus squash is not in the matrix:
-`prune.yml` runs it on a daily wake of its own.
+**The job graph.** Three jobs, in order. `plan` prints the shards, one
+`run-tasks` job runs each shard - all of them at once - and `history` runs the
+corpus squash after them. The squash is not in the matrix: it rewrites `main`,
+so it runs alone, once every shard has pushed. Every task in the matrix only
+reports today; the squash is the one task that changes anything.
 
 ```mermaid
 %%{init: {"theme": "base", "themeVariables": {"background": "#0f1117", "primaryColor": "#222834", "primaryTextColor": "#e6e9f0", "primaryBorderColor": "#4b5468", "lineColor": "#8b93a7", "textColor": "#e6e9f0", "clusterBkg": "#1a1e27", "clusterBorder": "#3a4254", "titleColor": "#e6e9f0", "edgeLabelBackground": "#1a1e27", "fontSize": "14px"}}}%%
 flowchart TB
-  WAKE["a wake: no workflow schedules the shards yet,<br/>so a person runs the two utilities"]
+  WAKE["a wake: 00:40 UTC every day,<br/>or a person's dispatch"]
 
-  subgraph OPS["Idhazh Gardener - backend/utilities/gardener_publish.py"]
-    PLAN["gardener_shards.py<br/>standard library only, before any install<br/>reads the config and nothing else"]
+  subgraph OPS["Idhazh Gardener - idhazh-gardener.yml"]
+    PLAN["plan job: gardener_shards.py<br/>standard library only,<br/>before any install;<br/>reads the config alone"]
     ANY{"any active task<br/>for the matrix?"}
     IDLE["no shard runs"]
-    TEND["gardener_publish.py --shard N<br/>every active task in exactly one shard"]
+    TEND["run-tasks job, one a shard:<br/>gardener_publish.py --shard N<br/>weighs the folders it owns"]
     RUN["for each task in the shard:<br/>select, report, delete"]
-    OWNED{"every path a task wrote or deleted<br/>inside that task's owns?"}
-    OUTSIDE["exit 2<br/>the ownership claim is wrong"]
+    OWNED{"every path a task<br/>wrote or deleted inside<br/>that task's owns?"}
+    OUTSIDE["exit 2<br/>the ownership<br/>claim is wrong"]
     LANDED{"this shard's record<br/>already on origin/main?"}
     REAPPLY["reset --mixed origin/main<br/>re-stage the same files<br/>it wrote and deleted"]
     PUSHED{"push accepted?"}
+    CLEAN{"every task passed,<br/>and the folders within<br/>max_cone_mb?"}
     OK["exit 0"]
-    LOST["exit 3<br/>attempts exhausted, nothing landed"]
-  end
-
-  subgraph PRUNE["Corpus prune - prune.yml"]
-    PWAKE["its own schedule, once a day"]
-    HIST["corpus_history.py<br/>reads corpus.meta.json, then squashes<br/>and force-pushes on a due day"]
+    ALARM["exit 1<br/>the record landed,<br/>naming the failed task<br/>or the weight"]
+    LOST["exit 3<br/>attempts exhausted,<br/>nothing landed"]
+    SKIP["history job skipped:<br/>no squash this wake"]
+    HIST["history job:<br/>corpus_squash_due.py, then,<br/>on a due day, corpus_history.py<br/>squashes and force-pushes main"]
   end
 
   subgraph TREE["The committed tree - state/"]
@@ -120,13 +129,19 @@ flowchart TB
   RUN --> OWNED
   OWNED -->|"no"| OUTSIDE
   OWNED -->|"yes"| LANDED
-  LANDED -->|"yes"| OK
+  LANDED -->|"yes"| CLEAN
   LANDED -->|"no"| REAPPLY
   REAPPLY --> PUSHED
-  PUSHED -->|"yes"| OK
+  PUSHED -->|"yes"| CLEAN
   PUSHED -->|"no, attempts left"| LANDED
   PUSHED -->|"no, attempts gone"| LOST
-  PWAKE --> HIST
+  CLEAN -->|"yes"| OK
+  CLEAN -->|"no"| ALARM
+  OK -->|"every shard"| HIST
+  IDLE --> HIST
+  ALARM -->|"any shard"| SKIP
+  OUTSIDE -->|"any shard"| SKIP
+  LOST -->|"any shard"| SKIP
   REAPPLY -->|"the record, and every live task's files"| RAW
   RAW -->|"a live compaction lists a due day"| RIDX
   RIDX -->|"then takes it into its day file"| COMPACT
@@ -142,15 +157,26 @@ flowchart TB
   classDef sysOps fill:#1a1e27,stroke:#8b93a7,stroke-width:1.5px,color:#c8cdd8;
   classDef sysPublish fill:#1a1e27,stroke:#3f8fb8,stroke-width:1.5px,color:#a5d6ea;
 
-  class WAKE,PLAN,TEND,RUN,REAPPLY,PWAKE,HIST stage;
-  class ANY,OWNED,LANDED,PUSHED decision;
+  class WAKE,PLAN,TEND,RUN,REAPPLY,HIST stage;
+  class ANY,OWNED,LANDED,PUSHED,CLEAN decision;
   class OK yes;
-  class OUTSIDE,LOST no;
-  class IDLE warn;
+  class OUTSIDE,LOST,ALARM no;
+  class IDLE,SKIP warn;
   class RAW,RIDX,COMPACT,WM ledger;
-  class OPS,PRUNE sysOps;
+  class OPS sysOps;
   class TREE sysPublish;
 ```
+
+**Any red shard skips the squash, and a failed plan does not.** The history job
+runs when the `run-tasks` jobs all passed or none ran. So a task that fails at
+every wake - a compaction that meets a hole, a shard over `max_cone_mb` - holds
+off every squash until a person acts. A `plan` job that fails skips the
+`run-tasks` jobs, and GitHub reads a skipped job as one the gate lets through,
+so the squash still runs. Both follow from the condition as the owner wrote it,
+`always() && (needs.run-tasks.result == 'success' || needs.run-tasks.result == 'skipped')`,
+and both are with the owner, with `!cancelled()` as the recommended
+replacement: it runs the squash after a red shard, whose push has already ended,
+and a person's cancel still stops it.
 
 **`digest.yml` is not on this picture, and that is the point.** It writes
 today's rows, and every day the gardener acts on ended at least a whole day
@@ -163,8 +189,8 @@ one writer into an older day, and a compaction takes its file at the next wake
 | Exit | What it means | Retried |
 | --- | --- | --- |
 | 0 | every task ran and the record landed, or had already landed | - |
-| 1 | a task failed. Its row says `failed`, its siblings still ran, and the record still landed | at the next wake |
-| 2 | ownership or integrity: a module that cannot serve, a path outside what a task owns, a record outside the gardener's ledger, or one record path with two sets of bytes | never; a person fixes it |
+| 1 | a task failed - its row says `failed` and its siblings still ran - or the folders the shard owns weigh more than `max_cone_mb`. Either way the record still landed | at the next wake; the weight goes on failing until a person acts |
+| 2 | ownership or integrity: a module that cannot serve, a history task handed to the runner, a path outside what a task owns, a record outside the gardener's ledger, or one record path with two sets of bytes | never; a person fixes it |
 | 3 | the push kept losing for every attempt | at the next wake |
 
 A shard reports the worst code it earned, in the order 2, 3, 1, 0.
@@ -177,6 +203,14 @@ cannot read. So is a module that raises while it is imported, a module that
 declares no task, and two modules that would serve one name (`old-days.py` beside
 `old_days.py`). None of these is caught and skipped: a skipped task is a task
 that silently stopped deleting.
+
+**A history task handed to the runner is refused before anything runs.** The
+only program that runs one is `backend/utilities/corpus_history.py`, which binds
+the task itself and runs its git in the history job. A history task run through
+`idhazh gardener run-task`, or put in a shard, would record the squash as done -
+stamping `last_run` - without squashing anything, and put the next real squash
+off by a whole `every_days`. So the runner exits 2 and names that program, and
+nothing runs. `lifecycle_status: paused` is how a person holds the squash back.
 
 **Every path a task touched must sit inside what it owns.** What it took and
 what it wrote are both checked, on a dry run too, because the check reads the
@@ -195,6 +229,37 @@ anything is staged, the way it stops for a path outside what a task owns. A
 report lands on a dry run too, because what a dry run found is the thing it
 exists to report; every deletion it named is still held back.
 
+## What a shard's folders weigh
+
+**Every shard weighs the folders it owns, at the commit it checked out, before
+any task runs.** `gardener_publish.py` adds up the sizes `git ls-tree -r -l`
+lists under each owned folder. It reads them off the commit, with
+`GIT_NO_LAZY_FETCH=1`, so a checkout that holds only its own folders downloads
+nothing to answer, and a folder outside the checkout fails rather than
+downloads. Every row the shard writes carries the total as `cone_bytes`. The
+code folders every shard also checks out - `config/`, `backend/` and
+`.github/` - are not counted: they are the same in every shard, and they grow
+with code rather than with what the pipeline keeps.
+
+**Over `max_cone_mb` the shard still runs its tasks and lands its record, then
+exits 1.** The number is an alarm, not a stop. Stopping before the tasks would
+stop the one thing that makes the folders lighter - a live task's deletes - and
+the dry-run rows a person reads before turning a task live; the checkout has
+already paid for the bytes by then, so stopping saves nothing. The message names
+the three heaviest owned folders. `idhazh gardener run-task` starts no git
+process, so a hand run records `cone_bytes` as empty and is never over.
+
+**768 MB is the committed ceiling, and it is an estimate.** A megabyte here is
+1024 x 1024 bytes. Read on 2026-09-28, the heaviest shard - the digest pages,
+the score files, the score index and archive, and the visual-prunes ledger -
+owned 46.3 MB and grew about 1.4 MB a day. Its windows are 390 days and 14
+months, so it keeps growing for about a year whether its tasks are live or not;
+at the rates of 2026-09-20 to 27 those windows fill at about 550 to 600 MB, and
+768 leaves about 30 percent for the rate to rise. A ceiling near today's weight
+would go red within two weeks on growth the windows allow, and stay red. The
+first wake's checkout time says whether that weight still fits the 20-minute
+job, and any wake's record gives the reading again.
+
 ## The record
 
 One record per shard, always. Every task adds its row - a
@@ -207,6 +272,8 @@ it with exit 2 if it went anywhere else.
 Each row names the run that wrote it: `run_id`, `attempt`, `job` and `shard`, the
 task's own `duration_ms`, and `work_ended_at`, the instant the shard finished
 working and began to publish. A slow push is therefore never read as a slow task.
+Each row also carries `cone_bytes`, what the shard's owned folders weighed
+([above](#what-a-shards-folders-weigh)).
 
 ## Landing the commit
 
@@ -239,6 +306,27 @@ commit as `--git-sha`, because the package does not start git to read it. The
 utility takes the same line without that flag, and both are built from one
 parser in `idhazh.gardener.cli`.
 
+## The collection tasks
+
+**Two tasks delete what GitHub keeps for this repository rather than what it
+commits**: `workflow-artifacts` and `workflow-runs`, one declaration each, both
+served by `backend/idhazh/gardener/tasks/collection.py` through their kind. A
+declaration names its collection in `collection`, and the loader refuses one
+whose file is not named for it, so two declarations cannot take from one
+collection. The task lists its collection through
+`backend/idhazh/gardener/github_collections.py` and deletes one member at a
+time, oldest first, up to `max_deletes_per_run`, through the same core every
+ledger prune uses ([../../concepts/atomic-deletes.md](../../concepts/atomic-deletes.md)).
+
+**It owns no folder and writes nothing but its row.** `owns` is empty, so it
+adds nothing to its shard's checkout. The repository comes from
+`GITHUB_REPOSITORY` and the token from `GITHUB_TOKEN`, both set by Actions; a
+missing one fails that task by name, and its siblings still run. The
+`run-tasks` job holds `actions: write` for these two, so turning one live is a
+config change. Both ship `dry_run: true`: a wake lists what the window selects
+and deletes nothing. How to read the list and turn one live is
+[../../how-to/prune-a-collection.md](../../how-to/prune-a-collection.md).
+
 ## The compaction
 
 **A compaction moves one ledger's rows out of the many small raw files its
@@ -265,7 +353,7 @@ flowchart TB
   RAWF[("state/raw/ledger/YYYY/MM/DD/file_id.parquet<br/>written once, many writers")]
   CSV[("the CSV day trees under state/")]
 
-  subgraph GARDEN["Idhazh Gardener - gardener/tasks/compaction.py"]
+  subgraph GARDEN["Idhazh Gardener - the run-tasks job, gardener/tasks/compaction.py"]
     DROP["1 and 2. drop the month files, listings<br/>and raw days the windows no longer keep"]
     MDONE{"a month done?<br/>daily_keep_days since it ended,<br/>every day compacted, no raw day left"}
     MWAIT["the month waits for a later wake"]
@@ -449,7 +537,8 @@ than the names (Fowler and Carmack).
 `backend/utilities/prune_artifacts.py --record` wrote one pass to a file nothing
 read. A record now names the run, attempt, job and shard that made it, and a pass
 a person runs by hand is none of those, so the flag went rather than invent an
-identity (Fowler and Carmack).
+identity (Fowler and Carmack). On 2026-09-28 the utility went too: both
+collections are gardener tasks, and a hand run is `idhazh gardener run-task`.
 
 **2026-09-27: the commit loop lives outside the package.** The loop runs git,
 and `backend/tests/test_canaries.py` refuses `subprocess` anywhere under
@@ -497,6 +586,55 @@ oldest raw day would leave the daily index holding part of a month, and that
 month's check would call the days before it holes. The start asks the same
 function the window drops months by, `first_kept_month`, so a first pass never
 takes a day the same pass would drop (Carmack and Fowler).
+
+**2026-09-28: the weight ceiling is an alarm, and it is 768 MB.** Over it, a
+shard still runs its tasks and lands its record, then exits 1. Stopping first
+would stop the deletes that make the folders lighter, and the checkout has
+already paid for the bytes. The first figure proposed was 64 MB, a point for a
+person to decide at. The heaviest shard passes it within two weeks on growth
+its own windows allow, and while any red shard skips the squash, a ceiling that
+stays red stops the squash with it. 768 goes red only on growth past what the
+windows can hold (Carmack on the figure; Fowler agreed while the history job's
+condition stands).
+
+**2026-09-28: the weight is `cone_bytes`, in whole bytes, and empty when nobody
+weighed it.** `bytes_freed` in the same row is bytes, a byte count is exact, and
+0 is a real reading, so "not measured" is empty rather than 0 (Fowler and
+Carmack).
+
+**2026-09-28: a collection declaration names its collection.** A typed
+`collection` key, checked against the file name at load, is the shape a
+compaction's `ledger` key already has, so the task never parses its own name and
+`TaskContext` gains no field for one kind. The window counts whole days, because
+that is what the core counts (Fowler and Carmack).
+
+**2026-09-28: the runner refuses a history task.** Run anywhere but
+`corpus_history.py`, it stamps `last_run` without squashing and puts the next
+squash off a whole cadence. Nothing is lost: `lifecycle_status: paused` holds the
+squash back, and `dry_run: true` rehearses it (Fowler and Carmack).
+
+**2026-09-28: each job holds only the permissions its own steps use.** `plan`
+reads; `run-tasks` writes contents and Actions, for its record and the two
+collection tasks; `history` writes contents and never calls the Actions API. A
+job's `permissions` replace the workflow's, so each job lists its whole set, and
+`backend/tests/workflows/test_gardener_workflow.py` pins all three (Fowler and
+Carmack).
+
+**2026-09-28: the history job checks out `main`, both times.** A checkout takes
+the commit the run was created at unless told otherwise, and the shards push
+after that. `corpus_history.py` compares its checkout with origin's tip and
+refuses when they differ, so without `ref: main` it would refuse on every due
+wake (Carmack).
+
+**2026-09-28: the shard adds the complement's folders to its own checkout.** The
+plan job reads config alone and cannot name the folders the complement sweeps:
+they are what the commit holds under `state/` that no declaration and no ledger
+claims, and that rule lives in the installed package. The runner fails a task
+whose folder the commit holds and the checkout lacks, so with an empty cone the
+complement failed at every wake, and a red shard skips the squash. The shard
+adds those folders - 952 bytes on 2026-09-28 - then weighs them with the rest.
+Copying the ledger rule into the plan job would give one rule two writers
+(Fowler and Carmack).
 
 ## See also
 

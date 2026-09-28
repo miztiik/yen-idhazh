@@ -13,9 +13,10 @@ what a knob is at all is [../config.md](../config.md).
 
 | Knob | Committed | What it decides |
 | --- | --- | --- |
-| `version` | `2026-09-27` | The UTC day this file's shape last changed |
+| `version` | `2026-09-28` | The UTC day this file's shape last changed |
 | `attempts` | `6` | How many times one shard may try to push before it gives up with exit 3 |
 | `shards` | `5` | The most shards a wake splits into. Fewer run when there are fewer tasks |
+| `max_cone_mb` | `768` | The most the folders one shard owns may weigh, in megabytes of 1024 x 1024 bytes, before the shard exits 1. Its tasks still run and its record still lands; the number is an alarm, and it is an estimate ([why 768](../../architecture/publishing/idhazh-gardener.md#what-a-shards-folders-weigh)) |
 
 **`attempts` must be above `shards`.** Every shard of a wake pushes to one
 branch at once, so the last one to land has lost a race to every other shard
@@ -26,9 +27,9 @@ naming both values.
 ## One declaration a task
 
 A task is named by its file: `config/gardener/seen.json` declares the task
-`seen`. A missing `config/gardener/` means no tasks. Fourteen ship today: ten
-`retention` tasks, three `compaction` tasks (below) and `corpus-squash`, the one
-`history` task (below).
+`seen`. A missing `config/gardener/` means no tasks. Sixteen ship today: ten
+`retention` tasks, two `collection` tasks, three `compaction` tasks (below) and
+`corpus-squash`, the one `history` task (below).
 **There is no index file and no `name` key**, so a task can never be listed under
 one name and filed under another.
 
@@ -49,7 +50,7 @@ Each kind adds its own keys, and a key on the wrong kind is refused by name:
 | Kind | Its own keys |
 | --- | --- |
 | `retention` | `series`, one window per series, for two tasks alone: `telemetry-aggregate` keeps `full-grain`, `aggregate` and `public-copy`, and `scores` keeps `full-grain` and `archive` |
-| `collection` | none yet |
+| `collection` | `collection` (required): `workflow-artifacts` or `workflow-runs`, the GitHub collection it deletes from, and the file is named for it. Its `window` is whole days and nothing else, because a pass counts a member's age in days |
 | `compaction` | `ledger` (required); `raw_index_keep_days` (90), `daily_keep_days` (45), `monthly_window` (13 months), `max_periods_per_run` (8), `max_raw_files_per_period` (2000), `compact_after_days` (1). Its `window` is always `{unit: forever}` and its `max_deletes_per_run` always `null`: the two periods are how far back it keeps, and `max_periods_per_run` is its budget |
 | `history` | `every_days`, how many whole days apart two rewrites may run. Its `window` is whole days and nothing else, because the squash cuts history at 00:00 UTC on the day that many days back |
 
@@ -88,10 +89,30 @@ Each ships `dry_run: true`, and each owns its ledger's two folders,
 | `compact-visual-prunes` | `visual-prunes`, the picture cleanup's report of every pass | the defaults | the same |
 | `compact-feed-retirements` | `feed-retirements`, the addresses the pipeline stopped fetching | day files for 45 to 76 days, then 60 month files | a retirement the window deletes is a feed the pipeline asks for again, so it keeps five years (owner, 2026-09-27). The price: an address retired more than 60 months ago is asked for once more, and is retired again if it is still gone |
 
+## The collection declarations that ship
+
+Each deletes members of one collection GitHub keeps for this repository - never
+a file in it - past its window, and each ships `dry_run: true`. Each owns no
+folder, so `owns` is `[]`. The ages and ceilings were `prune.collections` in
+`config/idhazh.json` until 2026-09-28 and moved here with no value changed; a
+`prune` block left there is now refused by name, pointing here. How a pass runs
+is
+[../../architecture/publishing/idhazh-gardener.md](../../architecture/publishing/idhazh-gardener.md#the-collection-tasks).
+
+| Task | Collection | Window | At most, a pass |
+| --- | --- | --- | --- |
+| `workflow-artifacts` | the files workflow runs upload. 612 of them held 1,063 MB on 2026-09-17 | 30 days | 50 |
+| `workflow-runs` | the runs themselves, each with its logs. 3,551 of them on 2026-09-17 | 90 days | 50 |
+
+**The ceiling is also a request budget.** A pass spends one request to list
+each page of 100 members and one request a delete, and the token Actions hands
+a run has an hourly allowance, so the ceiling bounds what one wake spends of it.
+
 ## The history declaration: `corpus-squash`
 
-`config/gardener/corpus-squash.json` is the corpus squash, which
-`.github/workflows/prune.yml` runs in its own job and never in the matrix.
+`config/gardener/corpus-squash.json` is the corpus squash, which the `history`
+job of `.github/workflows/idhazh-gardener.yml` runs on its own and never in the
+matrix.
 
 | Key | Committed | What it decides |
 | --- | --- | --- |
@@ -132,6 +153,7 @@ names the file an operator edits and the rule it broke.
 | `digest-fragments` or `visual-prune` keeping anything but 30 days times `retention.image_months`, or anything but forever when that is `-1` | The archive page states that window to a reader |
 | `series` on any other task | One task keeps several series |
 | A compaction not called `compact-<ledger>` | One compaction a ledger, found by name |
+| A collection task not called `<collection>.json`, or whose `window` is not whole days | One task a collection, found by name; a pass counts a member's age in days |
 | `raw_index_keep_days` below `daily_keep_days` | The daily period may still need the index to rebuild a file |
 | A compaction whose `window` is not `{unit: forever}`, or whose `max_deletes_per_run` is not `null` | Its two periods are how far back it keeps and `max_periods_per_run` is its budget. A second window would be a number nothing reads, and a ceiling could stop a month half absorbed |
 | `daily_keep_days` below 31 | GitHub lets a failed run be re-run for 30 days, into the day it first wrote, so a month absorbed sooner could still be reached by one |
@@ -139,8 +161,9 @@ names the file an operator edits and the rule it broke.
 | A published ledger whose two periods reach back less than the widest `console.window_presets` | The widest span the console offers would have days no file holds |
 | A compaction reaching back less far than the task that limited its ledger before it moved | The two periods are the ledger's retention now, and a shorter pair silently cuts it |
 
-**The two refusals that need the task modules are the runner's**: a declaration
-no module serves, and a module no declaration uses. **The deletion of a folder**
+**The refusals that need the task modules are the runner's**: a declaration no
+module serves, a module no declaration uses, and a history task handed to it
+rather than to `backend/utilities/corpus_history.py`. **The deletion of a folder**
 is refused by the commit loop, where the deletions are known.
 
 ## Design rationale

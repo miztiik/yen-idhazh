@@ -1120,7 +1120,7 @@ index, which is the price of keeping the dedupe exact. What the ratio buys in
 years is in
 [../architecture/publishing/retention.md](../architecture/publishing/retention.md#what-bounds-the-committed-state-tree).
 
-**It ships in dry run.** `.github/workflows/prune.yml` force-pushes `main` on a
+**It ships in dry run.** The `history` job of `.github/workflows/idhazh-gardener.yml` force-pushes `main` on a
 schedule, so a file deleted here stops being recoverable once that prune passes
 over it (`CLAUDE.md` section 8). The step prints what a live run would remove and
 removes nothing; turning it on is a one-line commit somebody takes after reading
