@@ -389,7 +389,8 @@ def test_the_canary_writes_every_column_the_item_health_ledger_defines() -> None
 #: The retired word, on its own. The boundary is letters and digits rather than
 #: `\b`, so `warm`, `alarm`, `harm`, `charm`, `farm`, `swarm`, `armed`, `arm64`,
 #: `Carmack` and `barMaxWidth` are not hits and need no allow-list. An underscore
-#: is deliberately outside the boundary, so `ARM_ROOT` and `_arm_lines` are hits.
+#: is deliberately outside the boundary, so `_arm_lines` is a hit. Only the first
+#: letter may be a capital, so the processor's name, spelled in capitals, is not.
 RETIRED_WORD = re.compile(r"(?<![A-Za-z0-9])[Aa]rms?(?![A-Za-z0-9])")
 
 #: The one sense that stays. "At arm's length" is a viewing distance a reader
@@ -398,30 +399,23 @@ ARMS_LENGTH = re.compile(r"(?<![A-Za-z0-9])[Aa]rm's length")
 
 
 def _lines_that_may_still_spell_it(path: Path, text: str) -> set[int]:
-    """Two things have to spell a retired name: a changelog, and the reader that migrates it.
+    """One thing has to spell a retired name: the changelog entry that records the rename.
 
-    A changelog entry says what a key used to be called, and a before-validator
-    accepts the old spelling for one release (CLAUDE.md section 11). Both would
-    be impossible to write if the sweep refused the word everywhere, and both are
-    found from the syntax tree rather than from a list of paths, so neither rots
-    when a file moves.
+    It is found from the syntax tree rather than from a list of paths, so it does
+    not rot when a file moves. A reader that still accepts the old spelling gets
+    no such excuse: a config file this project writes is edited in the same commit
+    that renames its key, so nothing is left for an alias to read.
     """
     if path.suffix != ".py":
         return set()
     allowed: set[int] = set()
     for node in ast.walk(ast.parse(text, filename=str(path))):
-        span: tuple[int, int | None] | None = None
-        if isinstance(node, ast.Call):
-            called = node.func
-            name = called.id if isinstance(called, ast.Name) else getattr(called, "attr", "")
-            if name == "ChangelogEntry":
-                span = (node.lineno, node.end_lineno)
-        elif isinstance(node, ast.FunctionDef) and node.name.endswith(
-            ("_still_read", "_still_reads")
-        ):
-            span = (node.lineno, node.end_lineno)
-        if span is not None and span[1] is not None:
-            allowed.update(range(span[0], span[1] + 1))
+        if not isinstance(node, ast.Call):
+            continue
+        called = node.func
+        name = called.id if isinstance(called, ast.Name) else getattr(called, "attr", "")
+        if name == "ChangelogEntry" and node.end_lineno is not None:
+            allowed.update(range(node.lineno, node.end_lineno + 1))
     return allowed
 
 

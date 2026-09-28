@@ -28,7 +28,7 @@ publishes.
 from __future__ import annotations
 
 import hashlib
-from typing import Annotated, Any, ClassVar, Self
+from typing import Annotated, ClassVar, Self
 
 from pydantic import Field, StringConstraints, model_validator
 
@@ -214,25 +214,6 @@ class PipelineTestsConfig(Contract):
         line, adding an address is a four-line diff over a file nobody can scan.
         """
         return records_json(self.model_dump(mode="json"))
-
-    @model_validator(mode="before")
-    @classmethod
-    def _the_old_key_still_reads(cls, data: Any) -> Any:
-        """`arms` was renamed to `cases` on 2026-09-15. A file spelling it still loads.
-
-        Nothing but the name moved, so the old value is carried across whole. The
-        model forbids unknown keys, so without this a config file an earlier build
-        read would be refused outright (section 11).
-
-        This one goes a release later. A config file is a file somebody can edit,
-        so the alias buys the edit time rather than standing for ever - which is
-        the rule `RunPlan.VerticalPlan` records for the same kind of rename.
-        """
-        if isinstance(data, dict) and "arms" in data and "cases" not in data:
-            migrated = dict(data)
-            migrated["cases"] = migrated.pop("arms")
-            return migrated
-        return data
 
     @model_validator(mode="after")
     def _the_list_can_answer_the_draw(self) -> Self:

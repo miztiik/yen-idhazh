@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Any, Self
+from typing import Self
 
 from pydantic import Field, model_validator
 
@@ -564,37 +564,6 @@ class ConsoleConfig(Model):
             "cover at 390 CSS px, the narrowest width."
         ),
     )
-
-    @model_validator(mode="before")
-    @classmethod
-    def _the_old_chart_keys_still_read(cls, data: Any) -> Any:
-        """`chart_arm_*` became `chart_*` on 2026-09-15. A config spelling it still loads.
-
-        Only the names moved. `arm` was benchmarking's word for the same work run
-        again under different settings, and this section's own prose stopped using
-        it in the same commit - so the keys followed rather than being left as the
-        one place a person still has to type it.
-
-        These go a release later, the way a renamed config knob does: a config
-        file is a file somebody can edit, so the alias buys the edit time and is
-        then replaced by a refusal (section 11).
-        """
-        if not isinstance(data, dict):
-            return data
-        moved = {
-            "chart_arm_rule_days": "chart_rule_days",
-            "chart_arm_minutes_target": "chart_minutes_target",
-            "chart_arm_coverage_pct": "chart_coverage_pct",
-        }
-        if not any(old in data for old in moved):
-            return data
-        migrated = dict(data)
-        for old, new in moved.items():
-            if old in migrated and new not in migrated:
-                migrated[new] = migrated.pop(old)
-            else:
-                migrated.pop(old, None)
-        return migrated
 
     @model_validator(mode="after")
     def _window_bounds_are_ordered(self) -> Self:
