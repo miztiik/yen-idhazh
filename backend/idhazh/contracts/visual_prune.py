@@ -1,8 +1,8 @@
 """What one cleanup pass over the rendered visuals found, took, and left behind.
 
-`state/raw/visual-prunes/YYYY/MM/DD/<file_id>.parquet`. One row per run of
-`idhazh prune-state`, written through the ledger door after the day is
-committed. Read whole - "is the backlog shrinking" has no time bound - so the
+`state/raw/visual-prunes/YYYY/MM/DD/<file_id>.parquet`. One row per pass of
+the gardener's `visual-prune` task, written through the ledger door, dry run or
+not. Read whole - "is the backlog shrinking" has no time bound - so the
 day layout buys the read nothing, and it is there for what it buys a writer
 instead: every writer holds a file of its own, so two runs never write one
 path. `idhazh.ledger` owns that trade and states it

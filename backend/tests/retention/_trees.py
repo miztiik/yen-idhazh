@@ -25,13 +25,7 @@ from idhazh.contracts.item_health import (
 )
 from idhazh.contracts.item_health_summary import ItemHealthSummaryRow
 from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
-from idhazh.contracts.knobs.console import ConsoleConfig
 from idhazh.contracts.ledger_name import LedgerName
-
-#: The widest span the console's control can select, from the config that owns
-#: it. The prune may never delete a shard a read that wide names.
-CONSOLE_MAX_WINDOW_DAYS: Final = ConsoleConfig().max_window_days
-
 
 #: The run every row these tests write is filed under. One value, so a test that
 #: writes twice is writing a repeat rather than a second run.
@@ -205,9 +199,9 @@ def month_holding(shard: Path) -> str:
 def census_of(state_dir: Path, date: str) -> list[ItemHealthRow]:
     """One row per item one named day recorded, settled the way the fold settles it.
 
-    The read `retention.prune_telemetry` itself makes. A test that opened the
-    day's own path would open a directory, and one that opened a single file
-    inside it would answer for one writer rather than for the day.
+    The read the gardener's `telemetry-aggregate` task itself makes. A test that
+    opened the day's own path would open a directory, and one that opened a single
+    file inside it would answer for one writer rather than for the day.
     """
     return [
         ItemHealthRow.from_csv_row(cells)

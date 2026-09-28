@@ -1,10 +1,10 @@
 """Are the two roots claimed, built one way, and the only roots the ledger door can write under?
 
-The trial-tree sweep in `prune-state` empties every child of `state/` the
-registry does not claim, so an unclaimed `raw/` or `compact/` would be read as a
-trial run's tree and the gardener would delete its own records. And the five
-root builders refuse any path whose first folder under the state root is
-neither, so a third root is a `ValueError` rather than a convention.
+The gardener's `trials` task empties every child of `state/` that no other task
+owns and the registry does not claim, so an unclaimed `raw/` or `compact/` would
+be read as a trial run's tree and the gardener would delete its own records. And
+the five root builders refuse any path whose first folder under the state root
+is neither, so a third root is a `ValueError` rather than a convention.
 """
 
 from __future__ import annotations
@@ -15,12 +15,13 @@ from pathlib import Path
 from typing import Final
 
 import pytest
+from gardener.tasks._task import committed_folders, declared
 
 from idhazh import ledger
 from idhazh.contracts.file_envelope import Format, Period
 from idhazh.contracts.ledger_name import LedgerName
+from idhazh.gardener import runner
 from idhazh.ledger import paths
-from idhazh.stages.prune_state import _trial_roots
 
 pytestmark = pytest.mark.contract
 
@@ -30,13 +31,18 @@ A_FILE: Final = uuid.UUID("01a0d03c-2e00-8461-98e0-a67898e9a802")
 WHICH: Final = LedgerName.VISUAL_PRUNES
 
 
-def test_a_state_tree_holding_only_the_two_roots_names_no_trial_root(tmp_path: Path) -> None:
+def test_a_state_tree_holding_only_the_two_roots_leaves_the_trial_task_nothing(
+    tmp_path: Path,
+) -> None:
     """The oracle: the door's own trees are never strays."""
     state = tmp_path / "state"
     (state / "raw" / WHICH.value / "2026" / "09" / "24").mkdir(parents=True)
     (state / "compact" / WHICH.value / "daily").mkdir(parents=True)
+    tasks = declared()
 
-    assert _trial_roots(state) == []
+    folders = runner.folders_of("trials", tasks, tmp_path, committed_folders(tmp_path, tasks))
+
+    assert folders.walk == ()
 
 
 def test_the_two_roots_are_claimed_beside_every_family() -> None:

@@ -1,6 +1,6 @@
 # Item Health
 
-**Last Updated**: 2026-09-23
+**Last Updated**: 2026-09-28
 
 What every planned item did on every run, where that record lives, and which
 failures count against a source. This is item-grain evidence. Feed health is
@@ -54,9 +54,9 @@ The ledger is append-only: a writer adds a file to the day and nothing edits a
 file that is already there. It is not kept for ever: a month
 older than `observability.item_health_full_grain_months` (14) is folded to one
 row per `(date, stage)` in `state/item-health-summary/<YYYY-MM>.csv` and that
-month's day directories are deleted, by `idhazh prune-state` after the day is
-committed. The browser's copy of that same month under
-`frontend/public/telemetry/` goes in the same step.
+month's day directories are deleted, by the gardener's `telemetry-aggregate`
+task. The browser's copy of that same month under
+`frontend/public/telemetry/` goes in the same pass.
 
 **The boundary is still a month and only the directories below it are days.** The
 fold is where the two grains meet: it reads a month's day directories - at most

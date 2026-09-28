@@ -7,7 +7,6 @@ row it filed through the ledger door.
 
 from __future__ import annotations
 
-import logging
 import os
 import re
 from collections.abc import Callable
@@ -17,16 +16,11 @@ from typing import Any, Final
 
 import pytest
 
-from idhazh import ledger, site_weight
+from idhazh import site_weight
 from idhazh.contracts.base import ITEM_ID_PATTERN
-from idhazh.contracts.knobs.collect import CollectConfig
-from idhazh.contracts.knobs.observability import ObservabilityConfig
-from idhazh.contracts.knobs.retention import RetentionConfig
-from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.visual_prune import VisualPruneRow
-from idhazh.retention import oldest_visual, prune, visuals_older_than
+from idhazh.retention import oldest_visual, visuals_older_than
 from idhazh.site_weight import SiteSize, measure
-from idhazh.stages.prune_state import stage_prune_state
 
 from ._trees import (
     PRUNE_RUN_ID,
@@ -367,23 +361,6 @@ def test_a_dry_run_reports_the_same_backlog_it_would_have_left(tmp_path: Path) -
     assert len(list(root.rglob("*.webp"))) == 300
 
 
-def test_the_flag_can_only_make_a_run_report_and_never_delete(tmp_path: Path) -> None:
-    """The step's flag is added to `retention.dry_run`, never subtracted from it.
-
-    There is no argument that turns deletion on, which is what keeps the two
-    guards independent: a workflow edit alone cannot make this delete.
-    """
-    root = site(tmp_path, {"2020-01-01": ["old-0000000003.webp"]})
-    live = RetentionConfig(image_months=6, dry_run=False)
-
-    assert prune(root, live, date(2026, 8, 21), dry_run=True).deleted == 0
-    assert (root / "2020" / "01" / "01" / "old-0000000003.webp").exists()
-
-    shipped = RetentionConfig(image_months=6, dry_run=True)
-    assert prune(root, shipped, date(2026, 8, 21), dry_run=False).deleted == 0
-    assert (root / "2020" / "01" / "01" / "old-0000000003.webp").exists()
-
-
 def test_the_bytes_are_the_files_that_actually_left_the_tree(
     tmp_path: Path,
 ) -> None:
@@ -552,81 +529,6 @@ def test_the_row_refuses_arithmetic_that_does_not_add_up() -> None:
         VisualPruneRow(**{**honest, "dry_run": True})
     with pytest.raises(ValueError, match="no cutoff"):
         VisualPruneRow(**{**honest, "policy_months": -1})
-
-
-def test_the_step_commits_one_row_a_run_and_names_what_it_left(
-    tmp_path: Path, caplog: pytest.LogCaptureFixture
-) -> None:
-    """End to end through the stage, on the shipped policy and on a live one.
-
-    `state_dir` and `digest_root` are named together, so nothing here can reach
-    the committed archive.
-    """
-    state = tmp_path / "state"
-    digest = site(tmp_path / "public", {"2020-01-01": [f"p-{n:010d}.webp" for n in range(300)]})
-
-    with caplog.at_level(logging.INFO):
-        assert (
-            stage_prune_state(
-                observability=ObservabilityConfig(),
-                collect=CollectConfig(),
-                retention_config=RetentionConfig(image_months=6, dry_run=False),
-                commit_sha="a" * 40,
-                run_id=PRUNE_RUN_ID,
-                today=date(2026, 8, 21),
-                state_dir=state,
-                digest_root=digest,
-            )
-            == 0
-        )
-
-    written = ledger.list_raw_files(state, LedgerName.VISUAL_PRUNES)
-    assert [held.envelope.covers for held in written] == ["2026-08-21"]
-    assert written[0].envelope.identity.producer == "stages.prune_state"
-    assert written[0].envelope.identity.git_sha == "a" * 40
-    rows = ledger.load_visual_prunes(state)
-    assert len(rows) == 1
-    assert (rows[0].deleted, rows[0].skipped_by_fuse) == (200, 100)
-    assert "100 held back by the 200-file fuse" in caplog.text
-
-    repeat = stage_prune_state(
-        observability=ObservabilityConfig(),
-        collect=CollectConfig(),
-        retention_config=RetentionConfig(image_months=6, dry_run=False),
-        commit_sha="a" * 40,
-        run_id=PRUNE_RUN_ID,
-        today=date(2026, 8, 21),
-        state_dir=state,
-        digest_root=digest,
-    )
-    assert repeat == 0
-    assert len(ledger.load_visual_prunes(state)) == 1, (
-        "a second pass by one execution is one work unit written twice, and the "
-        "reader keeps the later write"
-    )
-
-
-def test_the_step_leaves_the_pictures_alone_when_no_tree_is_named(tmp_path: Path) -> None:
-    """The pairing that stops a test run cleaning the committed archive.
-
-    `digest_root` defaults to the real tree only beside the real state tree,
-    exactly as `public_root` does and for the same reason.
-    """
-    state = tmp_path / "state"
-
-    assert (
-        stage_prune_state(
-            observability=ObservabilityConfig(),
-            collect=CollectConfig(),
-            retention_config=RetentionConfig(image_months=6, dry_run=False),
-            commit_sha="a" * 40,
-            run_id=PRUNE_RUN_ID,
-            today=date(2026, 8, 21),
-            state_dir=state,
-        )
-        == 0
-    )
-    assert ledger.list_raw_files(state, LedgerName.VISUAL_PRUNES) == []
 
 
 def test_a_directory_that_is_not_a_date_is_left_alone(tmp_path: Path) -> None:

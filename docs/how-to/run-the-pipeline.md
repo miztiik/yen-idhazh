@@ -88,22 +88,26 @@ the link, the title and our own summary.
 
 ## Turning state cleanup on
 
-`idhazh prune-state` runs after the day is committed, in the assemble job of
-`.github/workflows/digest.yml`. **It ships with `--dry-run` set, so it prints the
-files a live run would remove and removes none of them.** That is on purpose:
+Each retention pass is a gardener task, and each task's declaration under
+`config/gardener/` ships with `dry_run: true`. **A pass prints every file a live
+pass would take and takes none of them.** That is on purpose:
 `.github/workflows/prune.yml` force-pushes `main` on a schedule
-([../../CLAUDE.md](../../CLAUDE.md) section 8), so a file this step deletes
-wrongly stops being recoverable once that prune passes over the range. `git
-revert` is not a recovery path here.
+([../../CLAUDE.md](../../CLAUDE.md) section 8), so a file a task deletes wrongly
+stops being recoverable once that prune passes over the range. `git revert` is
+not a recovery path here. Until the gardener's own workflow runs the tasks on a
+schedule, `python -m idhazh gardener run-task NAME --run-id RUN_ID --attempt N
+--git-sha SHA` runs one in a checkout and prints what it would take.
 
-Turning live deletion on is a separate one-line commit, and this is the order:
+Turning one task's deletion on is a separate one-line commit to its own
+declaration, and this is the order:
 
-1. Wait for a scheduled run whose log would name at least one file. **The first
- such day is 2027-10-01**, when `2026-08` falls below the fourteen-month
- windows. Before then the list is empty every day and the switch proves
- nothing.
+1. Wait for a scheduled pass whose output would name at least one file. **For the
+ fourteen-month tasks the first such day is 2027-10-01**, when `2026-08` falls
+ below their windows. Before then the list is empty every day and the switch
+ proves nothing.
 2. Read that run's log: `gh run view <runId> --repo <owner/repo> --job <jobId>
- --log`, and grep it for `prune-state would remove`.
+ --log`, and grep it for `would delete`. Each task prints one line a pass and
+ then one line a file it would take.
 3. Check the list against what you expect. On 2027-10-01 that is four trees -
  the day files under `state/item-health/2026/08/`,
  `frontend/public/telemetry/2026-08.csv`, the day files under
@@ -111,20 +115,18 @@ Turning live deletion on is a separate one-line commit, and this is the order:
  A fifth name, or
  a month that is not the oldest, means a boundary is wrong and the switch
  waits.
-4. Confirm `state/score-archive/2026-08.json` exists and reconciles. The step
- writes and reads back every archive before it unlinks anything, so an archive
- that is missing is a step that already refused.
-5. Only then drop `--dry-run` from the `prune-state` step, in a commit that
- changes nothing else.
+4. Confirm `state/score-archive/2026-08.json` exists and reconciles. The `scores`
+ task writes and reads back every archive before it unlinks anything, so an
+ archive that is missing is a pass that already refused.
+5. Only then set that task's `dry_run` to `false` in its own declaration, in a
+ commit that changes nothing else.
 
-**Dropping that flag does not switch the picture cleanup on**, and it is worth
-knowing why before step 5. The same step also cleans the rendered visuals and
-files a row under `state/raw/visual-prunes/` saying what it found. That pass has a
-guard of its own: `retention.dry_run` is `true`, so with the flag gone it still
-reports and still deletes nothing. `retention.image_months` is `13` from
-2026-09-13, so the pass does name a cutoff - and nothing published is old enough
-to sit behind it. Switching it on is a separate change with its own
-conditions
+**Each task is switched on by itself, and the picture cleanup is a task of its
+own.** `visual-prune` files a row under `state/raw/visual-prunes/` saying what it
+found on every pass, and setting another task live leaves it reporting.
+`retention.image_months` is `13` from 2026-09-13, so the pass does name a cutoff -
+and nothing published is old enough to sit behind it. Switching it on is a
+separate change with its own conditions
 ([../architecture/publishing/retention.md](../architecture/publishing/retention.md#the-cleanup-says-what-it-did-not-clear-2026-09-06)).
 
 Two consequences to know before step 5. The published copy goes with its private

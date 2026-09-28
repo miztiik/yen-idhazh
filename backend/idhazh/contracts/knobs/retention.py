@@ -43,7 +43,7 @@ class RetentionConfig(Model):
             "configures nothing deletes nothing. Age-based only, never size: a "
             "size trigger deletes most on the day the reader has most to read. "
             "config/idhazh.json sets 13 from 2026-09-13, which is the first age "
-            "window this project has ever had. `retention.cutoff` spends a month "
+            "window this project has ever had. The cleanup spends a month "
             "as 30 days, so 13 here is 390 days and not thirteen calendar months - "
             "5.7 days shorter, which holds slightly less rather than slightly "
             "more. It is an archive policy and not a cap defence, and the "

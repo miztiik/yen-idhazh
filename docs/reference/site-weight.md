@@ -1,6 +1,6 @@
 # What a reader downloads
 
-**Last Updated**: 2026-09-27
+**Last Updated**: 2026-09-28
 Every number about **what the reader downloads**: the compression level the
 origin serves, each page's ceiling, what a cold load costs, how fast the site
 fills, and the weight of the archive, the search index and the published ledger.
@@ -84,7 +84,7 @@ every visual in the tree today is an SVG, so a raster family would move it.
 
 ### What a window buys against the cap
 
-`retention.cutoff` spends a month as 30 days, so a window of N months is 30N
+The `visual-prune` window spends a month as 30 days, so a window of N months is 30N
 days. Thirteen is therefore **390 days and not thirteen calendar months** - 5.7
 days short - and the error runs in the safe direction: the window holds slightly
 less than a calendar reading would say, never more.

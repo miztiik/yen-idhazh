@@ -56,7 +56,7 @@ Monthly shards, because a read looks back 31 days - just enough that a quarantin
 
 ## A month past its age is deleted, and no summary replaces it
 
-`observability.feed_health_keep_months` is 14, and a shard older than that is unlinked by `idhazh prune-state` after the day is committed. Nothing is folded first, and that is the decision rather than an omission: the quarantine reads 31 days and the console reaches at most `console.max_window_days` (366), so no total over a month fourteen months back has a reader - and writing one would persist a shape nothing consumes, for ever. Fourteen for the same reason the item-health window is: a 366-day read walks 367 inclusive days and those days can fall in fourteen calendar month files.
+`observability.feed_health_keep_months` is 14, and a shard older than that is unlinked by the gardener's `feed-health` task. Nothing is folded first, and that is the decision rather than an omission: the quarantine reads 31 days and the console reaches at most `console.max_window_days` (366), so no total over a month fourteen months back has a reader - and writing one would persist a shape nothing consumes, for ever. Fourteen for the same reason the item-health window is: a 366-day read walks 367 inclusive days and those days can fall in fourteen calendar month files.
 
 **Older than the oldest month kept, never merely outside a window.** `--date` takes whatever it is handed, so a run given a date in the past draws a smaller window and every shard since falls outside it. Deleting below the window's floor instead means a back-dated run deletes less rather than deleting the shard the next quarantine reads.
 

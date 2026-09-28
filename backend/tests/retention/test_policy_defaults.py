@@ -12,7 +12,7 @@ from gardener.tasks._task import declared
 from idhazh.contracts.base import ITEM_ID_PATTERN
 from idhazh.contracts.knobs.gardener import DaysWindow
 from idhazh.contracts.knobs.retention import RetentionConfig
-from idhazh.retention import cutoff, visuals_older_than
+from idhazh.retention import visuals_older_than
 
 from ._visual_prune import NAME, pruned, published, window
 
@@ -22,7 +22,6 @@ def test_retention_is_off_by_default() -> None:
     config = RetentionConfig()
     assert config.image_months == -1
     assert config.dry_run is True
-    assert cutoff(date(2026, 8, 21), config.image_months) is None
 
 
 def test_a_disabled_policy_deletes_nothing(tmp_path: Path) -> None:

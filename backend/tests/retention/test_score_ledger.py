@@ -25,21 +25,17 @@ from gardener.tasks._task import declared, run_task
 from idhazh import day_partition, day_shards, ledger
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.eval_row import ConfidenceBand, EvalRow
-from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW, CollectConfig
+from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
 from idhazh.contracts.knobs.gardener import MonthsWindow, RetentionPolicy
-from idhazh.contracts.knobs.observability import ObservabilityConfig
-from idhazh.contracts.knobs.retention import RetentionConfig
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.evals import archive as score_archive
 from idhazh.evals import writer as score_writer
 from idhazh.gardener.one_at_a_time import PruneInterruptedError
 from idhazh.retention import oldest_month_kept
-from idhazh.stages.prune_state import stage_prune_state
 
 from ._trees import (
     HISTORY_MONTHS,
     NOT_MONTHS,
-    RUN_ID,
     TODAY,
     months_back,
 )
@@ -581,82 +577,3 @@ def test_an_index_day_no_archive_covers_is_left_alone(tmp_path: Path) -> None:
         "the last record of those measurements went, and no archive carries them"
     )
     assert score_writer.recorded_observations(state)
-
-
-def test_the_stage_names_the_score_day_files_a_live_run_would_remove(
-    tmp_path: Path, caplog: pytest.LogCaptureFixture
-) -> None:
-    """The dry run names every score day file too, in the POSIX form section 2 asks for.
-
-    Each one by name, not a synthesised `<month>-01`: a month is a directory now,
-    so a caller that spelled one would name a file the ledger may never have held.
-
-    **The index days beside them are named on the same terms.** They are derived
-    from these rows and answer only for them, so the archiving pass takes both -
-    and a dry run that named one half would be a list a live run does not match.
-    """
-    state = tmp_path / "state"
-    config = ObservabilityConfig()
-    months = months_back(TODAY, config.scores_full_grain_months + 1)
-    score_history(state, months)
-    expired = months[0]
-    days = day_shards.shards_by_month(
-        ledger.tree_root(state, LedgerName.SCORES), days=UNBOUNDED_WINDOW
-    )[expired]
-    index_days = day_shards.shards_by_month(
-        ledger.tree_root(state, LedgerName.SCORE_INDEX), days=UNBOUNDED_WINDOW
-    )[expired]
-    doomed = sorted(
-        f"{ledger.STATE_DIRNAME}/{shard.relative_to(state).as_posix()}"
-        for shard in [*days, *index_days]
-    )
-    assert len(days) > 1, "one day a month would not separate a path from a synthesis"
-
-    with caplog.at_level(logging.INFO):
-        assert (
-            stage_prune_state(
-                observability=config,
-                collect=CollectConfig(),
-                retention_config=RetentionConfig(),
-                commit_sha="a" * 40,
-                run_id=RUN_ID,
-                today=TODAY,
-                state_dir=state,
-                dry_run=True,
-            )
-            == 0
-        )
-
-    named = sorted(
-        line.split("would remove ", 1)[1]
-        for line in caplog.text.splitlines()
-        if "prune-state would remove " in line and not line.endswith("files:")
-    )
-    assert named == doomed
-    assert "\\" not in caplog.text, "a path leaving the process is POSIX (section 2)"
-    assert score_writer.ledger_days(state), "a dry run deleted the ledger"
-    assert score_writer.index_days(state), "a dry run deleted the index"
-
-
-def test_the_stage_says_so_when_every_score_month_is_at_full_grain(
-    tmp_path: Path, caplog: pytest.LogCaptureFixture
-) -> None:
-    """Silence and "nothing aged out" read the same, and only one of them is true."""
-    state = tmp_path / "state"
-    score_history(state, months_back(TODAY, 2))
-
-    with caplog.at_level(logging.INFO):
-        assert (
-            stage_prune_state(
-                observability=ObservabilityConfig(),
-                collect=CollectConfig(),
-                retention_config=RetentionConfig(),
-                commit_sha="a" * 40,
-                run_id=RUN_ID,
-                today=TODAY,
-                state_dir=state,
-            )
-            == 0
-        )
-
-    assert "score archive: every month is inside the 14-month window" in caplog.text

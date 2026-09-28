@@ -1,158 +1,43 @@
-"""Delete or fold what is older than its window, by the policy each artefact carries.
+"""How old is a file under a dated tree, and what does a month fold into before its files go?
 
-**The concept is adaptive pruning, and `docs/concepts/adaptive-pruning.md` is
-where it is decided.** Adaptive because every ledger answers one question for
-itself - what a reader loses when its oldest entry goes - and the answer picks
-one of four policies: a ledger folds, a lookup deletes, an asset deletes, a
-record is kept. That page carries the deciding rule, the five properties every
-deletion below obeys, and the register naming every artefact this project writes
-against its policy. What follows here is how each policy is built rather than
-why it is the right one.
+The retention passes are gardener tasks, one module each under
+`idhazh.gardener.tasks`, and each says what it owns and how long it keeps it in
+its own declaration under `config/gardener/`. What they share lives here: the
+walk that reads a published day's date out of its path, the rule for which file
+in a day is a picture, the month stems a ledger files by, the day a trial file
+records, and the two folds that replace a month of full-grain rows with the
+rows a reader still needs. **The concept is adaptive pruning, and
+`docs/concepts/adaptive-pruning.md` is where it is decided**: which policy each
+artefact carries, and why.
 
-The 1 GB Pages cap is the earliest hard limit this project meets, and it is met
-by images rather than by text. So this does two separate things, and they are
-deliberately not the same thing:
-
-- **The alarm** measures the built bundle - the tree the deploy uploads - and
-  says when it is approaching the ceiling. It is on from the first run, long
-  before anything is ever deleted, because measuring the ceiling is what turns a
-  policy into a decision rather than a reaction. It lives in
-  `idhazh.site_weight`, because it deletes nothing.
-- **The prune** removes rendered visuals older than a configured window. It
-  ships disabled, in dry-run, behind a per-run delete fuse.
-
-Three rules the prune obeys, each one a way this goes wrong otherwise:
-
-- **Age only, never size.** A size-triggered prune deletes most on the day the
-  site is largest, which is the day the reader has most to read.
-- **Visuals only, never a day.** The digest payload is the record that a day
-  happened. Deleting text to save bytes trades the whole archive for a rounding
-  error.
-- **A fuse.** An off-by-one in a date parse must not eat the archive, so no run
-  may delete more than a configured number of files.
-- **A record.** Every pass files one row under `state/raw/visual-prunes/`, and that
-  row carries `skipped_by_fuse` beside `deleted`. The fuse caps `deleted`, so on
-  its own it is the same number on a run that finished its backlog and on one
-  that could not get near it. Only the pair says which, and the pass runs and
-  reports on every run - including today's, where the policy is off and nothing
-  is a candidate - so the day it starts working is visible in a committed file
-  rather than in a job log.
-
-**The telemetry fold is the third thing here, and it takes two files at once.**
-`state/item-health/` is the census, and it grew at a measured 211,742 bytes a
-published day on 2026-08-30 with nothing bounding it.
-`observability.item_health_full_grain_months` is where a month stops being kept
-item by item: past it the month is folded to one row per (date, stage), the
-full-grain shard is deleted, and the browser's copy of that same month under
-`frontend/public/telemetry/` goes with it. It is fourteen months because
-`console.max_window_days` is 366, `month_partition.shards_in_window` walks 367 inclusive
-days, and those days can fall in fourteen calendar months - a window ending on
-the first of a month starts on the last day of another. The aggregate is kept
-forever by default, because a downsampled year costs kilobytes and deleting it
-would make a year-over-year comparison unanswerable -
-`observability.item_health_aggregate_keep_months` is the escape hatch and is
-null. Those two names are what this module reads; the single age they replaced
-was removed on 2026-09-03, once every reader had moved onto them.
-
-**The private record and its browser copy go together, in that order.**
-`frontend/public/telemetry/<YYYY-MM>.csv` is the projection a reader's browser
-fetches, and `observability.public_telemetry_keep_months` is its own age - the
-config refuses any value but the ledger's own, so the two can never come apart
-by an edit. A copy that outlived its source would be a published rate nobody
-could check against the rows behind it. The copy is named before anything is
-deleted, so a dry run prints the file a live run removes rather than a list
-assembled from what the deletion happened to reach; and a copy whose source an
-earlier interrupted run already folded away is caught by the same pass, which is
-why that pass walks the published tree rather than the shards it just folded.
-
-**Feed health is deleted rather than folded, and that is the fourth thing.**
-`state/feed-health/` is one row per feed per run. The quarantine reads 31 days
-(`ledger.HEALTH_WINDOW_DAYS`) and the console reaches at most
-`console.max_window_days`, so no summary of a month past
-`observability.feed_health_keep_months` has a reader - and inventing one would
-persist a shape nothing consumes, for ever. The ledger files by day and that
-age is a month, so the prune takes a month's day files whole and names each one
-it removed. `state/raw/feed-retirements/` is never
-a candidate: it carries no time window at all, and a run that forgot a retired
-address would start asking a dead one again.
-
-**The seen prune is the fifth thing, and it folds nothing on purpose.**
-`state/seen/` is a lookup rather than a measurement: `ledger.load_seen` opens
-the day files `day_partition.days_in_window(today, collect.seen_window_days)`
-names and nothing else, so a day outside that set answers no question anybody
-asks and its honest retention is deletion. A fold would be inventing a total
-nobody reads. The keep-set is taken from the reader's own helper, and only days
-*older* than it are deleted, so the retained set is a superset of the read set
-whatever date the prune is handed. It is the one prune here whose boundary is a
-day rather than a month, because it is the one whose knob is counted in days.
-
-**The score archive is the sixth thing, and it is the only one that has to prove
-itself twice.** `state/scores/` is the largest ledger here - 5,335 rows in
-4,266,655 bytes on 2026-09-03 - and it is neither a lookup nor a set of timings:
-it is the evidence behind every published quality claim, and it is what stops an
-old measurement being scored again as if it were new. So a month past
-`observability.scores_full_grain_months` is summarised into
-`state/score-archive/<YYYY-MM>.json` (`idhazh.evals.archive`), the file is read
-back through its contract, and the summary is reconciled field by field against
-a second reading of the shard before the shard is unlinked. The telemetry fold
-above checks that what it wrote reads back; this checks that as well, and then
-checks that what reads back still describes the file it is about to delete.
-
-**The visual fold is the seventh thing, and today it is the fold and not the
-pass.** `state/visuals/` takes one row per attempt at a picture, and
-`observability.visuals_full_grain_months` is where a month stops being readable
-attempt by attempt. `fold_visual_month` is the arithmetic that replaces it: one
-row per `(date, decision, none_reason, rejection_reason, potential_primary,
-family, element_band, downgrade_depth)` group, carrying the counts a keep rate
-needs and the spread of the two measured columns. What is deliberately absent is
-a `prune_visuals` beside the six passes above, and the reason is that nothing
-writes the ledger yet: a pass over a directory no run creates would walk an empty
-tree on every run and report a policy working, which is a green light on the
-wrong tree - the failure this module already learned once from the alarm. The
-key is settled now because the fold deletes the shard and cannot be revised; the
-pass lands with the writer.
+Nothing here deletes a file but `drop_empty_directories`, and it deletes only
+directories already emptied: every deletion goes through a task, so each one is
+counted, capped and recorded in the gardener's own record.
 """
 
 from __future__ import annotations
 
 import re
 from collections.abc import Iterator, Sequence
-from dataclasses import dataclass
 from datetime import date, timedelta
 from pathlib import Path
 from typing import Final, NamedTuple, NoReturn
 
-from idhazh import day_partition, day_shards, ledger, month_partition, telemetry
+from idhazh import month_partition
 from idhazh.contracts.base import ITEM_ID_PATTERN
 from idhazh.contracts.item_health import ItemHealthRow, ItemOutcome, ItemStage
 from idhazh.contracts.item_health_summary import ItemHealthSummaryRow, percentile
-from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
-from idhazh.contracts.knobs.observability import ObservabilityConfig
-from idhazh.contracts.knobs.retention import RetentionConfig
-from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.visual_decision import VisualState
-from idhazh.contracts.visual_prune import VisualPruneRow
 from idhazh.contracts.visual_telemetry import VisualAggregateRow, VisualAttemptRow, band_of
-from idhazh.evals import archive as score_archive
-from idhazh.evals import writer as score_writer
-from idhazh.site_weight import measure
-from idhazh.telemetry.publish import public_telemetry
-
-
-def cutoff(today: date, months: int) -> date | None:
-    """None means retention is off, which is what ships."""
-    if months < 0:
-        return None
-    return today - timedelta(days=months * 30)
 
 
 def visuals_older_than(root: Path, limit: date) -> list[Path]:
     """Rendered visuals under dated directories older than the cutoff.
 
     Ordered by path, the same order a sort over the whole tree would give,
-    because `prune` hands the fuse the first `max_deletes_per_run` of this list.
-    The order decides which files a capped run takes and which it leaves for the
-    next one, so a reordering here would quietly change what a backlog run does.
+    because the visual-prune task hands its fuse this list in order. The order
+    decides which files a capped run takes and which it leaves for the next one,
+    so a reordering here would quietly change what a backlog run does.
 
     Only the expired days are opened. Measured on a built 400-day tree with
     3,600 files, 2026-09-07, Intel Core i7-1265U: 261 directory listings against
@@ -254,8 +139,8 @@ def _visuals_in(folder: Path) -> list[Path]:
     writer puts one. It was a set of image suffixes until 2026-09-13, when the
     reader's browser took over the drawing and a visual stopped being an image -
     and adding `.json` to that set would have made `digest.json` and `run.json`
-    candidates, which is the record that the day happened and the one thing this
-    module may never delete.
+    candidates, which is the record that the day happened and the one thing a
+    cleanup may never delete.
 
     Reading identity rather than extension is also what stops the list rotting.
     A suffix set holds the formats somebody remembered; an item id ends in a
@@ -277,14 +162,11 @@ def oldest_visual(root: Path) -> date | None:
     `deleted` says. None means the tree carries no visual at all, which is a
     different fact from "the oldest one is recent" and is spelled differently.
 
-    This is the one that costs on every run that has ever shipped, and it did not
-    stop costing when the window took a value. `image_months` is 13 from
-    2026-09-13 and the oldest visual on disk is weeks old, so `visuals_older_than`
-    returns nothing until 2027 - and `prune` still asks this on every path
-    through it, including the early
-    return. The answer is the first day that still holds a picture, so it stops
-    at that day: 4 directory listings on a built 400-day tree against 417 for the
-    shape it replaced, 2026-09-07, Intel Core i7-1265U.
+    The visual-prune task asks this on every pass, whatever it found, so it is
+    the one read here that costs on every wake. The answer is the first day that
+    still holds a picture, so it stops at that day: 4 directory listings on a
+    built 400-day tree against 417 for the shape it replaced, 2026-09-07, Intel
+    Core i7-1265U.
     """
     for published, folder in dated_days(root):
         if _visuals_in(folder):
@@ -292,219 +174,13 @@ def oldest_visual(root: Path) -> date | None:
     return None
 
 
-@dataclass(frozen=True, slots=True)
-class PruneResult:
-    """What one cleanup pass found, took, and left behind.
-
-    `skipped_by_fuse` was computable from the first day and thrown away every
-    run. It is the difference between a run that finished its backlog and a run
-    that could not get near it, and `deleted` cannot show it because the fuse
-    caps `deleted` at the same number in both cases.
-
-    It means the same thing on a dry run as on a live one - the candidates the
-    fuse would not have let this run reach - so it is never inflated by the
-    deletions a dry run declined to make. `dry_run` is the field that says
-    nothing was deleted.
-    """
-
-    considered: int
-    deleted: int
-    dry_run: bool
-    fuse_tripped: bool
-    skipped_by_fuse: int
-    bytes_reclaimed: int
-    cutoff_date: date | None
-    oldest_kept: date | None
-    bytes_before: int
-    bytes_after: int
-
-
-def prune(
-    root: Path, config: RetentionConfig, today: date, *, dry_run: bool = False
-) -> PruneResult:
-    """Delete nothing unless configured to, and never more than the fuse allows.
-
-    `dry_run` is an override the caller adds on top of `retention.dry_run`, never
-    one that cancels it: the step passes its own flag and either source is enough
-    to make the pass report-only. There is no argument that turns deletion on.
-
-    The tree is read once, at the top, and the after-total is that reading with
-    the deleted files retracted from it (`SiteSize.minus`). It used to be two
-    whole-tree readings, so learning the size of two pictures cost a second walk
-    of everything ever published - the cost Guardrail #12 refuses, and it rose every
-    time a day was added. The reason the old shape existed still holds and is
-    kept: a total that subtracts what the pass *meant* to delete would still be
-    written when an unlink did not happen, so a file is retracted only once it
-    has actually gone. `bytes_reclaimed` is then what left the tree rather than
-    what the loop intended, and `test_the_after_total_counts_only_the_files_that_actually_left`
-    is that distinction.
-    """
-    pretend = dry_run or config.dry_run
-    before = measure(root)
-    limit = cutoff(today, config.image_months)
-    if limit is None:
-        return PruneResult(
-            considered=0,
-            deleted=0,
-            dry_run=pretend,
-            fuse_tripped=False,
-            skipped_by_fuse=0,
-            bytes_reclaimed=0,
-            cutoff_date=None,
-            oldest_kept=oldest_visual(root),
-            bytes_before=before.bytes_used,
-            bytes_after=before.bytes_used,
-        )
-
-    candidates = visuals_older_than(root, limit)
-    allowed = candidates[: config.max_deletes_per_run]
-    skipped = len(candidates) - len(allowed)
-    if pretend:
-        return PruneResult(
-            considered=len(candidates),
-            deleted=0,
-            dry_run=True,
-            fuse_tripped=skipped > 0,
-            skipped_by_fuse=skipped,
-            bytes_reclaimed=0,
-            cutoff_date=limit,
-            oldest_kept=oldest_visual(root),
-            bytes_before=before.bytes_used,
-            bytes_after=before.bytes_used,
-        )
-
-    # One reading of each file the fuse lets through, taken while it is still
-    # there. The fuse bounds this, so it does not grow with the archive.
-    gone: dict[Path, int] = {}
-    for path in allowed:
-        try:
-            size = path.stat().st_size
-        except OSError:
-            continue
-        path.unlink(missing_ok=True)
-        if not path.exists():
-            gone[path] = size
-    after = before.minus(root, gone)
-    return PruneResult(
-        considered=len(candidates),
-        deleted=len(allowed),
-        dry_run=False,
-        fuse_tripped=skipped > 0,
-        skipped_by_fuse=skipped,
-        bytes_reclaimed=before.bytes_used - after.bytes_used,
-        cutoff_date=limit,
-        oldest_kept=oldest_visual(root),
-        bytes_before=before.bytes_used,
-        bytes_after=after.bytes_used,
-    )
-
-
-@dataclass(frozen=True, slots=True)
-class FragmentPruneResult:
-    """Which days' blocks went and what they weighed.
-
-    There is no kept-count. Answering it means walking every day still on disk,
-    which is the cost this pass exists to stop the tree charging (Guardrail
-    #12), and the number it would print is the archive's own size rather than
-    anything about this pass.
-    """
-
-    deleted: tuple[str, ...]
-    bytes_freed: int
-    dry_run: bool
-
-    @property
-    def changed(self) -> bool:
-        return bool(self.deleted)
-
-
-def prune_digest_fragments(
-    state_dir: Path, config: RetentionConfig, today: date, *, dry_run: bool = False
-) -> FragmentPruneResult:
-    """Delete the per-run blocks of every day past the window the day itself keeps.
-
-    A block is what one run of a day published, and the published day is
-    assembled out of every block of its date. Once the day is old enough that
-    nothing will be added to it, the blocks are a second full copy of every
-    story with no reader and no writer - an archive that grows one day at a time
-    and answers nothing (Guardrail #12).
-
-    The window is `retention.image_months`, which is the day's own: a date whose
-    pictures may still be deleted is a date whose blocks may still be needed, and
-    one rule for the day means the two can never disagree about when it closed.
-    The published day itself is never deleted here or anywhere - it is the record
-    that the day happened.
-
-    `dry_run` is an override the caller adds on top of `retention.dry_run`,
-    exactly as `prune` takes it, so either source is enough to make the pass
-    report-only. `deleted` carries the committed POSIX relpath of each file, so a
-    dry run names what a live run would take (section 2).
-
-    Cover: the days already past the window, and not the archive. `dated_days`
-    prunes by name at the year and the month, so a date inside the window is
-    never opened - the cost follows the backlog this pass has to clear and
-    shrinks as it clears it.
-    """
-    root = ledger.tree_root(state_dir, LedgerName.DIGEST_FRAGMENTS)
-    limit = cutoff(today, config.image_months)
-    if limit is None or not root.is_dir():
-        return FragmentPruneResult((), 0, dry_run or config.dry_run)
-
-    pretend = dry_run or config.dry_run
-    deleted: list[str] = []
-    freed = 0
-    for _published, folder in dated_days(root, before=limit):
-        for path in sorted(folder.iterdir()):
-            if not path.is_file():
-                continue
-            deleted.append(f"{ledger.STATE_DIRNAME}/{path.relative_to(state_dir).as_posix()}")
-            freed += path.stat().st_size
-            if not pretend:
-                path.unlink()
-        if not pretend:
-            day_partition.drop_empty_day_dirs(folder)
-
-    return FragmentPruneResult(deleted=tuple(deleted), bytes_freed=freed, dry_run=pretend)
-
-
-def prune_row(
-    result: PruneResult, config: RetentionConfig, *, date_stamp: str, run_id: str
-) -> VisualPruneRow:
-    """The committed account of one cleanup pass.
-
-    Built here rather than in the caller so the row and the result can never
-    describe two different runs, and so the contract's own arithmetic checks
-    whatever this module produces.
-    """
-    return VisualPruneRow(
-        version=VisualPruneRow.schema_version(),
-        date=date_stamp,
-        run_id=run_id,
-        policy_months=config.image_months,
-        max_deletes_per_run=config.max_deletes_per_run,
-        dry_run=result.dry_run,
-        cutoff_date=result.cutoff_date.isoformat() if result.cutoff_date else None,
-        candidates_found=result.considered,
-        deleted=result.deleted,
-        skipped_by_fuse=result.skipped_by_fuse,
-        fuse_tripped=result.fuse_tripped,
-        bytes_reclaimed=result.bytes_reclaimed,
-        oldest_kept=result.oldest_kept.isoformat() if result.oldest_kept else None,
-        payload_bytes_before=result.bytes_before,
-        payload_bytes_after=result.bytes_after,
-    )
-
-
-# --- The telemetry fold ------------------------------------------------------
-
-
 def oldest_month_kept(today: date, months: int) -> str:
     """The oldest `YYYY-MM` stem that still stays at full grain.
 
     `month_partition` owns the arithmetic, because the published tree ages by
     the same boundary now and two copies of it is how one ledger deletes a month
-    the other still serves. This name stays because every prune below reads by
-    it and a rename would be a second change in the same commit.
+    the other still serves. This name stays because the month tasks and their
+    tests read by it.
     """
     return month_partition.oldest_month_kept(today, months)
 
@@ -512,7 +188,7 @@ def oldest_month_kept(today: date, months: int) -> str:
 def month_shards(directory: Path) -> list[Path]:
     """Every `<YYYY-MM>.csv` in a ledger directory, oldest first.
 
-    Anything else in there is left alone. A directory this walks is one a prune
+    Anything else in there is left alone. A directory this walks is one a task
     deletes from, so it names what it recognises rather than deleting what it
     does not - and it recognises what `month_partition` recognises, which is the
     same thing `evals.writer` and `evals.archive` recognise. Those three used to
@@ -520,6 +196,9 @@ def month_shards(directory: Path) -> list[Path]:
     deleted there.
     """
     return month_partition.month_files(directory, ".csv")
+
+
+# --- The telemetry fold ------------------------------------------------------
 
 
 def _elapsed_ms(row: ItemHealthRow) -> int | None:
@@ -568,167 +247,6 @@ def compact_month(rows: list[ItemHealthRow]) -> list[ItemHealthSummaryRow]:
             )
         )
     return folded
-
-
-@dataclass(frozen=True, slots=True)
-class TelemetryPruneResult:
-    """What one fold did, in the words a log line needs."""
-
-    folded: tuple[str, ...]
-    rows_folded: int
-    aggregate_rows: int
-    hard_deleted: tuple[str, ...]
-    #: Every `state/item-health/<YYYY>/<MM>/<DD>.csv` the fold took, POSIX and
-    #: relative to the repository, oldest first. Carried rather than derived from
-    #: `folded`, because a month is a directory of day files now: a caller that
-    #: spelled `<month>-01` would name a file the ledger may never have held, and
-    #: the list a dry run prints has to be the list a live run removes, file for
-    #: file.
-    days_removed: tuple[str, ...]
-    #: Months whose browser copy under `frontend/public/telemetry/` went. Named
-    #: apart from `folded` because the two sets come apart: a copy whose source
-    #: month an earlier interrupted run already folded away is deleted here with
-    #: nothing left to fold beside it.
-    public_deleted: tuple[str, ...]
-    dry_run: bool
-
-    @property
-    def changed(self) -> bool:
-        return bool(self.folded or self.hard_deleted or self.public_deleted)
-
-
-def _expired_public_copies(public_root: Path | None, boundary: str) -> tuple[str, ...]:
-    """Every published month below the boundary, named before anything is deleted.
-
-    Read up front so the list a dry run prints is the list a live run removes,
-    file for file. That list is what a person reads before turning the deletion
-    on, so it may not be assembled from what the deletion happened to reach.
-
-    It walks the published tree rather than the shards being folded, which is
-    what catches a copy whose source is already gone. Only `<YYYY-MM>.csv` is
-    recognised - a directory this deletes from names what it knows.
-    """
-    if public_root is None:
-        return ()
-    return tuple(copy.stem for copy in month_shards(public_root) if copy.stem < boundary)
-
-
-def prune_telemetry(
-    state_dir: Path,
-    config: ObservabilityConfig,
-    today: date,
-    *,
-    public_root: Path | None = None,
-    dry_run: bool = False,
-) -> TelemetryPruneResult:
-    """Fold every out-of-window item-health month, then delete its days and its copy.
-
-    The ledger files by day and the aggregate that replaces it files by month, so
-    this is where the two grains meet: `day_shards.shards_by_month` groups the
-    files a month holds, and a month is folded whole or not at all. A month's
-    input is at most 31 days, so the fold stays a ledger-bounded read.
-
-    Each day is settled before it is folded, and the files it settled are what
-    get deleted. A day is a directory of writer-owned files and a re-run leaves a
-    second attempt beside the first, so folding every file would carry one item
-    into the aggregate twice - and the aggregate is what outlives the days.
-
-    Order matters and it is the whole safety argument: the aggregate is written
-    and read back before a single day file is unlinked, and the browser's copy of
-    that month is unlinked only after the days it copies. Nothing is deleted on
-    the strength of a write nobody checked.
-
-    `public_root` is `frontend/public/telemetry/`. None means there is no site
-    beside this state tree, so there is no copy to consider - and it is the
-    default because a caller that names its own state tree and forgets this one
-    must get nothing rather than the committed one.
-
-    `item_health_aggregate_keep_months` is applied last and defaults to null,
-    which means an aggregate is kept forever. Set, it must sit above
-    `item_health_full_grain_months`, which the config contract enforces - so a
-    month is never deleted before it is folded.
-    """
-    keep_from = oldest_month_kept(today, config.item_health_full_grain_months)
-    public_deleted = _expired_public_copies(
-        public_root, oldest_month_kept(today, config.public_telemetry_keep_months)
-    )
-    folded: list[str] = []
-    days_removed: list[str] = []
-    rows_folded = 0
-    aggregate_rows = 0
-
-    by_month = day_shards.shards_by_month(
-        ledger.tree_root(state_dir, LedgerName.ITEM_HEALTH), days=UNBOUNDED_WINDOW
-    )
-    for month in sorted(by_month):
-        if month >= keep_from:
-            continue
-        days = by_month[month]
-        rows = [
-            ItemHealthRow.from_csv_row(cells)
-            for date in sorted({day_shards.date_of(day) for day in days})
-            for cells in day_shards.settled_day(
-                ledger.tree_root(state_dir, LedgerName.ITEM_HEALTH),
-                date,
-                ledger.ITEM_HEALTH_KEY,
-                ItemHealthRow,
-            )
-        ]
-        summary = compact_month(rows)
-        folded.append(month)
-        # Named before anything is written, so the dry run prints the same list
-        # the live run removes.
-        days_removed += [
-            f"{ledger.STATE_DIRNAME}/{day.relative_to(state_dir).as_posix()}" for day in days
-        ]
-        rows_folded += len(rows)
-        aggregate_rows += len(summary)
-        if dry_run:
-            continue
-        target = ledger.path(state_dir, LedgerName.ITEM_HEALTH_SUMMARY, month)
-        ledger.write_item_health_summary(target, summary)
-        # Read back before the days go. A fold nobody verified is a deletion
-        # nobody can undo.
-        if ledger.load_item_health_summary(target) != summary:
-            raise ValueError(
-                f"{ledger.relpath(LedgerName.ITEM_HEALTH_SUMMARY, month)} did not read back as it "
-                f"was written, so the {len(days)} day files of {month} stay"
-            )
-        for day in days:
-            day.unlink()
-            day_partition.drop_empty_day_dirs(day)
-        # Only a copy below its own configured age, so the set deleted is exactly
-        # the set named above and never a month the published tree still owes a
-        # reader.
-        if public_root is not None and month in public_deleted:
-            public_telemetry.shard_path(public_root, month).unlink(missing_ok=True)
-
-    # Whatever the loop above did not reach. On the scheduled path this is empty:
-    # every copy below the boundary has a shard beside it, and the pair went
-    # together. It is not empty after a run that stopped between the two.
-    if public_root is not None and not dry_run:
-        for stem in public_deleted:
-            public_telemetry.shard_path(public_root, stem).unlink(missing_ok=True)
-
-    hard_deleted: list[str] = []
-    if config.item_health_aggregate_keep_months is not None:
-        delete_from = oldest_month_kept(today, config.item_health_aggregate_keep_months)
-        for aggregate in month_shards(ledger.tree_root(state_dir, LedgerName.ITEM_HEALTH_SUMMARY)):
-            if aggregate.stem >= delete_from:
-                continue
-            hard_deleted.append(aggregate.stem)
-            if not dry_run:
-                aggregate.unlink()
-
-    return TelemetryPruneResult(
-        folded=tuple(folded),
-        rows_folded=rows_folded,
-        aggregate_rows=aggregate_rows,
-        hard_deleted=tuple(hard_deleted),
-        days_removed=tuple(days_removed),
-        public_deleted=public_deleted,
-        dry_run=dry_run,
-    )
 
 
 # --- The visual fold ---------------------------------------------------------
@@ -813,7 +331,8 @@ def fold_visual_month(rows: Sequence[VisualAttemptRow]) -> list[VisualAggregateR
     the fold buying nothing rather than costing something.
 
     Ordered by the key, so a folded month reads down the days and then down the
-    causes.
+    causes. Nothing calls it yet: `state/visuals/` has no writer, and the task
+    that folds it lands with the writer.
     """
     grouped: dict[tuple[str, ...], list[VisualAttemptRow]] = {}
     for row in rows:
@@ -857,429 +376,6 @@ def fold_visual_month(rows: Sequence[VisualAttemptRow]) -> list[VisualAggregateR
     return folded
 
 
-# --- The feed-health shards --------------------------------------------------
-
-
-@dataclass(frozen=True, slots=True)
-class FeedHealthPruneResult:
-    """Which months of a day-filed ledger went, and what they weighed.
-
-    Named for the first ledger that needed it, and shared by every prune whose
-    knob is months and whose files are days - `prune_host_fingerprint` is the
-    other one today.
-    """
-
-    deleted: tuple[str, ...]
-    bytes_freed: int
-    kept: tuple[str, ...]
-    #: Every `<YYYY>/<MM>/<DD>.csv` this took, POSIX and relative to the
-    #: repository, oldest first. Carried rather than derived from `deleted`,
-    #: because a month is a directory of day files now: a caller that spelled
-    #: `<month>-01` would name a file the ledger may never have held, and the
-    #: list a dry run prints has to be the list a live run removes, file for
-    #: file.
-    days_removed: tuple[str, ...]
-    dry_run: bool
-
-    @property
-    def changed(self) -> bool:
-        return bool(self.deleted)
-
-
-def prune_feed_health(
-    state_dir: Path,
-    config: ObservabilityConfig,
-    today: date,
-    *,
-    dry_run: bool = False,
-) -> FeedHealthPruneResult:
-    """Delete every feed-health month past its own age, and fold nothing.
-
-    A row here is one feed's result on one run. The quarantine reads
-    `ledger.HEALTH_WINDOW_DAYS` (31) and the console reaches at most
-    `console.max_window_days`, so nothing asks a month older than
-    `observability.feed_health_keep_months` for anything - and a summary of what
-    a feed did fourteen months ago would be a shape nothing consumes, persisted
-    for ever.
-
-    The ledger files by day and this boundary is a month, so
-    `day_shards.shards_by_month` groups the day's files and a month goes whole or
-    not at all. That keeps the knob's unit the one it has always had while the
-    files below it are days.
-
-    **Older than the oldest month kept, never merely outside a window.** The
-    boundary is a floor, so a run handed a date in the past deletes less rather
-    than deleting the live day. That is the rule `prune_seen` states at length
-    and it is the same rule here.
-
-    `state/raw/feed-retirements/` is not in this directory and is never a
-    candidate. It carries no time window: one row is one address a server said
-    was gone, and a run that forgot it would start asking a dead address again.
-    """
-    boundary = oldest_month_kept(today, config.feed_health_keep_months)
-    deleted: list[str] = []
-    days_removed: list[str] = []
-    kept: list[str] = []
-    freed = 0
-
-    root = ledger.tree_root(state_dir, LedgerName.FEED_HEALTH)
-    by_month = day_shards.shards_by_month(root, days=UNBOUNDED_WINDOW)
-    for month in sorted(by_month):
-        if month >= boundary:
-            kept.append(month)
-            continue
-        deleted.append(month)
-        for path in by_month[month]:
-            # Named and weighed before anything is unlinked, so the dry run
-            # prints the same list the live run removes.
-            days_removed.append(f"{ledger.STATE_DIRNAME}/{path.relative_to(state_dir).as_posix()}")
-            freed += path.stat().st_size
-            if not dry_run:
-                path.unlink()
-                day_partition.drop_empty_day_dirs(path)
-
-    return FeedHealthPruneResult(
-        deleted=tuple(deleted),
-        bytes_freed=freed,
-        kept=tuple(kept),
-        days_removed=tuple(days_removed),
-        dry_run=dry_run,
-    )
-
-
-# --- The host-fingerprint shards ---------------------------------------------
-
-
-def prune_host_fingerprint(
-    state_dir: Path,
-    config: ObservabilityConfig,
-    today: date,
-    *,
-    dry_run: bool = False,
-) -> FeedHealthPruneResult:
-    """Delete every host-fingerprint month past its own age, and fold nothing.
-
-    A row here is one job's silicon on one run - the machine the platform handed
-    us and what its model server counted. Ten jobs a run each write one, so the
-    tree grows every run and nothing else bounds it (Guardrail #12).
-
-    Deleted rather than folded, for the reason `prune_feed_health` gives: a total
-    over a month fourteen months back names no machine, so the fold would be a
-    shape nothing consumes, persisted for ever. The month that matters is already
-    published under `frontend/public/machine/`.
-
-    Reuses `FeedHealthPruneResult` rather than minting a shape with the same five
-    fields and a different name, the way `prune_trial_state` reuses
-    `TracePruneResult`. The month knob over a day tree is the same problem, so it
-    is the same answer.
-
-    `observability.host_fingerprint_keep_months` is null by default, and null
-    means never: this then names no boundary and removes nothing. Set, it may not
-    sit below `public_machine_keep_months`, which the contract refuses - the
-    published shard is folded from this ledger.
-
-    **Older than the oldest month kept, never merely outside a window.** The
-    boundary is a floor, so a run handed a date in the past deletes less rather
-    than deleting the live day. That is the rule `prune_seen` states at length
-    and it is the same rule here.
-
-    It walks the tree to find what to delete, so the walk is what bounds the
-    collection and its cost falls as it works - a day it removes is a day no
-    later pass opens. That is the argument `prune_counterfactual_scores` already
-    makes for the same shape (`docs/concepts/growing-reads.md`, Guardrail #12).
-    """
-    if config.host_fingerprint_keep_months is None:
-        return FeedHealthPruneResult((), 0, (), (), dry_run)
-
-    boundary = oldest_month_kept(today, config.host_fingerprint_keep_months)
-    deleted: list[str] = []
-    days_removed: list[str] = []
-    kept: list[str] = []
-    freed = 0
-
-    by_month = day_shards.shards_by_month(
-        ledger.tree_root(state_dir, LedgerName.HOST_FINGERPRINT), days=UNBOUNDED_WINDOW
-    )
-    for month in sorted(by_month):
-        if month >= boundary:
-            kept.append(month)
-            continue
-        deleted.append(month)
-        for path in by_month[month]:
-            # Named and weighed before anything is unlinked, so the dry run
-            # prints the same list the live run removes.
-            days_removed.append(f"{ledger.STATE_DIRNAME}/{path.relative_to(state_dir).as_posix()}")
-            freed += path.stat().st_size
-            if not dry_run:
-                path.unlink()
-                day_partition.drop_empty_day_dirs(path)
-
-    return FeedHealthPruneResult(
-        deleted=tuple(deleted),
-        bytes_freed=freed,
-        kept=tuple(kept),
-        days_removed=tuple(days_removed),
-        dry_run=dry_run,
-    )
-
-
-# --- The seen day files ------------------------------------------------------
-
-
-@dataclass(frozen=True)
-class SeenPruneResult:
-    """Which seen day files went, and what they weighed.
-
-    `deleted` and `kept` are both `state/seen/<YYYY>/<MM>/<DD>.csv`, POSIX and
-    relative to the repository, oldest first. One unit rather than two, because
-    this prune has no month in it at all: `collect.seen_window_days` is counted
-    in days, so the boundary is a day and the file it names is the file it
-    deletes. The two health prunes beside this one carry a second `days_removed`
-    list precisely because their knobs are months and `deleted` has to stay a
-    month to match.
-    """
-
-    deleted: tuple[str, ...]
-    bytes_freed: int
-    kept: tuple[str, ...]
-    dry_run: bool
-
-    @property
-    def changed(self) -> bool:
-        return bool(self.deleted)
-
-
-def prune_seen(
-    state_dir: Path,
-    *,
-    today: str,
-    within_days: int,
-    dry_run: bool = False,
-) -> SeenPruneResult:
-    """Delete every seen day file the reader would no longer open.
-
-    `ledger.load_seen` consults `day_partition.days_in_window(today, within_days)`
-    and nothing else, so a day older than the oldest that names is already
-    invisible to the pipeline - it is bytes in the working tree answering no
-    question. Without this the ledger grows for ever at a rate nothing bounds:
-    measured 2026-08-31, 356 KB a day after the address column came off, which
-    is 32 MB over a 90-day window and no ceiling after that.
-
-    The keep-set comes from the reader's own helper rather than from a second
-    date calculation here. That is the safety argument: two calculations drift,
-    and the day they drift this one deletes a file the next plan wanted.
-
-    **The boundary is a day, and this is the one prune here where it is.** Every
-    other ledger in this module is bounded by a knob counted in months, so its
-    prune groups day files with `day_partition.days_by_month` and takes a month
-    whole. `collect.seen_window_days` is counted in days, so there is no month to
-    group by and the file the reader named is the file this keeps. The retained
-    span is therefore exactly the window - where the month shards this replaced
-    kept 90 to 120 days, because a whole shard survived if any of its days was in
-    range.
-
-    **Only what is older than that set goes, never what is newer.** The window
-    is anchored on the date this is handed, and a run can be handed a date in
-    the past - `--date` takes whatever it is given. Deleting everything outside
-    the window would then delete the live day file, which is the one file every
-    later plan opens. Deleting everything below the window's oldest day keeps
-    the retained set a superset of the read set for every date rather than for
-    today's, and it costs nothing: on the scheduled path the two sets are the
-    same files.
-
-    There is no fuse and no `max_deletes_per_run`. A day nobody reads is not
-    the archive, and the picture pruner's fuse exists because a date-parse bug
-    there eats published images - the worst case here is that the pipeline
-    re-learns a first-sight date it had already forgotten.
-    """
-    # `days_in_window` always names the anchor's own day, so this is never the
-    # minimum of an empty set.
-    oldest_read = min(day_partition.days_in_window(today, within_days))
-    deleted: list[str] = []
-    kept: list[str] = []
-    freed = 0
-
-    for day in day_partition.day_files(ledger.tree_root(state_dir, LedgerName.SEEN)):
-        on = day_partition.date_of(day)
-        if on >= oldest_read:
-            kept.append(ledger.relpath(LedgerName.SEEN, on))
-            continue
-        # Named and weighed before anything is unlinked, so the dry run prints
-        # the same list the live run removes.
-        deleted.append(ledger.relpath(LedgerName.SEEN, on))
-        freed += day.stat().st_size
-        if not dry_run:
-            day.unlink()
-            day_partition.drop_empty_day_dirs(day)
-
-    return SeenPruneResult(
-        deleted=tuple(deleted),
-        bytes_freed=freed,
-        kept=tuple(kept),
-        dry_run=dry_run,
-    )
-
-
-# --- The counterfactual score day files --------------------------------------
-
-
-@dataclass(frozen=True)
-class CounterfactualPruneResult:
-    """Which counterfactual day files went, and what they weighed.
-
-    The same shape as `SeenPruneResult` and for the same reason: this knob is
-    counted in days too, so the boundary is a day and the file the reader named
-    is the file this deletes. There is no month here to group by.
-    """
-
-    deleted: tuple[str, ...]
-    bytes_freed: int
-    kept: tuple[str, ...]
-    dry_run: bool
-
-    @property
-    def changed(self) -> bool:
-        return bool(self.deleted)
-
-
-def prune_counterfactual_scores(
-    state_dir: Path,
-    *,
-    today: str,
-    within_days: int,
-    dry_run: bool = False,
-) -> CounterfactualPruneResult:
-    """Delete every counterfactual day file outside the window anyone reads.
-
-    This ledger is appended to on every run and read only over a trailing window
-    - `lens_weights.window_days` - so a day older than that window's oldest is
-    bytes in the working tree answering no question. Without this prune it grows
-    for ever at a rate nothing bounds, and the row that added it put the
-    unbounded arithmetic in writing: about 180 rows a run and 900 a day, which
-    is roughly 135 KB a day and 49 MB a year at 150 bytes a row (estimate; the
-    measured width is in that row's pull request).
-
-    The keep-set comes from `day_partition.days_in_window`, the same helper the
-    reader consults, rather than from a second date calculation here. Two
-    calculations drift, and the day they drift this one deletes a file a reader
-    wanted.
-
-    **Only what is older than that set goes, never what is newer**, for the
-    reason `prune_seen` states at length: a run can be handed a date in the
-    past, and deleting everything outside the window would then take the live
-    day with it.
-
-    There is no fuse. A day nobody reads is not the archive, and the worst case
-    is that a later tuning pass has a shorter history to argue from - which is
-    the same thing the window already decided.
-
-    The walk is `day_shards.shard_files`, because a day here is a directory of
-    writer-owned files. `deleted` and `kept` name the files rather than the
-    days, so the list a dry run prints is the list a live run removes.
-    """
-    oldest_read = min(day_partition.days_in_window(today, within_days))
-    deleted: list[str] = []
-    kept: list[str] = []
-    freed = 0
-
-    root = ledger.tree_root(state_dir, LedgerName.COUNTERFACTUAL_SCORES)
-    for path in day_shards.shard_files(root, days=UNBOUNDED_WINDOW):
-        relpath = f"{ledger.STATE_DIRNAME}/{path.relative_to(state_dir).as_posix()}"
-        if day_shards.date_of(path) >= oldest_read:
-            kept.append(relpath)
-            continue
-        deleted.append(relpath)
-        freed += path.stat().st_size
-        if not dry_run:
-            path.unlink()
-            # `path` is inside the day directory, so this drops that directory
-            # and the month above it.
-            day_partition.drop_empty_day_dirs(path)
-
-    return CounterfactualPruneResult(
-        deleted=tuple(deleted),
-        bytes_freed=freed,
-        kept=tuple(kept),
-        dry_run=dry_run,
-    )
-
-
-# --- The trace tree ----------------------------------------------------------
-
-
-@dataclass(frozen=True, slots=True)
-class TracePruneResult:
-    """Which committed traces went, what they weighed, and how many stayed."""
-
-    deleted: tuple[str, ...]
-    bytes_freed: int
-    kept: int
-    dry_run: bool
-
-    @property
-    def changed(self) -> bool:
-        return bool(self.deleted)
-
-
-def prune_traces(
-    state_dir: Path,
-    *,
-    today: date,
-    within_days: int,
-    dry_run: bool = False,
-) -> TracePruneResult:
-    """Delete every committed trace older than the window, and fold nothing.
-
-    A trace is a lookup an operator opens to walk one recent run step by step,
-    not a measurement, so its honest retention is deletion: a fold would invent a
-    total nobody reads (section 9.2, docs/concepts/telemetry.md). The record of a
-    run is the span rollup beside it under `state/span-rollup/`; this is the
-    evidence, kept only briefly.
-
-    A file is kept while its published day is within `within_days` of `today` and
-    goes once it is further back, so the last `within_days` days survive and
-    everything older is removed. A file dated ahead of `today` - a back-dated run
-    handed an older `--date` - is newer than the window and is kept, the same
-    property `prune_seen` holds for the first-sight day files.
-
-    There is no fuse and no max-per-run. A trace outside the window is not the
-    archive, and the worst case is an operator losing a drill-down into a run
-    that has already left the window - not a published byte, which is what the
-    picture pruner's fuse exists to protect.
-
-    `state/traces/` does not exist until `observability.tracing_enabled` is true,
-    so on every run before that this returns at once having walked nothing.
-    `deleted` carries the committed POSIX relpath of each file, so a dry run can
-    name what a live run would remove (section 2); `kept` is a count, because a
-    full window is many files and naming them all is noise.
-    """
-    root = ledger.tree_root(state_dir, LedgerName.TRACES)
-    if not root.is_dir():
-        return TracePruneResult((), 0, 0, dry_run)
-
-    deleted: list[str] = []
-    kept = 0
-    freed = 0
-    for path in sorted(root.rglob("*.jsonl")):
-        published = telemetry.trace_date(path, root)
-        if published is None:
-            continue
-        if (today - published).days < within_days:
-            kept += 1
-            continue
-        deleted.append(f"{ledger.STATE_DIRNAME}/{path.relative_to(state_dir).as_posix()}")
-        freed += path.stat().st_size
-        if not dry_run:
-            path.unlink()
-
-    return TracePruneResult(
-        deleted=tuple(deleted),
-        bytes_freed=freed,
-        kept=kept,
-        dry_run=dry_run,
-    )
-
-
 # --- A trial run's ledgers ---------------------------------------------------
 
 
@@ -1297,7 +393,7 @@ def trial_day(relpath: str) -> date | None:
 
     A month head has no day of its own, so it takes the last day of its month:
     a month is inside the window while any day in it is, which is the same
-    boundary `prune_telemetry` holds for the months it folds.
+    boundary the telemetry-aggregate task holds for the months it folds.
     """
     found = _TRIAL_DAY.search(relpath)
     if found is None:
@@ -1313,80 +409,6 @@ def trial_day(relpath: str) -> date | None:
         return None
 
 
-def prune_trial_state(
-    state_dir: Path,
-    *,
-    dirname: str,
-    today: date,
-    within_days: int,
-    dry_run: bool = False,
-) -> TracePruneResult:
-    """Delete a trial run's files past their window, whatever ledger wrote them.
-
-    A trial run exercises production's code path and writes every ledger it
-    would write, under `state/<dirname>/` instead of `state/`. Nothing reads
-    those rows - no published series, no gate, no console band - so the honest
-    retention is deletion, and the window is about disk and about a reader who
-    opens `state/` and wonders what a directory is.
-
-    It takes the tree whole rather than one ledger at a time, and that is the
-    difference from every prune above it. Those know which ledger they are
-    pruning and what its knob is called; this one does not need to, because
-    every file under here is the same kind of thing - a day of a run nobody
-    reads - and a per-ledger version would have to be edited every time a ledger
-    is added.
-
-    **It walks to any depth, and that is what changed on 2026-09-22.** It used
-    to hand each child of the root to `day_shards.shard_files`, which expects a
-    day tree directly beneath it and raises on anything else. A trial run writes
-    `segments/<ledger>/<run-id>-...csv` two levels down and `traces/<YYYY>/<MM>/
-    <DD>-<ordinal>-<shard>.jsonl` under a name that is not a day file at all, so
-    the moment this prune was pointed at a real trial root it raised instead of
-    pruning. `trial_day` reads the date off the path instead.
-
-    **A file whose path spells no date is kept and counted, not refused.** A day
-    tree refuses a stray because a reader that skipped one would start missing
-    rows; nothing reads a trial root, so what a refusal costs here is the whole
-    nightly prune for a file nobody wanted (section 1a: degrade, do not fail).
-
-    Reuses `TracePruneResult` rather than minting a shape with the same four
-    fields and a different name.
-
-    A file dated ahead of `today` is kept, the same property `prune_traces` and
-    `prune_seen` hold: a run handed an older `--date` must not delete the day
-    the next one appends to.
-    """
-    root = state_dir / dirname
-    if not root.is_dir():
-        return TracePruneResult((), 0, 0, dry_run)
-
-    deleted: list[str] = []
-    kept = 0
-    freed = 0
-    # Unbounded because the question is which of this run's days have aged out,
-    # and a window would leave the oldest ones standing for ever.
-    for path in sorted(entry for entry in root.rglob("*") if entry.is_file()):
-        relative = path.relative_to(state_dir).as_posix()
-        written = trial_day(path.relative_to(root).as_posix())
-        if written is None or (today - written).days < within_days:
-            kept += 1
-            continue
-        deleted.append(f"{ledger.STATE_DIRNAME}/{relative}")
-        freed += path.stat().st_size
-        if not dry_run:
-            path.unlink()
-
-    if not dry_run:
-        drop_empty_directories(root)
-
-    return TracePruneResult(
-        deleted=tuple(deleted),
-        bytes_freed=freed,
-        kept=kept,
-        dry_run=dry_run,
-    )
-
-
 def drop_empty_directories(root: Path) -> None:
     """Take the emptied trial tree away, root included.
 
@@ -1399,172 +421,3 @@ def drop_empty_directories(root: Path) -> None:
             directory.rmdir()
     if not any(root.iterdir()):
         root.rmdir()
-
-
-# --- The score ledger --------------------------------------------------------
-
-
-@dataclass(frozen=True, slots=True)
-class ScorePruneResult:
-    """What one archiving pass did, in the words a log line and a measurement need."""
-
-    archived: tuple[str, ...]
-    rows_archived: int
-    #: Every `state/scores/<YYYY>/<MM>/<DD>.csv` this took, POSIX and relative to
-    #: the repository, oldest first. Carried rather than derived from `archived`,
-    #: because a month is a directory of day files now: a caller that spelled
-    #: `<month>-01` would name a file the ledger may never have held, and the
-    #: list a dry run prints has to be the list a live run removes, file for file.
-    days_removed: tuple[str, ...]
-    #: Every `state/score-index/<YYYY>/<MM>/<DD>.csv` this took, on the same
-    #: terms. The index is derived from the days above and answers only for
-    #: them, so it is pruned to the same span in the same pass - an index that
-    #: outlives its source is a lookup that misses for ever, and the archive
-    #: beside it already carries those digests.
-    index_days_removed: tuple[str, ...]
-    #: Distinct measurements the archives now index. This is the number that
-    #: keeps the dedupe exact after the rows are gone, so it is reported rather
-    #: than left to be inferred from the row count - they differ whenever a
-    #: month held a repeat the settlement had not yet dropped.
-    observations_indexed: int
-    #: What the archived day files weighed, and what their summaries weigh. Both
-    #: are counted in a dry run too, because the ratio between them is the
-    #: measurement this policy is justified by (Guardrail #10) and a person has to be
-    #: able to read it before any deletion is switched on.
-    source_bytes: int
-    archive_bytes: int
-    hard_deleted: tuple[str, ...]
-    dry_run: bool
-
-    @property
-    def changed(self) -> bool:
-        return bool(self.archived or self.hard_deleted)
-
-
-def prune_scores(
-    state_dir: Path,
-    config: ObservabilityConfig,
-    today: date,
-    *,
-    dry_run: bool = False,
-) -> ScorePruneResult:
-    """Archive every out-of-window score month, prove the archive, then delete its days.
-
-    Four steps per month and the order is the whole safety argument: summarise,
-    write temp-then-rename, read the written file back through its contract, and
-    reconcile it field by field against a second reading of the day files. Only
-    then are they unlinked. An archive that will not reconcile leaves its days in
-    place and stops the run, because the alternative is deleting a committed file
-    on the strength of a summary nobody checked - and `prune.yml` force-pushes
-    `main`, so that file does not come back.
-
-    The ledger files by day and this boundary is a month, so
-    `day_shards.shards_by_month` groups the day's files and a month goes whole or
-    not at all. That keeps the knob's unit the one it has always had while the
-    files below it are days, and it keeps the archive's own input to the files
-    of at most 31 days.
-
-    **The index beside those days goes in the same pass.** It is derived from
-    them and answers only for them, so an index month that outlived its rows is
-    a lookup that misses for ever. Nothing else drops one: no write path
-    compares an index against its rows, so a stale index would stand until an
-    operator ran `rebuild-score-index`. The guard is the fact that
-    the month's archive is on disk, and the archive carries those digests, so
-    nothing here can remove the last record of a measurement.
-
-    A dry run does the first step and none of the others. It still counts the
-    bytes both ways, so the log says what the archive would weigh against what
-    the days weigh, which is the figure Guardrail #10 asks for beside this policy.
-
-    `score_archive_keep_months` is applied last and defaults to null, which means
-    an archive is kept for ever. Set, it must sit above
-    `scores_full_grain_months`, which the config contract enforces - so a month
-    is never deleted before it is archived.
-
-    Re-running changes nothing. A month already archived has no day file left to
-    find, and a month whose archive was written by a run that then failed to
-    unlink is summarised again to the same bytes.
-    """
-    keep_from = oldest_month_kept(today, config.scores_full_grain_months)
-    archived: list[str] = []
-    days_removed: list[str] = []
-    rows_archived = 0
-    observations = 0
-    source_bytes = 0
-    archive_bytes = 0
-
-    by_month = day_shards.shards_by_month(
-        ledger.tree_root(state_dir, LedgerName.SCORES), days=UNBOUNDED_WINDOW
-    )
-    for month in sorted(by_month):
-        if month >= keep_from:
-            continue
-        days = by_month[month]
-        built = score_archive.summarise(
-            days, month=month, observation_key=score_writer.OBSERVATION_KEY
-        )
-        archived.append(month)
-        # Named and weighed before anything is written, so the dry run prints the
-        # same list the live run removes.
-        days_removed += [
-            f"{ledger.STATE_DIRNAME}/{day.relative_to(state_dir).as_posix()}" for day in days
-        ]
-        rows_archived += built.source_rows
-        observations += len(built.observation_digests)
-        source_bytes += sum(day.stat().st_size for day in days)
-        archive_bytes += len(built.to_json().encode("utf-8"))
-        if dry_run:
-            continue
-        target = score_archive.archive_path(state_dir, month)
-        score_archive.write(target, built)
-        # Read back through the contract, then check the file that came back
-        # still describes the days. The first catches a bad write; only the
-        # second catches a summary of the wrong month.
-        score_archive.reconcile(
-            score_archive.read(target),
-            days,
-            month=month,
-            observation_key=score_writer.OBSERVATION_KEY,
-        )
-        for day in days:
-            day.unlink()
-            day_partition.drop_empty_day_dirs(day)
-
-    # The months whose digests an archive now carries, including the ones this
-    # pass took - so a dry run names the same index files a live run removes.
-    covered = {path.stem for path in score_archive.archive_files(state_dir)} | set(archived)
-    index_days_removed: list[str] = []
-    for shard in day_shards.shard_files(
-        ledger.tree_root(state_dir, LedgerName.SCORE_INDEX), days=UNBOUNDED_WINDOW
-    ):
-        month = day_shards.date_of(shard)[:7]
-        if month >= keep_from or month not in covered:
-            continue
-        index_days_removed.append(
-            f"{ledger.STATE_DIRNAME}/{shard.relative_to(state_dir).as_posix()}"
-        )
-        if not dry_run:
-            shard.unlink()
-            day_partition.drop_empty_day_dirs(shard)
-
-    hard_deleted: list[str] = []
-    if config.score_archive_keep_months is not None:
-        delete_from = oldest_month_kept(today, config.score_archive_keep_months)
-        for summary in score_archive.archive_files(state_dir):
-            if summary.stem >= delete_from:
-                continue
-            hard_deleted.append(summary.stem)
-            if not dry_run:
-                summary.unlink()
-
-    return ScorePruneResult(
-        archived=tuple(archived),
-        rows_archived=rows_archived,
-        days_removed=tuple(days_removed),
-        index_days_removed=tuple(index_days_removed),
-        observations_indexed=observations,
-        source_bytes=source_bytes,
-        archive_bytes=archive_bytes,
-        hard_deleted=tuple(hard_deleted),
-        dry_run=dry_run,
-    )

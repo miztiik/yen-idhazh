@@ -1,8 +1,8 @@
 """Does each retention task take exactly the files the pass it replaced took, and write what it wrote?
 
-The oracle row 5 was held to. Each pass in the deleted `stages/prune_state.py`
-was run once, live and dry, over the tree `_oracle_tree.build` makes, with the
-committed windows, and what it removed and wrote was recorded in
+The oracle each task was held to when it replaced a pass. Each pass of the old
+state cleanup was run once, live and dry, over the tree `_oracle_tree.build`
+makes, with the committed windows, and what it removed and wrote was recorded in
 `tests/fixtures/gardener/prune-oracle/removals.json` before the module went.
 Each task now runs over the same tree with its committed declaration.
 

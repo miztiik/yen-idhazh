@@ -1,6 +1,6 @@
 # Instrument switches and cleanup ages
 
-**Last Updated**: 2026-09-23
+**Last Updated**: 2026-09-28
 
 Which instruments run at all, and how long what they write is kept. One JSON
 block holds both - `observability` in `config/idhazh.json` - because a switch
@@ -223,8 +223,8 @@ folded; the contract refuses the pair otherwise.
 **What `item_health_full_grain_months` governs is `state/item-health/`, and
 nothing else.** Past the window a month is folded to one row per `(date, stage)`
 in `state/item-health-summary/<YYYY-MM>.csv` and the full-grain shard is deleted,
-by `idhazh prune-state` in the assemble job - after the day is committed, never
-before it. What survives is every count and every timing total; what goes is the
+by the gardener's `telemetry-aggregate` task. What survives is every count and
+every timing total; what goes is the
 per-item detail, which is what the console's failure list offers and no rate
 needs. Folding the committed `state/item-health/2026-08.csv` on 2026-08-30 turned
 4,167 rows and 1,270,452 bytes into 24 rows and 1,531 bytes - **829.8 times
@@ -236,16 +236,16 @@ The 219 KB a year the old description quoted was an estimate at five stages and
 estimate. The description keeps the estimate's conclusion, which the measurement
 only strengthens.
 
-**Five of the six now decide something, and the same step spends them.** From
-2026-09-03 `idhazh prune-state` folds `state/item-health/` past
-`item_health_full_grain_months`, unlinks the browser's copy of that month past
-`public_telemetry_keep_months`, deletes `state/feed-health/` past
-`feed_health_keep_months`, and archives `state/scores/` past
+**Five of the six now decide something, and the gardener's tasks spend them.** The
+`telemetry-aggregate` task folds `state/item-health/` past
+`item_health_full_grain_months` and unlinks the browser's copy of that month past
+`public_telemetry_keep_months`; the `feed-health` task deletes `state/feed-health/`
+past `feed_health_keep_months`; and the `scores` task archives `state/scores/` past
 `scores_full_grain_months` before deleting the shard. `score_archive_keep_months`
-is the sixth and is null, so nothing has ever deleted an archive. From 2026-09-19
-the same step also deletes `state/host-fingerprint/` past
+is the sixth and is null, so nothing has ever deleted an archive. The
+`host-fingerprint` task deletes `state/host-fingerprint/` past
 `host_fingerprint_keep_months`, which was the one committed day-filed ledger with
-no age at all.
+no age at all until 2026-09-19.
 
 **A score month is summarised before it is deleted, and it is the only ledger here
 with a summary in front of the deletion.** The archive is

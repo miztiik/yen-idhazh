@@ -181,7 +181,7 @@ is the count of month shards a console read opens, and no read opens a visual
 | `state/raw/visual-prunes/` | Keep | none | it is property 5 - the record of what the prune did, including the runs it did nothing |
 | `state/raw/feed-retirements/` | Keep | never | it carries no time window at all. A run that forgot a retired address would start asking a dead one again |
 | `state/labels.csv` | **Keep, always** | never | the only ground truth here, and the one file in `state/` a person wrote rather than a machine. No committed instance yet |
-| `state/<run.trial_state_dirname>/candidate-models/` | Keep | none of its own | one verdict a dispatch, filed on the day tree. It lands under the trial root because only a qualification writes it, and `prune-state` already bounds that root |
+| `state/<run.trial_state_dirname>/candidate-models/` | Keep | none of its own | one verdict a dispatch, filed on the day tree. It lands under the trial root because only a qualification writes it, and the gardener's `trials` task already bounds that root |
 
 ### `corpus/` - the rolling training window
 
@@ -329,8 +329,8 @@ read cover on a visual at all: every published day is kept for ever and a reader
 can open any of them, which is why this row's licence comes from the other
 clause - the item survives without its picture.
 
-**A month is 30 days to this knob.** `retention.cutoff` is
-`today - timedelta(days=months * 30)`, so 13 is 390 days and not thirteen
+**A month is 30 days to this knob.** The `visual-prune` declaration counts its
+window in days, 30 of them a month, so 13 is 390 days and not thirteen
 calendar months - 5.7 days short. The error runs in the safe direction: the
 window holds slightly less than the table above would suggest, never more. It is
 recorded rather than fixed, because changing what a month means moves what every

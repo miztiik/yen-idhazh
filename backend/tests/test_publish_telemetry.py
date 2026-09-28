@@ -11,7 +11,7 @@ import pytest
 from conftest import REPO_ROOT
 from pydantic import ValidationError
 
-from idhazh import day_shards
+from idhazh import day_shards, retention
 from idhazh.contracts.item_health import (
     FailureCode,
     ItemHealthRow,
@@ -169,12 +169,13 @@ def test_publish_telemetry_can_seed_an_empty_month(tmp_path: Path) -> None:
 
 
 def test_the_writer_and_the_deleter_name_one_file(tmp_path: Path) -> None:
-    """`retention.prune_telemetry` deletes a copy through `shard_path`.
+    """The gardener's `telemetry-aggregate` task finds a copy by the name `shard_path` spells.
 
     Two spellings of `<month>.csv` would delete a shard nobody published and
     leave the one that was published behind, so the publish is asked what it
-    wrote rather than told. `shard_relpath` is the POSIX form the log line and
-    the workflow's staged path both use (`CLAUDE.md` section 2).
+    wrote rather than told, and the listing the task deletes from is asked to
+    find it. `shard_relpath` is the POSIX form the log line and the workflow's
+    staged path both use (`CLAUDE.md` section 2).
     """
     state = tmp_path / "state"
     public = tmp_path / "telemetry"
@@ -183,6 +184,7 @@ def test_the_writer_and_the_deleter_name_one_file(tmp_path: Path) -> None:
     written = publish(state_root=state, public_root=public)
 
     assert written == [shard_path(public, "2026-08")]
+    assert retention.month_shards(public) == written
     assert shard_relpath("2026-08") == "frontend/public/telemetry/2026-08.csv"
     assert shard_path(DEFAULT_PUBLIC_ROOT, "2026-08").relative_to(
         REPO_ROOT

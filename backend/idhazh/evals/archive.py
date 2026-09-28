@@ -7,9 +7,9 @@ whole safety argument of this module is the order those two things happen in.
 
 **The archive keeps a month while the ledger below it keeps days**, because a
 day file of one month's totals is a shape nothing consumes
-(`docs/concepts/partitions.md`). `retention.prune_scores` is where the two grains
-meet: it groups with `day_partition.days_by_month` and folds a month whole or not
-at all, so a month's input is at most 31 files.
+(`docs/concepts/partitions.md`). The gardener's `scores` task is where the two
+grains meet: it groups with `day_shards.shards_by_month` and folds a month
+whole or not at all, so a month's input is at most 31 files.
 
 The summary is computed, written temp-then-rename, read back through its
 contract, and reconciled field by field against a second reading of the day
@@ -238,7 +238,7 @@ def summarise(days: Sequence[Path], *, month: str, observation_key: Sequence[str
 
     A month is a tree of `<YYYY>/<MM>/<DD>` days since 2026-09-13, so the caller
     hands the files and the month they belong to rather than one path whose stem
-    said both. `retention.prune_scores` groups them with
+    said both. The gardener's `scores` task groups them with
     `day_shards.shards_by_month` and folds a month whole or not at all.
 
     `observation_key` is `evals.writer.OBSERVATION_KEY`, passed in rather than

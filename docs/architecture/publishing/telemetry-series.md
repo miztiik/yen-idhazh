@@ -1,6 +1,6 @@
 # Telemetry Series
 
-**Last Updated**: 2026-09-21
+**Last Updated**: 2026-09-28
 
 The console's interactive charts read a published projection of item health. They
 never read `state/item-health/` directly.
@@ -335,8 +335,8 @@ value that is not equal to `observability.item_health_full_grain_months`: this
 file is the browser's copy of that ledger, so a published month whose source has
 been folded away is a rate nobody can check, and a source month with no published
 copy is a window the console cannot draw. Since 2026-09-03 the two files go
-together: `retention.prune_telemetry` folds the ledger month, unlinks the shard,
-and unlinks this copy of it in the same step
+together: the gardener's `telemetry-aggregate` task folds the ledger month,
+unlinks the shard, and unlinks this copy of it in the same pass
 ([../../concepts/config/retention-ages.md](../../concepts/config/retention-ages.md#every-tree-names-its-own-cleanup-age)).
 
 Three things about that deletion are worth stating on this page rather than only

@@ -122,9 +122,9 @@ def date_of(day_file: Path) -> str:
     """The `<YYYY-MM-DD>` a day file holds, read off its own path.
 
     The peer of `month_of`, and both exist because a boundary is either a month
-    or a day. `retention.prune_telemetry` and `prune_feed_health` compare a month
-    because their knobs are months; `prune_seen` compares a day, because its knob
-    is `collect.seen_window_days` and `days_in_window` hands it days. A caller
+    or a day. The gardener's `telemetry-aggregate` and `feed-health` tasks compare
+    a month because their windows are months; the `seen` task compares a day,
+    because its window is days and `days_in_window` hands it days. A caller
     with a day boundary that spelled this itself would be the second place the
     path layout is written down.
     """

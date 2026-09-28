@@ -68,8 +68,8 @@ OBSERVATION_KEY: Final = ledger.OBSERVATION_KEY
 def ledger_days(state_dir: Path) -> list[Path]:
     """Every committed shard of the ledger, oldest day first.
 
-    Anything that is not a day of this ledger is left alone:
-    `retention.prune_scores` archives and then deletes out of this directory, so
+    Anything that is not a day of this ledger is left alone: the gardener's
+    `scores` task archives and then deletes out of this directory, so
     it names what it recognises rather than acting on what it does not. What
     counts as a day is `day_shards.shard_files` and nothing local - this
     directory is the one where getting that wrong deletes a file. That walk

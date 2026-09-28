@@ -8,9 +8,9 @@ it is older than the window, one file at a time with the folders it leaves
 empty. The published day is never touched here or anywhere.
 
 The window is counted in whole days back from the wake, the day before the
-first kept day being the last one taken, exactly as `retention.cutoff` counted
-the thirty-day months the old knob spent. `config.load_gardener` refuses a
-window that would include today, so this never selects a day a concurrent
+first kept day being the last one taken, as the visual-prune task counts the
+thirty-day months `retention.image_months` names. `config.load_gardener` refuses
+a window that would include today, so this never selects a day a concurrent
 assemble is still writing into.
 """
 

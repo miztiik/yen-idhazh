@@ -140,8 +140,9 @@ opens became 23, and it gains about 365 a year**. The bytes did not move: the sa
 digests are spread over more files, 21 more header lines. The ledger bound is what
 answers it - `observability.scores_full_grain_months` is 14, so once the prune is
 switched on the live index holds at most fourteen months of days and everything
-older is one `state/score-archive/<YYYY-MM>.json` a month. **`--dry-run` is on the
-workflow step today, so nothing prunes and the count grows until that is flipped**
+older is one `state/score-archive/<YYYY-MM>.json` a month. **The `scores` task
+ships `dry_run: true`, so nothing prunes and the count grows until its
+declaration is flipped**
 ([../architecture/publishing/retention.md](../architecture/publishing/retention.md)).
 A cover was rejected rather than overlooked, for the reason the paragraph above
 gives. `fingerprint.append_new` is the same shape one size down: it
@@ -166,8 +167,8 @@ on record.
 unbounded in code and bounded by design: `roll` evicts the oldest on every
 harvest, so the file this opens does not grow however long the project runs. A
 cover here would only hide a `roll` that stopped evicting. The same mechanism
-bounds `state/traces/`: `retention.prune_traces` deletes whole files past
-`observability.trace_window_days`, so there is at most a week of traces on disk
+bounds `state/traces/`: the gardener's `traces` task deletes whole files past
+its window, so there is at most a week of traces on disk
 and no read to cover. **A cover can be enforced on the ledger instead of on the
 read**, and where it is, the read needs nothing.
 
@@ -230,7 +231,7 @@ reads are here and not how many. These are `backend/`'s;
 | `evals.retrieval.load_corpus` | day directories of `frontend/public/digest/` | `assist.eval_corpus_through`, a pinned day rather than a rolling count. The day is read off the path and a later one is never opened, which is the whole saving: the gate was loading 32 days to score 6. A rolling count would be the wrong cover here - the pin holds the competitor set still for a frozen label set, so a cover that moved with the calendar would put the gate back where it was. `None` reads every day and is what the operator surface asks for |
 | `evals.retrieval.load_index_corpus`, pinned | one month shard of `frontend/public/assist/index/` | `assist.eval_corpus_through` again, matched against the shard **stem** before the file is opened, then the rows narrowed to the day. A month shard is coarser than a pin, so the second step is what makes the read exact - and it is cheap only because the first already refused every later shard |
 | `evals.retrieval.load_index_corpus`, live | the newest shards of the same directory | `assist.search_months` and `assist.search_min_days`, the two knobs `readScope` in `search.ts` reads. Newest-first, so it is at most `months + 1` shards whatever the archive holds |
-| `retention.prune_counterfactual_scores` | day files of `state/counterfactual-scores/` | `lens_weights.window_days`, committed at 30. It walks the tree to find what to delete, so its cost falls as it works - a day it deletes is a day no later run opens. The walk is what bounds the collection: the ledger gains rows on every run and nothing else takes any away |
+| the gardener's `counterfactual-scores` task | day files of `state/counterfactual-scores/` | `lens_weights.window_days`, committed at 30. It walks the tree to find what to delete, so its cost falls as it works - a day it deletes is a day no later run opens. The walk is what bounds the collection: the ledger gains rows on every run and nothing else takes any away |
 | `stages.assemble._earlier_days` | `digest.json` of the published days the same-story window can still reach | `assemble.same_story_window_hours`, committed at 36, which is `ceil(hours / 24)` days - one. The dates are named by date arithmetic, never by a directory walk, so it is one file open on the thousandth day and on the third. A bounded fixture cannot answer its question: whether this morning's story is one an earlier PUBLISHED day already carried, which only that day's own payload holds the vectors for. 0 reads nothing |
 
 ### A cover that is not a clock
@@ -298,8 +299,8 @@ rather than on the read.
 and not yet enforced, and it says so here rather than in a sentence that would be
 wrong.** Six of the seven series are trimmed on every assemble, because their
 publishers reach `series.publish_series`, which calls `prune_months`.
-`public_telemetry.publish` does not: its deletion lives in
-`retention.prune_telemetry`, inside the workflow step that ships `--dry-run`. So
+`public_telemetry.publish` does not: its deletion lives in the gardener's
+`telemetry-aggregate` task, which ships `dry_run: true`. So
 `public_telemetry_keep_months` is 14 and the directory holds every month it has
 ever published - 2 files on 2026-09-13, gaining one a month. Every listing of it
 grows with it, including the one
@@ -342,7 +343,7 @@ the month it names is the only one that can have changed - and the filter is
 skipped for any month whose mirror is missing, which is what lets a fresh clone
 rebuild one it never published and is why no cover in months belongs on the
 `months=None` case. **Fourteen is not yet a bound on what that case reads**: the
-oldest partition on disk is `2026-08` and `retention.prune_telemetry` first has a
+oldest partition on disk is `2026-08` and the `telemetry-aggregate` task first has a
 candidate to fold on **2027-10-01**, so today it reads every partition there has
 ever been - two of them, 3,824,328 bytes over 11,143 rows and 20 days on
 2026-09-12, which is 186.7 KB a day and exact. Fourteen partitions at that rate

@@ -1,6 +1,6 @@
 # Console Payloads
 
-**Last Updated**: 2026-09-27
+**Last Updated**: 2026-09-28
 The operator console reads ten datasets. Nine of them come from `state/`,
 which is never served, so each one crosses a trust boundary and each crossing
 needs a contract (Guardrail #11). This page is the list. The machine-readable copy is
@@ -144,9 +144,9 @@ drifts from its ledger unwatched - so both modules went and `PROJECTIONS` is two
 rows shorter.
 
 `public_telemetry.py` is the seventh and it predates this page. It keeps its own
-path helper because `retention.prune_telemetry` deletes a shard through the same
-function that writes one, and two spellings of `<month>.csv` would delete a
-month nobody published and leave the published one behind.
+path helper because the gardener's `telemetry-aggregate` task finds a shard to
+delete by the same `<month>.csv` name the helper writes, and two spellings of it
+would delete a month nobody published and leave the published one behind.
 
 `source_health.py` is the eighth. It writes `source-health.json`, the one entry
 in the table above that nothing fetches, and it sits here rather than beside the
@@ -355,9 +355,11 @@ compact, which is why the no-months row reads under the committed 777:
 | 24 (two years) | 780 | 39.0 percent |
 
 **The list cannot pass 14, and that is retention rather than a hope.** `months`
-is the union of the published month shards, `idhazh prune-state` deletes a shard
-once it is past its own `observability.public_*_keep_months`, and every one of
-those is 14. So the whole growable part of this payload is the 32 bytes between
+is the union of the published month shards, and each series drops a shard once
+it is past its own window: the publishers trim theirs to
+`observability.public_*_keep_months`, and the gardener's `telemetry-aggregate`
+task trims the telemetry copy to its `public-copy` series. Every one of those is
+14. So the whole growable part of this payload is the 32 bytes between
 the first row and the third, and the served payload at its bound is about 809 -
 40.5 percent of the guardrail, which needs no window of its own.
 
