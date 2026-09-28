@@ -25,6 +25,7 @@
 	import { plannedDays, runYield, yieldSeries, type RunYieldSource } from '$lib/charts/run-yield';
 	import type { TimeWindow } from '$lib/charts/viewport';
 	import { HEALTH_FILL, type DayColumn } from '$lib/console/run-square';
+	import { shortDate } from '$lib/format';
 
 	let {
 		yieldDays,
@@ -87,7 +88,7 @@
 	const readout = $derived(
 		readoutOf({
 			type: 'dateSeries',
-			columns: load.columns.map((column) => column.date),
+			columns: load.columns.map((column) => shortDate(column.date)),
 			series: yieldSeries(load.columns),
 			events: {
 				lines: days.map((day) =>

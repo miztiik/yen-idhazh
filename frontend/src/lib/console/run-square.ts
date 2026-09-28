@@ -109,12 +109,15 @@ export function squareLabel(
 	floorPct: number,
 	readInPart: number
 ): string {
+	return `Run ${run.n} on ${shortDate(date)}: ${runOutcome(run, floorPct, readInPart)}`;
+}
+
+/** The line the readout prints beside `Run {n}`: every clause the square's own
+ * sentence carries, in the same order, so the strip a keyboard or a thumb reads
+ * is the whole run and not a shorter one than a mouse used to get. */
+export function runOutcome(run: RunFacts, floorPct: number, readInPart: number): string {
 	const attempted = tried(run);
-	const parts = [
-		`Run ${run.n} on ${shortDate(date)}: ${
-			attempted === 0 ? 'nothing new to try' : `${run.succeeded} of ${attempted} succeeded`
-		}`
-	];
+	const parts = [attempted === 0 ? 'nothing new to try' : `${run.succeeded} of ${attempted} succeeded`];
 	if (underFloor(run, floorPct)) parts.push(`under ${floorPct}%`);
 	if (run.failed > 0) parts.push(`${run.failed} failed`);
 	if (run.skipped > 0) parts.push(`${run.skipped} skipped`);
@@ -122,21 +125,5 @@ export function squareLabel(
 	if (run.sourceListStale) parts.push(STALE);
 	if (heldByAnother(run)) parts.push(HELD);
 	if (run.status === 'failed') parts.push('the run failed');
-	return parts.join(', ');
-}
-
-/** The line the readout prints beside `Run {n}`: the counts, in the few words a
- * row has room for, and the two facts that turn a run amber without a count. */
-export function runOutcome(run: RunFacts, floorPct: number): string {
-	const attempted = tried(run);
-	let head: string;
-	if (run.status === 'failed') head = 'the run failed';
-	else if (attempted === 0) head = 'nothing new to try';
-	else if (underFloor(run, floorPct)) {
-		head = `${run.succeeded} of ${attempted} succeeded, under ${floorPct}%`;
-	} else head = `${run.succeeded} of ${attempted} succeeded`;
-	const parts = [head];
-	if (run.sourceListStale) parts.push(STALE);
-	if (heldByAnother(run)) parts.push(HELD);
 	return parts.join(', ');
 }
