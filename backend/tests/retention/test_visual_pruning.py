@@ -575,6 +575,7 @@ def test_the_step_commits_one_row_a_run_and_names_what_it_left(
                 observability=ObservabilityConfig(),
                 collect=CollectConfig(),
                 retention_config=RetentionConfig(image_months=6, dry_run=False),
+                commit_sha="a" * 40,
                 run_id=PRUNE_RUN_ID,
                 today=date(2026, 8, 21),
                 state_dir=state,
@@ -583,8 +584,10 @@ def test_the_step_commits_one_row_a_run_and_names_what_it_left(
             == 0
         )
 
-    written = ledger.path(state, LedgerName.VISUAL_PRUNES, "2026-08-21")
-    assert ledger.read_header(written) == VisualPruneRow.csv_columns()
+    written = ledger.list_raw_files(state, LedgerName.VISUAL_PRUNES)
+    assert [held.envelope.covers for held in written] == ["2026-08-21"]
+    assert written[0].envelope.identity.producer == "stages.prune_state"
+    assert written[0].envelope.identity.git_sha == "a" * 40
     rows = ledger.load_visual_prunes(state)
     assert len(rows) == 1
     assert (rows[0].deleted, rows[0].skipped_by_fuse) == (200, 100)
@@ -594,6 +597,7 @@ def test_the_step_commits_one_row_a_run_and_names_what_it_left(
         observability=ObservabilityConfig(),
         collect=CollectConfig(),
         retention_config=RetentionConfig(image_months=6, dry_run=False),
+        commit_sha="a" * 40,
         run_id=PRUNE_RUN_ID,
         today=date(2026, 8, 21),
         state_dir=state,
@@ -601,7 +605,8 @@ def test_the_step_commits_one_row_a_run_and_names_what_it_left(
     )
     assert repeat == 0
     assert len(ledger.load_visual_prunes(state)) == 1, (
-        "a second attempt at one execution is one cleanup written twice"
+        "a second pass by one execution is one work unit written twice, and the "
+        "reader keeps the later write"
     )
 
 
@@ -618,13 +623,14 @@ def test_the_step_leaves_the_pictures_alone_when_no_tree_is_named(tmp_path: Path
             observability=ObservabilityConfig(),
             collect=CollectConfig(),
             retention_config=RetentionConfig(image_months=6, dry_run=False),
+            commit_sha="a" * 40,
             run_id=PRUNE_RUN_ID,
             today=date(2026, 8, 21),
             state_dir=state,
         )
         == 0
     )
-    assert not ledger.path(state, LedgerName.VISUAL_PRUNES, "2026-08-21").exists()
+    assert ledger.list_raw_files(state, LedgerName.VISUAL_PRUNES) == []
 
 
 def test_a_directory_that_is_not_a_date_is_left_alone(tmp_path: Path) -> None:

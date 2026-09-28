@@ -99,12 +99,6 @@ AT_THE_BASE: Final[dict[str, tuple[str | None, str | None, str | None]]] = {
         "state/published/2026/09/18.csv",
         "state/published",
     ),
-    "FEED_RETIREMENTS": ("state/feed-retirements.csv", "state/feed-retirements.csv", None),
-    "VISUAL_PRUNES": (
-        "state/visual-prunes/2026/09/18.csv",
-        "state/visual-prunes/2026/09/18.csv",
-        "state/visual-prunes",
-    ),
     "COUNTERFACTUAL_SCORES": (
         "state/counterfactual-scores/2026/09/18",
         "state/counterfactual-scores/2026/09/18",
@@ -219,8 +213,10 @@ COVERS: Final[dict[Grain, str | None]] = {
 }
 
 #: The ledgers that file under `state/raw/` and `state/compact/` through the door.
-#: They were never CSV trees, so they have no address from before the registry
-#: and no registry address now: the four registry builders refuse them by name.
+#: They have no registry address now - the four registry builders refuse them by
+#: name - so they have no row above. The gardener was never a CSV tree; the feed
+#: retirements and the cleanup record were, and the one-shot migration that moved
+#: them spells where they sat.
 THROUGH_THE_DOOR: Final = frozenset(
     member for member in LedgerName if paths.entry(member).grain is Grain.RAW_AND_COMPACT
 )
@@ -352,20 +348,25 @@ def test_a_ledger_outside_its_familys_folder_stops_the_build_naming_it() -> None
     ) in str(refusal.value)
 
 
-def test_a_file_at_the_top_of_state_names_its_family_by_its_stem() -> None:
-    """The one ledger with no folder is named for its file, and a rename is refused."""
-    retirements = a_family(LedgerName.FEED_RETIREMENTS.value)
-    renamed = {**retirements, "name": "retirements"}
+def test_a_ledger_with_no_folder_is_refused_even_when_it_is_one_file() -> None:
+    """Every family is a folder under `state/`, so no ledger sits loose at its top.
 
-    with pytest.raises(ValidationError) as refusal:
+    The retirements were the one ledger that did, as `state/feed-retirements.csv`,
+    and the family check named that family by the file's stem. They moved under
+    `state/raw/`, and the exception went with them: a flat file with no prefix
+    is refused now, the way every other grain already was.
+    """
+    judge = a_family("content-similarity-judge")
+    loose = [
+        {**held, "prefix": []} if held["grain"] == Grain.FLAT.value else held
+        for held in judge["ledgers"]
+    ]
+    assert loose != judge["ledgers"], "the judge's family holds no flat ledger to lift out"
+
+    with pytest.raises(ValidationError, match="has no prefix, so its files would sit loose"):
         LedgersConfig.model_validate(
-            a_registry([renamed, *without(LedgerName.FEED_RETIREMENTS.value)])
+            a_registry([{**judge, "ledgers": loose}, *without("content-similarity-judge")])
         )
-
-    assert (
-        "feed-retirements sits at state/feed-retirements.csv and is listed in family "
-        "retirements"
-    ) in str(refusal.value)
 
 
 def test_a_member_named_for_the_wrong_place_stops_the_build_naming_it() -> None:
@@ -465,7 +466,7 @@ def test_a_dated_ledger_handed_no_period_refuses(member: LedgerName) -> None:
 def test_a_flat_ledger_handed_a_period_refuses() -> None:
     """One file has no period, so a caller passing one has the wrong ledger."""
     with pytest.raises(ValueError, match="names no period"):
-        paths.path(STATE, LedgerName.FEED_RETIREMENTS, A_DAY)
+        paths.path(STATE, LedgerName.CONTENT_SIMILARITY_JUDGE_HOLDOUT_PAIRS, A_DAY)
 
 
 def test_the_claimed_roots_differ_from_the_base_only_by_the_names_given() -> None:
@@ -534,8 +535,12 @@ def test_every_entry_carries_the_fields_its_grain_needs() -> None:
 
 
 def test_a_ledger_under_the_two_roots_has_no_registry_address() -> None:
-    """All four registry builders refuse it by name and point at the five that can build it."""
-    assert LedgerName.GARDENER in THROUGH_THE_DOOR
+    """All four registry builders refuse it by name and point at the ones that can build it."""
+    assert {
+        LedgerName.GARDENER,
+        LedgerName.FEED_RETIREMENTS,
+        LedgerName.VISUAL_PRUNES,
+    } <= THROUGH_THE_DOOR
     for member in sorted(THROUGH_THE_DOOR):
         refusal = f"^{member.value} files by raw-and-compact: .* Ask raw_path"
         with pytest.raises(ValueError, match=refusal):

@@ -1,6 +1,6 @@
 # Telemetry
 
-**Last Updated**: 2026-09-22
+**Last Updated**: 2026-09-28
 
 The structured-event vocabulary: the envelope every event carries, the event names that are emitted, the two shapes those names take, the span tree a developer can switch on, and the rule that there is no network sink. "Telemetry" here means a **local, structured log**; it is not a runtime analytics SDK, and this project ships none ([principles.md](principles.md), [../../CLAUDE.md](../../CLAUDE.md) section 1b).
 
@@ -441,7 +441,7 @@ Thirteen ledgers under `state/` is not thirteen designs. It is six grains, and t
 | item | date, run, item | `item-health` - the census |
 | observation | address, output digest, scorer version | `scores`, `score-index` |
 | address | url key | `seen`, `published`, `counterfactual-scores` |
-| feed | run, feed | `feed-health`, `feed-retirements.csv` |
+| feed | run, feed | `feed-health`, `feed-retirements` |
 | shard and run | date, run, shard | `host-fingerprint`, `span-rollup`, `visual-prunes` |
 | day | date | `day-metrics` |
 
@@ -504,7 +504,7 @@ Read this table before proposing a merge. A ledger folds only when it fails **ev
 | `seen` | an address | 90 days | **KEEP.** 76,834 addresses against 12,217 planned items. Most were never planned, so most can never have a row |
 | `counterfactual-scores` | a candidate | with the scores | **KEEP.** The refused candidates are the point, and a refused candidate is never planned |
 | `feed-health` | a feed | with the feeds | **KEEP.** A feed that returned nothing has no items, and that is the case it exists for |
-| `feed-retirements.csv` | a feed | never | **KEEP flat.** A fact with no day does not belong in a day tree |
+| `feed-retirements` | a feed | never | **KEEP.** It was one flat file, because a fact with no day had no day tree to go in. It moved to `state/raw/feed-retirements/` on 2026-09-28 and files each retirement under the day it happened, because through the ledger door every writer holds a file of its own and no merge driver is needed |
 | `runtime-counters.csv` | a shard | 14 months | **RETIRED 2026-09-20.** It was the independent check on the census's own timings; the four cells that carried that check moved onto `host-fingerprint`, which keys the same four cells and already files by day |
 | `span-rollup` | a shard and a span | 14 months | **KEEP.** Its columns are held disjoint from every ledger's by a contract test, which is what lets a fold of spans be committed at all |
 | `traces` | a shard | 7 days | **KEEP.** Evidence, not a record. Deleted rather than folded |
@@ -522,7 +522,7 @@ There is a second reason, and it bites in production rather than in year two. A 
 | --- | --- | --- |
 | Fill the census columns the run already computes | 58 of the 70 empty columns, from values the process holds and discards | Nothing blocking. The cost is one commit, not a measurement |
 | Fold `visual-prunes` into a run-grain ledger | one ledger and one writer instead of two | whether the month fold can carry two row shapes without a second fold path |
-| Move the three flat files to day trees | a ledger `idhazh telemetry prune` can reach, since that command takes a day file out and has no way to rewrite a row out of a flat one ([../architecture/publishing/retention.md](../architecture/publishing/retention.md#a-named-prune-one-ledger-one-range-of-days-2026-09-16)) | the one-time migration's cost, and whether any reader assumes a single file |
+| Move the remaining flat files to day trees | a ledger `idhazh telemetry prune` can reach, since that command takes a day file out and has no way to rewrite a row out of a flat one ([../architecture/publishing/retention.md](../architecture/publishing/retention.md#a-named-prune-one-ledger-one-range-of-days-2026-09-16)). `feed-retirements.csv` moved on 2026-09-28, under `state/raw/`, which that command does not reach | the one-time migration's cost, and whether any reader assumes a single file |
 | Compress the published projections | **measured 2026-09-15: 6,720,442 bytes of 8,726,606, 77.0 percent**, with no new dependency ([../reference/pipeline-cost.md](../reference/pipeline-cost.md#what-compressing-the-telemetry-takes-against-re-encoding-it-2026-09-15)) | whether every console fetch path handles the encoding. One build settles it. `span-rollup/` is 67 bytes and gzips to 77, so a switch has to leave a file alone where compressing it does not pay |
 | Re-encode every closed-vocabulary column as an ordinal integer | **measured 2026-09-15: 369,855 bytes of `state/item-health/`, 7.1 percent** - a ninth of what compressing the same files takes, and it costs a legend shipped beside the data and `grep failed` over a committed day | nothing. It is priced and deferred: compression is taken first, and an ordinal taken first would be re-encoded when compression lands |
 | A query engine over a rolling month index, in the browser | one fetch instead of a month of rows | the engine's wire size. The month it would replace is no longer an estimate: `telemetry/2026-09.csv` is 1,186,543 bytes and gzips to 254,252 |

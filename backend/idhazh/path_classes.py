@@ -77,12 +77,11 @@ DERIVED: Final[tuple[str, ...]] = (
 #: settles by key. Where two writers on one path ARE a disagreement, the answer
 #: is the written-once name instead: a union there would make the conflict quiet
 #: rather than remove it. `state/feed-health` is the tree that says so - it
-#: takes no driver.
+#: takes no driver. Nothing under `state/raw/` takes one either: every file
+#: there has one writer, so a union would have nothing to settle.
 UNION_SAFE: Final[tuple[str, ...]] = (
     "state/published",
-    "state/visual-prunes",
     "state/seen",
-    "state/feed-retirements.csv",
     "state/llm-council/shard-outcomes",
     "state/content-similarity-judge/metrics",
     "state/content-similarity-judge/merge-line-holdout-scores",

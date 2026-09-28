@@ -40,7 +40,7 @@ from idhazh.contracts.visual_prune import VisualPruneRow
 from idhazh.council import metrics_sink
 from idhazh.ledger import paths
 from idhazh.stages import score_merge_line_holdout, work
-from idhazh.telemetry import FileSink
+from idhazh.telemetry import FileSink, source_health
 from idhazh.telemetry.publish import day_metrics
 
 pytestmark = pytest.mark.contract
@@ -171,10 +171,15 @@ ROUTES: Final[dict[str, tuple[LedgerName, int, Callable[[Path], bool]]]] = {
         1,
         lambda s: _wrote(s, lambda: ledger.append_published(s, A_DAY, [_first(PublishedRow)])),
     ),
-    "append_retirements": (
+    "file_retirements": (
         LedgerName.FEED_RETIREMENTS,
         1,
-        lambda s: _wrote(s, lambda: ledger.append_retirements(s, [_first(FeedRetirementRow)])),
+        lambda s: _wrote(
+            s,
+            lambda: source_health.file_retirements(
+                s, [_first(FeedRetirementRow)], _identity(ServerJob.PLAN)
+            ),
+        ),
     ),
     "append_story_similarity_pairs": (
         LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS,

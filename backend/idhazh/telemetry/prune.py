@@ -89,7 +89,10 @@ PruneInterruptedError = one_at_a_time.PruneInterruptedError
 #: walker its suffix, which is where the question belongs. `state/candidate-models/`
 #: and `state/span-rollup/` are absent too: nobody has asked to take a range out
 #: of one, and joining this list is a decision rather than a consequence of the
-#: shape.
+#: shape. `visual-prunes` left on 2026-09-28, when it moved under `state/raw/`
+#: through the ledger door: its days are folders of writer files there, which
+#: neither walker here reads, and a target that walked its old folder would
+#: select nothing forever.
 #:
 #: **`host-fingerprint` is what a day taken off the site owes its machine rows.**
 #: It filed by day from 2026-09-16 and was missing from this list until
@@ -132,7 +135,6 @@ _TARGET_LEDGERS: Final[tuple[LedgerName, ...]] = (
     LedgerName.SCORES,
     LedgerName.SCORE_INDEX,
     LedgerName.LLM_COUNCIL_SHARD_OUTCOMES,
-    LedgerName.VISUAL_PRUNES,
 )
 
 TARGETS: Final[Mapping[str, str]] = MappingProxyType(

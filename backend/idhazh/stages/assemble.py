@@ -17,6 +17,7 @@ from idhazh.contracts.base import ServerJob
 from idhazh.contracts.digest_day import DigestDay
 from idhazh.contracts.digest_run_fragment import DigestRunFragment
 from idhazh.contracts.eval_row import EvalRow
+from idhazh.contracts.file_envelope import WriterIdentity
 from idhazh.contracts.fingerprint import PipelineInputs
 from idhazh.contracts.item_health import ItemOutcome
 from idhazh.contracts.ledger_name import LedgerName
@@ -51,6 +52,10 @@ from idhazh.telemetry.publish import source_health as source_health_publish
 #: whole day rather than fanning out, so it is shard 0 of one - the same answer
 #: the machine probe gives for every job that is not a work shard.
 ASSEMBLE_SHARD: Final = 0
+
+#: The name a file this stage writes through the ledger door carries as its
+#: producer: this module's own dotted name, less the package.
+PRODUCER: Final = __name__.partition(".")[2]
 
 
 def _index_root() -> Path:
@@ -461,7 +466,9 @@ def stage_assemble(
         # counts all along and nobody read them, which is why this speaks.
         print(f"::warning title=Sources answering but not reading::{yield_alarm}")
         LOG.warning("%s", yield_alarm)
-    _retire_low_yield_sources(instrument.sources, plan=plan, run_id=run_id, settings=settings)
+    _retire_low_yield_sources(
+        instrument.sources, plan=plan, run_id=run_id, settings=settings, commit_sha=commit_sha
+    )
     _report_nothing_published(day, plan)
     LOG.info(
         "published date=%s items=%s partial=%s eval_rows=%s addresses=%s item_health_rows=%s "
@@ -481,7 +488,12 @@ def stage_assemble(
 
 
 def _retire_low_yield_sources(
-    view: SourceHealthView, *, plan: RunPlan, run_id: str, settings: config.Settings
+    view: SourceHealthView,
+    *,
+    plan: RunPlan,
+    run_id: str,
+    settings: config.Settings,
+    commit_sha: str,
 ) -> int:
     """File a retirement for every source that has held under the mark long enough.
 
@@ -513,15 +525,18 @@ def _retire_low_yield_sources(
     )
     if not filed:
         return 0
-    landed = ledger.append_retirements(common.STATE_ROOT, filed)
-    for row in filed:
-        LOG.warning(
-            "retired a source on its own yield feed=%s days_under=%s evidence=%s..%s",
-            row.feed_id,
-            len(row.evidence_dates),
-            row.evidence_dates[0],
-            row.evidence_dates[-1],
-        )
+    landed = source_health.file_retirements(
+        common.STATE_ROOT,
+        filed,
+        WriterIdentity(
+            run_id=run_id,
+            attempt=run_context.run_attempt(),
+            job=ServerJob.ASSEMBLE,
+            shard=ASSEMBLE_SHARD,
+            producer=PRODUCER,
+            git_sha=commit_sha,
+        ),
+    )
     knobs = settings.app.collect
     print(
         "::warning title=Sources retired on their own yield::"
@@ -530,7 +545,7 @@ def _retire_low_yield_sources(
         f"{', '.join(row.feed_id for row in filed)}. Edit that feed's URL in "
         "config/sources.json to ask it again."
     )
-    return landed
+    return len(landed)
 
 
 def _published_rows(day: DigestDay, plan: RunPlan) -> list[PublishedRow]:

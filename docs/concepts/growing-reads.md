@@ -1,6 +1,6 @@
 # Growing Reads
 
-**Last Updated**: 2026-09-27
+**Last Updated**: 2026-09-28
 One question, asked of every read:
 
 > **Does this read cost more when a run appended more?**
@@ -251,8 +251,8 @@ reads are here and not how many. These are `backend/`'s;
 
 | Read | What it opens | Why no cover |
 | --- | --- | --- |
-| `ledger.load_retirements` | `state/feed-retirements.csv` | a retirement is permanent; forget one and the run asks a dead server again |
-| `ledger.load_visual_prunes` | `state/visual-prunes.csv` | the report is about the whole series |
+| `ledger.load_retirements` | every raw file under `state/raw/feed-retirements/` | a retirement is permanent; forget one and the run asks a dead server again. It lists every day folder and opens every file in it, so it grows with the retirements filed rather than with the archive - one file per day a retirement happened, and none on the days nothing retired |
+| `ledger.load_visual_prunes` | every raw file under `state/raw/visual-prunes/` | the report is about the whole series. One file per run, so this read opens about 1,825 more files a year until compaction folds closed days; no scheduled job calls it today |
 | `corpus.read_rows` | `corpus/corpus.jsonl` | already rolling, capped at `finetune.corpus_rows` |
 | `contracts.base.Contract.read` | one payload | a validator cannot skip what it has not read |
 | `publication_checks.run_publication_checks` | every committed `digest.json` under `frontend/public/digest/` | a published day is frozen, but the contracts it is read through are not, so any day can stop matching on a commit that changes a shape. The receipt that used to skip an unchanged day was decommissioned on 2026-09-27: it settled a day on a recorded payload LENGTH, which let a receipt earned over one tree pass a same-length day in another. Measured 44 MB/s (2026-09-08), so the 727-day horizon reads in 30-60 s on the runner |

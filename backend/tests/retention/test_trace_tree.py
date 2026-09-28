@@ -181,6 +181,7 @@ def test_the_stage_reports_the_trace_window_it_measured(
                 observability=ObservabilityConfig(),
                 collect=CollectConfig(),
                 retention_config=RetentionConfig(),
+                commit_sha="a" * 40,
                 run_id=RUN_ID,
                 today=TODAY,
                 state_dir=state,

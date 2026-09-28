@@ -1,6 +1,6 @@
 # The Ledger Door: Parquet and JSON Lines Under state/raw and state/compact
 
-**Last Updated**: 2026-09-27
+**Last Updated**: 2026-09-28
 
 How a contract payload reaches disk under `state/raw/` and `state/compact/`, how it comes back, and how the parquet engine is swapped. The door is `backend/idhazh/ledger/persist.py`; everything a producer needs is two calls, `ledger.persist` and `ledger.load`. The registry and the lifecycle statuses are [ledger-registry.md](ledger-registry.md), the CSV trees are [state-ledgers.md](state-ledgers.md), and the shape of a contract is [schemas.md](schemas.md).
 
@@ -21,7 +21,7 @@ state/compact/<ledger>/<period>/watermark.json
 
 **A raw file carries a minted name; a compact file carries a date.** Raw has many writers that never coordinate, so the minted `<file_id>` is what stops two of them taking one path. A compact period has exactly one writer, so its path is the period it covers and a reader can compute the address.
 
-Five builders in `backend/idhazh/ledger/paths.py` are the only code that spells these paths: `raw_path`, `raw_index_path`, `compact_path`, `compact_index_path` and `watermark_path`. Each takes the state root first, the way every ledger builder does, so a trial run and the test suite write where they point it. **Each refuses a path whose first folder under the state root is neither `raw` nor `compact`**, checked on the resolved path so `raw/../scores` is refused too - a third root is a `ValueError` naming the path and the rule, never a folder somebody forgot. `claimed_roots()` claims both roots, so the trial-tree sweep in `prune-state` never reads them as strays. Claimed means "not a stray", never "not pruned": a compaction bounds what sits in them.
+Six builders in `backend/idhazh/ledger/paths.py` are the only code that spells these paths: `raw_root` for the folder a reader walks, and `raw_path`, `raw_index_path`, `compact_path`, `compact_index_path` and `watermark_path` for the files. `raw_path` and `raw_index_path` are built from `raw_root`, so the folder a reader walks and the file a writer puts in it cannot disagree. Each takes the state root first, the way every ledger builder does, so a trial run and the test suite write where they point it. **Each refuses a path whose first folder under the state root is neither `raw` nor `compact`**, checked on the resolved path so `raw/../scores` is refused too - a third root is a `ValueError` naming the path and the rule, never a folder somebody forgot. `claimed_roots()` claims both roots, so the trial-tree sweep in `prune-state` never reads them as strays. Claimed means "not a stray", never "not pruned": a compaction bounds what sits in them.
 
 `.gitattributes` gives every data file, index and watermark under the two roots `-merge`, because each has one writer and a text merge could only splice two writers' bytes into a file neither wrote. `*.parquet` is `binary`.
 
@@ -48,7 +48,7 @@ The paths come back ascending by the period each file covers, never by path stri
 
 **A raw write into a paused or retired family from a pipeline job writes nothing**, returns an empty list and logs one warning, through `ledger.accepts_new_rows` ([ledger-registry.md](ledger-registry.md)). A compact-tier write and a write from `migrate`, `run-tasks` or `history` - the members of `MAINTENANCE_JOBS` beside `ServerJob` - are never skipped, because each files rows again that were already recorded.
 
-**`load` is the inverse of `persist` and nothing else.** It reads each file's container from the file's own first bytes, never from its suffix, and refuses a file whose envelope names a different writer. It refuses a file written under a newer shape of the contract than this build declares, naming the file, the stamp it holds and the stamp this build reads. It does not remove duplicates.
+**`load` is the inverse of `persist` and nothing else.** It reads each file's container from the file's own first bytes, never from its suffix, and refuses a file whose envelope names a different writer. It refuses a file written under a newer shape of the contract than this build declares, naming the file, the stamp it holds and the stamp this build reads. It does not remove duplicates: choosing which files are current is the reader's half, in [Reading a raw ledger](#reading-a-raw-ledger).
 
 ## The two identifiers
 
@@ -62,6 +62,24 @@ The paths come back ascending by the period each file covers, never by path stri
 | Same across two attempts | yes | no |
 
 **A union over any set of files keeps, for each `unit_id`, the rows of the highest `attempt`.** GitHub re-runs a failed job into the original run id, so the re-run's files share their `unit_id` with the first attempt's and the first attempt drops out. A re-run replaces its attempt rather than adding to it. `attempt` is only in `file_id` and `producer` only in `unit_id`; put `attempt` into `unit_id` and both attempts would survive the union. Within one millisecond the order of two `file_id`s is arbitrary.
+
+## Reading a raw ledger
+
+`backend/idhazh/ledger/raw_files.py` is the reader's half of the union above, written once so no reader invents its own. Three calls:
+
+| Call | What it answers |
+| --- | --- |
+| `list_raw_files(state_dir, ledger)` | every file under `raw/<ledger>/<YYYY>/<MM>/<DD>/` whose envelope this build can read, oldest first |
+| `pick_current_files(state_dir, ledger)` | for each `unit_id`, the file of its highest attempt |
+| `load_current_rows(state_dir, ledger, model=, key=)` | the current files' rows, oldest first, keeping the first row of each `key` |
+
+**Oldest first is an explicit sort, read from each file's envelope**: the day it covers, then `written_at_ms`, then `file_id`. A directory listing agrees today only because a `file_id` starts with its clock, and a reader that leaned on it would change its answer the day the name grammar did. Every file in a day folder is read whatever its suffix, because `ledger.format` may be JSON lines, and `index/` beside the years is passed over, because a listing is not a row.
+
+**The first row of a key wins**, because the two ledgers that read this way keep one record per key: a retirement per `endpoint_key`, and a cleanup pass per `(date, run_id)`. Two stale checkouts can each file one address, as two work units, and the earlier one is kept. A key that declares a winner rule of its own in `ledger/keys.py` is refused, because this reader would apply the wrong one.
+
+**A file this build cannot read is skipped, with one warning that names it**: a newer row shape, a row today's model refuses, a file that is not a ledger file, or one whose envelope names another ledger or another day than the folder it sits in. Only `ValueError` is caught. A missing parquet engine raises `ImportError`, and that stops the run, because skipping every file for it would read as a ledger with no history. For the retirements the direction is the safe one: a skipped file costs one request to an address that is probably still gone, and the next run files it again.
+
+The walk reads every day a ledger has a folder for. The two ledgers that read this way ask about their whole history, so a window would answer a different question; [growing-reads.md](../../concepts/growing-reads.md) lists both.
 
 ## The envelope inside the file
 
@@ -110,9 +128,39 @@ A date stays a string: it is a stamp a person reads in a diff and in a path, and
 
 **A footer records its engine's version, so two engines never write identical bytes.** That breaks nothing: nothing compares a data file's bytes, only whether a path exists.
 
+## Moving a ledger onto the door
+
+Two ledgers moved on 2026-09-28, producer and reader together: `state/feed-retirements.csv` and the `state/visual-prunes/<YYYY>/<MM>/<DD>.csv` day files. Their registry entries switched to `raw-and-compact`, and their `merge=union` lines in `.gitattributes` and `path_classes.UNION_SAFE` went, because a file with one writer has nothing for a union to settle.
+
+| Ledger | Writer now | Reader now | Files under |
+| --- | --- | --- | --- |
+| feed retirements | `telemetry.source_health.file_retirements`, the one writer, called by the plan stage (`410 Gone`) and the assemble stage (low yield) | `ledger.load_retirements` | the day each address was retired, because the row has no `date` field |
+| visual cleanup record | `stages/prune_state.py`, through `ledger.persist` | `ledger.load_visual_prunes` | the day its `date` names |
+
+Each writer names the commit its run checked out, which is why `idhazh plan` and `idhazh prune-state` take `--commit` as `idhazh assemble` always did, and every workflow job that reaches either ledger installs `.[parquet]`. A test holds both: `backend/tests/workflows/test_ledger_door_jobs.py`.
+
+**The committed CSV moved once, through `backend/utilities/migrate_csv.py`.** It reads the CSV, writes one file per day through the door, reads each file back field for field and cell for cell against the CSV row it came from, and only then deletes the CSV. Nothing is deleted until every day of every ledger asked for is proven, and a row that does not read back removes what the run wrote.
+
+```
+python backend/utilities/migrate_csv.py --state-dir state --run-id <YYYY-MM-DD-NNNN>
+       --git-sha <sha> [--ledger feed-retirements|visual-prunes] [--check]
+```
+
+| Exit | Meaning |
+| --- | --- |
+| 0 | every source CSV moved, or there was none; a second run exits 0 and writes nothing |
+| 1 | a row did not read back, or `--check` found a CSV left; no CSV was deleted |
+| 2 | a file for the same work unit exists and holds other rows; neither is discarded, and a person decides |
+
+Every file it writes carries `job=migrate`, `attempt=1`, `shard=0` and `producer=utilities.migrate_csv`, so a second run **with the first `--run-id`** mints the same `unit_id` and the same `content_sha256` for each day and leaves a matching file alone. A new run id is a new work unit for every day: the check that catches a disagreement never fires, and every day is written twice. `--git-sha` may differ between runs, because it is in neither identifier. The module is deleted once `--check` exits 0 on `main` and no run that checked out the CSV layout can still push; its removal condition is on its own first lines.
+
+**A CSV day file that lands after the move is migrated by running it again.** A digest run checks out the commit it was created at, so a run started before the move appends to a CSV its own checkout still holds. If that push reaches `main` after the move, the day file comes back beside its parquet, and a second migration with the first `--run-id` moves it. A day the first migration did not see is a new unit and is simply written. A day it did see, which the late run grew, exits 2: the CSV now holds every row of that day, so delete that day's file under `state/raw/visual-prunes/` and run the migration again, and it writes the whole day from the CSV.
+
 ## What it costs to install
 
-pyarrow is the largest thing the project installs, so it is the `parquet` optional extra rather than a runtime dependency: only a job that touches a parquet file installs `.[parquet]`, and `dev` pulls it in for the suite. **Its installed size and install time on ubuntu-latest are measured before any workflow job installs it**, and that figure is written here; the reading in hand is from Windows, whose wheel bundles different shared objects, so it is not quoted.
+pyarrow is the largest thing the project installs, so it is the `parquet` optional extra rather than a runtime dependency: only a job that touches a parquet file installs `.[parquet]`, and `dev` pulls it in for the suite. **Its install time on ubuntu-latest was not measured before the first workflow job installed it**, by owner ruling (2026-09-27); the first digest run that installs it is where that reading comes from, and it is written here when it is taken. The reading in hand is from Windows, whose wheel bundles different shared objects, so it is not quoted.
+
+The jobs that install it share `setup-python`'s pip cache key with the jobs that do not, because that action keys on the OS, the interpreter and the dependency file and offers no input that names the extras. A cache saved by a job without the engine costs the next job that needs it a download of pyarrow, never a failed run.
 
 ## Design rationale
 

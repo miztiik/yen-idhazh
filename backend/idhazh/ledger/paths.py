@@ -1,11 +1,11 @@
 """Where each ledger's file lives under `state/`, and never guessed.
 
-Two kinds of address, and nine builders in all. A ledger that files the way the
+Two kinds of address, and ten builders in all. A ledger that files the way the
 CSV trees do is read from `config/ledgers.json`, which is loaded and validated
 once, when this module loads, so a config that does not describe every ledger
 stops the build rather than a run four hundred seconds in. A ledger that goes
 through the door in `ledger/persist.py` files under `state/raw/` or
-`state/compact/`, and those two roots have one fixed grammar, so their five
+`state/compact/`, and those two roots have one fixed grammar, so their six
 builders need no registry entry to answer.
 
 The registry's four builders come in two pairs. `path` and `relpath` are the
@@ -15,7 +15,7 @@ are built from one segment list so they cannot disagree. `tree_root` and
 `tree_relpath` are the same pair for the folder a reader walks: the one that
 holds every file of a ledger and nothing else.
 
-**Nothing the door writes is born outside the two roots.** Each of the five
+**Nothing the door writes is born outside the two roots.** Each of the six
 root builders refuses, by name, a path whose first folder under `state/` is
 neither `raw` nor `compact`, so a third root is a `ValueError` rather than a
 convention somebody forgot.
@@ -110,9 +110,7 @@ def claimed_roots() -> frozenset[str]:
     whether the rows survive.
 
     A family is named for its top-level folder, so each name here is a child of
-    `state/`. `feed-retirements` is the one name that is a file's stem rather
-    than a folder - its only ledger is `state/feed-retirements.csv` - and
-    carrying it is harmless, because the sweep only ever looks at directories.
+    `state/`.
 
     `raw` and `compact` are claimed too, and they are not families: they are the
     two roots the ledger door files under. Unclaimed, the sweep would read them
@@ -177,10 +175,10 @@ def _folder(held: LedgerEntry) -> tuple[str, ...]:
     """The folder a ledger has to itself under `state/`, one segment at a time.
 
     A flat file has none. It shares its folder with other files -
-    `feed-retirements.csv` sits at the top of `state/` and `holdout-pairs.csv`
-    beside the similarity judge's other ledgers - so a walk handed that folder
-    would read files that are not this ledger's. A ledger under the two roots has
-    two folders rather than one, so it is refused too.
+    `holdout-pairs.csv` sits beside the similarity judge's other ledgers - so a
+    walk handed that folder would read files that are not this ledger's. A
+    ledger under the two roots has two folders rather than one, so it is refused
+    too.
     """
     if held.grain is Grain.RAW_AND_COMPACT:
         raise _no_registry_address(held)
@@ -249,6 +247,16 @@ def _day_segments(date: str) -> tuple[str, str, str]:
     return date[:4], date[5:7], date[8:10]
 
 
+def raw_root(state_dir: Path, ledger: LedgerName) -> Path:
+    """The folder that holds every raw file of one ledger: `raw/<ledger>/`.
+
+    What a reader walks to find the days a ledger has files for. `raw_path` and
+    `raw_index_path` are built from it, so the folder a reader walks and the
+    files a writer puts in it cannot disagree about where the ledger sits.
+    """
+    return _under_the_two_roots(state_dir, state_dir.joinpath(RAW_DIRNAME, ledger.value))
+
+
 def raw_path(
     state_dir: Path,
     ledger: LedgerName,
@@ -264,16 +272,14 @@ def raw_path(
     `<file_id>.json`.
     """
     year, month, day = _day_segments(date)
-    built = state_dir.joinpath(
-        RAW_DIRNAME, ledger.value, year, month, day, f"{file_id}.{fmt.value}"
-    )
+    built = raw_root(state_dir, ledger).joinpath(year, month, day, f"{file_id}.{fmt.value}")
     return _under_the_two_roots(state_dir, built)
 
 
 def raw_index_path(state_dir: Path, ledger: LedgerName, date: str) -> Path:
     """Where the listing of one raw day sits: `raw/<ledger>/index/<YYYY-MM-DD>.json`."""
     _day_segments(date)
-    built = state_dir.joinpath(RAW_DIRNAME, ledger.value, INDEX_DIRNAME, f"{date}{_JSON_SUFFIX}")
+    built = raw_root(state_dir, ledger).joinpath(INDEX_DIRNAME, f"{date}{_JSON_SUFFIX}")
     return _under_the_two_roots(state_dir, built)
 
 

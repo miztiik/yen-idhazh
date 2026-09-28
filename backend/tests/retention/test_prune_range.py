@@ -65,7 +65,6 @@ DAY_PATHS: Final[dict[str, LedgerName]] = {
         LedgerName.SCORES,
         LedgerName.SCORE_INDEX,
         LedgerName.LLM_COUNCIL_SHARD_OUTCOMES,
-        LedgerName.VISUAL_PRUNES,
     )
 }
 

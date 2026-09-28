@@ -10,10 +10,14 @@ a module-scope import here would close a load-time cycle: importing the package
 runs `__init__`, which imports this module, which re-enters a half-built package.
 
 Every writer here that records new rows asks `lifecycle.accepts_new_rows` first,
-and writes nothing into a paused or retired family. `append_visual_prunes` and
-`write_item_health_summary` do not ask: one is the prune's own log and the other
-folds rows already recorded, and the ageing step reads that fold back before it
-deletes anything.
+and writes nothing into a paused or retired family. `write_item_health_summary`
+does not ask: it folds rows already recorded, and the ageing step reads that
+fold back before it deletes anything.
+
+Two readers here read a ledger that lives under `state/raw/` rather than in a
+CSV tree - `load_retirements` and `load_visual_prunes` - and both read it through
+`ledger/raw_files.py`, which keeps one file per work unit. Their writers are not
+here at all: a producer hands those rows to `persist` itself.
 """
 
 from __future__ import annotations
@@ -39,7 +43,7 @@ from idhazh.contracts.seen import PublishedRow, SeenRow
 from idhazh.contracts.span_rollup import SpanRollupRow
 from idhazh.contracts.story_similarity_pair import StorySimilarityPair
 from idhazh.contracts.visual_prune import VisualPruneRow
-from idhazh.ledger import lifecycle, paths
+from idhazh.ledger import lifecycle, paths, raw_files
 from idhazh.ledger.csv_file import (
     CsvRecord,
     _read_rows,
@@ -260,48 +264,23 @@ def recorded_item_health(path: Path) -> set[tuple[str, ...]]:
     return _header_and_keys(path, ITEM_HEALTH_KEY)[1]
 
 
-def append_retirements(state_dir: Path, rows: Iterable[FeedRetirementRow]) -> int:
-    """Append the addresses this run decided are permanently gone.
-
-    Settled against `FEED_RETIREMENT_KEY` straight after the write, because the
-    two runs that can write one address are two
-    stale checkouts rather than two decisions: each reads the same five `410`
-    results and each files the same row. The settle catches the repeat inside one
-    checkout; a second attempt that races its own first stops at the rebase
-    rather than landing a second line. The
-    first row wins - there is nothing for a preference rule to choose between,
-    because a retirement is permanent and a second row for one address says
-    nothing the first did not.
-
-    Returns how many rows the file gained, so a caller can log the count. A row
-    that only repeated one already on record is not a gain.
-    """
-    recorded = list(rows)
-    if recorded and not lifecycle.accepts_new_rows(LedgerName.FEED_RETIREMENTS, len(recorded)):
-        return 0
-    file = paths.path(state_dir, LedgerName.FEED_RETIREMENTS)
-    landed = extend_ledger_file(file, FeedRetirementRow.csv_columns(), recorded)
-    return landed - drop_repeated_rows(file, FEED_RETIREMENT_KEY)
-
-
 def load_retirements(state_dir: Path) -> list[FeedRetirementRow]:
-    """Every retired address, in file order. Never windowed: retirement is forever.
+    """Every retired address, oldest first, one row each. Never windowed: retirement is forever.
 
-    A row that no longer parses is skipped rather than fatal, and the direction
-    of that failure is the safe one: an unreadable retirement costs one request
-    to an address that is probably still gone, and the next run reads the same
-    evidence and files it again. Refusing to start would cost the reader the day.
+    Two runs reading the same five `410` answers from two stale checkouts each
+    file the same address, and only the first row is kept - a retirement is
+    permanent, so a second row for one address says nothing the first did not.
+    A file this build cannot read is skipped with a warning, and the direction of
+    that failure is the safe one: it costs one request to an address that is
+    probably still gone, and the next run reads the same evidence and files it
+    again. Refusing to start would cost the reader the day.
 
     Cover: -1, unbounded on purpose. A retirement is permanent, so any cover in
     days would forget the oldest ones and the run would ask a dead server again.
     """
-    rows: list[FeedRetirementRow] = []
-    for raw in _read_rows(paths.path(state_dir, LedgerName.FEED_RETIREMENTS)):
-        try:
-            rows.append(FeedRetirementRow.from_csv_row(raw))
-        except (KeyError, ValueError):
-            continue
-    return rows
+    return raw_files.load_current_rows(
+        state_dir, LedgerName.FEED_RETIREMENTS, model=FeedRetirementRow, key=FEED_RETIREMENT_KEY
+    )
 
 
 def recorded_span_rollup(path: Path) -> set[tuple[str, ...]]:
@@ -315,34 +294,13 @@ def recorded_span_rollup(path: Path) -> set[tuple[str, ...]]:
     return {tuple(row[name] for name in SPAN_ROLLUP_KEY) for row in _read_rows(path)}
 
 
-def append_visual_prunes(state_dir: Path, date: str, rows: Iterable[VisualPruneRow]) -> int:
-    """Append what each cleanup pass found and took, into that day's own file.
-
-    The caller hands the date, the way `append_published` takes one and for the
-    same reason: the caller decides which day a pass belongs to, and a pass run
-    against a date that has already closed writes its row there.
-
-    Settled against `VISUAL_PRUNE_KEY` straight after the write, the way
-    `append_retirements` is, because the two writers that can produce one key are
-    two attempts at one execution rather than two cleanups. Each walks the same
-    tree and reports the same counts, so the first row wins and there is nothing
-    to choose between them. Settling the day file is enough: the key opens with
-    `date`, so a repeat can only ever be inside the one day's file.
-
-    Returns how many rows the file gained, so a caller can log the count.
-    """
-    file = paths.path(state_dir, LedgerName.VISUAL_PRUNES, date)
-    landed = extend_ledger_file(file, VisualPruneRow.csv_columns(), list(rows))
-    return landed - drop_repeated_rows(file, VISUAL_PRUNE_KEY)
-
-
 def append_story_similarity_pairs(
     state_dir: Path, date: str, rows: Iterable[StorySimilarityPair]
 ) -> int:
     """Append a day's judged pairs into that day's own file.
 
-    Settled against `STORY_SIMILARITY_PAIR_KEY` straight after the write, the
-    way `append_visual_prunes` is. The key carries `run_id`, so a second
+    Settled against `STORY_SIMILARITY_PAIR_KEY` straight after the write. The
+    key carries `run_id`, so a second
     RUN of one date keeps its own rows and only a second attempt at one
     execution is collapsed - both attempts judged the same pair under the same
     prompt against the same day, so the first row wins and there is nothing to
@@ -478,27 +436,23 @@ def load_fitted_thresholds(
 
 
 def load_visual_prunes(state_dir: Path) -> list[VisualPruneRow]:
-    """Every cleanup pass on record, oldest day first. Never windowed.
+    """Every cleanup pass on record, oldest day first, one row per run. Never windowed.
 
     The question is whether the backlog is shrinking, which is about the whole
-    series - so this opens every day file the tree holds and the layout saves it
-    nothing. That is the trade `docs/architecture/contracts/state-ledgers.md`
+    series - so this reads every day the raw ledger holds and no window saves it
+    anything. That is the trade `docs/architecture/contracts/state-ledgers.md`
     states for this ledger.
 
-    A row that no longer parses is skipped rather than fatal, for the reason
-    `load_retirements` gives: this ledger is a report, and refusing to start
-    because an old report cannot be read would cost a reader the day. A file the
-    walk cannot place is a different thing and still stops the read - a report
-    that quietly drops a day is a report of the wrong series.
+    One row per `(date, run_id)`: a second attempt at one run replaces the first
+    through the work unit, and a second row for one run from anywhere else walked
+    the same tree and reported the same counts, so the first is kept. A file this
+    build cannot read is skipped with a warning, for the reason `load_retirements`
+    gives: this ledger is a report, and refusing to start because an old report
+    cannot be read would cost a reader the day.
     """
-    rows: list[VisualPruneRow] = []
-    for file in day_partition.day_files(paths.tree_root(state_dir, LedgerName.VISUAL_PRUNES)):
-        for raw in _read_rows(file):
-            try:
-                rows.append(VisualPruneRow.from_csv_row(raw))
-            except (KeyError, ValueError):
-                continue
-    return rows
+    return raw_files.load_current_rows(
+        state_dir, LedgerName.VISUAL_PRUNES, model=VisualPruneRow, key=VISUAL_PRUNE_KEY
+    )
 
 
 def day_shard_path(

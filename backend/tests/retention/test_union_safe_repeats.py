@@ -1,6 +1,6 @@
 """Does a row arriving twice change any answer a union-safe tree gives?
 
-`.gitattributes` gives nine committed collections `merge=union`, so a merge that
+`.gitattributes` gives seven committed collections `merge=union`, so a merge that
 finds the same row on both sides keeps both copies. That is safe only where the
 row is keyed and something settles the repeat: the same key twice is one record
 recorded twice, never two records.
@@ -23,12 +23,10 @@ import pytest
 
 from idhazh import ledger, path_classes
 from idhazh.contracts.council_shard_outcome import CouncilShardOutcome
-from idhazh.contracts.feed_retirement import FeedRetirementRow
 from idhazh.contracts.fitted_similarity_threshold import FittedSimilarityThreshold
 from idhazh.contracts.merge_line_holdout_score import MergeLineHoldoutScore
 from idhazh.contracts.seen import PublishedRow, SeenRow
 from idhazh.contracts.story_similarity_pair import StorySimilarityPair
-from idhazh.contracts.visual_prune import VisualPruneRow
 
 pytestmark = pytest.mark.contract
 
@@ -49,18 +47,6 @@ ADDRESS_KEY = ("url_key",)
 _TREES = (
     ("state/seen", SeenRow, ADDRESS_KEY, {"url_key": AN_ADDRESS}),
     ("state/published", PublishedRow, ADDRESS_KEY, {"url_key": AN_ADDRESS}),
-    (
-        "state/visual-prunes",
-        VisualPruneRow,
-        ledger.VISUAL_PRUNE_KEY,
-        {"date": A_DATE, "run_id": A_RUN},
-    ),
-    (
-        "state/feed-retirements.csv",
-        FeedRetirementRow,
-        ledger.FEED_RETIREMENT_KEY,
-        {"endpoint_key": AN_ADDRESS},
-    ),
     (
         "state/llm-council/shard-outcomes",
         CouncilShardOutcome,

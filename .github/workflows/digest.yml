@@ -126,8 +126,12 @@ jobs:
           cache: pip
           cache-dependency-path: pyproject.toml
 
+      # `.[parquet]` rather than `.`: the plan reads every retirement back
+      # through the ledger door and files a new one through it, and the door's
+      # files are parquet. The engine is an optional extra, so only a job that
+      # touches the door installs it.
       - name: Install
-        run: pip install -e .
+        run: pip install -e ".[parquet]"
 
       - id: decide
         env:
@@ -284,6 +288,7 @@ jobs:
           python -m idhazh plan
           --date "${{ steps.decide.outputs.date }}"
           --execution "${{ github.run_id }}"
+          --commit "${{ github.sha }}"
 
       # Every job draws its own runner, so every job records the one it drew. A
       # run is only as fast as its slowest job, and until now only `work` said
@@ -992,8 +997,11 @@ jobs:
           cache: pip
           cache-dependency-path: pyproject.toml
 
+      # `.[parquet]` rather than `.`: assemble files a low-yield retirement and
+      # publishes every retirement on record, and prune-state records its
+      # cleanup pass, all through the ledger door, whose files are parquet.
       - name: Install
-        run: pip install -e .
+        run: pip install -e ".[parquet]"
 
       - uses: actions/download-artifact@v8
         with:
@@ -1214,8 +1222,8 @@ jobs:
       # It also covers the archive cleanup, which joined this step on 2026-09-06
       # and is the one thing here that would cost a reader something it can see.
       # `retention.dry_run` is true, so nothing is ever deleted and the
-      # pass is a measurement of the backlog: it appends one row to
-      # `state/visual-prunes/YYYY/MM/DD.csv` every run, carrying what it found
+      # pass is a measurement of the backlog: it files one row under
+      # `state/raw/visual-prunes/YYYY/MM/DD/` every run, carrying what it found
       # and what the fuse would have held back. `retention.image_months` took
       # its first value, 13, on 2026-09-13, so the pass names a cutoff now -
       # and nothing published is old enough to sit behind it. Switching the
@@ -1245,10 +1253,10 @@ jobs:
       # nor `state/score-archive/` exists until the first fold or the first
       # archive writes it, nor `state/traces/` until tracing is switched on.
       # `state` always does, and the day's own commit above
-      # has already taken everything else in it. `state/visual-prunes/` moved to
-      # a day tree on 2026-09-08, so a run writes a file that was not in the
-      # checkout it started from - staging `state` whole is what already reaches
-      # it, and is why that move needed nothing here.
+      # has already taken everything else in it. The cleanup record writes a
+      # file of its own under `state/raw/visual-prunes/` on every run, one the
+      # checkout it started from did not hold - staging `state` whole is what
+      # already reaches it, and is why moving that record needed nothing here.
       #
       # `frontend/public/telemetry` is named beside it because the fold deletes
       # the browser's copy of a month in the same step it folds the ledger, and
@@ -1266,7 +1274,8 @@ jobs:
         run: >-
           python -m idhazh prune-state
           --date "${{ needs.plan.outputs.date }}"
-          --execution "${{ github.run_id }}" --dry-run
+          --execution "${{ github.run_id }}"
+          --commit "${{ github.sha }}" --dry-run
 
       # The closed-day fold, and this job is its only caller. A day older than
       # `run.settled_fold_after_days` can gain no more rows, so its writer files

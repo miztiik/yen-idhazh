@@ -29,12 +29,10 @@ config/*.json text eol=lf
 # `state/seen/` is the one that never moved to a per-writer name and took the
 # driver back instead. Its own line below says why the repeat it lets through
 # changes no answer.
-
-# The retirement record. One row is one address a server said was gone, keyed
-# `(source_id, retired_on)` and true of that day whoever wrote it, so two runs
-# that both met a dead address are not in disagreement and the union of both
-# sides is the answer.
-state/feed-retirements.csv text eol=lf merge=union
+#
+# `state/feed-retirements.csv` and `state/visual-prunes/` carried a union driver
+# until 2026-09-28, when both moved under `state/raw/`: every file there has one
+# writer, so there is nothing for a union to settle.
 
 # One council shard's outcome. A row is one shard of one run and says nothing
 # about another shard or another run, so two writers appending are independent
@@ -50,7 +48,7 @@ state/content-similarity-judge/merge-line-holdout-scores/**/*.csv text eol=lf me
 state/content-similarity-judge/scored-pairs/**/*.csv text eol=lf merge=union
 state/content-similarity-judge/fitted-thresholds/**/*.csv text eol=lf merge=union
 
-# The published day tree. It is one of the three collections that take a union
+# The published day tree. It is one of the two day trees that take a union
 # driver, and it says so in its own words rather than inheriting one from a
 # neighbour: a merge rule nobody chose is nobody's decision, and this one
 # decides whether two runs of a day can both publish.
@@ -62,18 +60,7 @@ state/content-similarity-judge/fitted-thresholds/**/*.csv text eol=lf merge=unio
 # the union brings twice costs bytes and never moves a publication date.
 state/published/**/*.csv text eol=lf merge=union
 
-# The cleanup record's day tree, the second collection that takes a union
-# driver, and it names one for its own reason rather than the neighbour's.
-#
-# A row is one cleanup pass by one run - what it found, what it took, what the
-# fuse held back - and no pass says anything about another, so two runs of the
-# same day that both append are not in disagreement. A repeat the union brings
-# costs bytes and moves no count: `ledger.append_visual_prunes` settles the day
-# file against `VISUAL_PRUNE_KEY`, which is `(date, run_id)`, so a second row
-# for one run is dropped and the first is kept.
-state/visual-prunes/**/*.csv text eol=lf merge=union
-
-# The first-sight record's day tree, the third and last collection that takes a
+# The first-sight record's day tree, the second and last day tree that takes a
 # union driver. It had none until 2026-09-22 and fell through to `*.csv text
 # eol=lf` near the bottom of this file, so two runs of one day that both met a
 # new address conflicted at the push over a file neither of them disagreed

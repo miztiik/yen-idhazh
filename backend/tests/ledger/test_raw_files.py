@@ -1,0 +1,186 @@
+"""Which raw files does a reader trust, and in what order does it read them?
+
+The door writes a file per writer and removes nothing, so two attempts at one
+work unit leave two files and a directory listing is whatever the filesystem
+hands back. These tests hold the reader's half of that rule: the highest attempt
+per unit, the order read from each file's own envelope, and a file this build
+cannot read skipped by name rather than stopping the read.
+
+Every tree here is written under `tmp_path` through the door itself, so nothing
+reads the committed `state/` (CLAUDE.md section 13).
+"""
+
+from __future__ import annotations
+
+import time
+import uuid
+from pathlib import Path
+from typing import Final
+
+import pytest
+
+from idhazh import ledger
+from idhazh.contracts.base import ServerJob
+from idhazh.contracts.file_envelope import Format, WriterIdentity
+from idhazh.contracts.ledger_name import LedgerName
+from idhazh.contracts.visual_prune import VisualPruneRow
+
+pytestmark = pytest.mark.contract
+
+WHICH: Final = LedgerName.VISUAL_PRUNES
+A_DAY: Final = "2026-09-06"
+NEXT_DAY: Final = "2026-09-07"
+
+
+def a_pass(*, on: str = A_DAY, run: str = "1", before: int = 1000) -> VisualPruneRow:
+    """One reporting cleanup pass, the shape every committed row has."""
+    return VisualPruneRow(
+        version=VisualPruneRow.schema_version(),
+        date=on,
+        run_id=f"{on}-{run}",
+        policy_months=-1,
+        max_deletes_per_run=200,
+        dry_run=True,
+        candidates_found=0,
+        deleted=0,
+        skipped_by_fuse=0,
+        fuse_tripped=False,
+        bytes_reclaimed=0,
+        oldest_kept=None,
+        payload_bytes_before=before,
+        payload_bytes_after=before,
+    )
+
+
+def filed(
+    state: Path, row: VisualPruneRow, *, attempt: int = 1, fmt: Format | None = None
+) -> Path:
+    """One pass through the door, under the identity its own run would carry."""
+    (written,) = ledger.persist(
+        state,
+        [row],
+        ledger=WHICH,
+        covers=row.date,
+        identity=WriterIdentity(
+            run_id=row.run_id,
+            attempt=attempt,
+            job=ServerJob.ASSEMBLE,
+            shard=0,
+            producer="stages.prune_state",
+            git_sha="a" * 40,
+        ),
+        fmt=fmt,
+    )
+    return written
+
+
+def test_a_ledger_nothing_wrote_has_no_files(tmp_path: Path) -> None:
+    """A fresh clone has no raw folder, and that is no history rather than a fault."""
+    assert ledger.list_raw_files(tmp_path, WHICH) == []
+    assert ledger.load_current_rows(tmp_path, WHICH, model=VisualPruneRow, key=("date",)) == []
+
+
+def test_files_come_back_by_the_day_they_cover_not_the_order_they_were_written(
+    tmp_path: Path,
+) -> None:
+    """The later day is written first, so a reader that kept write order reads it first."""
+    later = filed(tmp_path, a_pass(on=NEXT_DAY))
+    earlier = filed(tmp_path, a_pass(on=A_DAY))
+
+    assert [held.path for held in ledger.list_raw_files(tmp_path, WHICH)] == [earlier, later]
+
+
+def test_one_days_files_come_back_by_their_write_instant_not_their_names(
+    tmp_path: Path,
+) -> None:
+    """The order inside a day is the envelope's clock, so a name that sorts first changes nothing.
+
+    A `file_id` starts with its clock, so a directory listing agrees with the
+    envelope today. The second file is renamed to sort before the first, which
+    is what a reader leaning on the listing would get wrong.
+    """
+    first = filed(tmp_path, a_pass(run="1"))
+    time.sleep(0.005)
+    second = filed(tmp_path, a_pass(run="2"))
+    renamed = second.with_name(f"{uuid.UUID(int=0)}{second.suffix}")
+    second.rename(renamed)
+    assert renamed.name < first.name
+
+    assert [held.path for held in ledger.list_raw_files(tmp_path, WHICH)] == [first, renamed]
+    assert [row.run_id for row in ledger.load_visual_prunes(tmp_path)] == [
+        f"{A_DAY}-1",
+        f"{A_DAY}-2",
+    ]
+
+
+def test_the_highest_attempt_at_a_unit_is_the_one_read_whatever_was_written_last(
+    tmp_path: Path,
+) -> None:
+    """A re-run replaces its attempt. The second attempt is written first here on purpose."""
+    second = filed(tmp_path, a_pass(before=200), attempt=2)
+    filed(tmp_path, a_pass(before=100), attempt=1)
+
+    current = ledger.pick_current_files(tmp_path, WHICH)
+
+    assert [held.path for held in current] == [second]
+    assert [row.payload_bytes_before for row in ledger.load_visual_prunes(tmp_path)] == [200]
+
+
+def test_two_runs_of_one_day_are_two_units_and_both_are_read(tmp_path: Path) -> None:
+    """A second run is a different unit, so the union keeps both passes."""
+    filed(tmp_path, a_pass(run="1"))
+    filed(tmp_path, a_pass(run="2"))
+
+    assert len(ledger.pick_current_files(tmp_path, WHICH)) == 2
+
+
+def test_a_json_lines_file_is_read_like_a_parquet_one(tmp_path: Path) -> None:
+    """`ledger.format` may name either container, so the walk takes every file in a day."""
+    written = filed(tmp_path, a_pass(), fmt=Format.JSON)
+
+    assert written.suffix == ".json"
+    assert ledger.load_visual_prunes(tmp_path) == [a_pass()]
+
+
+def test_a_file_filed_under_another_day_is_skipped_and_named(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """The envelope says which day a file covers, and the folder has to agree.
+
+    A file moved into the wrong day folder was put there by something other than
+    the door, so it is read as unreadable: skipped, with the path in the warning.
+    """
+    written = filed(tmp_path, a_pass(on=A_DAY))
+    wrong = ledger.raw_path(tmp_path, WHICH, NEXT_DAY, uuid.UUID(written.stem))
+    wrong.parent.mkdir(parents=True)
+    written.rename(wrong)
+
+    with caplog.at_level("WARNING"):
+        assert ledger.list_raw_files(tmp_path, WHICH) == []
+
+    assert f"raw/visual-prunes/2026/09/07/{wrong.name}" in caplog.text
+
+
+def test_the_day_listing_beside_the_years_is_not_read_as_rows(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """`index/` holds the compaction's listings, which are not ledger files."""
+    filed(tmp_path, a_pass())
+    listing = ledger.raw_index_path(tmp_path, WHICH, A_DAY)
+    listing.parent.mkdir(parents=True)
+    listing.write_text("{}", encoding="utf-8")
+
+    with caplog.at_level("WARNING"):
+        assert len(ledger.list_raw_files(tmp_path, WHICH)) == 1
+
+    assert "skipped" not in caplog.text
+
+
+def test_a_key_that_declares_a_preference_is_refused_before_anything_is_read(
+    tmp_path: Path,
+) -> None:
+    """This reader keeps the first row per key, which is the wrong rule for such a key."""
+    with pytest.raises(ValueError, match="declares a preference"):
+        ledger.load_current_rows(
+            tmp_path, WHICH, model=VisualPruneRow, key=ledger.FEED_HEALTH_KEY
+        )

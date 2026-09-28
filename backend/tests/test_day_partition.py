@@ -36,7 +36,6 @@ from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.seen import PublishedRow
-from idhazh.contracts.visual_prune import VisualPruneRow
 
 #: The one good day. Fixed, so nothing here expires when the calendar moves.
 DAY: Final = "2026-09-07"
@@ -78,37 +77,8 @@ def _write_published(root: Path, date: str) -> None:
     )
 
 
-def _write_prune(root: Path, date: str) -> None:
-    ledger.append_visual_prunes(
-        root.parent,
-        date,
-        [
-            VisualPruneRow(
-                version=VisualPruneRow.schema_version(),
-                date=date,
-                run_id=f"{date}-1",
-                policy_months=-1,
-                max_deletes_per_run=200,
-                dry_run=True,
-                candidates_found=0,
-                deleted=0,
-                skipped_by_fuse=0,
-                fuse_tripped=False,
-                bytes_reclaimed=0,
-                oldest_kept=None,
-                payload_bytes_before=1000,
-                payload_bytes_after=1000,
-            )
-        ],
-    )
-
-
 def _days_published(state: Path) -> list[str]:
     return sorted(ledger.load_published(state, today=None, within_days=UNBOUNDED_WINDOW).values())
-
-
-def _days_pruned(state: Path) -> list[str]:
-    return sorted(row.date for row in ledger.load_visual_prunes(state))
 
 
 def _days_walked(state: Path) -> list[str]:
@@ -124,10 +94,12 @@ Reader = Callable[[Path], list[str]]
 #:
 #: A row is added here when a reader is added, and that is the point - a reader
 #: this table does not drive is the reader that starts disagreeing.
+#: `ledger.load_visual_prunes` left on 2026-09-28, when the cleanup record moved
+#: under `state/raw/`: its days are folders of writer files there, walked by
+#: `ledger/raw_files.py`, not `<DD>.csv` files.
 READERS: Final[tuple[tuple[str, str, Writer, Reader], ...]] = (
     ("day_partition.day_files", LedgerName.PUBLISHED, _write_published, _days_walked),
     ("ledger.load_published", LedgerName.PUBLISHED, _write_published, _days_published),
-    ("ledger.load_visual_prunes", LedgerName.VISUAL_PRUNES, _write_prune, _days_pruned),
 )
 
 READER_IDS: Final = tuple(name for name, *_ in READERS)

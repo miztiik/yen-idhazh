@@ -8,8 +8,11 @@ from __future__ import annotations
 
 from datetime import date as date_type
 from pathlib import Path
+from typing import Final
 
-from idhazh import ledger, retention
+from idhazh import ledger, retention, run_context
+from idhazh.contracts.base import ServerJob
+from idhazh.contracts.file_envelope import WriterIdentity
 from idhazh.contracts.knobs.collect import CollectConfig
 from idhazh.contracts.knobs.extract import ExtractConfig
 from idhazh.contracts.knobs.observability import ObservabilityConfig
@@ -21,6 +24,17 @@ from idhazh.stages import common
 from idhazh.stages.common import LOG
 from idhazh.telemetry.publish import public_telemetry
 
+#: The workflow job this stage runs in: `digest.yml`'s assemble job, after the
+#: day is committed. It is the job a cleanup record's file names as its writer.
+PRUNE_JOB: Final = ServerJob.ASSEMBLE
+
+#: That job runs once for the whole day, so the record's file is shard 0 of one.
+PRUNE_SHARD: Final = 0
+
+#: The name a file this stage writes through the ledger door carries as its
+#: producer: this module's own dotted name, less the package.
+PRODUCER: Final = __name__.partition(".")[2]
+
 
 def stage_prune_state(
     *,
@@ -28,6 +42,7 @@ def stage_prune_state(
     collect: CollectConfig,
     retention_config: RetentionConfig,
     run_id: str,
+    commit_sha: str,
     today: date_type,
     extract_config: ExtractConfig | None = None,
     lens_weights: LensWeightsConfig | None = None,
@@ -83,6 +98,9 @@ def stage_prune_state(
     a deletion happened and nothing about what it took, and the workflow ships
     this in dry run precisely so a person can read that list before the deletion
     is switched on.
+
+    `commit_sha` is the commit this run checked out. The cleanup record's file
+    names it, so the file can be traced to the code that wrote it.
     """
     state = state_dir if state_dir is not None else common.STATE_ROOT
     # The published tree only defaults beside the default state tree. A caller
@@ -141,6 +159,7 @@ def stage_prune_state(
             retention_config,
             today,
             run_id=run_id,
+            commit_sha=commit_sha,
             state_dir=state,
             dry_run=dry_run,
         )
@@ -155,22 +174,39 @@ def _clean_the_visuals(
     today: date_type,
     *,
     run_id: str,
+    commit_sha: str,
     state_dir: Path,
     dry_run: bool,
 ) -> None:
-    """Run the archive cleanup over the day payloads and commit what it found.
+    """Run the archive cleanup over the day payloads and record what it found.
 
     The row lands whatever happened, including the run where the policy is off
     and nothing was a candidate. A ledger written only on the interesting runs
     cannot show that a backlog is shrinking, because the runs it skips are the
     ones that would have been the baseline.
+
+    The row goes through the ledger door, as one file of its own under the day
+    it describes, so two runs of one day never write one path.
     """
     result = retention.prune(digest_root, config, today, dry_run=dry_run)
     row = retention.prune_row(result, config, date_stamp=today.isoformat(), run_id=run_id)
-    landed = ledger.append_visual_prunes(state_dir, row.date, [row])
+    written = ledger.persist(
+        state_dir,
+        [row],
+        ledger=LedgerName.VISUAL_PRUNES,
+        covers=row.date,
+        identity=WriterIdentity(
+            run_id=run_id,
+            attempt=run_context.run_attempt(),
+            job=PRUNE_JOB,
+            shard=PRUNE_SHARD,
+            producer=PRODUCER,
+            git_sha=commit_sha,
+        ),
+    )
     LOG.info(
         "visual cleanup%s: %s candidates older than %s, %s deleted, %s held back by the "
-        "%s-file fuse, %s bytes reclaimed, oldest picture still kept %s (%s row)",
+        "%s-file fuse, %s bytes reclaimed, oldest picture still kept %s (%s file)",
         " (dry run)" if result.dry_run else "",
         result.considered,
         row.cutoff_date or "no cutoff - the policy is off",
@@ -179,7 +215,7 @@ def _clean_the_visuals(
         config.max_deletes_per_run,
         result.bytes_reclaimed,
         row.oldest_kept or "none",
-        landed,
+        len(written),
     )
 
 
