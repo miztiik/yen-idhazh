@@ -1,6 +1,6 @@
 # Agent Notes - Browser
 
-**Last Updated**: 2026-09-27
+**Last Updated**: 2026-09-28
 Traps in Playwright, the integrated browser, the service worker, and the Svelte
 components a spec drives. Index and scope:
 [../agent-notes.md](../agent-notes.md).
@@ -149,6 +149,8 @@ await expect(page.locator(`[data-window-preset="${DEFAULT_DAYS}"] input`)).toBeE
 
 **`locator.hover` scrolls the element into view**, so a viewport-relative rect taken afterwards says the element moved - `top` 332 before and 18 after, a 314 px jump the CSS does not contain. Take `rect.top + window.scrollY`, and scroll before the first reading as well.
 
+**A console panel scrolled into view lands below the stuck tab strip, not at the top of the window.** From `frame.breakpoints_px[1]` up the strip sticks, and `frontend/src/lib/console/strip.ts` sets the page's `scroll-padding-top` to the stuck strip's height, which `scrollIntoView` honours. So on a wide screen a panel lands lower than arithmetic without the strip says, and a capture or a measurement taken after the scroll is off by the strip. Read `getComputedStyle(document.documentElement).scrollPaddingTop` into the arithmetic, or place the page exactly with `window.scrollTo`.
+
 **A chart below the fold cannot be pointed at**, and the failure is silent: `boundingBox` returns PAGE coordinates, so `page.mouse.move` at y=8,000 in a 1,000 px viewport lands nowhere, the pointer handler never fires, and the readout prints its resting string. `await plot.scrollIntoViewIfNeeded` before every hover on a long page. A chart also follows a reactive option change in place - `Chart.svelte` hands the live chart each new option through `update`, so assert that the option count rose while the instance count held, not that it re-rendered.
 
 **`locator.screenshot` on a console panel times out on "waiting for element to be stable"**, because something above it is still settling and the wait is for the whole page. Scroll it into view inside an `evaluate`, wait once, then take a VIEWPORT screenshot - the element form failed twice at 10 s on `/console/model/` where the viewport one returned immediately.
@@ -176,6 +178,10 @@ await expect(page.locator(`[data-window-preset="${DEFAULT_DAYS}"] input`)).toBeE
 **SvelteKit's own service-worker registration has no `.catch`**, so any browser that refuses - a policy, a private window, `serviceWorkers: 'block'` - becomes an unhandled rejection on every page, and every spec counting console errors goes red at once. `kit.serviceWorker.register: false` plus one registration call of your own fixes it, and leaves exactly one file naming the worker API for a test to assert on.
 
 **Widening a Svelte action's node type to a union breaks its listeners**, because `addEventListener` overload sets do not merge across element types - `SVGSVGElement | HTMLElement` produced eight errors on lines that were not edited. Keep one `[type, handler]` list and attach through a single `const events: EventTarget = node`, so the add and remove halves cannot drift apart.
+
+**Svelte 5 drops the space at the start or end of a tag's content**, so `<span> Worst</span>` renders `Worst` and the text on either side runs together - which reads as a space missing from the data. Write the space as an expression, which the compiler keeps: `{' '}`, as `ConsoleNav.svelte` does between a tab's `Worst:` mark and its worst state.
+
+**Svelte deletes a style rule for an attribute that only a script sets.** The compiler keeps a scoped rule only when it can see an element in the template that the rule could match, so a rule on an attribute `strip.ts` sets at run time is pruned from the built CSS and the page ignores the attribute; the compiler's only complaint is an unused-selector warning. Wrap the attribute in `:global(...)`, as `.console-strip:global([data-console-strip-live='yes'])` in `frontend/src/routes/console/+layout.svelte` and `:global([data-console-strip-stuck='yes']) .tab-line` in `ConsoleNav.svelte` do.
 
 ## See also
 

@@ -689,9 +689,12 @@ module under `frontend/test-results/`, `import` it, and hand `render` from
 `svelte/server` the props. Feed that body and the `css.code` from the same
 compile to `page.setContent` - the scope hashes match, because both came from
 one compile - and the geometry can be measured with `getBoundingClientRect` in a
-real browser. One constraint makes it work: the component must import nothing at
-runtime, because a compiled module written outside its own directory cannot
-resolve a relative `.ts` import. Everything it draws arrives as a prop. The
+real browser. One constraint makes it work: the module is written outside the
+component's own directory, so a relative import inside it resolves from
+`frontend/test-results/` and finds nothing, while a `$lib/...` import still
+resolves. Write the component's imports through `$lib` and hand it its data as
+props; `frontend/tests/support/server-render.ts` compiles a component with its
+children, pointing each child's import at the child's compiled copy. The
 alternative is a route that exists only to host a test, and that route ships to
 a reader.
 
@@ -892,6 +895,11 @@ it took a hand-over from 0.7 s to about 10 s.
 
 `npm run bundle-gate` asserts that no encoder reaches the first-load path, and
 that every guarded page is under the number `config/idhazh.json` sets for it.
+
+**It weighs no script, whatever its name suggests.** The encoder check searches
+the first-load modules for three names and weighs nothing, and the number checks
+weigh prerendered documents and fetched data files, so the bundle gate cannot be
+the check on a JavaScript package's size.
 
 The page guardrails are absolute limits somebody priced, so nothing has to
 re-record them to merge and a page that got lighter needs no permission. The

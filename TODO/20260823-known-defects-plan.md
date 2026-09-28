@@ -1,9 +1,10 @@
 # Known defects
 
-**Last Updated**: 2026-09-27
+**Last Updated**: 2026-09-28
 
-**Thirteen defects are open.** Two of them need evidence or a ruling before any code
-is worth writing; the rest are known fixes with named blast radiuses.
+**Twenty-three defects are open.** Two of them need evidence or a ruling before any code
+is worth writing, and two more wait on one design ruling; the rest are known fixes
+with named blast radiuses.
 Defect 2 needed three repairs before a person could label anything, and all three
 shipped. The owner settled the counting rule on 2026-08-27, which took the
 draw from 32 of 60 to 60 of 60. What is left is **60 human labels** and eight
@@ -16,6 +17,10 @@ fix with a named blast radius rather than an open question. Defect 36 was filed 
 reads the same machine ledger raw, and calls every run written in two halves
 unreadable. Defect 37 came from the same row's browser check: in the dark theme
 two of the chart colours look the same, and that row put them side by side.
+Defects 38 to 47 were filed on 2026-09-28 from what plan 51's rows found outside
+their own files: 38 and 39 wait on one Susan ruling about which machines get a
+colour, and each of the other eight names the change or the plan row that fixes
+it.
 **This file cannot
 be deleted by writing more of it.**
 
@@ -61,6 +66,186 @@ decision. Current project behaviour belongs in `docs/` (Guardrail #4).
 | 35 | The chart loading flag flips at import, so the waiting sentence goes while the box is still empty | 2 | CLOSED 2026-09-27 |
 | 36 | The band above every console route calls every run written in two halves unreadable | 2 | **OPEN - merge or settle is the one ruling it needs** |
 | 37 | Two colours of the dark chart ramp look the same, so two machines read as one | 2 | **OPEN - one colour to pick, then every pair measured again** |
+| 38 | The machine colours go to the first machines by an arbitrary key, not to the most-placed ones | 2 | **OPEN - a Susan ruling first: do the most-placed machines get the colours?** |
+| 39 | The run-counter records name no machine, so the Hardware route counts 10 machines where there are 8 | 3 | **OPEN - rides on defect 38's ruling** |
+| 40 | The canary never writes a job in two halves, so no built page tests the merge | 2 | **OPEN - the canary builder writes one job in two halves** |
+| 41 | Span sentences print "in these 1 days" at the one-day window | 1 | **OPEN - one rule for a count and its noun** |
+| 42 | The processor-share tiles print "under 1%" past their own bottom edge | 1 | **OPEN - one panel's tiles** |
+| 43 | A section that follows the days control changes height and moves the page under the reader | 2 | **OPEN - one layout rule, not a fix per panel** |
+| 44 | One hatch means two things on the console: no reading, and time counted twice | 2 | **OPEN - plan 51's row 8 and a plan 52 row take one half each** |
+| 45 | A change to `Panel.svelte` does not buy the console tests on a pull request | 2 | **OPEN - one pattern in the selector and a truth-table case** |
+| 46 | `DateSeries` cannot draw the settings-change rule that gate 6 asks of every trend | 2 | **OPEN - plan 52's row 26, before a date series is judged** |
+| 47 | The Pipelines route draws no panel ids, so the pictures and gates reach 15 panels, not 26 | 2 | **OPEN - a plan 52 route row gives each section an id** |
+
+## 47 - The Pipelines route draws no panel ids, so the pictures and gates reach 15 panels, not 26 (OPEN)
+
+**The panel pictures and the sufficiency gates reach only a panel that carries
+an id, and the Pipelines route (`/console/`) gives none.** Of its eleven sections
+one draws three panels, four draw no panel frame, and none carries a
+`data-console-panel-id`, so `frontend/tests/panel-captures.spec.ts` pictures the
+Hardware route's 15 panels and nothing else. Plan 51 counted 26 panels on two
+routes; the row that built the pictures corrected it to 15 on one route on
+2026-09-28. Its capture spec names the Pipelines route and fails the day that
+route starts drawing ids, so the count cannot go stale without a red.
+
+**The home is a plan 52 route row that gives each Pipelines section a panel
+id.** Plan 52 already plans the same for the three routes that draw no id
+(`/console/model/`, `/console/voices/`, `/console/judgement/`), and it still says
+the gates reach 26 panels on two routes; that row, or one beside it, takes the
+Pipelines route too. Level 2 - each section's id, its `console.panel_groups`
+entry and its pictures move together.
+
+Found on 2026-09-28 by plan 51's row 6, which built the pictures.
+
+## 46 - `DateSeries` cannot draw the settings-change rule that gate 6 asks of every trend (OPEN)
+
+**Gate 6 asks every trend over days to carry its confounders**: the trend
+declares `data-model-rule`, and `yes` either draws the settings-change rule or
+says in visible words that no setting changed inside the span
+([`docs/concepts/design-system.md`](../docs/concepts/design-system.md#sufficiency-is-a-gate-not-a-taste)).
+`DateSeries`, the d3 trend in `frontend/src/lib/charts/d3/`, draws no rule and
+takes no settings - neither `DateSeries.svelte` nor `dateSeries.ts` carries
+one. The witness panel the gates are proven against passes gate 6 only by
+printing the no-change sentence beside the chart. So a real date series can pass
+gate 6 only on that sentence, and it cannot pass at all over a span in which a
+setting did change.
+
+**The home is plan 52's row 26, the settings-change rule on every
+`dateSeries`**, and it has to land before plan 52's first date-series panel
+joins `console.judged_panel_ids`. Level 2 - one component, and every panel that
+draws it.
+
+Filed on 2026-09-28 from plan 51's rows.
+
+## 45 - A change to `Panel.svelte` does not buy the console tests on a pull request (OPEN)
+
+**On a pull request, CI runs the console's own specs only when the change is
+the console's own**, and `CONSOLE_OWNED` in `frontend/scripts/test-scope.ts`
+counts a shared component as the console's only when its name starts with
+`Console`. `frontend/src/lib/components/Panel.svelte` is every console panel's
+frame - the 22 files that import it are all under a console path, counted
+2026-09-28 - so a change to it defers the console specs to the merge push, and a
+break is found on `main` rather than on the pull request that caused it. The
+local selector is not affected: it reads the file as a shared frontend input and
+selects every frontend group. Since #1144 a change to it does buy the panel
+pictures and the sufficiency gates, through `PANELS_DRAWN`; it still does not
+buy the console specs.
+
+**The home is `test-scope.ts`**: name `Panel.svelte` in `CONSOLE_OWNED`, and add
+the case to the truth table in `frontend/scripts/tests/test-scope.test.mjs`.
+Level 2 - the truth table is the dependant to check.
+
+Filed on 2026-09-28 from plan 51's rows.
+
+## 44 - One hatch means two things on the console: no reading, and time counted twice (OPEN)
+
+**A hatch means "no reading" on one console panel and "time counted twice" on
+another.** `MemoryBoard.svelte` hatches the bar of an item that carries no kernel
+reading. `RunTimelinePanel.svelte` hatches the notch where a job's steps add up
+to more than its own clock, keyed "overclaimed - two steps counted over it". A
+reader who learns the texture on one panel reads the other wrong. The chart
+vocabulary page
+([`the-mark-shapes-a-panel-may-reach-for.md`](../docs/concepts/console-design/the-mark-shapes-a-panel-may-reach-for.md))
+names the clash, and plan 51's row 4 made the absent hatch one builder,
+`absentHatch` in `frontend/src/lib/charts/d3/ordered-colour.ts`, for a known
+thing with no reading.
+
+**Two rows take one half each.** Plan 51's final panel row, row 8, moves
+`MemoryBoard.svelte` onto `absentHatch`, so "no reading" has one texture. The
+plan 52 row that redraws `RunTimelinePanel.svelte` resolves what its overrun is
+drawn with instead. Level 2 - two panels, each checked by name in both themes.
+
+Found on 2026-09-27 by plan 51's row 4, which built the hatch builder.
+
+## 43 - A section that follows the days control changes height and moves the page under the reader (OPEN)
+
+**When the reader changes the span, a section that follows it can redraw at a
+new height, and everything below it moves.** A reader looking at a panel further
+down loses their place, for a reason they did not cause and cannot see. Jony
+raised it in review of plan 51's rows. The console already holds this rule for
+one surface: `frontend/src/lib/console/strip.ts` keeps the page still when the
+tab strip sticks and gets shorter.
+
+**The home is the console layout**, as one rule for every section that follows
+the window, not a fix inside each panel. Level 2 - every windowed section on the
+five routes, each checked by name.
+
+Filed on 2026-09-28 from Jony's review.
+
+## 42 - The processor-share tiles print "under 1%" past their own bottom edge (OPEN)
+
+**On the Hardware route, the "By day" tiles of the processor-share panel - "How
+much of the processor went to somebody else" - print their "under 1%" label past
+the tile's bottom edge**, so the words sit outside the box they describe. Seen at
+1440 px in the light theme by plan 51's row 2, whose files do not draw it. The
+label is `under ${marked}%` from `processor-lost.ts`, drawn by
+`ProcessorLostPanel.svelte`, both in `frontend/src/lib/console/machine/`.
+
+**The home is that panel.** Level 1 - one panel's tiles, checked at every width
+in both themes.
+
+## 41 - Span sentences print "in these 1 days" at the one-day window (OPEN)
+
+**At the one-day preset, a panel's sentence reads "in these 1 days".** The
+sentences put the window's number straight in front of a literal `days`. A text
+search on 2026-09-28 finds 102 lines in 25 files under `frontend/src` that
+splice a day count in front of `days`, so each is a candidate. Seen on the
+console by plan 51's row 2, which changes no panel.
+
+**The home is the console sentence helpers**: one rule for a count and its
+noun, used by every sentence that names the span. Level 1 - wording, and a wrong
+version is obvious on the page.
+
+## 40 - The canary never writes a job in two halves, so no built page tests the merge (OPEN)
+
+**Every job now writes its machine record in two halves** - the first names the
+machine, the second what the job cost - and both build-time readers of
+`state/host-fingerprint/` merge the two by the settlement key. The canary day's
+machine rows, written by `frontend/scripts/build-canary.mjs`, never hold a job in
+two halves, so no built page and no browser spec ever reads one. Only the
+readers' fixture tests prove the merge, and a page that stopped merging would
+pass every browser spec.
+
+**The home is the canary builder**: write at least one job as its two halves.
+Level 2 - every browser spec shares the canary, so the specs that count machine
+rows are checked by name.
+
+Found on 2026-09-27 by plan 51's row 1, which built the merge.
+
+## 39 - The run-counter records name no machine, so the Hardware route counts 10 machines where there are 8 (OPEN)
+
+**A job's counter records carry no machine identifier**, so the Hardware route
+cannot tie them to the machine record of the job that wrote them, and it counts
+10 machine identities for 8 machines. The extra identities feed the ramp's
+`Other machines` group, which is where defect 38 bites.
+
+**The home is the same ruling as defect 38.** Either the reader ties each
+counter record to its job's machine record, or the writer stamps the machine on
+each counter record; the second changes a persisted ledger and is a Level 5 on
+its own. Level 3 as filed - two ledgers meet on one page.
+
+Found on 2026-09-27 by plan 51's row 1.
+
+## 38 - The machine colours go to the first machines by an arbitrary key, not to the most-placed ones (OPEN)
+
+**The Hardware route hands out its machine colours in key order, and the key is
+arbitrary on purpose** (`frontend/src/lib/charts/machine-colour.ts`): the machine
+record's fingerprint, or the processor's model name where no record reached the
+run. When the ramp runs out of colours, the machines left over are folded into
+`Other machines`, so which machine gets a bar of its own is decided by how its
+key happens to sort, not by how often it ran. Plan 51's row 1 found that inside
+`Other machines` the other AMD EPYC 9V74 records hold 27 placements, more than
+the 25 on the named AMD EPYC 9V74 bar.
+
+**The home is a Susan ruling, then the machine colour code.** The question is
+whether the most-placed machines take the colours first. Plan 51's row 8 already
+rules that the machine ramp becomes ordered by speed on the panel it redraws
+(its decision 5), so the ruling also says whether speed or placements decides
+which machines are left without a colour. Level 2 - the three panels that draw or
+count machines take their colours from `machine-colour.ts`, so each is checked by
+name.
+
+Found on 2026-09-27 by plan 51's row 1.
 
 ## 37 - Two colours of the dark chart ramp look the same, so two machines read as one (OPEN)
 
