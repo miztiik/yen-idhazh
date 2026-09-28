@@ -7,7 +7,7 @@
 	 */
 	import Chart from '$lib/charts/Chart.svelte';
 	import Panel from '$lib/components/Panel.svelte';
-	import { fleetChart, fleetColumns, type FleetView } from '$lib/charts/fleet';
+	import { fleetChart, fleetColumns, foldSentence, type FleetView } from '$lib/charts/fleet';
 	import type { RecordingNotes } from '$lib/console/recording';
 	import type { ChartConfig } from '$lib/server/config';
 
@@ -31,6 +31,9 @@
 	 * drew, so a span the operator picks gets the same bars as the first paint. */
 	const fleetOption = $derived(fleetChart(fleet.trend).option);
 	const fleetStrip = $derived(fleetColumns(fleet.trend));
+	/** What the fold bar holds, read off the fold the trend named rather than off
+	 * whichever series happens to be last. */
+	const foldLine = $derived(foldSentence(fleet.trend.fold));
 </script>
 
 <div
@@ -78,9 +81,8 @@
 					{fleet.trend.days.length === 1 ? 'day' : 'days'} of which recorded one. The kind we
 					are given most is {fleet.kinds[0].identity.name}, {fleet.kinds[0].placements} of
 					them.
-					{#if fleet.trend.folded > 0}
-						The {fleet.trend.folded} rarest kinds are drawn as one bar:
-						{fleet.trend.series.at(-1)?.identity.folded.join(', ')}.
+					{#if foldLine !== null}
+						<span data-fleet-fold={fleet.trend.folded}>{foldLine}</span>
 					{/if}
 				</p>
 				<Chart

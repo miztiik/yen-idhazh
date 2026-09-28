@@ -20,9 +20,20 @@
  * edit rather than a hunt.
  */
 import { MONTHS } from '$lib/format';
+import { grouped } from '$lib/charts/series';
 import { monthsInWindow, type TimeWindow } from '$lib/charts/viewport';
 
 export type PanelState = 'ready' | 'loading' | 'quiet' | 'missing' | 'unreachable';
+
+/** A panel's state, plus the one nothing only its chart can see.
+ *
+ * `too-few` is not a fetch state, so `panelState` never returns it: every
+ * month arrived and the rows are real, but there are fewer of them than the
+ * chart needs before its shape means anything - a histogram of eight readings
+ * is a claim. It has its own word because `unreachable` already means a fetch
+ * that failed, and a floor missed is not a failure.
+ */
+export type ChartState = PanelState | 'too-few';
 
 /** What became of one month file the open window reaches into. */
 export type MonthState = 'held' | 'loading' | 'missing' | 'unreachable';
@@ -156,6 +167,18 @@ export function unreachableSentence(months: readonly string[], heldDays: number)
 			? 'so this panel has nothing left to draw'
 			: `so this panel is drawn from the ${heldDays} ${heldDays === 1 ? 'day' : 'days'} that did arrive`;
 	return `${nameMonths(months)} ${did} not arrive, ${drawn}.`;
+}
+
+/** The sentence a chart below its floor prints.
+ *
+ * It names the floor, from the value the panel passed in, and how many rows
+ * there were, so an operator can tell a window that is too short from a
+ * pipeline that stopped. `noun` is the plural the floor counts - `readings`,
+ * `kinds` - because "fewer than 160" alone does not say of what.
+ */
+export function tooFewSentence(have: number, floor: number, noun: string): string {
+	const are = have === 1 ? 'is' : 'are';
+	return `Only ${grouped(have)} of the ${grouped(floor)} ${noun} this chart needs ${are} in this window, so it is not drawn.`;
 }
 
 /** The label on the retry, which carries its own subject.

@@ -20,7 +20,7 @@
  */
 
 import { expect, test } from '@playwright/test';
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -38,7 +38,7 @@ import {
 	type MachineLimits,
 	type MachineRun
 } from '../src/lib/server/machine-counters';
-import { ledgers, plan, type ShardReading } from './support/machine-rows';
+import { halvesDay, ledgers, plan, type ShardReading } from './support/machine-rows';
 import { observabilityConfig } from '../src/lib/server/config';
 
 const LIMITS: MachineLimits = { contextWindow: 8192, jobTimeoutSeconds: 21_600 };
@@ -610,5 +610,38 @@ test.describe('a day that published and kept no machine row', () => {
 	test('a ledger that was never written reports no days rather than throwing', () => {
 		const root = mkdtempSync(join(tmpdir(), 'idhazh-record-'));
 		expect(machineRecordDays(-1, root)).toEqual([]);
+	});
+});
+
+test.describe("one job's two halves", () => {
+	test('reach the cards as one placement carrying the machine and the clock', () => {
+		// The shape every work file has held since 2026-09-18: the probe's half
+		// names the machine and the clock's half names what the job cost, in one
+		// file. The clock's half carries no fingerprint, so until the halves were
+		// merged it was dropped here and the job's clock never sat beside the
+		// machine it was measured on.
+		const root = mkdtempSync(join(tmpdir(), 'idhazh-record-'));
+		try {
+			halvesDay(root, {
+				date: '2026-09-17',
+				runId: '2026-09-17-1',
+				job: 'work',
+				shard: 0,
+				fingerprint: '3a7f0b1c2d4e5f60',
+				cpuModel: 'AMD EPYC 7763 64-Core Processor',
+				cores: 2,
+				modelLoadMs: 2290.5,
+				jobSeconds: 780
+			});
+			const rows = hostFingerprints(-1, root);
+			expect(rows, 'one job is one placement').toHaveLength(1);
+			expect(rows[0].fingerprint).toBe('3a7f0b1c2d4e5f60');
+			expect(rows[0].cpu_model).toBe('AMD EPYC 7763 64-Core Processor');
+			expect(rows[0].cores).toBe(2);
+			expect(rows[0].job_seconds).toBe(780);
+			expect(rows[0].model_load_ms).toBe(2290.5);
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
 	});
 });

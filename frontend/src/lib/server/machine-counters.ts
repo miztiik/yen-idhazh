@@ -44,10 +44,11 @@ import { itemRead } from '../charts/machine';
 import { inferenceConfig, runConfig } from './config';
 import {
 	DIGEST_ROOT,
+	HOST_FINGERPRINT_KEY,
 	itemHealthRows,
 	LEDGER_WINDOW_DAYS,
 	loadManifests,
-	readDayShards,
+	mergedDayShards,
 	STATE_ROOT
 } from './payload';
 
@@ -899,11 +900,15 @@ export function machineCounters(
 
 /** One row per job per run of the machine record, read from the committed ledger.
  *
+ * A job's two halves arrive as one row (`mergedDayShards`). A shard whose rows
+ * fill one cell two different ways arrives as it was, so `mergeHost` still sees
+ * both and refuses the run by name.
+ *
  * Through `STATE_ROOT` like every other ledger read, so a test can point the
  * whole tree at a fixture and a canary build cannot reach the real one.
  */
 export function hostRows(days: number = LEDGER_WINDOW_DAYS): Record<string, string>[] {
-	return readDayShards(join(STATE_ROOT, 'host-fingerprint'), days).rows;
+	return mergedDayShards(join(STATE_ROOT, 'host-fingerprint'), HOST_FINGERPRINT_KEY, days).rows;
 }
 
 /** What each run's plan decided its shard count was, by run id.
