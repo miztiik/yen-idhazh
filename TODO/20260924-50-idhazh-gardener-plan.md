@@ -10,7 +10,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 
 ## Execution handover (zero-context cold start)
 
-A paste-ready brief for an agent that picks this plan up with no prior context. [execute-a-plan.md](../docs/how-to/execute-a-plan.md) is the canonical contract; this brief adds only what this plan's run has learned. Written 2026-09-27, about 20:10 UTC, and brought up to date 2026-09-28, about 12:15 UTC, when the first owner handed over after row 5 merged, and about 14:00 UTC, when the second owner's dispatch checks on row 7 added deviations 96 to 101 and row 12.
+A paste-ready brief for an agent that picks this plan up with no prior context. [execute-a-plan.md](../docs/how-to/execute-a-plan.md) is the canonical contract; this brief adds only what this plan's run has learned. Written 2026-09-27, about 20:10 UTC, and brought up to date 2026-09-28, about 12:15 UTC, when the first owner handed over after row 5 merged, about 14:00 UTC, when the second owner's dispatch checks on row 7 added deviations 96 to 101 and row 12, and about 17:30 UTC, after row 7 merged.
 
 ```text
 You are the OWNER of TODO/20260924-50-idhazh-gardener-plan.md. You have no prior context.
@@ -23,25 +23,25 @@ STEP 0 - COLD START. Read CLAUDE.md, docs/how-to/execute-a-plan.md, docs/how-to/
 and docs/how-to/run-the-gates.md. Then read this plan's section 0, section 1 (the Status
 Reckoner, the only tracker) and each row just before you dispatch it.
 
-STEP 1 - ADOPT OR CLOSE. Run git worktree list, gh pr list and git branch -r. At handover
-nothing of this plan was in flight: rows 1, 2, 3, 4, 5, 6 and 11 had merged (#1127, #1131,
-#1142, #1139, #1145, #1141, #1136), row 10 is collapsed, and no plan-50 worktree was left.
+STEP 1 - ADOPT OR CLOSE. Run git worktree list, gh pr list and git branch -r. At the last
+update nothing of this plan was in flight: rows 1 to 7 and 11 had merged (#1127, #1131,
+#1142, #1139, #1145, #1141, #1151, #1136), row 10 is collapsed, and the only plan-50
+worktree left was the owner's own, p50own, which holds no unpushed work.
 Section 0's three plan-54 reads ran before row 5 and all three came back empty.
 
-STEP 2 - DISPATCH. Row 7 is ready now: rows 5 and 11 have merged. Read deviations 8, 23,
-43 and 69 before you brief it, and 96 to 101, which the second owner's dispatch checks
-added on 2026-09-28: they take the CSV fold out of row 7, add the backend reader, and ship
-the three compactions report-only. Nothing else is ready, so the pool runs one wide until
-row 7's worker REPORTS. Refill a slot on a report, never on a merge. Two workers started
-together return together (deviation 94).
-  after rows 6, 7    row 8. It PAUSES at ESCALATE trigger 1, before the commit that
+STEP 2 - DISPATCH. Row 8 is ready now: rows 6 and 7 have merged. Row 7 merged on
+2026-09-28 at 17:22 UTC as #1151, and its findings are deviations 96 to 113. The pool
+runs one wide until row 8's worker REPORTS, because nothing else is ready. Refill a slot
+on a report, never on a merge. Two workers started together return together (deviation 94).
+  now                row 8. It PAUSES at ESCALATE trigger 1, before the commit that
                      removes the pruned_date alias. Read deviations 14, 15, 17, 24, 55,
-                     81, 86, 90 and 98 first: each hands row 8 work a row before it left
-  after row 7        row 9. It also needs plan 51's row 7, the query door, merged. Both
-                     rows that one waits on have merged (#1137, #1136), but it had not
-                     started on 2026-09-28. Row 9 also fires ESCALATE trigger 5, which is
-                     a person's pick. If either is open when row 9 is next, surface it to
-                     the person (CLAUDE.md section 0c). Do not build sliceFromDisk() here
+                     81, 86, 90, 98 and 110 first: each hands row 8 work a row before it left
+  after row 7        row 9. It also needs plan 51's row 7, the query door, merged. That
+                     row was in flight on 2026-09-28 (worktree p51r7). Row 9 also fires
+                     ESCALATE trigger 5, which is a person's pick, and deviation 112 is a
+                     rename it owes before `scores` moves. If either is open when row 9 is
+                     next, surface it to the person (CLAUDE.md section 0c). Do not build
+                     sliceFromDisk() here
   after rows 7, 8    row 12. Its design question is written in the row; settle it by
                      debate at dispatch. It edits digest.yml, so it needs a merge window
 
@@ -180,6 +180,18 @@ Every place where the tree, or a ruling, departs from the text further down. A w
 | 99 | 4, 7 | Section 5.9.5: `compact_after_hours`, "30 gives thirty hours"; rejected alternative 10 keeps six hours open | The knob becomes `compact_after_days`: `int`, `ge=1`, default `1`. `schedule.is_eligible` takes days. Only whole days keep the wake time out of which days qualify (CLAUDE.md section 2, deviation 23); six hours would make the wake time an input just as thirty does. No alias: nothing reads the knob yet, and config files are outside CLAUDE.md section 11 (owner, 2026-09-21). Do not copy section 5.3's 23:59 table row: 23 h 59 min have passed at that wake, not 24 h | Fowler and Carmack, 2026-09-28 |
 | 100 | 7 | Decision 4: a day below the watermark that has raw files again is compacted again from the union | The ledger door stamps every row with its writer's `unit_id` and `attempt`. A compact file written through it unchanged would carry the compaction's identity and lose the rows' own, so a re-run's attempt 2 would sit beside attempt 1 instead of replacing it. A compact file keeps each row's original identity columns, so `ledger/persist.py` joins row 7's file list. A re-compaction keeps the highest attempt per `unit_id` first, then the first row per key. Test: compact attempt 1, add an attempt 2 that files fewer rows, compact again, and compare with settling both raw files | Fowler and Carmack, 2026-09-28 |
 | 101 | 7 | Row 7's file list | Row 2 already put the four `.gitattributes` lines and the four `paths.py` builders on main, so row 7 writes none of them. `backend/tests/workflows/test_digest_workflow.py` does not exist, and after deviation 96 row 7 edits no workflow | Found at dispatch |
+| 102 | 7 | Section 5.3: list every eligible raw day, then run the daily period, then the monthly one | Each pass drops what the windows no longer keep, then folds finished months, then takes due days, and a day's listing is written only when that day is taken. A shard refuses a file it both wrote and deleted, and the planned order does exactly that on a catch-up pass | Carmack; Fowler agreed, 2026-09-28 |
+| 103 | 7 | Two modules: `_index_day.py` lists a raw day and writes its index, `compaction.py` does the rest | `compaction.py` holds `KIND` and `run`. Beside it, `_daily_period.py`, `_monthly_period.py` and `_compact_tree.py`, which holds every change a pass decides before anything touches disk; `_index_day.py` only builds the listing. The registry test also accepts a module named after its task kind | Fowler, 2026-09-28 |
+| 104 | 7, 9 | Deviation 100: `ledger/persist.py` changes, shape Fowler's call | `persist` writes raw files only, and lost its `tier`, `period` and `built_from` arguments. New `persist_period` writes a compact file and keeps each row's original writer identity, and refuses a row whose own `attempt` or `unit_id` differs from its writer's. The door also gained `render_period`, `load_stored` and a declared row-identity type. `docs/architecture/contracts/persistence.md` says so | Fowler, 2026-09-28 |
+| 105 | 7 | Deviation 100: the highest attempt per `unit_id`, then the first row per key | Per unit, only the latest file of its highest attempt counts. Without the "latest file" part, a job that wrote one unit twice in one attempt kept both copies, and an existing test caught it. `raw_files.py` holds the one merge rule, and `pick_current_files` is deleted | Fowler, 2026-09-28 |
+| 106 | 7 | (not in the plan) | `ledger/keys.py` holds a table that pairs each ledger with its row type and its key. The `gardener` ledger's key is date, `run_id` and task | Fowler, 2026-09-28 |
+| 107 | 7 | Section 5.9.5: a compaction carries the base `window` and `max_deletes_per_run`, and `daily_keep_days` is `ge=1` | A compaction's `window` is fixed to forever and its delete limit to none, in the type itself. `daily_keep_days` is at least 31, one more than the 30 days GitHub allows a re-run. A raw file that lands in a month already folded is refused and left for a person | Fowler; Carmack, 2026-09-28 |
+| 108 | 7 | Section 5.2 and deviation 32: load refuses a `daily_keep_days` that leaves less than a whole month before `monthly_window` begins | That refusal is deleted. `monthly_window` counts from the day a month is folded, so the gap it guarded cannot occur. The monthly period holds exactly its window of months on every UTC day, tested across 2027 and 2028 | Fowler and Carmack, 2026-09-28 |
+| 109 | 7 | Decision 10: a first run starts at the watermark plus one, bounded by `max_periods_per_run` | A first pass starts on the 1st of a month, from the same function that decides which months are kept. Days and months each get `max_periods_per_run`, and days a re-run wrote into again count first. Raw days in a month already past the window are deleted rather than folded; no such month exists today | Carmack and Fowler, 2026-09-28 |
+| 110 | 7 | Section 3's diagrams move unchanged | Redrawn to show the tree after row 7: nothing schedules the gardener yet, `prune.yml` runs the corpus squash alone, the CSV fold still runs in `digest.yml`, every task is report-only, and the reader is `ledger/ledger_files.py`, not the browser. Row 8 redraws them when it schedules the garden | Deviation 96, 2026-09-28 |
+| 111 | 7 | Row 7's file list | Also touched: `backend/idhazh/config.py`, `ledger/keys.py`, `ledger/rows.py`, `ledger/__init__.py`, `test_task_registry.py`, `test_gardener_config.py`, `_ledger_derivation.py`, `test_ledger_door_jobs.py`, `persistence.md` and `docs/reference/agent-notes/browser.md`. `docs/reference/github-actions.md` was not: nothing it states changed | Found at build |
+| 112 | 9 | (not in the plan) | `scores` rows carry an `attempt` field of their own, and since deviation 104 the door refuses a row whose own `attempt` differs from its writer's. One of the two needs a new name before row 9 moves `scores` onto the door; `persistence.md` says so | Row 7's worker, 2026-09-28 |
+| 113 | 7 | (another plan) | Plan 51's freshness paragraph said `compact_after_hours: 24`, and read as if compact files would appear on their own. It now says `compact_after_days: 1` (deviation 99), and one added sentence says every compaction ships report-only until a person turns it on (deviation 98). Corrected on main by this plan's owner | Plan owner, 2026-09-28 |
 
 ## 0. Operating contract
 
