@@ -1,6 +1,6 @@
 # The mark shapes a panel may reach for
 
-**Last Updated**: 2026-09-27
+**Last Updated**: 2026-09-28
 
 Nine chart types, the house style they draw with, five named mark shapes and
 three panel-level controls. **A panel is built from one chart type, and a mark
@@ -107,7 +107,7 @@ way keeps the reserved box's rule until it moves.
 | 1 | `d3-array` | binning, quantiles, tick steps | installed |
 | 2 | `d3-scale` | every scale in `scale.ts`, and the ordered ramp's cuts | installed |
 | 3 | `d3-shape` | the lines, the stack and the flow's ribbons | added 2026-09-27 at 3.2.0, with `d3-path` 3.1.0 and both type packages: 417,659 bytes of `node_modules`. The four generators the types use weigh 2,403 bytes gzipped (6,819 minified), and a route ships them only once it draws a type |
-| 4 | `d3-sankey` | - | **considered for `flow` and not taken** - see the design rationale |
+| 4 | `d3-sankey` | the flow's layout | added 2026-09-28 at 0.12.3, with `@types/d3-sankey` 0.12.5. It brings older second copies of `d3-array`, `d3-shape` and `d3-path` into `node_modules`; the layout it adds to a route that draws a flow is about 2 KB gzipped - see the design rationale |
 | 5 | `d3-axis` | - | **refused.** It would fork the measured label-thinning rule `dayTicks` owns |
 | 6 | `d3-selection`, `d3-transition` | - | **refused.** Svelte owns the page |
 | 7 | `d3-scale-chromatic` | - | **refused.** A library ramp collides with the confidence ramp |
@@ -490,22 +490,29 @@ page surface and never over a grey fill, because flat grey already means "not
 recorded" and a hatch on grey would read the same. Authority: Fowler, Susan and
 Carmack, 2026-09-27.
 
-**The flow's layout is written here; d3-sankey was considered and not taken.**
+**d3-sankey lays the flow out, and the funnel's own rules are put back on it.**
+Guardrail #8 prefers a library to arithmetic this project writes itself, and
+writing our own is a person's call; on 2026-09-28 the owner took the library.
 d3-sankey 0.12.3 is its newest release, from 2019. It depends on `d3-array` 1 to 2
 and `d3-shape` 1, so it installs a second, older copy of each beside the ones this
 console pins - measured 2026-09-27 in a scratch install, `d3-array` 2.12.1,
-`d3-shape` 1.3.7 and `d3-path` 1.0.9, 445,686 bytes of `node_modules` - and its
-two generators weigh 2,825 bytes gzipped. What it solves is crossings, merges and
-loops, which a straight funnel cannot have, and its layout spreads each column's
-spare height between the nodes in it, which moves the main line off the shared
-top edge the funnel is read along. The funnel's own cases - a drop of zero, a
-stage that lets more through than the next one counts, a narrow column - are ours
-to handle whichever layout draws it. **What writing it costs:** about 200 lines of
-code this project owns, its types included, and the tests for them. A flow that needs a general layout
-takes d3-sankey then. The bundle gate weighs pages and data files and not
-scripts, so it cannot see a package either way; the measure is the flow built with
-and without it and the compressed sizes compared. Authority: Fowler, Susan and
-Carmack, 2026-09-27.
+`d3-shape` 1.3.7 and `d3-path` 1.0.9, 445,686 bytes of `node_modules`. The flow
+imports the layout and not the link generator, whose stroked lines the filled
+ribbons replace, so a route that draws a flow ships about 2 KB gzipped more - the
+owner's estimate, taken without a new measurement, beside the 2,825 bytes measured
+for both generators on 2026-09-27. **Two rules are the funnel's and not the
+library's, and the flow applies them after the library runs.** Every node sits in
+the column of its own depth, because the library's default sends a node with
+nothing leaving it to the last column and would put every drop at the far edge.
+And each column is stacked again from the shared top edge, because the library
+spreads a column's spare height between the nodes in it, which moves the main line
+off the edge the funnel is read along. `frontend/tests/chart-vocabulary.spec.ts`
+asserts both. The funnel's own cases - a drop of zero, a stage that lets more
+through than the next one counts, a narrow column, a short one - stay ours to
+handle before the library is called. The bundle gate weighs pages and data files
+and not scripts, so it cannot see a package either way. Authority: owner,
+2026-09-28, overturning Fowler, Susan and Carmack's ruling of 2026-09-27 that the
+layout be written here.
 
 **A floor missed is "too few", never "refused".** "Refused" and `unreachable`
 already mean a fetch that did not come back, and a floor missed is not a failure:
