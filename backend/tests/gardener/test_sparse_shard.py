@@ -38,7 +38,7 @@ FRESH: Final = "state/old-days/2026-09-26.txt"
 #: A folder no declaration names and no ledger claims, so the complement sweeps it.
 STRAY: Final = "state/a-trial-run/2026-05-01.txt"
 
-#: Every file holds different bytes: git stores equal files as one object, and a
+#: Every file holds different bytes: git keeps equal files as one object, and a
 #: folder outside the cone whose file matched one inside it would be in the
 #: clone after all.
 FILES: Final = {
