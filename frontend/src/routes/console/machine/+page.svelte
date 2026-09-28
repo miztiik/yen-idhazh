@@ -38,7 +38,7 @@
 	import { onMount } from 'svelte';
 	import { base } from '$app/paths';
 	import PanelGroup from '$lib/components/PanelGroup.svelte';
-	import WindowControl from '$lib/components/WindowControl.svelte';
+	import WindowControlSource from '$lib/components/WindowControlSource.svelte';
 	import ContextCostPanel from '$lib/console/machine/ContextCostPanel.svelte';
 	import CounterfactualCostPanel from '$lib/console/machine/CounterfactualCostPanel.svelte';
 	import DiskReadsPanel from '$lib/console/machine/DiskReadsPanel.svelte';
@@ -101,11 +101,11 @@
 	<meta name="robots" content="noindex" />
 </svelte:head>
 
-<!-- The title, the strip and the band are the shell and live in
-     `../+layout.svelte`. The control stays here because it governs this route's
-     panels and nothing above them. -->
+<!-- The title, the strip, the band and the days control are the shell and live
+     in `../+layout.svelte`. The window stays here because it governs this
+     route's panels and nothing above them, and this hands it up. -->
 <div data-console-panels="machine">
-	<WindowControl days={windowDays} {presets} {monthsFor} {ready} onChange={show} />
+	<WindowControlSource days={windowDays} {presets} {monthsFor} {ready} onChange={show} />
 
 	<!-- One sentence, no chart. It is what stops this route reading as a page
 	     about a machine nothing ran on. -->

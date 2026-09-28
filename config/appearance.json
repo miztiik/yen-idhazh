@@ -22,6 +22,7 @@
     "chart_minutes_target": 6.0,
     "chart_rule_days": 14,
     "chart_width": 760,
+    "completeness_grace_days": 1,
     "context_cut_off_reason": "length",
     "context_high_percentile": 99.0,
     "default_window_days": 30,

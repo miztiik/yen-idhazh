@@ -83,7 +83,7 @@
 	import ShapeSwitch from '$lib/components/ShapeSwitch.svelte';
 	import Sparkline from '$lib/components/Sparkline.svelte';
 	import Viewport from '$lib/components/Viewport.svelte';
-	import WindowControl from '$lib/components/WindowControl.svelte';
+	import WindowControlSource from '$lib/components/WindowControlSource.svelte';
 	import RunHealthPanel from './RunHealthPanel.svelte';
 	import RunTimelinePanel from './RunTimelinePanel.svelte';
 
@@ -591,10 +591,10 @@
 	<meta name="robots" content="noindex" />
 </svelte:head>
 
-<!-- The title, the strip and the band are the shell and live in `+layout.svelte`.
-     What is left here is the route's own panels, and the control that governs
-     them - it is last of the chrome because a control read before any fact asks
-     the operator to configure a page he has been told nothing about.
+<!-- The title, the strip, the band and the days control are the shell and live
+     in `+layout.svelte`. What is left here is the route's own panels, and the
+     window that governs them, which this route holds and hands up to the
+     control.
 
      `data-telemetry-rows` is how anything outside this page knows whether the
      rows it draws from have landed. The page holds none at first paint and
@@ -610,7 +610,14 @@
 	data-telemetry-state={telemetryState}
 	data-shimmer={shimmer ? 'on' : 'off'}
 >
-	<WindowControl days={windowDays} {presets} {monthsFor} busy={fetching} {ready} onChange={show} />
+	<WindowControlSource
+		days={windowDays}
+		{presets}
+		{monthsFor}
+		busy={fetching}
+		{ready}
+		onChange={show}
+	/>
 
 	{#if stateSentence !== ''}
 		<!-- Said once, above every panel, and beside the control that governs the

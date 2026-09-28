@@ -20,7 +20,7 @@
 	import { shortDate } from '$lib/format';
 	import SourceCutRange from '$lib/components/SourceCutRange.svelte';
 	import TargetBar from '$lib/components/TargetBar.svelte';
-	import WindowControl from '$lib/components/WindowControl.svelte';
+	import WindowControlSource from '$lib/components/WindowControlSource.svelte';
 	import type { FeedDayOutcome, YieldDay } from './+page.server';
 
 	let { data } = $props();
@@ -144,10 +144,10 @@
 </script>
 
 <div data-console-panels="voices">
-	<!-- The title, the strip and the band are the shell and live in
-	     `../+layout.svelte`. The control stays here because it governs this
-	     route's panels and nothing above them. -->
-	<WindowControl days={windowDays} {presets} {monthsFor} {ready} onChange={show} />
+	<!-- The title, the strip, the band and the days control are the shell and
+	     live in `../+layout.svelte`. The window stays here because it governs
+	     this route's panels and nothing above them, and this hands it up. -->
+	<WindowControlSource days={windowDays} {presets} {monthsFor} {ready} onChange={show} />
 
 	<p class="console-carry" data-console-carry="pipelines">
 		{data.carries.voices}

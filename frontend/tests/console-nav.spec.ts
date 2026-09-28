@@ -14,7 +14,7 @@ import { expect, test, type Page } from '@playwright/test';
  * makes that a rename and not a route change. The strip may never take the
  * health ramp: green, amber and red on a label would say a route is failing,
  * and a route is a noun. And since 2026-09-12 the strip has to FIT - five tabs
- * on no more than two rows at 1440 and three at 360 and 320, with no box
+ * on one row at 1440 and no more than three at 360 and 320, with no box
  * overlapping another.
  */
 
@@ -167,6 +167,26 @@ test.describe('the strip', () => {
 		}
 	});
 
+	test("the band's worst route is the one tab that says so, in a word", async ({ page }) => {
+		// Every tab carries its own worst state, so which of them the band means
+		// was a thing a reader had to work out by comparing sentences. Once the
+		// strip sticks and the band has scrolled away it could not be worked out
+		// at all. One word on one tab says it, and a word is not a verdict colour.
+		await page.goto('/console/');
+		const named = await page.locator('[data-band-worst]').getAttribute('data-band-worst-route');
+		const marks = page.locator('[data-console-nav] [data-console-tab-worst-mark]');
+		if (named === null) {
+			await expect(marks, 'a tab says it is worst while the band says nothing is').toHaveCount(0);
+			return;
+		}
+		await expect(marks, 'the band names a worst route and no tab says so').toHaveCount(1);
+		await expect(
+			page.locator(`[data-console-tab="${named}"] [data-console-tab-worst-mark]`),
+			`the mark is not on ${named}, the route the band names`
+		).toHaveCount(1);
+		expect((await marks.innerText()).trim()).toMatch(/^Worst:?$/);
+	});
+
 	test('the health ramp never touches the strip', async ({ page }) => {
 		await page.goto('/console/');
 		// The rule under the active label is the categorical ramp, which names a
@@ -235,12 +255,18 @@ async function stripBoxes(page: Page) {
  * this suite drives; 320 is the narrowest screen still in use and is here
  * because the basis that cleared 360 still stacked five deep there - the same
  * defect one screen narrower, found by measuring rather than by reading the
- * rule. Two rows and three rows, because the strip sits directly above the band
+ * rule. Three rows on a phone, because the strip sits directly above the band
  * and the band is the first thing an operator reads: five rows of chrome would
  * push the verdict off a phone's first screen.
+ *
+ * **One row at 1440, since 2026-09-27.** From `frame.breakpoints_px[1]` up the
+ * strip is one row at any count of tabs - it sticks there, and a stuck strip
+ * that wrapped would cover a second row of every screen - so a tab list too wide
+ * for the row scrolls rather than wrapping. `console-shell.spec.ts` holds the
+ * same rule with one tab more than the routes have.
  */
 const STRIP_WIDTHS = [
-	{ width: 1440, height: 1000, rows: 2 },
+	{ width: 1440, height: 1000, rows: 1 },
 	{ width: 360, height: 780, rows: 3 },
 	{ width: 320, height: 780, rows: 3 }
 ] as const;

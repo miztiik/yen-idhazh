@@ -1,13 +1,14 @@
 # Which console surfaces follow the window, and which say why not
 
-**Last Updated**: 2026-09-23
+**Last Updated**: 2026-09-27
 
 One control at the top of the console sets the span for the whole page. This page
 is the control, and the list of every surface that does not simply follow it -
 which is the question asked far more often than how the control is drawn.
 
-Which panel sits on which route is [console.md](console.md). The two surfaces
-above this one are
+Which panel sits on which route is [console.md](console.md). The control stands on
+the strip beside the route tabs, and sticks with it from the wide breakpoint up;
+the shell it stands in is
 [what-sits-above-every-console-route.md](what-sits-above-every-console-route.md).
 
 ## One window governs the page

@@ -3,11 +3,11 @@
 	 *
 	 * Three and no more. A band that grows becomes a fourth page nobody chose to
 	 * open, and the point of it is that an operator who lands anywhere already
-	 * knows whether yesterday worked, what is worst, and how much room is left.
+	 * knows whether the latest day worked, what is worst, and how much room is left.
 	 *
 	 * The window control was a fourth member until 2026-08-31 and is not one now.
 	 * The band is deliberately not windowed, so a control inside it sat in a panel
-	 * it does not govern. It stands on its own below the band.
+	 * it does not govern. It stands on the strip above the band, beside the tabs.
 	 *
 	 * None of the three is windowed - the band stands on every route, so a figure
 	 * that moved when a control on one route moved would read as three different
@@ -39,13 +39,18 @@
 	};
 </script>
 
-<section class="band" aria-label="Yesterday, the worst thing and site size" data-console-band>
+<section class="band" aria-label="The latest day, the worst thing and site size" data-console-band>
 	<div class="facts">
 		<div class="fact" data-band-fact="verdict">
 			<!-- A label, not a heading. Three headings of band chrome above the page's
 			     own would put the furniture at the top of the outline on all three
-			     routes; the section names itself instead. -->
-			<p class="fact-label">Yesterday</p>
+			     routes; the section names itself instead.
+
+			     "Latest day" and not "Yesterday": the verdict is the newest day the
+			     record holds, which is today once today's first run has finished, and
+			     the sentence above the band dates it exactly. A fixed name needs no
+			     clock, so it is still true on a page read a week later. -->
+			<p class="fact-label" data-band-verdict-label>Latest day</p>
 			<p class="fact-body" data-band-verdict data-band-health={band.verdict.health}>
 				{band.verdict.sentence}
 			</p>

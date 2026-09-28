@@ -613,6 +613,29 @@ def test_the_console_window_presets_are_a_knob_the_frontend_agrees_with() -> Non
     assert [int(part) for part in mirrored.group(1).split(",")] == offered.window_presets
 
 
+def test_the_completeness_grace_is_a_knob_the_frontend_agrees_with() -> None:
+    """The sentence under the console's tab strip decides from this when a record is late.
+
+    The frontend keeps its own console defaults so a fresh clone renders with no
+    `config/`. A clone that allowed a different number of days would tell its
+    reader the pipeline had stopped on a day the committed build says it had not.
+    """
+    drawn = AppearanceConfig.from_json(read_text(CONFIG_DIR / "appearance.json")).console
+    assert ConsoleConfig().completeness_grace_days == drawn.completeness_grace_days, (
+        "config/appearance.json sets a completeness grace a clone with no config/ would not"
+    )
+    reader = read_text(REPO_ROOT / "frontend" / "src" / "lib" / "server" / "config.ts")
+    mirrored = re.search(r"completeness_grace_days:\s*(\d+)", reader)
+    assert mirrored is not None, "the frontend console defaults dropped completeness_grace_days"
+    assert int(mirrored.group(1)) == drawn.completeness_grace_days
+
+
+def test_a_completeness_grace_of_zero_days_is_refused() -> None:
+    """Zero would count the day the record was written as a day that is missing."""
+    with pytest.raises(ValidationError, match="completeness_grace_days"):
+        ConsoleConfig(completeness_grace_days=0)
+
+
 #: The four thresholds that decide when a quiet day is drawn as a loud one, and
 #: what the pair means: crossing the first fills that day's tile, crossing the
 #: second puts the day in the panel's headline sentence.

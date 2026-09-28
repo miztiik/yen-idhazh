@@ -250,13 +250,19 @@ for (const view of VIEWPORTS) {
 	});
 }
 
-test('THE ORACLE: chrome reads top to bottom - title, strip, band, control', async ({ page }) => {
+test('THE ORACLE: chrome reads top to bottom - title, strip, completeness, band, days sentence', async ({
+	page
+}) => {
 	await page.goto('/console/');
 
 	// Read as an ordering of tops rather than of DOM nodes, because that is what
 	// a reader gets. Until 2026-08-31 the strip sat 337px BELOW the band on a
 	// phone, so the band's worst fact linked into a strip the reader had already
 	// scrolled past, and the control sat inside a panel it does not govern.
+	//
+	// Since 2026-09-27 the days control is ON the strip, beside the tabs, and
+	// the sentence about the span stays under the band. So the control is not a
+	// step of its own here: it is held to the strip, and the strip to one place.
 	const order = await page.evaluate(() => {
 		const at = (selector: string) => {
 			const node = document.querySelector(selector);
@@ -265,9 +271,10 @@ test('THE ORACLE: chrome reads top to bottom - title, strip, band, control', asy
 		return {
 			header: at('body > header, header'),
 			title: at('[data-surface="operator"] h1'),
-			nav: at('[data-console-nav]'),
+			strip: at('[data-console-strip]'),
+			completeness: at('[data-console-completeness]'),
 			band: at('[data-console-band]'),
-			control: at('[data-window-control]'),
+			status: at('[data-window-status]'),
 			content: at('[data-surface="operator"] .console-h2')
 		};
 	});
@@ -277,16 +284,26 @@ test('THE ORACLE: chrome reads top to bottom - title, strip, band, control', asy
 	const tops = [
 		order.header,
 		order.title,
-		order.nav,
+		order.strip,
+		order.completeness,
 		order.band,
-		order.control,
+		order.status,
 		order.content
 	] as number[];
 	expect(
 		tops,
-		`header, title, strip, band, control, content - measured ${tops.join(', ')}`
+		`header, title, strip, completeness, band, days sentence, content - measured ${tops.join(', ')}`
 	).toEqual([...tops].sort((a, b) => a - b));
-	expect(new Set(tops).size, 'two of the six sit at the same height').toBe(tops.length);
+	expect(new Set(tops).size, 'two of the seven sit at the same height').toBe(tops.length);
+
+	await expect(
+		page.locator('[data-console-strip] [data-window-control]'),
+		'the days control is not on the strip'
+	).toHaveCount(1);
+	await expect(
+		page.locator('[data-console-strip] [data-window-status]'),
+		'the sentence about the span went onto the strip with the control'
+	).toHaveCount(0);
 });
 
 test('the band says what the worst state costs, and the strip keeps the short form', async ({

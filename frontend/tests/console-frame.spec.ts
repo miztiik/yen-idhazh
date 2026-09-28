@@ -85,6 +85,11 @@ test.describe('the console frame', () => {
 			for (const el of document.querySelectorAll<HTMLElement>('*')) {
 				const style = getComputedStyle(el);
 				if (!/auto|scroll/.test(style.overflowX)) continue;
+				// The one sideways scroll the console is meant to have: the tab list
+				// on the strip, which stays one row however many routes there are
+				// (owner decision, 2026-09-27) and scrolls once they outgrow it.
+				// `console-shell.spec.ts` holds that list to its own rule.
+				if (el.closest('[data-console-nav]') !== null) continue;
 				// A container that CAN scroll is fine. One that HAS to is the fault.
 				if (el.scrollWidth > el.clientWidth + 1) {
 					bad.push(

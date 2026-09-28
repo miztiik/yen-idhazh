@@ -743,13 +743,28 @@ test('the control names the window it is holding, and is inert before a script r
 	// And the prerendered document says it needs a script rather than offering a
 	// control that would do nothing when clicked. It says the same of the panels
 	// it governs: they hold their reserved shape with no script and nothing else,
-	// because the rows they draw arrive by fetch.
+	// because the rows they draw arrive by fetch. The sentence names the control
+	// it means, because since 2026-09-27 the control is on the strip above and
+	// the sentence is under the band.
 	const document = await (await page.request.get('/console/')).text();
-	expect(document).toContain('This control needs JavaScript');
+	expect(document).toContain('The days control above needs JavaScript');
 	expect(document).toContain('they draw rows a browser fetches');
 	expect(
 		document,
 		'the prerendered control still claims the sections below are showing data'
-	).not.toContain('This control needs JavaScript. Every windowed section below is showing');
+	).not.toContain('needs JavaScript. Every windowed section below is showing');
 	expect(document).toMatch(/<input[^>]*name="console-window"[^>]*disabled/);
+});
+
+test('one day is one day, in the sentence and to a screen reader', async ({ page }) => {
+	// The one-day preset read "1 days" on its tile and in the sentence under the
+	// band. The tile is the number alone now, but it still says its unit to a
+	// screen reader, and both say it in the singular.
+	await page.goto('/console/');
+	await hydrated(page);
+	const narrowest = Math.min(...PRESETS);
+	expect(narrowest, 'the presets no longer offer a single day, so this proves nothing').toBe(1);
+	await setWindow(page, narrowest);
+	await expect(page.locator('[data-window-status]')).toContainText('showing 1 day.');
+	await expect(page.locator('[data-window-preset="1"] .segment-days')).toHaveText('1 day');
 });
