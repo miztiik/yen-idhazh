@@ -22,11 +22,9 @@
 		dayTicks,
 		frame,
 		linearAxis,
-		observeWidth,
-		pointerReadout,
-		readoutMarks,
-		type DayReadout
+		observeWidth
 	} from '$lib/charts/frame';
+	import { pointerReadout, readoutMarks, readoutOf } from '$lib/charts/readout';
 	import { daysBetween, type TimeWindow } from '$lib/charts/viewport';
 	import ChartReadout from '$lib/components/ChartReadout.svelte';
 	import Panel from '$lib/components/Panel.svelte';
@@ -120,26 +118,31 @@
 			.length
 	);
 
-	const columns = $derived<DayReadout[]>(
-		marks.map((mark) => ({
-			x: mark.x,
-			date: dayMonth(mark.day.date),
-			rows: [
+	const readout = $derived(
+		readoutOf({
+			type: 'dateSeries',
+			columns: marks.map((mark) => dayMonth(mark.day.date)),
+			series: [
 				{
 					label: 'Disagreed with itself',
-					value: `${percent(mark.day.disagreementRate)} of ${mark.day.pairsJudged}`,
-					colour: 'var(--chart-1)'
+					swatch: 'var(--chart-1)',
+					values: marks.map((mark) => mark.day.disagreementRate),
+					format: (rate: number, column: number) =>
+						`${percent(rate)} of ${marks[column]?.day.pairsJudged ?? 0}`
 				},
 				{
 					label: 'Could not tell',
-					value: `${percent(mark.day.unclearRate)} of ${mark.day.pairsJudged}`,
-					colour: 'var(--chart-3)'
+					swatch: 'var(--chart-3)',
+					values: marks.map((mark) => mark.day.unclearRate),
+					format: (rate: number, column: number) =>
+						`${percent(rate)} of ${marks[column]?.day.pairsJudged ?? 0}`
 				}
-			]
-		}))
+			],
+			notMeasured: 'No pair was read twice on this day',
+			resting: 'last'
+		})
 	);
-	const resting = $derived(selected === null);
-	const readout = $derived(columns.length === 0 ? null : columns[selected ?? columns.length - 1]);
+	const count = $derived(readout.columns.length);
 </script>
 
 <Panel
@@ -151,8 +154,8 @@
 		data-window-days={windowDays}
 		data-agreement-domain={`${corridor[0]},${corridor[1]}`}
 		data-agreement-days={read.length}
-		data-readout-columns={columns.length > 0 ? columns.length : undefined}
-		data-readout-none={columns.length > 0
+		data-readout-columns={count > 0 ? count : undefined}
+		data-readout-none={count > 0
 			? undefined
 			: 'no pair has been read twice, so there is no column to read'}
 	>
@@ -167,7 +170,7 @@
 				tabindex="0"
 				aria-label="How often the judge disagreed with its own second reading, a day"
 				use:pointerReadout={{
-					marks: readoutMarks(columns),
+					marks: readoutMarks(marks.map((mark) => mark.x)),
 					width: box.width,
 					onSelect: (index) => (selected = index)
 				}}
@@ -263,9 +266,9 @@
 
 		<ChartReadout
 			{readout}
+			at={selected}
 			name="judge-agreement"
 			maxShare={readoutMaxShare}
-			{resting}
 			restingNote=", the newest day"
 		/>
 

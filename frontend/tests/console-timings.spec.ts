@@ -24,9 +24,9 @@ import {
 	dayColumns,
 	dayColumnX,
 	dayTicks,
-	frame,
-	readoutCapStyle
+	frame
 } from '../src/lib/charts/frame';
+import { readoutCapStyle } from '../src/lib/charts/readout';
 import { readCsv, readDayShards } from '../src/lib/server/payload';
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), '..', '..');

@@ -23,10 +23,9 @@
 		MODEL_RULE_LABEL,
 		modelRules,
 		noModelRuleNote,
-		observeWidth,
-		pointerReadout,
-		readoutMarks
+		observeWidth
 	} from '$lib/charts/frame';
+	import { pointerReadout, readoutMarks } from '$lib/charts/readout';
 	import {
 		namesMoved,
 		namesMovedShort,
@@ -76,7 +75,18 @@
 	// The four shapes below are a function of the RUNS alone, so a resize reuses
 	// them and only a new span rebuilds them.
 	const contextDates = $derived(firstOfDay(contextRuns));
-	const contextData = $derived(contextColumns(contextRuns, limit, cost.percentile));
+	// One set membership a column, built once a span, in place of a scan of the
+	// rule list a column. The set holds a boundary DAY's date and every run of
+	// that day carries it, so all its columns take the rule.
+	const contextData = $derived(
+		contextColumns(contextRuns, limit, cost.percentile, {
+			lines: contextRuns.map((run) =>
+				contextBoundaries.has(run.date)
+					? [modelRuleRow(namesMovedShort(movedOn.get(run.date) ?? []))]
+					: []
+			)
+		})
+	);
 	const contextBoundaries = $derived(boundaryDates(modelChanges, contextDates));
 	/** The domain the plot is drawn against. Zero-anchored, and the limit is one
 	 * of its bounds, so the ceiling is a line on the plot rather than a number
@@ -111,21 +121,6 @@
 	const contextRules = $derived(modelRules(modelChanges, contextDates, contextX));
 	/** The words for one date, or none where the record could not name them. */
 	const movedOn = $derived(settingsByDate(moved));
-	const contextStrip = $derived(
-		contextData.map((column, index) => ({
-			...column,
-			x: contextX[index] ?? 0,
-			// One set membership a column, built once a span, in place of a scan of
-			// the rule list a column. The set holds a boundary DAY's date and every
-			// run of that day carries it, so all its columns take the rule.
-			rows: contextBoundaries.has(contextRuns[index]?.date ?? '')
-				? [
-						...column.rows,
-						modelRuleRow(namesMovedShort(movedOn.get(contextRuns[index]?.date ?? '') ?? []))
-					]
-				: column.rows
-		}))
-	);
 	/** Days this span covers, that a setting moved on, and that no run here
 	 * measured. The rule and the absence are both drawn: a setting that moved on
 	 * a day nobody was measuring is what makes a before-and-after unsafe, and a
@@ -138,11 +133,7 @@
 				!contextRuns.some((run) => run.date === one.date)
 		)
 	);
-	const contextMarks = $derived(readoutMarks(contextStrip));
-	const contextResting = $derived(contextStrip.at(-1) ?? null);
-	const contextReadout = $derived(
-		contextAt === null ? contextResting : (contextStrip[contextAt] ?? contextResting)
-	);
+	const contextMarks = $derived(readoutMarks(contextRuns.map((_, index) => contextX[index] ?? 0)));
 	/** Two polylines, built once each rather than per mark. */
 	function line(values: readonly (number | null)[]): string {
 		return values
@@ -190,7 +181,7 @@
 			<div
 				class="plot"
 				data-context-window={limit}
-				data-readout-columns={contextStrip.length}
+				data-readout-columns={contextData.columns.length}
 			>
 				<div use:observeWidth={(px) => (contextWidth = px)}>
 					<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
@@ -356,10 +347,10 @@
 					</svg>
 				</div>
 				<ChartReadout
-					readout={contextReadout}
+					readout={contextData}
+					at={contextAt}
 					name="context"
 					maxShare={chart.readout_max_share}
-					resting={contextAt === null}
 					restingNote=", the last run"
 					hint="Point at a run to read it. Left and Right step through them, Escape returns to the last."
 				/>

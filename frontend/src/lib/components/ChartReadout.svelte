@@ -16,31 +16,78 @@
 	 * with JavaScript off still gets one column's numbers in words - which is
 	 * what makes the hover an addition rather than the only way to read a value.
 	 */
-	import { readoutCapStyle, type DayReadout } from '$lib/charts/frame';
+	import { readoutCapStyle, type Readout, type ReadoutFacts } from '$lib/charts/readout';
 
 	let {
 		readout,
+		at = null,
 		name,
 		maxShare,
 		resting = false,
 		restingNote = '',
 		hint = 'Point at a column to read it. Left and Right step through them, Escape returns to the newest.'
 	}: {
-		/** The column to print. Null draws nothing at all. */
-		readout: DayReadout | null;
+		/** What `readoutOf` or `factsOf` built. Null draws nothing at all. */
+		readout: Readout | ReadoutFacts | null;
+		/** The column a pointer or a key picked, or null for the resting one. A
+		 * record chart hands the record it picked as `readout` instead. */
+		at?: number | null;
 		/** What the strip is of, so a page with several can be told apart. */
 		name: string;
 		/** `chart.readout_max_share`. */
 		maxShare: number;
-		/** True while no column has been picked, so the heading can say which
-		 * column it fell back to rather than looking like a choice. */
+		/** For a record: true while no record has been picked, so the heading can
+		 * say which one it fell back to rather than looking like a choice. A
+		 * column strip knows this from `at`. */
 		resting?: boolean;
 		restingNote?: string;
 		hint?: string;
 	} = $props();
+
+	interface Entry {
+		label: string;
+		value: string;
+		swatch: string | null;
+	}
+
+	/** What the strip prints: a heading and its entries, in either shape. */
+	const view = $derived.by((): { heading: string; resting: boolean; entries: Entry[] } | null => {
+		if (readout === null) return null;
+		if ('subject' in readout) {
+			return {
+				heading: readout.subject,
+				resting,
+				entries: readout.facts.map((fact) => ({
+					label: fact.label,
+					value: fact.value ?? readout.notMeasured,
+					swatch: fact.swatch
+				}))
+			};
+		}
+		if (readout.columns.length === 0) return null;
+		const column = Math.min(readout.columns.length - 1, Math.max(0, at ?? readout.resting));
+		const measured = readout.series.some((one) => one.values[column] !== null);
+		const series: Entry[] = measured
+			? readout.series.map((one) => ({
+					label: one.note === undefined ? one.label : `${one.label} (${one.note})`,
+					value: one.values[column] ?? readout.notMeasured,
+					swatch: one.swatch
+				}))
+			: [{ label: readout.notMeasured, value: '', swatch: null }];
+		const events = readout.events[column] ?? [];
+		const none: Entry[] =
+			events.length === 0 && readout.eventsNone !== ''
+				? [{ label: readout.eventsNone, value: '', swatch: null }]
+				: [];
+		return {
+			heading: readout.columns[column],
+			resting: at === null,
+			entries: [...series, ...events, ...none]
+		};
+	});
 </script>
 
-{#if readout}
+{#if view}
 	<dl
 		class="mt-3 text-[0.75rem] text-text-tertiary"
 		style={readoutCapStyle(maxShare)}
@@ -48,12 +95,12 @@
 		aria-live="polite"
 	>
 		<dt class="font-semibold text-text-secondary" data-readout-day>
-			{readout.date}{resting ? restingNote : ''}
+			{view.heading}{view.resting ? restingNote : ''}
 		</dt>
-		{#each readout.rows as row (row.label)}
+		{#each view.entries as row, index (`${index}:${row.label}`)}
 			<div class="mt-1 flex items-center gap-2" data-readout-row={row.label}>
-				{#if row.colour}
-					<span class="size-3 shrink-0 rounded-sm" style="background: {row.colour}"></span>
+				{#if row.swatch}
+					<span class="size-3 shrink-0 rounded-sm" style="background: {row.swatch}"></span>
 				{/if}
 				<dd class="grow">{row.label}</dd>
 				<dd class="tabular-nums text-text-secondary">{row.value}</dd>

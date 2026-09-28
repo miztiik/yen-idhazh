@@ -13,7 +13,7 @@
  * and a config edit that changes the count changes no arithmetic on this page.
  */
 import { quantile } from '$lib/charts/machine';
-import type { DayReadout } from '$lib/charts/frame';
+import { readoutOf, type Readout, type ReadoutInput } from '$lib/charts/readout';
 import { grouped } from '$lib/charts/series';
 
 /** The call slots an item row can carry, in the order the stage fills them.
@@ -243,34 +243,45 @@ export function contextCost(
 	};
 }
 
-/** Everything one run's two marks print, for the strip under the chart. */
+/** Everything one run's two marks print, for the strip under the chart, and
+ * the lines a run's day carries on its own - the day a setting moved. */
 export function contextColumns(
 	runs: readonly ContextRun[],
 	limit: number | null,
-	percentile: number
-): DayReadout[] {
-	const of = (value: number | null, pct: number | null): string => {
-		if (value === null) return '-';
+	percentile: number,
+	events?: ReadoutInput['events']
+): Readout {
+	const of = (value: number, pct: number | null): string => {
 		const share = pct === null || limit === null ? '' : ` - ${pct}% of ${grouped(limit)}`;
 		return `${grouped(value)} tokens${share}`;
 	};
-	return runs.map((run) => ({
-		x: 0,
-		date: run.runId,
-		rows: [
+	return readoutOf({
+		type: 'dateSeries',
+		columns: runs.map((run) => run.runId),
+		series: [
 			{
 				label: 'The longest article',
-				value: of(run.largest, run.largestPct),
-				colour: 'var(--chart-1)'
+				swatch: 'var(--chart-1)',
+				values: runs.map((run) => run.largest),
+				format: (value: number, column: number) => of(value, runs[column]?.largestPct ?? null)
 			},
 			{
 				label: highLabel(percentile),
-				value: of(run.high, run.highPct),
-				colour: 'var(--chart-3)'
+				swatch: 'var(--chart-3)',
+				values: runs.map((run) => run.high),
+				format: (value: number, column: number) => of(value, runs[column]?.highPct ?? null)
 			},
-			{ label: 'Articles measured', value: `${run.items}`, colour: '' }
-		]
-	}));
+			{
+				label: 'Articles measured',
+				swatch: null,
+				values: runs.map((run) => run.items),
+				format: (value: number) => `${value}`
+			}
+		],
+		...(events === undefined ? {} : { events }),
+		notMeasured: 'This run measured no article',
+		resting: 'last'
+	});
 }
 
 /** The high mark in words, at whatever percentile the config set.

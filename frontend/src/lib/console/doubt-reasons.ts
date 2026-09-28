@@ -20,7 +20,7 @@
 
 // Relative, not `$lib`: the browser suite imports this module in plain Node,
 // where no Vite alias exists to resolve one.
-import type { DayReadout } from '../charts/frame';
+import { readoutOf, type Readout } from '../charts/readout';
 import { dayMonth } from '../format';
 import { grouped } from '../charts/series';
 import type { StackSeries } from '../charts/stacked';
@@ -180,17 +180,20 @@ export function reasonsDrawn(days: readonly ReasonDay[]): DoubtReason[] {
  * denominator invites a trend that is not there: 45 doubted of 208 published and
  * 45 of 731 are different facts.
  */
-export function reasonColumns(days: readonly ReasonDay[]): DayReadout[] {
-	const drawn = reasonsDrawn(days);
-	return days.map((day) => ({
-		x: 0,
-		date: day.date,
-		rows: drawn.map((reason) => ({
+export function reasonColumns(days: readonly ReasonDay[]): Readout {
+	return readoutOf({
+		type: 'dateSeries',
+		columns: days.map((day) => day.date),
+		series: reasonsDrawn(days).map((reason) => ({
 			label: reason.label,
-			value: `${grouped(day.counts[reason.id] ?? 0)} of ${grouped(day.items)}`,
-			colour: `var(${reason.token})`
-		}))
-	}));
+			swatch: `var(${reason.token})`,
+			values: days.map((day) => day.counts[reason.id] ?? 0),
+			format: (count: number, column: number) =>
+				`${grouped(count)} of ${grouped(days[column]?.items ?? 0)}`
+		})),
+		notMeasured: 'Nothing was doubted on this day',
+		resting: 'last'
+	});
 }
 
 /** A whole percent, or null where there is nothing to divide. */

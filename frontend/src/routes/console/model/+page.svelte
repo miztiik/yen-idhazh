@@ -720,7 +720,7 @@
 					width={data.console.chart_width}
 					height={data.console.chart_height}
 					label="Why summaries were doubted, per day, over {windowDays} days. One column is one day, its height is the summaries the checker wrote a reason on, and the bands are the five reasons it can give. Drawn as lines instead, each reason is its own count a day and the total is not shown."
-					columns={reasonStrip}
+					readout={reasonStrip}
 					readoutName="doubt-reasons"
 					readoutMaxShare={data.chart.readout_max_share}
 					restingNote=", the newest day"
@@ -821,7 +821,7 @@
 					width={data.console.chart_width}
 					height={data.console.chart_height}
 					label={matchChartLabel}
-					columns={matchStrip}
+					readout={matchStrip}
 					readoutName="faithfulness"
 					readoutMaxShare={data.chart.readout_max_share}
 					restingNote=", the newest day"

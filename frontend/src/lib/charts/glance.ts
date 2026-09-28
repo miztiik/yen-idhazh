@@ -14,7 +14,7 @@
 import type { EChartsOption } from 'echarts';
 import type { RunSummary } from '$lib/server/payload';
 import { dayMonth } from '../format';
-import type { DayReadout } from './frame';
+import { readoutOf, type Readout } from './readout';
 import { sparklineMarks, type SparklineMarks } from './sparkline';
 import { stacked, type StackShape } from './stacked';
 import { targetMarks, type TargetMarks } from './targetbar';
@@ -472,20 +472,22 @@ export function timeSplitChart(days: readonly TimeSplitDay[], shape: StackShape 
  * same line as its milliseconds, because a band's size is the question and a
  * reader should not have to divide two numbers off a chart to answer it.
  */
-export function timeSplitColumns(days: readonly TimeSplitDay[]): DayReadout[] {
-	return days.map((day) => ({
-		x: 0,
-		date: day.date,
-		rows: TIME_BANDS.map((band, index) => {
-			const ms = Math.round(day.ms[index] ?? 0);
-			const share = day.total > 0 ? Math.round((100 * ms) / day.total) : null;
-			return {
-				label: band.label,
-				value: share === null ? `${ms} ms` : `${ms} ms, ${share}%`,
-				colour: `var(${TIME_TOKENS[index % TIME_TOKENS.length]})`
-			};
-		})
-	}));
+export function timeSplitColumns(days: readonly TimeSplitDay[]): Readout {
+	return readoutOf({
+		type: 'dateSeries',
+		columns: days.map((day) => day.date),
+		series: TIME_BANDS.map((band, index) => ({
+			label: band.label,
+			swatch: `var(${TIME_TOKENS[index % TIME_TOKENS.length]})`,
+			values: days.map((day) => Math.round(day.ms[index] ?? 0)),
+			format: (ms: number, column: number) => {
+				const total = days[column]?.total ?? 0;
+				return total > 0 ? `${ms} ms, ${Math.round((100 * ms) / total)}%` : `${ms} ms`;
+			}
+		})),
+		notMeasured: 'Nothing was timed on this day',
+		resting: 'last'
+	});
 }
 
 /** Every stage's failure count on one day, for the strip under the chart.
@@ -494,17 +496,20 @@ export function timeSplitColumns(days: readonly TimeSplitDay[]): DayReadout[] {
  * wants is the one the eye cannot measure. The strip prints all four at the
  * hovered column, which is what turns four hovers into one.
  */
-export function failureMixColumns(series: readonly StageFailureSeries[]): DayReadout[] {
+export function failureMixColumns(series: readonly StageFailureSeries[]): Readout {
 	const dates = series[0]?.days.map((d) => d.date) ?? [];
-	return dates.map((date, index) => ({
-		x: 0,
-		date,
-		rows: series.map((stage, position) => ({
+	return readoutOf({
+		type: 'dateSeries',
+		columns: dates,
+		series: series.map((stage, position) => ({
 			label: stage.label,
-			value: String(stage.days[index]?.failures ?? 0),
-			colour: `var(${MIX_TOKENS[position % MIX_TOKENS.length]})`
-		}))
-	}));
+			swatch: `var(${MIX_TOKENS[position % MIX_TOKENS.length]})`,
+			values: dates.map((_, index) => stage.days[index]?.failures ?? 0),
+			format: (value: number) => String(value)
+		})),
+		notMeasured: 'No item was planned on this day',
+		resting: 'last'
+	});
 }
 
 /** The three stages in the categorical ramp, in pipeline order. */

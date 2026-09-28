@@ -36,11 +36,9 @@
 		dayTicks,
 		frame,
 		linearAxis,
-		observeWidth,
-		pointerReadout,
-		readoutMarks,
-		type DayReadout
+		observeWidth
 	} from '$lib/charts/frame';
+	import { pointerReadout, readoutMarks, readoutOf } from '$lib/charts/readout';
 	import { daysBetween, type TimeWindow } from '$lib/charts/viewport';
 	import ChartReadout from '$lib/components/ChartReadout.svelte';
 	import Panel from '$lib/components/Panel.svelte';
@@ -161,22 +159,29 @@
 			.map((run) => run.join(' '))
 	);
 
-	const columns = $derived<DayReadout[]>(
-		marks.map((mark) => ({
-			x: mark.x,
-			date: dayMonth(mark.day.date),
-			rows: [
-				{ label: 'Applied', value: reads(mark.day.applied), colour: 'var(--chart-1)' },
+	const readout = $derived(
+		readoutOf({
+			type: 'dateSeries',
+			columns: marks.map((mark) => dayMonth(mark.day.date)),
+			series: [
+				{
+					label: 'Applied',
+					swatch: 'var(--chart-1)',
+					values: marks.map((mark) => mark.day.applied),
+					format: reads
+				},
 				{
 					label: 'Proposed',
-					value: mark.day.proposed === null ? 'nothing was fitted' : reads(mark.day.proposed),
-					colour: 'var(--chart-2)'
+					swatch: 'var(--chart-2)',
+					values: marks.map((mark) => mark.day.proposed ?? 'nothing was fitted'),
+					format: reads
 				}
-			]
-		}))
+			],
+			notMeasured: 'No line was fitted on this day',
+			resting: 'last'
+		})
 	);
-	const resting = $derived(selected === null);
-	const readout = $derived(columns.length === 0 ? null : columns[selected ?? columns.length - 1]);
+	const count = $derived(readout.columns.length);
 
 	function columnTitle(day: LineDay): string {
 		if (day.heldReason !== 'none') {
@@ -198,8 +203,8 @@
 		data-window-days={windowDays}
 		data-line-domain={`${corridor[0]},${corridor[1]}`}
 		data-line-days={drawn.length}
-		data-readout-columns={columns.length > 0 ? columns.length : undefined}
-		data-readout-none={columns.length > 0
+		data-readout-columns={count > 0 ? count : undefined}
+		data-readout-none={count > 0
 			? undefined
 			: 'no day has fitted a line, so there is no column to read'}
 	>
@@ -214,7 +219,7 @@
 				tabindex="0"
 				aria-label="The merge line a day, on the whole range a fitted line may take"
 				use:pointerReadout={{
-					marks: readoutMarks(columns),
+					marks: readoutMarks(marks.map((mark) => mark.x)),
 					width: box.width,
 					onSelect: (index) => (selected = index)
 				}}
@@ -385,9 +390,9 @@
 
 		<ChartReadout
 			{readout}
+			at={selected}
 			name="merge-line"
 			maxShare={readoutMaxShare}
-			{resting}
 			restingNote=", the newest day"
 		/>
 

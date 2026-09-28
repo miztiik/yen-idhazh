@@ -1,5 +1,5 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
-import { columnStrip } from '../src/lib/charts/frame';
+import { readoutOf } from '../src/lib/charts/readout';
 import { clocksChart } from '../src/lib/charts/machine';
 import { stacked } from '../src/lib/charts/stacked';
 
@@ -491,18 +491,69 @@ test.describe('the strip is the key', () => {
 	});
 
 	test('a strip is built from the labels, so it cannot be a different length', () => {
-		const strip = columnStrip(['Mon', 'Tue', 'Wed'], [
-			{ label: 'Read', colour: 'var(--chart-1)', value: (index) => `${index * 10}` },
-			{ label: 'Written', colour: 'var(--chart-4)', value: (index) => `${index}` }
+		const strip = readoutOf({
+			type: 'dateSeries',
+			columns: ['Mon', 'Tue', 'Wed'],
+			series: [
+				{
+					label: 'Read',
+					swatch: 'var(--chart-1)',
+					values: [0, 10, 20],
+					format: (value) => `${value}`
+				},
+				{
+					label: 'Written',
+					swatch: 'var(--chart-4)',
+					values: [0, 1, 2],
+					format: (value) => `${value}`
+				}
+			],
+			notMeasured: 'Nothing was read on this day',
+			resting: 'last'
+		});
+		expect(strip.columns).toEqual(['Mon', 'Tue', 'Wed']);
+		expect(strip.series.map((one) => [one.label, one.swatch, one.values[2]])).toEqual([
+			['Read', 'var(--chart-1)', '20'],
+			['Written', 'var(--chart-4)', '2']
 		]);
-		expect(strip.map((column) => column.date)).toEqual(['Mon', 'Tue', 'Wed']);
-		expect(strip[2].rows).toEqual([
-			{ label: 'Read', value: '20', colour: 'var(--chart-1)' },
-			{ label: 'Written', value: '2', colour: 'var(--chart-4)' }
-		]);
-		// Zero, not a pixel. The engine keeps its insets in pixels and the element
-		// is fluid, so `Chart.svelte` recomputes every share from the measured
-		// width - a pixel written here would be right at one width only.
-		expect(strip.every((column) => column.x === 0)).toBe(true);
+		expect(strip.resting).toBe(2);
+		// A series one reading short is one day's numbers under another day's
+		// heading, so the builder refuses it rather than printing it.
+		expect(() =>
+			readoutOf({
+				type: 'dateSeries',
+				columns: ['Mon', 'Tue'],
+				series: [{ label: 'Read', swatch: null, values: [1], format: String }],
+				notMeasured: 'Nothing was read on this day',
+				resting: 'last'
+			})
+		).toThrow(/1 readings for 2 columns/);
+	});
+
+	test('a missing reading prints the not-measured word, never a dash or a zero', () => {
+		const strip = readoutOf({
+			type: 'dateSeries',
+			columns: ['Mon', 'Tue'],
+			series: [
+				{ label: 'Read', swatch: null, values: [null, 4], format: String },
+				{ label: 'Never read', swatch: null, values: [null, null], format: String }
+			],
+			notMeasured: 'Nothing was read on this day',
+			resting: 'newest'
+		});
+		expect(strip.series[0].values).toEqual([null, '4']);
+		expect(strip.notMeasured).toBe('Nothing was read on this day');
+		// A key for a series the window never measured is a claim the data does
+		// not support, so it has no entry at all.
+		expect(strip.series.map((one) => one.label)).toEqual(['Read']);
+		expect(() =>
+			readoutOf({
+				type: 'dateSeries',
+				columns: ['Mon'],
+				series: [{ label: 'Read', swatch: null, values: ['-'], format: String }],
+				notMeasured: 'Nothing was read on this day',
+				resting: 'last'
+			})
+		).toThrow(/hand null/);
 	});
 });

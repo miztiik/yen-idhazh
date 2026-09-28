@@ -62,12 +62,9 @@
 		modelRuleTitle,
 		MODEL_RULE_LABEL,
 		noModelRuleNote,
-		notMeasuredRow,
-		observeWidth,
-		pointerReadout,
-		readoutMarks,
-		type DayReadout
+		observeWidth
 	} from '$lib/charts/frame';
+	import { pointerReadout, readoutMarks, readoutOf } from '$lib/charts/readout';
 	import ChartReadout from './ChartReadout.svelte';
 	import { shortDate } from '$lib/format';
 	import type { StageTiming, StageTimingDay } from '$lib/charts/series';
@@ -236,41 +233,33 @@
 	 *
 	 * A day nothing timed prints one sentence rather than three `not timed`
 	 * rows. Measured, the hover worked on those columns and still read as broken,
-	 * because four columns in five carried a date and no values. */
-	const columns = $derived<DayReadout[]>(
-		calendar.map((date, index) => ({
-			x: x(index),
-			date: shortDate(date),
-			rows: timed[index]
-				? [
-						...legend.map((stage) => ({
-							label: stage.label,
-							value: reading(at(date, stage.key)),
-							colour: stage.colour
-						})),
-						// The rule is a mark on the plot and a line in the strip, so a reader
-						// stepping the days with an arrow key meets it without a pointer.
-						...(changedOn.has(date) ? [MODEL_RULE_ROW] : [])
-					]
-				: [
-						notMeasuredRow('Nothing was timed on this day'),
-						...(changedOn.has(date) ? [MODEL_RULE_ROW] : [])
-					]
-		}))
-	);
-	const marks = $derived(readoutMarks(columns));
-	/** The strip opens on the newest day the window timed, so it is never blank
+	 * because four columns in five carried a date and no values.
+	 *
+	 * The strip opens on the newest day the window timed, so it is never blank
 	 * and never shifts the page as it fills. Not the window's last column: a
 	 * window runs to today and a run can be hours away, so that column is often
 	 * four `not timed` rows, which is not a resting state anybody can read. */
-	const resting = $derived(
-		columns.length === 0
-			? null
-			: (columns[newest === null ? columns.length - 1 : calendar.indexOf(newest.date)] ??
-				columns[columns.length - 1])
+	const readout = $derived(
+		readoutOf({
+			type: 'dateSeries',
+			columns: calendar.map((date) => shortDate(date)),
+			series: legend.map((stage) => ({
+				label: stage.label,
+				swatch: stage.colour,
+				values: calendar.map((date, index) =>
+					timed[index] ? (at(date, stage.key) ?? 'not timed') : null
+				),
+				format: (ms: number) => reading(ms)
+			})),
+			// The rule is a mark on the plot and a line in the strip, so a reader
+			// stepping the days with an arrow key meets it without a pointer.
+			events: { lines: calendar.map((date) => (changedOn.has(date) ? [MODEL_RULE_ROW] : [])) },
+			notMeasured: 'Nothing was timed on this day',
+			resting: 'newest'
+		})
 	);
-	const readout = $derived(selected === null ? resting : (columns[selected] ?? resting));
-	const guide = $derived(selected === null ? null : (columns[selected]?.x ?? null));
+	const marks = $derived(readoutMarks(calendar.map((_, index) => x(index))));
+	const guide = $derived(selected === null ? null : x(selected));
 
 	function timingOn(date: string, key: Stage['key']): StageTiming | null {
 		return byDate.get(date)?.[key] ?? null;
@@ -408,7 +397,7 @@
 	<div
 		class="mt-4 rounded-md border border-rule bg-surface p-3"
 		data-timing="chart"
-		data-readout-columns={columns.length}
+		data-readout-columns={readout.columns.length}
 		data-model-rule="yes"
 		data-model-rule-name="timings"
 		data-model-rule-from={calendar[0] ?? ''}
@@ -602,9 +591,9 @@
 		     console prints - see `ChartReadout.svelte` for the rules it holds. -->
 		<ChartReadout
 			{readout}
+			at={selected}
 			name="timings"
 			maxShare={readoutMaxShare}
-			resting={selected === null}
 			restingNote=", the newest day we timed"
 			hint="Point at a day to read it. Left and Right step through the days, Escape returns to the newest."
 		/>

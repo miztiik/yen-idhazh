@@ -63,7 +63,7 @@
 	import { movementVerdict } from '$lib/charts/theme';
 	import type { TargetSense } from '$lib/charts/targetbar';
 	import Chart from '$lib/charts/Chart.svelte';
-	import { columnStrip } from '$lib/charts/frame';
+	import { readoutOf } from '$lib/charts/readout';
 	import { chartFlow, FLOW_HEIGHT } from '$lib/charts/chart-flow';
 	import { extractionTrend, extractionTrendColumns } from '$lib/charts/extraction-trend';
 	import {
@@ -406,12 +406,7 @@
 	/** `extractionTrend`'s own plot insets, so a column the pointer lands on is
 	 * the column the strip prints at every width. */
 	const YIELD_GRID = { left: 48, right: 14 };
-	const yieldColumns = $derived(
-		columnStrip(
-			yieldTrend.days.map((day) => shortDate(day.date)),
-			extractionTrendColumns(yieldTrend.days)
-		)
-	);
+	const yieldColumns = $derived(extractionTrendColumns(yieldTrend.days));
 	/** The three classes, as rows. `Not yet classified` is named rather than
 	 * folded into `narrative`: an article carrying two figures is not an article
 	 * carrying none, and only one of those two is a gap in our own questions. */
@@ -452,26 +447,32 @@
 	 * carries a month and a day, the point carries a size, and nothing else on
 	 * the chart says whether the day sat outside the band. */
 	const costColumns = $derived(
-		columnStrip(
-			perArticle.days.map((day) => shortDate(day.date)),
-			[
+		readoutOf({
+			type: 'dateSeries',
+			columns: perArticle.days.map((day) => shortDate(day.date)),
+			series: [
 				{
 					label: 'Payload bytes per article',
-					colour: 'var(--chart-3)',
-					value: (index) => bytes(Math.round(perArticle.days[index]?.bytesPerItem ?? 0))
+					swatch: 'var(--chart-3)',
+					values: perArticle.days.map((day) => Math.round(day.bytesPerItem ?? 0)),
+					format: (value: number) => bytes(value)
 				},
 				{
 					label: 'Against the window',
-					colour: '',
-					value: (index) =>
+					swatch: null,
+					values: perArticle.days.map((day) =>
 						perArticle.spread === null
 							? 'one day, so no band'
-							: perArticle.days[index]?.flagged
+							: day.flagged
 								? 'outside the band'
 								: 'inside the band'
+					),
+					format: (value: number) => String(value)
 				}
-			]
-		)
+			],
+			notMeasured: 'Nothing was published on this day',
+			resting: 'last'
+		})
 	);
 	/** What the tree gained over the window, in megabytes.
 	 *
@@ -785,7 +786,7 @@
 					width={data.console.chart_width}
 					height={220}
 					label="Payload bytes per article on each published day, over {windowDays} days, against the median and one standard deviation either side of it"
-					columns={costColumns}
+					readout={costColumns}
 					readoutName="cost-per-article"
 					readoutMaxShare={data.chart.readout_max_share}
 					grid={COST_GRID}
@@ -847,7 +848,7 @@
 					width={760}
 					height={220}
 					label="Failures per day by stage. One column is one day, its height is that day's failures, and the bands are the stages they stopped at - so a quiet day and a clean day do not draw alike. Drawn as lines instead, each stage is its own count a day and the total is not shown."
-					columns={failureMixColumns(mixSeries)}
+					readout={failureMixColumns(mixSeries)}
 					readoutName="failure-mix"
 					readoutMaxShare={data.chart.readout_max_share}
 					restingNote=", the newest day"
@@ -897,7 +898,7 @@
 					width={760}
 					height={220}
 					label="Mean milliseconds an item spent in each step, per day. One column is one day and its height is the mean item's whole clock. The bands from the bottom are fetch, extract, the label call, the summary, the visual plan, the model time neither call claimed, the faithfulness scorers, and at the top the time no named step claimed. Drawn as lines instead, each step is its own milliseconds a day and the whole clock is not shown."
-					columns={timeSplitColumns(timeDays)}
+					readout={timeSplitColumns(timeDays)}
 					readoutName="time-split"
 					readoutMaxShare={data.chart.readout_max_share}
 					restingNote=", the newest day"
@@ -1491,7 +1492,7 @@
 							width={data.console.chart_width}
 							height={220}
 							label="Articles the reading found enough figures of one kind in, against published articles carrying a chart, one point a day over {windowDays} days"
-							columns={yieldColumns}
+							readout={yieldColumns}
 							readoutName="extraction-yield"
 							readoutMaxShare={data.chart.readout_max_share}
 							grid={YIELD_GRID}

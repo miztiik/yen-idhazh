@@ -25,11 +25,9 @@
 		frame,
 		linearAxis,
 		observeWidth,
-		pointerReadout,
-		readoutMarks,
-		type DayReadout,
 		type Margin
 	} from '$lib/charts/frame';
+	import { pointerReadout, readoutMarks, readoutOf } from '$lib/charts/readout';
 	import ChartReadout from './ChartReadout.svelte';
 	import type { RunLength } from '../../routes/console/model/+page.server';
 
@@ -184,32 +182,34 @@
 
 	/** Three marks a run, printed together. The whole point of the shape is that
 	 * the ends move while the middle does not, and reading three marks off one
-	 * column by eye against a shared y axis is what the strip removes. */
-	const columns = $derived<DayReadout[]>(
-		placed.map(({ run, x: at }) => ({
-			x: at,
-			date: `${run.runId} - ${run.items} ${run.items === 1 ? 'summary' : 'summaries'}`,
-			rows: [
-				{ label: 'Shortest', value: `${run.low} words`, colour: 'var(--chart-8)' },
-				{ label: 'Middle', value: `${run.median} words`, colour: 'var(--chart-8)' },
-				{ label: 'Longest', value: `${run.high} words`, colour: 'var(--chart-8)' },
+	 * column by eye against a shared y axis is what the strip removes. It rests on
+	 * the newest run, which is the one an operator came for. */
+	const readout = $derived.by(() => {
+		const words = (value: number) => `${value} words`;
+		return readoutOf({
+			type: 'dateSeries',
+			columns: runs.map(
+				(run) => `${run.runId} - ${run.items} ${run.items === 1 ? 'summary' : 'summaries'}`
+			),
+			series: [
+				{ label: 'Shortest', swatch: 'var(--chart-8)', values: runs.map((run) => run.low), format: words },
+				{ label: 'Middle', swatch: 'var(--chart-8)', values: runs.map((run) => run.median), format: words },
+				{ label: 'Longest', swatch: 'var(--chart-8)', values: runs.map((run) => run.high), format: words },
 				{
 					label: 'Asked for',
-					value:
-						run.askLow === null || run.askHigh === null
-							? 'not recorded'
-							: `${run.askLow} to ${run.askHigh} words`,
-					colour: ''
+					swatch: null,
+					values: runs.map((run) =>
+						run.askLow === null || run.askHigh === null ? null : run.askLow
+					),
+					format: (low: number, column: number) => `${low} to ${runs[column]?.askHigh} words`
 				}
-			]
-		}))
-	);
-	const marks = $derived(readoutMarks(columns));
-	/** The newest run, which is the one an operator came for. */
-	const resting = $derived(columns.length === 0 ? null : columns.length - 1);
-	const at = $derived(selected ?? resting);
-	const readout = $derived(at === null ? null : (columns[at] ?? null));
-	const guide = $derived(selected === null ? null : (columns[selected]?.x ?? null));
+			],
+			notMeasured: 'not recorded',
+			resting: 'last'
+		});
+	});
+	const marks = $derived(readoutMarks(placed.map((mark) => mark.x)));
+	const guide = $derived(selected === null ? null : (placed[selected]?.x ?? null));
 </script>
 
 <div
@@ -217,7 +217,7 @@
 	data-run-lengths="chart"
 	data-run-lengths-runs={runs.length}
 	data-run-domain={runExtent}
-	data-readout-columns={columns.length}
+	data-readout-columns={readout.columns.length}
 >
 	<div use:observeWidth={(next) => (measured = next)}>
 		<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
@@ -371,9 +371,9 @@
 	     console prints - see `ChartReadout.svelte` for the rules it holds. -->
 	<ChartReadout
 		{readout}
+		at={selected}
 		name="run-lengths"
 		maxShare={readoutMaxShare}
-		resting={selected === null}
 		restingNote=", the newest run"
 		hint="Point at a run to read all three marks. Left and Right step through the runs, Escape returns to the newest."
 	/>

@@ -37,9 +37,9 @@
 		dayTicks,
 		frame,
 		linearAxis,
-		observeWidth,
-		pointerReadout
+		observeWidth
 	} from '$lib/charts/frame';
+	import { pointerReadout } from '$lib/charts/readout';
 	import {
 		placeOnYieldAxis,
 		plannedDays,

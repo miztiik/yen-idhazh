@@ -31,11 +31,9 @@
 		dayTicks,
 		frame,
 		linearAxis,
-		observeWidth,
-		pointerReadout,
-		readoutMarks,
-		type DayReadout
+		observeWidth
 	} from '$lib/charts/frame';
+	import { pointerReadout, readoutMarks, readoutOf } from '$lib/charts/readout';
 	import ChartReadout from './ChartReadout.svelte';
 	import type { ThroughputDay } from '$lib/charts/series';
 	import { daysInWindow } from '$lib/charts/viewport';
@@ -205,31 +203,28 @@
 	 * same measurement of the same articles and a reader stepping right means
 	 * the next day. Every series is printed at once, so comparing read against
 	 * write costs no second hover. A day that ran nothing still gets a column,
-	 * or an arrow key would step over it without saying so.
+	 * or an arrow key would step over it without saying so. The strip opens on
+	 * the newest day, so it is never blank and never shifts the page as it fills.
 	 */
-	const columns = $derived<DayReadout[]>(
-		calendar.map((date, index) => {
-			const day = byDate.get(date);
-			return {
-				x: x(index),
-				date: shortDate(date),
-				rows:
-					day === undefined
-						? [{ label: 'nothing ran', value: '', colour: '' }]
-						: drawn.map((series) => ({
-								label: series.label,
-								value: readoutLine(day, series.key),
-								colour: series.colour
-							}))
-			};
+	const readout = $derived(
+		readoutOf({
+			type: 'dateSeries',
+			columns: calendar.map((date) => shortDate(date)),
+			series: drawn.map((series) => ({
+				label: series.label,
+				swatch: series.colour,
+				values: calendar.map((date) => byDate.get(date)?.[series.key].median ?? null),
+				format: (_: number, index: number) => {
+					const day = byDate.get(calendar[index]);
+					return day === undefined ? '' : readoutLine(day, series.key);
+				}
+			})),
+			notMeasured: 'nothing ran',
+			resting: 'last'
 		})
 	);
-	const marks = $derived(readoutMarks(columns));
-	/** The strip opens on the newest day, so it is never blank and never shifts
-	 * the page as it fills. */
-	const resting = $derived(columns.length === 0 ? null : columns[columns.length - 1]);
-	const readout = $derived(selected === null ? resting : (columns[selected] ?? resting));
-	const guide = $derived(selected === null ? null : (columns[selected]?.x ?? null));
+	const marks = $derived(readoutMarks(calendar.map((_, index) => x(index))));
+	const guide = $derived(selected === null ? null : x(selected));
 
 	/** The span, said once, for a reader who cannot see the axis. The axis used
 	 * to carry this as a single string and no per-day label at all. */
@@ -264,7 +259,7 @@
 	<div
 		class="relative mt-4 rounded-md border border-rule bg-surface p-3"
 		data-throughput="chart"
-		data-readout-columns={columns.length}
+		data-readout-columns={readout.columns.length}
 	>
 		<!-- The measured element is this one, not the card: the card's padding and
 		     border are not part of the width the chart draws into. -->
@@ -414,9 +409,9 @@
 			     console prints - see `ChartReadout.svelte` for the rules it holds. -->
 			<ChartReadout
 				{readout}
+				at={selected}
 				name="throughput"
 				maxShare={readoutMaxShare}
-				resting={selected === null}
 				restingNote=", the newest day"
 				hint="Point at a day to read it. Left and Right step through the days, Escape returns to the newest."
 			/>

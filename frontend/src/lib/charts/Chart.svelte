@@ -32,13 +32,8 @@
 	 */
 	import type { EChartsOption } from 'echarts';
 	import { onMount } from 'svelte';
-	import {
-		bandShares,
-		pointerReadout,
-		readoutMarks,
-		type DayReadout,
-		type PlotGrid
-	} from './frame';
+	import { bandShares, type PlotGrid } from './frame';
+	import { pointerReadout, readoutMarks, type Readout } from './readout';
 	import ChartReadout from '../components/ChartReadout.svelte';
 	import type { ChartState, LiveChart } from './engine';
 
@@ -58,7 +53,7 @@
 		width,
 		height,
 		label,
-		columns = [],
+		readout = null,
 		readoutName = '',
 		noReadout = '',
 		readoutMaxShare = 0.33,
@@ -77,11 +72,12 @@
 		height: number;
 		/** What the chart is, for anyone who cannot see it. */
 		label: string;
-		/** One entry per category column, in drawing order. Empty turns the strip
-		 * off, which is right for a chart with one series or with no columns. */
-		columns?: DayReadout[];
+		/** The strip `readoutOf` built, one column per category in drawing order.
+		 * Null turns the strip off, which is right for a chart with one series or
+		 * with no columns. */
+		readout?: Readout | null;
 		readoutName?: string;
-		/** Why this chart has no strip, in words, where `columns` is empty.
+		/** Why this chart has no strip, in words, where `readout` has no column.
 		 * Left blank only where an enclosing element already says it - a card's
 		 * trend line is declared once by the card, not once per card. */
 		noReadout?: string;
@@ -115,7 +111,9 @@
 	/** True once a mark is on screen - the server's SVG, or the engine's first
 	 * draw. Until then the box holds a sentence saying which nothing it is. */
 	const drawn = $derived(svg !== '' || chartState === 'live');
-	const note = $derived(numbersNote ?? (columns.length > 0 ? STRIP_NUMBERS : ''));
+	/** How many columns the strip reads, and zero where the chart has none. */
+	const count = $derived(readout?.columns.length ?? 0);
+	const note = $derived(numbersNote ?? (count > 0 ? STRIP_NUMBERS : ''));
 	/** The option the live chart is holding, so an unchanged one is not handed
 	 * over again the first time the effect runs. */
 	let handed: EChartsOption | null = null;
@@ -129,15 +127,8 @@
 	/** The column a pointer or an arrow key has picked, or null for none. */
 	let selected = $state<number | null>(null);
 
-	const shares = $derived(bandShares(columns.length, measured, grid));
-	const marks = $derived(
-		readoutMarks(columns.map((column, index) => ({ ...column, x: shares[index] ?? 0 })))
-	);
-	/** The newest column, which is the one a reader came for. It is what the strip
-	 * prints before anything is pointed at, so the strip is never blank and never
-	 * changes the room the panel takes as it fills. */
-	const at = $derived(selected ?? (columns.length === 0 ? null : columns.length - 1));
-	const readout = $derived(at === null ? null : (columns[at] ?? null));
+	const shares = $derived(bandShares(count, measured, grid));
+	const marks = $derived(readoutMarks(Array.from({ length: count }, (_, index) => shares[index] ?? 0)));
 	const guide = $derived(selected === null ? null : (shares[selected] ?? null));
 
 	onMount(() => {
@@ -237,12 +228,12 @@
 <figure
 	class="chart"
 	aria-label={label}
-	data-readout-columns={columns.length > 0 ? columns.length : undefined}
-	data-readout-none={columns.length > 0 || noReadout === '' ? undefined : noReadout}
+	data-readout-columns={count > 0 ? count : undefined}
+	data-readout-none={count > 0 || noReadout === '' ? undefined : noReadout}
 	data-readout-fetched={fetched ? 'yes' : undefined}
 	data-chart-drawn={drawn ? 'yes' : 'no'}
 >
-	{#if columns.length > 0}
+	{#if count > 0}
 		<!-- The action goes on the wrapper, never on the SVG: the engine swaps that
 		     SVG out on hydration, so an action bound to it would come away holding
 		     the markup it was attached to. The wrapper takes the focus for the same
@@ -274,9 +265,9 @@
 		</div>
 		<ChartReadout
 			{readout}
+			at={selected}
 			name={readoutName}
 			maxShare={readoutMaxShare}
-			resting={selected === null}
 			{restingNote}
 			{hint}
 		/>

@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 
-import { bandShares, readoutCapStyle } from '../src/lib/charts/frame';
+import { bandShares } from '../src/lib/charts/frame';
+import { readoutCapStyle } from '../src/lib/charts/readout';
 import { stacked } from '../src/lib/charts/stacked';
 import {
 	countersWithoutScores,

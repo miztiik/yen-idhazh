@@ -46,12 +46,10 @@
 		frame,
 		linearAxis,
 		observeWidth,
-		pointerReadout,
-		readoutMarks,
 		thinLabels,
-		type DayReadout,
 		type Margin
 	} from '$lib/charts/frame';
+	import { pointerReadout, readoutMarks, readoutOf } from '$lib/charts/readout';
 	import ChartReadout from './ChartReadout.svelte';
 	import { plural } from '$lib/format';
 	import type { Distribution } from '../../routes/console/model/+page.server';
@@ -227,33 +225,39 @@
 
 	/** The bar's own count and the curve's reading at the same bin. Two series
 	 * against two different axes is the one shape where reading them together by
-	 * eye is hardest, and it is the reason both are drawn at all. */
-	const columns = $derived<DayReadout[]>(
-		bars.map((bar) => ({
-			// The bar's centre, not its right edge: the curve's point sits on the
-			// edge, but a reader aiming at a bar aims at the middle of it.
-			x: (bar.x + bar.pointX) / 2,
-			date: bar.bin.from === 0 ? 'Under 1 second' : `${bar.bin.from} to ${bar.bin.to} seconds`,
-			rows: [
+	 * eye is hardest, and it is the reason both are drawn at all. The curve's
+	 * entry keeps one label on every band - the band's own heading already says
+	 * which second it is done by. The strip rests on the last band, which is the
+	 * tail the panel exists to show. */
+	const readout = $derived(
+		readoutOf({
+			type: 'distribution',
+			columns: bars.map((bar) =>
+				bar.bin.from === 0 ? 'Under 1 second' : `${bar.bin.from} to ${bar.bin.to} seconds`
+			),
+			series: [
 				{
 					label: `${verb.charAt(0).toUpperCase()}${verb.slice(1)} in this band`,
-					value: String(bar.bin.n),
-					colour: 'var(--chart-1)'
+					swatch: 'var(--chart-1)',
+					values: bars.map((bar) => bar.bin.n),
+					format: (value: number) => String(value)
 				},
 				{
-					label: `Done by ${bar.bin.to} s`,
-					value: `${bar.bin.throughPct}%`,
-					colour: 'var(--chart-3)'
+					label: 'Done by then',
+					swatch: 'var(--chart-3)',
+					values: bars.map((bar) => bar.bin.throughPct),
+					format: (value: number) => `${value}%`
 				}
-			]
-		}))
+			],
+			notMeasured: `No ${noun} was ${verb} in this band`,
+			resting: 'last'
+		})
 	);
-	const marks = $derived(readoutMarks(columns));
-	/** The last band, which is the tail the panel exists to show. */
-	const resting = $derived(columns.length === 0 ? null : columns.length - 1);
-	const at = $derived(selected ?? resting);
-	const readout = $derived(at === null ? null : (columns[at] ?? null));
-	const guide = $derived(selected === null ? null : (columns[selected]?.x ?? null));
+	// The bar's centre, not its right edge: the curve's point sits on the edge,
+	// but a reader aiming at a bar aims at the middle of it.
+	const centres = $derived(bars.map((bar) => (bar.x + bar.pointX) / 2));
+	const marks = $derived(readoutMarks(centres));
+	const guide = $derived(selected === null ? null : (centres[selected] ?? null));
 </script>
 
 <div
@@ -261,7 +265,7 @@
 	data-histogram={name}
 	data-histogram-n={times.n}
 	data-hist-domain={histExtent}
-	data-readout-columns={columns.length}
+	data-readout-columns={readout.columns.length}
 	data-model-rule="no"
 	data-model-rule-name={name}
 	data-model-rule-none={noRuleReason}
@@ -422,9 +426,9 @@
 	     console prints - see `ChartReadout.svelte` for the rules it holds. -->
 	<ChartReadout
 		{readout}
+		at={selected}
 		{name}
 		maxShare={readoutMaxShare}
-		resting={selected === null}
 		restingNote=", the slowest band"
 		hint="Point at a band to read its count and how much of the window is done by then. Left and Right step through the bands, Escape returns to the slowest."
 	/>

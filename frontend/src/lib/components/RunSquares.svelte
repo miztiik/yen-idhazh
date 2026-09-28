@@ -17,7 +17,7 @@
 	 * is the column a reader most needs to see picked.
 	 */
 	import type { DaySlots } from '$lib/charts/day-slots';
-	import { pointerReadout, type ReadoutMark } from '$lib/charts/frame';
+	import { pointerReadout, type ReadoutMark } from '$lib/charts/readout';
 	import {
 		axisLabels,
 		cellFor,

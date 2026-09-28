@@ -29,12 +29,9 @@
 		modelRuleTitle,
 		MODEL_RULE_LABEL,
 		noModelRuleNote,
-		notMeasuredRow,
-		observeWidth,
-		pointerReadout,
-		readoutMarks,
-		type DayReadout
+		observeWidth
 	} from '$lib/charts/frame';
+	import { pointerReadout, readoutMarks, readoutOf } from '$lib/charts/readout';
 	import ChartReadout from './ChartReadout.svelte';
 	import { rank, tailSentence, type Rankable, type RankedDisplay } from '$lib/charts/rank';
 	import {
@@ -240,36 +237,36 @@
 
 	/** All three parts of a day, printed together. A stack is the shape where
 	 * reading one band off the middle is hardest, and the two bands that ride on
-	 * top are the ones anybody acts on. */
-	const columns = $derived<DayReadout[]>(
-		split.map((day, index) => ({
-			x: centres[index],
-			date: dayMonth(day.date),
-			rows:
-				day.items > 0
-					? [
-							...PARTS.map((part) => ({
-								label: part.text,
-								value: String(day[part.place]),
-								colour: part.colour
-							})),
-							{ label: 'Summaries that day', value: String(day.items), colour: '' },
-							// The rule is a mark on the plot and a line in the strip, so a reader
-							// stepping the days with an arrow key meets it without a pointer.
-							...(changedOn.has(day.date) ? [MODEL_RULE_ROW] : [])
-						]
-					: [
-							// Four zeros here would say every summary of the day landed
-							// nowhere, and no summary was written at all.
-							notMeasuredRow('Nothing was summarised on this day'),
-							...(changedOn.has(day.date) ? [MODEL_RULE_ROW] : [])
-						]
-		}))
+	 * top are the ones anybody acts on. A day with no summary reads null in every
+	 * part: four zeros there would say every summary of the day landed nowhere,
+	 * and no summary was written at all. */
+	const readout = $derived(
+		readoutOf({
+			type: 'dateSeries',
+			columns: split.map((day) => dayMonth(day.date)),
+			series: [
+				...PARTS.map((part) => ({
+					label: part.text,
+					swatch: part.colour,
+					values: split.map((day) => (day.items > 0 ? day[part.place] : null)),
+					format: (value: number) => String(value)
+				})),
+				{
+					label: 'Summaries that day',
+					swatch: null,
+					values: split.map((day) => (day.items > 0 ? day.items : null)),
+					format: (value: number) => String(value)
+				}
+			],
+			// The rule is a mark on the plot and a line in the strip, so a reader
+			// stepping the days with an arrow key meets it without a pointer.
+			events: { lines: split.map((day) => (changedOn.has(day.date) ? [MODEL_RULE_ROW] : [])) },
+			notMeasured: 'Nothing was summarised on this day',
+			resting: 'last'
+		})
 	);
-	const marks = $derived(readoutMarks(columns));
-	const at = $derived(selected ?? (columns.length === 0 ? null : columns.length - 1));
-	const readout = $derived(at === null ? null : (columns[at] ?? null));
-	const guide = $derived(selected === null ? null : (columns[selected]?.x ?? null));
+	const marks = $derived(readoutMarks(centres));
+	const guide = $derived(selected === null ? null : (centres[selected] ?? null));
 </script>
 
 <section
@@ -310,7 +307,7 @@
 	<div
 		class="mt-4 rounded-md border border-rule bg-surface p-3"
 		data-band-distance
-		data-readout-columns={columns.length}
+		data-readout-columns={readout.columns.length}
 		data-band-domain={tallest}
 		data-model-rule="yes"
 		data-model-rule-name="band-distance"
@@ -505,9 +502,9 @@
 		     console prints - see `ChartReadout.svelte` for the rules it holds. -->
 		<ChartReadout
 			{readout}
+			at={selected}
 			name="band-distance"
 			maxShare={readoutMaxShare}
-			resting={selected === null}
 			restingNote=", the newest day"
 			hint="Point at a day to read all three parts. Left and Right step through the days, Escape returns to the newest."
 		/>

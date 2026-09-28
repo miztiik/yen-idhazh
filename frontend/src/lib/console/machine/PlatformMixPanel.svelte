@@ -91,7 +91,7 @@
 					width={chart.width_px}
 					height={chart.height_px}
 					label="Job placements per day over {fleet.days} days, one bar per kind of machine. One group is one day."
-					columns={fleetStrip}
+					readout={fleetStrip}
 					readoutName="machine-fleet"
 					readoutMaxShare={chart.readout_max_share}
 					{grid}

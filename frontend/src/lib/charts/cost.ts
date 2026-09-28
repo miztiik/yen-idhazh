@@ -17,7 +17,7 @@
 
 import type { EChartsOption } from 'echarts';
 import { dayMonth, shortDate } from '$lib/format';
-import { columnStrip, type DayReadout } from './frame';
+import { readoutOf, type Readout } from './readout';
 import { costOf, money, valueGutter, type CostRate, type RunWork } from './machine';
 import { paint, type ChartToken } from './theme';
 
@@ -243,32 +243,31 @@ export function costChart(
  * tooltip is a fact half the readers never get. The strip is the key too, which
  * is why no chart carrying one draws a legend beside the plot.
  */
-export function costColumns(
-	shapes: CostShapes,
-	shape: CostShape,
-	currency: string
-): DayReadout[] {
-	const rows =
+export function costColumns(shapes: CostShapes, shape: CostShape, currency: string): Readout {
+	const format = (value: number) => money(value, currency, 4);
+	const series =
 		shape === 'running'
 			? [
 					{
 						label: 'Counterfactual so far',
-						colour: `var(${RUNNING_TOKEN})`,
-						value: (index: number) => money(shapes.days[index]?.running ?? 0, currency, 4)
+						swatch: `var(${RUNNING_TOKEN})`,
+						values: shapes.days.map((day) => day.running),
+						format
 					}
 				]
 			: bands(shapes).map((band) => ({
 					label: band.label,
-					colour: `var(${band.token})`,
-					value: (index: number) => {
-						const day = shapes.days[index];
-						return day === undefined ? '-' : money(band.value(day), currency, 4);
-					}
+					swatch: `var(${band.token})`,
+					values: shapes.days.map((day) => band.value(day)),
+					format
 				}));
-	return columnStrip(
-		shapes.days.map((day) => shortDate(day.date)),
-		rows
-	);
+	return readoutOf({
+		type: 'dateSeries',
+		columns: shapes.days.map((day) => shortDate(day.date)),
+		series,
+		notMeasured: 'Nothing was costed on this day',
+		resting: 'last'
+	});
 }
 
 /** What the chart is, for anybody who cannot see the marks.

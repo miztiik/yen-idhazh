@@ -10,10 +10,9 @@ import {
 	linearAxis,
 	logAxis,
 	MARGIN,
-	nearestColumn,
-	type ReadoutMark,
 	SPARSE_COVERAGE
 } from '../src/lib/charts/frame';
+import { nearestColumn, type ReadoutMark } from '../src/lib/charts/readout';
 
 /**
  * The coordinate frame every console chart draws through.
@@ -224,8 +223,8 @@ const LOG_LENGTHS = [120, 340, 900, 1100, 4200, 9000].map(
  * drawing two runs of one day produces, and 250 is exactly halfway between
  * 100 and 400 so the far pair ties as well. */
 const TIED = [0, 100, 100, 100, 250, 250, 400];
-/** What `columnStrip` builds before `Chart.svelte` gives it real shares: every
- * mark at zero, so every distance is equal and only the tie rule decides. */
+/** Every mark at zero, what an engine-drawn chart holds before it is given its
+ * real shares: every distance is equal and only the tie rule decides. */
 const FLAT = [0, 0, 0, 0];
 const SHUFFLED = [400, 0, 250, 100, 900, 100];
 

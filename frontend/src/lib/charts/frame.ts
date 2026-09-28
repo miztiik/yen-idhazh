@@ -19,6 +19,7 @@
 import { scaleLinear, scaleLog } from 'd3-scale';
 
 import { dayMonth, shortDate } from '../format';
+import type { ReadoutLine } from './readout';
 import { grouped } from './series';
 
 export interface Margin {
@@ -516,15 +517,15 @@ function capitalise(text: string): string {
 	return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
-/** The readout row a chart prints on a day the pipeline changed.
+/** The readout line a chart prints on a day the pipeline changed.
  *
- * No colour, because it is an event and not a series - the strip draws a swatch
- * only where a mark on the plot is that colour.
+ * No swatch, because it is an event and not a series - the strip draws a
+ * swatch only where a mark on the plot is that colour.
  */
-export const MODEL_RULE_ROW: ReadoutRow = {
+export const MODEL_RULE_ROW: ReadoutLine = {
 	label: 'How summaries are written',
 	value: 'changed on this day',
-	colour: ''
+	swatch: null
 };
 
 /** The same row, naming what moved where the record named it.
@@ -534,7 +535,7 @@ export const MODEL_RULE_ROW: ReadoutRow = {
  * on one line - five hairlines on one date would be a smear, and five lines in
  * the strip would be the same smear written out.
  */
-export function modelRuleRow(settings: string): ReadoutRow {
+export function modelRuleRow(settings: string): ReadoutLine {
 	if (settings === '') return MODEL_RULE_ROW;
 	return { ...MODEL_RULE_ROW, value: `${settings} changed on this day` };
 }
@@ -718,30 +719,6 @@ export function coverageSentence(
 	return `${days}${count}. The tinted span is days nothing recorded, not quiet days.`;
 }
 
-/** The readout row a chart prints on a column nothing measured.
- *
- * Measured, a pointer on one of those columns selected it and printed a set of
- * blanks or a set of zeros, which is what reads as a broken hover rather than
- * as an empty day. No colour: nothing on the plot is this row's mark.
- */
-export function notMeasuredRow(sentence: string): ReadoutRow {
-	return { label: sentence, value: '', colour: '' };
-}
-
-
-/** How wide the readout strip under a plot may be, as an inline style.
- *
- * The strip sits below the plot, so it cannot cover a mark whatever its width.
- * The cap is what stops it becoming a paragraph: a reader glancing at a chart
- * reads a short column of values, not a block of prose. `share` is
- * `chart.readout_max_share`, and it is a share of the plot rather than a pixel
- * count so the cap holds at every window width.
- */
-export function readoutCapStyle(share: number): string {
-	const capped = Math.min(1, Math.max(0, share));
-	return `max-width: ${(capped * 100).toFixed(2)}%`;
-}
-
 /** Report an element's own width, now and whenever it changes.
  *
  * A Svelte action, so a chart writes `use:observeWidth={...}` and never reads
@@ -757,95 +734,6 @@ export function observeWidth(
 	observer.observe(node);
 	report();
 	return { destroy: () => observer.disconnect() };
-}
-
-/** One mark a readout can land on: where it sits.
- *
- * It carried a second field, `lines`, holding one preformatted sentence per
- * series on the premise that the action would read them out. Nothing ever did.
- * `ChartReadout.svelte` is the live region and it prints `DayReadout.rows`
- * straight, so every hover target on every console chart was built with a
- * string per series that no element and no reader saw. Deleted 2026-09-06
- * after a grep over `frontend/` found one reader, and it was a test asserting
- * the field's own shape.
- */
-export interface ReadoutMark {
-	/** The mark's x in the chart's own pixels. The hit rule is nearest by x. */
-	x: number;
-}
-
-/** One row of a readout strip: a series, what it read, and the line's colour. */
-export interface ReadoutRow {
-	label: string;
-	value: string;
-	/** The series colour, so the strip is also the legend and one fact is drawn
-	 * once. Empty where the chart has no colour to lend. */
-	colour: string;
-}
-
-/** One column of a day chart, as the strip under it prints it. */
-export interface DayReadout {
-	/** The column's x in the chart's own pixels. */
-	x: number;
-	/** The date, already written the way a reader reads it. */
-	date: string;
-	rows: ReadoutRow[];
-}
-
-/** Every chart on the console says whether it has a column to hover, in markup.
- *
- * A chart that shares a column between its marks carries `data-readout-columns`
- * on the element holding both the plot and the strip, and the strip is the only
- * key it draws. A chart with no shared column - a ranked list, one target bar,
- * a flow, a share of one total - carries `data-readout-none` with the reason in
- * words instead.
- *
- * The second attribute is the point of the pair. "This chart has no hover" is a
- * decision somebody took, and an undeclared chart is indistinguishable from one
- * where the readout was forgotten. `console-readout.spec.ts` enumerates every
- * chart on the three routes and fails on any that declares neither.
- */
-
-/** The action's marks: where each column of the strip sits.
- *
- * The strip and the action are built from one array, so the column a pointer
- * lands on and the column the strip prints cannot be two different ones.
- */
-export function readoutMarks(columns: readonly DayReadout[]): ReadoutMark[] {
-	return columns.map((column) => ({ x: column.x }));
-}
-
-/** One series of a strip: what it is, what colour it is drawn in, what it read.
- *
- * `value` is asked per column rather than handed as an array, so a strip cannot
- * be built from a list that is a different length from the labels. */
-export interface StripSeries {
-	label: string;
-	/** The colour the chart draws this series in, so the strip is the key. */
-	colour: string;
-	value: (index: number) => string;
-}
-
-/** A strip for an engine-drawn chart, from its category labels and its series.
- *
- * `x` is left at zero: an engine keeps its plot insets in pixels and the
- * element is fluid, so `Chart.svelte` recomputes every column's share of the
- * measured width through `bandShares`. A pixel written here would be the pixel
- * the server drew at and wrong at every other width.
- */
-export function columnStrip(
-	labels: readonly string[],
-	series: readonly StripSeries[]
-): DayReadout[] {
-	return labels.map((date, index) => ({
-		x: 0,
-		date,
-		rows: series.map((one) => ({
-			label: one.label,
-			value: one.value(index),
-			colour: one.colour
-		}))
-	}));
 }
 
 /** The plot insets an engine-drawn chart leaves around its categories. */
@@ -872,286 +760,4 @@ export function bandShares(count: number, width: number, grid: PlotGrid): number
 		{ length: count },
 		(_, index) => (grid.left + ((index + 0.5) * inner) / count) / width
 	);
-}
-
-/** How far a mark may sit from an evenly spaced one and still count as evenly
- * spaced, as a share of one step.
- *
- * `dayColumns` computes `left + (index * (right - left)) / (columns - 1)`, so
- * two neighbouring columns come out a bit or two of a double apart rather than
- * exactly one step apart. A millionth of a step admits that and admits nothing
- * else: over the widest axis this ships, 366 columns, the arithmetic below can
- * then be out by at most a thousandth of a column, and it checks a whole column
- * either side of its own answer.
- */
-const EVEN_SPACING_SLACK = 1e-6;
-
-/** How a set of marks lies along x, which decides how a pointer is answered. */
-export type MarkSpacing = 'even' | 'ordered' | 'scan';
-
-/** Which of the three rules a set of marks gets, and the rule itself. */
-export interface ColumnLookup {
-	/** `even` where the marks are evenly spaced, so a column is one division;
-	 * `ordered` where they only ascend, so it is a binary search; `scan` where
-	 * they do neither. Published so a test can say which rule ran, rather than
-	 * only that the answer came out right - an implementation that quietly
-	 * walked every mark every time would pass a parity test in silence. */
-	rule: MarkSpacing;
-	/** The column a pointer at this x means, or null where there are none. */
-	at: (x: number) => number | null;
-}
-
-function spacingOf(xs: readonly number[]): MarkSpacing {
-	for (let index = 0; index < xs.length; index += 1) {
-		// A mark that is not a real number, or one sitting before the mark before
-		// it, is outside what either fast rule can promise. Neither happens on a
-		// console chart and both are cheap to hand back to the walk.
-		if (!Number.isFinite(xs[index])) return 'scan';
-		if (index > 0 && xs[index] < xs[index - 1]) return 'scan';
-	}
-	if (xs.length < 2) return 'ordered';
-	const first = xs[0];
-	const step = (xs[xs.length - 1] - first) / (xs.length - 1);
-	// Every mark at one x, which is what `columnStrip` builds before an
-	// engine-drawn chart is given its real shares. The search answers it.
-	if (!(step > 0)) return 'ordered';
-	const slack = step * EVEN_SPACING_SLACK;
-	for (let index = 1; index < xs.length - 1; index += 1) {
-		if (Math.abs(xs[index] - (first + index * step)) > slack) return 'ordered';
-	}
-	return 'even';
-}
-
-/** The first mark at or past `x`, looking only at the first `to` of them. */
-function firstAtOrPast(xs: readonly number[], x: number, to: number): number {
-	let low = 0;
-	let high = to;
-	while (low < high) {
-		const middle = (low + high) >> 1;
-		if (xs[middle] < x) low = middle + 1;
-		else high = middle;
-	}
-	return low;
-}
-
-/** Which column a pointer at an x means, worked out once for one set of marks.
- *
- * The walk this replaces measured every mark on every `pointermove`, so a chart
- * with a column a day over a ninety-day window did ninety subtractions to
- * answer a question a dragging thumb asks many times a second, and it did them
- * again for a move that did not change the answer. The layout is settled once
- * instead, when the marks change:
- *
- * - **Evenly spaced** - every day chart on the console, because `dayColumns`
- *   and `bandShares` both divide the plot evenly. The column is then one
- *   division, and only its two neighbours are measured to settle a pointer
- *   sitting on a boundary.
- * - **Ascending but not evenly spaced** - a chart placing its columns by a
- *   value rather than by a count, and any strip whose marks share an x. A
- *   binary search finds the first mark at or past the pointer and measures the
- *   pair around it.
- * - **Neither** - the walk, unchanged. Nothing on the console produces this,
- *   and a rule that guessed here would be a rule nobody could check.
- *
- * All three answer the same, including the tie: where two marks are the same
- * distance away the lower index wins, because the strip prints one column and
- * a chart with two runs of one day at one x needs the pointer and the strip to
- * agree which. `frame.spec.ts` holds every rule to the walk, at every mark,
- * every midpoint and every duplicate.
- */
-export function nearestColumn(marks: readonly ReadoutMark[]): ColumnLookup {
-	const xs = marks.map((mark) => mark.x);
-	const count = xs.length;
-	const rule = spacingOf(xs);
-
-	/** The nearest of a run of candidates, lowest index on a tie. The walk's own
-	 * comparison, so a fast rule that narrows the field cannot change the pick. */
-	const best = (x: number, from: number, to: number): number => {
-		let at = from;
-		let gap = Math.abs(xs[from] - x);
-		for (let index = from + 1; index <= to; index += 1) {
-			const distance = Math.abs(xs[index] - x);
-			if (distance < gap) {
-				gap = distance;
-				at = index;
-			}
-		}
-		return at;
-	};
-
-	if (count === 0) return { rule, at: () => null };
-
-	if (rule === 'even') {
-		const first = xs[0];
-		const step = (xs[count - 1] - first) / (count - 1);
-		return {
-			rule,
-			at: (x: number) => {
-				// The walk keeps its first candidate against every distance it cannot
-				// beat, so an x that is not a number picks the first column.
-				if (!Number.isFinite(x)) return 0;
-				// `ceil(t - 0.5)` is the nearest column with an exact halfway point
-				// sent down, which is the walk's tie rule.
-				const guess = Math.ceil((x - first) / step - 0.5);
-				const near = Math.min(count - 1, Math.max(0, guess));
-				return best(x, Math.max(0, near - 1), Math.min(count - 1, near + 1));
-			}
-		};
-	}
-
-	if (rule === 'ordered') {
-		return {
-			rule,
-			at: (x: number) => {
-				if (!Number.isFinite(x)) return 0;
-				const past = firstAtOrPast(xs, x, count);
-				if (past === 0) return 0;
-				// A second search rather than a walk back over the duplicates: a strip
-				// whose marks all share an x is the case that would make that walk the
-				// whole array again.
-				const firstOf = (index: number) => firstAtOrPast(xs, xs[index], index + 1);
-				if (past === count) return firstOf(count - 1);
-				return xs[past] - x < x - xs[past - 1] ? past : firstOf(past - 1);
-			}
-		};
-	}
-
-	return { rule, at: (x: number) => best(x, 0, count - 1) };
-}
-
-export interface ReadoutOptions {
-	marks: ReadoutMark[];
-	/** The width the chart drew at, so a client x can be scaled into chart
-	 * pixels even in the frame before the resize observer has reported. */
-	width: number;
-	/** Which mark is selected now, or null for none. */
-	onSelect: (index: number | null) => void;
-	/** The mark a second figure has picked, where two figures share one pick.
-	 * It is taken as this figure's own position without being reported back, so
-	 * an arrow key steps on from the day the reader is on rather than from the
-	 * day this figure last saw. Left out, the action keeps its own position. */
-	selected?: number | null;
-	/** Told of a deliberate pick - a step key, or a tap or click that finished -
-	 * and never of a hover or the start of a touch. A figure that scrolls another
-	 * into view does it here, so a page scroll that starts on the chart cannot
-	 * drag the other figure along with it. */
-	onPick?: (index: number) => void;
-}
-
-/** Report which mark the reader is pointing at, or has stepped to.
- *
- * A Svelte action, so a chart writes `use:pointerReadout={...}` and never reads
- * the DOM itself. One `pointermove` and `pointerdown` stream covers mouse, pen
- * and touch, which an SVG `<title>` never did: a `<title>` needs a hover, so on
- * a phone the numbers in it did not exist. The `<title>` stays as the mark's
- * accessible name, and nothing this action reports is needed to read the chart.
- *
- * The `<svg>` itself takes the focus, not its marks. A tab stop per point is a
- * trap on a plot that draws two and a half thousand of them. An engine-drawn
- * chart hands its wrapping element instead: the engine owns everything inside
- * it and swaps the prerendered SVG out on hydration, so an action bound to the
- * SVG would come away with the markup it was attached to.
- */
-export function pointerReadout(
-	node: SVGSVGElement | HTMLElement,
-	options: ReadoutOptions
-): { update: (next: ReadoutOptions) => void; destroy: () => void } {
-	let current = options;
-	let at: number | null = options.selected ?? null;
-	let column = nearestColumn(options.marks);
-
-	const select = (next: number | null) => {
-		if (next === at) return;
-		at = next;
-		current.onSelect(next);
-	};
-
-	/** Nearest mark by x, never by straight-line distance. Two articles of the
-	 * same length sit on top of each other, and a reader pointing at a column
-	 * means the column rather than whichever of them is nearer the pointer. */
-	const nearest = (clientX: number): number | null => {
-		if (current.marks.length === 0) return null;
-		const rect = node.getBoundingClientRect();
-		if (rect.width === 0) return null;
-		return column.at(((clientX - rect.left) * current.width) / rect.width);
-	};
-
-	const track = (event: PointerEvent) => select(nearest(event.clientX));
-
-	/** A touch ends the moment the thumb lifts, and a lift raises this event.
-	 * Clearing there would blank the readout before it could be read, so only a
-	 * mouse leaving the plot clears it. */
-	const leave = (event: PointerEvent) => {
-		if (event.pointerType === 'mouse') select(null);
-	};
-
-	const enter = () => {
-		if (at === null && current.marks.length > 0) select(0);
-	};
-
-	const away = () => select(null);
-
-	/** A press that lifted where it landed. A touch that turned into a page
-	 * scroll is cancelled and never gets here, which is the whole difference
-	 * between a tap and the start of a touch. */
-	const tap = (event: MouseEvent) => {
-		const index = nearest(event.clientX);
-		if (index === null) return;
-		select(index);
-		current.onPick?.(index);
-	};
-
-	const step = (event: KeyboardEvent) => {
-		const last = current.marks.length - 1;
-		if (last < 0) return;
-		const from = at ?? 0;
-		if (event.key === 'ArrowLeft') select(Math.max(0, from - 1));
-		else if (event.key === 'ArrowRight') select(Math.min(last, from + 1));
-		else if (event.key === 'Home') select(0);
-		else if (event.key === 'End') select(last);
-		else if (event.key === 'Escape') select(null);
-		else return;
-		event.preventDefault();
-		// The chart consumed the key. The compression scatter sits inside the
-		// viewport control, which pans on the same two arrows - left unstopped,
-		// one step through the marks also moved the window under them and left
-		// the readout pointing at a mark that had gone.
-		event.stopPropagation();
-		if (at !== null) current.onPick?.(at);
-	};
-
-	// One list, attached and removed from the same entries, so the two halves
-	// cannot drift. The node is an `<svg>` on a hand-written chart and a `<div>`
-	// on an engine-drawn one; a union of two element types has two incompatible
-	// `addEventListener` overload sets, so the listeners go on the base
-	// interface both of them implement.
-	const events: EventTarget = node;
-	const bound: [string, EventListener][] = [
-		['pointermove', track as EventListener],
-		['pointerdown', track as EventListener],
-		['pointerleave', leave as EventListener],
-		['focusin', enter],
-		['focusout', away],
-		['keydown', step as EventListener],
-		['click', tap as EventListener]
-	];
-	for (const [type, handler] of bound) events.addEventListener(type, handler);
-
-	return {
-		update(next: ReadoutOptions) {
-			// The layout of the marks is settled here rather than on every pointer
-			// move, which is the whole of what this action costs a dragging thumb.
-			if (next.marks !== current.marks) column = nearestColumn(next.marks);
-			current = next;
-			// Another figure moved the shared pick. Take it as this figure's own,
-			// silently: reporting it back would be the pick answering itself.
-			if (next.selected !== undefined) at = next.selected;
-			// The window moved, so the mark this index named may be gone. Holding
-			// the index would print one article's numbers under another's mark.
-			if (at !== null && at > next.marks.length - 1) select(null);
-		},
-		destroy() {
-			for (const [type, handler] of bound) events.removeEventListener(type, handler);
-		}
-	};
 }
