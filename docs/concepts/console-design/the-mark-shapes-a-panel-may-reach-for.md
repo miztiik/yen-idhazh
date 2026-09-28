@@ -1,8 +1,11 @@
 # The mark shapes a panel may reach for
 
-**Last Updated**: 2026-09-23
+**Last Updated**: 2026-09-27
 
-Five named shapes and three panel-level controls. Each is here because a reader
+Nine chart types, the house style they draw with, five named mark shapes and
+three panel-level controls. **A panel is built from one chart type, and a mark
+shape is drawn inside a type** - a range mark is a row of a ranked list, a tile
+strip is what the `tileStrip` type lays out. Each shape is here because a reader
 was doing arithmetic the drawing should have done for them, and each carries what
 it cannot say - a shape reused where it does not fit is a shape a reader stops
 trusting.
@@ -18,6 +21,99 @@ What a figure may say in words is [../console-design.md](../console-design.md).
 | Span track | one reading against the window it sits in | when in the window each end fell |
 | Tile strip | a reading that is quiet on most days | how big the reading was on the day it fired |
 | Reserved box | a panel whose rows have not arrived | which of the four nothings it is holding - the page says that once, above |
+
+## The chart types a panel is built from
+
+**This table is the list a new type is added to.** A panel that needs a type the
+table lacks asks Susan, and her ruling adds the row - its name, its question,
+when it is wrong, who ruled and what draws it - before the type is built. That is
+a design call, not an escalation. The code lives in `frontend/src/lib/charts/d3/`,
+one module a type named exactly as below, and
+[../../../frontend/tests/chart-vocabulary.spec.ts](../../../frontend/tests/chart-vocabulary.spec.ts)
+holds this table and that directory in step both ways: a module nobody listed and
+a listed type with no module both fail the build.
+
+| # | Type | The question it answers | Wrong when | Ruled by | Drawn by |
+| --- | --- | --- | --- | --- | --- |
+| 1 | `rankedList` | which one is worst | the question is what is changing - that is `dateSeries` | Susan, 2026-09-26 | `frontend/src/lib/components/RankedList.svelte` |
+| 2 | `dateSeries` | what is changing | the set is not ordered by time, so a trend would invite a cause nothing measured | Susan, 2026-09-26 | `DateSeries.svelte` |
+| 3 | `distribution` | how bad does it get | there are fewer readings than its floor - a histogram of eight readings is a claim | Susan, 2026-09-26 | `Distribution.svelte` |
+| 4 | `partsOfOne` | what is this one thing made of | the parts do not add up to the row - then each part is a bracket from the origin | Susan, 2026-09-26 | `PartsOfOne.svelte` |
+| 5 | `tileStrip` | was it quiet, and which day did it fire | the reading has a useful value axis every day - that is `dateSeries` | Susan, 2026-09-26 | `TileStrip.svelte` |
+| 6 | `paired` | what did the change move | a side of a row made fewer attempts than the rate floor - that row draws nothing and says why | Susan, 2026-09-26 | `frontend/src/lib/components/SwapDots.svelte` |
+| 7 | `overlapTimeline` | what was happening at the same time | the reader wants totals - a timeline is the worst shape there is for a sum | Susan, 2026-09-26 | `frontend/src/routes/console/RunTimelinePanel.svelte` |
+| 8 | `flow` | where did they go, and where did they leave | never - where the panel is narrow the same call returns the stepped list | Susan, 2026-09-26 | `Flow.svelte` |
+| 9 | `pairedScatter` | do these two move together | it has fewer readings or fewer subjects than its two floors - and it never draws a trend line | Susan, 2026-09-26 | `PairedScatter.svelte` |
+
+Five rules hold every type.
+
+- **A type is a pure module that returns its geometry or `null`.** Never an empty
+ geometry: that draws an empty frame, the one picture in which a quiet pipeline
+ and a broken fetch look the same. On `null` the component draws the empty state
+ it was handed, with the sentence that says which nothing it is.
+- **Every number a type uses is an argument, and a floor has no default.** No
+ module under `frontend/src/lib` reads `config/` while the page runs, so the panel
+ reads the knob and passes it in. A default inside the module would be a second
+ copy of the knob, and the one nobody updates.
+- **A type whose drawing already exists keeps its component.** `rankedList`,
+ `paired` and `overlapTimeline` are drawn by the component the table names, and
+ the change that first draws one of them from its geometry moves that
+ component's props onto the geometry type in the same commit.
+- **Susan's current advice is to avoid** a pie, a donut over anything but a single
+ completed share, a gauge, a dial, a radar, a treemap, a word cloud, a bubble,
+ anything in three dimensions, and a bar of a rate over fewer attempts than the
+ rate floor, because a listed type answers each of those questions better.
+ Changing that advice is her call.
+- **A panel may offer more than one view of its data** where Susan rules it needs
+ one: radio buttons between types over the same query result, never a drop-down,
+ and a switch that redraws and fetches nothing.
+
+## The house style every chart type draws with
+
+| # | Module | What it owns | Drawn by |
+| --- | --- | --- | --- |
+| 1 | `scale.ts` | the band, linear and time scales, each reading its range from the frame. The time scale is UTC wherever it runs | - |
+| 2 | `axis.ts` | a value axis - its ticks, their words and the room between labels. A date axis is `dayTicks` in `frontend/src/lib/charts/frame.ts` and has no second home | - |
+| 3 | `ordered-colour.ts` | the ordered ramp, which is one token in steps cut at the quantiles of the whole record; the reserved grey; and the hatch for a known thing with no reading | - |
+| 4 | `motion.ts` | one duration and one easing from the motion tokens, and reduced motion as a hard stop | - |
+| 5 | `empty.ts` | the drawing of each nothing a chart can be in. The words are `frontend/src/lib/console/waiting.ts`'s, and it mints none | `EmptyState.svelte` |
+
+**On this console d3 is a maths library, not a drawing library.** Scales and path
+generators only; Svelte owns the page. A `select()` inside a component has left
+the house style, and so has a hex colour: colour comes from `--chart-1` to
+`--chart-8` and the tint tokens, as a custom-property reference.
+
+**A chart with nothing to draw keeps the chart's height and says which nothing it
+is.** A wait is the reserved box below, shimmer and all, and says nothing. Every
+other nothing is a box of the same height with one sentence in it:
+
+| State | What happened | What the box says |
+| --- | --- | --- |
+| Quiet | the window was read and held nothing | the quiet sentence, naming the preset that would reach a day with rows |
+| Missing | the pipeline never wrote those days | the missing sentence, so a gap is not read as a dip |
+| Too few | the rows arrived, fewer than the chart's floor | the floor and the count - `Only 42 of the 160 readings this chart needs are in this window, so it is not drawn.` |
+| Unreachable | a fetch did not come back | its sentence, on the warn tint - the only one of the five that is a fault |
+
+**A failed fetch prints its sentence inside the box here**, which is not what the
+reserved box below does. On the house style each panel asks the query door for
+its own slice, and the door answers with the date it could not reach, so the
+failure belongs to the panel rather than to the page. A panel still drawn the old
+way keeps the reserved box's rule until it moves.
+
+## The packages a chart type may import, and what each costs
+
+| # | Package | For | Status |
+| --- | --- | --- | --- |
+| 1 | `d3-array` | binning, quantiles, tick steps | installed |
+| 2 | `d3-scale` | every scale in `scale.ts`, and the ordered ramp's cuts | installed |
+| 3 | `d3-shape` | the lines, the stack and the flow's ribbons | added 2026-09-27 at 3.2.0, with `d3-path` 3.1.0 and both type packages: 417,659 bytes of `node_modules`. The four generators the types use weigh 2,403 bytes gzipped (6,819 minified), and a route ships them only once it draws a type |
+| 4 | `d3-sankey` | - | **considered for `flow` and not taken** - see the design rationale |
+| 5 | `d3-axis` | - | **refused.** It would fork the measured label-thinning rule `dayTicks` owns |
+| 6 | `d3-selection`, `d3-transition` | - | **refused.** Svelte owns the page |
+| 7 | `d3-scale-chromatic` | - | **refused.** A library ramp collides with the confidence ramp |
+
+The umbrella `d3` package re-exports all four refused ones, so the test refuses it
+with them.
 
 ## A typical reading and the worst one are one mark, not two bars
 
@@ -370,6 +466,56 @@ measurement inside a user-interface row was refused: a user-interface row is not
 a measurement harness, and a number measured on a laptop's loopback would be the
 wrong number twice over.
 
+**The vocabulary shipped before any panel used it.** A vocabulary and its first
+panel in one change cannot be reverted apart, and the vocabulary is the half more
+likely to need editing. What that costs: until a panel draws each type, its
+component is checked by rendering it on the server against a geometry the test
+built, not against a real ledger. Authority: Susan, 2026-09-26.
+
+**Four d3 packages are refused by name, so nobody re-argues them.** Each would
+fork a rule this console already owns: the axis package the measured
+label-thinning in `dayTicks`, the selection and transition packages Svelte's
+ownership of the page, and the colour-ramp package the eight chart tokens.
+Authority: Susan, 2026-09-26.
+
+**The hatch's angle is passed in, and has no default.** A pure module cannot read
+config, and a knob that nothing reads is a knob whose substitution test cannot
+pass, so `console.absent_hatch_degrees` is minted by the change that first draws
+the hatch, beside its reader, and `absentHatch` takes the angle and the stripe
+spacing as arguments. The hatch means "a known thing with no reading" and nothing
+else. **The run timeline's hatched overrun means "time counted twice"** - the
+same texture for a different fact - and that clash is named here so the change
+that moves that panel resolves it rather than copies it. The stripes sit on the
+page surface and never over a grey fill, because flat grey already means "not
+recorded" and a hatch on grey would read the same. Authority: Fowler, Susan and
+Carmack, 2026-09-27.
+
+**The flow's layout is written here; d3-sankey was considered and not taken.**
+d3-sankey 0.12.3 is its newest release, from 2019. It depends on `d3-array` 1 to 2
+and `d3-shape` 1, so it installs a second, older copy of each beside the ones this
+console pins - measured 2026-09-27 in a scratch install, `d3-array` 2.12.1,
+`d3-shape` 1.3.7 and `d3-path` 1.0.9, 445,686 bytes of `node_modules` - and its
+two generators weigh 2,825 bytes gzipped. What it solves is crossings, merges and
+loops, which a straight funnel cannot have, and its layout spreads each column's
+spare height between the nodes in it, which moves the main line off the shared
+top edge the funnel is read along. The funnel's own cases - a drop of zero, a
+stage that lets more through than the next one counts, a narrow column - are ours
+to handle whichever layout draws it. **What writing it costs:** about 200 lines of
+code this project owns, its types included, and the tests for them. A flow that needs a general layout
+takes d3-sankey then. The bundle gate weighs pages and data files and not
+scripts, so it cannot see a package either way; the measure is the flow built with
+and without it and the compressed sizes compared. Authority: Fowler, Susan and
+Carmack, 2026-09-27.
+
+**A floor missed is "too few", never "refused".** "Refused" and `unreachable`
+already mean a fetch that did not come back, and a floor missed is not a failure:
+the rows are real and there are too few of them for the shape to mean anything.
+So it has its own word in `waiting.ts` beside the other nothings, and its sentence
+names the floor from the value the panel passed in. `paired` applies its floor
+row by row and side by side, so one thin row draws nothing and says why while the
+rest still draw, and it is null only when every row missed. Authority: Fowler,
+Susan and Carmack, 2026-09-27.
+
 ## See also
 
 - [../console-design.md](../console-design.md) - what a figure may say, and in what words.
@@ -378,3 +524,4 @@ wrong number twice over.
 - [../design-system.md](../design-system.md) - the tokens, ramps, motion set and sufficiency gate.
 - [../../architecture/publishing/telemetry-series.md](../../architecture/publishing/telemetry-series.md) - the grain every figure was measured at.
 - [../config/appearance.md](../config/appearance.md) - `console.*`, the knobs these shapes read.
+- [../../../frontend/tests/chart-vocabulary.spec.ts](../../../frontend/tests/chart-vocabulary.spec.ts) - holds the chart-type table and `frontend/src/lib/charts/d3/` in step, and walks every import for a refused package.

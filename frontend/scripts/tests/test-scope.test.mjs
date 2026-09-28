@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
-import { CONSOLE_MODEL_LABELS_PAGE } from '../doc-test-inputs.ts';
+import { CHART_VOCABULARY_PAGE, CONSOLE_MODEL_LABELS_PAGE } from '../doc-test-inputs.ts';
 import { FRONTEND_GROUPS, groupedSpecs, groupForSpec } from '../test-groups.ts';
 import { changedPaths, ciAnswer, selectPaths, selectionForChange } from '../test-scope.ts';
 
@@ -97,6 +97,17 @@ test('a document a test reads is that test input, not documentation', () => {
 	// On the branch, not after the merge: the spec that reads the page is the one
 	// an edit to it can break.
 	assert.equal(answer.console, true);
+});
+
+test('the chart vocabulary page buys the logic spec that reads it, and no browser', () => {
+	const page = CHART_VOCABULARY_PAGE;
+	assert.ok(existsSync(join(FRONTEND, '..', page)), `${page} is gone, so the spec that reads it cannot pass`);
+	assert.deepEqual(selectPaths([page]).groups, ['logic']);
+	assert.equal(selectPaths([page]).reasons[0].reason, 'documentation a test reads');
+	const answer = ciAnswer([page], true);
+	assert.equal(answer.code, true);
+	assert.equal(answer.browser, false);
+	assert.equal(answer.console, false);
 });
 
 test('specific backend modules select existing module and integration tests', () => {
