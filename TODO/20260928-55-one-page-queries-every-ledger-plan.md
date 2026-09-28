@@ -74,6 +74,16 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 
 **Why row 1 is in this plan at all.** The span control is shared by every console route, so shrinking it is not this page's change - but this page is the first surface where the control sits beside a second control on the same row, and the owner ruled the shape here (2026-09-28). It ships first so rows 5 to 7 build against the final control rather than against one that moves under them.
 
+**What can start, and what waits, measured 2026-09-28 by plan 51's owner.** This plan is AUTHOR-AND-STOP until the owner authorizes it. Once authorized:
+
+| # | Rows | Can start | Why |
+| --- | --- | --- | --- |
+| 1 | 1 and 2 | After plan 52's first row merges | They wait on no other plan's data. But plan 52's row titled **Each route gets its own console file, gate drivers and test expectations** moves `console.panel_groups` and the other console keys out of `config/appearance.json` into one file a route, and rewrites `console-nav.spec.ts` and `console-window.spec.ts`. Run beside it, both rows here edit keys while they move. That row depends on nothing |
+| 2 | 3 | After plan 51's row 9 merges | Its dependency, plan 51's row 7, merged on 2026-09-28 (#1154). Plan 51's row titled **The door keeps what it fetched for the page's life, and says how far a ledger reaches** edits the same files - `ledger.ts`, `slice-reader.ts`, `engine.ts` - and puts every buffer the door registers under `door/`, which section 2.6's seal needs. That row needs only row 7, so it is ready now |
+| 3 | 4, then 5 to 8 | After packed files are on main | Row 4 extends plan 51's row 3, which publishes packed files, and none exist: `state/compact/` is absent on main, and plan 50 ships every packing task report-only. The three console ledgers also wait on plan 50's row titled **The three ledgers the console's routes read become parquet**, not started, and on a person turning their packing on. Rows 5 to 8 wait on row 4 |
+
+**So rows 1 to 3 can run as soon as those two rows merge, and rows 4 to 8 wait on plan 50 and on a person's call to turn packing on.**
+
 ## 2. The contracts
 
 ### 2.1 The address, the tab, and the route id
@@ -228,10 +238,24 @@ Four controls, strongest first. Row 3 proves each one rather than assuming it.
 
 | # | Control | What it stops |
 | --- | --- | --- |
-| 1 | Only buffers the door registered are visible. `registerFileBuffer` only; **`registerFileURL` is never called** | The statement cannot reach a file the door did not fetch |
-| 2 | On every connection, before any statement: `SET enable_external_access = false`, `SET autoinstall_known_extensions = false`, `SET autoload_known_extensions = false`, then `SET lock_configuration = true` | `read_csv('https://...')`, `COPY ... TO`, `ATTACH`, `INSTALL`, `LOAD`, and the statement turning any of them back on |
-| 3 | The page refuses, before the engine sees it: more than one statement; anything that is not `SELECT`, `WITH ... SELECT`, `DESCRIBE`, `SUMMARIZE` or `EXPLAIN`; and a statement longer than `console.explorer_query_max_chars` | A write, a schema change, and a paste large enough to stop the tab responding |
-| 4 | `connect-src 'self'` plus the configured asset base, already computed in `frontend/asset-base.js` from `visuals.asset_base_url` | Anything that got past 1 to 3 reaching a third party |
+| 1 | Only buffers the door registered are visible, and **every one sits under one directory, `door/`**. `registerFileBuffer` only; **`registerFileURL` is never called** | The statement cannot reach a file the door did not fetch |
+| 2 | Once per engine, before this page's first statement: `LOAD parquet`, then `SET allowed_directories = ['door/']`, then `SET enable_external_access = false`, `SET autoinstall_known_extensions = false`, `SET autoload_known_extensions = false`, and last `SET lock_configuration = true`. **The order is part of the control**: the engine refuses `allowed_directories` once access is off, and loads no add-on after it | `read_csv('https://...')`, `ATTACH`, `INSTALL`, `LOAD`, a file outside `door/`, and the statement turning any of them back on |
+| 3 | The page refuses, before the engine sees it: more than one statement; anything that is not `SELECT`, `WITH ... SELECT`, `DESCRIBE`, `SUMMARIZE` or `EXPLAIN`; and a statement longer than `console.explorer_query_max_chars` | A write - including a `COPY` into `door/`, which control 2 does not stop - a schema change, and a paste large enough to stop the tab responding |
+| 4 | `connect-src 'self'`, the configured asset base, and the origin of `ledger.engine_extension_repository`, where the engine fetches its parquet add-on (plan 51 deviation 15), all computed in `frontend/asset-base.js` | Anything that got past 1 to 3 reaching a third party |
+
+**Measured 2026-09-28 by plan 51's owner, and controls 1 to 3 are written to it.** In Node, on the engine build plan 51 ships - DuckDB v1.5.4 inside `@duckdb/duckdb-wasm` 1.33.1-dev57.0 - one fresh engine a case, reading one parquet file from `tests/fixtures/ledger-door/`. A browser runs the same engine code; row 3's own seal test, in a browser, is the check.
+
+| # | What ran | What happened |
+| --- | --- | --- |
+| 1 | The four settings as this section first wrote them, then a read | `read_parquet` does not exist. The parquet reader is an add-on this build downloads, and autoload is off |
+| 2 | `LOAD parquet`, the four settings, then a read | Refused: `enable_external_access = false` blocks every registered buffer, registered before the seal or after it |
+| 3 | `LOAD parquet`, `allowed_directories = ['door/']`, the four settings | A buffer under `door/` reads. A buffer outside it, `read_csv('https://...')`, `LOAD httpfs`, `ATTACH` and turning access back on are all refused |
+| 4 | `allowed_directories` set after access is off | Refused by the engine, so control 2's order is the only one that works |
+| 5 | Everything but `enable_external_access = false` | Buffers read, but `LOAD httpfs` succeeds and `read_csv('https://...')` sends a request. That one setting is the seal |
+| 6 | `COPY (SELECT 1) TO 'door/x.csv'` under order 3 | Not refused by the settings: it reached the engine's file layer. Control 3 is what refuses it |
+| 7 | Sealed from one connection, then read from a second connection on the same engine | The second is sealed too. The settings belong to the engine, not to a connection |
+
+**The seal belongs to the engine, so it reaches every panel in the tab.** `engine.ts` starts one engine a tab, and moving between console pages keeps it. Once this page has sealed it, every console panel opened afterwards in that tab reads through the sealed engine, so every buffer the door registers - `slice()`'s as well as `ask()`'s - sits under `door/`. Plan 51's row titled **The door keeps what it fetched for the page's life, and says how far a ledger reaches** puts them there; row 3 builds on it, and row 3's oracle checks that a `slice()` still answers after this page has sealed the engine.
 
 **The engine is not pinned to an exact version, and the seal is held by a test rather than by a pin.** `frontend/package.json` takes `@duckdb/duckdb-wasm` at a caret range, the way every other dependency here is taken, so an upgrade is a normal upgrade. The hostile-query set below runs against whatever version is installed, so a release that changed one of these settings turns that test red on the pull request that raised the version - which is where somebody wants to find out, and which a pin would only have delayed. **If a release ever removes one of them, the answer is the previous working version, not a text rule over the statement**: a text rule is a denylist, and a denylist over a language with function syntax is not a boundary.
 
@@ -247,6 +271,8 @@ SET enable_external_access = true
 SELECT 1; DROP TABLE "item-health"
 CREATE TABLE t AS SELECT 1
 SELECT * FROM "item-health"    -- refused: no columns named
+SELECT * FROM read_parquet('elsewhere.parquet')
+COPY (SELECT 1) TO 'door/x.csv'    -- control 2 lets this through; control 3 refuses it
 ```
 
 ### 2.7 Every cell is text, and nothing on this page can change that
@@ -434,7 +460,7 @@ The owner's reference is a query workbench screenshot and its HTML, kept at `tes
 
 - **Files touched:**
   - `frontend/src/lib/data/ledger.ts` (`ask`, `AskOptions`, `AskResult`, `Column`, `FetchCost`; `LedgerName` widens; **the archive address is composed here too, and nowhere else**)
-  - `frontend/src/lib/data/engine.ts` (the four `SET` statements and the connection's read-only open; still the only importer of the engine)
+  - `frontend/src/lib/data/engine.ts` (`LOAD parquet`, the allowed directory and the four settings, in the order section 2.6 gives, and the connection's read-only open; still the only importer of the engine)
   - `frontend/src/lib/data/statement.ts` (new: is this one read-only statement? - pure, no engine import, so it is unit-testable on its own)
   - `frontend/src/lib/data/slice.ts` (the tier order in section 2.5 gains the writers' files and the repository copy, reading `RawDayIndex`)
   - `config/idhazh.json`, `backend/idhazh/contracts/knobs/ledger.py` (`archive_base_url`, shipping empty), `frontend/asset-base.js` (`connect-src` gains that origin, computed from the same value), `frontend/svelte.config.js` if the allow-list is assembled there
@@ -445,7 +471,7 @@ The owner's reference is a query workbench screenshot and its HTML, kept at `tes
   - `backend/tests/contracts/test_frontend_index_shapes.py` (the hand copy gains `RawDayIndex`)
   - `frontend/tests/chart-vocabulary.spec.ts` (the single-engine walk still finds one importer)
 - **Acceptance gates:** local `npm --prefix frontend run test:changed -- --list` then the selected checks; `pytest backend/tests/contracts -q`. CI runs the full suite. No browser smoke - this row draws nothing.
-- **Oracle:** **the seal holds and the answer is the answer.** Over the fixture ledger, on recorded responses: each of the nine hostile statements in section 2.6 returns `refused` and no network request leaves the page; a well-formed statement over two ledgers returns exactly the rows the same query returns from the same files read in Python; a date present in both a packed day and a writer file is read once; the unpacked day returns its rows; a zero-row span returns `quiet`; a date named by no index returns `unreachable`; and an answer past `maxRows` returns `capped` with `maxRows` rows. It cannot settle whether an operator can write a useful query; row 5 and the owner do.
+- **Oracle:** **the seal holds and the answer is the answer.** Over the fixture ledger, on recorded responses: each hostile statement in section 2.6 returns `refused` and no network request leaves the page; a `slice()` still answers after the page has sealed the engine; a well-formed statement over two ledgers returns exactly the rows the same query returns from the same files read in Python; a date present in both a packed day and a writer file is read once; the unpacked day returns its rows; a zero-row span returns `quiet`; a date named by no index returns `unreachable`; and an answer past `maxRows` returns `capped` with `maxRows` rows. It cannot settle whether an operator can write a useful query; row 5 and the owner do.
 - **Decisions:**
 
   | # | Decision | Authority |
@@ -454,7 +480,7 @@ The owner's reference is a query workbench screenshot and its HTML, kept at `tes
   | 2 | **The seal is settings and registration, never a text rule over SQL.** A denylist over a language with function syntax is not a boundary. Control 3 in section 2.6 exists to give a fast, readable refusal, not to be the boundary | Carmack, with Andre |
   | 3 | **The engine takes a caret range, not a pin, and the seal test is the guard.** A pin would only delay the day a setting changed; the hostile-query set fails on the upgrade that changed it, in the pull request that raised the version. Where a release removes a setting the answer is the previous working version | Carmack, on the owner's ruling of 2026-09-28 |
   | 3a | **The seal is four lines in one file, so opening it is cheap - and it is opened by a config value, never by a control on the page.** A switch a reader can reach is a switch a shared address finds already on, in a browser holding the operator's own origin. A config value is a diff a person reads, the same reason `model_server.base_url` is committed rather than environmental (Guardrail #11) | Fowler and Carmack |
-  | 3b | **What the seal costs, named rather than implied.** Multi-step work is unaffected - a `WITH` clause does everything a temporary table would. Extension loading costs nothing the page reaches for, because parquet reading is built into the browser engine. **The one real loss is joining a ledger against a file of your own**, and the seal is not what would have to move for that: the page reads the file with the browser's file API and hands the engine one more buffer. It is in hard scope - out with its price | Carmack |
+  | 3b | **What the seal costs, named rather than implied.** Multi-step work is unaffected - a `WITH` clause does everything a temporary table would. **The parquet reader is not built into the engine: it is an add-on the engine downloads** from `ledger.engine_extension_repository` (plan 51 deviation 15), so the seal loads it first, and no add-on loads after the lock. **The one real loss is joining a ledger against a file of your own**, and the seal is not what would have to move for that: the page reads the file with the browser's file API and hands the engine one more buffer. It is in hard scope - out with its price | Carmack; the add-on corrected by plan 51's owner, measured 2026-09-28 (section 2.6) |
   | 4 | **`ask` rather than `query`.** The module is the query door; a `query()` inside it puts one word in two jobs | CLAUDE.md section 0b |
   | 5 | **`LedgerName` widens to the whole registry, and a test binds it both ways.** A ledger declared and not published answers `missing` by name, which is more useful than being absent from the list | Fowler |
   | 6 | **The statement is checked by a pure module with no engine import.** It is the piece most likely to be wrong and the piece cheapest to test exhaustively | Fowler |
@@ -469,7 +495,7 @@ The owner's reference is a query workbench screenshot and its HTML, kept at `tes
   | 2 | Keep the structured predicate and add operators until it can express a join | It becomes a query language of our own, badly, and an operator has to learn it | Months, and the result is worse than SQL | Owner, 2026-09-28 |
   | 3 | Parse the statement ourselves and allow only what we understand | A SQL parser is a dependency or a mistake. The engine's own settings are the boundary and they are enforced inside the engine | A parser dependency, and a false sense of a boundary | Carmack |
   | 4 | Read only packed files, as panels do | The answer stops two days short of now, which is the question an operator most often opens this page to ask | Zero; costs the page its point | Owner, 2026-09-28 |
-  | 5 | **Open the engine's own URL access** - `enable_external_access` on, the remote-file extension loaded - so a statement can name `https://...` directly | It is the one thing the whole seal exists to prevent, and it buys nothing decision 8 does not already buy. Loading a remote-file extension also means fetching executable code from a third party into the engine, which is a bigger step than reading a data file. **What the reader would lose by not having it**: writing a URL inside the statement rather than picking dates and letting the door choose the address - a keystroke, not a capability | Zero to write, and it converts every one of the nine hostile statements from refused to allowed | Carmack and Andre; ESCALATE trigger 2 |
+  | 5 | **Open the engine's own URL access** - `enable_external_access` on, the remote-file extension loaded - so a statement can name `https://...` directly | It is the one thing the whole seal exists to prevent, and it buys nothing decision 8 does not already buy. Loading a remote-file extension also means fetching executable code from a third party into the engine, which is a bigger step than reading a data file. **What the reader would lose by not having it**: writing a URL inside the statement rather than picking dates and letting the door choose the address - a keystroke, not a capability | Zero to write, and it turns the hostile statements the settings refuse from refused to allowed | Carmack and Andre; ESCALATE trigger 2 |
   | 6 | Ship more than ninety days to the site so the repository is never needed | It grows the site with the archive forever, and the same bytes are already served from the repository at no cost to the 1 GB cap | Zero now; costs the cap later | Carmack |
 
 ---
@@ -679,10 +705,10 @@ The owner's reference is a query workbench screenshot and its HTML, kept at `tes
 
 ## Dependent plans
 
-- [`20260924-51-console-fetches-and-draws-its-own-data-plan.md`](20260924-51-console-fetches-and-draws-its-own-data-plan.md). Row 3 here waits on its row titled **The query door module and its two entry points**; row 4 here waits on its row titled **The three ledgers the console reads are published**. Row 5 here edits that plan's ESCALATE trigger 1 wording. Nothing in that plan waits on this one.
-- [`20260924-50-idhazh-gardener-plan.md`](20260924-50-idhazh-gardener-plan.md). Row 4 here waits on its row titled **One compaction task a ledger, two compact periods, and the diagrams move into the page**, and reads the `RawDayIndex` its row titled **The index and watermark shapes are declared** already delivered (#1136). The more ledgers that plan migrates, the more of the picker works; **no row here blocks on all of them**.
+- [`20260924-51-console-fetches-and-draws-its-own-data-plan.md`](20260924-51-console-fetches-and-draws-its-own-data-plan.md). Row 3 here waits on its row titled **The query door module and its two entry points**; row 4 here waits on its row titled **The three ledgers the console reads are published**. Row 3 here also runs after its row titled **The door keeps what it fetched for the page's life, and says how far a ledger reaches**, which edits the same files and puts the door's buffers under `door/`. Row 5 here edits that plan's ESCALATE trigger 1 wording. Nothing in that plan waits on this one.
+- [`20260924-50-idhazh-gardener-plan.md`](20260924-50-idhazh-gardener-plan.md). Row 4 here waits on its row titled **One compaction task a ledger, two compact periods, and the diagrams move into the page**, and reads the `RawDayIndex` its row titled **The index and watermark shapes are declared** already delivered (#1136). The more ledgers that plan migrates, the more of the picker works; **no row here blocks on all of them**. **No packed file is on main on 2026-09-28**: that plan ships every packing task report-only, and turning one on is a person's call under it, so row 4 here waits on that call as well as on a migration.
 - [`20260911-26-retire-prerender-plan.md`](20260911-26-retire-prerender-plan.md). Delivered (#613, #614, #645, #649). Its ruling keeps the six prerendered routes and its section 6 is the executable price of reversing that. **This plan neither reverses it nor depends on it**: the new route simply never prerenders, the way the two dated routes already do. **It also inherits one contradiction and does not repair it** - telemetry-intent N4 says the existing prerendered routes come off, and plan 26 ruled they stay. That disagreement is older than this plan and belongs to whichever of the two moves next.
-- [`20260926-52-fifty-panels-move-and-six-projections-go-plan.md`](20260926-52-fifty-panels-move-and-six-projections-go-plan.md), a placeholder. It moves fifty panels onto the query door. It gains `ask()` from row 3 here and loses nothing to it; the two can run beside each other.
+- [`20260926-52-fifty-panels-move-and-six-projections-go-plan.md`](20260926-52-fifty-panels-move-and-six-projections-go-plan.md). It moves fifty panels onto the query door, in thirteen rows. It gains `ask()` from row 3 here and loses nothing to it. **Its first row moves the console keys that rows 1 and 2 here edit** into one file a route, so those two run after it; the rest of the two plans can run beside each other.
 
 ## See also
 
