@@ -23,15 +23,23 @@ const frontend = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'
 /** One import a compiled module names, and the compiled copy it names instead. */
 export type Rewrite = readonly [from: string, to: string];
 
+/** Compile one component and return the path of the module it was written to. */
+export interface ServerCompile {
+	(file: string, name: string, rewrite: readonly Rewrite[]): Promise<string>;
+	/** The CSS each compiled component emitted, by name. Markup rendered
+	 * without it has none of the component's own styles, so a check that
+	 * measures a box has to mount the two together. */
+	readonly css: ReadonlyMap<string, string>;
+}
+
 /** A compiler that writes every component it is handed into `directory`.
  *
  * `file` is relative to `frontend/`. The module is written as
  * `<name>.server.mjs`, so a sibling's rewrite can name it before it exists.
  */
-export function serverCompiler(
-	directory: string
-): (file: string, name: string, rewrite: readonly Rewrite[]) => Promise<string> {
-	return async function compiled(file, name, rewrite) {
+export function serverCompiler(directory: string): ServerCompile {
+	const css = new Map<string, string>();
+	const compiled = async (file: string, name: string, rewrite: readonly Rewrite[]): Promise<string> => {
 		const filename = path.join(frontend, file);
 		const pre = await preprocess(readFileSync(filename, 'utf8'), vitePreprocess(), { filename });
 		const result = compile(pre.code, { generate: 'server', filename, name });
@@ -40,6 +48,8 @@ export function serverCompiler(
 		let code = result.js.code;
 		for (const [from, to] of rewrite) code = code.split(`'${from}'`).join(`'${to}'`);
 		writeFileSync(module, code, 'utf8');
+		css.set(name, result.css?.code ?? '');
 		return module;
 	};
+	return Object.assign(compiled, { css });
 }
