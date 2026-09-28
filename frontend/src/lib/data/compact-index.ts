@@ -1,0 +1,121 @@
+/**
+ * Can this build read a compact index, and what does the index say?
+ *
+ * `state/compact/<ledger>/index/<period>.json` is written by the gardener's
+ * compaction task, one writer per ledger, and declared once, as `CompactIndex`
+ * and `CompactEntry` in `backend/idhazh/contracts/ledger_index.py`. This module
+ * is the frontend's hand copy of those two shapes, the stamp this build reads,
+ * and the guard that decides whether a fetched index may be acted on.
+ * `backend/tests/contracts/test_frontend_index_shapes.py` holds the copy and the
+ * stamp in step with the Pydantic originals.
+ *
+ * **An index at this build's stamp or an older one is read; a newer one is
+ * refused.** The gardener rewrites an index at its own wake, not in the commit
+ * that moves the shape, so a build that demanded its own stamp exactly would
+ * blank every panel from a shape change until the next wake. A newer stamp is a
+ * shape this build has never seen, so it is refused rather than guessed at - the
+ * rule the backend's own reader applies to a ledger file.
+ *
+ * **The guard checks what the door acts on, and nothing else.** An older index
+ * may carry a field this build no longer declares, and that is not a reason to
+ * refuse it. The ledger, the period and every entry's `covers`, `rows` and
+ * `bytes` are checked in full, because file selection trusts them and a `covers`
+ * becomes part of a file's address.
+ *
+ * Imports nothing tied to one environment, so a Node test loads it as it is.
+ */
+
+import type { LedgerName } from './slice-shapes';
+
+/** The `CompactIndex` stamp this build reads: `CompactIndex.schema_version()`. */
+export const COMPACT_INDEX_STAMP = '2026-09-27';
+
+/** How much time one compact file covers. Also the directory name. */
+export const COMPACT_PERIODS = ['daily', 'monthly'] as const;
+
+export type Period = (typeof COMPACT_PERIODS)[number];
+
+/** One compact file named in a `CompactIndex`: what it covers, its rows, its size. */
+export interface CompactEntry {
+	covers: string;
+	rows: number;
+	bytes: number;
+}
+
+/** Which compact files exist in one period of one ledger. */
+export interface CompactIndex {
+	version?: string;
+	ledger: LedgerName;
+	period: Period;
+	entries: CompactEntry[];
+}
+
+/** A stamp as the contract spells one: a UTC day, to the minute or second on a same-day revision. */
+const STAMP = /^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}(?::\d{2})?)?$/;
+
+/** What `covers` looks like in each period. */
+const COVERS: Record<Period, RegExp> = {
+	daily: /^\d{4}-\d{2}-\d{2}$/,
+	monthly: /^\d{4}-\d{2}$/
+};
+
+/** Why an index was not acted on, in words the console can print. */
+export type IndexRefusal =
+	| { reason: 'newer'; stamp: string }
+	| { reason: 'unreadable'; detail: string };
+
+/** The index, or why this build will not act on it. */
+export type IndexReading = { index: CompactIndex } | { refused: IndexRefusal };
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isCount(value: unknown): value is number {
+	return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
+}
+
+/** The first entry that breaks the shape, named, or null when every entry holds it. */
+function brokenEntry(entries: unknown[], period: Period): string | null {
+	let previous = '';
+	for (const [at, entry] of entries.entries()) {
+		if (!isRecord(entry)) return `entry ${at} is not an object`;
+		const { covers, rows, bytes } = entry;
+		if (typeof covers !== 'string' || !COVERS[period].test(covers)) {
+			return `entry ${at} covers ${JSON.stringify(covers)}, which is not a ${period} period`;
+		}
+		if (!isCount(rows)) return `entry ${at} (${covers}) has rows ${JSON.stringify(rows)}`;
+		if (!isCount(bytes)) return `entry ${at} (${covers}) has bytes ${JSON.stringify(bytes)}`;
+		if (covers <= previous) return `entry ${at} (${covers}) does not come after ${previous}`;
+		previous = covers;
+	}
+	return null;
+}
+
+/**
+ * Whether a parsed index can be acted on, for the ledger and period it was
+ * fetched as.
+ *
+ * A missing `version` reads as this build's own stamp, as the contract stamps a
+ * document that omits one.
+ */
+export function readIndex(value: unknown, ledger: LedgerName, period: Period): IndexReading {
+	const unreadable = (detail: string): IndexReading => ({ refused: { reason: 'unreadable', detail } });
+	if (!isRecord(value)) return unreadable('it is not a JSON object');
+	const stamp = value.version ?? COMPACT_INDEX_STAMP;
+	if (typeof stamp !== 'string' || !STAMP.test(stamp)) {
+		return unreadable(`its version ${JSON.stringify(stamp)} is not a stamp`);
+	}
+	if (stamp > COMPACT_INDEX_STAMP) return { refused: { reason: 'newer', stamp } };
+	if (value.ledger !== ledger) return unreadable(`it names the ledger ${JSON.stringify(value.ledger)}`);
+	if (value.period !== period) return unreadable(`it names the period ${JSON.stringify(value.period)}`);
+	if (!Array.isArray(value.entries)) return unreadable('it has no list of entries');
+	const broken = brokenEntry(value.entries, period);
+	if (broken !== null) return unreadable(broken);
+	const entries = value.entries.map((entry: { covers: string; rows: number; bytes: number }) => ({
+		covers: entry.covers,
+		rows: entry.rows,
+		bytes: entry.bytes
+	}));
+	return { index: { version: stamp, ledger, period, entries } };
+}
