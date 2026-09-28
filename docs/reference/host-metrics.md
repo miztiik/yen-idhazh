@@ -1,6 +1,6 @@
 # What the pipeline records about the machine it ran on
 
-**Last Updated**: 2026-09-23
+**Last Updated**: 2026-09-27
 
 Every column of the host fingerprint, what it means, and what it is for. One row
 a job, by every job that draws its own runner - written in two halves, one at job
@@ -53,7 +53,11 @@ wants a gigabyte and an idle machine. What the job cost - its wall clock, and
 what opening the weights cost before the first item - is only knowable once the
 job is over. So `idhazh job-clock` writes a second row of the same shape into the
 same segment, carrying those two cells and repeating nothing, and
-`day_shards.settled_rows` takes the union at read time. **A job that dies between the two leaves a usable half-row with two
+`day_shards.settled_rows` takes the union at read time. The console's build-time
+readers take the same union through `mergedDayShards`, from 2026-09-27, so a job is
+one row on the Hardware route too
+([../architecture/publishing/console-payloads.md](../architecture/publishing/console-payloads.md)).
+**A job that dies between the two leaves a usable half-row with two
 empty cells**, which is the degrade path rather than a failure - and an empty
 cell is what says the reading was not taken, where a zero would claim a job that
 cost nothing.

@@ -28,7 +28,13 @@
  */
 
 import { join } from 'node:path';
-import { dayShardFiles, LEDGER_WINDOW_DAYS, readDayShards, STATE_ROOT } from './payload';
+import {
+	dayShardFiles,
+	HOST_FINGERPRINT_KEY,
+	LEDGER_WINDOW_DAYS,
+	mergedDayShards,
+	STATE_ROOT
+} from './payload';
 
 /** Which workflow job produced a row. `ServerJob` in `contracts/base.py`. */
 export const SERVER_JOB = [
@@ -141,7 +147,11 @@ function serverJob(cell: string | undefined): ServerJob | null {
 	return SERVER_JOB.find((job) => job === named) ?? null;
 }
 
-/** The newest `days` day files of the machine record, as typed rows.
+/** The newest `days` day files of the machine record, as typed rows, one a job.
+ *
+ * A job writes its row in two halves - the machine before its heaviest step,
+ * its clock after the last item - and they arrive here as one row, so what a
+ * job cost sits beside the machine it ran on (`mergedDayShards`).
  *
  * A row with no run id, no fingerprint, or a job this build cannot place is
  * skipped rather than refused: the page degrades to the processor name the
@@ -152,7 +162,7 @@ export function hostFingerprints(
 	days: number = LEDGER_WINDOW_DAYS,
 	root: string = STATE_ROOT
 ): HostFingerprint[] {
-	const table = readDayShards(join(root, 'host-fingerprint'), days);
+	const table = mergedDayShards(join(root, 'host-fingerprint'), HOST_FINGERPRINT_KEY, days);
 	const found: HostFingerprint[] = [];
 	for (const row of table.rows) {
 		const runId = text(row.run_id);

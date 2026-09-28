@@ -1,6 +1,6 @@
 # How the machine's work is drawn, and what may not be pooled
 
-**Last Updated**: 2026-09-23
+**Last Updated**: 2026-09-27
 
 The Hardware route and the run timeline draw one machine's work. One measurement
 shapes all of it: **a run does not get one machine.** Measured 2026-09-17 over
@@ -127,6 +127,19 @@ The chart rules these panels obey are
  largest set that clears a pixel there. **The fold bar equals the kinds it
  folded, in the window and on every day of it**, and the page carries both
  figures so it can be held to them agreeing.
+- **The colour ramp's own `Other machines` group never takes one of those named
+ slots.** It is the machines the page ran out of colours for - the ramp folds by
+ key order, not by rarity - so it is not a kind of machine, and it always joins
+ the last bar and keeps the ramp's colour there. Given a slot, it ranked second on
+ the committed record on 2026-09-27 and took the three rarest kinds into itself:
+ one bar of 68 of 260 placements, drawn as the second most common machine. **The
+ sentence above the plot says what the last bar holds, in two parts**, because
+ only one of them is rare: the kinds too rare for a bar of their own, and the
+ machines the page has no colour left for. Each is named once, off the open span's
+ own placements, and a machine whose name also has a bar is called another one.
+ The count it prints is the number of names it lists. Ruled 2026-09-27: Jony on
+ the bar, breaking a tie between Fowler for it and Susan against; Susan on the
+ words.
 - **None of the empty states is tinted and none gets the reserved box.** The
  route is prerendered and reads `state/` at build time, so there is no fetch,
  no waiting state and no unreachable state. Every nothing here is settled at
@@ -338,6 +351,18 @@ counts are bars, below it the same counts are a list, and both say the same
 thing. What would settle it is a seventh machine kind arriving - every share
 drops, the rarest gets rarer and the bar rises - so the number is re-derived
 from the committed rows rather than argued with.
+
+**On the dark theme the machine-kinds chart fails the two-second check, and
+ships.** Its first two bars, AMD EPYC 7763 and AMD EPYC 9V74, hold chart stops 3
+and 6, and in the dark theme those two look the same: 2.3 apart on the CIEDE2000
+scale, where about 2 is the smallest difference most people can see and every
+other pair of the first seven stops is 9.3 or more. Since the ramp's own
+`Other machines` group moved to the last bar, the two stand side by side in 8 of
+the 11 day groups over 30 days, measured 2026-09-27, and a glance reads them as
+one kind. The readout names every bar and the order never changes, so a reader
+who looks loses nothing. The fault is in the ramp the whole site shares, so it
+is fixed there, in its own change, and not in this panel: it is defect 37 in the
+known-defects plan. Susan, 2026-09-27.
 
 **The machine card's two readings are lengths rather than sentences, and that is
 what carries the two-second check.** `32 MiB` beside `260 MiB` on two cards is a
