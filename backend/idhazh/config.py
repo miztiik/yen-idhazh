@@ -210,8 +210,9 @@ _WINDOW_FLOORS: Final[Mapping[str, str]] = MappingProxyType(
     }
 )
 
-#: The one task that keeps several series of one tree family at different ages.
-SERIES_TASK: Final = "telemetry-aggregate"
+#: The name of a task's series that its own `window` must equal: the rows kept
+#: one by one, which every task that keeps series has.
+FULL_GRAIN: Final = "full-grain"
 
 
 @dataclass(frozen=True, slots=True)
@@ -225,13 +226,24 @@ class _SeriesFloor:
     ledger: LedgerName | None
 
 
-#: Every series `telemetry-aggregate` may keep, and the knob each one must reach.
-_SERIES_FLOORS: Final[Mapping[str, _SeriesFloor]] = MappingProxyType(
+#: Every task that keeps several series of one tree family at different ages,
+#: each series it may keep, and the knob each one must reach.
+_SERIES_FLOORS: Final[Mapping[str, Mapping[str, _SeriesFloor]]] = MappingProxyType(
     {
-        "full-grain": _SeriesFloor("item_health_full_grain_months", LedgerName.ITEM_HEALTH),
-        "public-copy": _SeriesFloor("public_telemetry_keep_months", None),
-        "aggregate": _SeriesFloor(
-            "item_health_aggregate_keep_months", LedgerName.ITEM_HEALTH_SUMMARY
+        "telemetry-aggregate": MappingProxyType(
+            {
+                FULL_GRAIN: _SeriesFloor("item_health_full_grain_months", LedgerName.ITEM_HEALTH),
+                "public-copy": _SeriesFloor("public_telemetry_keep_months", None),
+                "aggregate": _SeriesFloor(
+                    "item_health_aggregate_keep_months", LedgerName.ITEM_HEALTH_SUMMARY
+                ),
+            }
+        ),
+        "scores": MappingProxyType(
+            {
+                FULL_GRAIN: _SeriesFloor("scores_full_grain_months", LedgerName.SCORES),
+                "archive": _SeriesFloor("score_archive_keep_months", LedgerName.SCORE_ARCHIVE),
+            }
         ),
     }
 )
@@ -452,37 +464,56 @@ def _knob_window(months: int | None) -> Window:
 
 
 def _refuse_a_series_under_its_floor(tasks: Mapping[str, TaskPolicy], app: AppConfig) -> None:
-    """Series belong to one task, and each must outlive the knob it covers."""
+    """Series belong to the tasks that keep several at once, and each outlives its knob.
+
+    A task that keeps series keeps its own `window` equal to its full-grain one,
+    so one number is never spelled twice with room to disagree.
+    """
     for name, policy in tasks.items():
         carries = isinstance(policy, RetentionPolicy) and bool(policy.series)
-        if name != SERIES_TASK and carries:
+        if name not in _SERIES_FLOORS and carries:
             raise ValueError(
                 f"config/{GARDENER_TASKS_DIR}/{name}.json keeps series. Only "
-                f"{SERIES_TASK} keeps several series at once"
+                f"{', '.join(sorted(_SERIES_FLOORS))} keep several series at once"
             )
-    keeper = tasks.get(SERIES_TASK)
-    if keeper is None:
-        return
-    if not isinstance(keeper, RetentionPolicy) or not keeper.series:
-        raise ValueError(
-            f"config/{GARDENER_TASKS_DIR}/{SERIES_TASK}.json keeps no series. It is the "
-            "retention task that keeps several, so it names each one with its window"
-        )
-    for series, window in sorted(keeper.series.items()):
-        floor = _SERIES_FLOORS.get(series)
-        if floor is None:
+    for keeper_name, floors in _SERIES_FLOORS.items():
+        keeper = tasks.get(keeper_name)
+        if keeper is None:
+            continue
+        where = f"config/{GARDENER_TASKS_DIR}/{keeper_name}.json"
+        if not isinstance(keeper, RetentionPolicy) or not keeper.series:
             raise ValueError(
-                f"config/{GARDENER_TASKS_DIR}/{SERIES_TASK}.json keeps a series called "
-                f"{series}, which covers no observability key. It keeps "
-                f"{', '.join(sorted(_SERIES_FLOORS))}"
+                f"{where} keeps no series. It is a retention task that keeps several, so it "
+                "names each one with its window"
             )
-        months: int | None = getattr(app.observability, floor.knob)
-        if not _reaches(window, _knob_window(months)):
+        for series, window in sorted(keeper.series.items()):
+            floor = floors.get(series)
+            if floor is None:
+                raise ValueError(
+                    f"{where} keeps a series called {series}, which covers no observability "
+                    f"key. It keeps {', '.join(sorted(floors))}"
+                )
+            months: int | None = getattr(app.observability, floor.knob)
+            if not _reaches(window, _knob_window(months)):
+                raise ValueError(
+                    f"{where} keeps its {series} series {_spelled(window)} and "
+                    f"observability.{floor.knob} is "
+                    f"{'never delete' if months is None else f'{months} months'}, so the "
+                    "series would delete what that knob keeps"
+                )
+        full_grain = keeper.series.get(FULL_GRAIN)
+        if full_grain != keeper.window:
             raise ValueError(
-                f"config/{GARDENER_TASKS_DIR}/{SERIES_TASK}.json keeps its {series} series "
-                f"{_spelled(window)} and observability.{floor.knob} is "
-                f"{'never delete' if months is None else f'{months} months'}, so the "
-                "series would delete what that knob keeps"
+                f"{where} keeps its window {_spelled(keeper.window)} and its {FULL_GRAIN} "
+                f"series {'none' if full_grain is None else _spelled(full_grain)}. The window "
+                f"is the {FULL_GRAIN} series, so the two are one number"
+            )
+        if keeper.max_deletes_per_run is not None:
+            raise ValueError(
+                f"{where} names a ceiling of {keeper.max_deletes_per_run}. It summarises a "
+                "whole month before that month's files go, and a ceiling could stop it part "
+                "way through one, so the next pass would summarise what was left over the "
+                "summary of the whole month. It carries none"
             )
 
 
@@ -498,11 +529,12 @@ def _old_tree_floor(ledger: LedgerName, tasks: Mapping[str, TaskPolicy]) -> Wind
     from idhazh.ledger.paths import STATE_DIRNAME
 
     old_tree = f"{STATE_DIRNAME}/{ledger.value}"
-    for policy in tasks.values():
+    for name, policy in tasks.items():
         if not isinstance(policy, RetentionPolicy) or old_tree not in (policy.owns or ()):
             continue
+        floors = _SERIES_FLOORS.get(name, {})
         for series, window in (policy.series or {}).items():
-            floor = _SERIES_FLOORS.get(series)
+            floor = floors.get(series)
             if floor is not None and floor.ledger is ledger:
                 return window
         return policy.window

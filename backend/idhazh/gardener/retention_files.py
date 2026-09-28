@@ -118,6 +118,7 @@ def take_files(
     collection: str,
     first_kept: date | None,
     after_delete: Callable[[Path], None] = _nothing,
+    before_delete: Callable[[Aged], None] | None = None,
 ) -> Pass:
     """Delete each aged file in the order given, up to the declaration's ceiling.
 
@@ -125,6 +126,11 @@ def take_files(
     the day before it and says which days the window held. Every file handed in
     is already older than that, so the window only confirms it. None is a window
     that keeps every day, which takes nothing and reads nothing.
+
+    `before_delete` runs ahead of each delete of a live pass and may refuse it by
+    raising: a task that writes a summary before the files it replaces go writes
+    it there, so a summary that will not read back stops the pass with those
+    files still in place.
     """
     if first_kept is None:
         return Pass(
@@ -152,6 +158,8 @@ def take_files(
         )
 
     def delete(item: Aged) -> None:
+        if before_delete is not None:
+            before_delete(item)
         item.path.unlink()
         after_delete(item.path)
 

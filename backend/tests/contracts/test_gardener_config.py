@@ -231,11 +231,36 @@ def test_a_series_is_held_to_the_knob_it_covers(
     assert refusal in refused(a_garden(tmp_path, telemetry_aggregate=declared))
 
 
-def test_only_the_series_task_keeps_series(tmp_path: Path) -> None:
+def test_only_the_tasks_that_keep_several_series_carry_series(tmp_path: Path) -> None:
     declared = fixture("traces", series={"full-grain": MONTHS})
-    assert "Only telemetry-aggregate keeps several series" in refused(
+    assert "Only scores, telemetry-aggregate keep several series" in refused(
         a_garden(tmp_path, traces=declared)
     )
+
+
+def test_a_task_that_keeps_series_keeps_its_window_as_its_full_grain_series(
+    tmp_path: Path,
+) -> None:
+    """One number spelled twice is two numbers the day somebody edits one of them."""
+    declared = fixture("telemetry-aggregate", window={"unit": "months", "value": 15})
+    assert "The window is the full-grain series" in refused(
+        a_garden(tmp_path, telemetry_aggregate=declared)
+    )
+
+
+def test_the_score_archive_series_is_held_to_the_knob_it_covers(tmp_path: Path) -> None:
+    """The archive is kept for ever while `observability.score_archive_keep_months` is null."""
+    kept = fixture("scores")["series"] | {"archive": MONTHS}
+    message = refused(a_garden(tmp_path, scores=fixture("scores", series=kept)))
+    assert "archive series 14 months" in message and "never delete" in message
+
+
+@pytest.mark.parametrize("name", ["scores", "telemetry-aggregate"])
+def test_a_task_that_summarises_whole_months_carries_no_ceiling(tmp_path: Path, name: str) -> None:
+    """A ceiling could stop part way through a month, and the next summary would be partial."""
+    declared = fixture(name, max_deletes_per_run=50)
+    message = refused(a_garden(tmp_path, **{name.replace("-", "_"): declared}))
+    assert f"{name}.json names a ceiling of 50" in message
 
 
 def test_a_compaction_is_named_for_its_ledger(tmp_path: Path) -> None:
