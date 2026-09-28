@@ -290,7 +290,9 @@ test.describe('the four states, before the engine is needed', () => {
 		);
 		expect(result).toEqual({ state: 'unreachable', rows: [], at: '2026-08-30' });
 		expect(engine.opened()).toBe(0);
-		expect(warned.join('\n')).toContain('its entry says 13567');
+		const month = fixtureEntries('monthly').find((entry) => entry.covers === '2026-08');
+		expect(month, 'the fixture names no 2026-08 month file').toBeDefined();
+		expect(warned.join('\n')).toContain(`arrived as ${(month?.bytes ?? 0) - 1} bytes and its entry says ${month?.bytes}`);
 	});
 
 	test('an index is asked for fresh, and a data file under the version its entry names', async () => {

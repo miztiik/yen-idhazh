@@ -6,12 +6,20 @@
 `backend/tests/contracts/test_ledger_door_fixture.py` checks that every entry's
 `rows` and `bytes` match the file the backend reader opens.
 
-The files that hold rows were written by the backend door, `persist()` at the
-compact tier, from validated `HostFingerprintRow` rows, the way the gardener's
-compaction writes them - so each envelope names `gardener.tasks.compaction` as
-its producer. The zero-row day went through the same writer, because `persist()`
-writes nothing for no rows. The indexes were built from what landed on disk and
-serialized by `CompactIndex` itself.
+Every row was first filed raw by the backend door, `persist()`, under the identity
+of the job that measured it. Each compact file was then built the way the
+gardener's compaction builds one: the raw files read back with `load_stored()`,
+settled with `settle_rows()` by the key the ledger's day tree declares, and
+written by `persist_period()`. So every row keeps the identity its raw file gave
+it - its `covers` cell is the day it was filed under, even inside the month file
+- and each envelope names `gardener.tasks.compaction` as its producer. The month
+was absorbed from daily files of its own two days. The zero-row day went through
+`persist_period()` with no rows. The indexes were built from what landed on disk
+and serialized by `CompactIndex` itself.
+
+Nothing in the pipeline writes this ledger's compact tier yet: `host-fingerprint`
+is still a day tree, and the compaction's door table does not name it. This is
+the tier as the compaction writes one for a ledger that does.
 
 What the days exercise:
 
