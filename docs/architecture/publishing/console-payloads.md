@@ -1,6 +1,6 @@
 # Console Payloads
 
-**Last Updated**: 2026-09-27
+**Last Updated**: 2026-09-28
 The operator console reads ten datasets. Nine of them come from `state/`,
 which is never served, so each one crosses a trust boundary and each crossing
 needs a contract (Guardrail #11). This page is the list. The machine-readable copy is
@@ -321,14 +321,19 @@ and left the wave count at three.
 
 ### The band is drawn once, in `console/+layout.svelte`
 
-The title, the strip and the band are the console shell and they live in one
-component beside the load that fetches them. Each route renders its control and
-its panels inside it. Three routes each drawing their own band is three copies
-of one verdict, and the day two of them disagreed about which route is worst
-there would be no way to say which was right.
+The title, the strip, the sentence that dates the record and the band are the
+console shell, and they live in one component beside the load that fetches them.
+The strip carries the days control: the shell draws it and the route holds it,
+handing its window up through `window-slot.ts`. Each route renders its panels
+inside the shell. Three routes each drawing their own band is three copies of
+one verdict, and the day two of them disagreed about which route is worst there
+would be no way to say which was right.
 
-The order on the page is title, strip, band, control, content, and it did not
-move: the shell holds the operator surface and each route's panels sit one
+The order down the page is title, strip, completeness sentence, band, the
+sentence about the span, the jump links, content. `console-band.spec.ts` holds
+it, and
+[what-sits-above-every-console-route.md](what-sits-above-every-console-route.md)
+owns it. The shell holds the operator surface and each route's panels sit one
 element inside it, so `[data-surface="operator"]` still means the whole page.
 Which tab is lit is read off the route rather than passed in by each page.
 

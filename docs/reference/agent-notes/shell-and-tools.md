@@ -1,6 +1,6 @@
 # Agent Notes - Shell and Tools
 
-**Last Updated**: 2026-09-27
+**Last Updated**: 2026-09-28
 Traps in PowerShell, MSYS, the editor's own file and search tools, the Python
 environment, npm and the libraries that lie about what they returned. Index and
 scope: [../agent-notes.md](../agent-notes.md).
@@ -21,7 +21,11 @@ $p = Start-Process -FilePath pwsh -ArgumentList '-NoProfile','-File','x.ps1' -Wa
 
 **`Start-Process pwsh -Wait` can also report exit 1 while the child succeeded and is still running** even when the child finished cleanly. Re-launching on that code starts a second copy of the work against the same output files, which is the real damage. Believe the child's own sentinel, not the parent's code.
 
-**`Start-Process -ArgumentList` splits an element that holds spaces.** A seven-word `--title` came back from `gh` as `unknown arguments [...]`, which reads like a wrong flag rather than a shell fault. Inside a detached script, call the program directly and redirect there rather than passing its arguments through `-ArgumentList`.
+**`Start-Process -ArgumentList` splits an element that holds spaces.** It joins the array with single spaces and adds no quotes. A seven-word `--title` came back from `gh` as `unknown arguments [...]`, which reads like a wrong flag rather than a shell fault. The same split ran `C:\Program` for a path under `C:\Program Files`, and turned `'--grep','THE ORACLE'` into two arguments, so the grep matched every test with no error. Put double quotes inside any element that holds a space - `'"THE ORACLE"'`, `('"{0}"' -f $npm)` - and read the child's command line before trusting what it reports. Inside a detached script, call the program directly and redirect there rather than passing its arguments through `-ArgumentList`.
+
+```powershell
+(Get-CimInstance Win32_Process -Filter "ProcessId=$($p.Id)").CommandLine
+```
 
 **A command that goes IDLE is killed at 16 to 45 seconds** and reported as "may be waiting for input", even with `-NonInteractive`. The trigger is idleness rather than duration, which is why a long `pytest` streaming dots outlives a short sleep. Anything long must be detached with `Start-Process -WindowStyle Hidden` writing to a file, then read the file. Never `Start-Sleep`.
 
@@ -38,6 +42,10 @@ $p = Start-Process -FilePath pwsh -ArgumentList '-NoProfile','-File','x.ps1' -Wa
 **`-like '??*'` treats `?` as a wildcard**, so a filter meant to find untracked lines in `git status --porcelain` matches every line of two or more characters and returns the whole status. Ask git instead (`git ls-files --others --exclude-standard`), or use `.StartsWith('??')`.
 
 **`-match` against an ARRAY filters it instead of answering yes or no.** `if ($lines -notmatch 'x')` is true whenever ANY line fails to match, so a check-run poller broke on its first tick and wrote its "done" sentinel over a log reading `browser=in_progress... gates=in_progress`. Nothing errors and the exit code is 0. Join before you match - `if (($r -join ' ') -notmatch 'in_progress|queued')` - and remember `-eq`, `-like` and `-ne` filter an array too.
+
+**`(...)[0]` on a filtered result is the first CHARACTER when only one line matched.** A pipeline that yields one object hands back the object itself rather than an array of one, so `($lines | Where-Object { ... })[0]` gives the first letter of the line. Two matches give the first line, as meant, so the code passes on the data it was written against and fails on a narrower day; the tell is a one-character value where a line belonged. Wrap the pipeline in `@(...)`, which is always an array: `@($lines | Where-Object { ... })[0]`.
+
+**`.Substring()` throws on a line shorter than the cut, and in a wait loop the throw ended the whole command.** `(Get-Content $log -Tail 1).Substring(0, 60)` works while the last line is long and throws the first time it is not - an empty line, or a file with nothing in it yet - and the terminal tool reported only `exited with code 1`, which reads as a crashed child rather than a crashed poll. Cast to `[string]` and bound the cut: `$s = [string](Get-Content $log -Tail 1); $s.Substring(0, [Math]::Min(60, $s.Length))`.
 
 **`Select-String` matches case-insensitively unless you pass `-CaseSensitive`.** Hunting a merge failure a search for `INDEX_ROOT` reported five hits in a file whose real content was five `_index_root` calls, which read as "the constant is still there" and pointed the diagnosis at the wrong side of the merge. It also has no `-Recurse`; feed it `Get-ChildItem -Recurse` output.
 
@@ -137,6 +145,8 @@ MSYS_NO_PATHCONV=1 git show 'origin/main:docs/a.md' # the fallback, per shell
 **The replace tool deletes whatever the old text held and the new text drops.** It is a literal swap and it reports success, so a line inside the matched block that is missing from the replacement is gone with no warning - a workflow edit silently dropped an `actions/setup-python` step sitting between the two steps being changed, and nothing failed until the job ran. Two edits to a tab-indented TypeScript file written with space-indented replacement text dropped a closing brace, and `svelte-check` then reported 37 errors in 12 files, none of them about the change; the one real error is the `'}' expected.` line. Match tightly, match the file's indentation character exactly, and run `git diff --stat` after EVERY structural edit - an unexpected line count is the only early warning. Inserting a heading is the same hazard: markdown has no closing tag, so a new `###` takes ownership of everything below it until the next one.
 
 **Two replace calls on one file in one parallel batch can land one of them at the wrong place.** Three edits to `frontend/src/routes/console/+page.svelte` issued together all reported success; one left its own block untouched and spliced its new text into `const WINDOW_KEY = ...` forty lines lower, so the page failed to compile on a line nobody had edited. Edit one file with calls in sequence, never side by side, and read `git diff -U0` for the file before the next step.
+
+**A file created in the same parallel batch as the command that reads it may not exist yet when that command runs.** The calls in one batch start together and finish in any order: a `git commit -F` beside the call writing its message file stopped on an empty message, and a poller launched beside its own script died at once. Neither result names the file. Create the file in one step and run whatever reads it in the next.
 
 ## Nested subagents
 

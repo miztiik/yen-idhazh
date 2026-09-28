@@ -35,7 +35,7 @@ Remove-Item -LiteralPath <path> -Recurse -Force; git worktree prune; git branch 
 
 Check `Test-Path <path>\.git` afterwards; progress lines reaching 100 percent do not mean the `.git` file was written.
 
-**`git worktree remove` can deregister a worktree and still fail to delete it.** On Windows it stops at the first locked path and reports `failed to delete...: Invalid argument` or `Permission denied` with the administrative entry already gone. Read the exit as "partly done", find the holder, then re-run the filesystem delete - not `git worktree remove`, which has nothing left to deregister.
+**`git worktree remove` can deregister a worktree and still fail to delete it.** On Windows it stops at the first locked path and reports `failed to delete...: Invalid argument`, `Directory not empty` or `Permission denied` with the administrative entry already gone. Read the exit as "partly done", find the holder, then re-run the filesystem delete - not `git worktree remove`, which has nothing left to deregister.
 
 ```powershell
 Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*<worktree>*' }
@@ -84,6 +84,8 @@ git merge-tree --write-tree --name-only HEAD origin/main   # exit 0 means no con
 ```
 
 `git merge-tree` answers without touching the worktree, so it is also the cheapest way to find out whether a fetch has made a merge you already resolved conflict again.
+
+**`git merge-tree --write-tree --name-only` lists the conflicted files above its messages, not in them.** On a conflict it prints the tree id, then each conflicted path on its own line, then a blank line and the `CONFLICT` messages. Reading only the `CONFLICT` lines missed three of four conflicted files, which reads as a merge with one file to resolve. Take the paths between the first line and the first blank line.
 
 **Local `main` is often behind on purpose.** When the shared checkout is dirty with work that overlaps incoming commits, `git merge --ff-only` aborts. That is correct. Do not force it.
 
@@ -254,7 +256,7 @@ ghm api user --jq .login
 This loads no profile and changes no saved account. Stop if the returned login
 is not the intended actor; do not print or export a token for an account check.
 
-**`gh pr merge`'s exit code says nothing useful.** It exits non-zero with `fatal: 'main' is already used by worktree` when any worktree holds `main`, and with `could not determine current branch: failed to run git: not on any branch` from a detached worktree - and in both the server-side merge and the branch delete have already succeeded. The merge can also be invisible for a few seconds afterwards. `gh pr view <n> --json state,mergeCommit` is the only reliable read, and a second merge attempt is the one action here that is not idempotent.
+**`gh pr merge`'s exit code says nothing useful.** It exits non-zero with `fatal: 'main' is already used by worktree` when any worktree holds `main`, and with `could not determine current branch: failed to run git: not on any branch` from a detached worktree - and in both the server-side merge and the branch delete have already succeeded. Both come from gh switching the local branch after the merge, so run it from a folder outside every checkout and name the repository - `gh pr merge <n> --squash --delete-branch --repo <owner/repo>` - and there is no local branch to switch. It can still exit 1 on a merge that succeeded, and the merge can be invisible for a few seconds afterwards. `gh pr view <n> --repo <owner/repo> --json state,mergedAt,mergeCommit` is the only reliable read, and a second merge attempt is the one action here that is not idempotent.
 
 **Do not detach a row's worktree in order to free its branch - remove the worktree instead.** Detaching throws the branch away, which is the only signal `sweep_worktrees.py` can judge a leftover on, so the tree is kept for ever.
 
