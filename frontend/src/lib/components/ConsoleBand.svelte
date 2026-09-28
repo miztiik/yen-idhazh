@@ -80,9 +80,11 @@
 			{#if band.verdict.runs.length > 0}
 				<!-- One square a run, in the order they ran. It says what the sentence
 				     cannot: whether one run ate every failure or all five limped. Every
-				     square names its verdict in words, and the line under the row says
-				     every verdict at once, so the colour is never the only signal and a
-				     pointer is never the only way to read one. -->
+				     square names its verdict in words, and the words after the squares
+				     say every verdict at once, so the colour is never the only signal
+				     and a pointer is never the only way to read one. They sit on the
+				     squares' own line because they describe the squares, and a line of
+				     their own would cost the band's height on every console route. -->
 				<p class="runs" data-band-runs={band.verdict.runs.length}>
 					{#each band.verdict.runs as run, index (index)}
 						<span
@@ -98,8 +100,8 @@
 							>+{band.verdict.moreRuns}</span
 						>
 					{/if}
+					<span class="runs-said" data-band-runs-said>{verdictLine}</span>
 				</p>
-				<p class="runs-said" data-band-runs-said>{verdictLine}</p>
 			{/if}
 		</div>
 
@@ -209,8 +211,11 @@
 		color: var(--color-text-tertiary);
 	}
 
+	/* The squares sit in the middle of the words' line, and the words stand
+	   further from the last square than the squares stand from each other, so
+	   the row reads as squares, then what they say. */
 	.runs-said {
-		margin: var(--space-1) 0 0;
+		margin-inline-start: var(--space-2);
 		font-size: var(--text-xs);
 		line-height: var(--leading-xs);
 		color: var(--color-text-secondary);

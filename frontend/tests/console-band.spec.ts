@@ -384,9 +384,9 @@ test('the newest day draws one square a run, on the same ramp as the run strip',
 			: Number((await overflow.getAttribute('data-band-runs-more')) ?? 0);
 	expect(squares.length + more, 'the row and the sentence count different runs').toBe(runs);
 
-	// Every verdict is also said in one line under the row, grouped, so a thumb
-	// and a keyboard read what a pointer on a ten-pixel square would. No square
-	// keeps a native tooltip, which only a mouse reaches.
+	// Every verdict is also said in words after the squares, on their own line,
+	// grouped, so a thumb and a keyboard read what a pointer on a ten-pixel
+	// square would. No square keeps a native tooltip, which only a mouse reaches.
 	const grouped = new Map<string, number>();
 	for (const square of squares) {
 		const said = /^Run \d+ (.+)$/.exec(square.label)?.[1] ?? square.label;

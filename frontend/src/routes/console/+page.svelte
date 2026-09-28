@@ -770,8 +770,10 @@
 	<!-- Six questions, six shapes. A different chart per question is the point:
 	     one shape repeated is what made this page read as a single instrument. -->
 	<h2 class="console-h2">At a glance</h2>
+	<!-- One line at a phone's width: the section's first chart sits right under
+	     it, and the keys are the ones every other strip on the console names. -->
 	<p class="mt-1 text-[0.8125rem] text-text-tertiary" data-glance-hint>
-		Point at a card's bars to read a day. Left and Right step days, Escape returns to the newest.
+		Point at a card's bars to read a day.
 	</p>
 	<div class="auto-grid mt-4" style="--auto-grid-min: 17rem" data-glance>
 		<!-- Articles first. Visuals published is a fraction of it, and a fraction
