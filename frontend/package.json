@@ -19,6 +19,7 @@
     "test:whole-day": "playwright test --config playwright.whole-day.config.ts"
   },
   "devDependencies": {
+    "@duckdb/duckdb-wasm": "^1.33.1-dev57.0",
     "@huggingface/transformers": "^3.8.1",
     "@playwright/test": "^1.62.1",
     "@sveltejs/adapter-static": "^3.0.6",
