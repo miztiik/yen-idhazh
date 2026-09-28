@@ -1,6 +1,6 @@
 # Design System
 
-**Last Updated**: 2026-09-19
+**Last Updated**: 2026-09-27
 The visual vocabulary of the published surface: the state-driven styling pattern, design tokens, the restrained motion set, and the icon rule. This is the shared language the [chrome](ui-shell.md) and every [item](digest.md) speak; the concrete token file lands with the design-system code row, and this page fixes the vocabulary that row builds to. The bounds are owned by Jony ([../../.github/agents/jony.agent.md](../../.github/agents/jony.agent.md)).
 
 **A rule is here if it binds a token or a bound the whole site resolves.** A rule about one named console panel - how a figure is worded, ranked, tinted or drawn there - is in [console-design.md](console-design.md), which reads this page's vocabulary and adds no token of its own.
@@ -354,6 +354,9 @@ Two shapes replace it. A row of variable-width labels **wraps**, and the overflo
 The filter bar is the case. It sticks from `frame.breakpoints_px[1]` (1024px) up, where the pills sit on the left and the field on the right in a single band. Below that it can run to several wrapped lines plus a field, and a control holding a third of a phone screen for the whole scroll is screen the reader paid for. A media query cannot read a custom property, so the number is written twice - in `config/appearance.json` and in the component - which is the one place this duplication is unavoidable and is already true of the item's side rail.
 
 **This rule is why the day's aside stands beside the stream and not beside the day's controls.** The first arrangement of the two-column day put the leads in column two from the top of the page, which narrowed everything below them to 896px - and at 896px the filter bar's six pills wrap under its field, so a two-band panel then followed the reader down the page. The controls keep the whole content box and the aside starts level with the first story.
+
+**The console's tab strip is the second case, and it holds the rule for any number of tabs.** It sticks from the same width, as one row: the route tabs with the days control at the trailing end. Where the tabs are wider than the row, the tab list scrolls sideways inside the strip rather than wrapping to a second band - the one sideways scroll the operator surface has, by owner decision 2026-09-27, and the list opens with the band's worst route in view
+([../architecture/publishing/what-sits-above-every-console-route.md](../architecture/publishing/what-sits-above-every-console-route.md#from-the-wide-breakpoint-up-the-strip-sticks-and-it-is-one-row)).
 
 ### The reading page spends its width in four named zones
 

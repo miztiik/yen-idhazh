@@ -72,6 +72,10 @@ export interface BandRun {
  * without a schema break.
  */
 export interface ConsoleBandFacts {
+	/** When the run that wrote this band finished, as the payload's own
+	 * `generated_at`: an ISO-8601 instant in UTC. Null when no band was read.
+	 * It is what the sentence under the strip dates the record by. */
+	finishedAt: string | null;
 	/** The newest day the manifests hold, as a sentence. */
 	verdict: {
 		date: string | null;
@@ -173,6 +177,7 @@ function blankCarries(): Record<RouteId, string> {
  */
 export const BAND_UNREAD: ConsoleShell = {
 	band: {
+		finishedAt: null,
 		verdict: {
 			date: null,
 			sentence: 'The band could not be read, so nothing here reports on the last run.',
@@ -255,6 +260,7 @@ export function readBand(payload: unknown): ConsoleShell {
 
 	return {
 		band: {
+			finishedAt: typeof raw.generated_at === 'string' ? raw.generated_at : null,
 			verdict: {
 				date: typeof verdict.date === 'string' ? verdict.date : null,
 				sentence: verdict.sentence,

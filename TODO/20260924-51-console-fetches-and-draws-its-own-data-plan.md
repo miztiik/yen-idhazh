@@ -52,7 +52,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | The Hardware route stops counting every job twice | - | A | DONE | p51r1 | #1138 | p51-r1-worker |
-| 2 | The console shell: a stuck tab strip, the span control on it, jump links, a completeness sentence | - | A | IN-FLIGHT | p51r2 | - | p51-r2-worker |
+| 2 | The console shell: a stuck tab strip, the span control on it, jump links, a completeness sentence | - | A | DONE | p51r2 | #1140 | p51-r2-worker |
 | 3 | The three ledgers the console reads are published | plan 50's rows titled "One compaction task a ledger, two compact periods, and the diagrams move into the page" and "The three ledgers the console's routes read become parquet" | B | PENDING | - | - | - |
 | 4 | The chart vocabulary and the house style, with no panel moved | - | B | DONE | p51r4 | #1137 | p51-r4-worker |
 | 5 | One readout strip, every chart, and hover a keyboard can reach | 1, 4 | C | IN-FLIGHT | p51r5 | #1143 | p51-r5-worker |
@@ -545,21 +545,22 @@ Susan ruled all fifty-one panels on 2026-09-26 - each KEEP, REDRAW, REPLACE, DEL
 
 **Row 2 ships before row 3, and that ordering is the requirement rather than a convenience.** Every chart on the console draws the newest days that **exist**, not the last N days - so when data stops, a chart gains no gap at the right edge. It slides back in time and looks exactly as full as it did yesterday. Reader's verdict on that, 2026-09-24: *"I read a month-old chart, believed it, and closed the tab satisfied."* A page that can go quiet without saying so is worse than useless, so the sentence exists before anything starts fetching.
 
-**The completeness sentence is a template with named slots, computed from fields that already exist** - `covers_through`, `generated_at`, `compaction_lag_days` on `ConsoleBand`. **No new `ConsoleBand` field.** All three are UTC (CLAUDE.md section 2), and every slot is formatted in UTC.
+**The completeness sentence is a template with named slots, computed from a field that already exists** - `generated_at` on `ConsoleBand`, the instant the run that wrote the record finished. **No new `ConsoleBand` field.** It is UTC (CLAUDE.md section 2), and every slot is formatted in UTC with `UTC` printed beside the time.
 
 Two templates, and one switch chooses between them:
 
 ```
-Complete to {HH:MM} {today|weekday}. A run still going is not in this yet.
+Complete to {HH:MM} UTC on {weekday day month}. A run still going is not on this page yet.
 ```
 ```
-Nothing has been recorded since {weekday day month}. {n} days are missing.
+Nothing has been recorded since {HH:MM} UTC on {weekday day month}. {n} days are missing.
 ```
 
-- **The switch.** Template 2 fires when `covers_through` falls further behind `generated_at` than the routine compaction lag - plan 50's `compact_after_hours` produces a fixed lag, so in routine operation the data sits exactly that far back and template 1 fires. `{n}` is the excess in whole UTC days.
-- **The slots.** `{HH:MM}` is `covers_through` as UTC hours and minutes; `{today|weekday}` is "today" when `covers_through` is the current UTC day, else its UTC weekday name; `{weekday day month}` is `covers_through` spelled in UTC.
+- **The switch is the reader's clock.** Template 2 fires when the UTC day of `generated_at` trails the reader's own UTC day by more than `console.completeness_grace_days` (default 1). `{n}` is the whole UTC days between the two - today is still being recorded and the record's own day is not missing - so it is at least one, and one reads `1 day is missing.` The prerendered page has no reader's clock, so it prints template 1 and claims nothing about age; a browser recomputes at mount, at every 00:00 UTC, and when the page is shown again.
+- **The slots.** `{HH:MM}` is `generated_at` as UTC hours and minutes; `{weekday day month}` is its UTC weekday and date, always spelled out. **No slot says `today`**: the page's day is the UTC day, a reader's is not always, and a prerendered page is read for a day or more.
+- **Why not `covers_through` and `compaction_lag_days`, as this row first said.** `covers_through` is a date with no time, and it is the run's own day - the same UTC day as `generated_at` on every run - and `compaction_lag_days` is always 0, so a switch between those two fields can never fire, and a record that stopped being written is not rewritten to say so. Only the reader's clock can see that it is old. **Row 3 has to revisit the sentence**: once panels draw compacted periods, the newest day a panel can draw trails `generated_at`, and the sentence must date that day instead. Corrected 2026-09-27; Susan, Reader and Fowler agreed the clock, the grace and the dropped lag, and Reader ruled the words.
 
-The load-bearing word is **complete**: a promise about the left side and an admission about the right, so once it is read a gap is a fact rather than a defect. It is a sentence, not a badge, not a colour and not a grey timestamp. The filled examples ("Complete to 14:25 today"; "Nothing has been recorded since Friday 20 September. Four days are missing.") are illustrations, not the contract.
+The load-bearing word is **complete**: a promise about the left side and an admission about the right, so once it is read a gap is a fact rather than a defect. It is a sentence, not a badge, not a colour and not a grey timestamp. The filled examples ("Complete to 18:23 UTC on Sunday 27 September"; "Nothing has been recorded since 18:23 UTC on Sunday 27 September. 2 days are missing.") are illustrations, not the contract.
 
 Ruled by Susan on 2026-09-24. The complaint: the Hardware route is fifteen panels long with no quick way back, and the span control sits at the top where a reader nine panels down cannot reach it.
 
@@ -568,32 +569,40 @@ Ruled by Susan on 2026-09-24. The complaint: the Hardware route is fifteen panel
 | # | Element | Ruling | What the reader loses |
 | --- | --- | --- | --- |
 | 1 | The tab strip | **Stuck from `frame.breakpoints_px[1]` up**, one tab per console route, however many there are. Below that it stays where it is | one strip-height of every screen above that width, against a long route of scrolling |
-| 2 | `Days shown` | Moves to the trailing edge of the stuck strip at that width and up, as a **compact control with one segment per `console.window_presets` value**. Below it, unchanged and full width | the word `days` on every segment |
-| 3 | The tab description line, while stuck | Hidden. It is already hidden below 1400 px and is the anchor's `title` | the one-line summary of the other routes while scrolled; it returns at the top |
+| 2 | `Days shown` | Moves onto the strip at the trailing end of the tabs, as a **compact control with one segment per `console.window_presets` value**: the number, and the months it would fetch under it. Below the breakpoint it is the same control on its own row under the tabs, not stuck. Amended 2026-09-27 from "below it, unchanged and full width" - Susan, with Fowler: one control in one place keeps keyboard, screen-reader and reading order the same at every width | the word `days` on every segment, said once beside them; on a phone the band starts one control row lower |
+| 3 | The tab description line, while stuck | Hidden. It is already hidden below 1024 px and is the anchor's `title`. An empty box under the strip takes the height back, so the page does not move when it sticks | the one-line summary of the other routes while scrolled; it returns at the top |
 | 4 | Back to the top | An **`On this page` row of the route's own group names** under the span control, read from `console.panel_groups[route]`, and a `Top` link on each group heading. A route with no groups, or one unnamed group, shows no anchor row | nothing |
 | 5 | The site header | Not stuck, unchanged. Its tagline drops on console routes only | the site's one-line self-description on operator routes; it stays on every reading route |
 | 6 | The `Console` heading | Not stuck, scrolls away | nothing. It names the surface once, and repeating it every screen is furniture |
 | 7 | The days status sentence | Stays under the strip, never inside it | nothing. It is a sentence, not a control |
 
 - **Files touched:**
-  - `frontend/src/routes/console/+layout.svelte` (the strip sticks; the span control moves onto it)
-  - `frontend/src/lib/components/ConsoleNav.svelte` (the span control with one segment per preset, the tab list that scrolls sideways when stuck, the description line's stuck state)
+  - `frontend/src/routes/console/+layout.svelte` (the strip, sticky from the breakpoint; the span control on it; the completeness sentence; the days sentence under the band; the `On this page` row)
+  - `frontend/src/lib/components/ConsoleNav.svelte` (one row and a sideways-scrolling tab list from the breakpoint up, each tab's worst state under its label; the description line's stuck state; the `Worst:` word on the band's worst route)
+  - `frontend/src/lib/components/WindowControl.svelte` (the compact control) and `WindowStatus.svelte` (its sentence, split out so it can stay under the band)
+  - `frontend/src/lib/components/WindowControlSource.svelte`, `frontend/src/lib/console/window-slot.ts` (each route hands its window up to the layout that draws the control), and the five route pages' `<WindowControl>` line, `machine/+page.svelte` included at that line only
+  - `frontend/src/lib/console/strip.ts` (when the strip is stuck; the page kept still; the scroll padding)
+  - `frontend/src/lib/console/completeness.ts` (the sentence), `frontend/src/lib/console/band.ts` (reads `generated_at`)
+  - `frontend/src/lib/components/PanelGroup.svelte` (a group's id and its `Top` link), `ConsoleBand.svelte` (`Latest day` for `Yesterday`)
   - `frontend/src/lib/components/SiteHeader.svelte` (the tagline drops on console routes)
-  - `frontend/src/lib/console/band.ts` (the worst-thing fragment the stuck strip carries)
-  - `frontend/src/app.css` (the stuck band's tokens)
-  - `frontend/tests/console-nav.spec.ts`, `frontend/tests/console-chrome.spec.ts`, `frontend/tests/console-title.spec.ts`
+  - `console.completeness_grace_days`: `config/appearance.json`, `backend/idhazh/contracts/knobs/console.py`, both changelogs, `frontend/src/lib/server/config.ts`
+  - `frontend/tests/console-shell.spec.ts` (the oracle), `console-nav.spec.ts`, `console-band.spec.ts`, `console-window.spec.ts`
+  - Corrected 2026-09-27: the list named `frontend/src/app.css`, which is `frontend/src/styles/app.css` and needed no change, and it left out the route pages, which each drew their own control.
 - **Acceptance gates:** the browser smoke on every console route at 390, 768 and 1440 - the set section 2.9 fixes, straddling the `breakpoints_px[1]` sticky boundary (CLAUDE.md section 12); zero new `[error]` and zero new `404`. Local `npm --prefix frontend run test:changed -- --list`, then the selected checks. CI runs the full suite.
-- **Oracle:** at 1440 (above the boundary) the stuck strip's measured height equals one row and each of the route's anchors scrolls its heading into view below the stuck band rather than behind it; at 768 (below) nothing is stuck. **The spec runs twice - with the real routes and with one extra test route added** - so a new tab cannot break the strip. It cannot settle whether the breakpoint is the right one; decision 4 makes it a knob so it moves without a code change.
+- **Oracle:** at 1440 (above the boundary) the stuck strip's measured height equals one row and each of the route's anchors scrolls its heading into view below the stuck band rather than behind it; at 768 (below) nothing is stuck. **The spec runs twice - with the real routes and with one extra test route added** - so a new tab cannot break the strip. It cannot settle whether the breakpoint is the right one; decision 4 makes it a knob. A media query cannot read the knob, so the stylesheets repeat its value, and `console-shell.spec.ts` reads the knob and checks the strip sticks at it and not a pixel below - moving the knob is a code change to two stylesheets, and the spec says which.
 - **Decisions:**
 
   | # | Decision | Authority |
   | --- | --- | --- |
   | 1 | **A dropdown is refused for the span control.** A menu hides all but one option, and it hides the price at the moment the browser starts fetching its own data | Susan, 2026-09-24 |
   | 2 | **Collapsing the logo on scroll is refused.** It buys zero pixels because the header already leaves the screen, and scroll-linked motion has to be designed twice for reduced motion | Susan, 2026-09-24 |
-  | 3 | **Collapsing the band is refused.** The band is what an operator reads on landing; collapsed, he opens a disclosure to learn that yesterday failed. Its worst-thing fragment rides in the stuck strip as one short line instead | Susan, 2026-09-24 |
+  | 3 | **Collapsing the band is refused.** The band is what an operator reads on landing; collapsed, he opens a disclosure to learn that yesterday failed. Its worst-thing fragment rides in the strip on the worst route's own tab, as the word `Worst:` before the fragment that tab already carries, shown at the top and when stuck alike, and the tab list opens with that tab in view. Amended 2026-09-27 from "one short line": a separate line printed the fragment twice in one row and took about 200 px from the tabs | Susan, 2026-09-24; amended by Susan with Fowler and Jony, 2026-09-27 |
   | 4 | It sticks at `frame.breakpoints_px[1]` (inclusive), reusing the existing key. A stuck control is one band at the width it sticks at, so the tabs and the span control together are one row there. **When the tabs do not fit, the tab list scrolls sideways inside the strip and the span control stays pinned at its end**; the strip never wraps to a second line and no label is shortened, whatever the number of tabs. Below the breakpoint the strip is not stuck and may wrap | Owner, 2026-09-27, for any number of tabs; Susan for the breakpoint. A second key naming that width is the duplicate this project rejects everywhere else |
   | 5 | Named anchors beat one floating arrow. A long route's panels sit in declared groups, and named anchors work with no script at every width | Susan, 2026-09-24 |
   | 6 | This row does not touch `PlatformMixPanel.svelte`. Row 1 owns that file and runs beside this one | Fowler |
+  | 7 | **The band's first fact is labelled `Latest day`, not `Yesterday`.** The verdict is the newest day the record holds, which is today once today's first run has finished, so `Yesterday` contradicted the sentence above it. A fixed name needs no clock and stays true on a page read a week later | Susan, 2026-09-27. Reader and Fowler asked for the date itself; the fixed name meets both their reasons without printing the date three times in one band |
+  | 8 | **The one-day preset says `1 day`**, in the sentence under the band and to a screen reader | All four, 2026-09-27 |
+  | 9 | **From the breakpoint up a tab's worst state stands on its own line under its label**, never broken inside the phrase, so a tab is as wide as the longer line. Measured on the built page with each tab one line wide, the landing route - whose control carries prices and is the widest - showed four of five tabs whole at every width from 1366 to 1920 | Jony, Susan and Reader, 2026-09-27. Susan's condition: every label starts level, a tab with no worst state included |
 
 - **Rejected alternatives:**
 
@@ -602,6 +611,13 @@ Ruled by Susan on 2026-09-24. The complaint: the Hardware route is fifteen panel
   | 1 | Stick the strip at every width | On a narrow screen the tabs wrap onto several lines, and a stuck control that wraps covers much of a small screen | Zero; costs the small-screen reader much of the page | Susan |
   | 2 | A floating back-to-top arrow | It goes one place; a route with several groups needs one destination per group, and an arrow needs script where an anchor does not | Zero; costs every destination but one | Susan |
   | 3 | Merge this into row 1 | Route chrome and a settlement-key change in one pull request, because both happen to be about one route | Zero; costs the independent revert | Fowler |
+  | 4 | Keep the span control under the band below the breakpoint, moved there by CSS order | Keyboard and screen-reader order would run tabs, control, band while the eye reads tabs, band, control | Zero; costs a keyboard reader a jump past the band and back | Susan and Fowler, 2026-09-27; Reader preferred it for the phone and can live with the control above the band |
+  | 5 | Two copies of the span control, one shown per width | Two radio groups to hold in step, and every check that finds the control by its one attribute would find two | A second control, and about 25 locators rewritten | Fowler, 2026-09-27, over Jony's preference |
+  | 6 | The band above the strip | The completeness sentence could not sit both under the strip and above the band, and it reverses the order that puts the tabs first on a phone | Zero; costs that order | Fowler and Jony, 2026-09-27 |
+  | 7 | A pinned `Worst now:` line while stuck, beside the tabs | It prints the worst tab's own fragment twice in one row and takes about 200 px from the tabs, so they scroll even at 1440 | Zero; costs that width | Susan, Fowler and Jony, 2026-09-27 |
+  | 8 | `today` in the sentence, relative to the reader | The page's day is the UTC day and a reader's is not always; beside a UTC time `today` names the wrong day for part of every day far from UTC | Zero; costs the glance `today` gave | Reader and Susan, 2026-09-27 |
+  | 9 | Each tab one line wide, label and worst state side by side | On the landing route the fifth tab stayed out of view at every width up to 1920, 5px short at the widest | Zero; saves one line of every tab's height | Jony, Susan and Reader, 2026-09-27 |
+  | 10 | The prices leave the tiles while the strip is stuck | It hides what a choice downloads at the moment a reader deep in a route makes it, which is what refused the dropdown, and the tabs slide sideways as the strip sticks | Zero; buys one tab at 1024 and 1280 on the landing route, while stuck only | Jony, Susan and Reader, 2026-09-27 |
 
 ---
 
