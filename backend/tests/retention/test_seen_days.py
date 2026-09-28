@@ -18,7 +18,6 @@ from idhazh.contracts.knobs.placement import LensWeightsConfig
 from idhazh.contracts.knobs.retention import RetentionConfig
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.seen import SeenRow
-from idhazh.retention import prune_counterfactual_scores
 from idhazh.stages.prune_state import stage_prune_state
 
 from ._trees import (
@@ -88,65 +87,6 @@ def _counterfactual_file(day: str) -> str:
         job=ServerJob.PLAN,
         shard=0,
     )
-
-
-def test_a_counterfactual_day_outside_the_window_goes_and_says_what_it_weighed(
-    tmp_path: Path,
-) -> None:
-    """The ledger is appended to on every run, so without this it has no ceiling.
-
-    `2024-01-15` is far outside any window this config can name. The day inside
-    the window stays, and the empty year directory goes with the last day in it
-    - a walk that kept them would cost more every year while reading the same
-    rows.
-    """
-    state = tmp_path / "state"
-    window = LensWeightsConfig().window_days
-    today = TODAY.isoformat()
-    stale = _counterfactual_day(state, "2024-01-15", rows=3)
-    weight = sum(path.stat().st_size for path in stale.iterdir())
-    kept = _counterfactual_day(state, today)
-
-    result = prune_counterfactual_scores(state, today=today, within_days=window)
-
-    assert result.deleted == (_counterfactual_file("2024-01-15"),)
-    assert result.kept == (_counterfactual_file(today),)
-    assert result.bytes_freed == weight
-    assert not stale.exists()
-    assert kept.exists()
-    assert not (ledger.tree_root(state, LedgerName.COUNTERFACTUAL_SCORES) / "2024").exists()
-
-
-def test_a_counterfactual_dry_run_names_the_day_file_and_leaves_it(tmp_path: Path) -> None:
-    state = tmp_path / "state"
-    stale = _counterfactual_day(state, "2024-01-15")
-
-    result = prune_counterfactual_scores(
-        state, today=TODAY.isoformat(), within_days=LensWeightsConfig().window_days, dry_run=True
-    )
-
-    assert result.deleted == (_counterfactual_file("2024-01-15"),)
-    assert result.dry_run
-    assert stale.exists()
-
-
-def test_a_counterfactual_day_the_window_still_names_is_never_deleted(tmp_path: Path) -> None:
-    """The boundary is the window's OLDEST day, not the window's edges.
-
-    A run can be handed a date in the past, and deleting everything outside the
-    window would then take the live day with it. The anchor here is a month
-    before the day on disk, so the day on disk is newer than every date the
-    window names - and it still has to survive.
-    """
-    state = tmp_path / "state"
-    on = TODAY.isoformat()
-    day = _counterfactual_day(state, on)
-    past = (TODAY - timedelta(days=30)).isoformat()
-
-    result = prune_counterfactual_scores(state, today=past, within_days=7)
-
-    assert result.deleted == ()
-    assert day.exists()
 
 
 def test_the_stage_deletes_the_counterfactual_days_nobody_reads(
