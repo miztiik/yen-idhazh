@@ -290,6 +290,14 @@ every day and does not change height as a reader steps. It rests on the newest
 day rather than opening blank, so pointing at the chart never moves the marks
 under the pointer. Susan, 2026-09-28.
 
+**On a phone the throughput strip is taller than its candles, and that is
+kept.** Measured 2026-09-28 on the real build: a day of five runs prints 266 px
+of strip under a 220 px plot at 390 px wide, 107 px at 768 and 63 px at 1440.
+Each run's two rates were the candle's `<title>`, and the strip is the one place
+a reader sees which run moved the day, so cutting run entries to fit the plot's
+height would drop words a tooltip used to carry. Susan asked for this line
+before the measurement was taken, 2026-09-28.
+
 The strip's shape is not this chart's own. `dayTicks` and `dayColumnX` in
 [frontend/src/lib/charts/frame.ts](../../../frontend/src/lib/charts/frame.ts)
 hold the axis-thinning and the column arithmetic, and `readoutCapStyle` and
