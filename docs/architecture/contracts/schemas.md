@@ -1,6 +1,6 @@
 # Contracts and Schemas
 
-**Last Updated**: 2026-09-27
+**Last Updated**: 2026-09-28
 
 The persisted-shape subsystem: where the models live, how a schema is obtained from one, the small hand copy the frontend carries, and the tests that stop the two drifting apart. This is the operational home of Guardrail #3 (contracts before logic) and `CLAUDE.md` sections 1a and 11.
 
@@ -107,7 +107,7 @@ The shapes, and where each one lives once written:
 | `SeenRow` | `seen-row` | one appended row of `state/seen/<YYYY>/<MM>/<DD>.csv` |
 | `PublishedRow` | `published-row` | one appended row of `state/published/YYYY/MM/DD.csv` |
 | `FeedHealthRow` | `feed-health-row` | one row of `state/feed-health/<YYYY>/<MM>/<DD>/`, in the file its writer owns |
-| `FeedRetirementRow` | `feed-retirement-row` | one appended row of `state/feed-retirements.csv` |
+| `FeedRetirementRow` | `feed-retirement-row` | one row of `state/raw/feed-retirements/<YYYY>/<MM>/<DD>/`, in the file its writer owns, filed under the day the address was retired |
 | `ItemHealthRow` | `item-health-row` | one row of `state/item-health/<YYYY>/<MM>/<DD>/`, in the file its writer owns |
 | `PublicTelemetryRow` | `public-telemetry` | one row of `frontend/public/telemetry/<YYYY-MM>.csv`, the browser-safe projection of the row above |
 | `ItemHealthSummaryRow` | `item-health-summary-row` | one row of `state/item-health-summary/<YYYY-MM>.csv`, rewritten whole |
@@ -137,15 +137,15 @@ Everything under `state/` is a row contract rather than a file contract, because
 
 ### A new row ledger ships with its header, not with its first run
 
-`backend/utilities/commit_and_push.py` stages every path a job owns in one `git add`. A path that is not in the checkout makes that call fail, and the program then abandons the whole commit step - so a ledger that only appears once its producer has succeeded lets a broken producer cost the job the *other* ledgers it was staging beside it. `state/feed-retirements.csv` and `state/content-similarity-judge/holdout-pairs.csv` therefore ship as header-only files, and `backend/utilities/check_seeded_stores.py` asserts each committed header equals its contract's own `csv_columns`.
+`backend/utilities/commit_and_push.py` stages every path a job owns in one `git add`. A path that is not in the checkout makes that call fail, and the program then abandons the whole commit step - so a ledger that only appears once its producer has succeeded lets a broken producer cost the job the *other* ledgers it was staging beside it. `state/content-similarity-judge/holdout-pairs.csv` therefore ships as a header-only file, and `backend/utilities/check_seeded_ledgers.py` asserts its committed header equals its contract's own `csv_columns`. The feed retirements shipped the same way until they moved under `state/raw/`, where each writer creates its own file and the step that commits it stages `state` whole.
 
 That is not "pre-creating an empty module for later" (`CLAUDE.md` section 10). The file is the ledger, and its header is the contract's own column list; what is being avoided is a failure mode in the step that commits it.
 
 The training corpus ships the same way and for the same reason: `corpus/corpus.jsonl` is committed empty, `corpus/corpus.meta.json` holds a zero census, and `corpus/holdout.txt` is empty. A test asserts all three are tracked.
 
-`state/feed-retirements.csv` is the third, committed as a header and no rows on 2026-09-02 - one commit before the plan stage started writing it. It is also registered in `ledger.keyed_paths`, keyed on `endpoint_key` alone, so what makes two of its rows one record is declared with the shape rather than with its first writer - which is what makes the rule true from the first row rather than from the second.
+`state/feed-retirements.csv` was the third, committed as a header and no rows on 2026-09-02 - one commit before the plan stage started writing it - and registered in `ledger.keyed_paths`, keyed on `endpoint_key` alone, so what makes two of its rows one record was declared with the shape rather than with its first writer. It moved under `state/raw/` on 2026-09-28 still holding no row, and its reader now keeps the first row of each `endpoint_key` as it reads ([persistence.md](persistence.md#reading-a-raw-ledger)).
 
-`state/content-similarity-judge/holdout-pairs.csv` is the fourth. It was committed as a header on 2026-09-18 and it has held marks since 2026-09-19, so a fresh clone now gets the marks rather than an empty file - which is what lets the console draw the margin on a checkout that has never run the pipeline. It is the one `state/` CSV that names `merge=text` - two edits of it are two people disagreeing about the same rows, and a union merge of a disagreement silently keeps both marks. Only `state/published/**`, `state/visual-prunes/**` and `state/seen/**` carry a union driver at all.
+`state/content-similarity-judge/holdout-pairs.csv` is the fourth. It was committed as a header on 2026-09-18 and it has held marks since 2026-09-19, so a fresh clone now gets the marks rather than an empty file - which is what lets the console draw the margin on a checkout that has never run the pipeline. It is the one `state/` CSV that names `merge=text` - two edits of it are two people disagreeing about the same rows, and a union merge of a disagreement silently keeps both marks. Only the trees `path_classes.UNION_SAFE` lists carry a union driver at all.
 
 ### The one row contract whose CSV omits `version`
 
@@ -178,7 +178,7 @@ edit does not start (Guardrail #11).
 
 ### Two of these are contracts and are deliberately not migration surfaces
 
-`EvidenceItem` and the two corpus shapes carry a `version` like everything else and owe no read-side migration when they change (section 11). Nothing they were written into survives: the oldest `EvidenceItem` that can exist is a 14-day workflow artifact, and the corpus is a rolling window regenerable from the run's own payloads whose history is rewritten every `finetune.prune_every_days`. A shape change there owes a re-run or a re-harvest. They are contracts under Guardrail #3 all the same, because each crosses a process boundary and something on the far side has to be able to refuse a file it cannot trust.
+`EvidenceItem` and the corpus row carry a `version` like everything else and owe no read-side migration when they change (section 11). Nothing they were written into survives: the oldest `EvidenceItem` that can exist is a 14-day workflow artifact, and the corpus is a rolling window regenerable from the run's own payloads whose history is rewritten every `every_days` of `config/gardener/corpus-squash.json`. A shape change there owes a re-run or a re-harvest. They are contracts under Guardrail #3 all the same, because each crosses a process boundary and something on the far side has to be able to refuse a file it cannot trust. **`CorpusMeta` is the exception**: the harvest and the squash's due check read the committed `corpus/corpus.meta.json` on every run, so when `pruned_date` became `last_run` on 2026-09-28 both readers learned the old name for one release, and they drop it together.
 
 ### A shard-grain fact is its own contract, not a field on the run manifest
 
@@ -208,9 +208,9 @@ mirrors the digest tree its rows are derived from.
 | `state/scores/` | day files | how did every scored item do? | no - sharded by month from 2026-08-31 and filed by **day** since 2026-09-13, and a month past `scores_full_grain_months` becomes [one `ScoreArchive` document](../publishing/retention.md#what-bounds-the-committed-state-tree) |
 | `state/score-index/` | day files | which measurements does the day file beside this one already hold? | no, and deliberately - `OBSERVATION_KEY` carries no date, so the same address, output and scorer is one measurement whenever it is re-taken. It files by the ledger's day rather than a grain of its own, because two grains in one relationship would be a mapping somebody maintains |
 | `state/score-archive/` | monthly documents | what did a month past `scores_full_grain_months` do, in totals and distributions - and which measurements did it hold? | it inherits the shard boundary of the file it replaces |
-| `state/feed-retirements.csv` | one file | is this address gone for good? | no - a retirement is permanent for one endpoint |
+| `state/raw/feed-retirements/` | a file per writer, by day | is this address gone for good? | no - a retirement is permanent for one endpoint |
 | `state/day-metrics/` | day files | what did one published day do, in totals? | it is addressed by day: the site opens the dates a page names and walks nothing |
-| `state/visual-prunes/` | day files | is the picture backlog shrinking? | no, and the layout saves this read nothing - see below |
+| `state/raw/visual-prunes/` | a file per writer, by day | is the picture backlog shrinking? | no, and the layout saves this read nothing - see below |
 | `state/content-similarity-judge/scored-pairs/` | day files | what did the judge say about this day's borderline pairs? | no - the collecting job reads one named date and never opens that file again |
 | `state/content-similarity-judge/fitted-thresholds/` | day files | what was the merge line, and what moved it? | yes - the step-change guard takes a median over the newest `step_change_window_rows` written rows, and `assemble` looks back `applied_lookback_days` for a line |
 | `state/content-similarity-judge/holdout-pairs.csv` | one file | which pairs did a person judge, and how? | no - a mark taken in August is still a mark in September, and the file grows with how many pairs somebody has marked rather than with the archive |
@@ -254,25 +254,29 @@ Two consequences worth stating so nobody re-derives them:
  the period is a layout change and not a contract change; see
  [../sources/item-health.md](../sources/item-health.md).
 
-**The single file above is deliberately unsharded, and the burden is on a
-change that shards it.** `state/feed-retirements.csv` is not work left undone.
-Its read carries no window, so by the rule above a partition would open every
-file anyway and cost a directory walk a single `open` does not need.
+**A ledger read with no window gains nothing from sharding, and the burden is
+on a change that shards one.** Its read opens every file anyway, so a partition
+costs a directory walk a single `open` does not need.
 
-There were four until 2026-09-13, three until 2026-09-19 and two until
-2026-09-27.
+There were four single files read that way until 2026-09-13, three until
+2026-09-19, two until 2026-09-27 and one until 2026-09-28.
 `state/fingerprints.csv` was the fourth, and it was deleted rather than sharded:
 its read had no window because it had no reader left at all.
 `state/runtime-counters.csv` was the third and went the same way - every cell a
 reader still wanted moved onto `state/host-fingerprint/`, which is already a day
-tree.
+tree. `state/feed-retirements.csv` was the last, and it pays the walk on
+purpose: it moved through the ledger door, which gives every writer a file of
+its own under the day it covers ([persistence.md](persistence.md)). What that
+bought is one writer per file and no merge driver; the walk grows with the
+retirements rather than with the archive
+([../../concepts/growing-reads.md](../../concepts/growing-reads.md)).
 
 **A collection can file by day for a reason that is not the read**, and
-`state/visual-prunes/` is the worked case: its question is the whole series, so
-the layout buys the read nothing at all. What it buys is a merge surface and a
-removal - two runs collide on a file only when they are the same day, and taking
-a day back off the record is one `rm` rather than an edit inside a shared file,
-which an append-only ledger cannot express.
+`state/raw/visual-prunes/` is the worked case: its question is the whole series,
+so the layout buys the read nothing at all. What it buys is a file per writer
+and a removal - two runs never share a file, and taking a day back off the
+record is one `rm` of that day's folder rather than an edit inside a shared
+file, which an append-only ledger cannot express.
 
 **What a shard obliges its writer to do is a separate rule, and it is defined
 once.** A closed month is rewritten only when a correction targets it; every

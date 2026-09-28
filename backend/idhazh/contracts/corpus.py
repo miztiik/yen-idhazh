@@ -22,11 +22,14 @@ exists to be shown to a person rather than to train anything.
 
 **A contract under Guardrail #3 and not a migration surface under section 11**, on
 the precedent `EvidenceItem` set on 2026-08-27. The window is read by a notebook a
-person re-runs rather than by a build, and the prune rewrites its history every
-`finetune.prune_every_days`. So a shape change here owes a re-harvest, never a
-read-side migration: no reader ever learns to accept two shapes. The `version` field
-is carried because every `Contract` carries one and because it tells a training
-session which build wrote the rows in front of it.
+person re-runs rather than by a build, and the corpus squash rewrites its history
+every `every_days` of `config/gardener/corpus-squash.json`. So a shape change to a
+row owes a re-harvest, never a read-side migration: no reader ever learns to accept
+two row shapes. The `version` field is carried because every `Contract` carries one
+and because it tells a training session which build wrote the rows in front of it.
+`CorpusMeta` is the exception, because a build reads it on every run - the harvest
+and the squash's own due check - so a field renamed there is read under both names
+for one release.
 
 **A re-harvest cannot reach the rows already on disk, so a shape change owes them a
 strip as well.** Changing the target changes `output_digest` with it, and that digest
@@ -45,7 +48,7 @@ is what makes the corpus the prompt we serve instead of an approximation of it.
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import ClassVar, Self
+from typing import Any, ClassVar, Final, Self
 
 from pydantic import Field, model_validator
 
@@ -147,6 +150,13 @@ class CorpusRow(Contract):
         return len(self.user.split())
 
 
+#: The field `last_run` is read from, and `LEGACY_LAST_RUN_KEY` the name it had
+#: before. `backend/utilities/corpus_squash_due.py` cannot import this module and
+#: spells both again; a test holds the two readers to the same keys and preference.
+LAST_RUN_KEY: Final = "last_run"
+LEGACY_LAST_RUN_KEY: Final = "pruned_date"
+
+
 class CorpusMeta(Contract):
     """What the window holds, and when each of its two schedules last fired.
 
@@ -163,6 +173,11 @@ class CorpusMeta(Contract):
 
     __schema_stem__: ClassVar[str] = "corpus-meta"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-28",
+            change="pruned_date is renamed last_run, and a pruned_date is read as last_run.",
+            why="It says when the squash job last ran, whether or not it squashed anything.",
+        ),
         ChangelogEntry(
             version="2026-08-28",
             change="Initial shape: the census of the window, plus harvested_date and pruned_date.",
@@ -191,12 +206,12 @@ class CorpusMeta(Contract):
             "the day it is running for, so a missed day self-corrects on the next wake."
         ),
     )
-    pruned_date: DateStamp | None = Field(
+    last_run: DateStamp | None = Field(
         default=None,
         description=(
-            "The day `prune.yml` last squashed history. It is the only thing that stops "
-            "a due-check from firing every day once the repository is older than "
-            "`finetune.prune_keep_days`."
+            "The UTC day the corpus squash last ran, whether or not it found anything old "
+            "enough to squash. None means it has never run. It is the only thing that "
+            "stops the squash's due check from firing every day."
         ),
     )
     prompt_digest: Sha256 | None = Field(
@@ -208,4 +223,23 @@ class CorpusMeta(Contract):
             "that the prompt moved under the corpus they are about to train on."
         ),
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _read_pruned_date_as_last_run(cls, data: Any) -> Any:
+        """`last_run` was `pruned_date` until 2026-09-28, and a payload may still say so.
+
+        Every `corpus/corpus.meta.json` written before then spells the old name,
+        and a branch or a run started before the rename still carries one.
+        Refusing it would stop the build that has to read that file and rewrite
+        it. When a payload carries both names, `last_run` wins - the
+        standard-library due check prefers it too. The two copies go in one
+        commit or not at all: a payload only one reader understood would be read
+        two ways.
+        """
+        if not isinstance(data, dict) or LEGACY_LAST_RUN_KEY not in data:
+            return data
+        moved = {name: value for name, value in data.items() if name != LEGACY_LAST_RUN_KEY}
+        moved.setdefault(LAST_RUN_KEY, data[LEGACY_LAST_RUN_KEY])
+        return moved
 

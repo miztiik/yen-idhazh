@@ -1,12 +1,13 @@
 # GitHub Actions Workflows
 
-**Last Updated**: 2026-09-23
+**Last Updated**: 2026-09-28
 The exact workflow display names, files, and trigger classes. All scheduled
 times are UTC.
 
 **Three workflows push to `main`.** `digest.yml` does it on every run.
-`prune.yml` does it on the first wake `finetune.prune_every_days` allows, and it
-is the one force-push this repository permits. `measure.yml` does it only from
+`prune.yml` does it on the first wake the `every_days` of
+`config/gardener/corpus-squash.json` allows, and it is the one force-push this
+repository permits. `measure.yml` does it only from
 the `runtime` job, and only the machine that job drew - one row under
 `state/pipeline-tests/host-fingerprint/`. Nothing else in `measure.yml` writes
 anything back; every other job uploads an artifact and the runner takes the rest
@@ -23,7 +24,7 @@ so the others still cannot.
 | `drift.yml` | `Drift review` | Sunday at 08:00 (`0 8 * * 0`) | yes |
 | `validate.yml` | `Model validation` | none | yes |
 | `measure.yml` | `Measurements` | none | yes |
-| `prune.yml` | `Corpus prune` | `37 23 * * *`; squashes on the first wake `finetune.prune_every_days` allows | yes |
+| `prune.yml` | `Corpus prune` | `37 23 * * *`; squashes on the first wake the squash's `every_days` allows | yes |
 | `backfill.yml` | `Vector backfill` | none | yes |
 | `idhazh-pipeline-tests.yaml` | `Pipeline tests` | none | yes |
 

@@ -307,6 +307,7 @@ def plan(
     return stage_plan(
         DATE,
         settings=settings,
+        commit_sha="a" * 40,
         fetcher=fetcher or fetcher_over(*urls),
         now=lambda: now,
         execution=run_n,

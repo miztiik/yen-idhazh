@@ -1,13 +1,13 @@
 # Partitions
 
-**Last Updated**: 2026-09-23
+**Last Updated**: 2026-09-28
 A **partition** is one file holding one period of a collection that grows. The
 directory is the collection and the name says the period - `<YYYY-MM>` for a month,
 `<YYYY>/<MM>/<DD>` for a day. A reader opens the periods its window names and skips
 the rest. A writer appends to the period its own date names and leaves the rest
 alone.
 
-**A month is the usual unit here and it is not the only one.** Ten collections
+**A month is the usual unit here and it is not the only one.** Eleven collections
 partition by **day** instead, and the first two below are the same series - the
 state ledger is derived from the published tree:
 
@@ -16,7 +16,8 @@ state ledger is derived from the published tree:
 | `frontend/public/digest/<YYYY>/<MM>/<DD>/` | `stages.assemble.stage_assemble` |
 | `state/published/<YYYY>/<MM>/<DD>.csv` | `ledger.append_published` |
 | `state/day-metrics/<YYYY>/<MM>/<DD>.json` | `telemetry.publish.day_metrics.write` |
-| `state/visual-prunes/<YYYY>/<MM>/<DD>.csv` | `ledger.append_visual_prunes` |
+| `state/raw/visual-prunes/<YYYY>/<MM>/<DD>/` | `stages.prune_state`, through `ledger.persist` |
+| `state/raw/feed-retirements/<YYYY>/<MM>/<DD>/` | `telemetry.source_health.file_retirements`, through `ledger.persist` |
 | `state/counterfactual-scores/<YYYY>/<MM>/<DD>/` | `ledger.write_segment` |
 | `state/content-similarity-judge/scored-pairs/<YYYY>/<MM>/<DD>.csv` | `ledger.append_story_similarity_pairs`, from the collecting job |
 | `state/content-similarity-judge/fitted-thresholds/<YYYY>/<MM>/<DD>.csv` | `ledger.append_fitted_thresholds`, from the collecting job |
@@ -197,8 +198,8 @@ so an empty one is a writer that made the directory and lost its rows. Reading
 it as a day that recorded nothing would draw an empty panel on a passing build.
 
 **`day_partition.day_files` is not taught the directory shape, on purpose.** It
-keeps its callers over the union-safe ledgers - `state/published/`, `state/seen/`
-and `state/visual-prunes/` - which stay one file a day, and its loud refusal of
+keeps its callers over the union-safe ledgers - `state/published/` and
+`state/seen/` - which stay one file a day, and its loud refusal of
 a directory is the tripwire that catches a ledger arriving in the new shape
 without a plan.
 
@@ -296,7 +297,8 @@ Authority: owner, 2026-09-06.
 | Search index | `frontend/public/assist/index/<YYYY-MM>.json` and `<YYYY-MM>.bin` | `assemble.rebuild_search_index` | It is derived whole from the committed days of that month, so the month is closed once no day inside it changes. `stages.assemble.stage_assemble` rebuilds only `month_of(plan.date)`. |
 | Published addresses | `state/published/<YYYY>/<MM>/<DD>.csv` | `ledger.append_published` | Partitioned by **day**, not by month. The caller hands the date and the writer appends to that day alone, so a day is closed once the run's date leaves it. Its read carries `collect.published_window_days`, which the committed config sets to `-1` - the cover is open, and the partition is what a finite value would have to skip. **A finite value must be strictly wider than `collect.seen_window_days`**, and `CollectConfig` refuses one that is not: an undated address whose sight row expires the same week reads as first-seen-today and republishes as new. |
 | Day metrics | `state/day-metrics/<YYYY>/<MM>/<DD>.json` | `telemetry.publish.day_metrics.write` | Partitioned by **day**. One record per published day, mirroring the published tree it is derived from, and closed the moment that day is. The site opens only the dates a page names, so nothing walks the tree. |
-| Visual prunes | `state/visual-prunes/<YYYY>/<MM>/<DD>.csv` | `ledger.append_visual_prunes` | Partitioned by **day**, and the one collection here whose read will never carry a window - the question is the whole series. It files by day anyway, for the two things the grain buys with no read time at all: two runs collide on a file only when they are the same day, and taking a day back off the record is one `rm` rather than an edit inside a shared file, which its own `merge=union` line cannot express. |
+| Visual prunes | `state/raw/visual-prunes/<YYYY>/<MM>/<DD>/` | `stages.prune_state`, through `ledger.persist` | Partitioned by **day**, and one of the two collections here whose read will never carry a window - the question is the whole series. It files by day anyway, for the two things the grain buys with no read time at all: every run files a file of its own, so two runs never write one path and the tree needs no merge driver, and taking a day back off the record is one `rm` of that day's folder. It moved under `state/raw/` on 2026-09-28, from `<YYYY>/<MM>/<DD>.csv` day files that carried a `merge=union` line. Closed once the run's date leaves the day. |
+| Feed retirements | `state/raw/feed-retirements/<YYYY>/<MM>/<DD>/` | `telemetry.source_health.file_retirements`, through `ledger.persist` | Partitioned by **day** since 2026-09-28, where it was one flat file, `state/feed-retirements.csv`. A retirement files under the day the address was retired, so a day is closed once the run's date leaves it. It is the other collection here whose read never carries a window: a retirement is permanent for one address, so the reader opens every file. The grain buys it what it buys the cleanup record above. |
 | Scored pairs | `state/content-similarity-judge/scored-pairs/<YYYY>/<MM>/<DD>.csv` | none yet | Partitioned by **day**, and the first collection here that nests one directory deeper than `state/` - the whole adaptive merge line hangs off `state/content-similarity-judge/`, so a commit step stages one prefix. A day is closed once its pairs have been folded into the score record, which happens once. The shape, the path and the header ship ahead of the step that appends to them (Guardrail #3). |
 | Fitted thresholds | `state/content-similarity-judge/fitted-thresholds/<YYYY>/<MM>/<DD>.csv` | none yet | Partitioned by **day** for the reason its sibling is, and unlike that sibling its read does carry a window: the step-change guard takes a median over the newest `step_change_window_rows` written rows, and `assemble` looks back `applied_lookback_days` for a line to apply. Closed once the run's date leaves the day. |
 | Council shard outcomes | `state/llm-council/shard-outcomes/<YYYY>/<MM>/<DD>.csv` | none yet | Partitioned by **day**, and it is the one collection here whose day is **not** the day its writer ran: a row files by the digest date it judged, so one night's run appends to every date its plan covered and a day is closed once no later night still names it. Nested one directory deeper than `state/` for the reason the adaptive merge line is - everything the council records about itself hangs off one prefix, so a commit step stages one path. Two directory levels and no more: the day inventory globs one level and two, so a third would be invisible to it and the miss would be silent. The shape, the path and the header ship ahead of the step that appends to them (Guardrail #3). |
@@ -434,7 +436,6 @@ commitment to convert any of them.
 
 | Collection | Path | Writer | Why not |
 | --- | --- | --- | --- |
-| Feed retirements | `state/feed-retirements.csv` | `ledger.append_retirements` | A retirement is permanent for one address. A run that forgot one would start asking a dead server again. |
 | Source health view | `frontend/public/source-health.json` | `telemetry.publish.source_health` | One document, rewritten whole each run. Row 20 of the constant-cost-reads plan bounded the read behind it to the recorded dates it needs (#485), so it no longer walks all history to write the same document. |
 | Training corpus | `corpus/corpus.jsonl`, `corpus/corpus.meta.json`, `corpus/holdout.txt` | `idhazh.corpus`, rolled by `backend/utilities/data_wrangler.py` | A rolling training window bounded by `finetune.corpus_rows` and by `prune.yml`, not by a calendar. Deliberately given no union merge driver, because the union of two rolls holds evicted rows again. |
 | Published days | `frontend/public/digest/<YYYY>/<MM>/<DD>/` | `stages.assemble.stage_assemble` | Partitioned by **day**, and listed here because it is the tree the day grain came from rather than because it is unpartitioned. A day is frozen the moment it is written. The month partitions above are keyed off this tree, and so is `state/published/`. |

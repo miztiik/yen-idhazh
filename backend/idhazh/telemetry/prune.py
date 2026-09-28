@@ -12,7 +12,8 @@ default and `--no-dry-run` is the second word. The reason is
 `.github/workflows/prune.yml`: it squashes and force-pushes `main` on a
 schedule, so a state file deleted here stops being recoverable from history once
 that prune passes over the range (CLAUDE.md section 8). `git revert` is not a
-recovery path for a file older than `finetune.prune_keep_days`. The precedent is
+recovery path for a file older than the squash's window in
+`config/gardener/corpus-squash.json`. The precedent is
 the fold step in `.github/workflows/digest.yml`, which ships `idhazh
 prune-state --dry-run` for exactly that reason and has never removed a file.
 
@@ -89,7 +90,10 @@ PruneInterruptedError = one_at_a_time.PruneInterruptedError
 #: walker its suffix, which is where the question belongs. `state/candidate-models/`
 #: and `state/span-rollup/` are absent too: nobody has asked to take a range out
 #: of one, and joining this list is a decision rather than a consequence of the
-#: shape.
+#: shape. `visual-prunes` left on 2026-09-28, when it moved under `state/raw/`
+#: through the ledger door: its days are folders of writer files there, which
+#: neither walker here reads, and a target that walked its old folder would
+#: select nothing forever.
 #:
 #: **`host-fingerprint` is what a day taken off the site owes its machine rows.**
 #: It filed by day from 2026-09-16 and was missing from this list until
@@ -132,7 +136,6 @@ _TARGET_LEDGERS: Final[tuple[LedgerName, ...]] = (
     LedgerName.SCORES,
     LedgerName.SCORE_INDEX,
     LedgerName.LLM_COUNCIL_SHARD_OUTCOMES,
-    LedgerName.VISUAL_PRUNES,
 )
 
 TARGETS: Final[Mapping[str, str]] = MappingProxyType(
