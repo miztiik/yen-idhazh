@@ -12,7 +12,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 
 | Field | Value |
 | --- | --- |
-| **Blocked by** | Row 1 starts now; rows 2 and 3 follow it. Row 4 also waits on plan 50 row 9, plan 51 row 3 and plan 51 row 9, and every later row waits on row 4 (section 1 names each by title). **A route row (6 to 9) merges only when the live site carries what it reads** (section 1, "Before a route row merges"); until then its branch waits and the pool keeps running |
+| **Blocked by** | Row 1 starts now; rows 2 and 3 follow it. Row 4 also waits on plan 50 row 9 and plan 51 row 3, and every later row waits on row 4 (section 1 names each by title). **A route row (6 to 9) merges only when the live site carries what it reads** (section 1, "Before a route row merges"); until then its branch waits and the pool keeps running |
 | Why this plan exists | A console panel reads a file the build wrote in advance, so the question it can ask was fixed by whoever wrote that file. The browser can now ask the ledger directly. This plan moves every panel whose facts are in the three published ledgers onto the query door, redraws every chart that still uses ECharts so it can be uninstalled, applies Susan's verdicts, and deletes the six telemetry projections under `frontend/public/` once nothing reads them |
 | Hard scope - in | - Each route gets its own console file, test expectations and gate drivers, and every console page reads its config from one build-time value (row 1).<br>- The chart types become ready for a route: the ranked list draws a range and two named ends, the date series carries the settings line and named rules, every type carries its readout and its chart attribute, and the series colours become one table (row 2).<br>- Judgement carries its ids and gates, and its two readers are named for the judge (row 3).<br>- Every panel's query is declared in code before any panel draws it, with the loading states every route shares, the packed canary and the browser fixture; the door is measured at the console's real volume before any route moves (row 4).<br>- The band reads the ledgers and carries the settings and checker changes; four projections nothing draws go (row 5).<br>- Every panel whose facts are in `item-health`, `scores` or `host-fingerprint` asks the door at view time (rows 6 to 9), with Susan's verdicts applied panel by panel: panels 4 and 15 deleted, panels 3 and 13 replaced, panel 22 folded into panel 18, the new panels added, the rest kept or redrawn (section 2.7).<br>- The `telemetry` and `run-timeline` projections go (row 10); `echarts` is uninstalled (row 11); the `span-rollup` ledger goes and one item's trace becomes a command (row 12) |
 | Hard scope - out | see the table below |
@@ -25,7 +25,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | What is out | What it costs to leave out | What would bring it in |
 | --- | --- | --- |
 | **Publishing the other datasets the console reads**: `state/day-metrics/`, `state/feed-health/`, the run manifests and item facts inside the digest day files, the source-health view, and `state/content-similarity-judge/` | The panels section 2.8 lists keep a build-time read, so N2 and N3 are not met for those panels and their routes stay prerendered. They draw without ECharts, so N5 is met. **The reader loses** nothing they have today; they do not gain view-time freshness on those panels | Its own plan: each dataset needs a parquet contract, a writer through the ledger door, a compaction task, a publish entry and a `LedgerName` member - plan 50's migration row again for each. Plan 50's ESCALATE trigger 3 makes each migration a person's call |
-| Changes to the query door itself: a column-shaped result, a "newest N days" ask, a structured aggregate | Rows 6 to 9 take the door as plan 51 ships it, with the cache plan 51's row **The door keeps what it fetched for the page's life, and says how far a ledger reaches** adds. Row 4 says whether that is fast enough | Plan 51's owner, handed the reading by ESCALATE trigger 3 |
+| Changes to the query door itself: a column-shaped result, a "newest N days" ask, a structured aggregate | Rows 6 to 9 take the door as plan 51 ships it, with the cache plan 51's row **The door keeps what it fetched for the page's life, and says how far a ledger reaches** added (#1157). Row 4 says whether that is fast enough | Plan 51's owner, handed the reading by ESCALATE trigger 3 |
 | New questions beyond Susan's verdicts | None today | A later Susan pass |
 | `failed_field` (verdict 27) | It stays in `UNREAD_CELLS`, empty on every committed row | A row that gives it a writer or deletes the column |
 | A page where an operator types a question | Nothing here | [`20260928-55-one-page-queries-every-ledger-plan.md`](20260928-55-one-page-queries-every-ledger-plan.md), which starts after row 1 |
@@ -68,7 +68,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | plan 50 row 12 | The closed-day fold of the CSV day trees moves into the gardener | PENDING, stacked on the open #1156 |
 | plan 51 row 3 | The three ledgers the console reads are published | PENDING, waits on plan 50 row 9 |
 | plan 51 row 8 | One panel end to end: the browser fetches the ledger and draws it in d3 | PENDING; asked to wait on rows 1, 2 and 4 here (found while planning, item 2) |
-| plan 51 row 9 | The door keeps what it fetched for the page's life, and says how far a ledger reaches | PENDING, ready |
+| plan 51 row 9 | The door keeps what it fetched for the page's life, and says how far a ledger reaches | DONE, #1157 |
 
 **Rows of other plans that are never in flight with a row here**, because they share files. The readiness check compares against them too:
 
@@ -249,7 +249,7 @@ export const BY_ROUTE: Readonly<Record<RouteId, { readonly DRIVERS: typeof DRIVE
 **`frontend/src/lib/console/queries/`**: one module for each of `pipelines`, `model`, `machine` and `voices`; `shared.ts` for a query two routes draw, re-exported by each route module that draws it; `window.ts` for the reach, the range and the memo.
 
 ```ts
-import type { DateStamp, LedgerName, Predicate, SliceResult } from '$lib/data/ledger';
+import type { DateStamp, LedgerName, LedgerReach, Predicate, SliceResult } from '$lib/data/ledger';
 import { ledgerReach } from '$lib/data/ledger';
 
 /** What one panel asks one ledger. Declared here and nowhere else, so the columns a panel
@@ -263,8 +263,8 @@ export interface PanelQuery {
 	readonly span: 'window' | 'newest-day' | 'widest';
 }
 
-// window.ts
-export type LedgerReach = Awaited<ReturnType<typeof ledgerReach>>;
+// window.ts. LedgerReach, from the door (#1157):
+//   {state: 'ok'; first; through} | {state: 'quiet'} | {state: 'missing'} | {state: 'unreachable'}
 export interface RouteReach {
 	/** The oldest `through` among the route's ledgers whose reach is `ok`; null when none is. */
 	readonly through: DateStamp | null;
@@ -300,7 +300,8 @@ export function tallyAsks(answers: readonly (SliceResult | LedgerReach | 'pendin
 ```
 
 - **Names.** A query is exported as `<panelIdInCamelCase>Query`, and its `name` is that identifier. A query two panels share is named for what it asks (`failedRuleQuery`).
-- **The window is anchored on the data, not the clock.** `to` is `RouteReach.through`; each query's `from` is clamped to its own ledger's `first`, from `ledgerReach()` (plan 51's row **The door keeps what it fetched for the page's life, and says how far a ledger reaches**). One query a preset: a narrower preset is a new ask, and the door's cache serves its files.
+- **The window is anchored on the data, not the clock.** `to` is `RouteReach.through`; each query's `from` is clamped to its own ledger's `first`, from `ledgerReach()` (plan 51's row **The door keeps what it fetched for the page's life, and says how far a ledger reaches**, #1157). One query a preset: a narrower preset is a new ask, and the door's cache serves its files.
+- **A reach that did not arrive names no day** (plan 51 deviation 20). A slice's `unreachable` names the first day it could not answer; a reach asks for no day, so its `unreachable` carries none, and any day the console printed for it would be made up. So nothing reads or prints a day from an unreachable reach: each of that ledger's panels answers `unreachable` with no slice asked, its box prints `Did not arrive.`, the route line counts it with the rest (section 2.4 step 4), and the door's own browser-console line says why. The retry asks the reach again: a fetch that failed is fetched again, and an index this build will not act on stays `unreachable` until the page is reloaded.
 - **A panel that does not follow the window** asks `span: 'newest-day'`, or `span: 'widest'` (`model-change` only), and names the day, run or change it drew. **The newest run** is the run of the newest day whose `run_id` carries the largest number after its date. Section 2.7's `Window` column says which.
 - **Two ledgers meet by day or by `url_key`, never on `item_id` or `run_id`.** `scores` meets `item-health` by `date` or by `url_key`; a `url_key` with two score rows takes the later one. `item-health` meets `host-fingerprint` on `(date, run_id, job, shard)`, the whole of `HOST_FINGERPRINT_KEY`, and an empty item `job` reads as `work`, the way `console_band.py` reads an empty host `job`. A row with no match is counted and printed, never dropped.
 - **Rates.** `itemRates` moves from `frontend/src/lib/server/model-work.ts` to `frontend/src/lib/console/rates.ts`, and `model-work.ts` imports it back until its last caller moves. A row qualifies when `prefill_ms`, `input_tokens`, `cached_tokens`, `decode_ms` and `output_tokens` are all filled and `input_tokens - cached_tokens` and `output_tokens` are above zero. **The reference machine** is the window's `cpu_model` with the most qualifying rows, ties by name. **The typical article** reads the window's median `input_tokens - cached_tokens` and writes its median `output_tokens`; its seconds on a day are those two counts priced at that day's median milliseconds per token on the reference machine. `slower-on-same-work`, `slower-machines`, `model-throughput` and `model-change` all use this module.
