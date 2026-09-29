@@ -58,12 +58,16 @@ field existed.
 **What it costs.** Every shard of every enabled test case runs on a runner of
 its own, all at the same time, and one article a shard is the default - so a
 dispatch takes about as long as its slowest article, plus each runner's cache
-restore or download and its model load. Before the runners split, one dispatch
-took 106 minutes on 2026-09-15: three test cases, one after another, over two
-articles on one runner. A bench dispatch of `measure.yml` on 2026-09-16 took
-189 minutes, and one of the four that day took 288. A candidate is always a
-cache miss on its first dispatch, so every runner pays its own download: the
-same fetch in `Model validation` took 25 to 74 seconds on 2026-08-26.
+restore or download and its model load. The first dispatch of this shape, on
+2026-09-29 (run 36540131911, `models/ornith-1.5-9b-q5km.json`, two articles
+under two test cases on four stock runners, each downloading the weights), took
+34 minutes, and its slowest article took 30 of them. One dispatch, so there is
+no spread. Before the runners split, one dispatch took 106 minutes on
+2026-09-15: three test cases, one after another, over two articles on one
+runner. A bench dispatch of `measure.yml` on 2026-09-16 took 189 minutes, and
+one of the four that day took 288. A candidate is always a cache miss on its
+first dispatch, so every runner pays its own download: the same fetch in
+`Model validation` took 25 to 74 seconds on 2026-08-26.
 
 Which test cases run is `enabled` in `config/pipeline-tests.json`, and nothing
 else. `parallel-summarization` is off by default, because its two slots each
