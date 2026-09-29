@@ -1,606 +1,183 @@
 # Retention
 
-**Last Updated**: 2026-09-28
+**Last Updated**: 2026-09-29
 
-What may be deleted, when, and what bounds every collection a run appends to.
-Unpublishing a day, the state tree's own ceilings, and the score shards that
-turn into summaries once they age out.
+What the app may delete, what must survive, and the safeguards before deletion.
+[layout.md](layout.md) owns publication. The [gardener](idhazh-gardener.md)
+owns scheduled cleanup; its [task declarations](../../concepts/config/idhazh-gardener.md)
+own the active windows, deletion ceilings and dry-run settings.
 
-[layout.md](layout.md) is the other half and owns what a run **writes** - the day
-artifact, the item's facts, the month search index and the routes a reader
-reaches. This page owns what happens to all of it afterwards. A person arrives
-holding one question or the other: how is a day published, or what happens to it
-when it is old.
+## Deletion rules
 
-The rule underneath every section here is `CLAUDE.md` Guardrail #12 - nothing costs
-more as the repository grows - and the reason retention has a page at all is that
-a deletion promise is a promise to a reader
-([../../concepts/digest.md](../../concepts/digest.md)).
+- Read retention policy from config. A site-size warning is not permission to delete data, and a size forecast is not a deletion schedule.
+- Use UTC boundaries. Decide age from the period being retained, not when the job woke. Delete only below the retention floor, so a pass using a past date cannot delete newer data.
+- Keep every period a supported reader can request. Compare calendar windows at their actual partition boundaries; do not approximate every month as thirty days.
+- Respect each task's ownership, lifecycle status, dry-run setting and deletion ceiling. Do not assume all tasks have the same mode.
+- Review the dry-run list before enabling deletion. Enabling a task is an explicit configuration decision, not a side effect of adding it.
+- Write and validate any required summary before removing its source files. A failed write or reconciliation leaves the source intact.
+- Deletion is atomic per file or collection member, not per whole range. An interrupted pass reports what happened and where it stopped; it does not promise to restore earlier deletions.
 
-Retention exists to bound the **published site**, which has a hard ceiling. It does nothing for repository size: deleting a committed file leaves the blob in history forever, and rewriting history is forbidden ([../../../CLAUDE.md](../../../CLAUDE.md) section 8). Anything that must not grow the repository must not be committed at all.
+Removing a committed file bounds the live tree, not its Git history. Only the
+gardener's `history` job has standing permission to rewrite that history under
+[CLAUDE.md section 8](../../../CLAUDE.md). Once the rewrite removes the old
+history, a revert cannot recover the deleted data.
 
-The levers are ordered, and deletion is the last one:
+## Published days and visuals
 
-1. **Encode efficiently.** Images are the overwhelming majority of the bytes; the encoding choice alone moves the ceiling by years.
-2. **Honour the visual rule.** "Nothing" is the common and correct answer ([../../concepts/digest.md](../../concepts/digest.md)), so most items carry no image at all.
-3. **Serve the drawings from somewhere else.** `visuals.asset_base_url`, below. The bytes still exist and every link still works; they stop being ours to fit under the cap.
-4. **Then, and only if still needed, prune.**
+The `visual-prune` task removes rendered visuals only. It must not remove a day's
+payload, its directory, evaluation records, fixtures, canaries or schema history.
+Other ledgers have their own retention tasks; visual cleanup is not authority to
+delete them.
 
-After the first two, the knob may never need to be switched on. That is the intended outcome, not a fallback.
+`retention.image_months` controls the published visual-retention promise, with
+`-1` meaning no age-based visual deletion. The gardener declaration must match
+that promise. Visual pruning is currently a dry run; inspect
+[visual-prune.json](../../../config/gardener/visual-prune.json) before assuming
+that a pass deletes anything.
 
-What the job may do: delete rendered visuals older than a configured age, never on a size trigger, dry-run by default, refusing to act above a maximum-deletions fuse, in its own scheduled workflow that can never take the daily digest down with it. A pruned visual is a **distinct state from a failed render** - "we could not make this" and "we made it and threw it away" are different facts, and one field must not mean both.
+State the visual window on the archive before enabling deletion. Say what the
+policy permits, not that a deletion has already happened. Stories and their links
+remain. Distinguish a pruned visual from a failed render, and keep the story
+readable without either. A missing day must use the designed missing state,
+never silently redirect to today.
 
-What it must never touch: a day's JSON payload, a date directory, the eval ledger, the golden fixtures including retired ones, the injection canaries, or any schema changelog. The ledger and the fixtures are three orders of magnitude smaller than the images and are the only reason a year-over-year quality claim can be interpreted at all.
+Prefer reducing unnecessary published bytes before deleting reader content.
+Measure the actual deployed bundle through the
+[site-weight rules](../../reference/site-weight.md); cleaning a source tree is
+not a measurement of the site's size.
 
-Two promises to the reader, both non-negotiable: **the window is stated before anything is deleted**, on the archive page and on the missing-day page; and a pruned day lands in the designed missing state, **never a silent redirect to today**. A reader who cannot distinguish a dead link from a live one has lost the ability to trust any link.
+## Unpublishing a day
 
-The archive states it in its own header from 2026-08-27, and **the sentence names what is actually deleted**. The knob is `retention.image_months` and the job it drives may remove a rendered chart and nothing else, so "Charts are kept for N months, then deleted; every story and every link stays." is the promise, and "Nothing here is deleted." is what a day published before 2026-09-13 carries, when the knob was `-1`. **The sentence states the rule and never reports an event.** It read "Charts older than N months are deleted" until 2026-09-13 and was changed the day the window took a value: a reader who scrolls an archive with nothing missing reads the present tense as an account of what has happened and starts wondering what they cannot see, where a house rule is true on day one whether or not anything has aged into it (Reader, 2026-09-13). That distinction is what lets the promise below be kept - the window can be stated a year before the first chart can reach it. **The archive is now the only page that states it.** The footer carried a copy on every page from 2026-08-31 and lost it on 2026-09-09: it was read off the newest day, so a page a reader already held was rewritten each time one published, for a sentence about a job that has never deleted anything. The archive's copy stays because that is the page where deletion could matter to the reader looking at it, and because the promise above is that the window is stated **before** anything is deleted - one page stating it is what that asks for, and one page cannot disagree with itself.
-
-**The window is 13 months from 2026-09-13 and `config/gardener/visual-prune.json` still carries `dry_run: true`, so nothing is deleted and the notice is a year early on purpose.** The oldest chart on disk was published 2026-08-22, so the first one could not go before about 2027-09-22 even with the deletion switched on. Where 13 came from, and why the byte budget could not choose between 12, 13 and 14, is [../../concepts/adaptive-pruning.md](../../concepts/adaptive-pruning.md#why-13-and-why-the-bytes-did-not-choose-it).
-
-## Unpublishing a day, a range or a month: the design (2026-09-06)
-
-**Designed, not built. Nothing below ships yet.** The request is an operator
-command that takes a day back off the site - one date, a range of dates, or a
-whole month - and the reason it is written down before it is written is that
-the gardener's `visual-prune` task cannot be stretched into it. That task
-selects files by an item's name, deletes rendered charts only, and is explicitly
-forbidden from touching a day's payload or its date directory. Unpublishing is
-the opposite operation and it needs its own name.
-
-**A published day is the artefacts below, and a command that misses one leaves a
-reader on a broken page.** The daily publish stages exactly this set, so this
-set is what an unpublish has to answer for. A count is deliberately not given:
-the last one said eleven over twelve rows, because a row was added and the
-sentence above it was not.
-
-| Artefact | Grain | What an unpublish owes it |
-| --- | --- | --- |
-| `frontend/public/digest/<Y>/<M>/<D>/digest.json` | day | remove |
-| `frontend/public/digest/<Y>/<M>/<D>/run.json` | day | remove |
-| `frontend/public/digest/<Y>/<M>/<D>/<item_id>.json` | day | remove |
-| `frontend/public/assist/index/<Y>-<M>.json` and `.bin` | month | **rebuild**, never edit |
-| `frontend/public/telemetry/<Y>-<M>.csv` | month | rewrite without the day's rows |
-| `frontend/public/machine/<Y>-<M>.csv` | month | **rebuild** from the day files that are left |
-| `frontend/public/source-health.json` | whole site | rebuild |
-| `state/published/<Y>/<M>/<D>.csv` | day | remove |
-| `state/scores/<Y>/<M>/<D>.csv` | day | remove |
-| `state/score-index/<Y>/<M>/<D>.csv` | day | remove |
-| `state/item-health/<Y>/<M>/<D>.csv` | day | remove |
-| `state/host-fingerprint/<Y>/<M>/<D>.csv` | day | remove |
-| `corpus/corpus.jsonl` | rolling window | rewrite without the day |
-
-The month-grain rows are the trap. Three of them are shards a later run appends
-to, so a command that deletes the shard takes the neighbouring days with it, and
-a command that leaves it alone publishes telemetry for a day that no longer
-exists. The index is worse: it is derived, and `assemble.rebuild_search_index`
-already regenerates a whole month from the days present - so the index needs a
-rebuild call rather than an edit, and it is the one artefact that repairs itself
-correctly for free.
-
-`state/host-fingerprint/` is a day file and removing it is one `rm`, but it is
-the row that carries a second obligation: `telemetry/publish/machine.py` folds
-the published machine shard from that tree and from `state/item-health/`, so the
-day has to come off both and the month has to be republished from what is left.
-Deleting the source day alone leaves the drawn month still naming a machine for
-a day the site no longer has.
-
-**`state/seen/` is deliberately absent from that table.** It records that a URL
-was *seen*, not that it was published; removing a day's rows there would let the
-next run rediscover every story it just unpublished, which turns one operator
-command into a loop.
-
-**The reader-facing half is already designed and must not be re-decided.** This
-page's retention rules bind an unpublished day exactly as they bind a pruned
-one: the day lands in the designed missing state, never a silent redirect to
-today, and the archive's own header says what happened. Today that header reads
-"Nothing here is deleted.", which is true and would stop being true - so the
-sentence is part of the change, not a follow-up to it.
-
-**What it costs, stated rather than implied.** The `history` job of
-`idhazh-gardener.yml` force-pushes `main`
-on a schedule ([../../../CLAUDE.md](../../../CLAUDE.md) section 8), so once a
-squash passes over the range, the unpublished day's bytes are gone from history
-as well as from the tree. Before that boundary an unpublish is a normal commit
-and is revertible; after it, it is permanent. That is an argument for the
-command writing what it removed into its own commit message, and for it never
-running on a schedule.
-
-**The command carries no threshold of its own, and may not grow one.** It takes
-the dates an operator names and nothing else - no "older than", no "down to N
-megabytes", no day count written into the code. Every bound this repository
-honours is already a key in `config/` with a contract behind it
-([../../../CLAUDE.md](../../../CLAUDE.md) Guardrail #6): `retention.image_months`,
-`retention.site_budget_mb`, the `observability.public_*_keep_months` family
-that bounds the published copies a day writes into, and the window of each
-gardener task under `config/gardener/` that bounds a ledger. A number in the source that decides what to delete is
-the defect, whatever the number is.
-
-If a scheduled variant is ever wanted, it reuses that shape rather than minting
-a figure: months as an integer, `-1` meaning never, defaulting to never, and the
-same `dry_run` and `max_deletes_per_run` guards the `visual-prune` declaration
-already answers to. **It would also have to clear a higher bar than the manual command.**
-The manual one removes a day somebody decided was wrong; a scheduled one removes
-a day nobody looked at, and the archive's own header would have to say so before
-the first run.
-
-**Nothing forces this yet.** Measured 2026-09-05: 16 committed days, and the
-site's ceiling is a function of the prerendered dated routes named in the
-follow-up above rather than of any day's payload - so deleting days is not the
-lever that buys room, and sizing this command against `site_budget_mb` would be
-solving the wrong problem with the destructive tool. The command is worth having
-for a day published in error - a bad extraction, a source that asked to be
-removed - and that is a different need from bounding the site.
-
-
-## The valve: the drawings can be served from somewhere else (2026-09-06)
-
-`visuals.asset_base_url` is one config key with two effects, and it ships empty, which means this site.
-
-Name an absolute `https://` prefix and `frontend/scripts/copy-visuals.mjs` stops staging the rendered drawings into the bundle, while `ItemVisual.svelte` asks that prefix for them instead. They are one key because two would let the bundle keep a copy of every drawing the page is asking a host for, and the valve would move nothing. The page's own `connect-src` is derived from the same key for the same reason: `'self'` is what makes exfiltration from a planted instruction a browser-level impossibility, so it is also what refuses an off-origin drawing, and an operator who has to edit it by hand gets a site that fetches nothing and says why only in a console no reader opens.
-
-**What it buys, measured 2026-09-06 on an node 24.12.0, over the 17 committed days.** Shut, the built site is 685 files and 111,255,143 bytes. Open, it is 309 files and 106,474,222 bytes. So it removes 376 drawings and **4,780,921 bytes, which is 4.3 percent of the site** - about seven weeks of headroom at the 16,641,956 bytes a published day this page measures below, against a cap the same measurement puts at about 2026-10-22.
-
-**Say the small number first: 4.3 percent is not the answer to the cap.** The prerendered dated routes are 39.5 percent and they are what the cap date is a function of. This valve is worth having because it is one config edit and it costs nothing shut, not because it is the lever that saves the site. Anyone reaching for it as the fix has read the wrong number.
-
-**What it costs open, also measured.** The candidate host caches for five minutes, so a repeat reader refetches a drawing the bundle would have served from cache - real on a slow connection, and the reason the reading experience never waits on it: a drawing arrives after the sentence that repeats its numbers, and the page is complete without it. `connect-src` gains that one origin, computed at build time from our own config; no payload field, no model output and no fetched text can reach it (Guardrail #11), and the path is still matched by `publishedVisual` before either half is joined.
-
-**The carrier does not move, only the URL.** The drawing is fetched as text and inlined, exactly as it is today. An `img` would be the obvious way to point at another host and it is refused: an SVG inside an `img` is a separate document, reads none of the page's custom properties, and comes back with the colours the renderer baked in - black axis type on a near-black card in the dark theme. That was removed on 2026-09-05 and moving bytes is not a reason to bring it back. Cross-origin `fetch` returns text, and text inlined into our document is themed by our stylesheet whichever host sent it.
-
-**Shut is proven, not assumed.** At the default the whole built tree is byte-identical to one built without the valve: 685 files, 111,255,143 bytes, zero differing hashes over two builds at a pinned `BUILD_VERSION`, same hardware and date. The join is written `${__ASSET_BASE_URL__ || base}` so the minifier folds an empty constant away rather than shipping a branch. A release valve that changes the default output is not a valve, it is a change.
-
-**Whoever opens it puts the same `digest/` tree at that prefix first.** Nothing in the pipeline uploads it, and nothing checks that it is there. The day payloads and the month index are staged either way: they are read from this origin, and they are not what the ceiling is about.
-
-## The cleanup says what it did not clear (2026-09-06)
-
-Every pass of the gardener's `visual-prune` task files one row under `state/raw/visual-prunes/` describing the cleanup over the rendered visuals - the policy in force, the cutoff it drew, what it found, what it took, what the fuse held back, the oldest day still carrying a picture, and the payload tree before and after. `VisualPruneRow` is the contract.
-
-**`skipped_by_fuse` is the field the row exists for, and it is the one nobody would have added.** `deleted` looks like the answer and cannot be one: the declaration's `max_deletes_per_run` caps it at 200, so it reads 200 on a run that has just cleared its backlog and 200 on a run that has twenty more passes to go. Only the pair separates them. A run that deleted 200 and skipped none is finished; a run that deleted 200 and skipped 4,000 is not, and nothing else on the row would say so.
-
-**It means the same thing on a dry run as on a live one**: the candidates the fuse would not have let that run reach. It is deliberately not "everything still there afterwards". Every pass that ships today is a dry run - `config/gardener/visual-prune.json` carries `dry_run: true` - so counting the deletions a dry run declined to make would set `skipped_by_fuse` equal to `candidates_found` on every row this project will ever write, and the field would say nothing at all. That is the same failure `deleted` already has, arrived at from the other side. `dry_run` is the cell that says nothing was deleted, and the arithmetic reads it: on a live run `deleted + skipped_by_fuse` is `candidates_found` exactly, and on a dry run it falls short by what a live run would have taken. The contract refuses a row that breaks either rule.
-
-**The two byte figures are the tree the cleanup walks, not the published site.** Those are two different trees - eighteen times apart when they were last measured together - so the row names the one it read. The site is measured by `idhazh site-weight` against the built bundle, and never here.
-
-**The row lands on every pass, including the passes where the window is forever and nothing is a candidate.** A ledger written only when something was deleted has no baseline: its first row would arrive on the day the deletion started working, with nothing to compare it against. It lands on a dry run too: the task's declaration `appends_to` the ledger, and the gardener stages a report whatever `dry_run` says ([idhazh-gardener.md](idhazh-gardener.md)).
-
-Each row is one file of its own through the ledger door, under `state/raw/visual-prunes/<YYYY>/<MM>/<DD>/`, where the date is the day the pass ran for ([../contracts/persistence.md](../contracts/persistence.md)). The layout buys the read nothing, because the question it answers - is the backlog shrinking - carries no time bound, so every file is opened anyway ([../contracts/schemas.md](../contracts/schemas.md#a-ledger-partitions-only-when-its-read-carries-a-window)). What it buys is a file per pass, so two passes never write one file and the tree needs no merge driver. The gardener lands the file the ledger door named, so a fresh clone needs no seeded file for the first row to land.
-
-**Both things that had to move with the deletion have moved.** The gardener stages every path a task deleted, so a picture removed under `frontend/public/digest/` leaves the repository with the commit that records it - `git add` records a removal only for a path it is handed, and the old cleanup's commit call named `state` and `frontend/public/telemetry` alone. And the cleanup no longer rides in the assemble job: it is a gardener task, so it runs where the gardener's own scheduled workflow runs it, and until that workflow lands nothing runs it and no row is filed.
-
-## Follow-up: the dated route trees are what decides the cap date (2026-08-27)
-
-**Recorded, not fixed. No row has addressed it.**
-
-The prerendered dated routes are **50,598,258 bytes, 39.5 percent of the published site** - measured 2026-08-27 on an node 24.12.0, over the six committed days and 2,237 items ([../../archive/measurements-2026-08.md](../../archive/measurements-2026-08.md#what-is-left-and-where-it-is)). They were 65,197,022 bytes and 44.4 percent before PR #171 narrowed the staged payload.
-
-That is **twelve prerendered documents per published day**: six HTML pages - the all-topics page and one per vertical - and their six `__data.json` twins. Every published day adds twelve more, forever, and nothing else on the site grows per day at anything like that rate. So this is the number the 1 GB cap date is a function of: at 16,641,956 bytes a published day the site reaches the cap on about 2026-10-22, and about 39.5 percent of each of those days is this.
-
-The three levers this page already names - encode efficiently, honour the visual rule, then prune - were all argued about images. **None of them touches an HTML document.** Whatever answers this is a fourth thing, and it has not been designed. What is written down here is the measurement, so the next person starts from a number rather than a feeling.
+There is no implemented command to unpublish a day, range or month. Do not use
+visual pruning or telemetry pruning as a substitute. A removal must account for
+the day, its search entries and derived published data without deleting its
+neighbouring days. The `seen` ledger must not be cleared to make that removal:
+forgetting those addresses would let the next run rediscover them.
 
 ## What bounds the committed state tree
 
-`state/` is the other tree that grows every run, and it is bounded separately, because what it costs is a checkout rather than a deploy. Re-measured on this checkout 2026-08-31, over the nine days the ledgers then held:
+Sharding makes bounded reads and deletions possible; it does not bound growth by
+itself. Each collection needs an explicit policy. Current values and the readers
+that constrain them belong to
+[retention ages](../../concepts/config/retention-ages.md) and the
+[gardener declarations](../../concepts/config/idhazh-gardener.md).
 
-| File | Bytes | Share of `state/` | Bounded by |
-| --- | --- | --- | --- |
-| `state/seen/<YYYY>/<MM>/<DD>.csv` | 2,904,221 | 37.2 percent | `collect.seen_window_days` |
-| `state/scores/<YYYY>/<MM>/<DD>/` | 2,700,019 | 34.6 percent | the `full-grain` series of `config/gardener/scores.json` - **archived and deleted from 2026-09-03, and the deletion is in dry run** |
-| `state/item-health/<YYYY>/<MM>/<DD>/` | 1,409,945 | 18.0 percent | the `full-grain` series of `config/gardener/telemetry-aggregate.json` - folded a month at a time from that month's day files, and the fold is in dry run |
-| `state/published/<YYYY>/<MM>/<DD>.csv` | 384,448 | 4.9 percent | `collect.published_window_days`, committed at `-1` - so nothing bounds it today, and the day files are what a finite cover would skip |
-| everything else | 416,995 | 5.3 percent | small enough not to ask |
-
-Total 7,815,628 bytes over 8 files. **All three of the ledgers this table exists to watch moved inside a day**, and the shares moved further than the bytes did, so the shares are the ones to re-take rather than to quote. Against 2026-08-30: `state/` as a whole fell 17.6 percent, because `state/seen/` shed its address column and fell 43.8 percent from 5,166,315. `state/scores.csv` grew 14.4 percent from 2,359,230 in the same day - so its share went from 24.9 to 34.6 percent while it was the only file nobody had touched, and it is now 204,202 bytes short of being the largest file in the tree.
-
-**The fold covers `state/item-health/`, its browser copy, and `state/feed-health/`.** A month older than the `full-grain` series of `config/gardener/telemetry-aggregate.json` is read whole - since 2026-09-13 that means that month's day files, at most 31 of them - folded to one row per `(date, stage)` in `state/item-health-summary/<YYYY-MM>.csv`, the day files are deleted with the month and year directories they emptied, and `frontend/public/telemetry/<YYYY-MM>.csv` goes with them - in that order, with the aggregate read back before anything is unlinked, so a fold that cannot be written leaves every file where it was. **The boundary stays a month even though the files below it are days**, because a day file of a month's totals is a shape nothing consumes. Fourteen months, and the fourteenth is not spare: `console.max_window_days` is 366, `month_partition.shards_in_window` walks 367 inclusive days, and a window ending on the first of a month starts on the last day of another - so a read can open 14 months. The knob carried 13 until 2026-09-02, because the check behind it compared `13 * 30` against 366 rather than against the shards that window selects. Measured over all 146,097 end dates of one 400-year Gregorian cycle, 13 deletes a shard the console still opens on 3,636 of them, 2.5 percent ([../../concepts/config/retention-ages.md](../../concepts/config/retention-ages.md#why-14-and-not-13)).
-
-**Feed health is deleted rather than folded, and that is a decision.** `state/feed-health/<YYYY>/<MM>/<DD>/` is one row per feed per run. The quarantine reads 31 days and the console reaches at most 366, so no summary of a month past the window of `config/gardener/feed-health.json` has a reader - and a shape nothing consumes, persisted for ever, is the cost of inventing one. **The ledger files by day and that age is still a month**, so the prune takes a month's day files whole and names each one it removed, deleting the month and year directories they empty. `state/raw/feed-retirements/` is never a candidate for it: that ledger's own compaction, `config/gardener/compact-feed-retirements.json`, keeps 60 months of it, because a run that forgot a retired address would start asking a dead one again.
-
-**`state/raw/visual-prunes/` is bounded by arithmetic rather than by a rule.** A row was 105 bytes as a CSV line, counted 2026-09-06. Through the ledger door one row is one parquet file of 8,008 bytes - 76 times as much, because every file carries its own column schema and writer envelope. Measured 2026-09-28 on a Windows development machine with pyarrow 25.0.1; the 21 CSV day files the move converted held 89 rows in 13,660 bytes and became 170,147 bytes of parquet. Five scheduled runs a day is 1,825 files a year, which is 14,614,600 bytes a year where the CSV rows took 191,625. Nothing deletes from it until its compaction task, `compact-visual-prunes`, runs live; from then it holds 13 month files and 45 to 76 day files, and asking it whether the backlog is shrinking across more than one year is the whole reason it is kept.
-
-**Every task ships in dry run, and that is what makes it safe to have written at all.** Each declaration under `config/gardener/` carries `dry_run: true`, so a pass names every file a live pass would take and takes none of them. The reason is the `history` job of `.github/workflows/idhazh-gardener.yml`: it squashes and force-pushes `main` on a schedule, so a state file deleted here stops being recoverable from history once that prune passes over it (`CLAUDE.md` section 8) - `git revert` is not a recovery path for a file older than the squash's `window` in `config/gardener/corpus-squash.json`. Turning one task's deletion on is a one-line commit to its own declaration, taken after a scheduled run has printed its list.
-
-**Measured on this checkout on 2026-09-13, that list is empty and stays empty for a year.** Every committed file is inside its own window, so a live run today would remove nothing at all. The first file to go is `state/seen/2026/08/23.csv` on **2026-11-22**, through the 90-day sight window; the first files the fourteen-month rules take are on **2027-10-01**, when `2026-08` falls below fourteen months and four go together - the day files under `state/item-health/2026/08/`, `frontend/public/telemetry/2026-08.csv`, the day files under `state/feed-health/2026/08/` and the day files under `state/scores/2026/08/`. The sight date was 2026-11-30 while that ledger filed by month, because a whole month shard survived if any of its days was in range; at day grain the file the window stops naming is the file that goes, which is 8 days earlier. Reading committed files against a fixed calendar is deterministic, so the spread is zero.
-
-**A score month is summarised before it is deleted, and that is the one deletion here with a summary in front of it.** `state/scores/` is the evidence behind every published quality claim, and until 2026-09-07 `evals.writer` refused a repeat measurement by reading those rows - so deleting a month outright would erase the evidence AND make every measurement in that month scoreable again as if it were new. A month past the `full-grain` series of `config/gardener/scores.json` therefore becomes `state/score-archive/<YYYY-MM>.json` first: the SHA-256 of that month's day files in day order, the month's row count, one digest per distinct measurement it held, and one cohort per (date, run, row version, model, scorer) carrying counts, ten faithfulness deciles, three bands, the boolean signal counts, the cut counts, the premise-digest counts and `{n, sum, sum_squares, min, max}` for every numeric column. **The ledger files by day and this boundary is a month**, so the gardener's `scores` task groups with `day_shards.shards_by_month` and folds a month whole or not at all - at most 31 files in, one out. The file is written temp-then-rename, read back through its contract, and reconciled field by field against a second reading of those day files; only then are they unlinked, with the month and year directories they empty.
-
-**The writer reads the identities rather than the rows, and that costs 76 bytes a measurement.** A repeat is refused against `state/score-index/<YYYY>/<MM>/<DD>/` - a ten-character stamp, a comma, the observation digest and a newline - and the rows are not opened at all. Measured on this checkout on 2026-09-07 over 7,710 measurements in two shards: 572.3 KB of index against 6,174.4 KB of rows, 10.8 times smaller, and 820.0 bytes a row against a fixed 76. Both figures are file sizes, so the spread is zero. **The index moved to day files with the ledger on 2026-09-13** and files by the ledger's own day, because two grains in one relationship would be a mapping somebody maintains. Nothing is forgotten and no clock is involved: `OBSERVATION_KEY` carries no date, so a January measurement re-taken in February is still the same measurement. A live index day is dropped only once the archive that supersedes its month is on disk, so the two records never both exist and neither is ever the last one removed. **The archiving pass is the only thing that drops an index day, and it does it in the same pass that unlinks the rows beside them.** Nothing on the write path drops one: a second dropper ran on the next run that wrote a score until 2026-09-22, and it never repaired a stale index, so an index month whose rows had gone stood in between with nothing to notice it. A dry run names the index files a live run would take.
-
-**An index that fell behind its rows is repaired by deleting it, and nothing detects that state on its own.** Detecting it means reading the rows, which is the cost this file exists to remove, so the pair is kept in step by the two writers instead: `append` writes the rows and their identities in one call, and a day with no index is filled from its rows once. The only way to fall behind is therefore rows appended by something that never maintained the index - which is what a long-lived branch meets when it merges a `main` older than this file, and what happened here: the scheduled pipeline added 74 rows to the September shard while this work was open. Delete that day's index and the next run rebuilds it; `idhazh rebuild-score-index --month <YYYY-MM>` does a whole month at once and checks its own result both ways. Leaving it costs what this writer already declares: it under-reports, so those measurements are taken a second time and the compaction settles the repeats against `OBSERVATION_KEY` when it folds them.
-
-**Measured 2026-09-03** on an (build 26200), CPython 3.14.2, over both committed shards, three reads each:
-
-| Shard | Rows | Cohorts | Source bytes | Archive bytes | Archive as a share |
-| --- | --- | --- | --- | --- | --- |
-| `2026-08` | 4,110 | 35 | 3,215,734 | 430,009 | 13.4 percent |
-| `2026-09` | 1,225 | 10 | 1,050,921 | 127,281 | 12.1 percent |
-| both | 5,335 | 45 | 4,266,655 | 557,290 | **13.1 percent** |
-
-Three reads of each shard gave byte-identical archives, so the spread is zero - reading a committed file is deterministic. **What the 13.1 percent means: 87 percent of the bytes go, and a row shrinks from 782 to 858 bytes of CSV to 104 bytes of archive.** Two thirds of what is left is the digest index - 68.8 and 69.3 percent of the two archives - which is the price of keeping the dedupe exact and is what Decision 2 of the plan bought deliberately.
-
-**In years.** The ledger grew 4,266,655 bytes over the 12 published days from 2026-08-22 to 2026-09-02, which is 355,555 bytes a published day and 130 MB a year, with nothing bounding it (444.6 rows a day on average, 10 on the thinnest day and 731 on the fullest, so read the rate as the mean of a wide spread rather than as a constant). With this rule the item-level part stops growing at fourteen months - about 151 MB - and only the archive keeps going, at 46,441 bytes a published day and **17.0 MB a year**. The archive needs 8.9 years to reach the size those fourteen months of shards already are; the raw ledger reached it in fourteen months. That is **7.7 years of headroom for every one the ledger used to spend**, and the fourteen-month part stops growing at all.
-
-**A thin month summarises LARGER than it held, and that is not a defect.** The digest index scales with rows and the block of moments is a fixed cost per cohort, so a twelve-row month pays the second and barely earns the first. Fourteen-month-old months are the full ones, which is why the direction that matters is the one measured above. `backend/tests/retention/` pins it at a run's worth of rows rather than at a figure, because a figure taken here would go stale the next time a column is added.
-
-
-**Measured on this checkout, 2026-08-30.** Folding the committed item-health month `2026-08` - 4,167 rows over six published days, 1,270,452 bytes, one month shard at the time and twenty day files now - gives 24 aggregate rows and 1,531 bytes: **829.8 times smaller**, 63.8 bytes an aggregate row, 255.2 bytes a published day, 93,136 bytes a year against the month's 77,285,830. Four rows a day and not five, because `plan` wrote no row that month. The grain change of 2026-09-13 moved no row and no byte, so the ratio stands; only the number of files the fold opens moved.
-
-Three things make it the one ledger the fold reaches, and each of them is why the other two need a decision of their own rather than a copy of this one:
-
-- Its rows carry a `stage`, which is what the aggregate is keyed on. A `seen` row is an address and a timestamp; a `scores.csv` row is a faithfulness measurement. Neither folds to `(date, stage)`.
-- It is partitioned, so a fold is a whole partition appearing and whole files going. `state/scores.csv` is one file, and bounding it means either sharding it - a change across four readers, `payload.ts`, `model-work.ts`, `drift.py` and `label_queue.py` - or rewriting it in place.
-- It is a measurement whose totals are worth keeping. `state/seen/` is a lookup, read only through `collect.seen_window_days`, so a day past that window answers nothing and its honest retention is deletion rather than a fold. **That is what it now gets**, beside the fold: the gardener's `seen` task deletes every seen day file *older* than the oldest day `day_partition.days_in_window(today, seen_window_days)` names - the reader's own helper, so the keep-set cannot drift from what the planner opens - and drops the month and year directories a deleted day empties. `state/feed-health/` is the same argument reaching the same answer for a different reason: its rows are per-feed-per-run evidence rather than a lookup, and no reader asks a month older than the window for anything. The same day the sight ledger also shed `canonical_url`, which no reader had ever opened: 2,800,881 bytes of 5,705,102 over 25,036 rows, **49.1 percent of the file**, leaving about 356 KB a published day and roughly 32 MB across a full 90-day window.
-
-**Older than the oldest day kept, never merely outside the window.** The two rules read the same on the scheduled path and come apart the moment the pass is handed a date in the past - a task takes whatever day it is handed, and a window drawn around last January puts every file since outside it, the live one included. Deleting below the window's floor instead makes the retained set a superset of the read set for every date rather than for today's. **The margin over what the planner reads is now zero on every date**, which is what the grain bought: while the ledger filed by month the prune kept whole shards, so what survived reached back 90 to 120 days for a 90-day read - measured over the 366 anchor dates from 2026-01-01. A day file and a day of window are the same unit, so the keep-set is the read-set exactly.
-
-**What this does not do, stated plainly: it does not bound the `/console/` document.** That page was linear in items at a measured 50.45 gzipped bytes an item and crossed its 301,580-byte ceiling on published day 16, because the compression scatter inlined every row `state/scores.csv` had ever held. Both halves of that are closed - the plot moved to a windowed seed over the telemetry projection on 2026-08-29, and the scatter itself became a per-day count of three bins on 2026-08-30 - so the page no longer grows a mark an item. The fold was never an answer to it either way: the two problems share a file and share nothing else.
-
-The aggregate is kept forever by default. The `aggregate` series of `config/gardener/telemetry-aggregate.json` is `forever`, and the gardener loader refuses a window at or below the `full-grain` series beside it - so a month is never deleted before it has been folded. The `archive` series of `config/gardener/scores.json` stands in the same relation to that file's `full-grain` series, and is `forever` for the same reason.
-
-**What is deliberately lost when a score month is archived**, and what survives, because a policy that only lists what it keeps is not a policy:
-
-| Lost | Survives |
+| Collection | Required behavior |
 | --- | --- |
-| Looking one item up by its address or its id | Every total and rate the cohorts carry |
-| Drawing that month into the human label queue | The distribution, as ten faithfulness deciles and three bands |
-| Re-banding those rows under new thresholds | Ranges and spread, from `{n, sum, sum_squares, min, max}` per column |
-| An exact percentile | Boolean signal counts, cut counts and premise-digest counts |
-| Correlating two columns against each other | Exact dedupe, through the sorted observation digests |
-| Any slice the cohort key does not name | The shard's own SHA-256 and row count |
+| Seen addresses | Keep the planner's full read window. Delete only older days, using the same window rule as the reader. |
+| Published identities | Preserve the information that prevents duplicate publication. The manual prune refuses this ledger. |
+| Item health | Write and validate the required day-and-stage summary before deleting an aged source month and its published copy. |
+| Feed health | Delete expired records when no reader needs them; do not invent an unused aggregate. Feed retirements have a separate policy so cleanup does not revive retired sources. |
+| Scores and score index | Archive a complete eligible month, verify it, then remove its source rows and live index together. |
+| Raw and compact ledgers | Follow the ledger's compaction declaration. A legacy task's retirement must not silently shorten the period retained. |
+| Trial records and other task-owned data | Follow the owning declaration, not a blanket cleanup of `state/`. |
 
-Authority: Andre, under Guardrail #10 - a claim about an archived month has to be one the archive can still support.
+### Score archives and identity
 
-## A named prune: one ledger, one range of days (2026-09-16)
+A score archive preserves the source checksum and row count, exact observation
+identities, and cohort statistics: counts, faithfulness bands and deciles, signal
+counts, and numeric counts, sums, squared sums, minima and maxima. Write it with
+temp-file-plus-rename, read it through its contract, and reconcile it against the
+source before unlinking anything.
 
-Everything above is the scheduled half - a window in `config/` decides, and a
-day goes when it ages out of it. `idhazh telemetry prune` is the other half. A
-person names the ledger and the two days, and nothing else decides anything:
+Keep observation identity across the live index and archives so an old measurement
+cannot be counted as new merely because its rows aged out. The archiving pass
+removes the superseded live index in the same pass as the source rows. A stale
+index can be rebuilt with `idhazh rebuild-score-index --month <YYYY-MM>`.
 
-```
-idhazh telemetry prune --target item-health --since 2026-08-24 --until 2026-08-26
+| Archiving gives up | Archiving preserves |
+| --- | --- |
+| Per-item lookup and human label-queue input | Cohort totals, rates and distributions |
+| Re-banding under new thresholds and exact percentiles | Recorded bands, deciles and numeric summaries |
+| Cross-column correlations and slices outside the cohort key | Exact deduplication, source checksum and row count |
+
+An aggregate or archive must outlive the full-detail data it replaces. A summary
+can be larger than a very small source partition; that alone does not make it
+invalid. Claims about archived data must stay within what the archive preserves.
+
+## A named prune: one ledger, one range of days
+
+`idhazh telemetry prune` removes explicitly selected ledger day files. The current
+supported targets are listed by `idhazh telemetry prune --help`; the target is a
+ledger name, never a path. This command does not unpublish a day or rebuild the
+site's derived payloads.
+
+```text
+idhazh telemetry prune --target <ledger> --since <YYYY-MM-DD> --until <YYYY-MM-DD>
 ```
 
-It exists for the case a window cannot express - a day published in error, a run
-that wrote rows nobody wants kept, a source that asked to be removed. It carries
-no threshold of its own and may not grow one, for the reason the unpublish
-design above gives: a number in the source that decides what to delete is the
-defect, whatever the number is.
+- Both ends are inclusive. Equal endpoints select one day.
+- Dry run is the default and reports the selected paths. `--no-dry-run` permits deletion.
+- `--max-deletes` bounds a pass and reports where to resume. Without it, the supplied range sets the default bound.
+- `published` and `seen` are refused because forgetting their records permits repeat publication or discovery.
+- Keep `scores` and `score-index` in step. Prune the same range from both, or rebuild the affected index from the remaining source rows.
+- Do not point the command at unsupported raw trees or file layouts. Their owning tasks decide retention.
 
-**It reports and removes nothing until it is told twice.** `--dry-run` is on by
-default and `--no-dry-run` is the second word. That is the precedent every
-gardener retention task sets by shipping `dry_run: true` in its declaration,
-taken for the same reason and not a new one: the `history` job of
-`.github/workflows/idhazh-gardener.yml`
-squashes and force-pushes `main` on a schedule, so a state file deleted here
-stops being recoverable from history once that prune passes over the range
-([../../../CLAUDE.md](../../../CLAUDE.md) section 8). What a dry run prints is
-every path, one a line, rather than a count - the list is the thing a person
-reads before typing the second word, and a count says a deletion happened and
-nothing about what it took.
+The procedure and failure handling are in
+[prune a collection](../../how-to/prune-a-collection.md). The per-member deletion
+guarantee is in [atomic deletes](../../concepts/atomic-deletes.md).
 
-**`--target` names a ledger and is never a path.** The vocabulary is closed, and
-a word outside it is refused with the whole list rather than resolved against
-the file system, so there is no argument on this command a path could travel
-through. That is Guardrail #11 applied at the sharpest point it has: a deletion
-primitive pointed at the repository is the one accident nobody can undo.
+## The cleanup says what it did not clear
 
-| `--target` | Bounded by |
-| --- | --- |
-| `content-similarity-judge-fitted-thresholds` | nothing today - one row a day at about 400 bytes across 33 columns is 146 KB a year at any `pair_budget` |
-| `content-similarity-judge-merge-line-holdout-scores` | nothing today - one row a day |
-| `content-similarity-judge-metrics` | nothing today - one row per shard per night, and a night is a handful of shards |
-| `content-similarity-judge-scored-pairs` | nothing today - at most `pair_budget` rows a day, 200 on the committed knobs |
-| `counterfactual-scores` | the window of `config/gardener/counterfactual-scores.json`, which may not sit below `lens_weights.window_days` |
-| `feed-health` | the window of `config/gardener/feed-health.json` |
-| `host-fingerprint` | the window of `config/gardener/host-fingerprint.json` |
-| `item-health` | the `full-grain` series of `config/gardener/telemetry-aggregate.json` |
-| `llm-council-shard-outcomes` | nothing today - one row per unit of work per night, and a night is a handful of units |
-| `score-index` | the `full-grain` series of `config/gardener/scores.json` |
-| `scores` | the `full-grain` series of `config/gardener/scores.json` |
+Every visual-prune pass writes a `VisualPruneRow`, including dry runs and passes
+with no candidates. It records the policy, cutoff, candidates, deletions,
+`skipped_by_fuse`, remaining visual coverage and the walked tree's before-and-after
+size. The report is written through the shared ledger writer under
+`state/raw/visual-prunes/`; the task declares that report in `appends_to`.
 
-`visual-prunes` was a target until 2026-09-28. It left when the cleanup record
-moved under `state/raw/visual-prunes/`, because this command deletes CSV day
-files and that tree holds none. An operator has no range delete of the cleanup
-record now. What bounds a raw tree is its compaction task,
-`config/gardener/compact-visual-prunes.json`, which moves a closed day's raw
-files into `state/compact/` and deletes them
-([idhazh-gardener.md](idhazh-gardener.md#the-compaction)). It ships
-`dry_run: true`, so until a person turns it live nothing is deleted, and the
-arithmetic above says what waiting costs.
+`skipped_by_fuse` counts candidates held back by the deletion ceiling, on both
+live and dry runs. It is not every file left after a dry run. On a live pass,
+`deleted + skipped_by_fuse` equals `candidates_found`; on a dry run, the
+difference is what a live pass would have deleted. The contract validates this.
 
-The rule that decides membership is one line: a ledger files
-`<YYYY>/<MM>/<DD>.csv` day files, and is not one of the two below. A flat
-ledger's word **is** its directory name under `state/`, and a nested ledger's word
-joins its two directory names with a hyphen. Both halves come from the module
-that owns the ledger rather than being spelled again, so a ledger that is renamed
-renames its target with it (Guardrail #6). The hyphen is what keeps the
-vocabulary closed: a slash in the word would make the argument look like a path,
-and a deletion primitive that resolved its argument against the file system is
-the one accident nobody can undo.
+Report the tree actually measured, not the built site's size. Commit removals
+with their report so the repository does not retain files the pass says it
+deleted. Run cleanup through the gardener, separately from digest assembly.
 
-**The judge's scored pairs and its fitted lines are not a pair, and either can
-go on its own.**
-The judged pairs are folded into `score-distribution.json` once and never read
-again, so deleting a day of them takes nothing away from the fit. Deleting a
-fitted row does take something away: it leaves a day out of the step-change
-guard's median and out of what step 4 compares this week against.
+## External visual assets
 
-**`llm-council-shard-outcomes` is in the vocabulary before anything writes it.**
-The shape and the path land ahead of the step that appends to them (Guardrail
-#3), and the content-similarity judge's four ledgers are the precedent: a ledger
-an operator
-cannot name is a ledger a day cannot be taken out of, and a range over a ledger
-with no file selects nothing and says so. What it holds is the council's own
-pipeline record - which units of work started, which finished, which stopped on
-their own clock - so a day removed from it takes away how one night went and
-nothing a tenant measured. A tenant's own readings are in a tenant's own ledger
-under that tenant's slug.
+`visuals.asset_base_url` can serve existing rendered assets from another host.
+Empty means this site. A configured HTTPS prefix controls both where the browser
+fetches drawings and whether the build includes those drawings; deriving both
+from one value avoids publishing a duplicate copy.
 
-**The two `content-similarity-judge` words are that last sentence made real, and
-they are in the vocabulary early for the same reason.** One is what that judge
-measured about its own night, so deleting a day of it takes away that judge's
-readings and leaves the council record beside it untouched. The other is a
-reading of the merge line rather than of any judge: the shipped scoring calls no
-model, and a day removed from it takes away one comparison against the
-hand-marked holdout. Both are named for the judge rather than the venue that ran
-it, because what a reading is ABOUT decides where it is filed.
+The operator must publish the matching `digest/` assets at that prefix first.
+The pipeline does not upload them. Derive the permitted origin from committed
+config, validate the visual path, and allow the browser fetch on the asset host.
+Keep SVGs inlined for theme styling rather than moving them into an `img` whose
+document cannot read the page's theme tokens. Failed visuals must not block text.
 
-**`state/day-metrics/` and `state/traces/` are day-shaped and deliberately
-outside it.** They file `<DD>.json` and `<DD>-<run>-<shard>.jsonl`, which
-`day_partition.day_files` refuses, and a second walker inside the prune would be
-a second answer to what a day file is. Bringing either in means teaching that
-one walker its suffix, which is where the question belongs. `state/span-rollup/`
-files a day directory rather than a `<DD>.csv`, so `day_partition.day_files`
-refuses it for the same reason.
+Moving assets changes hosting and caching costs, not which stories are retained.
+It is not a reason to prerender new charts; new rendering follows the
+[UI-shell policy](../../concepts/ui-shell.md#rendering-policy).
 
-**`host-fingerprint` joined the vocabulary on 2026-09-19 and was a real gap.**
-It has filed by day since 2026-09-16 and as a day directory since 2026-09-22, so the membership rule
-above already covered it and the list did not - an operator could take a day's
-census, scores and feeds back and leave the machines that produced them
-standing. The table above is where that day's obligation is written down.
+## A collection GitHub holds: artifacts and workflow runs
 
-**`published` and `seen` are refused by name, with the reason attached.** Not
-forgetting is their whole job. `state/published/` is the guard against
-publishing one story twice and has no window at all - `collect.published_window_days`
-is `-1`, so every row in it is a row that must never be deleted, and a ledger
-that forgets cannot be that guard. `state/seen/` is what the planner remembers
-having already seen, so removing a day from it lets the next run rediscover
-every address it holds, which turns one operator command into a loop - the same
-argument the unpublish design above already makes for the same ledger. They are
-refused rather than left off the list because a ledger missing from a vocabulary
-reads as an oversight, and somebody who typed one of them is holding a real
-question whose answer is why the answer is no.
+`workflow-artifacts` and `workflow-runs` are separate gardener tasks. Their
+declarations set the age, ceiling and dry-run mode. Each API deletion costs a
+request, so the ceiling also limits work against GitHub's request allowance.
+Use the same per-member failure and resume rules as file cleanup.
 
-**Both ends of the range are named.** `--since 2026-08-24 --until 2026-08-26` is
-three days and `--since X --until X` is one. That is the arithmetic
-`day_partition.days_in_window` already uses, where a cover of `n` days returns
-`n + 1` dates, and the two agree on purpose.
+Pipeline-test prose remains in expiring artifacts, while its committed telemetry
+retains measurements. The numbers cannot reconstruct the fetched article or the
+model's answer after the artifact expires. Re-fetching a changed page is not a
+replay of the original evidence. Artifact retention comes from the upload step
+and the collection's cleanup policy, within GitHub's supported limits.
 
-**`scores` and `score-index` are one pair.** `evals.writer` refuses a repeat
-measurement by reading the index rather than the rows, so a range taken out of
-one and left in the other puts the two out of step: an index whose rows are gone
-refuses a measurement nothing can produce, and rows whose index is gone are
-re-measurable as if new. Prune both over the same range, or repair afterwards
-with `idhazh rebuild-score-index --month <YYYY-MM>`, which checks its own result
-both ways. The dry run is where that is caught, which is the second reason it is
-the default.
+## Design rationale
 
-**Atomic per day file, one delete at a time (2026-09-17).** Every selected file
-is removed on its own, in walk order, through the shared core in
-[../../concepts/atomic-deletes.md](../../concepts/atomic-deletes.md). A pass
-interrupted after the third file leaves three files gone and the rest exactly as
-they were, and the record it carries names the day the next pass retries. The
-month and year directories a deleted day empties go with it, through the same
-`day_partition.drop_empty_day_dirs` the scheduled prune and the score archive
-use.
-
-Until 2026-09-17 this moved the whole range into a scratch directory beside the
-ledgers and rolled every move back if one failed, so a failed pass removed
-nothing at all. The scratch directory is gone with that shape; what replaced it,
-and what the change cost, is on the concept page.
-
-**One pass is bounded.** `--max-deletes` names how many day files a pass may
-take before it stops and prints the day to resume at. Its default is every day
-the range names, so an operator who typed a range gets that range - a real bound
-taken from their own arithmetic rather than a number somebody picked.
-
-**What the tests settle and what they cannot.** `backend/tests/retention/test_prune_range.py`
-drives a built tree and asserts the bijection both ways - every day inside the
-range went, and every day outside it is still there with the same SHA-256 - plus
-a delete failed on the third of four leaving the first two gone and the rest
-untouched, a ceiling that stops and names its resume point, and both refusals.
-What no test here can settle is what the SCHEDULED prune should delete: that is
-a window in `config/`, it is a person's decision, and this command deliberately
-has no opinion about it.
-
-## A collection GitHub holds: artifacts and workflow runs (2026-09-17)
-
-Everything above bounds a tree this repository commits. Two collections are
-bounded by nothing at all, because no file here represents them: the artifacts
-jobs upload and the workflow runs that produced them. Measured 2026-09-17 on
-`miztiik/yen-idhazh`: 612 live artifacts holding 1,063.2 MB - of which
-`github-pages` is 30 artifacts holding 1,003.1 MB, 94 percent of the bytes in 5
-percent of the count - and 3,551 workflow runs.
-
-Both are gardener tasks, `workflow-artifacts` and `workflow-runs`, and each is
-one declaration under `config/gardener/` holding its window and its ceiling,
-with `dry_run` true, so a wake reports and deletes nothing
-([../../concepts/config/idhazh-gardener.md](../../concepts/config/idhazh-gardener.md#the-collection-declarations-that-ship)).
-How to read what a wake would take, and how to turn one live, is
-[../../how-to/prune-a-collection.md](../../how-to/prune-a-collection.md).
-
-**It is the same core the day files go through**, which is the whole reason it
-is one paragraph here and not a second retention design. A collection is three
-callables - list, describe, delete - and everything else is shared.
-
-### Design rationale: the pipeline test's prose stays an artifact (2026-09-23)
-
-A pipeline-test dispatch runs two models over the same articles across three
-test cases and writes, per item, the model's summary, its score, the fetched article
-and a visual decision. All of it uploads as an artifact at 90 days. Only the CSV
-day-ledgers are committed, into `state/pipeline-tests/`. After day 90 the prose
-is gone and the numbers remain: the ledger says an item scored 0.62 and cannot
-say what the model wrote to earn it.
-
-**It stays that way.** Nobody has asked the question a committed record would
-answer, and 90 days covers the window in which a prompt change is argued.
-Production keeps less: the premise-and-summary payload a human labeller reads is
-a 14-day artifact, chosen deliberately, so a dispatch already keeps its prose six
-times longer than the instrument the labelling loop runs on.
-
-Two costs make committing it the worse trade. Measured 2026-09-23: model output
-alone is about 19 KB a dispatch and everything is about 48 KB, and **neither has
-a prune path** - `day_shards.shard_files` refuses a stray, and a `.summary.json`
-is not a day shard, so committing either needs a new one built first. And the
-article payload sits in the same directory as the prose, so committing the
-directory commits `article.text`, which the corpus carve-out permits only for
-training data nobody renders and which the prune rewrites.
-
-Raising the retention is not an option that exists: GitHub caps artifact
-retention at 90 days for a public repository.
-
-**What would reopen it:** the first time somebody moves the scorer or the model
-pin and asks to re-score a dispatch older than 90 days. Re-running is not a
-substitute - it re-fetches pages that have changed, which is the premise
-mismatch `backend/idhazh/contracts/evidence.py` already refuses - and a
-committed article would pin the premise but not the generator, so only the
-article and the prose together make a valid comparison. Authority: Fowler and
-Andre, owner ruling 2026-09-23.
-
-## `state/scores/` became a directory, and that bounds nothing on its own (2026-08-31)
-
-**The eval ledger moved from `state/scores.csv` to `state/scores/<YYYY-MM>.csv` on
-2026-08-31**, and from those month shards to `state/scores/<YYYY>/<MM>/<DD>/` on
-**2026-09-13**. The first migration is a split and nothing else: 3,509 rows, one month,
-2,700,019 bytes before and after, every cell compared by name across both
-revisions. Say what it did not do first, because the section this replaces was
-right about it: **sharding is not a bound.** Nothing is deleted, nothing is
-folded, and the tree grows at the same rate it grew yesterday. The second
-migration did not change that either - it is the same rows in more files, and
-what bounds them is still the `full-grain` series of `config/gardener/scores.json`.
-
-What it buys is that the two things which could bound it are now possible. A
-retention rule can take a whole month the way `state/item-health/` already does,
-instead of rewriting a file no run was allowed to rewrite. And a
-reader that wants a window can skip whole files - `payload.ts` has a shared
-`readShards` helper now, which `state/item-health/` was using at the time and
-this ledger could not. **`state/item-health/` left that helper on 2026-09-13**,
-when it moved to day files and took `readDayShards` instead; the argument the
-paragraph makes is untouched by which of the two a given ledger reads through.
-
-**The reader half landed on 2026-09-09.** `readShards(dir, months)` opens the
-newest `months` shards and nothing older. The default is `shardMonths(90)`, which
-is five - a month is at least 28 days, so the rule rounds up, and 90 is where
-`console.window_presets` ends. `evalRows`, `itemHealthRows`, `feedResults` and
-`loadSpanRollup` are all thin wrappers over it, so all four inherit the cover.
-Pass `-1` to read every month and say beside the call why
-([growing-reads.md](../../concepts/growing-reads.md)). The listing still names
-every shard - one directory entry a month - because the newest stem cannot be
-derived from today's date for a ledger whose last run was two months ago.
-
-It also shrinks what one commit touches. Every run appended to a single file, so
-git wrote a new blob of the whole ledger several times a day; it now writes a
-new blob of the current month.
-
-**The cost was named in advance and it was accurate.** The change touched
-`evals/writer.py`, `cli.py`, the `drift.yml` inline program, four utilities, the
-canary builder, `payload.ts`, the commit program's staged list,
-`REFRESH_PATHS`, the closed-world path map and the merge-driver test in
-`backend/tests/workflows/`, nine test modules, a fixture tree, and a migration of the
-committed file. It is a Level 4 change taken on an owner instruction, against a
-file that is not yet costing anything measurable.
-
-One promise had to be defended explicitly. `writer.append` dedupes against
-`OBSERVATION_KEY` across **every** shard, not the one being written, because an
-observation is the same measurement whichever month it is re-taken in - a dedupe
-scoped to the current month would let January's row come back in February and
-turn a count over the ledger into a count of times the pipeline looked. The
-header check moved ahead of the dedupe for the same reason: a corrupt shard is
-corrupt whatever the call had to say, and checking after the dedupe let a stale
-header survive an append that returned zero.
-
-**The header check's cover narrowed on 2026-09-13, and the dedupe's did not.**
-At day grain, checking every committed partition before every append would have
-cost one more open a day for ever on the hot path (Guardrail #12), so `append`
-now checks the one or two days it is about to write - which is also the exact
-cover, because a file this call does not append to is a file this call cannot
-corrupt. The dedupe still reads every identity, through the index rather than
-the rows, for the reason the paragraph above gives.
-
-### What the ledger is made of, and the three narrowings not taken
-
-Measured 2026-08-31 on the committed file: 3,544 rows over nine days and 30 runs,
-35 columns, 2,728,991 bytes; 770 bytes a row, 303,221 bytes a published day,
-about 111 MB a year. There is no cap on `state/` the way there is a 1 GB cap on
-the published site, so the runway is not a date - the cost is a checkout, paid by
-every `plan`, `work`, `assemble` and CI job, several times a day.
-
-What each reader needs, and how far back:
-
-| Reader | What it needs | How far back |
-| --- | --- | --- |
-| `payload.ts` -> `model-work.ts` | per-**day** figures only | `console.max_window_days`, 366 |
-| `backend/idhazh/drift.py` | per-item, per-domain | `recent_days` plus `baseline_days`, 35 days on the scheduled path |
-| `backend/utilities/label_queue.py` | per-item, at the live `scorer_version` | `evaluation.label_min_run_days`, 10 run-days |
-| `backend/idhazh/evals/writer.py` | one row per `OBSERVATION_KEY`, to refuse a repeat | for ever |
-
-**Twenty-four percent of every cell byte is derivable from `run_id`.** Four
-columns are constant within a run - measured over all 30 committed runs, **none
-varies**:
-
-| Column | Distinct values | Runs that vary | Bytes | Share |
-| --- | --- | --- | --- | --- |
-| `scorer_version` | 5 | 0 of 30 | 288,448 | 10.6 percent |
-| `pipeline_fingerprint` | 7 | 0 of 30 | 230,360 | 8.5 percent |
-| `model_id` | 2 | 0 of 30 | 59,328 | 2.2 percent |
-| `version` | 6 | 0 of 30 | 46,286 | 1.7 percent |
-
-`scorer_version` alone is a 99-character string repeated 3,544 times to say one
-of five things, and `RunRecord` **already carries** `scorer_version`, so one of
-the four is duplicated onto a committed manifest today. It carried
-`pipeline_fingerprints` until 2026-09-13, when that list was removed from the
-shape; the column beside it has been blank on every row written since
-2026-09-12, so this table's second row measures a cost the ledger stopped paying
-rather than one it still pays. `date`
-is a strict prefix of `run_id` on 3,544 of 3,544 rows, for
-another 38,984 bytes. Together: **663,406 bytes, 24.3 percent, 111 MB a year to
-84 MB.**
-
-**This corrects the previous version of this section**, which said the one column
-that looks like waste - `scorer_version` - could not move because `label_queue`
-selects the live instrument by it. It can move: a per-run side table answers that
-selection exactly, because the value never varies inside a run. What it costs is
-real and is why it was not taken here: **a row stops being self-describing.**
-Reading one today tells you which scorer produced it without opening anything
-else, and that is a property somebody chose. 26 MB a year is not obviously worth
-trading it for.
-
-Two smaller narrowings, also measured and also not taken:
-
-- **Ten columns no committed-file reader opens** - `attempt`, `hhem_full`,
- `hhem_delta`, `compression`, `extraction_suspect`, `determinism_violation`,
- `scored_at`, `evidential_density`, `speculative_density`, `self_repetition` -
- are 379,095 bytes, 13.9 percent. **"No reader" is not "delete" here.** This
- ledger is evidence, unlike `state/seen/`, which is a lookup: Guardrail #10 turns on
- being able to re-read a measurement to defend a design, and four of these got
- written descriptions on 2026-08-30. Deleting evidence a day after documenting
- it is churn.
-- **`source_url` and `title`** are 643,696 bytes, 23.6 percent - the largest pair
- in the file - and both are read. `drift` names a domain from the first;
- `evals/evidence.py` and `label_queue` both open the second. This is where the
- `PublishedRow` and `SeenRow` narrowings do not repeat: those two dropped a
- column nobody opened, and this ledger has none.
-
-**What would change the answer.** The console learning to read a daily aggregate,
-which makes a short full-grain window enough; `state/` acquiring a measured
-ceiling the way the published site has one; or the file passing a size where a
-checkout is measurably slower. Sharding is what makes the first two cheap when
-somebody wants them.
+- Retention follows reader needs and declared age windows, not old size snapshots or predicted cap dates.
+- Summaries are verified before deletion because the history rewrite can make a mistaken deletion permanent.
+- Preserving observation identities prevents archival from turning repeat measurements into new evidence.
+- Dry runs, deletion ceilings and progress reports let an operator inspect and finish bounded cleanup.
+- A reader must know whether a visual was removed, a render failed or a day never existed. Those states must not share one misleading message.
 
 ## See also
 
-- [layout.md](layout.md) - what a run writes, and the addresses a reader reaches.
-- [../../concepts/config/retention-ages.md](../../concepts/config/retention-ages.md) - the retention knobs and their defaults.
-- [../../concepts/growing-reads.md](../../concepts/growing-reads.md) - Guardrail #12's escape hatch, and what a growing read has to declare.
-- [../../reference/site-weight.md](../../reference/site-weight.md) - size limits, warnings and growth-estimate assumptions.
-- [../../how-to/run-the-gates.md](../../how-to/run-the-gates.md) - the page ceilings and what to do when one fires.
-- [../../CLAUDE.md](../../../CLAUDE.md) - Guardrail #2 (the runner is the architecture) and Guardrail #12 (nothing costs more as the repository grows).
+- [layout.md](layout.md) - what a run publishes and the addresses readers use.
+- [idhazh-gardener.md](idhazh-gardener.md) - how scheduled maintenance runs.
+- [../../concepts/config/idhazh-gardener.md](../../concepts/config/idhazh-gardener.md) - task ownership, windows and safeguards.
+- [../../concepts/config/retention-ages.md](../../concepts/config/retention-ages.md) - why each collection keeps its window.
+- [../../how-to/prune-a-collection.md](../../how-to/prune-a-collection.md) - manual operation and failure handling.
+- [../../reference/site-weight.md](../../reference/site-weight.md) - deployed size limits and warnings.
+- [../../../CLAUDE.md](../../../CLAUDE.md) - history-rewrite authority and bounded-work requirements.
