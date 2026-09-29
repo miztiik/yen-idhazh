@@ -1,6 +1,6 @@
 # Agent Notes - Gates and Builds
 
-**Last Updated**: 2026-09-28
+**Last Updated**: 2026-09-29
 Traps in the commands that decide whether a change is done: the test selector,
 pytest, ruff, mypy, the build, the canary day, and the
 measurement recipes that run on top of them. Index and scope:
@@ -294,6 +294,12 @@ A total of zero on a push to `main` means no workflow was created. The recovery 
 **A test that builds its input through the real producer can still pass against a shape production never writes.** Calling the producer is the right instinct and it is not enough - the ARGUMENTS have to be production-shaped too. A test of the script's "is this conflicted file mine?" rule built its filename through `ledger.segment_relpath` and then handed that producer a run id of `"40000000001"`. This project's run id is `<date>-<execution>`, so the anchored prefix match worked in the test and would have matched nothing at all in production: the feature was dead on arrival and the push would have failed where it used to recover. The second half of the same defect was a number crossing from YAML into a filename - the shard is written `%02d` and the workflow matrix passes `0` to `7`, so shard 3 looked for `-3` in a name that spells `-03`. **Check a constructed identifier against a committed real example and against the contract's own regex, never against the plan's prose.**
 
 **A closed-world set in a workflow test is the usual way a workflow change goes green here and red in CI.** Two live in `backend/tests/workflows/`: the set naming every step that carries `continue-on-error: true`, and the set naming every job allowed to force-push. Adding a step or a job without adding its name is a red the local selector may never choose to run, because the failing module is nowhere near the file you edited. **Write the constant to name the SURVIVORS rather than the leavers, and assert both directions** - `present == listed` catches a file and its name disagreeing the moment either moves, where a count of what left cannot say which row is wrong.
+
+**Twenty-five workflow tests that push to a scratch repository fail with `fatal: cannot use bare repository ... (safe.bareRepository is 'explicit')`, and nothing is wrong with the code they test.** The Copilot app sets `safe.bareRepository=explicit` for every git command it starts, through `GIT_CONFIG_COUNT`, and these tests stand a bare repository up as the remote and run git inside it. Measured on the developer box on 2026-09-29: 25 of the 51 tests in `test_commit_script.py`, `test_prune_push.py`, `test_daily_commit_steps.py` and `test_worker_ledgers.py` fail with the setting and all 51 pass without it; CI does not set it. The tell is the setting's own name at the end of git's message. Clear it for the test process only:
+
+```powershell
+Remove-Item Env:GIT_CONFIG_COUNT, Env:GIT_CONFIG_KEY_*, Env:GIT_CONFIG_VALUE_* -ErrorAction SilentlyContinue
+```
 
 ## See also
 
