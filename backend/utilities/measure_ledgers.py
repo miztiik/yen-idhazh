@@ -14,8 +14,9 @@ nobody could see that before, because the two clocks sat in two files nothing
 joined.
 
 **This is per shard where the rows allow it and per run where they do not.**
-`shard` landed on `ItemHealthRow` on 2026-08-30 and is empty on every row written
-before it, so both grains are live at once and the report says which one each
+The item row's shard landed on `ItemHealthRow` on 2026-08-30, as `shard` and now
+`machine_shard`, and is empty on every row written before it, so both grains are
+live at once and the report says which one each
 line is. Per run is the coarser answer because it averages the shards together,
 and the read rate spreads 2.30x between shards inside one run - which is exactly
 the variance the per-shard split exists to show.
@@ -79,7 +80,6 @@ read" from "read it, here are the numbers".
 from __future__ import annotations
 
 import argparse
-import csv
 import math
 import statistics
 from collections.abc import Iterable, Sequence
@@ -90,10 +90,9 @@ from typing import Final
 from idhazh import config, ledger
 from idhazh.classify import calls
 from idhazh.contracts.base import WORK_JOB
+from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.item_health import ItemHealthRow
-from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.day_shards import shard_files
 from idhazh.extract import TOKENS_PER_WORD
 from idhazh.llm.server import window
 
@@ -138,27 +137,25 @@ def _cell(row: dict[str, str], name: str) -> int | None:
 
 
 def read_items(state_dir: Path) -> list[Item]:
-    """Every committed item-health row, from every day file."""
-    directory = ledger.tree_root(state_dir, LedgerName.ITEM_HEALTH)
+    """Every committed item-health row, read through the ledger door."""
     items: list[Item] = []
-    for path in shard_files(directory, days=UNBOUNDED_WINDOW):
-        with path.open("r", encoding="utf-8", newline="") as handle:
-            for row in csv.DictReader(handle):
-                items.append(
-                    Item(
-                        run_id=row["run_id"],
-                        shard=row.get("shard") or None,
-                        fetch_ms=_cell(row, "fetch_ms"),
-                        extract_ms=_cell(row, "extract_ms"),
-                        summarize_ms=_cell(row, "summarize_ms"),
-                        prefill_ms=_cell(row, "prefill_ms"),
-                        decode_ms=_cell(row, "decode_ms"),
-                        input_tokens=_cell(row, "input_tokens"),
-                        source_words=_cell(row, "source_words"),
-                        source_words_before_cap=_cell(row, "source_words_before_cap"),
-                        truncation_cap_tokens=_cell(row, "truncation_cap_tokens"),
-                    )
-                )
+    for held in ledger.load_ledger_rows(state_dir, LedgerName.ITEM_HEALTH, model=ItemHealthRow):
+        row = held.csv_row()
+        items.append(
+            Item(
+                run_id=row["run_id"],
+                shard=row.get("machine_shard") or None,
+                fetch_ms=_cell(row, "fetch_ms"),
+                extract_ms=_cell(row, "extract_ms"),
+                summarize_ms=_cell(row, "summarize_ms"),
+                prefill_ms=_cell(row, "prefill_ms"),
+                decode_ms=_cell(row, "decode_ms"),
+                input_tokens=_cell(row, "input_tokens"),
+                source_words=_cell(row, "source_words"),
+                source_words_before_cap=_cell(row, "source_words_before_cap"),
+                truncation_cap_tokens=_cell(row, "truncation_cap_tokens"),
+            )
+        )
     return items
 
 
@@ -236,9 +233,10 @@ def shard_clocks(state_dir: Path, items: Sequence[Item]) -> list[ShardClock]:
     """The finest grain the two ledgers support, for every run that filed a clock.
 
     One entry per shard where that run's item rows name their shard, and one for
-    the whole run where they do not. `shard` landed on `ItemHealthRow` on
-    2026-08-30 and is empty on every row written before it, so a ledger can hold
-    both kinds of run at once.
+    the whole run where they do not. The item row's shard landed on
+    `ItemHealthRow` on 2026-08-30, as `shard` and now `machine_shard`, and is
+    empty on every row written before it, so a ledger can hold both kinds of run
+    at once.
     """
     clocks_read = _job_clock_rows(state_dir)
     clocks: list[ShardClock] = []
@@ -272,20 +270,20 @@ def _clock(
 
 
 def _job_clock_rows(state_dir: Path) -> list[dict[str, str]]:
-    """Every committed `work` host row, as raw cells.
+    """Every committed `work` host row, as the cells a CSV line spells.
 
     The `work` job is the only one this report is about: the plan and assemble
     jobs run one shard each and serve different weights, so their clocks cannot
-    be read against a shard board. Raw cells rather than the contract, because
-    the question is which runs filed a clock at all and a row that no longer
-    parses still answers it.
+    be read against a shard board. The rows come through the ledger door, so a
+    file this build cannot parse is skipped with a warning rather than counted.
     """
-    directory = ledger.tree_root(state_dir, LedgerName.HOST_FINGERPRINT)
-    rows: list[dict[str, str]] = []
-    for path in shard_files(directory, days=UNBOUNDED_WINDOW):
-        with path.open("r", encoding="utf-8", newline="") as handle:
-            rows.extend(row for row in csv.DictReader(handle) if row.get("job") == WORK_JOB.value)
-    return rows
+    return [
+        row.csv_row()
+        for row in ledger.load_ledger_rows(
+            state_dir, LedgerName.HOST_FINGERPRINT, model=HostFingerprintRow
+        )
+        if row.job == WORK_JOB
+    ]
 
 
 def percentile(values: Sequence[int], share: float) -> int:
@@ -443,15 +441,15 @@ def report(state_dir: Path, *, cap_tokens: int, context_tokens: int, output_toke
 
     lines.append("1. Unaccounted job wall-clock")
     attributed = sum(1 for item in items if item.shard is not None)
-    if "shard" not in ItemHealthRow.csv_columns():
+    if "machine_shard" not in ItemHealthRow.csv_columns():
         lines.append(
-            "   per SHARD is unavailable: item-health has no `shard` column, so an item "
-            "row cannot be attributed to the machine that produced it"
+            "   per SHARD is unavailable: item-health has no `machine_shard` column, so an "
+            "item row cannot be attributed to the machine that produced it"
         )
     elif attributed == 0:
         lines.append(
-            f"   per SHARD has no population yet: `shard` is a column but 0 of {len(items)} "
-            "committed rows carry one, so every line below is a whole run"
+            f"   per SHARD has no population yet: `machine_shard` is a column but 0 of "
+            f"{len(items)} committed rows carry one, so every line below is a whole run"
         )
     else:
         lines.append(
@@ -521,7 +519,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Three figures the committed ledgers hold.")
     parser.add_argument("--state", type=Path, default=Path("state"))
     args = parser.parse_args()
-    if not (ledger.tree_root(args.state, LedgerName.ITEM_HEALTH)).is_dir():
+    if not ledger.held_days(args.state, LedgerName.ITEM_HEALTH):
         print(f"no item-health ledger under {args.state.as_posix()} - nothing to read")
         return 1
     settings = config.load()

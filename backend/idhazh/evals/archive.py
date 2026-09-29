@@ -100,8 +100,9 @@ MEASUREMENT_COLUMNS: Final = (
 
 #: What a person reading a utility's refusal needs to know in one line.
 RAW_WINDOW_NOTE: Final = (
-    f"{ledger.tree_relpath(LedgerName.SCORES)}/ keeps item-level rows for the full-grain "
-    "window of config/gardener/scores.json. An older month exists only as "
+    "The scores ledger keeps item-level rows under state/raw/scores/ and "
+    "state/compact/scores/ for the monthly window of config/gardener/compact-scores.json. "
+    "An older month exists only as "
     f"{ledger.tree_relpath(LedgerName.SCORE_ARCHIVE)}/<YYYY-MM>.json, which carries totals, "
     "distributions, ranges, spread and the dedupe index, and no item."
 )

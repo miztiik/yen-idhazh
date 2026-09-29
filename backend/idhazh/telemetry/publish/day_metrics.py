@@ -35,7 +35,7 @@ from datetime import date
 from pathlib import Path
 from typing import Final
 
-from idhazh import day_shards, ledger
+from idhazh import ledger
 from idhazh.assemble import TaxonomyVectors, nearest_label_cosines
 from idhazh.atomic_write import write_atomic
 from idhazh.contracts.base import canonical_json
@@ -115,14 +115,15 @@ def read_score_rows(state_root: Path, date: str) -> list[dict[str, str]]:
     every month would cost more with each month the ledger keeps (CLAUDE.md
     Guardrail #12).
 
-    Settled rather than concatenated, because a day is a directory of
-    writer-owned files: a work shard and assemble each leave their own, and a
-    re-run leaves a second attempt beside the first. Counting them all would
-    report one measurement twice.
+    Settled rather than concatenated, because a work shard and assemble each file
+    their own raw file, and a re-run files a second attempt beside the first.
+    Counting them all would report one measurement twice. Each row comes back as
+    a CSV line spells it, which is what the reducers below read.
     """
-    return day_shards.settled_day(
-        ledger.tree_root(state_root, LedgerName.SCORES), date, ledger.OBSERVATION_KEY, EvalRow
-    )
+    return [
+        row.csv_row()
+        for row in ledger.load_days(state_root, LedgerName.SCORES, [date], model=EvalRow)
+    ]
 
 
 def read_health_rows(state_root: Path, date: str) -> list[dict[str, str]]:
@@ -130,12 +131,12 @@ def read_health_rows(state_root: Path, date: str) -> list[dict[str, str]]:
 
     Settled for the reason `read_score_rows` gives, and against the same day.
     """
-    return day_shards.settled_day(
-        ledger.tree_root(state_root, LedgerName.ITEM_HEALTH),
-        date,
-        ledger.ITEM_HEALTH_KEY,
-        ItemHealthRow,
-    )
+    return [
+        row.csv_row()
+        for row in ledger.load_days(
+            state_root, LedgerName.ITEM_HEALTH, [date], model=ItemHealthRow
+        )
+    ]
 
 
 # --- reducer arithmetic, matched to the frontend console ---------------------

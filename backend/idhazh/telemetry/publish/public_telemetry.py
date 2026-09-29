@@ -31,9 +31,8 @@ from collections.abc import Collection
 from pathlib import Path
 from typing import Final
 
-from idhazh import config, day_shards, ledger
+from idhazh import config, ledger
 from idhazh.contracts.item_health import ItemHealthRow
-from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.public_telemetry import FORBIDDEN_COLUMNS, PublicTelemetryRow
 
@@ -71,18 +70,15 @@ def shard_relpath(month: str) -> str:
     return f"frontend/public/{PUBLIC_TELEMETRY_DIRNAME}/{month}.csv"
 
 
-def _settled_day(source_dir: Path, date: str) -> list[PublicTelemetryRow]:
-    """One day of the census, settled, as the rows a reader is allowed to see.
+def _settled_days(state_root: Path, days: list[str]) -> list[PublicTelemetryRow]:
+    """These days of the census, settled, as the rows a reader is allowed to see.
 
-    `day_shards.settled_day` reads every row through `ItemHealthRow` first, so a
-    file missing a column the census promises is refused there by name and this
-    never has to check the header itself.
+    Read through the ledger door as `ItemHealthRow`s, each day settled on its
+    own, and projected to the public shape here.
     """
     return [
-        PublicTelemetryRow.from_csv_row(cells)
-        for cells in day_shards.settled_day(
-            source_dir, date, ledger.ITEM_HEALTH_KEY, ItemHealthRow
-        )
+        PublicTelemetryRow.from_csv_row(row.csv_row())
+        for row in ledger.load_days(state_root, LedgerName.ITEM_HEALTH, days, model=ItemHealthRow)
     ]
 
 
@@ -191,15 +187,13 @@ def publish(
     wider**, and the listing behind it grows by one directory entry a day rather
     than one a month.
     """
-    source_dir = ledger.tree_root(state_root, LedgerName.ITEM_HEALTH)
     public_root.mkdir(parents=True, exist_ok=True)
     written: list[Path] = []
-    by_month = day_shards.dates_by_month(source_dir, days=UNBOUNDED_WINDOW)
-    for month in sorted(by_month):
+    for month in ledger.held_months(state_root, LedgerName.ITEM_HEALTH):
         target = shard_path(public_root, month)
         if months is not None and month not in months and target.exists():
             continue
-        rows = [row for date in by_month[month] for row in _settled_day(source_dir, date)]
+        rows = _settled_days(state_root, ledger.month_days(month))
         if _write_if_changed(target, rows):
             written.append(target)
     if ensure_month is not None and all(path.stem != ensure_month for path in written):

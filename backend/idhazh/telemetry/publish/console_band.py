@@ -41,7 +41,6 @@ it (Guardrail #6).
 
 from __future__ import annotations
 
-import csv
 import math
 from collections import defaultdict
 from collections.abc import Mapping, Sequence
@@ -50,7 +49,7 @@ from datetime import date
 from pathlib import Path
 from typing import Final
 
-from idhazh import assemble, day_partition, day_shards, discover, ledger
+from idhazh import assemble, day_partition, discover, ledger
 from idhazh.contracts.console_band import (
     BandRun,
     BandSize,
@@ -1435,35 +1434,28 @@ def fetchable_months(digest_root: Path, telemetry_root: Path | None = None) -> l
 def _machine_rows(
     state_root: Path, *, within_days: int, anchor: str
 ) -> list[Mapping[str, str]]:
-    """The `work` host rows the widest span reaches, as raw cells.
+    """The `work` host rows the widest span reaches, as the cells a CSV line spells.
 
-    Raw rather than through `HostFingerprintRow`, because refusing a run is the
-    band's whole point here: a row that will not validate is one of the two hosts
-    this has to notice, and validating it away would silently drop the evidence.
-
-    The job is read off the cell rather than through the contract, for that same
-    reason, and a row whose cell is missing or empty is kept - `job` defaults to
-    the work job in the contract, so a blank cell is that job. Every other job
-    writes a host row too, and they are not this slice: the plan and assemble jobs
-    run one shard each, so pooling them into a shard count would answer about a
+    Read through the ledger door, so every row was validated by its contract when
+    it was filed and each day is settled on its own: a re-run's host replaces its
+    first attempt's, and one shard of one run is one host. Every other job writes
+    a host row too, and they are not this slice: the plan and assemble jobs run
+    one shard each, so pooling them into a shard count would answer about a
     matrix nobody dispatched. `machine.PUBLISHED_JOB` carries the same reason for
     the published series.
 
-    The files of one day over `within_days`, which is `max(console.window_presets)`,
-    so the cost is set by a committed knob and not by how much the archive has
-    accumulated (Guardrail #12). A day nothing wrote opens nothing.
+    The days of `within_days`, which is `max(console.window_presets)`, so the
+    cost is set by a committed knob and not by how much the archive has
+    accumulated (Guardrail #12). A day nothing wrote reads nothing.
     """
-    found: list[Mapping[str, str]] = []
-    root = ledger.tree_root(state_root, LedgerName.HOST_FINGERPRINT)
-    for day in day_partition.days_in_window(anchor, within_days):
-        for source in day_shards.one_day(root, day):
-            with source.open("r", encoding="utf-8", newline="") as handle:
-                found.extend(
-                    row
-                    for row in csv.DictReader(handle)
-                    if (row.get("job") or machine.PUBLISHED_JOB) == machine.PUBLISHED_JOB
-                )
-    return found
+    days = day_partition.days_in_window(anchor, within_days)
+    return [
+        row.csv_row()
+        for row in ledger.load_days(
+            state_root, LedgerName.HOST_FINGERPRINT, days, model=HostFingerprintRow
+        )
+        if row.job == machine.PUBLISHED_JOB
+    ]
 
 
 def _planned_shards(digest_root: Path, newest_date: str | None) -> dict[str, int]:

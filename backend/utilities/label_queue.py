@@ -72,9 +72,8 @@ from typing import Final
 REPO_ROOT: Final = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "backend"))
 
-from idhazh import config, ledger  # noqa: E402
+from idhazh import config  # noqa: E402
 from idhazh.contracts.label_row import LabelRow, LabelTag, LabelVerdict  # noqa: E402
-from idhazh.contracts.ledger_name import LedgerName  # noqa: E402
 from idhazh.evals import archive, evidence, labels  # noqa: E402
 from idhazh.evals.writer import records as _score_records  # noqa: E402
 from idhazh.ledger import STATE_DIRNAME  # noqa: E402
@@ -98,7 +97,7 @@ SKIP: Final = object()
 
 
 def _ledger(state_dir: Path) -> list[dict[str, str]]:
-    """Every committed row, oldest day first. The ledger is a day tree now.
+    """Every committed row, oldest day first, read through the ledger door.
 
     A ledger with no full-grain month left is refused by name rather than
     reported as an empty draw. The two look identical from the row count and
@@ -110,12 +109,12 @@ def _ledger(state_dir: Path) -> list[dict[str, str]]:
         summarised = archive.archived_months(state_dir)
         if summarised:
             raise SystemExit(
-                f"every month of {ledger.tree_relpath(LedgerName.SCORES)} has aged out of "
+                "every month of the scores ledger has aged out of "
                 f"the full-grain window - {', '.join(summarised)} exist only as summaries "
                 f"at {archive.archive_relpath('<YYYY-MM>')}, and a summary holds no row to "
                 f"label. {archive.RAW_WINDOW_NOTE}"
             )
-        raise SystemExit(f"no eval ledger under {ledger.tree_relpath(LedgerName.SCORES)}")
+        raise SystemExit("the scores ledger holds no row")
     return rows
 
 
@@ -142,10 +141,7 @@ def refuse(records: Sequence[dict[str, str]], *, scorer: str, reason: str) -> in
     print(f"reason           {reason}")
     print(RULE)
     print()
-    print(
-        f"{ledger.tree_relpath(LedgerName.SCORES)} holds these scorers. "
-        "Only the scorer above can be drawn:"
-    )
+    print("The scores ledger holds these scorers. Only the scorer above can be drawn:")
     for pair in labels.pairs(records):
         here = "   <- this scorer" if pair.scorer_version == scorer else ""
         print()

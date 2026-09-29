@@ -36,7 +36,6 @@ from idhazh.contracts.council_shard_outcome import CouncilShardOutcome
 from idhazh.contracts.feed_health import FeedHealthRow
 from idhazh.contracts.feed_retirement import FeedRetirementRow
 from idhazh.contracts.fitted_similarity_threshold import FittedSimilarityThreshold
-from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.item_health import ItemHealthRow, ItemOutcome
 from idhazh.contracts.item_health_summary import ItemHealthSummaryRow
 from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
@@ -59,7 +58,6 @@ from idhazh.ledger.keys import (
     COUNCIL_SHARD_OUTCOME_KEY,
     DATE_CELL,
     FEED_HEALTH_KEY,
-    ITEM_HEALTH_KEY,
     SPAN_ROLLUP_KEY,
     STORY_SIMILARITY_PAIR_KEY,
     STORY_SIMILARITY_THRESHOLD_KEY,
@@ -189,15 +187,16 @@ def load_settled_failures(state_dir: Path, date: str, *, codes: Collection[str])
     """
     if not codes:
         return set()
-    from idhazh import day_shards
-
     wanted = set(codes)
     return {
-        row["url_key"]
-        for row in day_shards.settled_day(
-            paths.tree_root(state_dir, LedgerName.ITEM_HEALTH), date, ITEM_HEALTH_KEY, ItemHealthRow
+        row.url_key
+        for row in ledger_files.load_days(
+            state_dir, LedgerName.ITEM_HEALTH, [date], model=ItemHealthRow
         )
-        if row["date"] == date and row["outcome"] != ItemOutcome.OK and row["code"] in wanted
+        if row.date == date
+        and row.outcome != ItemOutcome.OK
+        and row.code is not None
+        and row.code in wanted
     }
 
 
@@ -213,15 +212,13 @@ def load_source_counts(state_dir: Path, date: str) -> dict[str, int]:
     can be written by more than one job, and a re-run of the same day writes it
     again. Counting rows would charge a feed twice for one story.
     """
-    from idhazh import day_shards
-
     carried: dict[str, str] = {}
-    for row in day_shards.settled_day(
-        paths.tree_root(state_dir, LedgerName.ITEM_HEALTH), date, ITEM_HEALTH_KEY, ItemHealthRow
+    for row in ledger_files.load_days(
+        state_dir, LedgerName.ITEM_HEALTH, [date], model=ItemHealthRow
     ):
-        if row["date"] != date or row["outcome"] != ItemOutcome.OK:
+        if row.date != date or row.outcome != ItemOutcome.OK:
             continue
-        carried[row["url_key"]] = row["source_id"]
+        carried[row.url_key] = row.source_id
     counts: dict[str, int] = {}
     for source_id in carried.values():
         counts[source_id] = counts.get(source_id, 0) + 1
@@ -253,15 +250,6 @@ def _header_and_keys(
         return header, {
             tuple(cells[index] for index in at) for cells in reader if len(cells) > widest
         }
-
-
-def recorded_item_health(path: Path) -> set[tuple[str, ...]]:
-    """Every planned item this day's file already has a verdict for.
-
-    A missing file is a day with no history, which is what the first run of a
-    day has.
-    """
-    return _header_and_keys(path, ITEM_HEALTH_KEY)[1]
 
 
 def load_retirements(state_dir: Path) -> list[FeedRetirementRow]:
@@ -616,21 +604,6 @@ def extend_segment(
     return added
 
 
-def load_item_health_shard(path: Path) -> list[ItemHealthRow]:
-    """Every row of one full-grain partition. Empty for a day never written."""
-    return [ItemHealthRow.from_csv_row(row) for row in _read_rows(path)]
-
-
-def load_host_fingerprint_shard(path: Path) -> list[HostFingerprintRow]:
-    """Every row of one day's host records. Empty for a day never written.
-
-    A day and not a window, because the key opens with `date` and a run id
-    already names its date - so a caller asking about one run opens one file
-    however long the ledger gets (Guardrail #12).
-    """
-    return [HostFingerprintRow.from_csv_row(row) for row in _read_rows(path)]
-
-
 def load_span_rollup_shard(path: Path) -> list[SpanRollupRow]:
     """Every row of one month's span rollup. Empty for a month never written.
 
@@ -638,36 +611,6 @@ def load_span_rollup_shard(path: Path) -> list[SpanRollupRow]:
     at. A caller asking about one date filters on `date` after reading.
     """
     return [SpanRollupRow.from_csv_row(row) for row in _read_rows(path)]
-
-
-def load_item_health(state_dir: Path, *, today: str, within_days: int) -> list[ItemHealthRow]:
-    """Every item-health row in the window, oldest day first.
-
-    Bounded for the same reason `load_health` is (Guardrail #12): this is the
-    fastest-growing ledger in the repository and twenty work shards file into it
-    every day, so a reader that walked every day would cost more every run for
-    an answer about the last few weeks. `day_shards.settled_rows` names both the
-    cover and the settlement, so a cover of `n` days reads the newest `n`
-    RECORDED days and returns one row per planned item per run.
-
-    A day the ledger never recorded has no entry, which is not a fault: a run
-    that planned nothing that day wrote nothing that day.
-
-    A row that no longer parses stops the read, which is what every day-shard
-    read does: a census divides by these rows, so a silently dropped one moves a
-    ratio instead of costing a decision some evidence.
-    """
-    from idhazh import day_shards
-
-    return [
-        ItemHealthRow.from_csv_row(row)
-        for row in day_shards.settled_rows(
-            paths.tree_root(state_dir, LedgerName.ITEM_HEALTH),
-            ITEM_HEALTH_KEY,
-            ItemHealthRow,
-            days=within_days,
-        )
-    ]
 
 
 def write_item_health_summary(path: Path, rows: list[ItemHealthSummaryRow]) -> int:

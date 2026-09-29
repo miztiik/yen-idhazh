@@ -91,21 +91,13 @@ def outcomes(state_root: Path, *, date: str) -> list[str]:
     """How this date's items ended, counted by stage, outcome and failure code.
 
     One day of the census, settled, and nothing else. Every work shard of a run
-    leaves its own file in the day directory, so the count is over all of them
-    and a re-run's second attempt does not add its items a second time.
+    files its own raw file, so the count is over all of them and a re-run's
+    second attempt does not add its items a second time.
 
-    A day the ledger never recorded has no file, which is not a fault: a run that
-    planned nothing that day wrote nothing that day.
+    A day the ledger never recorded holds no row, which is not a fault: a run
+    that planned nothing that day wrote nothing that day.
     """
-    rows = [
-        ItemHealthRow.from_csv_row(cells)
-        for cells in day_shards.settled_day(
-            ledger.tree_root(state_root, LedgerName.ITEM_HEALTH),
-            date,
-            ledger.ITEM_HEALTH_KEY,
-            ItemHealthRow,
-        )
-    ]
+    rows = ledger.load_days(state_root, LedgerName.ITEM_HEALTH, [date], model=ItemHealthRow)
     if not rows:
         return [f"{date}: the item-health ledger recorded no item"]
 

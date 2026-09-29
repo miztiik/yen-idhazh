@@ -235,6 +235,54 @@ def load_ledger_rows[C: Contract](
     return [held.row for held in raw_files.settle_rows(stored, keys.door_key(ledger))]
 
 
+def month_days(month: str) -> list[str]:
+    """Every UTC day of a `YYYY-MM` month, first to last."""
+    day, last = date.fromisoformat(f"{month}-01"), date.fromisoformat(_last_day(month))
+    days: list[str] = []
+    while day <= last:
+        days.append(day.isoformat())
+        day += timedelta(days=1)
+    return days
+
+
+def held_months(state_dir: Path, ledger: LedgerName) -> list[str]:
+    """Every UTC month this ledger may hold a row in, oldest first, from names alone.
+
+    The two indexes and the names of the raw day folders: no data file is
+    opened, so it costs one listing and two small reads whatever the ledger
+    holds. A month named here can still hold no row - a quiet day is a zero-row
+    file with an index entry - and `load_days` over its days then returns none.
+    """
+    months: set[str] = set()
+    for period in Period:
+        index = _index(state_dir, ledger, period)
+        if index is not None:
+            months.update(entry.covers[:7] for entry in index.entries)
+    months.update(day[:7] for day in raw_files.raw_days(state_dir, ledger))
+    return sorted(months)
+
+
+def held_days(state_dir: Path, ledger: LedgerName) -> list[str]:
+    """Every UTC day this ledger holds a row for, oldest first, from names alone.
+
+    A day the daily index names with rows, or a raw day folder that holds a
+    file. A day the daily index names with none is a quiet day and is left out.
+    A month file's index counts the month's rows and not its days, so every day
+    of an absorbed month is named, and `load_days` returns nothing for the ones
+    that held none. No data file is opened.
+    """
+    days: set[str] = set(raw_files.raw_days(state_dir, ledger))
+    daily = _index(state_dir, ledger, Period.DAILY)
+    if daily is not None:
+        days.update(entry.covers for entry in daily.entries if entry.rows)
+    monthly = _index(state_dir, ledger, Period.MONTHLY)
+    if monthly is not None:
+        for entry in monthly.entries:
+            if entry.rows:
+                days.update(month_days(entry.covers))
+    return sorted(days)
+
+
 def _stored_or_skipped[C: Contract](
     state_dir: Path, path: Path, *, model: type[C]
 ) -> list[StoredRow[C]]:

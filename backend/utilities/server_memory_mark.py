@@ -1,7 +1,7 @@
 """Does the model server's recorded memory mark ever fall, and in whose order?
 
-**An operator script, never a test.** It reads every committed
-`state/item-health/` day file, so it costs more as the archive grows
+**An operator script, never a test.** It reads every row the item-health
+ledger holds, so it costs more as the archive grows
 (CLAUDE.md Guardrail #12), and every number it prints is a property of data a
 run appended - which CLAUDE.md section 13 forbids a test to assert on, because a
 red would arrive on the day a run wrote an unusual shard rather than on the day
@@ -34,7 +34,6 @@ same amount.
 from __future__ import annotations
 
 import argparse
-import csv
 import sys
 from collections import defaultdict
 from dataclasses import dataclass
@@ -42,8 +41,8 @@ from itertools import pairwise
 from pathlib import Path
 from typing import Final
 
-from idhazh import day_shards, ledger
-from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
+from idhazh import ledger
+from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.ledger_name import LedgerName
 
 #: The mark under investigation, and the current resident set beside it.
@@ -60,7 +59,7 @@ MODEL_CLOCK: Final = "item_ended_at"
 
 #: One job, one machine, one model server. A shard number alone spans days and
 #: runs, and `plan` and `assemble` both spell shard 0.
-JOB_KEY: Final = ("date", "run_id", "shard")
+JOB_KEY: Final = ("date", "run_id", "machine_shard")
 
 #: Below this share of the previous item's resident set, the server gave the
 #: weights back - which is a restart rather than a page the kernel reclaimed.
@@ -110,8 +109,8 @@ class Order:
 def cell(row: dict[str, str], name: str) -> str:
     """One cell, empty where the column is absent as well as where it is blank.
 
-    A day file written before a column existed does not carry the heading at
-    all, and an older row read through `csv.DictReader` answers `None` for it.
+    A row read through the door carries every column its contract names, so
+    only a name the contract does not have reads as absent.
     """
     return (row.get(name) or "").strip()
 
@@ -119,27 +118,27 @@ def cell(row: dict[str, str], name: str) -> str:
 def marked_rows(root: Path, day: str | None) -> tuple[list[dict[str, str]], int]:
     """Every committed row that carries both the mark and the clock it was taken on.
 
-    **This is the growing read.** It opens every day file under
-    `state/item-health/` (Guardrail #12). A bounded window cannot answer the
+    **This is the growing read.** It reads every row the item-health ledger
+    holds (Guardrail #12). A bounded window cannot answer the
     question: a fall is a property of a pair of rows inside one shard, and
     whether any shard anywhere has ever produced one is the thing being asked.
     `--day` narrows it to one day for a spot check, which is the bounded form
     where the reader already knows which run they are looking at.
+
+    The count beside the rows is the number of days that held a row.
     """
-    kept: list[dict[str, str]] = []
-    files = 0
-    folder = ledger.tree_root(root / ledger.STATE_DIRNAME, LedgerName.ITEM_HEALTH)
-    for path in day_shards.shard_files(folder, days=UNBOUNDED_WINDOW):
-        if day is not None and day_shards.date_of(path) != day:
-            continue
-        files += 1
-        with path.open(encoding="utf-8", newline="") as handle:
-            kept.extend(
-                row
-                for row in csv.DictReader(handle)
-                if cell(row, MARK) and cell(row, MODEL_CLOCK) and cell(row, FETCH_CLOCK)
-            )
-    return kept, files
+    state_dir = root / ledger.STATE_DIRNAME
+    if day is None:
+        held = ledger.load_ledger_rows(state_dir, LedgerName.ITEM_HEALTH, model=ItemHealthRow)
+    else:
+        held = ledger.load_days(state_dir, LedgerName.ITEM_HEALTH, [day], model=ItemHealthRow)
+    rows = [row.csv_row() for row in held]
+    kept = [
+        row
+        for row in rows
+        if cell(row, MARK) and cell(row, MODEL_CLOCK) and cell(row, FETCH_CLOCK)
+    ]
+    return kept, len({row["date"] for row in rows})
 
 
 def jobs(rows: list[dict[str, str]]) -> dict[tuple[str, ...], list[dict[str, str]]]:
@@ -225,7 +224,7 @@ def mark_against_set(rows: list[dict[str, str]]) -> tuple[int, int]:
 
 def report(root: Path, day: str | None) -> int:
     """Print the evidence. Non-zero only where there is nothing to read."""
-    rows, files = marked_rows(root, day)
+    rows, days = marked_rows(root, day)
     if not rows:
         where = "the committed ledger" if day is None else f"{day}"
         print(f"no row of {where} carries {MARK} with both clocks", file=sys.stderr)
@@ -234,7 +233,7 @@ def report(root: Path, day: str | None) -> int:
     grouped = jobs(rows)
     orders = (read_in(grouped, FETCH_CLOCK), read_in(grouped, MODEL_CLOCK))
     print(
-        f"{len(rows):,} rows carry `{MARK}`, over {files} day files and "
+        f"{len(rows):,} rows carry `{MARK}`, over {days} days and "
         f"{len(grouped)} jobs.\n"
     )
     print("| Rows read in this order | Pairs | Falls | Jobs with a fall |")
