@@ -6,6 +6,8 @@ body of its own (CLAUDE.md section 1a, "A router is the sharpest case").
 
 from __future__ import annotations
 
+from typing import Final
+
 from idhazh import (
     config,
     ledger,
@@ -14,6 +16,7 @@ from idhazh import (
 )
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.eval_row import EvalRow
+from idhazh.contracts.file_envelope import WriterIdentity
 from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.run_plan import RunPlan
@@ -27,9 +30,18 @@ from idhazh.stages.common import (
     shard_of,
 )
 
+#: The name every file this stage writes carries as its producer: what keeps its
+#: work unit apart from assemble's when both file rows for one day.
+PRODUCER: Final = __name__.partition(".")[2]
+
 
 def stage_record(
-    plan: RunPlan, *, settings: config.Settings, shard: int = 0, shards: int = 1
+    plan: RunPlan,
+    *,
+    settings: config.Settings,
+    commit_sha: str,
+    shard: int = 0,
+    shards: int = 1,
 ) -> tuple[int, int]:
     """Commit what one shard measured, before anything can throw it away.
 
@@ -57,11 +69,10 @@ def stage_record(
     is `HOST_FINGERPRINT_KEY` minus the date and the run, so it is what takes an
     item to the `state/host-fingerprint/` row for the machine that read it.
 
-    **Both ledgers go to this shard's own files, never to a day file others
-    open.** Up to eight work shards and assemble all record the same day, so
-    nine writers would be appending to one path; each writes its own file inside
-    the day directory instead. The attempt is in the name, so a re-run corrects
-    its first try rather than colliding with it.
+    **Both ledgers go to this shard's own files, never to a file others open.**
+    Up to eight work shards and assemble all record the same day, and each files
+    its own raw file through the ledger door, named for the writer. A re-run's
+    second attempt replaces its first try rather than colliding with it.
 
     Returns the item-health rows and the eval rows that landed.
     """
@@ -91,24 +102,25 @@ def stage_record(
         )
         if payload.eval_path.exists():
             rows.append(EvalRow.read(payload.eval_path))
-    attempt = run_context.run_attempt()
-    recorded = ledger.write_segment(
+    identity = WriterIdentity(
+        run_id=plan.run_id,
+        attempt=run_context.run_attempt(),
+        job=ServerJob.WORK,
+        shard=shard,
+        producer=PRODUCER,
+        git_sha=commit_sha,
+    )
+    # The door writes nothing into a paused family, and says so by returning no path.
+    landed = ledger.persist(
         common.STATE_ROOT,
-        LedgerName.ITEM_HEALTH,
         health,
-        run_id=plan.run_id,
-        attempt=attempt,
-        job=ServerJob.WORK,
-        shard=shard,
+        ledger=LedgerName.ITEM_HEALTH,
+        covers=plan.date,
+        identity=identity,
     )
-    scored = writer.append_segment(
-        common.STATE_ROOT,
-        rows,
-        run_id=plan.run_id,
-        attempt=attempt,
-        job=ServerJob.WORK,
-        shard=shard,
-    )
+    recorded = len(health) if landed else 0
+    scored = writer.file_measurements(common.STATE_ROOT, rows, identity=identity)
+    attempt = identity.attempt
     LOG.info(
         "recorded shard=%s/%s run=%s attempt=%s settled=%s rebuilt=%s item_health_rows=%s "
         "eval_rows=%s",

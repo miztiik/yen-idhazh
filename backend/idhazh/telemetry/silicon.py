@@ -33,6 +33,7 @@ from typing import TYPE_CHECKING, Final
 
 from idhazh import ledger, run_context
 from idhazh.contracts.base import WORK_JOB, ServerJob
+from idhazh.contracts.file_envelope import WriterIdentity
 from idhazh.contracts.host_fingerprint import WATCHED_FLAGS, HostFingerprintRow
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.run_plan import RunPlan
@@ -42,6 +43,19 @@ if TYPE_CHECKING:  # pragma: no cover - a type, not a runtime dependency
     from idhazh import config
 
 LOG: Final = logging.getLogger("idhazh")
+
+#: The producer both halves of a job's host row file under. One name for the
+#: probe and the clock is what makes the clock's whole row a later write of the
+#: probe's work unit, so the door keeps the whole row and drops the half.
+PRODUCER: Final = __name__.partition(".")[2]
+
+#: The four cells only the end of a job can fill. The probe fills none of them.
+CLOCK_CELLS: Final = (
+    "model_load_ms",
+    "job_seconds",
+    "server_prompt_tokens",
+    "server_prompt_seconds",
+)
 
 CPUINFO: Final = Path("/proc/cpuinfo")
 UPTIME: Final = Path("/proc/uptime")
@@ -348,11 +362,31 @@ def read_row(
     )
 
 
+def _writer(plan: RunPlan, *, commit_sha: str, job: ServerJob, shard: int) -> WriterIdentity:
+    """This job's writer identity, the same for its probe and its clock."""
+    return WriterIdentity(
+        run_id=plan.run_id,
+        attempt=run_context.run_attempt(),
+        job=job,
+        shard=shard,
+        producer=PRODUCER,
+        git_sha=commit_sha,
+    )
+
+
+def _shown(state_root: Path, paths: list[Path]) -> str:
+    """Where a write landed, as it may leave the process: relative and POSIX."""
+    return ",".join(
+        f"{ledger.STATE_DIRNAME}/{path.relative_to(state_root).as_posix()}" for path in paths
+    ) or "nothing"
+
+
 def stage_fingerprint(
     plan: RunPlan,
     *,
     settings: config.Settings,
     state_root: Path,
+    commit_sha: str,
     shard: int = 0,
     job: ServerJob = WORK_JOB,
 ) -> HostFingerprintRow | None:
@@ -365,11 +399,10 @@ def stage_fingerprint(
     than the host. How much it needs depends on the cache the machine reports:
     `probe_buffer_mib` sizes each of the two buffers against it.
 
-    The row goes to this job's own segment, never to the day file. Ten jobs of
-    one run each draw a machine and each record it, so ten runners would be
-    appending to one path at once; on 2026-09-16 that race left the day
-    header-only. `assemble` folds the segments into the head, and the attempt is
-    in the name so a re-run corrects its first try rather than colliding with it.
+    The row goes to this job's own raw file through the ledger door. Ten jobs of
+    one run each draw a machine and each record it, and the door names each file
+    for its writer, so no two jobs share a path; the attempt is in the writer's
+    identity, so a re-run replaces its first try rather than colliding with it.
     """
     knobs = settings.app.observability
     if not knobs.host_fingerprint:
@@ -383,20 +416,17 @@ def stage_fingerprint(
         probe_floor_mib=knobs.host_fingerprint_bandwidth_floor_mib,
         probe_cache_multiple=knobs.host_fingerprint_bandwidth_cache_multiple,
     )
-    attempt = run_context.run_attempt()
-    landed = ledger.write_segment(
+    landed = ledger.persist(
         state_root,
-        LedgerName.HOST_FINGERPRINT,
         [row],
-        run_id=plan.run_id,
-        attempt=attempt,
-        job=job,
-        shard=shard,
+        ledger=LedgerName.HOST_FINGERPRINT,
+        covers=plan.date,
+        identity=_writer(plan, commit_sha=commit_sha, job=job, shard=shard),
     )
     LOG.info(
         "fingerprint job=%s shard=%s run=%s id=%s cpu=%s family=%s model=%s stepping=%s "
         "flags=%s l3_bytes=%s memcpy_gib_s=%s probe_mib=%s vm_size=%s zone=%s "
-        "boot_seconds=%s mhz=%s rows=%s segment=%s",
+        "boot_seconds=%s mhz=%s file=%s",
         job,
         shard,
         plan.run_id,
@@ -413,17 +443,58 @@ def stage_fingerprint(
         row.vm_zone,
         row.boot_seconds,
         row.mhz_at_probe,
-        landed,
-        ledger.day_shard_relpath(
-            LedgerName.HOST_FINGERPRINT,
-            date=plan.date,
-            run_id=plan.run_id,
-            attempt=attempt,
-            job=job,
-            shard=shard,
-        ),
+        _shown(state_root, landed),
     )
     return row
+
+
+def _own_probe(state_root: Path, date: str, identity: WriterIdentity) -> HostFingerprintRow | None:
+    """The row this job's probe filed at its start, read back from its raw file.
+
+    The newest file of this writer's own work unit and attempt, so a clock step
+    that ran twice reads the whole row it wrote last, and never a sibling job's
+    or an earlier attempt's. None when the probe was off or never ran.
+    """
+    unit = ledger.unit_id(
+        ledger=LedgerName.HOST_FINGERPRINT,
+        covers=date,
+        run_id=identity.run_id,
+        job=identity.job,
+        shard=identity.shard,
+        producer=identity.producer,
+    )
+    mine = [
+        held
+        for held in ledger.list_raw_files(state_root, LedgerName.HOST_FINGERPRINT, days={date})
+        if held.envelope.unit_id == unit and held.envelope.identity.attempt == identity.attempt
+    ]
+    if not mine:
+        return None
+    rows = ledger.load([mine[-1].path], model=HostFingerprintRow)
+    return rows[0] if rows else None
+
+
+def _with_clock(probe: HostFingerprintRow, clock: HostFingerprintRow) -> HostFingerprintRow:
+    """The probe's row with the four job-end cells filled from the clock's reading.
+
+    The probe fills none of those four, so a probe that did is named in a
+    warning: the clock's reading replaces it, and a person should know the two
+    disagreed about who measures what.
+    """
+    cells = probe.model_dump()
+    for name in CLOCK_CELLS:
+        if cells[name] is not None:
+            LOG.warning(
+                "the probe filled a clock cell, and the clock's reading replaces it "
+                "key=%s,%s,%s,%s cell=%s",
+                probe.date,
+                probe.run_id,
+                probe.job,
+                probe.shard,
+                name,
+            )
+        cells[name] = getattr(clock, name)
+    return HostFingerprintRow.model_validate(cells)
 
 
 def stage_job_clock(
@@ -431,6 +502,7 @@ def stage_job_clock(
     *,
     settings: config.Settings,
     state_root: Path,
+    commit_sha: str,
     shard: int = 0,
     job: ServerJob = WORK_JOB,
     job_started_at: int | None = None,
@@ -443,13 +515,12 @@ def stage_job_clock(
     once the job is over - the wall clock it spent, what opening the weights cost
     before the first item, and the two prompt counters the model server itself
     kept - and moving the probe to job end to collect them would destroy
-    `mhz_at_probe` and `boot_seconds`, which want an idle machine. So this writes
-    them as a second row of the same key, into the same segment, filling nothing
-    the probe already filled.
+    `mhz_at_probe` and `boot_seconds`, which want an idle machine.
 
-    The settlement is what unites the two. Neither row is ever edited: the
-    probe's cells and these four are disjoint, so the fold takes the union and the
-    day file holds one row a job.
+    So this reads back the row this attempt's probe filed, fills the four cells,
+    and files the whole row again under the same writer. That is a later write of
+    the probe's own work unit, which the door keeps in place of the half-row, so
+    a settled day holds one row a job and never one row naming two machines.
 
     The two prompt cells are the second instrument. The item ledger answers the
     same question by arithmetic over its own rows, which cannot check those rows;
@@ -457,9 +528,10 @@ def stage_job_clock(
 
     A job that dies between the probe and this step leaves a usable half-row with
     four empty cells, which is the degrade path rather than a failure. So is a
-    stamp that never arrived, or a scrape the server was already gone for: an
-    empty cell says the reading was not taken, where a zero would claim a job that
-    took no time and read no tokens.
+    probe that never ran, which leaves this row alone, and a stamp that never
+    arrived, or a scrape the server was already gone for: an empty cell says the
+    reading was not taken, where a zero would claim a job that took no time and
+    read no tokens.
     """
     knobs = settings.app.observability
     if not knobs.host_fingerprint:
@@ -478,19 +550,19 @@ def stage_job_clock(
         server_prompt_tokens=prompt_tokens,
         server_prompt_seconds=prompt_seconds,
     )
-    attempt = run_context.run_attempt()
-    landed = ledger.extend_segment(
+    identity = _writer(plan, commit_sha=commit_sha, job=job, shard=shard)
+    probe = _own_probe(state_root, plan.date, identity)
+    whole = _with_clock(probe, row) if probe is not None else row
+    landed = ledger.persist(
         state_root,
-        LedgerName.HOST_FINGERPRINT,
-        [row],
-        run_id=plan.run_id,
-        attempt=attempt,
-        job=job,
-        shard=shard,
+        [whole],
+        ledger=LedgerName.HOST_FINGERPRINT,
+        covers=plan.date,
+        identity=identity,
     )
     LOG.info(
         "job clock job=%s shard=%s run=%s job_seconds=%s model_load_ms=%s "
-        "server_prompt_tokens=%s server_prompt_seconds=%s rows=%s segment=%s",
+        "server_prompt_tokens=%s server_prompt_seconds=%s probe=%s file=%s",
         job,
         shard,
         plan.run_id,
@@ -498,17 +570,10 @@ def stage_job_clock(
         row.model_load_ms,
         row.server_prompt_tokens,
         row.server_prompt_seconds,
-        landed,
-        ledger.day_shard_relpath(
-            LedgerName.HOST_FINGERPRINT,
-            date=plan.date,
-            run_id=plan.run_id,
-            attempt=attempt,
-            job=job,
-            shard=shard,
-        ),
+        "found" if probe is not None else "absent",
+        _shown(state_root, landed),
     )
-    return row
+    return whole
 
 
 def _text_if_readable(path: Path | None) -> str | None:

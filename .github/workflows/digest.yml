@@ -305,6 +305,7 @@ jobs:
           set -euo pipefail
           python -m idhazh fingerprint \
             --date "${{ steps.decide.outputs.date }}" \
+            --commit "${{ github.sha }}" \
             --shard 0 \
             --job plan
 
@@ -362,6 +363,7 @@ jobs:
           set -euo pipefail
           python -m idhazh job-clock \
             --date "${{ steps.decide.outputs.date }}" \
+            --commit "${{ github.sha }}" \
             --job plan \
             --shard 0 \
             --job-started-at "${JOB_STARTED_AT:-}"
@@ -485,10 +487,10 @@ jobs:
       - name: Install
         run: |
           if [ "${{ needs.plan.outputs.faithfulness }}" = "false" ]; then
-            pip install -e .
+            pip install -e ".[parquet]"
           else
             pip install --index-url https://download.pytorch.org/whl/cpu torch
-            pip install -e ".[faithfulness]"
+            pip install -e ".[faithfulness,parquet]"
           fi
 
       - uses: actions/download-artifact@v8
@@ -508,6 +510,7 @@ jobs:
           set -euo pipefail
           python -m idhazh fingerprint \
             --date "${{ needs.plan.outputs.date }}" \
+            --commit "${{ github.sha }}" \
             --shard ${{ matrix.shard }} \
             --job work
 
@@ -634,6 +637,7 @@ jobs:
         run: |
           python -m idhazh record \
             --date "${{ needs.plan.outputs.date }}" \
+            --commit "${{ github.sha }}" \
             --shard ${{ matrix.shard }} \
             --shards ${{ needs.plan.outputs.shards }}
 
@@ -712,6 +716,7 @@ jobs:
           set -euo pipefail
           python -m idhazh job-clock \
             --date "${{ needs.plan.outputs.date }}" \
+            --commit "${{ github.sha }}" \
             --job work \
             --shard ${{ matrix.shard }} \
             --job-started-at "${JOB_STARTED_AT:-}" \
@@ -1025,6 +1030,7 @@ jobs:
           set -euo pipefail
           python -m idhazh fingerprint \
             --date "${{ needs.plan.outputs.date }}" \
+            --commit "${{ github.sha }}" \
             --shard 0 \
             --job assemble
 
