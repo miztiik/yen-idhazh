@@ -176,7 +176,7 @@ is refused by the commit loop, where the deletions are known.
 
 ## Design rationale
 
-**2026-09-27: a month is counted where it is hardest to pass.** A comparison of
+**A month is counted where it is hardest to pass.** A comparison of
 days against months cannot be answered once: fourteen months hold between 424
 and 428 days depending on where they fall. So a window that deletes is counted at
 the fewest days its months can hold, and a window that is needed at the most,
@@ -184,7 +184,7 @@ and the answer never depends on the day the build ran. The same unit against the
 same unit compares the numbers. The period pair reaches back `daily_keep_days`
 plus its `monthly_window` (Fowler and Carmack).
 
-**2026-09-27: a compaction's floor is the task that limited the ledger.** Once a
+**A compaction's floor is the task that limited the ledger.** Once a
 ledger moves under the two roots, the task that kept its old tree is retired and
 keeps its declaration, so its window is the one record of how far back the ledger
 reached. For `item-health` that is the `full-grain` series of
@@ -194,7 +194,7 @@ against a pair kept forever passes; a floor kept forever against a bounded pair 
 refused, because a person chose never to delete that ledger; forever against
 forever passes; and a ledger no task ever limited has no floor.
 
-**2026-09-28: a cleanup age lives in the declaration of the task that deletes by
+**A cleanup age lives in the declaration of the task that deletes by
 it.** Eleven keys left `config/idhazh.json` - the ledger ages, the trial window,
 the picture cleanup's fuse and the one dry run every pass shared - because each
 had one reader and that reader is now a task. The rules that tied them together
@@ -206,7 +206,7 @@ declaration, rather than read as a second spelling somebody has to hold in
 step. `retention.image_months` stays where it is, because the archive page
 states it to a reader, and the loader holds both picture windows to it (Fowler).
 
-**2026-09-28: a compaction's month window leaves no gap to refuse.** The loader
+**A compaction's month window leaves no gap to refuse.** The loader
 used to refuse a `monthly_window` that left less than one whole month after
 `daily_keep_days`, because a window counted from a month's end could drop the
 month before it was absorbed. The window now counts from the month's absorption -
@@ -214,7 +214,7 @@ month M goes when the month `monthly_window` later is absorbed - so a month is
 always absorbed before it can go, and the rule went with the gap it guarded
 (Fowler and Carmack).
 
-**2026-09-28: a compaction has no window and no ceiling of its own.** `window` and
+**A compaction has no window and no ceiling of its own.** `window` and
 `max_deletes_per_run` are fixed on the type, to forever and null, rather than
 left for a declaration to set. A compaction never read either: its two periods
 are how far back it keeps, and `max_periods_per_run` is its budget. A value there
