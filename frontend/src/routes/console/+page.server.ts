@@ -4,6 +4,7 @@ import { chartFlow } from '$lib/charts/chart-flow';
 import type { ExtractionDay } from '$lib/charts/extraction-trend';
 import type { RunYieldSource } from '$lib/charts/run-yield';
 import { itemCost, type ItemCost } from '$lib/console/item-cost';
+import { recordNotes } from '$lib/console/recording';
 import { extraction, type Extraction } from '$lib/console/extraction';
 import { health, runOutcome, squareLabel, type DayColumn } from '$lib/console/run-square';
 import { pipelineChanges, wasCut } from '$lib/server/model-work';
@@ -13,6 +14,7 @@ import { chartConfig, consoleConfig, panelGroupsFor, retentionConfig, runConfig,
 import { evalRows, itemHealthRows } from '$lib/server/ledger-rows';
 import {
 	dayMetrics,
+	latestDate,
 	loadManifests,
 	publishedCharts,
 	publishedItems,
@@ -192,8 +194,12 @@ export async function load() {
 	// this route reads file by day.
 	const widest = Math.max(...console.window_presets);
 	const days = shardDays(widest);
-	const { rows } = evalRows(days);
-	const itemRows = itemHealthRows(days).rows;
+	// Both from their packed files, so both stop at the newest packed day and say
+	// so below rather than drawing the days after it as quiet ones.
+	const scores = await evalRows(days);
+	const items = await itemHealthRows(days);
+	const { rows } = scores;
+	const itemRows = items.rows;
 	const floorPct = runConfig().success_floor_pct;
 	const itemCeiling = runConfig().safety_ceiling_per_run;
 	const siteBudgetMb = retentionConfig().site_budget_mb;
@@ -381,6 +387,16 @@ export async function load() {
 		// operator moves without editing a component.
 		chart,
 		summarizeBands: summarize.bands,
+		// What the page says about the two records it read before any panel draws
+		// from them: one not packed yet, one that did not load, or one packed some
+		// days short of the newest published day.
+		recordNotes: recordNotes(
+			[
+				{ record: 'article', read: items.read },
+				{ record: 'score', read: scores.read }
+			],
+			latestDate(undefined, 1)
+		),
 		today
 	};
 }

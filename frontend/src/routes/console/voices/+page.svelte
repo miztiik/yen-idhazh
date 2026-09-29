@@ -20,6 +20,7 @@
 	import { windowOfDays } from '$lib/charts/viewport';
 	import { shortDate } from '$lib/format';
 	import ChartReadout from '$lib/components/ChartReadout.svelte';
+	import RecordNotes from '$lib/console/RecordNotes.svelte';
 	import SourceCutRange from '$lib/components/SourceCutRange.svelte';
 	import TargetBar from '$lib/components/TargetBar.svelte';
 	import WindowControlSource from '$lib/components/WindowControlSource.svelte';
@@ -208,6 +209,10 @@
 		{data.carries.voices}
 		<a class="carry-link" href="{base}/console/">Pipelines &rarr;</a>
 	</p>
+
+	<!-- The article record is the one record this route reads when the site is
+	     built, and the cut-short table below is built on it. -->
+	<RecordNotes notes={data.recordNotes} />
 
 	<h2 class="console-h2">Sources we may ask, and what they yield</h2>
 

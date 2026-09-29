@@ -39,6 +39,7 @@
 	import { base } from '$app/paths';
 	import PanelGroup from '$lib/components/PanelGroup.svelte';
 	import WindowControlSource from '$lib/components/WindowControlSource.svelte';
+	import RecordNotes from '$lib/console/RecordNotes.svelte';
 	import ContextCostPanel from '$lib/console/machine/ContextCostPanel.svelte';
 	import CounterfactualCostPanel from '$lib/console/machine/CounterfactualCostPanel.svelte';
 	import DiskReadsPanel from '$lib/console/machine/DiskReadsPanel.svelte';
@@ -126,6 +127,12 @@
 		{view.start} to {view.end}. Every figure below is the model server's own count, read at build
 		time and published nowhere.
 	</p>
+
+	<!-- First under the intro, before the recording notes: a record this build did
+	     not read, or read only as far as a day some while back, is the reason every
+	     panel built on it is empty or stops early, and the notes below it would
+	     otherwise explain an empty page as something the recording did. -->
+	<RecordNotes notes={data.recordNotes} />
 
 	<!-- What the recording was doing, before anything says what it recorded.
 	     None of these is an error and none is styled as one: each states a fact

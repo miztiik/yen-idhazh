@@ -107,7 +107,7 @@ function healthRow(cells: Partial<Record<string, string | number>>): Record<stri
 		input_tokens: '',
 		output_tokens: '',
 		cached_tokens: '',
-		shard: ''
+		machine_shard: ''
 	};
 	for (const [name, value] of Object.entries(cells)) blank[name] = String(value);
 	return blank;
@@ -611,7 +611,7 @@ test.describe('do the two clocks agree', () => {
 		return Array.from({ length: 4 }, (_, index) =>
 			healthRow({
 				item_id: `s${shard}-${index}`,
-				shard,
+				machine_shard: shard,
 				input_tokens: tokens + 50,
 				cached_tokens: 50,
 				prefill_ms: prefillMs

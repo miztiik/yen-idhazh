@@ -203,7 +203,7 @@ export function processorLostOverShards(
 ): ProcessorLostRun {
 	if (run === null) return { runId: null, date: null, shards: [], from: 0, outOf: 0 };
 	const mine = health.filter((row) => row.run_id === run.runId && (row.date ?? '') === run.date);
-	const byShard = groupBy(mine, (row) => row.shard ?? '');
+	const byShard = groupBy(mine, (row) => row.machine_shard ?? '');
 	const shards = [...byShard.keys()]
 		.sort((left, right) => Number(left) - Number(right))
 		.map((shard) =>

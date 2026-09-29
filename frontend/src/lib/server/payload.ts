@@ -544,7 +544,7 @@ export function readShards(dir: string, months: number = LEDGER_WINDOW_MONTHS): 
 /** The newest `days` `<YYYY>/<MM>/<DD>/` day directories of a ledger, oldest first, as one table.
  *
  * The day-grain twin of `readShards`, and the bound sits here for the same
- * reason: it is exported, so bounding only `itemHealthRows` would leave the next
+ * reason: it is exported, so bounding only `feedResults` would leave the next
  * caller reading every day a run ever wrote. Pass `-1` to open all of them and
  * say beside the call why (`docs/concepts/growing-reads.md`).
  *
@@ -609,8 +609,9 @@ export interface DayShard {
  * stray the producer already refuses at write time and at every backend read,
  * and refusing it here would white-screen a page over it. An empty day
  * directory is not a stray: it is a day the walk would report as recorded and
- * hand back zero rows for, and four prerendered console routes would draw
- * nothing on a passing build. A prerender failure is where that belongs.
+ * hand back zero rows for, and the console routes that read the day-filed
+ * ledgers would draw nothing on a passing build. A prerender failure is where
+ * that belongs.
  */
 export function dayShardFiles(dir: string, days: number = LEDGER_WINDOW_DAYS): DayShard[] {
 	if (!existsSync(dir)) return [];
@@ -644,183 +645,6 @@ export function dayShardFiles(dir: string, days: number = LEDGER_WINDOW_DAYS): D
 	}
 	const kept = unbounded(days) ? recorded : recorded.slice(Math.max(0, recorded.length - days));
 	return kept.flat();
-}
-
-/** Which of two rows holding one key survives. `true` means `later` replaces
- * `kept`; a key with no preference keeps the first row it saw.
- *
- * `ledger.Preference`, restated for this side of the boundary. */
-export type Preference = (later: Record<string, string>, kept: Record<string, string>) => boolean;
-
-/** `ledger.ITEM_HEALTH_KEY` - what makes two census rows the same record. */
-export const ITEM_HEALTH_KEY = ['date', 'run_id', 'item_id'] as const;
-
-/** What makes two machine rows the same record. The Pydantic original is
- *  `ledger.HOST_FINGERPRINT_KEY`; `day-shards.spec.ts` holds this copy in step. */
-export const HOST_FINGERPRINT_KEY = ['date', 'run_id', 'job', 'shard'] as const;
-
-/** The cell a row carries to say which shape of the contract wrote it.
- *
- * A format literal rather than a knob: it is the base contract's own column
- * name. Two halves of one job can be written by two builds, so it is the one
- * cell outside the key that two halves may fill differently and still be one
- * row - the rule the backend's settle and its compaction both apply. */
-const VERSION_CELL = 'version';
-
-/** `ledger.OBSERVATION_KEY` - what makes two eval rows the same measurement.
- *
- * The address says which article, the digest says which words came out, and the
- * scorer version says which instrument read them. No `item_id`, because that is
- * a slot on a page rather than an identity, and no date, which is why the
- * settlement below is per day rather than over the whole cover. */
-export const OBSERVATION_KEY = ['url_key', 'output_digest', 'scorer_version'] as const;
-
-/** Does `later` replace `kept` as this run's one census row for this item?
- *
- * `ledger.ITEM_HEALTH_RULE`, restated, and named for it so the two are one grep
- * apart. A row that names the job which ran the item beats one that does not:
- * the shard's rebuild carries `job` and `shard` - the one moment either is
- * known - and assemble's rebuild leaves both empty, because it runs once for the
- * whole day on a machine that read none of the items. Anything else leaves the
- * row already held.
- */
-export const ITEM_HEALTH_RULE: Preference = (later, kept) => Boolean(later.job) && !kept.job;
-
-/** One row per key, in the order the rows arrived.
- *
- * `ledger.settled_rows` for a reader that cannot import it. The key decides
- * what two rows saying one thing look like, and `prefer` decides which of them
- * survives - the same pair `ledger.preference_for` hands the backend, so the
- * console and the pipeline cannot disagree about how many records a day had.
- */
-export function settleRows<T extends Record<string, string>>(
-	rows: readonly T[],
-	key: readonly string[],
-	prefer?: Preference
-): T[] {
-	const kept = new Map<string, T>();
-	for (const row of rows) {
-		const cells = key.map((cell) => row[cell] ?? '').join('\u0000');
-		const held = kept.get(cells);
-		if (held === undefined || (prefer !== undefined && prefer(row, held))) kept.set(cells, row);
-	}
-	return [...kept.values()];
-}
-
-/** `readDayShards`, settled within each recorded day, oldest day first.
- *
- * **Within a day, never across the cover.** A day is the unit a writer owns:
- * one directory holding one file per job that wrote the ledger that day, and a
- * repeat inside it is one record written twice. Two days holding one key can be
- * two real measurements, and `OBSERVATION_KEY` carries no date to tell them
- * apart - so settling over the flattened walk would delete the second. Measured
- * 2026-09-23 over the committed score ledger: of 12,463 keys in the cover, one
- * genuinely spans two days, and a cover-wide settlement would have dropped it.
- *
- * Costs nothing for a key that already carries `date`: the day groups and the
- * key agree, and the rows come back in the order the flat walk would have given
- * them, because the walk is oldest day first and a Map keeps what it was given.
- *
- * Exported for the same reason `dayShardFiles` is: the day scope is the claim,
- * and it can only be driven from a tree, so a test needs a reader it can point
- * at a fixture instead of at `state/` (`CLAUDE.md` section 13).
- */
-export function settledDayShards(
-	dir: string,
-	key: readonly string[],
-	prefer: Preference | undefined,
-	days: number
-): CsvTable {
-	const byDay = new Map<string, Record<string, string>[]>();
-	let columns: string[] = [];
-	for (const shard of dayShardFiles(dir, days)) {
-		const table = readCsv(shard.path);
-		if (columns.length === 0 && table.columns.length > 0) columns = table.columns;
-		const held = byDay.get(shard.date);
-		if (held === undefined) byDay.set(shard.date, [...table.rows]);
-		else held.push(...table.rows);
-	}
-	return { rows: [...byDay.values()].flatMap((day) => settleRows(day, key, prefer)), columns };
-}
-
-/** Two rows of one key are one job's two halves: the hardware probe wrote one
- *  before the heaviest step, the clock wrote the other after the last item.
- *  Neither row is preferred - the cells are unioned. A cell both rows fill
- *  differently is a defect, and `day-shards.spec.ts` counts what comes back.
- *
- * `settledDayShards` cannot say this. A preference chooses one whole row and
- * drops the other, and each half holds cells the other never wrote.
- *
- * **A cell two rows fill differently is not two halves.** It is a second attempt
- * at the job on a second runner, or a writer that repeated itself wrongly, and
- * no union can say which value was the job's. Those rows come back as they
- * were, one each - which is what every reader saw before this merged anything:
- * `machine-counters.ts` refuses the run and names the shard, and the fleet
- * counts two runners because two were drawn. Neither the key nor `version` is
- * compared: the key is equal by construction, and two halves written by two
- * builds are still one job's.
- *
- * Per day, like `settledDayShards`, because the key carries `date`: the same job
- * measured on a later day is a later measurement, never a repeat to fold away.
- *
- * For the build-time CSV reader only. A compacted ledger already holds one row a
- * job, so it leaves nothing here to merge.
- */
-export function mergedDayShards(
-	dir: string,
-	key: readonly string[],
-	days: number = LEDGER_WINDOW_DAYS
-): CsvTable {
-	const byDay = new Map<string, Record<string, string>[]>();
-	let columns: string[] = [];
-	for (const shard of dayShardFiles(dir, days)) {
-		const table = readCsv(shard.path);
-		if (columns.length === 0 && table.columns.length > 0) columns = table.columns;
-		const held = byDay.get(shard.date);
-		if (held === undefined) byDay.set(shard.date, [...table.rows]);
-		else held.push(...table.rows);
-	}
-	return { rows: [...byDay.values()].flatMap((day) => mergeRows(day, key)), columns };
-}
-
-/** One row a key where the rows are halves of one record, and the rows as they
- * were where they are not. In the order the walk handed them over, a merged row
- * standing where its first half stood. */
-function mergeRows(
-	rows: readonly Record<string, string>[],
-	key: readonly string[]
-): Record<string, string>[] {
-	const byKey = new Map<string, Record<string, string>[]>();
-	for (const row of rows) {
-		const cells = key.map((cell) => row[cell] ?? '').join('\u0000');
-		const held = byKey.get(cells);
-		if (held === undefined) byKey.set(cells, [row]);
-		else held.push(row);
-	}
-	return [...byKey.values()].flatMap((same) => {
-		const whole = unionOf(same, key);
-		return whole === null ? same : [whole];
-	});
-}
-
-/** The rows' cells as one row, or null where two of them fill one cell differently.
- *
- * An empty cell is a reading nobody took, so it never disagrees with anything
- * and never overwrites a cell a row did fill. */
-function unionOf(
-	rows: readonly Record<string, string>[],
-	key: readonly string[]
-): Record<string, string> | null {
-	const merged: Record<string, string> = { ...rows[0] };
-	for (const row of rows.slice(1)) {
-		for (const [cell, value] of Object.entries(row)) {
-			if (value.trim() === '') continue;
-			const held = merged[cell] ?? '';
-			if (held.trim() === '') merged[cell] = value;
-			else if (held !== value && cell !== VERSION_CELL && !key.includes(cell)) return null;
-		}
-	}
-	return merged;
 }
 
 /** The counts a run settled about one day.

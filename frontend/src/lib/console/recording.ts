@@ -178,3 +178,106 @@ export function recordingNotes(facts: RecordingFacts): RecordingNotes {
 		recordDestroyed: recordDestroyed(lost)
 	};
 }
+
+/** How a build-time read of one packed record went.
+ *
+ * A console route reads three records from their packed files only, so a record
+ * has two states a day file never had. `not-packed` is a record with no packed
+ * day at all - a fresh clone, or a packing step not yet run. `unreadable` is a
+ * packed day, or the list of them, that did not load; `at` is the first day that
+ * failed, or null when the list itself did not load. `read` carries the newest
+ * packed day, which is where every panel built on the record stops.
+ */
+export type RecordRead =
+	| { state: 'read'; through: string }
+	| { state: 'not-packed' }
+	| { state: 'unreadable'; at: string | null };
+
+/** The three records the console reads at build time, as its notes name them. */
+export type RecordName = 'article' | 'score' | 'machine';
+
+/** One sentence about one or more records. `unreadable` is a fault; the others are not. */
+export interface RecordNote {
+	kind: 'not-packed' | 'unreadable' | 'behind';
+	records: RecordName[];
+	text: string;
+}
+
+/** `article`, `article and score`, `article, score and machine`. */
+function recordsNamed(records: readonly RecordName[]): string {
+	if (records.length < 2) return records.join('');
+	return `${records.slice(0, -1).join(', ')} and ${records.at(-1)}`;
+}
+
+function recordNoun(records: readonly RecordName[]): string {
+	return `${recordsNamed(records)} ${records.length === 1 ? 'record' : 'records'}`;
+}
+
+/** What a route says about the records it read, before any panel draws from them.
+ *
+ * One sentence a record and a state, never one a panel and never a banner: the
+ * record is what is late or broken, and every panel built on it is empty for the
+ * same reason. `newestDay` is the newest day the site published. A record packed
+ * as far as the day before it is as current as packing can be - a day is packed
+ * only once it has ended - so it earns no sentence. Further behind than that,
+ * the panels stop early for a reason a reader cannot see, so the sentence says
+ * where they stop and how many days are not shown yet.
+ *
+ * The words are fixed, like the other notes in this file; only the names, the
+ * dates and the counts inside them are computed.
+ */
+export function recordNotes(
+	reads: readonly { record: RecordName; read: RecordRead }[],
+	newestDay: string | null
+): RecordNote[] {
+	const notes: RecordNote[] = [];
+	const notPacked = reads.filter((entry) => entry.read.state === 'not-packed').map((entry) => entry.record);
+	if (notPacked.length > 0) {
+		notes.push({
+			kind: 'not-packed',
+			records: notPacked,
+			text:
+				`The ${recordNoun(notPacked)} ${notPacked.length === 1 ? 'has' : 'have'} not been packed yet, ` +
+				`so the panels below that use ${notPacked.length === 1 ? 'it' : 'them'} are empty. ` +
+				'That is a step not yet run, not a quiet pipeline.'
+		});
+	}
+	for (const { record, read } of reads) {
+		if (read.state !== 'unreadable') continue;
+		const what =
+			read.at === null
+				? `The ${record} record's list of packed days did not load`
+				: `The ${record} record's day for ${shortDate(read.at)} did not load`;
+		notes.push({
+			kind: 'unreadable',
+			records: [record],
+			text: `${what}, so the panels below that use it are empty. This is a fault to fix, not a quiet day.`
+		});
+	}
+	if (newestDay === null) return notes;
+	const behind = new Map<string, RecordName[]>();
+	for (const { record, read } of reads) {
+		if (read.state !== 'read') continue;
+		// Two days short of the newest published day is the first that is late:
+		// the day before it may not have ended when the packing step last ran.
+		if (daysAfter(read.through, newestDay) < 2) continue;
+		behind.set(read.through, [...(behind.get(read.through) ?? []), record]);
+	}
+	for (const [through, records] of [...behind].sort(([left], [right]) => left.localeCompare(right))) {
+		const after = daysAfter(through, newestDay);
+		notes.push({
+			kind: 'behind',
+			records,
+			text:
+				`The ${recordNoun(records)} ${records.length === 1 ? 'is' : 'are'} packed as far as ` +
+				`${shortDate(through)}, so the ${after} ${after === 1 ? 'day' : 'days'} after it ` +
+				`${after === 1 ? 'is' : 'are'} not shown yet.`
+		});
+	}
+	return notes;
+}
+
+/** Whole UTC days from `from` to `to`, negative when `to` is earlier. */
+function daysAfter(from: string, to: string): number {
+	return Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000);
+}
