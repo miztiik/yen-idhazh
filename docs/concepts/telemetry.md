@@ -1,6 +1,6 @@
 # Telemetry
 
-**Last Updated**: 2026-09-28
+**Last Updated**: 2026-09-29
 
 The structured-event vocabulary: the envelope every event carries, the event names that are emitted, the two shapes those names take, the span tree a developer can switch on, and the rule that there is no network sink. "Telemetry" here means a **local, structured log**; it is not a runtime analytics SDK, and this project ships none ([principles.md](principles.md), [../../CLAUDE.md](../../CLAUDE.md) section 1b).
 
@@ -49,7 +49,7 @@ flowchart TD
   sinks --> rollup
   record --> census
 
-  census --> ih["state/item-health/ (day, one file per writer)"]
+  census --> ih["state/raw/item-health/ (day, one file per write)"]
   rollup --> sr["state/span-rollup/ (month)"]
   traces --> tr["state/traces/ (day)"]
   health --> fh["state/feed-health/ (day, one file per writer)"]
@@ -319,26 +319,26 @@ AVX-512 than on one without, which is a far larger gap than anything separating
 our candidate models ([the processor
 lottery](../reference/benchmarks/the-processor-lottery.md)).
 
-So there is a third grain: **one row a job**, in
-`state/host-fingerprint/<YYYY>/<MM>/<DD>/`, holding what the host reports
+So there is a third grain: **one row a job**, in the host-fingerprint ledger,
+`state/raw/host-fingerprint/<YYYY>/<MM>/<DD>/`, holding what the host reports
 about its own silicon plus a memory-bandwidth probe. A bench dispatch writes the
-same shape into `state/pipeline-tests/host-fingerprint/`, apart from the rows the
-console reads.
+same shape into `state/pipeline-tests/raw/host-fingerprint/`, apart from the rows
+the console reads.
 
 **No job opens a shared day file.** Ten jobs of one run each draw a machine and each
-record it, so each writes its own
-`state/host-fingerprint/<YYYY>/<MM>/<DD>/<run>-<attempt>-<job>-<shard>.csv` inside
-the day directory. Ten runners appending to one
-path is not a thing a merge driver can settle: on 2026-09-16 the pushes raced and
-the day came back header-only. What a reader opens is unchanged, because every
-file in the day carries the tree's own columns and the tree's own contract.
+record it, so each files its own raw file through the ledger door inside the day
+directory, under a name the door mints for that one writer. Ten runners appending
+to one path is not a thing a merge driver can settle: on 2026-09-16 the pushes
+raced and the day came back header-only. Every file in the day carries the
+ledger's own contract, so a reader reads them all as one day.
 
-`state/item-health/` goes the same way from 2026-09-18, with `state/scores/` and
-`state/score-index/` beside it. The writers there are the work shards and
-assemble rather than every job of the run, and the settlement has one extra
-thing to say: `ITEM_HEALTH_KEY` carries no `job` cell, so two writers describing
-one item are one record to the fold, and `ledger.ITEM_HEALTH_RULE` keeps the row
-that names a job over the row that does not.
+The item-health ledger went the same way from 2026-09-18, with the scores ledger
+and `state/score-index/` beside it, and the first two have since moved to the
+ledger door as well. The writers there are the work shards and assemble rather
+than every job of the run, and the settlement has one extra thing to say:
+`ITEM_HEALTH_KEY` carries no machine cell, so two writers describing one item are
+one record to a reader, and `ledger.ITEM_HEALTH_RULE` keeps the row that names a
+`machine_job` over the row that does not.
 
 `state/runtime-counters.csv` was the last ledger to join them, on the same day,
 and it was deleted on 2026-09-20 rather than moved. It held what each
@@ -453,9 +453,9 @@ Thirteen ledgers under `state/` is not thirteen designs. It is six grains, and t
 
 **The ladder is day, month, year, and each rung answers a different question.** Day files, because a day is the unit a prune deletes and the unit a window fetches - both stay cheap only while the file boundary is the day boundary. Month folds at the `full-grain` series of `config/gardener/telemetry-aggregate.json`, because a trend over a year does not need every item. Year is unbuilt and stays unbuilt until a month fold is too big to read, which at kilobytes a month it is not.
 
-**The published mirror is a redaction step, not a copy.** `state/` is committed and never published; `frontend/public/` is published and never holds a ledger. Between them sits a projection that drops the columns a reader may not have - `PublicTelemetryRow` exists to strip 77 of them. Calling the published copy pollution mistakes the safety control for the leak. What it costs is 8.8 MB of a 39.2 MB site, under 1 percent of the 1 GB cap, and it is bounded: the `public-copy` series of `config/gardener/telemetry-aggregate.json` deletes a published month in the same pass that folds its source, so the mirror plateaus rather than grows. The site reaches its cap on pictures and stories, not on telemetry.
+**The published mirror is a redaction step, not a copy.** `state/` is committed and never published; `frontend/public/` is published and never holds a ledger. Between them sits a projection that drops the columns a reader may not have - `PublicTelemetryRow` exists to strip 77 of them. Calling the published copy pollution mistakes the safety control for the leak. What it costs is 8.8 MB of a 39.2 MB site, under 1 percent of the 1 GB cap, and it is bounded: the `public-copy` series of `config/gardener/telemetry-aggregate.json` deletes a published month in the same pass that summarises its source, so the mirror plateaus rather than grows. The site reaches its cap on pictures and stories, not on telemetry.
 
-**A published payload with no reader is deleted rather than kept for later.** `scores/` and `feed-health/` were 6,455,733 bytes that no console route fetched, and on 2026-09-16 they went with their two projections. A mirror nobody reads drifts from the ledger it mirrors and nobody notices, which is the same failure as a column nobody writes. The ledgers under `state/scores/` and `state/feed-health/` stay - they are the record, and the console reads them at build time.
+**A published payload with no reader is deleted rather than kept for later.** `scores/` and `feed-health/` were 6,455,733 bytes that no console route fetched, and on 2026-09-16 they went with their two projections. A mirror nobody reads drifts from the ledger it mirrors and nobody notices, which is the same failure as a column nobody writes. The scores and feed-health ledgers stay - they are the record, and the console reads them at build time.
 
 ### Where a judging night files what it measured
 
