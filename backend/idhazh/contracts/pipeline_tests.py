@@ -1,18 +1,24 @@
 """`config/pipeline-tests.json` - what one dispatch of the pipeline test workflow runs.
 
-**The whole point of this file is a loop a person can close in an hour.** A
-production run takes about 200 minutes and has been cancelling shards, so a
-change to the pipeline is tested a day after it is written, by a run whose
-result is mixed in with eighty other articles. The test workflow runs two
-articles down the real path three times over, on one runner, and this file is
-where the two articles come from and what the three test cases differ by.
+**The whole point of this file is a fast check of a model on the production
+path.** A production run takes hours, so a model or a pipeline change is checked
+here instead: a few articles down the real fetcher, extractor, prompts and model
+server. It is a check, not a benchmark - measuring and tuning a server is
+`measure.yml`'s job - so everything here is shaped for the shortest wait: the
+articles split into shards the way production splits a day, and every shard of
+every test case runs at once, each on a runner of its own.
+
+**A test case is switched on or off here, and nowhere else.** The workflow asks
+this file which test cases are enabled and starts one job for each runner they
+need, so turning a test case off is a one-word edit, and keeping one that a
+model or a runner cannot serve yet costs nothing.
 
 **Addresses are candidates, never a fixed pair.** A fixed pair would be the
 worst kind of test: it passes for as long as those two pages stay up and stays
-silent about everything else the extractor meets. A dispatch draws its pair from
-this list, seeded from the run id it was allocated, so two dispatches read
+silent about everything else the extractor meets. A dispatch draws its articles
+from this list, seeded from the run id it was allocated, so two dispatches read
 different articles and the seed says which - and the draw is made once, before
-any test case starts, so the three test cases compare like with like.
+any test case starts, so every test case reads the same articles.
 
 **A candidate names a feed and not a vertical.** The feed is already in
 `config/sources.json` with its vertical, its tier and its form, so repeating
@@ -88,24 +94,34 @@ class PipelineTestCandidate(Model):
 
 
 class PipelineTestCase(Model):
-    """One pass over the two articles, and what it changes about the run.
+    """One pass over the drawn articles, and what it changes about the run.
 
-    A test case is a whole pass rather than a knob, because the numbers that
-    matter - wall clock, tokens a second, what the picture cost - are per pass.
-    Three test cases over the same two articles is what makes the difference
-    between two of them readable; one test case over six articles is not.
+    A test case is a whole pass rather than a knob, because what a person reads
+    off a dispatch - did every article come back summarized, and how long did
+    the slowest one take - is per pass. Every test case reads the same articles
+    on model servers of its own, so no test case inherits another's warm cache.
     """
 
     id: Slug = Field(description="What the test case is called in the log and in the artifact.")
+    enabled: bool = Field(
+        description=(
+            "Whether a dispatch runs this test case. Off keeps the definition for the "
+            "day a model or a runner can serve it, and turning it back on is this one "
+            "word: the workflow starts a job for every runner an enabled test case "
+            "needs and none for the rest."
+        ),
+    )
     n_parallel: int | None = Field(
         default=None,
         ge=1,
         le=8,
         description=(
-            "The model server's slot count for this test case. None leaves the committed "
-            "value, which is what the production run serves. A test case that moves it "
-            "needs the server restarted, because the slot count is fixed when the "
-            "process starts."
+            "How many requests one model server works on at once in this test case, "
+            "and so how many shards share each runner - each one a `work` process "
+            "posting to that server at the same time. None is one, which is what "
+            "production serves. Every slot holds a window of its own, so a test case "
+            "that raises this needs a machine with the memory for all of them, and "
+            "it needs at least as many shards as slots to put them to work."
         ),
     )
     n_ctx: int | None = Field(
@@ -134,15 +150,19 @@ class PipelineTestCase(Model):
     )
 
     @property
+    def slots(self) -> int:
+        """How many shards share one of this test case's model servers at a time."""
+        return self.n_parallel or 1
+
+    @property
     def trial_state_dirname(self) -> str:
         """Where this test case's ledgers go under `state/`.
 
         Derived rather than declared, because it is not a choice anybody makes:
-        the dispatch runs one plan, so the three test cases share a run id, a
-        shard, a job and an attempt - which is the whole of a writer's filename.
-        Without a root each, the last test case to write would be the only one
-        anybody could read, and the three numbers this workflow exists to
-        subtract would be one number.
+        the dispatch runs one plan, so every test case shares a run id, a job
+        and an attempt, and two test cases share each shard number - which is
+        the whole of a writer's filename. Without a root each, the last test
+        case to write would be the only one anybody could read.
 
         Here rather than beside either caller: the config writer names the root
         and the commit job checks what arrived against it, and a second spelling
@@ -156,6 +176,11 @@ class PipelineTestsConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "pipeline-tests-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-29",
+            change="A test case carries `enabled`, and the articles split into shards.",
+            why="A dispatch runs what config switches on, every shard at once.",
+        ),
         ChangelogEntry(
             version="2026-09-28",
             change="`cases` is now `test_cases`.",
@@ -173,8 +198,8 @@ class PipelineTestsConfig(Contract):
         ),
         ChangelogEntry(
             version="2026-09-14",
-            change="Initial shape: candidate addresses, the draw size and the cases.",
-            why="A production run is long, so a pipeline change was tested a day at a time.",
+            change="Earlier changes are in this file's git history.",
+            why="A changelog says what moved lately; git is the archive.",
         ),
     )
 
@@ -183,9 +208,20 @@ class PipelineTestsConfig(Contract):
         ge=1,
         le=8,
         description=(
-            "How many addresses one dispatch draws. Two is what fits the hour: the "
-            "test cases run in sequence over the same articles, so the cost is this "
-            "number times the number of test cases."
+            "How many addresses one dispatch draws. Every test case reads all of "
+            "them, split into shards that run at once, so another article costs "
+            "another runner rather than a longer wait."
+        ),
+    )
+    articles_a_shard: int = Field(
+        default=1,
+        ge=1,
+        le=8,
+        description=(
+            "How many of those articles one shard works through, one after another. "
+            "One is the fastest: every article gets a worker of its own, the way a "
+            "production day is split across workers, and a test case takes as long "
+            "as its slowest article. Raise it to spend fewer runners on a large draw."
         ),
     )
     budget_minutes: int = Field(
@@ -193,9 +229,9 @@ class PipelineTestsConfig(Contract):
         ge=1,
         le=350,
         description=(
-            "What one dispatch is allowed. The workflow's own `timeout-minutes` is "
-            "this number, and a test holds the two together so the bound lives in "
-            "config rather than in the YAML."
+            "What one runner of a test case is allowed. The workflow's own "
+            "`timeout-minutes` is this number, and a test holds the two together so "
+            "the bound lives in config rather than in the YAML."
         ),
     )
     candidates: list[PipelineTestCandidate] = Field(
@@ -203,11 +239,11 @@ class PipelineTestsConfig(Contract):
         description="The addresses a dispatch draws from. One per feed, all distinct.",
     )
     test_cases: list[PipelineTestCase] = Field(
-        min_length=2,
+        min_length=1,
         description=(
-            "The passes, in order. The first is the baseline the rest are read "
-            "against, so there are at least two: one test case measures nothing it "
-            "can be compared with."
+            "The passes a dispatch may run. Only the enabled ones start, and one is "
+            "enough: checking that a model walks the production path compares it "
+            "with nothing."
         ),
     )
 
@@ -226,6 +262,8 @@ class PipelineTestsConfig(Contract):
 
         Two candidates on one feed would let a draw take two articles off the same
         site and call that a spread, and the point of the list is that it is not.
+        A config with every test case switched off would start a dispatch that
+        runs nothing, so it is refused here rather than on a runner.
         """
         urls = [candidate.url for candidate in self.candidates]
         if len(set(urls)) != len(urls):
@@ -236,19 +274,48 @@ class PipelineTestsConfig(Contract):
         names = [test_case.id for test_case in self.test_cases]
         if len(set(names)) != len(names):
             raise ValueError("two test cases share a name, so their results cannot be told apart")
+        if not any(test_case.enabled for test_case in self.test_cases):
+            raise ValueError("no test case is enabled, so a dispatch would run nothing")
         if self.articles_a_dispatch > len(self.candidates):
             raise ValueError("the draw asks for more addresses than the list holds")
         return self
+
+    def shard_count(self) -> int:
+        """How many shards a dispatch's articles split into, for every test case alike."""
+        return -(-self.articles_a_dispatch // self.articles_a_shard)
+
+    def runners(self, test_case: PipelineTestCase) -> int:
+        """How many machines one test case needs: each serves one model to `slots` shards."""
+        return -(-self.shard_count() // test_case.slots)
+
+    def shards_on(self, test_case: PipelineTestCase, runner: int) -> tuple[int, ...]:
+        """Which shards one runner of a test case works, all at once against its server.
+
+        Consecutive shard numbers, so a two-slot runner holds two shards and the
+        production round-robin in `stages.common.shard_of` hands each of them its
+        own articles. A runner past the last shard holds none.
+        """
+        first = runner * test_case.slots
+        return tuple(range(first, min(first + test_case.slots, self.shard_count())))
+
+    def runs(self) -> tuple[tuple[PipelineTestCase, int], ...]:
+        """Every enabled test case and runner a dispatch starts a job for, in config order."""
+        return tuple(
+            (test_case, runner)
+            for test_case in self.test_cases
+            if test_case.enabled
+            for runner in range(self.runners(test_case))
+        )
 
     def draw(self, seed: str) -> tuple[PipelineTestCandidate, ...]:
         """The addresses this dispatch reads, decided once by the seed it was given.
 
         The seed is the CI run id, which GitHub allocates and nothing in the run
         can compute, so two dispatches read different articles and the log can say
-        which pair a result belongs to. The ordering is a digest of the seed and
+        which ones a result belongs to. The ordering is a digest of the seed and
         the address rather than `random.shuffle`, so it does not depend on which
         Python built the runner, and re-running this function with the same seed
-        and the same list returns the same pair anywhere.
+        and the same list returns the same articles anywhere.
         """
 
         def rank(candidate: PipelineTestCandidate) -> str:
