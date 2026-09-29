@@ -553,11 +553,8 @@ jobs:
             lscpu -p=CPU,CORE,SOCKET,NODE
           } | tee backend/var/runtime-sweep/hardware.txt
 
-      # `.[parquet]` rather than `.`: `idhazh plan` below reads every retirement
-      # through the ledger door and can file one, and the door's files are
-      # parquet.
       - name: Install
-        run: pip install -e ".[parquet]"
+        run: pip install -e .
 
       # The same key the raw case wrote, so this job restores what that job
       # already paid for. A miss here is a second download of the same bytes,

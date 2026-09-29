@@ -126,12 +126,8 @@ jobs:
           cache: pip
           cache-dependency-path: pyproject.toml
 
-      # `.[parquet]` rather than `.`: the plan reads every retirement back
-      # through the ledger door and files a new one through it, and the door's
-      # files are parquet. The engine is an optional extra, so only a job that
-      # touches the door installs it.
       - name: Install
-        run: pip install -e ".[parquet]"
+        run: pip install -e .
 
       - id: decide
         env:
@@ -487,10 +483,10 @@ jobs:
       - name: Install
         run: |
           if [ "${{ needs.plan.outputs.faithfulness }}" = "false" ]; then
-            pip install -e ".[parquet]"
+            pip install -e .
           else
             pip install --index-url https://download.pytorch.org/whl/cpu torch
-            pip install -e ".[faithfulness,parquet]"
+            pip install -e ".[faithfulness]"
           fi
 
       - uses: actions/download-artifact@v8
@@ -1003,11 +999,8 @@ jobs:
           cache: pip
           cache-dependency-path: pyproject.toml
 
-      # `.[parquet]` rather than `.`: assemble files a low-yield retirement and
-      # publishes every retirement on record, both through the ledger door, whose
-      # files are parquet.
       - name: Install
-        run: pip install -e ".[parquet]"
+        run: pip install -e .
 
       - uses: actions/download-artifact@v8
         with:

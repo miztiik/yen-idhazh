@@ -32,10 +32,8 @@ jobs:
           cache: pip
           cache-dependency-path: pyproject.toml
 
-      # `.[parquet]` rather than `.`: the eval ledger is read through the ledger
-      # door, whose files are parquet, and without the engine the first read fails.
       - name: Install
-        run: pip install -e ".[parquet]"
+        run: pip install -e .
 
       # Reads the committed ledger. It never re-scores anything: a trend
       # computed against a model that has since moved is not a trend.

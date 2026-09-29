@@ -340,7 +340,7 @@ def test_a_shard_checks_out_its_cone_and_the_code_and_runs_the_landing_program()
     assert steps[1].get("run") == "git config index.sparse true", (
         "the index turns sparse right after the checkout, before any reset can expand it"
     )
-    assert any(step.get("run") == "pip install -e '.[parquet]'" for step in steps)
+    assert any(step.get("run") == "pip install -e ." for step in steps)
 
     landing = _step(workflow, RUN_TASKS, "name", "Run the shard's tasks and land its record")
     assert _script(landing, "shard step").split() == [
