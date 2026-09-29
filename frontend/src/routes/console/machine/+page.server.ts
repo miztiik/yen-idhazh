@@ -35,9 +35,19 @@ import { splitByMachine } from '$lib/charts/machine-split';
 import { machineCards, type MachineCards } from '$lib/charts/machine-cards';
 import { machineKeys, machineRamp } from '$lib/charts/machine-colour';
 import { fleetChart, fleetOverWindow, type FleetView } from '$lib/charts/fleet';
-import { hostFingerprints, machineRecordDays, watchedFlags } from '$lib/server/host-fingerprint';
+import {
+	fingerprintsOf,
+	machineRecord,
+	machineRecordDays,
+	watchedFlags
+} from '$lib/server/host-fingerprint';
 import { windowOfDays } from '$lib/charts/viewport';
-import { recordingNotes, type LostDay, type RecordingNotes } from '$lib/console/recording';
+import {
+	recordingNotes,
+	recordNotes,
+	type LostDay,
+	type RecordingNotes
+} from '$lib/console/recording';
 import {
 	chartConfig,
 	consoleConfig,
@@ -46,13 +56,15 @@ import {
 	panelGroupsFor,
 	runConfig
 } from '$lib/server/config';
-import { itemHealthRows, evalRows, loadDay, loadManifests, shardDays } from '$lib/server/payload';
+import { evalRows, itemHealthRows } from '$lib/server/ledger-rows';
+import { latestDate, loadDay, loadManifests, shardDays } from '$lib/server/payload';
 import { pipelineChanges } from '$lib/server/model-work';
 import { settingsMoved } from '$lib/console/settings-moved';
 import {
 	CLOCKS_AGREE_WITHIN_PCT,
-	loadMachineCounters,
+	machineCounters,
 	machineLimits,
+	plannedShards,
 	type MachineRun,
 	type RefusedRun
 } from '$lib/server/machine-counters';
@@ -179,19 +191,23 @@ export async function load() {
 	const days = shardDays(widestPreset);
 	const chart = chartConfig();
 	const limits = machineLimits();
-	const counters = loadMachineCounters(days);
+	// Both records from their packed files, each read once. The counters, the
+	// fleet and every panel below take their rows from these two reads, so no two
+	// panels on this route can answer over different days.
+	const machine = await machineRecord(days);
 	// The header as well as the rows: how many requests an article makes is a
 	// fact the ledger's own column names carry, and the reuse panel reads it off
 	// them rather than off a constant anybody would have to remember to change.
-	const healthTable = itemHealthRows(days);
+	const healthTable = await itemHealthRows(days);
 	const health = healthTable.rows;
+	const counters = machineCounters(machine.rows, health, plannedShards(days), limits);
 	const observability = observabilityConfig();
 	const today = new Date().toISOString().slice(0, 10);
 
 	// One row a job, bounded to the same cover every other read on this route
 	// takes (Guardrail #12), and the twelve flag names out of the generated
 	// contract rather than a list typed here.
-	const fingerprints = hostFingerprints(days);
+	const fingerprints = fingerprintsOf(machine.rows);
 	const flagNames = watchedFlags();
 	// Both context figures come from one call per row set, so the sentence under
 	// the chart and the marks on it cannot disagree about method.
@@ -201,17 +217,17 @@ export async function load() {
 	};
 
 	// **The third state this route has to be able to say.** A day the machine
-	// record opened a file for and kept no row of, that published articles
-	// anyway, lost what it measured - the run worked, the measurement did not
-	// survive. It is not the day the record had not started on, and it is not a
-	// quiet day, and until 2026-09-17 all three drew the same sentence.
+	// record holds rows for and not one row naming its machine, that published
+	// articles anyway, lost what it measured - the run worked, the measurement did
+	// not survive. It is not the day the record had not started on, and it is not
+	// a quiet day, and until 2026-09-17 all three drew the same sentence.
 	//
 	// A day payload is opened only for a candidate, and a candidate is a day
-	// whose record file exists and holds nothing. A healthy archive has none, so
-	// this costs nothing on a healthy archive and stays bounded by the same
-	// cover on a broken one (`CLAUDE.md` Guardrail #12).
+	// whose record rows name no machine. A healthy archive has none, so this costs
+	// nothing on a healthy archive and stays bounded by the same cover on a
+	// broken one (`CLAUDE.md` Guardrail #12).
 	const recordedDays = new Set(fingerprints.map((row) => row.date));
-	const lostDays: LostDay[] = machineRecordDays(days)
+	const lostDays: LostDay[] = machineRecordDays(machine.rows)
 		.filter((date) => !recordedDays.has(date))
 		.map((date) => ({ date, articles: loadDay(date)?.items.length ?? 0 }))
 		.filter((day) => day.articles > 0)
@@ -480,7 +496,7 @@ export async function load() {
 		// off two different day lists, and the two would eventually disagree. The
 		// rows stop at the widest preset, which is as far back as either chart draws
 		// (`CLAUDE.md` Guardrail #12), and the manifests are bounded the same way.
-		modelChanges: pipelineChanges(evalRows(days).rows, manifests),
+		modelChanges: pipelineChanges((await evalRows(days)).rows, manifests),
 		// WHICH settings moved on each of those days, off the same manifests, so a
 		// rule and its readout cannot be built from two different reads. A date the
 		// line above holds and this one does not is a day whose identity came from
@@ -517,6 +533,16 @@ export async function load() {
 		contextWindow: inferenceConfig().n_ctx,
 		clocksTolerancePct: CLOCKS_AGREE_WITHIN_PCT,
 		panelGroups: panelGroupsFor('machine', DRAWN_PANELS),
+		// What the page says about the two records every panel here is built on,
+		// before any of them draws: one not packed yet, one that did not load, or
+		// one packed some days short of the newest published day.
+		recordNotes: recordNotes(
+			[
+				{ record: 'machine', read: machine.read },
+				{ record: 'article', read: healthTable.read }
+			],
+			latestDate(undefined, 1)
+		),
 		console: console_,
 		chart
 	};

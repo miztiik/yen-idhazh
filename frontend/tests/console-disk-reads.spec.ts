@@ -19,14 +19,9 @@
 
 import { expect, test, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { resolve } from 'node:path';
 import { diskReads, type DiskReadMarks } from '../src/lib/console/machine/disk-reads';
-import { readDayShards } from '../src/lib/server/payload';
-
-/** The canary tree the browser suite is built from. The page under the browser
- * was built from this tree, so reading the committed one would compare a
- * drawing of one ledger against the arithmetic of another. */
-const CANARY = resolve(process.cwd(), '..', 'backend', 'var', 'canary', 'state');
+import { canaryArticleRows } from './support/canary-records';
 
 /** The two marks and the presets, off the committed config rather than typed
  * here - a threshold written into a test stops checking the shipped one. */
@@ -55,8 +50,11 @@ function marks(): DiskReadMarks {
 	return { marked: config.model_disk_reads_marked, named: config.model_disk_reads_named };
 }
 
-function canaryHealth(): Record<string, string>[] {
-	return readDayShards(join(CANARY, 'item-health'), -1).rows;
+/** The canary's article rows. The page under the browser was built from this
+ * tree, so reading the committed one would compare a drawing of one ledger
+ * against the arithmetic of another. */
+function canaryHealth(): Promise<Record<string, string>[]> {
+	return canaryArticleRows();
 }
 
 /** One item row, with only the cells a reading needs. */
@@ -70,13 +68,13 @@ const dayOf = (health: readonly Record<string, string>[], date: string) =>
 	health.filter((row) => (row.date ?? '') === date);
 
 test.describe('the fold, as arithmetic', () => {
-	test('a day counts the articles that were not first on their shard, and only those', () => {
+	test('a day counts the articles that were not first on their shard, and only those', async () => {
 		// The exclusion is the whole reason this reading is about the machine and
 		// not about a server starting up, so it is checked against the canary's own
 		// rows rather than against a number written here: the total is summed in
 		// this test from the cells, and the rows sitting first are summed
 		// separately so a fold that quietly included them cannot pass.
-		const health = canaryHealth();
+		const health = await canaryHealth();
 		const loud = health
 			.map((row) => (row.date ?? ''))
 			.filter((date, at, all) => all.indexOf(date) === at)
@@ -170,10 +168,10 @@ test.describe('the fold, as arithmetic', () => {
 	test('the setting is counted once a run, and a run that said nothing is silent', () => {
 		const reading = diskReads(
 			[
-				itemRow({ date: '2026-09-02', run_id: 'held', shard: 0, weights_pinned: 'True' }),
-				itemRow({ date: '2026-09-02', run_id: 'held', shard: 1, weights_pinned: 'True' }),
-				itemRow({ date: '2026-09-02', run_id: 'loose', shard: 0, weights_pinned: 'False' }),
-				itemRow({ date: '2026-09-02', run_id: 'quiet-run', shard: 0 })
+				itemRow({ date: '2026-09-02', run_id: 'held', machine_shard: 0, weights_pinned: 'True' }),
+				itemRow({ date: '2026-09-02', run_id: 'held', machine_shard: 1, weights_pinned: 'True' }),
+				itemRow({ date: '2026-09-02', run_id: 'loose', machine_shard: 0, weights_pinned: 'False' }),
+				itemRow({ date: '2026-09-02', run_id: 'quiet-run', machine_shard: 0 })
 			],
 			marks()
 		);
@@ -183,8 +181,8 @@ test.describe('the fold, as arithmetic', () => {
 	test('a run whose shards disagree is loose - one of them could be taken from', () => {
 		const reading = diskReads(
 			[
-				itemRow({ date: '2026-09-02', run_id: 'split', shard: 0, weights_pinned: 'True' }),
-				itemRow({ date: '2026-09-02', run_id: 'split', shard: 1, weights_pinned: 'False' })
+				itemRow({ date: '2026-09-02', run_id: 'split', machine_shard: 0, weights_pinned: 'True' }),
+				itemRow({ date: '2026-09-02', run_id: 'split', machine_shard: 1, weights_pinned: 'False' })
 			],
 			marks()
 		);
@@ -354,7 +352,7 @@ test.describe('the panel', () => {
 		await setWindow(page, Math.max(...consoleConfig().window_presets));
 
 		const said = new Set(
-			canaryHealth()
+			(await canaryHealth())
 				.map((row) => row.weights_pinned ?? '')
 				.filter((value) => value !== '')
 		);
@@ -383,7 +381,7 @@ test.describe('the panel', () => {
 		);
 		expect(drawn.length, 'the panel drew no days to read').toBeGreaterThan(0);
 		const worst = diskReads(
-			canaryHealth().filter((row) => drawn.includes(row.date ?? '')),
+			(await canaryHealth()).filter((row) => drawn.includes(row.date ?? '')),
 			marks()
 		).worst;
 		expect(worst, 'no day reached the naming mark on the default span').not.toBeNull();
