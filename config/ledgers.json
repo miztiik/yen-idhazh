@@ -38,7 +38,7 @@
       "ledgers": [
         {
           "name": "item-health",
-          "grain": "tree",
+          "grain": "raw-and-compact",
           "prefix": ["item-health"],
           "stem": null,
           "suffix": null
@@ -53,7 +53,7 @@
       "ledgers": [
         {
           "name": "host-fingerprint",
-          "grain": "tree",
+          "grain": "raw-and-compact",
           "prefix": ["host-fingerprint"],
           "stem": null,
           "suffix": null
@@ -68,7 +68,7 @@
       "ledgers": [
         {
           "name": "scores",
-          "grain": "tree",
+          "grain": "raw-and-compact",
           "prefix": ["scores"],
           "stem": null,
           "suffix": null

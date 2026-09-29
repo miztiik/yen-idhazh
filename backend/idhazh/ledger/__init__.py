@@ -73,6 +73,7 @@ from idhazh.ledger.ledger_files import (
     Source,
     compact_file,
     list_ledger_files,
+    load_days,
     load_ledger_rows,
 )
 from idhazh.ledger.lifecycle import accepts_new_rows
@@ -187,6 +188,7 @@ __all__ = [  # noqa: RUF022
     "Source",
     "compact_file",
     "list_ledger_files",
+    "load_days",
     "load_ledger_rows",
     # lifecycle.py: whether a ledger takes new rows now.
     "accepts_new_rows",

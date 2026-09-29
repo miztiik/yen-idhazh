@@ -240,6 +240,28 @@ def _refuse_a_row_that_names_another_try(
                 )
 
 
+def _refuse_an_identity_no_reader_could_read(
+    stored: Sequence[Mapping[str, Any]], *, where: str
+) -> None:
+    """Every row's identity cells read back as a `RowIdentity`, checked before the write.
+
+    A contract field that shares a name with an identity cell is the column, so
+    a row can carry a value there the reader refuses - an empty `job`, say. A
+    file written with such a row would be refused whole by `load_stored`, and
+    once its source is gone that is lost data, so it is refused here instead.
+    """
+    for cells in stored:
+        try:
+            RowIdentity.model_validate(
+                {column.name: cells.get(column.name) for column in _IDENTITY_COLUMNS}
+            )
+        except ValidationError as refusal:
+            raise ValueError(
+                f"{where}: a row's identity cells would not read back, so nothing is "
+                f"written: {refusal}"
+            ) from refusal
+
+
 def persist(
     state_dir: Path,
     rows: Sequence[Contract],
@@ -291,8 +313,10 @@ def persist(
         }
         own = [row.model_dump(mode="json") for row in batch]
         _refuse_a_row_that_names_another_try(stamped, own, where=f"{ledger.value} {day}")
+        stored = [stamped | cells for cells in own]
+        _refuse_an_identity_no_reader_could_read(stored, where=f"{ledger.value} {day}")
         name, data = _rendered(
-            [stamped | cells for cells in own],
+            stored,
             model=model,
             ledger=ledger,
             covers=day,

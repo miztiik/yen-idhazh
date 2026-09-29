@@ -39,7 +39,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Collection, Sequence
 from pathlib import Path
-from typing import NamedTuple
+from typing import NamedTuple, cast
 
 from idhazh import day_partition
 from idhazh.contracts.base import Contract
@@ -198,6 +198,35 @@ def read_day_files(state_dir: Path, ledger: LedgerName, day: str) -> list[RawFil
     return sorted(found, key=_order)
 
 
+def _cells(row: Contract) -> dict[str, str]:
+    """A row's cells as a CSV line spells them, which is what a preference rule reads."""
+    spelled = getattr(row, "csv_row", None)
+    if callable(spelled):
+        return cast("dict[str, str]", spelled())
+    return {
+        name: "" if value is None else str(value)
+        for name, value in row.model_dump(mode="json").items()
+    }
+
+
+def _say_what_was_dropped(
+    record: tuple[str, ...], kept: Contract, dropped: Contract
+) -> None:
+    """Name each cell the dropped row filled and the kept row left empty.
+
+    A settlement keeps whole rows, so a cell only the dropped row carried goes
+    with it. That is the rule, and saying so is what lets a person see it.
+    """
+    held, gone = _cells(kept), _cells(dropped)
+    for name, value in gone.items():
+        if value and not held.get(name):
+            logger.warning(
+                "a settled row dropped a cell the kept row lacks key=%s cell=%s",
+                ",".join(record),
+                name,
+            )
+
+
 def settle_rows[C: Contract](
     files: Sequence[Sequence[StoredRow[C]]], key: tuple[str, ...]
 ) -> list[StoredRow[C]]:
@@ -211,15 +240,16 @@ def settle_rows[C: Contract](
     every read. A compact file is passed before the raw files of its day: its
     rows were written before any raw file that arrived after it.
 
-    Of the rows left, the first row of each `key` is kept: two writers that are
+    Of the rows left, one whole row of each `key` is kept. Two writers that are
     not attempts at one unit - two runs reading the same evidence from two stale
-    checkouts - can each file a row for one key, and the first one filed wins,
-    which is the rule `ledger/keys.py` gives a key that declares no preference
-    of its own. A key that does declare one is refused, because this would apply
-    the wrong rule to it.
+    checkouts, or a work shard and assemble filing one item - can each file a
+    row for one key. The first one filed wins, which is the rule `ledger/keys.py`
+    gives a key that declares no preference of its own; a key that declares one
+    keeps the later row wherever its preference says so. Either way a row is
+    kept or dropped whole, and a cell only the dropped row filled is named in a
+    warning.
     """
-    if preference_for(key) is not None:
-        raise ValueError(f"{key} declares a preference, and this settlement keeps the first row")
+    prefers = preference_for(key)
     current: dict[str, tuple[int, int]] = {}
     for position, rows in enumerate(files):
         for held in rows:
@@ -228,8 +258,17 @@ def settle_rows[C: Contract](
     kept: dict[tuple[str, ...], StoredRow[C]] = {}
     for position, rows in enumerate(files):
         for held in rows:
-            if current[held.identity.unit_id] == (held.identity.attempt, position):
-                kept.setdefault(tuple(str(getattr(held.row, name)) for name in key), held)
+            if current[held.identity.unit_id] != (held.identity.attempt, position):
+                continue
+            record = tuple(str(getattr(held.row, name)) for name in key)
+            incumbent = kept.get(record)
+            if incumbent is None:
+                kept[record] = held
+                continue
+            later_wins = prefers is not None and prefers(_cells(held.row), _cells(incumbent.row))
+            winner, loser = (held, incumbent) if later_wins else (incumbent, held)
+            kept[record] = winner
+            _say_what_was_dropped(record, winner.row, loser.row)
     return list(kept.values())
 
 
@@ -247,11 +286,6 @@ def load_current_rows[C: Contract](
     file is read on its own, so one file this build cannot read costs the rows
     in it and never the rows in the files beside it.
     """
-    if preference_for(key) is not None:
-        raise ValueError(
-            f"{ledger.value} settles on {key}, which declares a preference, and this "
-            "reader keeps the first row per key"
-        )
     stored: list[list[StoredRow[C]]] = []
     for held in list_raw_files(state_dir, ledger, days=days):
         try:

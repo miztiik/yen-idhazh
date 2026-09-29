@@ -29,6 +29,7 @@ from idhazh.contracts.base import (
     Url,
     UrlKey,
     fits_its_column,
+    renamed_keys,
     without_retired_keys,
 )
 from idhazh.contracts.call_cost import COST_FIELDS, CallKind
@@ -75,14 +76,28 @@ ItemHealthDetail = Annotated[str, _DETAIL, fits_its_column(_DETAIL, absent=UNSPE
 _TOKEN: Final = StringConstraints(min_length=1, max_length=64, pattern=LOWER_TOKEN_PATTERN)
 Token = Annotated[str, _TOKEN, fits_its_column(_TOKEN, absent=UNPRINTABLE)]
 
+#: The two cells that name whose machine took an item's readings, under the names
+#: they carried before the ledger door. `job` and `shard` are the door's own
+#: columns for the writer that filed a row, and assemble files the day's census
+#: without knowing any item's machine, so one word meant two things in one file.
+#: Read on both sides of the row: a committed heading through `RETIRED_CELLS`,
+#: and a payload a work shard sealed before the rename through the
+#: before-validator below.
+MACHINE_CELLS_RENAMED: Final[Mapping[str, str]] = MappingProxyType(
+    {"job": "machine_job", "shard": "machine_shard"}
+)
+
 #: Headings a day file an earlier run wrote still carries, and the column each
-#: one is read into now. Derived from CALL_SLOTS so a seventh cost quantity
-#: cannot be added to one side and forgotten on the other.
+#: one is read into now. The cost cells are derived from CALL_SLOTS so a seventh
+#: cost quantity cannot be added to one side and forgotten on the other.
 RETIRED_CELLS: Final[Mapping[str, str]] = MappingProxyType(
     {
-        f"call_{turn}_{field}": f"{slot}_{field}"
-        for turn, slot in enumerate(CALL_SLOTS, start=1)
-        for field in ("kind", *COST_FIELDS)
+        **{
+            f"call_{turn}_{field}": f"{slot}_{field}"
+            for turn, slot in enumerate(CALL_SLOTS, start=1)
+            for field in ("kind", *COST_FIELDS)
+        },
+        **MACHINE_CELLS_RENAMED,
     }
 )
 
@@ -186,7 +201,7 @@ COLUMN_READERS: Final[Mapping[str, tuple[str, ...]]] = MappingProxyType(
         "frontend/src/lib/console/machine/article-cost.ts": (
             "date",
             "run_id",
-            "shard",
+            "machine_shard",
             "item_index",
             "prefill_ms",
             "decode_ms",
@@ -223,7 +238,7 @@ COLUMN_READERS: Final[Mapping[str, tuple[str, ...]]] = MappingProxyType(
             "n_threads",
             "n_batch",
         ),
-        "frontend/src/lib/server/machine-counters.ts": ("job", "llama_rss_peak_bytes"),
+        "frontend/src/lib/server/machine-counters.ts": ("machine_job", "llama_rss_peak_bytes"),
         "frontend/src/lib/server/model-work.ts": ("version", "url_key", "model_id"),
         "frontend/src/lib/server/payload.ts": ("detail", "elements_found"),
         "backend/utilities/server_memory_mark.py": ("item_ended_at",),
@@ -597,6 +612,11 @@ class ItemHealthRow(Contract):
     __schema_stem__: ClassVar[str] = "item-health-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-29",
+            change="job and shard are machine_job and machine_shard; rows file as parquet.",
+            why="The ledger's own job and shard name the writer; these name the machine.",
+        ),
+        ChangelogEntry(
             version="2026-09-22",
             change="FailureCode gained contaminated, a fourth signal an ok row may carry.",
             why="An extraction that returned the publisher's front page is a named outcome.",
@@ -610,11 +630,6 @@ class ItemHealthRow(Contract):
             version="2026-09-20T18:00",
             change="Steal, faults, pinning and anonymous RSS added; empty cgroup_peak_bytes cut.",
             why="Time another tenant used, and pages the kernel took back, are not our own work.",
-        ),
-        ChangelogEntry(
-            version="2026-09-20T15:30",
-            change="llama_rss_peak_bytes says what it measures: a whole-life mark that can fall.",
-            why="It read as a per-item peak that cannot fall, which is neither thing it is.",
         ),
         ChangelogEntry(
             version="2026-08-23",
@@ -664,27 +679,29 @@ class ItemHealthRow(Contract):
             "nothing else. A count, never the text. Null before 2026-08-28."
         ),
     )
-    shard: int | None = Field(
+    machine_shard: int | None = Field(
         default=None,
         ge=0,
         description=(
-            "Which worker of the run produced this row, numbered the way stages.common.shard_of "
-            "numbers them. state/host-fingerprint/ carries the same number at the "
-            "job grain, so a per-shard rate can be read against the machine that ran "
-            "it. Null means no worker claimed the row: assemble writes the day's "
+            "Which worker of the run took this item's readings, numbered the way "
+            "stages.common.shard_of numbers them. state/host-fingerprint/ carries the same "
+            "number at the job grain, so a per-shard rate can be read against the machine "
+            "that ran it. Null means no worker claimed the row: assemble writes the day's "
             "census from one job and cannot know which machine an item was for, and "
             "every row written before 2026-08-30 predates the column. Never read an "
-            "empty cell as shard 0."
+            "empty cell as shard 0, and never read it as the ledger's own shard column, "
+            "which names the writer that filed the row."
         ),
     )
-    job: ServerJob | None = Field(
+    machine_job: ServerJob | None = Field(
         default=None,
         description=(
             "Which workflow job's machine took this row's readings - never which job "
-            "wrote the row. With `shard` this is the whole of `HOST_FINGERPRINT_KEY`, "
-            "so an item resolves to exactly one host record. Null on the same terms as "
-            "`shard`: assemble writes the day's census and cannot know whose machine an "
-            "item ran on, and every row written before this column predates it."
+            "wrote the row, which is the ledger's own job column. With `machine_shard` "
+            "this is the whole of `HOST_FINGERPRINT_KEY` past the date and the run, so an "
+            "item resolves to exactly one host record. Null on the same terms as "
+            "`machine_shard`: assemble writes the day's census and cannot know whose "
+            "machine an item ran on, and every row written before this column predates it."
         ),
     )
     span_integrity: bool | None = Field(
@@ -1306,9 +1323,12 @@ class ItemHealthRow(Contract):
         costs the reader nothing it could have used; a column that MOVED is in
         `RETIRED_CELLS` instead, is not named here, and still raises, because a
         reader that silently dropped it would publish a row missing a value that
-        exists.
+        exists. The two machine cells are the exception, and by name: a payload a
+        work shard sealed before they were renamed is read in the same run, so
+        each is read under its new name, `MACHINE_CELLS_RENAMED`, when that name is
+        absent.
         """
-        return without_retired_keys(data, *DROPPED_CELLS)
+        return renamed_keys(without_retired_keys(data, *DROPPED_CELLS), MACHINE_CELLS_RENAMED)
 
     @model_validator(mode="after")
     def _state_is_complete(self) -> Self:
@@ -1338,20 +1358,18 @@ class ItemHealthRow(Contract):
 
     @model_validator(mode="after")
     def _a_named_job_names_a_worker_too(self) -> Self:
-        """`job` implies `shard`, and deliberately not the other way round.
+        """`machine_job` implies `machine_shard`, and deliberately not the other way round.
 
         The pair is `HOST_FINGERPRINT_KEY` minus the date and the run, so a job
         with no shard points at no host record - it is half a key, and half a key
         resolves to every shard that job ran.
 
         **The converse is not a rule, and that is the load-bearing half.** Every
-        row written before this column carries a shard and no job; every read of
-        a committed day parses each row back through `from_csv_row`
-        (`day_shards.parsed`), so `job iff shard` would refuse the whole of it on
-        the first run after this lands.
+        row written before the job column carries a shard and no job, and every
+        such row still reads back, so `job iff shard` would refuse all of them.
         """
-        if self.job is not None and self.shard is None:
-            raise ValueError("a job on an item-health row names a shard as well")
+        if self.machine_job is not None and self.machine_shard is None:
+            raise ValueError("a machine_job on an item-health row names a machine_shard as well")
         return self
 
     @model_validator(mode="after")
