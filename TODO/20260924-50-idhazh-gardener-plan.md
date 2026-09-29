@@ -10,7 +10,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 
 ## Execution handover (zero-context cold start)
 
-A paste-ready brief for an agent that picks this plan up with no prior context. [execute-a-plan.md](../docs/how-to/execute-a-plan.md) is the canonical contract; this brief adds only what this plan's run has learned. Written 2026-09-27, about 20:10 UTC, and brought up to date 2026-09-28, about 12:15 UTC, when the first owner handed over after row 5 merged, about 14:00 UTC, when the second owner's dispatch checks on row 7 added deviations 96 to 101 and row 12, about 17:30 UTC, after row 7 merged, and 2026-09-29, about 06:15 UTC, when the third owner's session ran out of context with row 8 ready to merge and row 12's worker ended mid-row, about 06:40 UTC, when the person ruled on row 9's two open questions, and about 07:30 UTC, when the fourth owner had merged row 8 and dispatched rows 12 and 9 side by side (deviation 137), and about 08:40 UTC, when row 12 had merged and row 9 was dispatched again from main (deviation 146).
+A paste-ready brief for an agent that picks this plan up with no prior context. [execute-a-plan.md](../docs/how-to/execute-a-plan.md) is the canonical contract; this brief adds only what this plan's run has learned. Written 2026-09-27, about 20:10 UTC, and brought up to date 2026-09-28, about 12:15 UTC, when the first owner handed over after row 5 merged, about 14:00 UTC, when the second owner's dispatch checks on row 7 added deviations 96 to 101 and row 12, about 17:30 UTC, after row 7 merged, and 2026-09-29, about 06:15 UTC, when the third owner's session ran out of context with row 8 ready to merge and row 12's worker ended mid-row, about 06:40 UTC, when the person ruled on row 9's two open questions, and about 07:30 UTC, when the fourth owner had merged row 8 and dispatched rows 12 and 9 side by side (deviation 137), and about 08:40 UTC, when row 12 had merged and row 9 was dispatched again from main (deviation 146), and about 21:45 UTC, when row 9's pull request was green and waiting for a quiet hour, and the person's answers to row 8's open questions added row 13 (deviations 161 to 165).
 
 ```text
 You are the OWNER of TODO/20260924-50-idhazh-gardener-plan.md. You have no prior context.
@@ -24,17 +24,18 @@ and docs/how-to/run-the-gates.md. Then read this plan's section 0, section 1 (th
 Reckoner, the only tracker) and each row just before you dispatch it.
 
 STEP 1 - ADOPT OR CLOSE. Run git worktree list, gh pr list and git branch -r. At the last
-update (2026-09-29, 08:40 UTC) rows 1 to 8, 11 and 12 had merged (#1127, #1131, #1142,
-#1139, #1145, #1141, #1151, #1156, #1136, #1161) and row 10 is collapsed. Row 9 is the
-last row and is in flight (STEP 2). If its worker ended without a report, read worktree
-p50r9, its pushed branch and %TEMP%\p50r9\report.md before dispatching it again. The
+update (2026-09-29, 21:45 UTC) rows 1 to 8, 11 and 12 had merged (#1127, #1131, #1142,
+#1139, #1145, #1141, #1151, #1156, #1136, #1161) and row 10 is collapsed. Rows 9 and 13
+are in flight (STEP 2). If a worker ended without a report, read its worktree, its
+pushed branch and its report under %TEMP% before dispatching it again. The
 owner's worktree, p50own, holds no unpushed work.
 Section 0's three plan-54 reads ran before row 5 and all three came back empty.
 
 STEP 2 - DISPATCH. Row 8's findings are deviations 118 to 131 and three open questions
 for a person (section "Open questions for a person, from row 8"); ESCALATE trigger 1 was
-answered with A3 (deviation 130). Refill a slot on a report, never on a merge. Two
-workers started together return together (deviation 94).
+answered with A3 (deviation 130). The person answered the first two questions on
+2026-09-29, which is row 13, and the third is still open (deviation 163). Refill a slot on
+a report, never on a merge. Two workers started together return together (deviation 94).
   row 8              merged as #1156 at 07:05 UTC 2026-09-29, after its branch took main
                      in and CI went green, with no digest.yml or prune.yml run queued or
                      running. Worktree p50r8 and its branch are removed
@@ -42,16 +43,20 @@ workers started together return together (deviation 94).
                      138), with no digest.yml or idhazh-gardener.yml run queued or
                      running. Its departures from the row are deviations 139 to 144.
                      Worktree p50r12 and its branch are removed
-  row 9              IN-FLIGHT, finishing in two waves from about 12:40 UTC 2026-09-29
-                     (deviation 153). Worker p50-r9-worker-3 in worktree p50r9, branch
-                     p50r9-the-console-ledgers-become-parquet, fixes the backend.
-                     Worker p50-r9-worker-fe in worktree p50r9fe, branch
-                     p50r9fe-the-console-readers-read-parquet, moves the frontend
-                     readers. Their reports are %TEMP%\p50r9\report.md and
-                     %TEMP%\p50r9fe\report.md. Then one worker merges p50r9fe into
-                     p50r9, runs the migration and opens the pull request. Its first
-                     worker ended with nothing committed (deviation 146), and its
-                     second pushed five commits (deviations 147 to 152).
+  row 9              IN-FLIGHT. Pull request #1166, branch
+                     p50r9-the-console-ledgers-become-parquet, worktree p50r9, was green
+                     at caf193824 on 2026-09-29 19:42 UTC and waits for a quiet hour.
+                     The steps left: no digest.yml or idhazh-gardener.yml run queued or
+                     running; merge origin/main into the branch; run
+                     backend/utilities/migrate_to_parquet.py again with --run-id
+                     2026-09-29-1, then its --check, and commit what it moved; push;
+                     wait for CI green; check again that no run is queued or running;
+                     merge; remove worktrees p50r9 and p50r9fe and both branches.
+                     The worker notes are %TEMP%\p50r9w5\report.md.
+                     History: it finished in two waves from about 12:40 UTC 2026-09-29
+                     (deviations 153 and 160). Its first worker ended with nothing
+                     committed (deviation 146), and its second pushed five commits
+                     (deviations 147 to 152).
                      The person's rulings are deviations 135 and 136, read with 112,
                      132 and 133. It deletes CSV trees a digest run writes, so it
                      merges as row 3 was merged (deviation 52): no digest.yml
@@ -61,6 +66,10 @@ workers started together return together (deviation 94).
                      A plain git push here is refused (403); push with
                      git -c credential.helper= -c 'credential.helper=!gh auth
                      git-credential' push origin <branch>
+  row 13             IN-FLIGHT from about 21:50 UTC 2026-09-29. Worker p50-r13-worker in
+                     worktree p50r13, branch p50r13-the-squash-push-takes-a-lease-and-retries,
+                     report %TEMP%\p50r13\report.md. It merges after row 9 and takes
+                     main in first (deviation 165), in the same quiet-hour rule as row 9
 
 STEP 3 - GATES. A worker runs `npm --prefix frontend run test:changed -- --list`, then only
 its row's named acceptance gates, then pushes and reports. CI is the one full-suite run
@@ -256,6 +265,11 @@ Every place where the tree, or a ruling, departs from the text further down. A w
 | 158 | 9 | (not in the plan) | `idhazh telemetry prune` no longer takes a day of the three ledgers; their days go when their compaction goes live, as row 3 left `visual-prunes`. The migration refuses a day where a late scores row conflicts with one already filed, for a person to fix. The drift review skips a raw file whose rows the contract refuses, with a warning, which is the door's rule for every reader | Row 9's third worker; plan owner, 2026-09-29 |
 | 159 | 9 | (not in the plan) | The four console routes read the packed files and say, in one plain line under the route's introduction, when a ledger is not packed yet, did not load, or stops two or more days early. The item-health column list is written once, in `frontend/src/lib/server/ledger-rows.ts`, and a backend test binds it to `ItemHealthRow`. About 25 panels still say "no rows" where the reason is "not packed yet"; plan 52's route rows reword them | Fowler, Jony and Susan, 2026-09-29 |
 | 160 | 9 | Deviation 153: one worker finishes the row | Wave 1 ended with both branches pushed, and both merged into row 9's branch with main without a conflict. Wave 2 is a docs worker and a code worker on separate branches; then the owner runs the migration, opens the pull request and merges it | Plan owner, 2026-09-29 |
+| 161 | 13 | Row 8's first open question: the history job runs only when every `run-tasks` shard succeeded or none ran (row 8 decision 4) | The history job runs `if: ${{ !cancelled() }}` and keeps `needs: [plan, run-tasks]`, so it still starts after every shard has finished. A red shard no longer skips that day's squash; a cancelled run still does. This overturns the rulings of 2026-09-24 and 2026-09-26. Row 13 carries it | The person, 2026-09-29 |
+| 162 | 13 | Row 8's second open question, and ESCALATE trigger 2: `corpus_history.py` reads origin's tip, then pushes with `--force` | The push takes a lease on the tip the program read, so GitHub refuses it if `main` moved, where today a commit landing in that gap is lost. A refusal is reported as the same "main moved" refusal, with the same exit code. The person added a retry: a configurable number of pushes and a configurable delay, each retry reading `main` again and redoing the squash on the new tip; after the last refusal the squash is due again the next day, as today. Trigger 2 is answered for this change only. Row 13 carries it | The person, 2026-09-29 |
+| 163 | - | Row 8's third open question: a person approves the growing `run-tasks` checkout or names its bound | The person asked why it grows when the ledgers carry an index and a watermark. Read against row 9's branch: each shard's checkout downloads the content of every file in the folders its tasks own, before any task runs. Compaction already finds its due days from the watermark and the folder names, the retention tasks decide from the dates in paths, and deleting a file needs only its name, so most of the download is never read. 33 MB of the heaviest shard's 48 MB is `frontend/public/digest`, which keeps every day for ever, so "about a year" in `docs/concepts/growing-reads.md` is wrong for it. Put to the person again: a new row whose checkout fetches file names plus only the files a task reads, or approve the read as it is | The person's question, 2026-09-29; the reading is the plan owner's |
+| 164 | 9 | (not in the plan) | After row 9, `telemetry-aggregate` finds its due months in `state/raw/item-health/`, a folder `compact-item-health` owns. When the two tasks land in different shards, that folder is not in `telemetry-aggregate`'s checkout, so it finds no month and still reports success. Its first month falls due about late 2027 (an estimate, from the 14-month full-grain window). It goes to the row that answers deviation 163 if the person takes it, and to a row of its own before this plan closes if not | Plan owner, 2026-09-29 |
+| 165 | 13 | Section 1: `Depends-on` and the `Files touched` lists are the readiness test | Row 13 shares two files with row 9, the gardener workflow and its page, and starts before row 9 merges. Row 9 is green and waits only for a quiet hour, and the two rows edit different jobs of the workflow and different sections of the page. Row 13 merges after row 9 and takes `main` in first; a conflict there is resolved in row 13's branch | Plan owner, 2026-09-29 |
 
 ## 0. Operating contract
 
@@ -322,6 +336,9 @@ Every place where the tree, or a ruling, departs from the text further down. A w
 | 10 | `span-rollup` becomes parquet | - | - | **COLLAPSED** | - | - | - |
 | 11 | The index and watermark shapes are declared | 2 | C | DONE | p50r11 | #1136 | p50-r11-worker |
 | 12 | The closed-day fold of the CSV day trees moves into the gardener | 7, 8 | I | DONE | p50r12 | #1161 | p50-r12-worker-2 |
+| 13 | The squash runs unless the run was cancelled, and its push takes a lease and retries | 8 | J | IN-FLIGHT | p50r13 | - | p50-r13-worker |
+
+**Row 13 came from the person's answers to row 8's open questions, 2026-09-29** (deviations 161 and 162). It shares `.github/workflows/idhazh-gardener.yml` and `docs/architecture/publishing/idhazh-gardener.md` with row 9, so it merges after row 9 and takes `main` in first (deviation 165).
 
 **Row 5 now depends on row 3 as well as row 4.** Its `visual-prune` task calls the parquet writer row 3 creates; dispatched after row 4 alone it would write CSV through a door that does not exist.
 
@@ -2235,13 +2252,43 @@ def squash_history(repo: Path, *, keep_days: int, now: datetime, message: str) -
 
 ---
 
+### Row #13 - The squash runs unless the run was cancelled, and its push takes a lease and retries
+
+- **Scope:** the person's answers to row 8's first two open questions, 2026-09-29 (deviations 161 and 162). Three changes in one pull request.
+  1. `.github/workflows/idhazh-gardener.yml`: the `history` job keeps `needs: [plan, run-tasks]` and runs `if: ${{ !cancelled() }}`. It still starts only after every shard has finished; a red shard no longer skips the squash; a cancelled run still does. The comment above the job says why, with the person's ruling.
+  2. `backend/utilities/corpus_history.py`: `push_rewritten` pushes with `--force-with-lease=refs/heads/main:<the tip the program read>`, so GitHub refuses the push if `main` moved. Today a commit that lands between the tip check and the push is lost. A refusal prints today's "main moved" message and returns `EXIT_TIP_MOVED`, and no stamp reaches `main`. The docstring that says a lease cannot work goes.
+  3. The retry. On a refusal the program waits `push_retry_delay_seconds`, fetches `main` again, resets its local `main` to it, and redoes the whole squash on the new tip - boundary, squash, replay, the tree check, the record - then pushes with a lease on that tip. It stops after `push_attempts` pushes in all. It never pushes the old rewrite again, because that rewrite does not hold the commit that moved `main`. Both keys are declared in `config/gardener/corpus-squash.json` and in the model that loads a history declaration, and a missing key is refused by name at load (Guardrail #3). After the last refusal the program exits as in item 2, so the squash is due again at the next daily wake.
+- **Files touched (expected; the dispatch check confirms them):**
+  - `.github/workflows/idhazh-gardener.yml`, `backend/utilities/corpus_history.py`, `config/gardener/corpus-squash.json`, `backend/idhazh/contracts/knobs/gardener.py`
+  - `backend/tests/gardener/test_corpus_history.py`, `backend/tests/workflows/test_prune_push.py`, `backend/tests/workflows/_harness.py`, `backend/tests/workflows/test_gardener_workflow.py`, `backend/tests/contracts/test_gardener_config.py`
+  - `CLAUDE.md` section 8 and `AGENTS.md`, whose standing exception says the job reads the tip again and refuses: it now pushes with a lease and retries. Section 8's list of commands to avoid keeps `--force-with-lease`, because the exception is still the only place it may run
+  - `docs/architecture/publishing/idhazh-gardener.md`, `docs/reference/github-actions.md`, and any page a grep for `force-with-lease`, `tip moved` or `main moved` finds
+  - `TODO/20260924-50-idhazh-gardener-plan.md` (this row's Reckoner line)
+- **Acceptance gates:** local `ruff check .`, `mypy backend`, and `pytest` over the test modules above. CI runs the full suite.
+- **Oracle:** against a real bare repository on disk, reached by a `file://` address, and no network (CLAUDE.md section 13):
+  1. A commit pushed to that `main` after the program's fetch and before its first push is refused by the lease, and after the retry it is on `main`, inside the rewritten history, with every file it changed.
+  2. When every push is refused, the program exits with `EXIT_TIP_MOVED`, `main` holds exactly what the other writer pushed, and no stamp landed.
+  3. With `push_attempts` of 1 the program behaves as today apart from the lease: one push, and a refusal ends it.
+  4. The workflow test reads `if: ${{ !cancelled() }}` and `needs: [plan, run-tasks]` on the history job.
+- **Merge window:** it edits the workflow that force-pushes `main`, so it merges only while no `digest.yml` or `idhazh-gardener.yml` run is queued or running (deviations 52 and 54), and after row 9 (deviation 165).
+- **Decisions:**
+
+  | # | Decision | Authority |
+  | --- | --- | --- |
+  | 1 | **`if: ${{ !cancelled() }}`, and `needs` does not change**, so the squash is still the last thing a run does | The person, 2026-09-29 |
+  | 2 | **The lease names the tip the program read**, never whatever `origin/main` happens to be when the push starts, and a refusal keeps today's message and exit code | The person, 2026-09-29 |
+  | 3 | **A retry rebuilds the squash on the new tip.** Pushing the same rewrite again would be refused again, and forcing it would delete the commit that moved `main` | The person asked for the retry, 2026-09-29; the rebuild follows from the lease |
+  | 4 | **The defaults of `push_attempts` and `push_retry_delay_seconds` are settled at dispatch**, so that every attempt and delay fits well inside the job's 30-minute limit (Carmack). An estimate: 3 pushes, 60 seconds apart | Plan owner, 2026-09-29 |
+
+---
+
 ## Open questions for a person, from row 8
 
-Row 8 shipped each of these as the plan wrote it. None blocks a row; each needs a person, because it changes an owner's ruling, a trigger's subject or a growing read.
+Row 8 shipped each of these as the plan wrote it. None blocks a row; each needs a person, because it changes an owner's ruling, a trigger's subject or a growing read. **The person answered the first two on 2026-09-29 (deviations 161 and 162, carried by row 13) and asked about the third (deviation 163).**
 
-1. **The history job's start condition.** It runs only when every `run-tasks` shard succeeded or none ran (row 8 decision 4). So one red shard skips that day's squash, which is then due again at the next wake, while a failed `plan` job does not skip it. Row 8's worker proposes `if: ${{ !cancelled() }}`: the squash would then run on a day a shard is red, and the red shard's work is retried at the next wake either way. Changing it overturns an owner ruling of 2026-09-24 and 2026-09-26.
-2. **The gap between the tip check and the force push** (ESCALATE trigger 2). `corpus_history.py` reads origin's tip, then pushes with `--force`; a commit landing between the two is lost. `--force-with-lease=refs/heads/main:<tip>` would make GitHub refuse the push instead. Any change here is trigger 2.
-3. **The `run-tasks` checkout is a growing read** (Guardrail #12). Each shard checks out the folders its tasks own, and those grow with what the repository keeps while every task is report-only: the heaviest shard holds 46.3 MB today and grows about 1.4 MB a day. Section 5.6 said it stops growing once its tasks run live; for this shard that is false for about a year. `max_cone_mb: 768` turns a shard red before it grows unseen, and `docs/concepts/growing-reads.md` records the read. A person approves it or names the bound.
+1. **Answered: `if: ${{ !cancelled() }}`.** The history job's start condition. It runs only when every `run-tasks` shard succeeded or none ran (row 8 decision 4). So one red shard skips that day's squash, which is then due again at the next wake, while a failed `plan` job does not skip it. Row 8's worker proposes `if: ${{ !cancelled() }}`: the squash would then run on a day a shard is red, and the red shard's work is retried at the next wake either way. Changing it overturns an owner ruling of 2026-09-24 and 2026-09-26.
+2. **Answered: the lease, with a configurable retry.** The gap between the tip check and the force push (ESCALATE trigger 2). `corpus_history.py` reads origin's tip, then pushes with `--force`; a commit landing between the two is lost. `--force-with-lease=refs/heads/main:<tip>` would make GitHub refuse the push instead. Any change here is trigger 2.
+3. **Open: the person asked why it grows at all, and was shown what the code does (deviation 163).** The `run-tasks` checkout is a growing read (Guardrail #12). Each shard checks out the folders its tasks own, and those grow with what the repository keeps while every task is report-only: the heaviest shard holds 46.3 MB today and grows about 1.4 MB a day. Section 5.6 said it stops growing once its tasks run live; for this shard that is false for about a year. `max_cone_mb: 768` turns a shard red before it grows unseen, and `docs/concepts/growing-reads.md` records the read. A person approves it or names the bound.
 
 ## Dependent plans
 
