@@ -1,0 +1,3 @@
+version,date,run_id,job,shard,fingerprint,cpu_model,cpu_vendor,cpu_family,cpu_model_number,cpu_stepping,microcode,cores,threads,l3_cache_bytes,mhz_max,mhz_at_probe,flags,boot_seconds,memcpy_gib_s,memcpy_probe_mib,vm_size,vm_location,vm_zone,vm_fault_domain,runner_name,measured_at,model_load_ms,job_seconds,server_prompt_tokens,server_prompt_seconds
+2026-09-20,2026-09-28,2026-09-28-36497591174,work,2,9d0459022d60f8b3,AMD EPYC 9V74 80-Core Processor,AuthenticAMD,25,17,1,0xffffffff,2,4,33554432,,2664.77575,avx2 f16c fma sse4_2,93.98,33.15283273549205,512,Standard_D4ads_v5,northcentralus,,0,GitHub Actions 1000041014,2026-09-28T23:25:24Z,,,,
+2026-09-20,2026-09-28,2026-09-28-36497591174,work,2,,,,,,,,,,,,,,,,,,,,,,,4917.076,8942,32289,3653.29
