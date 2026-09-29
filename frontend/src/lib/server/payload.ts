@@ -512,8 +512,9 @@ export function readCsv(path: string): CsvTable {
  *
  * The published mirrors file by month and they wanted this loop. The columns
  * come from the first shard that has any, so an empty month cannot blank the
- * header. Every `state/` ledger that used to come here files by day now and
- * takes `readDayShards` instead.
+ * header. Every `state/` ledger that used to come here files by day now, and is
+ * read either from its packed files through the query door (`ledger-rows.ts`)
+ * or through `readDayShards`.
  *
  * **This is where the bound has to sit.** It is exported, so bounding only the
  * callers would leave the next one reading every month a run ever wrote.

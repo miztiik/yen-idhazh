@@ -238,7 +238,7 @@ export function recordNotes(
 			records: notPacked,
 			text:
 				`The ${recordNoun(notPacked)} ${notPacked.length === 1 ? 'has' : 'have'} not been packed yet, ` +
-				`so the panels below that use ${notPacked.length === 1 ? 'it' : 'them'} are empty. ` +
+				`so nothing below that uses ${notPacked.length === 1 ? 'it' : 'them'} has anything to show. ` +
 				'That is a step not yet run, not a quiet pipeline.'
 		});
 	}
@@ -251,7 +251,7 @@ export function recordNotes(
 		notes.push({
 			kind: 'unreadable',
 			records: [record],
-			text: `${what}, so the panels below that use it are empty. This is a fault to fix, not a quiet day.`
+			text: `${what}, so nothing below that uses it has anything to show. This is a fault to fix, not a quiet day.`
 		});
 	}
 	if (newestDay === null) return notes;

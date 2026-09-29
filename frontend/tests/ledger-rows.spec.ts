@@ -188,7 +188,7 @@ test.describe('what a route says about the records it read', () => {
 				kind: 'not-packed',
 				records: ['article', 'score'],
 				text:
-					'The article and score records have not been packed yet, so the panels below that use them are empty. That is a step not yet run, not a quiet pipeline.'
+					'The article and score records have not been packed yet, so nothing below that uses them has anything to show. That is a step not yet run, not a quiet pipeline.'
 			}
 		]);
 	});
@@ -203,10 +203,10 @@ test.describe('what a route says about the records it read', () => {
 		);
 		expect(notes.map((note) => note.kind)).toEqual(['unreadable', 'unreadable']);
 		expect(notes[0].text).toBe(
-			"The machine record's day for 4 Sep 2026 did not load, so the panels below that use it are empty. This is a fault to fix, not a quiet day."
+			"The machine record's day for 4 Sep 2026 did not load, so nothing below that uses it has anything to show. This is a fault to fix, not a quiet day."
 		);
 		expect(notes[1].text).toBe(
-			"The article record's list of packed days did not load, so the panels below that use it are empty. This is a fault to fix, not a quiet day."
+			"The article record's list of packed days did not load, so nothing below that uses it has anything to show. This is a fault to fix, not a quiet day."
 		);
 	});
 
