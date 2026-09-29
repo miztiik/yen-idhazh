@@ -1,6 +1,6 @@
 # Which console surfaces follow the window, and which say why not
 
-**Last Updated**: 2026-09-28
+**Last Updated**: 2026-09-29
 
 One control at the top of the console sets the span for the whole page. This page
 is the control, and the list of every surface that does not simply follow it -
@@ -131,13 +131,13 @@ reading the control's own attribute back against the panel's.
 `/console/machine/`, and `scoredDays` with `modelByDate` on `/console/model/`,
 all read every committed score row rather than the window. That is deliberate - a
 change marker has to sit on the day it happened, whatever span is being read -
-but the gardener's `scores` task archives a score month past its full-grain
-window and deletes that month's day files, and
-the archive carries cohort totals rather than dated rows. So from the first live
+but the gardener's `scores` compaction deletes a month's rows once its monthly
+window has passed, and a score archive that summarised such a month carries
+cohort totals rather than dated rows. So from the first live
 deletion those three lose the dates in the deleted month. **No number a reader
 sees moves; a date list silently shortens.**
 
-Left as it is, because deletion is still in dry run. Before that switch is
+Left as it is, because the compaction still only reports. Before that switch is
 thrown, either teach the readers to union the archive's cohort dates or say on
 the page how far back the marker list reaches.
 

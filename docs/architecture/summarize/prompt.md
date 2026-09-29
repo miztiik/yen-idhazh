@@ -1,6 +1,6 @@
 # The summarizer prompt
 
-**Last Updated**: 2026-09-24
+**Last Updated**: 2026-09-29
 What the Summarize stage asks a model for, and where every number in that ask
 comes from.
 
@@ -120,7 +120,7 @@ ladder has to keep, not the number 4000: the cap moves, so
 `config/` (Guardrail #6). A test that only checks the rungs climb passes either way
 and proves nothing.
 
-**None of these numbers came from `state/scores/`, deliberately.** The
+**None of these numbers came from the scores ledger, deliberately.** The
 summariser prompt is being tuned and a fine-tune is in flight, so our own length
 figures describe a pipeline mid-repair. Using them would be circular: the model
 has not been asked for the higher ceiling, so its shorter replies prove only the
@@ -960,7 +960,7 @@ inference. A retry that changed the ask would be a prompt change,
 and the attempt budget it would need has no home in `config/` (Guardrail #6).
 
 The reader sees nothing. The item is absent like any other failed item, and
-`state/item-health/` carries the census row that says which code dropped it and
+the item-health ledger carries the census row that says which code dropped it and
 how many words it had.
 
 **An address.** No published word of ours may carry a URL. Above the fence the

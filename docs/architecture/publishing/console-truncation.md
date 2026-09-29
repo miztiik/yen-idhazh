@@ -1,6 +1,6 @@
 # What the truncation cap costs
 
-**Last Updated**: 2026-09-20
+**Last Updated**: 2026-09-29
 The truncation cap removes words from an article before the model ever reads
 them, and nothing about a published summary says it happened. The console says
 it in four places across three routes, and this page is what each of them is
@@ -17,12 +17,12 @@ about it, and each one is on the surface that already owns its grain.
 
 | Figure | Where | Grain | Read from |
 | --- | --- | --- | --- |
-| `Article read only in part` | the model table | one day | `state/scores.csv` |
-| `Read only in part, as a percent` | the model table | one day | `state/scores.csv` |
-| `Time to write one`, second figure | the model table | one day | `state/item-health/` |
-| `Too long to send` | the model table | one day | `state/item-health/` |
-| `n read only in part` | the run square's own label | one run | `state/item-health/` |
-| `Sources cut short most often` | its own range plot | one source, the open window | `state/item-health/` |
+| `Article read only in part` | the model table | one day | the scores ledger |
+| `Read only in part, as a percent` | the model table | one day | the scores ledger |
+| `Time to write one`, second figure | the model table | one day | the item-health ledger |
+| `Too long to send` | the model table | one day | the item-health ledger |
+| `n read only in part` | the run square's own label | one run | the item-health ledger |
+| `Sources cut short most often` | its own range plot | one source, the open window | the item-health ledger |
 **The run grain is a clause on a label and never a published figure.** Measured
 2026-08-29 over the 19 committed runs, the count is 1 to 12 articles of 160 to
 200 - 0.6 to 7.5 percent - and that swing is which articles the feeds carried
