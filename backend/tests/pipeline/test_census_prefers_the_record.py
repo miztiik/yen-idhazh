@@ -7,12 +7,12 @@ carried a rebuild from the article and the summary payloads - which between them
 cannot say what the machine was, what the calls cost, or how long the item
 waited.
 
-Two writers reach that ledger. Neither appends to it: each writes a segment and
-`closed_day_fold` folds them onto one head, and the fold settles two rows for one
-key rather than keeping whichever arrived first. The tests below take the
-question off the table at the source rather than relying on that settlement -
-both writers derive the row from the same sealed file, so they agree cell for
-cell and the order buys nothing.
+Two writers reach that ledger. Neither appends to it: each files a raw file of
+its own through the ledger door, and every reader settles the two when it reads
+them - one row per key, and a row that names the machine which read the item
+beats one that does not. The tests below take the question off the table at the
+source rather than relying on that settlement - both writers derive the row from
+the same sealed file, so they agree cell for cell and the order buys nothing.
 
 Every test is driven from the fixture plan's five items over captured pages and
 recorded replies - no network, nothing mocked (Guardrail #7), and a cost that
@@ -21,15 +21,14 @@ does not move when the archive grows (Guardrail #12).
 
 from __future__ import annotations
 
-import shutil
 from pathlib import Path
 from typing import Final
 
 import pytest
-from conftest import CONFIG_DIR, FIXTURES_DIR, fold, read_text
+from conftest import CONFIG_DIR, FIXTURES_DIR, SEED_COMMIT, read_text
 from pytest import MonkeyPatch
 
-from idhazh import config, day_shards, ledger, telemetry
+from idhazh import config, ledger, telemetry
 from idhazh.contracts.article import Article
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.item_health import ItemHealthRow
@@ -80,11 +79,8 @@ def sealed(items_dir: Path) -> dict[str, ItemHealthRow]:
 
 
 def committed(state_dir: Path, date: str) -> dict[str, ItemHealthRow]:
-    """The row the day's ledger kept for each item, settled across its files."""
-    settled = day_shards.settled_day(
-        ledger.tree_root(state_dir, LedgerName.ITEM_HEALTH), date, ledger.ITEM_HEALTH_KEY, ItemHealthRow
-    )
-    rows = [ItemHealthRow.from_csv_row(record) for record in settled]
+    """The row the day's ledger kept for each item, settled across its raw files."""
+    rows = ledger.load_days(state_dir, LedgerName.ITEM_HEALTH, [date], model=ItemHealthRow)
     return {row.item_id: row for row in rows}
 
 
@@ -134,8 +130,7 @@ def test_every_cell_the_shard_sealed_reaches_the_days_ledger(
     run_plan, items_dir = worked(tmp_path, monkeypatch)
     state = tmp_path / "state"
 
-    stage_record(run_plan, settings=config.load(CONFIG_DIR))
-    fold(state, run_plan.date)
+    stage_record(run_plan, settings=config.load(CONFIG_DIR), commit_sha=SEED_COMMIT)
 
     kept = committed(state, run_plan.date)
     on_disk = sealed(items_dir)
@@ -163,8 +158,7 @@ def test_the_ledger_row_says_more_than_the_payloads_could(
     run_plan, items_dir = worked(tmp_path, monkeypatch)
     state = tmp_path / "state"
 
-    stage_record(run_plan, settings=config.load(CONFIG_DIR))
-    fold(state, run_plan.date)
+    stage_record(run_plan, settings=config.load(CONFIG_DIR), commit_sha=SEED_COMMIT)
 
     kept = committed(state, run_plan.date)
     for planned in run_plan.items:
@@ -179,11 +173,10 @@ def test_which_writer_reaches_the_ledger_first_does_not_change_the_row(
 ) -> None:
     """The sharp edge, blunted: both writers derive the row from the same file.
 
-    The fold settles two rows for one key, so whichever writer it reads first
-    decides what the day carries - and a head file is append-only, so it cannot
-    be corrected later. That used to be a real fork, because the two stages ran
-    two derivations. It is not one any more: both read the row the shard sealed,
-    and this test is what says so.
+    The reader settles two rows for one key, so whichever writer's file it reads
+    first can decide what the day carries. That used to be a real fork, because
+    the two stages ran two derivations. It is not one any more: both read the
+    row the shard sealed, and this test is what says so.
 
     One work stage feeds both halves. Two runs would differ in every timing cell
     and prove nothing about the derivation.
@@ -192,11 +185,11 @@ def test_which_writer_reaches_the_ledger_first_does_not_change_the_row(
     run_plan, _ = worked(tmp_path, monkeypatch)
     state = tmp_path / "state"
 
-    stage_record(run_plan, settings=settings)
-    fold(state, run_plan.date)
+    stage_record(run_plan, settings=settings, commit_sha=SEED_COMMIT)
     after_the_worker = committed(state, run_plan.date)
 
-    shutil.rmtree(ledger.path(state, LedgerName.ITEM_HEALTH, run_plan.date))
+    for held in ledger.list_raw_files(state, LedgerName.ITEM_HEALTH, days=[run_plan.date]):
+        held.path.unlink()
     stage_assemble(run_plan, settings=settings, commit_sha="a" * 40, runner="fixture")
     after_assemble = committed(state, run_plan.date)
 
@@ -221,8 +214,7 @@ def test_an_item_whose_shard_sealed_nothing_still_gets_a_census_line(
     orphan = run_plan.items[0]
     (items_dir / f"{orphan.item_id}{HEALTH_SUFFIX}").unlink()
 
-    stage_record(run_plan, settings=config.load(CONFIG_DIR))
-    fold(state, run_plan.date)
+    stage_record(run_plan, settings=config.load(CONFIG_DIR), commit_sha=SEED_COMMIT)
 
     kept = committed(state, run_plan.date)
     # `stage_record` runs as shard 0 of 1 in the `work` job here and stamps both
@@ -234,34 +226,30 @@ def test_an_item_whose_shard_sealed_nothing_still_gets_a_census_line(
     ), "the fallback row says something the payloads cannot"
     assert kept[orphan.item_id].cpu_model is None
     assert all(kept[item.item_id].cpu_model is not None for item in run_plan.items[1:])
-    assert kept[orphan.item_id].job is ServerJob.WORK, (
+    assert kept[orphan.item_id].machine_job is ServerJob.WORK, (
         "the stage that rebuilt the row knows which job it is, even where the shard sealed nothing"
     )
 
-def test_work_then_assemble_leaves_one_settled_head_and_no_waiting_segments(
+
+def test_work_then_assemble_leaves_one_row_per_item(
     tmp_path: Path, monkeypatch: MonkeyPatch
 ) -> None:
-    """The Oracle for moving the item census onto segments.
+    """The Oracle for moving the item census onto the ledger door.
 
     Both writers run in the order a real day runs them - a work shard as each
-    item settles, then assemble over the whole day - and the three things that
+    item settles, then assemble over the whole day - and the two things that
     would say the move went wrong are checked together, because each one hides
-    a different failure and any of them alone passes while another is broken.
+    a different failure and either alone passes while the other is broken.
 
-    **Exactly one row per item.** Two writers recorded all five, so a fold that
-    did not settle them would leave ten rows, and every count taken off this
-    ledger - a feed's share of the day, the day's own metrics - would read
+    **One raw file a writer.** The shard and assemble each file the day once,
+    each under its own writer identity, so a stage that filed a file per item,
+    or filed as the other writer, shows here as a count rather than as a slow
+    read later.
+
+    **Exactly one row per item.** Two writers recorded all five, so a reader
+    that did not settle them would return ten rows, and every count taken off
+    this ledger - a feed's share of the day, the day's own metrics - would read
     double.
-
-    **Nothing left waiting.** A fold that wrote the settled file and did not
-    take the writer files it read would re-fold the same rows on the next run,
-    and the day would grow with the archive rather than with what is waiting
-    (Guardrail #12).
-
-    **One header line.** The head is what every reader of this ledger opens, and
-    a second header block inside it is the shape a stacked append makes and no
-    reader refuses - the day it appeared in the committed tree, 71 rows went
-    unread under it.
 
     What this cannot settle is a production-scale row count: five fixture items
     over captured pages is a shape check, not a load test.
@@ -270,26 +258,17 @@ def test_work_then_assemble_leaves_one_settled_head_and_no_waiting_segments(
     run_plan, _ = worked(tmp_path, monkeypatch)
     state = tmp_path / "state"
 
-    stage_record(run_plan, settings=settings)
-    health_root = ledger.tree_root(state, LedgerName.ITEM_HEALTH)
-    assert day_shards.one_day(health_root, run_plan.date), (
-        "the work stage wrote no file, so the rest of this proves nothing"
+    stage_record(run_plan, settings=settings, commit_sha=SEED_COMMIT)
+    assert ledger.list_raw_files(state, LedgerName.ITEM_HEALTH, days=[run_plan.date]), (
+        "the work stage filed nothing, so the rest of this proves nothing"
     )
     stage_assemble(run_plan, settings=settings, commit_sha="a" * 40, runner="fixture")
-    # The fold is a step of the assemble job rather than of the stage, because a
-    # day a shard could still be writing is not one to fold.
-    fold(state, run_plan.date)
 
-    settled = ledger.path(state, LedgerName.ITEM_HEALTH, run_plan.date) / day_shards.SETTLED_NAME
-    lines = settled.read_text(encoding="utf-8").splitlines()
-    header = list(ItemHealthRow.csv_columns())
-    assert [line for line in lines if line.split(",")[:3] == header[:3]] == [",".join(header)], (
-        "the fold carries more than one header block"
-    )
+    filed = ledger.list_raw_files(state, LedgerName.ITEM_HEALTH, days=[run_plan.date])
+    assert sorted(held.envelope.identity.job for held in filed) == sorted(
+        [ServerJob.WORK, ServerJob.ASSEMBLE]
+    ), "each writer files the day once, under its own writer identity"
 
-    kept = committed(state, run_plan.date)
-    assert sorted(kept) == sorted(item.item_id for item in run_plan.items)
-    assert len(lines) == PLANNED_ITEMS + 1, f"{len(lines) - 1} rows for {PLANNED_ITEMS} items"
-    assert [path.name for path in day_shards.one_day(health_root, run_plan.date)] == [
-        day_shards.SETTLED_NAME
-    ], "the fold left a writer file behind"
+    rows = ledger.load_days(state, LedgerName.ITEM_HEALTH, [run_plan.date], model=ItemHealthRow)
+    assert sorted(row.item_id for row in rows) == sorted(item.item_id for item in run_plan.items)
+    assert len(rows) == PLANNED_ITEMS, f"{len(rows)} rows for {PLANNED_ITEMS} items"

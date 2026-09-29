@@ -30,11 +30,10 @@ from pathlib import Path
 from typing import Final
 
 import pytest
-from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, REPO_ROOT, read_text
+from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, REPO_ROOT, read_text, seed_scores
 from pydantic import ValidationError
 
 from idhazh import config
-from idhazh.contracts.base import ServerJob
 from idhazh.contracts.eval_row import ConfidenceBand, EvalRow
 from idhazh.contracts.evidence import EvidenceItem
 from idhazh.contracts.label_row import LabelRow, LabelTag, LabelVerdict
@@ -155,14 +154,7 @@ def _the_built_world(tmp_path_factory: pytest.TempPathFactory) -> Iterator[None]
     global _WORLD
     root = tmp_path_factory.mktemp("label-world")
     shutil.copytree(CONFIG_DIR, root / "config")
-    landed = writer.append_segment(
-        root / "state",
-        _built_rows(),
-        run_id="2026-09-03-1",
-        attempt=1,
-        job=ServerJob.ASSEMBLE,
-        shard=0,
-    )
+    landed = seed_scores(root / "state", _built_rows(), run_id="2026-09-03-1")
     assert landed == 80, f"the built ledger deduped down to {landed} rows"
     _WORLD = root
     yield
@@ -181,11 +173,11 @@ def world() -> Path:
 
 
 def ledger() -> list[dict[str, str]]:
-    """Every built row, oldest month first - the population the tool reads.
+    """Every built row, oldest day first - the population the tool reads.
 
-    Read back through `writer.records` off real shards rather than handed over
-    in memory, so a test sees the CSV spelling production sees and a column that
-    stops round-tripping fails here.
+    Read back through `writer.records` off the ledger's real files rather than
+    handed over in memory, so a test sees the cells production sees and a
+    column that stops round-tripping fails here.
     """
     return list(writer.records(world() / "state"))
 
@@ -464,17 +456,7 @@ def _a_sitting_world(root: Path, *, rows: int = 2) -> None:
         )
         for seq in range(rows)
     ]
-    assert (
-        writer.append_segment(
-            root / "state",
-            built,
-            run_id="2026-09-02-1",
-            attempt=1,
-            job=ServerJob.ASSEMBLE,
-            shard=0,
-        )
-        == rows
-    )
+    assert seed_scores(root / "state", built, run_id="2026-09-02-1") == rows
 
     package = root / evidence.EVIDENCE_ROOT_RELPATH
     package.mkdir(parents=True, exist_ok=True)
@@ -599,7 +581,7 @@ class TestTheRow:
     def test_the_row_carries_the_counterweights_its_tags_are_measured_against(self) -> None:
         """A label outlives the score row it was drawn from, so it copies these three.
 
-        `state/scores/` keeps the scores task's full-grain window of
+        The scores ledger keeps the scores task's full-grain window of
         item-level rows. Re-joining on `output_digest` stops working the day
         that month is archived, and the three counterweights the tag vocabulary
         mirrors are exactly what would be lost - which is the precision and
@@ -735,7 +717,7 @@ class TestTheLoopStaysOpen:
     def test_the_queue_says_which_months_a_draw_can_no_longer_reach(self) -> None:
         """A row count gives no hint that a month was ever there.
 
-        `state/scores/` becomes a summary past the scores task's full-grain
+        The scores ledger becomes a summary past the scores task's full-grain
         window, and a summary holds no row to
         label. The report names those months rather than leaving the operator to
         infer them from a shortfall.

@@ -8,11 +8,11 @@ bytes. The fixture files are the same files in both runs, so a difference is a
 difference in the fold rather than in the input. That is the whole of what
 moving the settlement out of the writer is allowed to change: nothing.
 
-**The move.** Parity cannot say whether every production reader was moved onto
-the walker, so the second half of this module reads the modules decision 5.2 of
-the no-file-has-two-writers plan enumerates and checks each one by name. The
-list is fixed and written out here, so this test costs the same however much the
-repository grows (`CLAUDE.md` section 13).
+**The readers.** Parity cannot say whether every production reader of a
+writer-owned tree reads it through the walker, so the second half of this module
+names each one and checks it by name. The list is fixed and written out here, so
+this test costs the same however much the repository grows (`CLAUDE.md` section
+13).
 
 A day is a directory and nothing else, so a `<DD>.csv` beside one is a name no
 writer spells and the walk refuses it with every other stray.
@@ -260,20 +260,21 @@ def test_a_row_the_contract_cannot_read_stops_the_read(tmp_path: Path) -> None:
         day_shards.settled_rows(tmp_path, ledger.SPAN_ROLLUP_KEY, SpanRollupRow, days=1)
 
 
-#: Every reader that left the day-file walk: the module, the exact call it used
-#: to make, and the `day_shards` call it makes instead. A module keeps its other
-#: day-file walks - `state/seen/`, `state/counterfactual-scores/` and the judge
-#: trees are not moving - so the claim is about the named call and never about
-#: the file.
+#: Every reader of a writer-owned CSV day tree: the module, the day-file call it
+#: would make if it went back to the one-file-a-day walk, and the `day_shards`
+#: call it makes instead. A module keeps its other day-file walks - `state/seen/`,
+#: `state/published/` and the judge trees still file one file a day - so the
+#: claim is about the named call and never about the file.
 #:
 #: The entry point differs by what the reader wants. `shard_files` hands back
 #: every file, which is what a prune and a census need. `settled_rows`,
 #: `settled_day` and `one_day` settle a day's shards into one answer first,
 #: which is what a published number needs.
 #:
-#: The ledger package keeps the item-health reader and lost the
-#: host-fingerprint one: `load_item_health` settles the window itself, while the
-#: host records are read by the two panels that show them.
+#: The item census, the eval rows and the machine rows are not here: they moved
+#: under `state/raw/` through the ledger door, and their readers call
+#: `ledger.load_days`, which walks no day tree of this kind. The two migration
+#: utilities are not here either, because reading an older shape is their job.
 #:
 #: The cleanup passes left `retention.py` for the gardener's tasks, so their walk
 #: is named where it runs now, each with the day-file call it would be if it
@@ -284,43 +285,29 @@ def test_a_row_the_contract_cannot_read_stops_the_read(tmp_path: Path) -> None:
 MOVED: Final = (
     (
         "backend/idhazh/ledger/rows.py",
-        "day_files(state_dir / ITEM_HEALTH_DIRNAME)",
+        "day_files(paths.tree_root(state_dir, LedgerName.FEED_HEALTH))",
         "settled_rows(",
     ),
-    (
-        "backend/idhazh/telemetry/publish/console_band.py",
-        "day_files(state_dir / HOST_FINGERPRINT_DIRNAME)",
-        "one_day(",
-    ),
-    (
-        "backend/idhazh/telemetry/publish/machine.py",
-        "day_files(state_dir / HOST_FINGERPRINT_DIRNAME)",
-        "dates_by_month(",
-    ),
+    ("backend/idhazh/gardener/closed_day_fold.py", "day_files(root)", "shard_files("),
     ("backend/idhazh/gardener/retention_files.py", "day_files(tree)", "shards_by_month("),
     (
         "backend/idhazh/gardener/tasks/counterfactual_scores.py",
         "day_files(tree)",
         "shard_files(",
     ),
-    ("backend/idhazh/gardener/tasks/scores.py", "day_files(scores)", "shards_by_month("),
     ("backend/idhazh/gardener/tasks/scores.py", "day_files(index)", "shard_files("),
-    (
-        "backend/idhazh/gardener/tasks/telemetry_aggregate.py",
-        "day_files(census)",
-        "shards_by_month(",
-    ),
-    ("backend/idhazh/evals/writer.py", "day_files(state_dir / LEDGER_DIRNAME)", "shard_files("),
     ("backend/idhazh/evals/writer.py", "day_files(state_dir / INDEX_DIRNAME)", "shard_files("),
-    ("backend/idhazh/telemetry/prune.py", "day_files(state_root / ledger)", "shard_files("),
-    ("backend/utilities/measure_ledgers.py", "day_files(directory)", "shard_files("),
     (
-        "backend/utilities/item_health_provenance.py",
-        "day_files(root / LEDGER_ROOT)",
+        "backend/idhazh/telemetry/inventory.py",
+        "day_files(ledger.tree_root(state_root, LedgerName.SPAN_ROLLUP))",
+        "settled_day(",
+    ),
+    ("backend/idhazh/telemetry/prune.py", "day_files(state_root / ledger)", "shard_files("),
+    (
+        "backend/idhazh/telemetry/publish/span_rollup.py",
+        "day_files(source_dir)",
         "shard_files(",
     ),
-    ("backend/utilities/server_memory_mark.py", "day_files(root / LEDGER_ROOT)", "shard_files("),
-    ("backend/utilities/empty_column_census.py", "day_files(root / ledger.root)", "shard_files("),
 )
 
 #: The one ledger that keeps the day-file walk, and the reader that walks it.

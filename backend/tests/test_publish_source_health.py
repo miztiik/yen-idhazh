@@ -10,23 +10,24 @@ from __future__ import annotations
 
 import json
 from collections import defaultdict
-from collections.abc import Iterator, Sequence
+from collections.abc import Sequence
 from pathlib import Path
 
 import pytest
 from conftest import seed_feed_health, seed_item_health
 from pydantic import ValidationError
 
-from idhazh import config, day_partition, day_shards, ledger
-from idhazh.contracts.base import derive_url_key
+from idhazh import config, day_partition, ledger
+from idhazh.contracts.base import Contract, derive_url_key
 from idhazh.contracts.feed_health import (
     FeedHealthRow,
     FetchOutcome,
     RobotsOutcome,
     derive_endpoint_key,
 )
+from idhazh.contracts.file_envelope import FileEnvelope
 from idhazh.contracts.item_health import FailureCode, ItemHealthRow, ItemOutcome, ItemStage
-from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW, CollectConfig
+from idhazh.contracts.knobs.collect import CollectConfig
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.source_health_view import (
     FORBIDDEN_FIELDS,
@@ -37,6 +38,7 @@ from idhazh.contracts.source_health_view import (
 )
 from idhazh.contracts.sources import FeedDef, SourceForm
 from idhazh.contracts.taxonomy import SourceKind, SourceTier
+from idhazh.ledger import ledger_files, raw_files
 from idhazh.telemetry.publish import source_health
 from idhazh.telemetry.source_health import reliability
 
@@ -852,9 +854,9 @@ _GAP_OLDER = ("2026-04-10", "2026-05-10", "2026-06-10")
 _GAP_SHORT = COLLECT.model_copy(update={"source_yield_min_complete_days": _GAP_KEEP})
 
 
-def _day_relpath(date: str) -> str:
-    """The settled file of one day, relative to the ledger - what a folded day holds."""
-    return f"{date[:4]}/{date[5:7]}/{date[8:10]}/{day_shards.SETTLED_NAME}"
+def _day_folder(date: str) -> str:
+    """One day's raw folder, relative to the ledger's raw root - where a day's writers file."""
+    return f"{date[:4]}/{date[5:7]}/{date[8:10]}"
 
 
 def _gap_items() -> list[ItemHealthRow]:
@@ -877,7 +879,7 @@ def _gap_items() -> list[ItemHealthRow]:
 
 
 def _write_item_health(state: Path, rows: Sequence[ItemHealthRow]) -> None:
-    """Append each row to the day file its own date names."""
+    """File each date's rows through the ledger door, one writer a day, under that date."""
     by_date: dict[str, list[ItemHealthRow]] = defaultdict(list)
     for row in rows:
         by_date[row.date].append(row)
@@ -930,7 +932,7 @@ def test_publish_reads_the_selected_dates_and_writes_the_complete_read_s_bytes(
     assert path.read_text(encoding="utf-8") == reference.to_json()
 
 
-def test_publish_opens_only_the_shards_that_hold_the_selected_dates(
+def test_publish_opens_only_the_files_that_hold_the_selected_dates(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The read stops at the newest `keep` dates and never opens the history behind them.
@@ -939,22 +941,36 @@ def test_publish_opens_only_the_shards_that_hold_the_selected_dates(
     on a run whether the project has recorded for three months or for years, so
     the days older than the selected dates must not be opened at all.
 
-    **The day grain makes this exact where it used to be generous.** A month shard
-    held whole months to get at three dates; the ledger now files one CSV a day,
-    so the read opens exactly the `keep` files the selection names.
+    **Counted by what the ledger door opens.** A recorded day is a folder of raw
+    files, one per writer, and the census names the `keep` dates it selected -
+    so every file the door opens, for its envelope or for its rows, sits in one
+    of those folders. The folders behind them are listed and never opened.
     """
     state = tmp_path / "state"
     _write_item_health(state, _gap_items())
-    opened: list[str] = []
-    real = day_shards.rows_of
-    root = ledger.tree_root(state, LedgerName.ITEM_HEALTH)
+    root = ledger.raw_root(state, LedgerName.ITEM_HEALTH)
+    opened: set[str] = set()
+    real_envelope = ledger.read_envelope
+    real_rows = ledger.load_stored
 
-    def spy(shard: Path) -> Iterator[tuple[int, dict[str, str]]]:
-        if root in shard.parents:
-            opened.append(shard.relative_to(root).as_posix())
-        return real(shard)
+    def note(path: Path) -> None:
+        if root in path.parents:
+            opened.add(path.relative_to(root).as_posix())
 
-    monkeypatch.setattr(day_shards, "rows_of", spy)
+    # Recorders rather than substitutes: each calls the real reader and hands
+    # back what it returned, so the view is the one a run writes (Guardrail #7).
+    # Each is patched on the module that calls it, which imported the name.
+    def envelope(path: Path) -> FileEnvelope:
+        note(path)
+        return real_envelope(path)
+
+    def rows(paths: Sequence[Path], *, model: type[Contract]) -> list[ledger.StoredRow[Contract]]:
+        for path in paths:
+            note(path)
+        return real_rows(paths, model=model)
+
+    monkeypatch.setattr(raw_files, "read_envelope", envelope)
+    monkeypatch.setattr(ledger_files, "load_stored", rows)
     settings = config.load()
     source_health.publish(
         sources=settings.sources,
@@ -966,10 +982,17 @@ def test_publish_opens_only_the_shards_that_hold_the_selected_dates(
         state_root=state,
         path=tmp_path / "public" / source_health.PUBLIC_FILENAME,
     )
-    assert set(opened) == {_day_relpath(date) for date in _GAP_SELECTED}
-    assert len(opened) == _GAP_KEEP, "one file a selected date, and not one more"
+    held = {
+        path.relative_to(root).as_posix()
+        for date in _GAP_SELECTED
+        for path in (root / _day_folder(date)).iterdir()
+    }
+    assert opened == held, "every file of a selected date, and not one more"
+    assert {name.rsplit("/", 1)[0] for name in opened} == {
+        _day_folder(date) for date in _GAP_SELECTED
+    }
     for older in _GAP_OLDER:
-        assert _day_relpath(older) not in opened, (
+        assert not any(name.startswith(f"{_day_folder(older)}/") for name in opened), (
             f"{older} is behind the window and may not be opened"
         )
 
@@ -984,23 +1007,16 @@ def test_a_calendar_window_undercounts_the_census_a_recorded_selection_restores(
     Selecting the dates the ledger holds preserves both, and calendar subtraction
     is not an equivalent query for them (Fowler).
 
-    The short side is built by calendar subtraction here rather than read out of
-    the ledger, because the ledger's own cover counts recorded days now and can
-    no longer produce the defect.
+    The short side asks the ledger for the days calendar subtraction names, because
+    the census now selects recorded days and can no longer produce the defect.
     """
     state = tmp_path / "state"
     _write_item_health(state, _gap_items())
     run_id = f"{_GAP_TODAY}-1"
     generated_at = f"{_GAP_TODAY}T06:20:00Z"
 
-    named = set(day_partition.days_in_window(_GAP_TODAY, _GAP_KEEP))
-    windowed = [
-        row
-        for row in ledger.load_item_health(
-            state, today=_GAP_TODAY, within_days=UNBOUNDED_WINDOW
-        )
-        if row.date in named
-    ]
+    named = day_partition.days_in_window(_GAP_TODAY, _GAP_KEEP)
+    windowed = ledger.load_days(state, LedgerName.ITEM_HEALTH, named, model=ItemHealthRow)
     short = source_health.build(
         feeds=[feed("wire")],
         collect=_GAP_SHORT,

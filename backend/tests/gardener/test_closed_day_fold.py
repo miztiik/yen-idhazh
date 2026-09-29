@@ -25,11 +25,11 @@ from pathlib import Path
 from typing import Final
 
 import pytest
-from conftest import FIXTURES_DIR
+from conftest import FIXTURES_DIR, seed_feed_health
 
 from idhazh import day_shards, ledger
 from idhazh.contracts.base import ServerJob
-from idhazh.contracts.host_fingerprint import HostFingerprintRow
+from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome
 from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
 from idhazh.contracts.knobs.gardener import DEFAULT_CLOSED_AFTER_DAYS
 from idhazh.contracts.ledger_name import DAY_TREES, LedgerName
@@ -46,13 +46,12 @@ OLDEST_OPEN: Final = "2026-09-16"
 NEWEST_CLOSED: Final = "2026-09-15"
 OLDER_CLOSED: Final = "2026-09-04"
 
-#: Every job of one full digest run that records a machine: one plan, eight work
-#: shards, one assemble. Ten writers, ten files, one day directory.
-WRITERS: Final[tuple[tuple[ServerJob, int], ...]] = (
-    (ServerJob.PLAN, 0),
-    *tuple((ServerJob.WORK, shard) for shard in range(8)),
-    (ServerJob.ASSEMBLE, 0),
-)
+#: Eight work shards of one run, each filing its own span totals: eight writers,
+#: eight files, one day directory.
+WORK_SHARDS: Final = tuple(range(8))
+
+#: The feed-health days the fixture tree carries beside its span days.
+FEED_DAYS: Final = ("2026-09-05", "2026-09-06", "2026-09-07")
 
 DAY_SHARDS: Final = FIXTURES_DIR / "day-shards"
 
@@ -80,27 +79,14 @@ def fold(
     )
 
 
-def a_machine(day: str, *, job: ServerJob, shard: int, **cells: object) -> HostFingerprintRow:
-    """One machine row, shaped the way the contract's own validators demand."""
-    return HostFingerprintRow.model_validate(
-        {
-            "date": day,
-            "run_id": f"{day}-900000001",
-            "job": job,
-            "shard": shard,
-            "fingerprint": "0123456789abcdef",
-            "measured_at": f"{day}T00:00:00Z",
-            **cells,
-        }
-    )
-
-
-def a_span(day: str, *, shard: int, span: RollupSpan, total_ms: int) -> SpanRollupRow:
+def a_span(
+    day: str, *, shard: int, span: RollupSpan, total_ms: int, run: int = 1
+) -> SpanRollupRow:
     """One span total, shaped the way the contract's own validators demand."""
     return SpanRollupRow.model_validate(
         {
             "date": day,
-            "run_id": f"{day}-900000001",
+            "run_id": f"{day}-90000000{run}",
             "shard": shard,
             "span_name": span,
             "count": 1,
@@ -109,42 +95,60 @@ def a_span(day: str, *, shard: int, span: RollupSpan, total_ms: int) -> SpanRoll
     )
 
 
-def write(
+def file_spans(
     state: Path,
-    tree: LedgerName,
-    rows: list[HostFingerprintRow] | list[SpanRollupRow],
+    rows: list[SpanRollupRow],
     *,
     day: str,
     run: int = 1,
     attempt: int = 1,
-    job: ServerJob = ServerJob.PLAN,
     shard: int = 0,
 ) -> Path:
-    """File one writer's rows the way a job files them, and say which day folder they went to."""
+    """File one work shard's span totals the way the shard files them, and say which day folder."""
     ledger.write_segment(
         state,
-        tree,
+        LedgerName.SPAN_ROLLUP,
         rows,
         run_id=f"{day}-90000000{run}",
         attempt=attempt,
-        job=job,
+        job=ServerJob.WORK,
         shard=shard,
     )
-    return ledger.path(state, tree, day)
+    return ledger.path(state, LedgerName.SPAN_ROLLUP, day)
 
 
 def a_full_run(state: Path, day: str) -> Path:
-    """Ten jobs of one run, each filing its own machine into one day."""
-    for job, shard in WRITERS:
-        write(
+    """Every work shard of one run, each filing its own span totals into one day."""
+    for shard in WORK_SHARDS:
+        file_spans(
             state,
-            LedgerName.HOST_FINGERPRINT,
-            [a_machine(day, job=job, shard=shard, cpu_model=f"{job.value}-{shard}")],
+            [a_span(day, shard=shard, span=RollupSpan.ITEM, total_ms=700 + shard)],
             day=day,
-            job=job,
             shard=shard,
         )
-    return ledger.path(state, LedgerName.HOST_FINGERPRINT, day)
+    return ledger.path(state, LedgerName.SPAN_ROLLUP, day)
+
+
+def a_verdict(day: str, *, run: int) -> FeedHealthRow:
+    """One feed's verdict on one run, shaped the way the contract's own validators demand."""
+    return FeedHealthRow.model_validate(
+        {
+            "run_id": f"{day}-90000000{run}",
+            "date": day,
+            "feed_id": "example-feed",
+            "checked_at": f"{day}T06:00:00Z",
+            "outcome": FetchOutcome.OK,
+            "status": 200,
+            "items": 3,
+        }
+    )
+
+
+def verdicts(state: Path, day: str, *, runs: int = 1) -> Path:
+    """The plan job of each run filing its verdict into one day, and that day's folder."""
+    for run in range(1, runs + 1):
+        seed_feed_health(state, day, [a_verdict(day, run=run)], run_id=f"{day}-90000000{run}")
+    return ledger.path(state, LedgerName.FEED_HEALTH, day)
 
 
 def names_in(folder: Path) -> list[str]:
@@ -180,14 +184,16 @@ def every_day(state: Path) -> dict[tuple[LedgerName, str], list[dict[str, str]]]
 
 
 def the_fixture_tree(root: Path) -> Path:
-    """Three committed day fixtures copied into one state tree, and that tree.
+    """Three built feed-health days and two committed span fixtures in one tree, and that tree.
 
-    Six writer files over three machine days, three writer files of one span day
-    where a second attempt corrects the first, and one span day an earlier fold
-    already settled with a straggler and a pre-partition head beside it.
+    Six writer files over three feed-health days, where the plan jobs of two
+    runs each filed a verdict; three writer files of one span day where a second
+    attempt corrects the first; and one span day an earlier fold already settled,
+    with a straggler and a pre-partition head beside it.
     """
     state = root / ledger.STATE_DIRNAME
-    shutil.copytree(DAY_SHARDS / "closed-day" / ledger.STATE_DIRNAME, state)
+    for day in FEED_DAYS:
+        verdicts(state, day, runs=2)
     shutil.copytree(
         DAY_SHARDS / "writer-files" / "span-rollup",
         ledger.tree_root(state, LedgerName.SPAN_ROLLUP),
@@ -213,12 +219,10 @@ def test_the_fold_changes_no_answer_and_never_touches_an_open_day(tmp_path: Path
     """
     state = the_fixture_tree(tmp_path)
     wake = "2026-09-22"
-    open_day = write(
+    open_day = file_spans(
         state,
-        LedgerName.SPAN_ROLLUP,
         [a_span("2026-09-21", shard=0, span=RollupSpan.ITEM, total_ms=700)],
         day="2026-09-21",
-        job=ServerJob.WORK,
     )
     open_bytes = {path.name: path.read_bytes() for path in open_day.iterdir()}
     before = every_day(state)
@@ -244,22 +248,22 @@ def test_a_tree_with_no_days_folds_nothing_and_says_so(tmp_path: Path) -> None:
 
 
 def test_a_closed_day_folds_into_one_file_holding_every_row(tmp_path: Path) -> None:
-    """Ten writers leave ten files, and the fold leaves one holding every row.
+    """Eight writers leave eight files, and the fold leaves one holding every row.
 
     Two-sided on purpose: "one file is there" passes on a fold that wrote the
-    settled file and kept the ten beside it.
+    settled file and kept the eight beside it.
     """
     state = tmp_path / ledger.STATE_DIRNAME
     day = a_full_run(state, NEWEST_CLOSED)
-    before = settled_in(state, LedgerName.HOST_FINGERPRINT, NEWEST_CLOSED)
+    before = settled_in(state, LedgerName.SPAN_ROLLUP, NEWEST_CLOSED)
 
     folded = fold(state)
 
     assert names_in(day) == [day_shards.SETTLED_NAME]
     assert [(settled.tree, settled.day) for settled in folded.days] == [
-        (LedgerName.HOST_FINGERPRINT, NEWEST_CLOSED)
+        (LedgerName.SPAN_ROLLUP, NEWEST_CLOSED)
     ]
-    assert folded.files == len(WRITERS)
+    assert folded.files == len(WORK_SHARDS)
     assert rows_in(day / day_shards.SETTLED_NAME) == before
 
 
@@ -277,7 +281,9 @@ def test_the_newest_open_day_is_left_alone_and_the_day_before_it_is_taken(
 
     folded = fold(state)
 
-    assert len(names_in(open_day)) == len(WRITERS), "a day a re-run could still write was folded"
+    assert len(names_in(open_day)) == len(WORK_SHARDS), (
+        "a day a re-run could still write was folded"
+    )
     assert names_in(closed_day) == [day_shards.SETTLED_NAME]
     assert [settled.day for settled in folded.days] == [NEWEST_CLOSED]
 
@@ -288,7 +294,7 @@ def test_which_days_are_closed_is_measured_from_the_instant_handed_in(tmp_path: 
     day = a_full_run(state, NEWEST_CLOSED)
 
     assert fold(state, wake="2026-09-16").days == ()
-    assert len(names_in(day)) == len(WRITERS)
+    assert len(names_in(day)) == len(WORK_SHARDS)
 
     assert [settled.day for settled in fold(state, wake=WAKE).days] == [NEWEST_CLOSED]
     assert names_in(day) == [day_shards.SETTLED_NAME]
@@ -309,45 +315,33 @@ def test_every_closed_day_goes_in_one_pass_so_a_missed_wake_catches_up(tmp_path:
 def test_two_trees_closed_on_one_day_are_both_folded(tmp_path: Path) -> None:
     """Every tree it is handed is folded, not the first one with a closed day."""
     state = tmp_path / ledger.STATE_DIRNAME
-    machines = a_full_run(state, NEWEST_CLOSED)
-    spans = write(
-        state,
-        LedgerName.SPAN_ROLLUP,
-        [a_span(NEWEST_CLOSED, shard=0, span=RollupSpan.ITEM, total_ms=900)],
-        day=NEWEST_CLOSED,
-        job=ServerJob.WORK,
-    )
+    spans = a_full_run(state, NEWEST_CLOSED)
+    feeds = verdicts(state, NEWEST_CLOSED)
 
     folded = fold(state)
 
-    assert names_in(machines) == names_in(spans) == [day_shards.SETTLED_NAME]
+    assert names_in(spans) == names_in(feeds) == [day_shards.SETTLED_NAME]
     assert sorted(settled.tree for settled in folded.days) == sorted(
-        (LedgerName.HOST_FINGERPRINT, LedgerName.SPAN_ROLLUP)
+        (LedgerName.FEED_HEALTH, LedgerName.SPAN_ROLLUP)
     )
 
 
 def test_only_the_trees_handed_in_are_folded(tmp_path: Path) -> None:
     """A task folds the trees it walks, so a tree another task owns is left to that task."""
     state = tmp_path / ledger.STATE_DIRNAME
-    machines = a_full_run(state, NEWEST_CLOSED)
-    spans = write(
-        state,
-        LedgerName.SPAN_ROLLUP,
-        [a_span(NEWEST_CLOSED, shard=0, span=RollupSpan.ITEM, total_ms=900)],
-        day=NEWEST_CLOSED,
-        job=ServerJob.WORK,
-    )
+    spans = a_full_run(state, NEWEST_CLOSED)
+    feeds = verdicts(state, NEWEST_CLOSED)
 
     closed_day_fold.fold(
         state,
-        [LedgerName.SPAN_ROLLUP],
+        [LedgerName.FEED_HEALTH],
         now=midnight(WAKE),
         after_days=DEFAULT_CLOSED_AFTER_DAYS,
         dry_run=False,
     )
 
-    assert names_in(spans) == [day_shards.SETTLED_NAME]
-    assert len(names_in(machines)) == len(WRITERS)
+    assert names_in(feeds) == [day_shards.SETTLED_NAME]
+    assert len(names_in(spans)) == len(WORK_SHARDS)
 
 
 def test_a_day_folder_the_window_took_is_left_to_the_window(tmp_path: Path) -> None:
@@ -358,7 +352,7 @@ def test_a_day_folder_the_window_took_is_left_to_the_window(tmp_path: Path) -> N
 
     folded = fold(state, skip=frozenset({taken}))
 
-    assert len(names_in(taken)) == len(WRITERS)
+    assert len(names_in(taken)) == len(WORK_SHARDS)
     assert names_in(kept) == [day_shards.SETTLED_NAME]
     assert [settled.day for settled in folded.days] == [NEWEST_CLOSED]
 
@@ -377,7 +371,7 @@ def test_a_dry_run_settles_every_day_it_would_fold_and_changes_nothing(tmp_path:
     assert {path.name: path.read_bytes() for path in day.iterdir()} == before
     assert rehearsed.dry_run is True
     assert [settled.day for settled in rehearsed.days] == [NEWEST_CLOSED]
-    assert rehearsed.files == len(WRITERS)
+    assert rehearsed.files == len(WORK_SHARDS)
     assert fold(state).days == rehearsed.days
 
 
@@ -393,15 +387,15 @@ def test_a_row_that_will_not_read_stops_the_fold_and_carries_the_days_before_it(
     bad = a_full_run(state, NEWEST_CLOSED)
     victim = sorted(bad.iterdir())[0]
     with victim.open("a", encoding="utf-8", newline="") as handle:
-        handle.write("not,a,machine\n")
+        handle.write("not,a,span\n")
 
-    with pytest.raises(FoldInterruptedError, match=f"host-fingerprint {NEWEST_CLOSED}") as stop:
+    with pytest.raises(FoldInterruptedError, match=f"span-rollup {NEWEST_CLOSED}") as stop:
         fold(state)
 
     assert stop.value.so_far.failed is True
     assert [settled.day for settled in stop.value.so_far.days] == [OLDER_CLOSED]
     assert names_in(good) == [day_shards.SETTLED_NAME]
-    assert len(names_in(bad)) == len(WRITERS)
+    assert len(names_in(bad)) == len(WORK_SHARDS)
 
 
 # --- What a second fold does -----------------------------------------------------
@@ -429,13 +423,11 @@ def test_a_straggler_that_lands_after_a_fold_is_folded_into_the_file_beside_it(
     state = tmp_path / ledger.STATE_DIRNAME
     day = a_full_run(state, NEWEST_CLOSED)
     fold(state)
-    write(
+    file_spans(
         state,
-        LedgerName.HOST_FINGERPRINT,
-        [a_machine(NEWEST_CLOSED, job=ServerJob.WORK, shard=9, cpu_model="a late shard")],
+        [a_span(NEWEST_CLOSED, shard=9, span=RollupSpan.ITEM, total_ms=900, run=2)],
         day=NEWEST_CLOSED,
         run=2,
-        job=ServerJob.WORK,
         shard=9,
     )
     assert len(names_in(day)) == 2
@@ -444,9 +436,9 @@ def test_a_straggler_that_lands_after_a_fold_is_folded_into_the_file_beside_it(
 
     assert names_in(day) == [day_shards.SETTLED_NAME]
     assert folded.files == 1, "the settled file is rewritten, so only the straggler goes"
-    machines = [row["cpu_model"] for row in rows_in(day / day_shards.SETTLED_NAME)]
-    assert "a late shard" in machines
-    assert len(machines) == len(WRITERS) + 1
+    shards = [(row["run_id"], row["shard"]) for row in rows_in(day / day_shards.SETTLED_NAME)]
+    assert (f"{NEWEST_CLOSED}-900000002", "9") in shards
+    assert len(shards) == len(WORK_SHARDS) + 1
 
 
 def test_two_folds_of_one_closed_day_write_the_same_bytes(tmp_path: Path) -> None:

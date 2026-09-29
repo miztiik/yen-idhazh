@@ -12,8 +12,11 @@ from pathlib import Path
 from typing import Final
 
 import pytest
+from conftest import seed_item_health
+from retention._trees import health_row
 
 from idhazh import ledger
+from idhazh.contracts.item_health import ItemStage
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.gardener import runner
 
@@ -38,12 +41,16 @@ def a_tree(root: Path, *, days: dict[str, list[str]]) -> Path:
 
 
 def a_ledger_day(state: Path, *, written: str) -> Path:
-    """One declared ledger's day file, beside the trial roots and not one of them."""
-    tree = ledger.tree_root(state, LedgerName.ITEM_HEALTH)
-    day = tree / written[:4] / written[5:7] / f"{written[8:10]}.csv"
-    day.parent.mkdir(parents=True, exist_ok=True)
-    day.write_text("version,date\n2026-09-15," + written + "\n", encoding="utf-8")
-    return day
+    """One declared ledger's day, filed through the ledger door beside the trial roots.
+
+    Its path spells its day under `state/raw/`, so a sweep that read that root as
+    a trial tree would date the file and take it.
+    """
+    seed_item_health(
+        state, written, [health_row(day=written, run=1, number=1, stage=ItemStage.PUBLISH)]
+    )
+    (held,) = ledger.list_raw_files(state, LedgerName.ITEM_HEALTH)
+    return held.path
 
 
 def a_file(root: Path, relative: str) -> Path:

@@ -92,10 +92,8 @@ LIVE_BY_DECISION: Final = {
     ),
     ("counterfactual-scores", "fold.dry_run"): FOLD_ALREADY_RAN_LIVE,
     ("feed-health", "fold.dry_run"): FOLD_ALREADY_RAN_LIVE,
-    ("host-fingerprint", "fold.dry_run"): FOLD_ALREADY_RAN_LIVE,
     ("scores", "fold.dry_run"): FOLD_ALREADY_RAN_LIVE,
     ("span-rollup", "fold.dry_run"): FOLD_ALREADY_RAN_LIVE,
-    ("telemetry-aggregate", "fold.dry_run"): FOLD_ALREADY_RAN_LIVE,
 }
 
 #: The CSV day trees no task folds, each with why. A tree that joins `DAY_TREES`

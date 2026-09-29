@@ -700,10 +700,11 @@ COMMIT_STAGED_PATHS: Final = {
     # many times a day against unmerged branches, so one of its rows beside the
     # rows the console reads would mean every panel filtering by job for ever.
     #
-    # The fingerprint directory alone, not `state/pipeline-tests` whole: the
-    # sweep's item-health, scores and traces land under the same trial root
-    # because the whole state root moved, and nothing reads them back.
-    "bench": [f"{BENCH_LEDGER_ROOT}/{LedgerName.HOST_FINGERPRINT}"],
+    # The machine ledger's raw folder alone, not `state/pipeline-tests` whole:
+    # the sweep's item-health, scores and traces land under the same trial root
+    # because the whole state root moved, and nothing reads them back. The
+    # folder is asked of the ledger door, which files the probe's row there.
+    "bench": [ledger.raw_root(Path(BENCH_LEDGER_ROOT), LedgerName.HOST_FINGERPRINT).as_posix()],
 }
 
 # The step that fills the two ledgers the step above commits, and the two things
@@ -788,8 +789,9 @@ CLOCK_VARIABLES: Final = ("JOB_STARTED_AT",)
 
 # The other end of `FINGERPRINT_STEP`. The probe runs before the model server so
 # the bandwidth reading gets an idle machine; the job's own clock and what the
-# weights cost to open are only knowable once the job is over. Both halves go to
-# the one segment this job owns and the fold unites them.
+# weights cost to open are only knowable once the job is over. Both halves are
+# filed through the ledger door as one work unit of this job, so the clock's
+# whole row replaces the probe's half-row when the ledger is read.
 JOB_CLOCK_STEP: Final = "What this job cost"
 
 JOB_CLOCK_COMMAND: Final = "python -m idhazh job-clock"
