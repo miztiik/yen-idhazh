@@ -2,13 +2,15 @@ import { expect, test } from '@playwright/test';
 import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { render } from 'svelte/server';
 
 import { recordNotes, type RecordRead } from '../src/lib/console/recording';
 import { checkedRequest, type Row } from '../src/lib/data/slice-shapes';
 import { HOST_FINGERPRINT_COLUMNS, machineRecord } from '../src/lib/server/host-fingerprint';
 import { sliceFromDisk } from '../src/lib/server/ledger-disk';
 import { datedFirst, ITEM_HEALTH_COLUMNS, SCORE_COLUMNS } from '../src/lib/server/ledger-rows';
+import { serverCompiler } from './support/server-render';
 
 /**
  * How a console route reads a packed record at build time, and what it says
@@ -232,5 +234,37 @@ test.describe('what a route says about the records it read', () => {
 				text: 'The machine record is packed as far as 27 Sep 2026, so the 2 days after it are not shown yet.'
 			}
 		]);
+	});
+
+	test('the route prints one line a note, and only a record that did not load looks like a fault', async () => {
+		// Compiled and rendered for real, because the canary packs every record as
+		// far as its own day and so never shows a route one of these lines.
+		const module = await serverCompiler(path.resolve(here, '..', 'test-results', 'ledger-rows'))(
+			'src/lib/console/RecordNotes.svelte',
+			'RecordNotes',
+			[]
+		);
+		const RecordNotes = (await import(pathToFileURL(module).href)).default;
+		const notes = recordNotes(
+			[
+				{ record: 'article', read: { state: 'not-packed' } },
+				{ record: 'machine', read: { state: 'unreadable', at: '2026-09-04' } },
+				{ record: 'score', read: read('2026-09-25') }
+			],
+			'2026-09-29'
+		);
+		const lines = [...render(RecordNotes, { props: { notes } }).body.matchAll(/<p\b([^>]*)>([\s\S]*?)<\/p>/g)];
+		const attribute = (attributes: string, name: string) => new RegExp(`${name}="([^"]*)"`).exec(attributes)?.[1];
+		expect(lines.map(([, attributes]) => attribute(attributes, 'data-record-note'))).toEqual([
+			'not-packed',
+			'unreadable',
+			'behind'
+		]);
+		expect(lines.map(([, attributes]) => attribute(attributes, 'data-records'))).toEqual(['article', 'machine', 'score']);
+		expect(lines.map(([, attributes]) => /\brecord-fault\b/.test(attributes))).toEqual([false, true, false]);
+		expect(lines.map(([, , text]) => text.replace(/<!--[\s\S]*?-->/g, '').trim())).toEqual(
+			notes.map((note) => note.text)
+		);
+		expect(render(RecordNotes, { props: { notes: [] } }).body).not.toContain('<p');
 	});
 });
