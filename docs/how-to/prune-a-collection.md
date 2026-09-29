@@ -89,7 +89,7 @@ idhazh telemetry prune --target scores --since 2025-01-01 --until 2025-12-31 \
 
 Which ledgers this may be pointed at, which two are refused by name, and why
 `scores` and `score-index` are pruned as a pair are in
-[../architecture/publishing/retention.md](../architecture/publishing/retention.md#a-named-prune-one-ledger-one-range-of-days-2026-09-16).
+[../architecture/publishing/retention.md](../architecture/publishing/retention.md#a-named-prune-one-ledger-one-range-of-days).
 
 ## Failure modes
 

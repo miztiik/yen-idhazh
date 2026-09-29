@@ -127,7 +127,7 @@ found on every pass, and setting another task live leaves it reporting.
 `retention.image_months` is `13` from 2026-09-13, so the pass does name a cutoff -
 and nothing published is old enough to sit behind it. Switching it on is a
 separate change with its own conditions
-([../architecture/publishing/retention.md](../architecture/publishing/retention.md#the-cleanup-says-what-it-did-not-clear-2026-09-06)).
+([../architecture/publishing/retention.md](../architecture/publishing/retention.md#the-cleanup-says-what-it-did-not-clear)).
 
 Two consequences to know before step 5. The published copy goes with its private
 source, so `/console/`'s per-item detail stops reaching back past the window. And
@@ -205,7 +205,7 @@ It prints every file a live run would remove and removes nothing until you add
 `published` and `seen` are refused by name - forgetting is the one thing those
 two may not do. Which ledgers it accepts, why those two are refused, and what
 makes it safe to stop half way is
-[../architecture/publishing/retention.md](../architecture/publishing/retention.md#a-named-prune-one-ledger-one-range-of-days-2026-09-16).
+[../architecture/publishing/retention.md](../architecture/publishing/retention.md#a-named-prune-one-ledger-one-range-of-days).
 
 ## Three things that will bite
 

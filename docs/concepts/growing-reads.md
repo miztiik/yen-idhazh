@@ -859,7 +859,7 @@ them apart.
 - [partitions.md](partitions.md) - the companion: what a layout obliges a writer to do, the freeze rule, and what counts as a month name.
 - [../architecture/contracts/schemas.md](../architecture/contracts/schemas.md#a-ledger-partitions-only-when-its-read-carries-a-window) - why a ledger partitions at all, and which reads carry a window.
 - [../architecture/sources/freshness.md](../architecture/sources/freshness.md#the-published-ledger-files-by-day-and-the-read-carries-a-cover) - the published cover, the day grain, and the argument it reversed.
-- [../architecture/publishing/retention.md](../architecture/publishing/retention.md#what-bounds-the-committed-state-tree) - what bounds each committed collection, and the state-prune measurement.
+- [../architecture/publishing/retention.md](../architecture/publishing/retention.md#what-bounds-the-committed-state-tree) - retention rules and archive guarantees for committed data.
 - [telemetry.md](telemetry.md#the-committed-traces-briefly) - a ledger bounded by its prune rather than by a read.
 - [../architecture/publishing/autotune-search-quality.md](../architecture/publishing/autotune-search-quality.md) - why the retrieval eval's whole-archive reading left this table on 2026-09-23, and what the project gave up with it.
 - [../reference/data-growth.md](../reference/data-growth.md) - where growing work is heading, what a replacement owes before the old path goes, and the shortcuts that are not answers.
