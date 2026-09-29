@@ -54,6 +54,31 @@ test('shared styles, layouts and dependencies include console coverage', () => {
 	}
 });
 
+test('data helpers select ledger logic and console consumers without unrelated frontend groups', () => {
+	for (const path of [
+		'frontend/src/lib/data/ledger.ts', 'frontend/src/lib/data/engine.ts',
+		'frontend/src/lib/data/nested/query.ts', String.raw`frontend\src\lib\data\page-keeper.ts`
+	]) {
+		const selection = selectPaths([path]);
+		assert.deepEqual(selection.groups, ['logic', 'console', 'panels', 'publishing'], path);
+		assert.deepEqual(selection.backendFiles, []);
+		assert.equal(selection.contracts, false);
+		assert.equal(selection.tooling, false);
+		assert.equal(selection.reasons[0].reason, 'ledger queries and console consumers');
+		assert.deepEqual(ciAnswer([path], true), {
+			browser: true, code: true, console: false, panels: false, validateAll: false
+		});
+	}
+});
+
+test('the data mapping preserves broader mixed edits and the unknown-path fallback', () => {
+	const data = 'frontend/src/lib/data/slice-reader.ts';
+	assert.deepEqual(selectPaths([data, 'docs/a.md']).groups, ['logic', 'console', 'panels', 'publishing']);
+	assert.deepEqual(selectPaths([data, 'frontend/src/routes/+layout.svelte']).groups, [...FRONTEND_GROUPS]);
+	assert.deepEqual(selectPaths([data, 'new-area/module.ts']).groups, ['backend', ...FRONTEND_GROUPS]);
+	assert.deepEqual(selectPaths(['frontend/src/lib/database/query.ts']).groups, [...FRONTEND_GROUPS]);
+});
+
 test('unknown inputs and backend subpackages fail toward full coverage', () => {
 	for (const path of ['new-area/module.ts', 'backend/idhazh/render/write.py', '.github/workflows/ci.yml']) {
 		assert.deepEqual(selectPaths([path]).groups, ['backend', ...FRONTEND_GROUPS], path);

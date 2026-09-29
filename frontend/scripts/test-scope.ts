@@ -178,6 +178,9 @@ export function selectPaths(paths: readonly string[]): Selection {
 		} else if (/^frontend\/src\/lib\/assist\//.test(path)) {
 			selected = [...READER, 'archive', 'model-search'];
 			reason = 'shared day loading and on-device search';
+		} else if (/^frontend\/src\/lib\/data\//.test(path)) {
+			selected = CONSOLE;
+			reason = 'ledger queries and console consumers';
 		} else if (/^frontend\//.test(path)) {
 			selected = [...FRONTEND_GROUPS];
 			reason = 'shared or unmapped frontend input';
