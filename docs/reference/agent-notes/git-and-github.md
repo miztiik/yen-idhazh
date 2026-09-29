@@ -1,6 +1,6 @@
 # Agent Notes - Git and GitHub
 
-**Last Updated**: 2026-09-28
+**Last Updated**: 2026-09-29
 
 Traps in `git`, worktrees, merges and the `gh` CLI. Index and scope:
 [../agent-notes.md](../agent-notes.md).
@@ -20,6 +20,15 @@ $env:TZ = 'UTC'; git commit -m '<message>'; Remove-Item Env:TZ
 ```
 
 GitHub's own squash merges carry the same offset and take no such switch; that is filed as a known defect.
+
+**A push or a pull request from this machine fails when it goes out under the app's own login, and nothing is wrong with the branch.** The Copilot app gives every git command its own credential helper for `github.com` and sets `GH_TOKEN`, both for the account that pays for the model's inference tokens, and this repository is `miztiik`'s. The tell is `gh auth status`: the `GH_TOKEN` account is active and `miztiik` is listed as a keyring account that is not. Every git and `gh` command for this repository runs as `miztiik`, with the credential Git Credential Manager holds, and the token is never printed (owner instruction, 2026-09-29):
+
+```powershell
+$gcm = '-c','credential.https://github.com.helper=','-c','credential.https://github.com.helper=manager','-c','credential.https://github.com.username=miztiik'
+git @gcm push --dry-run origin 'HEAD:refs/heads/<unused-name>' # proves the credential, changes nothing
+$env:GH_TOKEN = (("protocol=https`nhost=github.com`nusername=miztiik`n`n" | git @gcm credential fill) -match '^password=') -replace '^password='
+gh api user --jq .login # must print miztiik
+```
 
 ## Worktrees
 
