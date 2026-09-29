@@ -91,7 +91,7 @@ the link, the title and our own summary.
 Each retention pass is a gardener task, and each task's declaration under
 `config/gardener/` ships with `dry_run: true`. **A pass prints every file a live
 pass would take and takes none of them.** That is on purpose:
-`.github/workflows/prune.yml` force-pushes `main` on a schedule
+The `history` job of `.github/workflows/idhazh-gardener.yml` force-pushes `main` on a schedule
 ([../../CLAUDE.md](../../CLAUDE.md) section 8), so a file a task deletes wrongly
 stops being recoverable once that prune passes over the range. `git revert` is
 not a recovery path here. Until the gardener's own workflow runs the tasks on a

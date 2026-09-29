@@ -644,7 +644,7 @@ weights are still committed, so `raw.githubusercontent.com` at that tag keeps
 serving them after they leave `main`.
 
 **What the tag costs, stated rather than left to be discovered.**
-`.github/workflows/prune.yml` force-pushes `main` and pushes no tags, so this tag
+The `history` job of `.github/workflows/idhazh-gardener.yml` force-pushes `main` and pushes no tags, so this tag
 survives every prune and keeps its commit - and that commit's whole tree,
 `corpus/` included - reachable for ever. The prune bounds the repository by
 making old commits unreachable; a tag is a ref, and a ref is reachability. This
@@ -1367,7 +1367,7 @@ repository happened to be packed.
 **History costs 10.5 percent more than the tree it carries, so the prune reaches
 an eighth of the problem.** Six published days added 7,400,744 bytes to the
 working tree and 8,180,210 to a clone of it, so only the 779,466-byte difference
-- 9.5 percent of the growth - is history that `prune.yml` can ever squash. On
+- 9.5 percent of the growth - is history that the corpus squash can ever squash. On
 the level it is the same story: 6,480,999 bytes of the 49,579,643-byte clone are
 history, 13.1 percent. A clone today is 47.3 MiB against a site of 106.2, and it
 grows at 45 percent of the site's rate.

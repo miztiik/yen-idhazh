@@ -48,7 +48,7 @@ is what makes the corpus the prompt we serve instead of an approximation of it.
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Any, ClassVar, Final, Self
+from typing import ClassVar, Final, Self
 
 from pydantic import Field, model_validator
 
@@ -150,11 +150,10 @@ class CorpusRow(Contract):
         return len(self.user.split())
 
 
-#: The field `last_run` is read from, and `LEGACY_LAST_RUN_KEY` the name it had
-#: before. `backend/utilities/corpus_squash_due.py` cannot import this module and
-#: spells both again; a test holds the two readers to the same keys and preference.
+#: The field the day the squash last ran is read from.
+#: `backend/utilities/corpus_squash_due.py` cannot import this module and spells
+#: it again; a test holds the two readers to the same key.
 LAST_RUN_KEY: Final = "last_run"
-LEGACY_LAST_RUN_KEY: Final = "pruned_date"
 
 
 class CorpusMeta(Contract):
@@ -173,6 +172,11 @@ class CorpusMeta(Contract):
 
     __schema_stem__: ClassVar[str] = "corpus-meta"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-28T21:00",
+            change="pruned_date is no longer read: every committed payload says last_run.",
+            why="The old name was read for one release, and no payload spells it now.",
+        ),
         ChangelogEntry(
             version="2026-09-28",
             change="pruned_date is renamed last_run, and a pruned_date is read as last_run.",
@@ -223,23 +227,4 @@ class CorpusMeta(Contract):
             "that the prompt moved under the corpus they are about to train on."
         ),
     )
-
-    @model_validator(mode="before")
-    @classmethod
-    def _read_pruned_date_as_last_run(cls, data: Any) -> Any:
-        """`last_run` was `pruned_date` until 2026-09-28, and a payload may still say so.
-
-        Every `corpus/corpus.meta.json` written before then spells the old name,
-        and a branch or a run started before the rename still carries one.
-        Refusing it would stop the build that has to read that file and rewrite
-        it. When a payload carries both names, `last_run` wins - the
-        standard-library due check prefers it too. The two copies go in one
-        commit or not at all: a payload only one reader understood would be read
-        two ways.
-        """
-        if not isinstance(data, dict) or LEGACY_LAST_RUN_KEY not in data:
-            return data
-        moved = {name: value for name, value in data.items() if name != LEGACY_LAST_RUN_KEY}
-        moved.setdefault(LAST_RUN_KEY, data[LEGACY_LAST_RUN_KEY])
-        return moved
 

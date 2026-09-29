@@ -1,8 +1,8 @@
 """What does the corpus squash do when `main` moves while it is rewriting history?
 
-`prune.yml`'s history job squashes everything older than the boundary and
-force-pushes the result. A force push is a whole-ref operation: it replaces the
-branch with this checkout, so a commit another run pushed in the meantime is
+`idhazh-gardener.yml`'s history job squashes everything older than the boundary
+and force-pushes the result. A force push is a whole-ref operation: it replaces
+the branch with this checkout, so a commit another run pushed in the meantime is
 deleted and nothing records that it existed. Until now the only thing holding
 that off was a cron minute placed in the one idle gap the serial digest
 schedule leaves, and a gap is not a lock.
@@ -188,8 +188,8 @@ def test_the_history_step_runs_the_shipped_program_and_nothing_else() -> None:
     one through the job's environment. The day it squashes against is the due
     step's own reading, so the job reads the clock once.
     """
-    workflow = _load_workflows()["prune.yml"]
-    step = _step(workflow, "prune", "name", PRUNE_PUSH_STEP)
+    workflow = _load_workflows()["idhazh-gardener.yml"]
+    step = _step(workflow, "history", "name", PRUNE_PUSH_STEP)
 
     assert tuple(_script(step, PRUNE_PUSH_STEP).split()) == PRUNE_PUSH_CALL, (
         "the step runs the shipped program and nothing else, or the tests are "
@@ -200,7 +200,7 @@ def test_the_history_step_runs_the_shipped_program_and_nothing_else() -> None:
         "RUN_ID": "${{ steps.due.outputs.today }}-${{ github.run_id }}",
         "ATTEMPT": "${{ github.run_attempt }}",
     }
-    for other in _steps(workflow, "prune"):
+    for other in _steps(workflow, "history"):
         script = other.get("run")
         assert not (isinstance(script, str) and "GITHUB_ENV" in script), (
             f"{other.get('name') or other.get('id')} writes the job environment, and the "

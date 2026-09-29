@@ -5,8 +5,8 @@ series a month stops being rows and becomes one summary under
 `state/score-archive/`, and four steps per month come before a single day file
 of it is unlinked: summarise, write it, read it back through its contract, and
 reconcile it against a second reading of those days. A summary that will not
-reconcile stops the pass with its days in place, because `prune.yml` rewrites
-history on a schedule and a deleted day does not come back.
+reconcile stops the pass with its days in place, because the gardener's history
+job rewrites history on a schedule and a deleted day does not come back.
 
 The index beside those days goes in the same pass, for every month an archive
 covers: it is derived from the days and answers only for them. A month is taken

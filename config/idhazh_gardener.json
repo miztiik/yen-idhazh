@@ -1,5 +1,6 @@
 {
   "attempts": 6,
+  "max_cone_mb": 768,
   "shards": 5,
-  "version": "2026-09-27"
+  "version": "2026-09-28"
 }

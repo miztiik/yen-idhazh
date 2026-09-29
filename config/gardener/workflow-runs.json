@@ -1,5 +1,5 @@
 {
-  "collection": "workflow-artifacts",
+  "collection": "workflow-runs",
   "dry_run": true,
   "kind": "collection",
   "lifecycle_status": "active",
@@ -7,6 +7,6 @@
   "owns": [],
   "window": {
     "unit": "days",
-    "value": 30
+    "value": 90
   }
 }

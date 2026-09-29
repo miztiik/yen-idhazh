@@ -29,7 +29,10 @@ agree on purpose.
 **The run that wrote the row is on the row.** The run, its attempt, the job and
 the shard say which of a wake's records this is; `duration_ms` is this task's
 own wall clock and `work_ended_at` is the instant its shard finished working and
-started to publish, so a slow push is never read as a slow task.
+started to publish, so a slow push is never read as a slow task. `cone_bytes`
+is what the shard's owned folders weighed at the commit it checked out, the
+same on every row of one record, so where the weight sits is read off the
+record rather than measured again.
 """
 
 from __future__ import annotations
@@ -82,6 +85,11 @@ class CollectionPruneRow(Contract):
 
     __schema_stem__: ClassVar[str] = "collection-prune-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-28",
+            change="cone_bytes, additive: what the shard's owned folders weighed; None if unread.",
+            why="A shard's checkout is bounded, and the record says what each one weighed.",
+        ),
         ChangelogEntry(
             version="2026-09-27",
             change="collection is task; run identity, timing and a null ceiling added.",
@@ -189,6 +197,16 @@ class CollectionPruneRow(Contract):
             "The UTC instant the shard finished its work and began to publish. Every "
             "row of one record carries the same instant."
         )
+    )
+    cone_bytes: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "What the folders the shard's tasks own weighed at the commit it checked "
+            "out, in bytes, read once a shard and written on every row of its record. "
+            "The code every shard checks out is not counted. Empty when nobody read "
+            "the commit: a task run by hand in a checkout reads none."
+        ),
     )
 
     @model_validator(mode="after")

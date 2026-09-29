@@ -16,7 +16,7 @@ the same qualification as any other candidate.
 | The window's census and schedule state | `corpus/corpus.meta.json` | written by the harvest and the prune |
 | The harvest and the roll | `backend/idhazh/corpus.py` | a step in the digest run |
 | The four operator verbs | `backend/utilities/data_wrangler.py` | a person, on demand |
-| The history prune | `.github/workflows/prune.yml` | a schedule |
+| The history prune | the `history` job of `.github/workflows/idhazh-gardener.yml` | a schedule |
 
 ## The corpus
 
@@ -106,7 +106,7 @@ a model cannot improve by copying: `hedge_dropped`, `unsupported_numbers`,
 | --- | --- | --- |
 | Harvest | CI, a step in the digest run | every `finetune.harvest_every_days` |
 | Roll | CI, the same step, the same commit | the same moment |
-| Prune | CI, `prune.yml`, wired to nothing | every `every_days` of `config/gardener/corpus-squash.json` |
+| Prune | CI, the `history` job of `idhazh-gardener.yml`, wired to nothing | every `every_days` of `config/gardener/corpus-squash.json` |
 
 ### The harvest runs inside the digest job, and it has to
 
@@ -164,7 +164,7 @@ version loses data:
 
 ### The prune rewrites history, and that costs something
 
-`prune.yml` wakes daily, reads `last_run` out of a shallow checkout with
+The `history` job of `idhazh-gardener.yml` wakes daily, reads `last_run` out of a shallow checkout with
 `backend/utilities/corpus_squash_due.py`, and on 29 days out of 30 exits without
 doing anything. When the `every_days` of `config/gardener/corpus-squash.json` have
 passed it takes a full clone and runs `backend/utilities/corpus_history.py`: one
@@ -241,7 +241,7 @@ not change.
 
 ### A tag is a hole in all of that, so each one is a decision
 
-`prune.yml` force-pushes `main` and **pushes no tags**. A tag is a ref, and a ref
+The `history` job of `idhazh-gardener.yml` force-pushes `main` and **pushes no tags**. A tag is a ref, and a ref
 keeps every commit it reaches alive whatever happens to the branch - so a tag on
 a commit inside the range the prune will rewrite quietly undoes, for that commit,
 the thing section 8 grants the prune its exception to achieve. Nothing fails when
