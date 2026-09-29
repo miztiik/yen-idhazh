@@ -28,7 +28,7 @@ section 1 (the Status Reckoner, the only tracker), section 2.2, and each row jus
 you dispatch it.
 
 STEP 1 - ADOPT OR CLOSE. Run git worktree list, gh pr list and git branch -vv. At the
-last update, 2026-09-29 at about 01:20 UTC, nothing of this plan was in flight. Rows 1,
+last update, 2026-09-29 at about 10:15 UTC, nothing of this plan was in flight. Rows 1,
 2, 4, 5, 6, 7 and 9 had merged (#1138, #1140, #1137, #1143, #1144, #1154, #1157), and
 so had #1146, this run's tool notes and defects 38 to 47. This run's worktrees, local
 branches and leftover folders were all swept, row 9's after its merge, so any plan 51
@@ -42,14 +42,22 @@ plan, and that its readers import sliceFromDisk() from frontend/src/lib/server/.
 Row 9 merged on 2026-09-29 (#1157), settled at dispatch by Carmack and Fowler
 (deviations 19 and 20); the person was asked to tell plan 52's owner about deviation
 20. Nothing is ready now. Row 3 needs packed files of its three ledgers on main, and
-row 8 needs row 3 (deviation 16). Measured on main at e5a0f8718: state/compact/ does
-not exist, the three ledgers are still CSV, and every packing task is report-only.
-  after packed files of    row 3. They reach main by whatever route plan 50 and the
-  the three ledgers are    person take - this plan asks nothing of plan 50
-  on main                  (deviation 18) - and never before plan 50's row 9
-                           merges. Row 2's text says row 3 must date the
-                           completeness sentence from the newest compacted day, not
-                           from generated_at, but row 3's file list does not name
+row 8 needs row 3 (deviation 16). They arrive in the merge of plan 50's row 9: the
+person chose that its one-time migration packs every day the packing rule admits and
+writes each ledger's index/daily.json (deviation 21, plan 50 deviation 135). At 10:10
+UTC on 2026-09-29 that row was IN-FLIGHT - worker p50-r9-worker-2, worktree p50r9,
+branch p50r9-the-console-ledgers-become-parquet, no pull request yet - and it merges
+only while no digest.yml or idhazh-gardener.yml run is queued or running. Check it
+with plan 50's Reckoner on origin/main and with
+`git ls-tree -r --name-only origin/main state/compact/`. Do not edit plan 50's plan
+or touch its branches (deviation 18); read them only.
+  when plan 50's row 9     row 3. The three index/daily.json files it finds set the
+  is DONE and state/       ceilings (decision 5). The packed days end on the day the
+  compact/ lists all       migration ran until a person turns packing on, so row 2's
+  three ledgers            completeness sentence tells the reader how old they are.
+                           Row 2's text says row 3 must date that sentence from the
+                           newest compacted day, not from generated_at, but row 3's
+                           file list does not name
                            frontend/src/lib/console/completeness.ts. Settle it at
                            dispatch.
   after row 3              row 8. Get Susan's ruling on defect 38 first: does speed or
@@ -82,7 +90,10 @@ STEP 3 - GATES. A worker runs `npm --prefix frontend run test:changed -- --list`
 only its row's named acceptance gates, then pushes and reports. CI is the one full-suite
 run (CLAUDE.md section 9). A worker keeps a running report in a file under %TEMP% from
 its first push on (execute-a-plan.md): row 5's first worker ran out of room mid-row, and
-its pushed draft is what let the row be finished rather than done again.
+its pushed draft is what let the row be finished rather than done again. A change under
+frontend/src/lib/data/ makes the selector pick every frontend group and a site build -
+about 34 minutes on this machine for row 9 - so a row that touches the door budgets
+for it; plan 50's deviation 145 found the same for two backend test helpers.
 
 STEP 4 - MERGE. GitHub refuses auto-merge on this repository, so merge by hand when CI
 is green: gh pr merge <N> --repo miztiik/yen-idhazh --squash --delete-branch, run from
