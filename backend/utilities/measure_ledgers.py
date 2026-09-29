@@ -170,7 +170,6 @@ class ShardClock:
     run_id: str
     shard: str | None
     clock_rows: int
-    distinct_shards: int
     job_seconds: int
     fetch_ms: int
     extract_ms: int
@@ -201,22 +200,16 @@ class ShardClock:
     def joinable(self) -> bool:
         """Whether the two ledgers cover the same work in this scope.
 
-        A scope holding more clock rows than shards had a shard re-run. Both
-        ledgers are written by the shard itself, so neither execution can see
-        the other's rows and each files its own. The two then cover different
-        sets of executions, and their difference is not a measurement of
-        anything.
+        Items claiming more time than the job clocks hold mean a shard that
+        produced rows filed no clock, and the difference is then not a
+        measurement of anything. A re-run shard cannot split the two: both
+        ledgers are read through the ledger door, which keeps the highest
+        attempt of each job's files, so both describe the same execution.
         """
-        return self.clock_rows == self.distinct_shards and self.unaccounted_seconds >= 0
+        return self.unaccounted_seconds >= 0
 
     @property
     def verdict(self) -> str:
-        if self.clock_rows != self.distinct_shards:
-            return (
-                f"NOT JOINABLE: {self.clock_rows} clock rows for "
-                f"{self.distinct_shards} shards, so a shard was re-run and the two ledgers "
-                "cover different sets of executions"
-            )
         if self.unaccounted_seconds < 0:
             return (
                 "NOT JOINABLE: the items claim more time than the job clocks hold, "
@@ -261,7 +254,6 @@ def _clock(
         run_id=run_id,
         shard=shard,
         clock_rows=len(rows),
-        distinct_shards=len({r["shard"] for r in rows}),
         job_seconds=sum(int(r["job_seconds"]) for r in rows),
         fetch_ms=sum(i.fetch_ms or 0 for i in mine),
         extract_ms=sum(i.extract_ms or 0 for i in mine),

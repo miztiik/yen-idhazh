@@ -70,10 +70,13 @@ def _month_files(state_root: Path, date: str) -> list[Path]:
     directory rather than beside day shards a walker would read as the same
     shape.
 
-    Two depths, for the reason `_day_files` gives.
+    Two depths, for the reason `_day_files` gives, and a third for the ledger
+    door's packed month, `compact/<ledger>/monthly/<YYYY>/<MM>`.
     """
     stem = f"{month_of(date)}.*"
-    return sorted(set(state_root.glob(f"*/{stem}")) | set(state_root.glob(f"*/*/{stem}")))
+    year, month = month_of(date).split("-")
+    patterns = (f"*/{stem}", f"*/*/{stem}", f"*/*/*/{year}/{month}.*")
+    return sorted({entry for pattern in patterns for entry in state_root.glob(pattern)})
 
 
 def files(state_root: Path, *, date: str) -> list[str]:

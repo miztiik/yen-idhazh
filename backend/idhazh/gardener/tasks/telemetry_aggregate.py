@@ -14,7 +14,9 @@ The browser's copy of each month under `frontend/public/telemetry/` goes once it
 is past the public-copy series. A summary past the aggregate series is deleted
 outright; while that series is `forever`, none is.
 
-A month already summarised is not folded again. A dry run folds every due month
+A month already summarised is not folded again. The summary folder need not be
+in the checkout yet: the first summary a pass writes is what creates it, so a
+due month never waits on it. A dry run folds every due month
 in memory and writes nothing, so the log says how many rows would become how
 many.
 """
@@ -59,8 +61,7 @@ def run(context: TaskContext) -> Pass:
     due = [
         month
         for month in ledger.held_months(state, LedgerName.ITEM_HEALTH)
-        if folds is not None
-        and keep_from is not None
+        if keep_from is not None
         and month < keep_from
         and not ledger.path(state, LedgerName.ITEM_HEALTH_SUMMARY, month).is_file()
     ]

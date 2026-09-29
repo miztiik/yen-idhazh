@@ -98,7 +98,10 @@ def read_ledger(state_dir: Path) -> list[dict[str, str]]:
                 f"out of the full-grain window - {', '.join(summarised)} exist only as "
                 f"summaries, and a band is a function of one row. {archive.RAW_WINDOW_NOTE}"
             )
-        raise ValueError("the scores ledger holds no day")
+        raise ValueError(
+            f"{state_dir.as_posix()} holds no day of the scores ledger, raw or compacted, "
+            "so there is no row to re-band"
+        )
     return list(writer.records(state_dir))
 
 
