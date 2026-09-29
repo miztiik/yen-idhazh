@@ -1,9 +1,8 @@
 """What happened to one planned item on one run.
 
-One row per planned item per run, appended to
-`state/item-health/<YYYY>/<MM>/<DD>.csv`. The row is a census: successes and
-failures share one file, because a rate needs its denominator beside its
-numerator.
+One row per planned item per run, filed in the item-health ledger
+(`state/raw/item-health/`). The row is a census: successes and failures share
+one ledger, because a rate needs its denominator beside its numerator.
 """
 
 from __future__ import annotations
@@ -104,22 +103,22 @@ RETIRED_CELLS: Final[Mapping[str, str]] = MappingProxyType(
 #: Headings a day file an earlier run wrote still carries that this row no longer
 #: names and that nothing replaced. A retired cell moves to another column; a
 #: dropped one is gone. `runner_name` is answered elsewhere - the host record
-#: carries it at job grain, which an item row reaches through `job` and `shard`
-#: (`docs/reference/host-metrics.md`). `cgroup_peak_bytes` is answered nowhere:
-#: the kernel file it was read from is absent on every runner this project has
-#: probed, so no run has ever put a value under that heading.
+#: carries it at job grain, which an item row reaches through `machine_job` and
+#: `machine_shard` (`docs/reference/host-metrics.md`). `cgroup_peak_bytes` is
+#: answered nowhere: the kernel file it was read from is absent on every runner
+#: this project has probed, so no run has ever put a value under that heading.
 #:
-#: **This is a contract, not a courtesy.** `ledger.migrate_header` refuses any
-#: heading that is neither a current column nor one the reader carries, rather
-#: than dropping cells silently - so a column deleted above without an entry here
-#: raises on the first append to every committed day file.
+#: **This is a contract, not a courtesy.** The row refuses a key it does not
+#: name rather than dropping the cell silently - so a column deleted above
+#: without an entry here makes every ledger file that still holds it refused on
+#: read.
 #:
-#: **Both sides of the row read this one set.** The committed day file reaches it
-#: through `ledger.ITEM_HEALTH_CARRIED`; the per-item payload a work shard seals
-#: reaches it through `_without_the_columns_this_row_stopped_naming` below. A
-#: removal declared once is therefore honoured everywhere the row is read, which
-#: is what stops a column leaving the contract while a run is in flight and
-#: taking that run's day with it.
+#: **Both sides of the row read this one set.** A file the ledger door reads
+#: back and the per-item payload a work shard seals both reach it through
+#: `_without_the_columns_this_row_stopped_naming` below. A removal declared once
+#: is therefore honoured everywhere the row is read, which is what stops a
+#: column leaving the contract while a run is in flight and taking that run's
+#: day with it.
 #:
 #: `max_output_tokens` recorded the configured ceiling on one decode. The two
 #: settings behind it left `inference` on 2026-09-21 and nothing replaced them:
@@ -613,7 +612,7 @@ class ItemHealthRow(Contract):
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
             version="2026-09-29",
-            change="job and shard are machine_job and machine_shard; rows file as parquet.",
+            change="job and shard are machine_job and machine_shard.",
             why="The ledger's own job and shard name the writer; these name the machine.",
         ),
         ChangelogEntry(
@@ -684,13 +683,13 @@ class ItemHealthRow(Contract):
         ge=0,
         description=(
             "Which worker of the run took this item's readings, numbered the way "
-            "stages.common.shard_of numbers them. state/host-fingerprint/ carries the same "
-            "number at the job grain, so a per-shard rate can be read against the machine "
-            "that ran it. Null means no worker claimed the row: assemble writes the day's "
-            "census from one job and cannot know which machine an item was for, and "
-            "every row written before 2026-08-30 predates the column. Never read an "
-            "empty cell as shard 0, and never read it as the ledger's own shard column, "
-            "which names the writer that filed the row."
+            "stages.common.shard_of numbers them. The host-fingerprint ledger carries "
+            "the same number at the job grain, so a per-shard rate can be read against "
+            "the machine that ran it. Null means no worker claimed the row: assemble "
+            "writes the day's census from one job and cannot know which machine an item "
+            "was for, and every row written before 2026-08-30 predates the column. Never "
+            "read an empty cell as shard 0, and never read it as the ledger's own shard "
+            "column, which names the writer that filed the row."
         ),
     )
     machine_job: ServerJob | None = Field(
@@ -1080,10 +1079,10 @@ class ItemHealthRow(Contract):
     # a slower runner rather than as a regression.
     #
     # `runner_name` was here until 2026-09-17 and is in `DROPPED_CELLS`. The host
-    # record carries it once a job rather than once an item, and `job` with
-    # `shard` is what reaches that record - a second copy of it here was a thing
-    # that could disagree. `cpu_model` stays, and its reason is the one thing
-    # that separates the two: it crosses to the browser as
+    # record carries it once a job rather than once an item, and `machine_job`
+    # with `machine_shard` is what reaches that record - a second copy of it here
+    # was a thing that could disagree. `cpu_model` stays, and its reason is the
+    # one thing that separates the two: it crosses to the browser as
     # `PublicTelemetryRow.cpu_model`, and a browser cannot join.
     cpu_model: OneLine | None = Field(
         default=None, description="The CPU the runner reported, verbatim."

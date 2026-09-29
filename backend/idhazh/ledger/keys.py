@@ -21,9 +21,6 @@ from typing import TYPE_CHECKING, Final, NamedTuple
 from idhazh.contracts.base import Contract
 from idhazh.contracts.collection_prune import CollectionPruneRow
 from idhazh.contracts.counterfactual_score import CounterfactualScoreRow
-from idhazh.contracts.eval_row import (
-    DROPPED_CELLS as DROPPED_EVAL_CELLS,
-)
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.feed_health import FeedHealthRow, supersedes
 from idhazh.contracts.feed_retirement import FeedRetirementRow
@@ -31,7 +28,7 @@ from idhazh.contracts.fitted_similarity_threshold import (
     DROPPED_CELLS as DROPPED_FIT_CELLS,
 )
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
-from idhazh.contracts.item_health import DROPPED_CELLS, RETIRED_CELLS, ItemHealthRow
+from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.ledger_name import DAY_TREES, LedgerName
 from idhazh.contracts.observation_index import ObservationIndexRow
 from idhazh.contracts.span_rollup import SpanRollupRow
@@ -174,7 +171,8 @@ COUNCIL_SHARD_OUTCOME_KEY: Final = ("date", "run_id", "judge_id", "shard")
 #: keeping. `item_id` is deliberately absent: it is a slot on a page, not an
 #: identity. It carries no date either - re-measuring an article a year later is
 #: the same measurement - so it is the one key here that settles two rows of one
-#: day file and leaves the cross-day question to `evals.writer.append_segment`.
+#: day and leaves the cross-day question to the dedupe in
+#: `evals.writer.file_measurements`, which reads the index.
 OBSERVATION_KEY: Final = ("url_key", "output_digest", "scorer_version")
 
 
@@ -262,22 +260,12 @@ def preference_for(key: tuple[str, ...]) -> Preference | None:
 
 
 #: The headings a day file an earlier run wrote still carries that the current
-#: row no longer names. Two kinds, and the difference is what happens to the
-#: cell: `from_csv_row` reads a RETIRED heading into the column that replaced
-#: it, and a DROPPED heading has no replacement - the file still re-files, and
-#: the cell goes, which is the point of dropping it.
-ITEM_HEALTH_CARRIED: Final[frozenset[str]] = frozenset(RETIRED_CELLS) | DROPPED_CELLS
-
-
-#: The same, for the judged-pair ledger. One column has left this row and none has
-#: moved, so there is no retired half: `from_csv_row` reads a day file by the
-#: names the contract holds now and the dropped heading simply goes.
+#: judged-pair row no longer names. A dropped heading has no replacement - the
+#: file still re-files, and the cell goes, which is the point of dropping it. One
+#: column has left this row and none has moved, so there is no retired half:
+#: `from_csv_row` reads a day file by the names the contract holds now and the
+#: dropped heading simply goes.
 STORY_SIMILARITY_PAIR_CARRIED: Final[frozenset[str]] = DROPPED_PAIR_CELLS
-
-
-#: The same again, for the eval ledger. Two columns have left that row and none
-#: has moved, so a committed shard still re-files and the two cells go.
-SCORES_CARRIED: Final[frozenset[str]] = DROPPED_EVAL_CELLS
 
 
 #: The same again, for the fitted line's day files.

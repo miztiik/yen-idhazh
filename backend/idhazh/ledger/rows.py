@@ -14,10 +14,11 @@ and writes nothing into a paused or retired family. `write_item_health_summary`
 does not ask: it folds rows already recorded, and the ageing step reads that
 fold back before it deletes anything.
 
-Two readers here read a ledger that lives under `state/raw/` and
-`state/compact/` rather than in a CSV tree - `load_retirements` and
-`load_visual_prunes` - and both read it through `ledger/ledger_files.py`, which
-reads the monthly files, then the daily files, then the raw days no compact
+Four readers here read a ledger that lives under `state/raw/` and
+`state/compact/` rather than in a CSV tree - `load_retirements`,
+`load_visual_prunes`, and the two item-health readers `load_settled_failures`
+and `load_source_counts` - and all four read it through `ledger/ledger_files.py`,
+which reads the monthly files, then the daily files, then the raw days no compact
 index names, each date from exactly one of them. Their writers are not here at
 all: a producer hands those rows to `persist` itself.
 """
@@ -223,33 +224,6 @@ def load_source_counts(state_dir: Path, date: str) -> dict[str, int]:
     for source_id in carried.values():
         counts[source_id] = counts.get(source_id, 0) + 1
     return counts
-
-
-def _header_and_keys(
-    path: Path, key: tuple[str, ...]
-) -> tuple[tuple[str, ...], set[tuple[str, ...]]]:
-    """The file's own header and every record it already holds, in one pass.
-
-    One `csv.reader` rather than a `DictReader`, and one open rather than two.
-    `DictReader` builds a dict of every column for each row, which is 119 keys on
-    an item-health shard to read three cells; the positions are taken off the
-    header once and the cells are read by index after that.
-
-    A file with no header, or one that does not name every cell of `key`, holds
-    no record this key can match - which is what a day with no history has.
-    """
-    if not path.exists():
-        return (), set()
-    with path.open("r", encoding="utf-8", newline="") as handle:
-        reader = csv.reader(handle)
-        header = tuple(next(reader, []))
-        if any(name not in header for name in key):
-            return header, set()
-        at = [header.index(name) for name in key]
-        widest = max(at)
-        return header, {
-            tuple(cells[index] for index in at) for cells in reader if len(cells) > widest
-        }
 
 
 def load_retirements(state_dir: Path) -> list[FeedRetirementRow]:

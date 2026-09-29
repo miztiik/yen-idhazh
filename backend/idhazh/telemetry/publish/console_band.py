@@ -22,13 +22,12 @@ owns it, never re-derived from a wider one:
   `discover.streak` and `discover.resting`, because those are the reducers the
   pipeline itself rested a feed by, and a page that ran its own would contradict
   the run that produced it;
-- the model facts come from one day's item-health shard and that day's own
-  day-metrics record, each keyed to the newest day the manifests hold;
-- the free-swap pair comes from that same item-health shard, which is the only
+- the model facts come from one day of the item-health ledger and that day's
+  own day-metrics record, each keyed to the newest day the manifests hold;
+- the free-swap pair comes from that same item-health day, which is the only
   place either cell is recorded;
 - the machine facts come from `frontend/public/machine/`, the published fold of
-  `state/item-health/` and `state/host-fingerprint/`, whose read `machine`
-  declares;
+  the item-health and host-fingerprint ledgers, whose read `machine` declares;
 - the compaction lag comes from the fold this run already ran, handed in by the
   caller. It is never a listing taken here, because the fold runs first and the
   directory is empty by the time this file is written.
@@ -1308,9 +1307,10 @@ def publish(
       and the article counts;
     - `state/feed-health/` over the widest span, through `ledger.load_health`,
       which opens the day files that span names and no others;
-    - the newest day's item-health shard and its day-metrics record, one file
-      each;
-    - the host rows for the days the widest span reaches, one file a day;
+    - the newest day's item-health rows through `ledger.load_days`, which opens
+      that one day's files, and its day-metrics record, one file;
+    - the host rows for the days the widest span reaches, through
+      `ledger.load_days`, which opens the files of those days and no others;
     - the newest day's run manifest, one file, for the shard count each of that
       day's runs planned.
 

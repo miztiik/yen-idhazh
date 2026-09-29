@@ -2,8 +2,8 @@
 
 `RunTimelineRow` settled the shape and left the writer open
 (`docs/architecture/publishing/run-timeline.md`). This is the writer. It reads
-the per-item census under `state/item-health/` - a day tree, bounded to the days
-of one month - and writes `frontend/public/run-timeline/<YYYY-MM>.csv`.
+the per-item census, the item-health ledger (`state/raw/item-health/`), bounded
+to the days of one month, and writes `frontend/public/run-timeline/<YYYY-MM>.csv`.
 
 **One ledger, not two.** The contract's step 7 takes its NAME from
 `EvalRow.score_ms`, and the value is not a second measurement: `stages/work.py`

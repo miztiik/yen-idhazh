@@ -1281,10 +1281,10 @@ def _feed_defs() -> list[FeedDef]:
 def _census_rows() -> list[ItemHealthRow]:
     """A planned-item census for the canary's own sources.
 
-    Built in memory and handed straight to the fold rather than appended to the
-    canary ledger: `frontend/scripts/build-canary.mjs` owns
-    `state/item-health/`, and two writers of one file is a fixture that depends
-    on which of them ran last.
+    Built in memory and handed straight to the fold rather than filed in the
+    canary's item-health ledger: `frontend/scripts/build-canary.mjs` owns that
+    ledger's rows, and two writers of one ledger is a fixture that depends on
+    which of them ran last.
     """
     rows: list[ItemHealthRow] = []
     start = calendar_date.fromisoformat(DATE) - timedelta(days=CENSUS_DAYS)
@@ -1493,7 +1493,8 @@ def _eval_row(item: DigestItem, measured: _Measured, evaluation: EvaluationConfi
         speculative_density=_SPECULATIVE_DENSITY,
         coherence=_COHERENCE,
         semantic_coverage=_SEMANTIC_COVERAGE,
-        extraction_suspect=False,        band=item.band,
+        extraction_suspect=False,
+        band=item.band,
         source_words_before_cap=measured.source_words if measured.full_length_known else None,
         source_words=seen_words(measured),
         summary_words=measured.summary_words,

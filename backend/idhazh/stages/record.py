@@ -62,12 +62,13 @@ def stage_record(
     item no shard sealed one for - which on a healthy run is none of them, and is
     why the log line below says how many were rebuilt.
 
-    Each rebuilt row is stamped with this worker's own `shard` and with `work`,
-    the workflow job this stage runs in, which is the only moment either is
-    known: `stage_assemble` runs once for the whole day and cannot say which
-    machine an item was for, so the rows it adds leave both cells empty. The pair
-    is `HOST_FINGERPRINT_KEY` minus the date and the run, so it is what takes an
-    item to the `state/host-fingerprint/` row for the machine that read it.
+    Each rebuilt row is stamped with this worker's own shard and with `work`,
+    the workflow job this stage runs in, as `machine_shard` and `machine_job`,
+    which is the only moment either is known: `stage_assemble` runs once for the
+    whole day and cannot say which machine an item was for, so the rows it adds
+    leave both cells empty. The pair is `HOST_FINGERPRINT_KEY` minus the date and
+    the run, so it is what takes an item to the host-fingerprint ledger's row for
+    the machine that read it.
 
     **Both ledgers go to this shard's own files, never to a file others open.**
     Up to eight work shards and assemble all record the same day, and each files

@@ -5,7 +5,7 @@ prune deletes what a window has aged out; this deletes what a person names -
 one ledger, one range of days, because that day was published in error, or a
 source asked to be removed, or a run wrote rows nobody wants kept.
 
-    idhazh telemetry prune --target item-health --since 2026-08-24 --until 2026-08-26
+    idhazh telemetry prune --target feed-health --since 2026-08-24 --until 2026-08-26
 
 **It reports and removes nothing until it is told twice.** `--dry-run` is on by
 default and `--no-dry-run` is the second word. The reason is the history job of
@@ -95,19 +95,17 @@ PruneInterruptedError = one_at_a_time.PruneInterruptedError
 #: neither walker here reads, and a target that walked its old folder would
 #: select nothing forever.
 #:
-#: **`host-fingerprint` is what a day taken off the site owes its machine rows.**
-#: It filed by day from 2026-09-16 and was missing from this list until
-#: 2026-09-19, so an operator could take a day's census, scores and feeds back
-#: and leave the machines that produced them standing. The published machine
-#: shard is folded from this tree, so a day removed here is also a month to
-#: republish - `docs/architecture/publishing/retention.md` carries that pairing.
+#: **`item-health`, `scores` and `host-fingerprint` left for the same reason**,
+#: when they moved under `state/raw/` through the ledger door. So a day taken off
+#: the site no longer has a command that takes its census, its measurements and
+#: its machine rows with it: until their compactions bound the raw tree, that is
+#: a person's job, and `docs/architecture/publishing/retention.md` says so.
 #:
-#: **`scores` and `score-index` are one pair.** `evals.writer` refuses a repeat
-#: measurement by reading the index rather than the rows, so a range taken out of
-#: one and left in the other puts the two out of step: an index whose rows are
-#: gone refuses a measurement nothing can produce, and rows whose index is gone
-#: are re-measurable as if new. Prune both over the same range, or repair with
-#: `idhazh rebuild-score-index --month <YYYY-MM>` afterwards. The dry run is
+#: **`score-index` is half of a pair whose other half is no longer here.**
+#: `evals.writer` refuses a repeat measurement by reading the index rather than
+#: the rows, so a range taken out of the index makes every measurement in it
+#: re-measurable as if new, while the rows it indexed stay on the door. Repair
+#: with `idhazh rebuild-score-index --month <YYYY-MM>` afterwards. The dry run is
 #: where that is read, which is why it is the default.
 #:
 #: **`content-similarity-judge-scored-pairs` and

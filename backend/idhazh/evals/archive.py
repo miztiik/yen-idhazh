@@ -1,16 +1,19 @@
 """Summarise a month of the eval ledger, and prove the summary before the rows go.
 
-`state/scores/<YYYY>/<MM>/<DD>.csv` is the committed record of how every summary
-scored. Past the full-grain window of `config/gardener/scores.json` a whole month
-of those day files is turned into `state/score-archive/<YYYY-MM>.json` and
-unlinked - and the whole safety argument of this module is the order those two
-things happen in.
+`summarise` reads a month of the eval ledger's CSV day files,
+`state/scores/<YYYY>/<MM>/<DD>.csv`. Past the full-grain window of
+`config/gardener/scores.json` a whole month of those day files was turned into
+`state/score-archive/<YYYY-MM>.json` and unlinked - and the whole safety
+argument of this module is the order those two things happen in. The ledger's
+rows are now filed through the ledger door under `state/raw/scores/`, so no CSV
+day file is left to read, and no task calls `summarise` until a summary is built
+from the door's rows (`idhazh/gardener/tasks/scores.py`).
 
 **The archive keeps a month while the ledger below it keeps days**, because a
 day file of one month's totals is a shape nothing consumes
-(`docs/concepts/partitions.md`). The gardener's `scores` task is where the two
-grains meet: it groups with `day_shards.shards_by_month` and folds a month
-whole or not at all, so a month's input is at most 31 files.
+(`docs/concepts/partitions.md`). `summarise` is where the two grains meet: its
+caller hands it one month's day files and it folds that month whole or not at
+all, so a month's input is at most 31 days.
 
 The summary is computed, written temp-then-rename, read back through its
 contract, and reconciled field by field against a second reading of the day
@@ -21,11 +24,11 @@ stops being recoverable once the squash passes over it.
 
 **The observation index is the half that is easy to forget.**
 `evals.writer.recorded_observations` is what stops a run scoring an old
-measurement again as if it were new, and it works by reading the rows. Delete a
-day with no index and every measurement in it becomes fresh again, which turns
-a count over the ledger from a count of items into a count of times the pipeline
-looked. So the archive keeps one digest per distinct observation, sorted, and
-the writer unions them with the live rows.
+measurement again as if it were new, and it works by reading the live index.
+Delete an index day with no summary and every measurement in it becomes fresh
+again, which turns a count over the ledger from a count of items into a count of
+times the pipeline looked. So the archive keeps one digest per distinct
+observation, sorted, and the writer unions them with the live index.
 
 **The measurements are named here rather than discovered.** A column added to
 `EvalRow` has to be filed as a signal or as a measurement in the same commit,
@@ -240,8 +243,8 @@ def summarise(days: Sequence[Path], *, month: str, observation_key: Sequence[str
 
     A month is a tree of `<YYYY>/<MM>/<DD>` days since 2026-09-13, so the caller
     hands the files and the month they belong to rather than one path whose stem
-    said both. The gardener's `scores` task groups them with
-    `day_shards.shards_by_month` and folds a month whole or not at all.
+    said both. The caller groups them with `day_shards.shards_by_month` and folds
+    a month whole or not at all.
 
     `observation_key` is `evals.writer.OBSERVATION_KEY`, passed in rather than
     imported so this module stays below the writer that unions its digests back

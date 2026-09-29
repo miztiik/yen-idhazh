@@ -171,7 +171,7 @@ class ObservabilityConfig(Model):
         default=True,
         description=(
             "Whether the faithfulness scorer runs. False writes no row to "
-            "state/scores.csv, so for those days the eval dashboard and the console's "
+            "the scores ledger, so for those days the eval dashboard and the console's "
             "score panels list nothing and each item bands from the model-free "
             "counterweights instead. The digest still publishes. `--no-faithfulness` "
             "is the same switch for one invocation and overrides this; no flag turns "
@@ -188,7 +188,7 @@ class ObservabilityConfig(Model):
             "frontend/public/telemetry/<YYYY-MM>.csv. False leaves that month file at "
             "whatever the last publishing run wrote, so every console chart ends on "
             "that date and the page says which day it read to. Nothing is lost: "
-            "state/item-health/ still holds every row, so switching it back on "
+            "the item-health ledger still holds every row, so switching it back on "
             "republishes the gap."
         ),
     )
@@ -197,7 +197,8 @@ class ObservabilityConfig(Model):
         description=(
             "Whether a job records what silicon it drew - processor family, model, "
             "stepping, instruction-set flags, cache, and the platform's own name for "
-            "the machine size - into state/host-fingerprint/<YYYY>/<MM>/<DD>.csv. "
+            "the machine size - into the host-fingerprint ledger "
+            "(state/raw/host-fingerprint/). "
             "False writes no row, and every throughput number that run takes becomes "
             "uncomparable with any other run's, because nothing says which machine "
             "produced it. Retire it when the platform stops mixing processor "
@@ -326,8 +327,8 @@ class ObservabilityConfig(Model):
         ge=1,
         description=(
             "How long frontend/public/machine/ keeps a month of machine rows. "
-            "Fourteen on the same argument. The shard is folded from "
-            "state/item-health/ and state/host-fingerprint/, so it may not outlive "
+            "Fourteen on the same argument. The shard is folded from the "
+            "item-health and host-fingerprint ledgers, so it may not outlive "
             "either source: a published month whose source months are gone cannot be "
             "rebuilt. config.load_gardener refuses a host-fingerprint task that keeps "
             "less than this, on the argument the telemetry copy makes for its own pair."

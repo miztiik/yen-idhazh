@@ -53,9 +53,10 @@ recorded a premise at all.
 Both the summary and the article body are untrusted (Guardrail #11). They print as
 inert terminal text and are sanitized on the way to the note field.
 
-**A draw only reaches the months still at full grain.** `state/scores/` keeps
-the scores task's full-grain window of item-level rows and then
-becomes a summary, and a summary holds no row to label. So the report prints the
+**A draw only reaches the months still at full grain.** The scores ledger
+(`state/raw/scores/`) keeps item-level rows for the monthly window of
+`config/gardener/compact-scores.json`, and an older month exists only as a
+summary, which holds no row to label. So the report prints the
 months the draw could see and the months that have aged out, and a run against a
 ledger with no full-grain month left refuses instead of reporting a draw of
 zero.

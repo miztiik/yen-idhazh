@@ -102,11 +102,10 @@ permissions:
 
 concurrency:
   # One group per target, because the four targets are four jobs that share
-  # nothing. Only `bench` commits: its `runtime` job pushes one host row to
-  # `state/pipeline-tests/host-fingerprint/<Y>/<M>/<DD>.csv`, a day file two
-  # dispatches on one day both append to. Until every writer owns its own
-  # filename, two of them racing that path lose a row at the rebase - and the
-  # step is `continue-on-error`, so the run stays green while the record goes.
+  # nothing. Only `bench` commits: its `runtime` job pushes one host row as a
+  # raw file of its own under `state/pipeline-tests/raw/host-fingerprint/`,
+  # named for its writer, so two dispatches on one day never share a path and
+  # neither can lose the other's row at the rebase.
   #
   # Per target rather than one flat group, for validate.yml's reason: GitHub
   # keeps only ONE pending run per group and a newer pending run cancels the

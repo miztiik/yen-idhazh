@@ -12,11 +12,14 @@ nothing new to say, so it writes nothing. That is the promise in
 `docs/concepts/evaluation.md`, and it is what keeps a count over the ledger a
 count of items rather than a count of times the pipeline looked at them.
 
-A month past the full-grain window of `config/gardener/scores.json` stops being
-rows and becomes `state/score-archive/<YYYY-MM>.json` (`idhazh.evals.archive`). That is
-why `recorded_observations` reads two places: the promise above has to hold for
-a month whose rows are gone, and the archive's sorted digest index is the only
-thing that can still answer it.
+`recorded_observations` reads two places: the index described below, and any
+month summary already written under `state/score-archive/<YYYY-MM>.json`
+(`idhazh.evals.archive`). No new summary is built: the `scores` task built one
+from the CSV day files, and those are gone. So no index day is ever dropped,
+and the dedupe read opens one more index day for every day recorded, until a
+month summary built from the door's rows lands. That read grows with what the
+ledger has piled up (Guardrail #12), and it is listed in
+`docs/concepts/growing-reads.md`.
 
 **The dedupe does not read the rows.** Answering "do we already hold this one?"
 meant every run paid for every row it had ever written. Measured on this
@@ -95,10 +98,9 @@ def observation(payload: Mapping[str, object]) -> tuple[str, ...]:
 def observation_digest(payload: Mapping[str, object]) -> str:
     """The same identity as one hash, which is the form that survives a deletion.
 
-    A month past the scores task's full-grain window is summarised and its
-    day files are unlinked, and the summary keeps this digest rather than the four
-    values it came from - `state/score-archive/` is a fixed-width index instead
-    of a second copy of the addresses.
+    The index keeps this digest rather than the four values it came from, and so
+    does a month summary under `state/score-archive/` - a fixed-width record
+    instead of a second copy of the addresses.
     """
     return archive.digest_of(observation(payload))
 
@@ -112,12 +114,13 @@ def recorded_observations(state_dir: Path) -> set[str]:
     which would turn a count over the ledger into a count of times the pipeline
     looked, and that is the one thing this ledger promises it is not.
 
-    **The archived half is what makes deleting a day safe.** A month older
-    than the full-grain window has no rows left to read, so a dedupe over the
-    rows alone would call every measurement in it new the day it was deleted.
-    `state/score-archive/<YYYY-MM>.json` carries those digests for exactly this
-    union, and it is why the archive keeps them sorted (`docs/concepts/
-    evaluation.md`).
+    **The archived half is what makes deleting an index day safe.** The
+    `scores` task drops an index day only once a month summary covers its
+    month, so a dedupe over the index alone would call every measurement in it
+    new the day it was dropped. `state/score-archive/<YYYY-MM>.json` carries
+    those digests for exactly this union, and it is why the archive keeps them
+    sorted (`docs/concepts/evaluation.md`). No new summary is built today, so
+    no index day is dropped; the module docstring says why.
 
     **Neither half reads a score row.** Both are fixed-width digest records, so
     what this costs follows the measurements the ledger holds rather than the
@@ -133,8 +136,9 @@ def recorded_observations(state_dir: Path) -> set[str]:
 def index_days(state_dir: Path) -> list[Path]:
     """Every committed shard of the index, oldest day first.
 
-    `day_shards.shard_files` for the reason `ledger_days` gives, and unbounded
-    for the reason it gives: every caller here needs the whole index.
+    `day_shards.shard_files` decides what counts as a day, which is the same walk
+    the `scores` task drops index days by. Unbounded because every caller here
+    needs the whole index.
     """
     return list(
         day_shards.shard_files(
@@ -154,12 +158,11 @@ def indexed_observations(state_dir: Path) -> set[str]:
     **This opens one file a recorded day and it is declared rather than hidden**
     (Guardrail #12, `docs/concepts/growing-reads.md`). It was one file a month
     until 2026-09-13, when the grain change turned 2 opens into 23, and it gains
-    about 365 a year. The ledger bound is what answers it: a day past the scores
-    task's full-grain window is folded into one
-    `state/score-archive/<YYYY-MM>.json` and its index day is dropped, so the
-    live index holds at most fourteen months of days. **The task ships
-    `dry_run: true`, so nothing prunes and the count grows until its declaration
-    is flipped** (`docs/architecture/publishing/retention.md`).
+    about 365 a year. **Nothing bounds it today.** The `scores` task drops an
+    index day only once a month summary under `state/score-archive/` covers it,
+    and it builds no summary any more: it built one from the CSV day files, and
+    those are gone. So the read grows with every recorded day until a month
+    summary built from the door's rows lands.
 
     A cover was rejected rather than overlooked: a measurement re-taken outside
     a window would read as new, and a count over the ledger would become a count

@@ -1,10 +1,10 @@
 """Publish what each work shard's machine did, a month at a time.
 
 One row per `(date, run_id, shard)`, folded from the two ledgers that record it:
-`state/item-health/<Y>/<M>/<DD>/` for what the items cost, and
-`state/host-fingerprint/<Y>/<M>/<DD>/` for what the machine was and what the
-model server itself counted. The shape is `MachineShardRow`, and it says in its
-own module why both instruments ride on one row.
+the item-health ledger (`state/raw/item-health/`) for what the items cost, and
+the host-fingerprint ledger (`state/raw/host-fingerprint/`) for what the machine
+was and what the model server itself counted. The shape is `MachineShardRow`,
+and it says in its own module why both instruments ride on one row.
 
 **An ordinary month-scoped producer.** Both sources file by day, so the month
 boundary is inherited rather than drawn here, and the read is scoped by
