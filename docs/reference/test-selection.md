@@ -1,6 +1,6 @@
 # Test Selection
 
-**Last Updated**: 2026-09-28
+**Last Updated**: 2026-09-29
 
 Why a pull request runs only some of the tests, what that choice gives up, and
 what was rejected on the way to it. The commands, the groups and the current
@@ -52,6 +52,14 @@ the other direction too - a browser spec that shells out to a Python command is
 checking both halves. A directory split cannot decide which tests a change
 needs, so a new dependency between areas owes a selector regression test rather
 than only a new group label.
+
+**Ledger-query helpers have a local mapping.** Changes under
+`frontend/src/lib/data/` select `logic`, `console`, `panels` and `publishing`.
+This keeps the ledger query checks and console consumers, without selecting
+the reader, offline, archive and model-search groups for a data-only change.
+A new consumer outside those groups needs a mapping update and a regression
+test. Mixed edits still select the union of their groups. The pull-request
+deferral above and full coverage on a code push to `main` do not change.
 
 **An unclassified path falls to full coverage on purpose.** A selector that
 guesses narrow on a path nobody listed fails silently, and it fails in the
