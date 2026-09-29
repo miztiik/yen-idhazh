@@ -28,24 +28,22 @@ section 1 (the Status Reckoner, the only tracker), section 2.2, and each row jus
 you dispatch it.
 
 STEP 1 - ADOPT OR CLOSE. Run git worktree list, gh pr list and git branch -vv. At the
-last update, 2026-09-28 at about 21:30 UTC, nothing of this plan was in flight. Rows 1,
-2, 4, 5, 6 and 7 had merged (#1138, #1140, #1137, #1143, #1144, #1154), and so had
-#1146, this run's tool notes and defects 38 to 47. This run's worktrees, local branches
-and leftover folders were all swept, row 7's after its merge, so any plan 51 checkout
-you find was made after that update.
+last update, 2026-09-29 at about 01:20 UTC, nothing of this plan was in flight. Rows 1,
+2, 4, 5, 6, 7 and 9 had merged (#1138, #1140, #1137, #1143, #1144, #1154, #1157), and
+so had #1146, this run's tool notes and defects 38 to 47. This run's worktrees, local
+branches and leftover folders were all swept, row 9's after its merge, so any plan 51
+checkout you find was made after that update.
 
 STEP 2 - DISPATCH. Row 7 merged on 2026-09-28 (#1154). Its open questions were
 settled by Carmack and Fowler before dispatch - row 7's decisions 10 to 18 and
 deviations 7 to 12 - and its parquet reader by the owner (deviations 14 and 15).
 The person was told the same evening that plan 50's row 9 no longer waits on this
 plan, and that its readers import sliceFromDisk() from frontend/src/lib/server/.
-Row 9 is ready now; it needs only row 7. Row 3 needs packed files of its three
-ledgers on main, and row 8 needs rows 3 and 9 (deviations 16 and 17). Measured on
-main at e5a0f8718: state/compact/ does not exist, the three ledgers are still CSV,
-and every packing task is report-only.
-  now                      row 9. Settle its one open question at dispatch, with
-                           Carmack and Fowler: whether an index is kept for the
-                           page's life.
+Row 9 merged on 2026-09-29 (#1157), settled at dispatch by Carmack and Fowler
+(deviations 19 and 20); the person was asked to tell plan 52's owner about deviation
+20. Nothing is ready now. Row 3 needs packed files of its three ledgers on main, and
+row 8 needs row 3 (deviation 16). Measured on main at e5a0f8718: state/compact/ does
+not exist, the three ledgers are still CSV, and every packing task is report-only.
   after packed files of    row 3. They reach main by whatever route plan 50 and the
   the three ledgers are    person take - this plan asks nothing of plan 50
   on main                  (deviation 18) - and never before plan 50's row 9
@@ -54,7 +52,7 @@ and every packing task is report-only.
                            from generated_at, but row 3's file list does not name
                            frontend/src/lib/console/completeness.ts. Settle it at
                            dispatch.
-  after rows 3, 7 and 9    row 8. Get Susan's ruling on defect 38 first: does speed or
+  after row 3              row 8. Get Susan's ruling on defect 38 first: does speed or
                            placement count decide which machines are left without a
                            colour? Defect 39 rides on it. Row 8's file list also misses
                            two things other text gives it: defect 44 says row 8 moves
@@ -69,7 +67,16 @@ and every packing task is report-only.
                            ceiling; the oracle adds "the engine's worker cannot fetch
                            an origin connect-src does not name"; and how the device keeps the engine across
                            deploys (deviation 12). Its scope line reads "no change to
-                           the door's contract", so it may fix engine.ts.
+                           the door's contract", so it may fix engine.ts. Row 9 hands
+                           row 8 two more: its page keeper has run only in Node, whose
+                           engine copies a buffer where a browser's takes it, so row 8's
+                           panel is its first browser run; and ledgerReach() asks for
+                           monthly.json, which is not there until a ledger's first
+                           month is packed, so a browser logs a 404 that the smoke
+                           check counts (Carmack, 2026-09-29). Settle it at dispatch;
+                           the fix Carmack named, an empty monthly.json from the first
+                           packing pass, is plan 50's, and this plan asks nothing of
+                           plan 50 (deviation 18).
 
 STEP 3 - GATES. A worker runs `npm --prefix frontend run test:changed -- --list`, then
 only its row's named acceptance gates, then pushes and reports. CI is the one full-suite
