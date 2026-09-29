@@ -79,7 +79,7 @@ LAUNCH_ROOTS: Final = (
         "idhazh-pipeline-tests.yaml",
         "test-cases",
         "Start the model",
-        "backend/var/test-cases/baseline/config",
+        "backend/var/test-cases/production-settings/config",
     ),
     (
         "idhazh-pipeline-tests.yaml",
@@ -652,7 +652,9 @@ def _the_five_roots(tmp_path: Path) -> dict[str, Path]:
     return {
         "config": committed,
         "backend/var/candidate-config": scratch,
-        "backend/var/test-cases/baseline/config": test_cases / "baseline" / "config",
+        "backend/var/test-cases/production-settings/config": (
+            test_cases / "production-settings" / "config"
+        ),
         "backend/var/test-cases/parallel-2/config": test_cases / "parallel-2" / "config",
     }
 

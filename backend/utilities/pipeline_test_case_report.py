@@ -1,4 +1,4 @@
-"""What did the three test cases measure, and did they all read the same two articles?"""
+"""What did each test case measure, and did it read the drawn pair and get one summarized?"""
 
 from __future__ import annotations
 
@@ -26,6 +26,7 @@ def main(argv: list[str] | None = None) -> int:
 
     silent: list[str] = []
     disagreed: list[str] = []
+    unsummarized: list[str] = []
     for test_case in settings.test_cases:
         items = args.test_cases_root / test_case.id / "run" / "items"
         landed = sorted(path.name.split(".")[0] for path in items.glob("*.article.json"))
@@ -43,6 +44,8 @@ def main(argv: list[str] | None = None) -> int:
             note = "nothing recorded"
         elif landed != expected:
             disagreed.append(f"{test_case.id} recorded {landed}")
+        if landed and len(failed) == len(summaries):
+            unsummarized.append(test_case.id)
         print(f"| {test_case.id} | {len(landed)} | {len(summaries)} | {spent} | {note} |")
 
     print("")
@@ -55,6 +58,15 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit(
             "the test cases did not all read the same two articles, so nothing here compares: "
             + "; ".join(disagreed)
+        )
+    # A test case whose articles all stopped before the model answered - a
+    # refused download, a failed extraction, a call that never came back - has
+    # said nothing about the model, so it fails the job rather than reading as a
+    # pass. A silent test case is not counted here: its own step is already red.
+    if unsummarized:
+        raise SystemExit(
+            "no article came back summarized, so these test cases said nothing about "
+            "the model: " + ", ".join(unsummarized)
         )
     return 0
 

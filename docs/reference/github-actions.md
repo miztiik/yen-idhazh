@@ -1,6 +1,6 @@
 # GitHub Actions Workflows
 
-**Last Updated**: 2026-09-28
+**Last Updated**: 2026-09-29
 The exact workflow display names, files, and trigger classes. All scheduled
 times are UTC.
 
@@ -537,7 +537,7 @@ seed rather than its whole day, so a build never opens the stories past it.
 A production run takes about 200 minutes and has been cancelling shards, so a
 change to the pipeline was tested the next day, against a day of eighty articles
 whose spread hid whatever the change did. `idhazh-pipeline-tests.yaml` closes
-that loop inside `pipeline-tests.budget_minutes`, which is 45. It runs the real
+that loop inside `pipeline-tests.budget_minutes`, which is 140. It runs the real
 path - the real fetcher, the real extractor, the real two calls, the real model
 server - over two articles, three times over, and reports what each pass cost.
 It publishes nothing a reader sees: no step writes `frontend/public/` and no
@@ -590,7 +590,9 @@ the three record the same two item ids and the numbers between them can be
 subtracted. The final step compares what each test case recorded against what the
 plan asked for and fails the job when they disagree, because an address that 404s
 would otherwise leave one test case with one item and three rows of plausible
-numbers.
+numbers. It also fails the job when a test case got no article summarized: two
+refused downloads leave two articles on file and every step green, and a run
+that never reached the model has said nothing about it.
 
 **Three test cases, in sequence, on one runner, and never a matrix.** Prefill
 spans 4.2x between GitHub-hosted runners ([pipeline-cost.md](pipeline-cost.md)),
@@ -599,8 +601,8 @@ would report the three hosts they drew. Sequential on one box cancels the host.
 
 | Test case | What it changes | What the difference prices |
 | --- | --- | --- |
-| `baseline` | nothing - the production path exactly | the number the other two are read against |
-| `no-visual-decision` | no picture is reachable, so the summarize-and-plan call returns the summary alone | the visual plan's decode, on the same server process |
+| `production-settings` | nothing - the production path exactly | the number the other two are read against |
+| `no-visual-plan` | no picture is reachable, so the summarize-and-plan call returns the summary alone | the visual plan's decode, on the same server process |
 | `parallel-2` | two server slots, and the window doubled with them | decode throughput at two slots, plus a second model load |
 
 Each test case is a step rather than an iteration of a loop, so the run page
