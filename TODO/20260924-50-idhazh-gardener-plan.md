@@ -1,6 +1,6 @@
 # Plan 50 - Idhazh Gardener: one utility tends every ledger
 
-**Last Updated**: 2026-09-28
+**Last Updated**: 2026-09-29
 
 **Level**: 5 (CLAUDE.md section 6). It changes a persisted contract, the project's persistence format, and the one workflow that force-pushes `main`. The owner's rulings recorded in section 0 and in each row ARE the design consultation; the ESCALATE triggers name what still stops a worker.
 
@@ -10,7 +10,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 
 ## Execution handover (zero-context cold start)
 
-A paste-ready brief for an agent that picks this plan up with no prior context. [execute-a-plan.md](../docs/how-to/execute-a-plan.md) is the canonical contract; this brief adds only what this plan's run has learned. Written 2026-09-27, about 20:10 UTC, and brought up to date 2026-09-28, about 12:15 UTC, when the first owner handed over after row 5 merged, about 14:00 UTC, when the second owner's dispatch checks on row 7 added deviations 96 to 101 and row 12, and about 17:30 UTC, after row 7 merged.
+A paste-ready brief for an agent that picks this plan up with no prior context. [execute-a-plan.md](../docs/how-to/execute-a-plan.md) is the canonical contract; this brief adds only what this plan's run has learned. Written 2026-09-27, about 20:10 UTC, and brought up to date 2026-09-28, about 12:15 UTC, when the first owner handed over after row 5 merged, about 14:00 UTC, when the second owner's dispatch checks on row 7 added deviations 96 to 101 and row 12, about 17:30 UTC, after row 7 merged, and 2026-09-29, about 06:15 UTC, when the third owner's session ran out of context with row 8 ready to merge and row 12's worker ended mid-row.
 
 ```text
 You are the OWNER of TODO/20260924-50-idhazh-gardener-plan.md. You have no prior context.
@@ -24,30 +24,46 @@ and docs/how-to/run-the-gates.md. Then read this plan's section 0, section 1 (th
 Reckoner, the only tracker) and each row just before you dispatch it.
 
 STEP 1 - ADOPT OR CLOSE. Run git worktree list, gh pr list and git branch -r. At the last
-update rows 1 to 7 and 11 had merged (#1127, #1131, #1142, #1139, #1145, #1141, #1151,
-#1136), row 10 is collapsed, and row 8 was in flight: #1156, worktree p50r8, its
-worker finished and reported. The owner's own worktree, p50own, holds no unpushed work.
+update (2026-09-29, 06:15 UTC) rows 1 to 7 and 11 had merged (#1127, #1131, #1142, #1139,
+#1145, #1141, #1151, #1136) and row 10 is collapsed. Row 8 is open as #1156 (worktree
+p50r8, pushed, clean). Row 12 is UNCOMMITTED work in worktree p50r12 (STEP 2). Row 9
+waits on a person (deviation 133). The owner's worktree, p50own, holds no unpushed work.
 Section 0's three plan-54 reads ran before row 5 and all three came back empty.
 
-STEP 2 - DISPATCH. Row 8 is built and waits only for its merge. Its worker reported on
-2026-09-28; its findings are deviations 118 to 131 and three open questions for a person
-(section "Open questions for a person, from row 8"). ESCALATE trigger 1 was answered: the
-owner chose A3 (deviation 130), and the change is on #1156. Refill a slot on a report,
-never on a merge. Two workers started together return together (deviation 94).
-  merge row 8        only after the squash's first live run (WATCH below) has recorded
-                     the run and pushed without force, and never while a prune.yml run
-                     is queued or running. Then remove p50r8. Its named observation is
-                     the first idhazh-gardener.yml run after the merge
-  after row 7        row 9. It also needs plan 51's row 7, the query door, merged. That
-                     row was in flight on 2026-09-28 (#1154). Read deviations 112, 132
-                     and 133 first: 133 is a person's call on how packed files first
-                     reach main, asked by plan 51's owner. If it is still open when
-                     row 9 is next, surface it to the person (CLAUDE.md section 0c). Do
-                     not build sliceFromDisk() here
-  in flight          row 12, dispatched stacked on #1156 (deviation 134), with its design
-                     settled at dispatch (row 12 decisions 3 to 7). It merges after
-                     #1156, once its branch has taken main in, and it edits digest.yml,
-                     so it needs a merge window
+STEP 2 - DISPATCH. Row 8's findings are deviations 118 to 131 and three open questions
+for a person (section "Open questions for a person, from row 8"); ESCALATE trigger 1 was
+answered with A3 (deviation 130). Refill a slot on a report, never on a merge. Two
+workers started together return together (deviation 94).
+  merge row 8 NOW    its condition is met: prune.yml run 36513758400, created 02:41 UTC
+                     2026-09-29, was the squash's first live run; it recorded the run
+                     and pushed without force, and corpus/corpus.meta.json on main reads
+                     last_run 2026-09-29. #1156 read MERGEABLE CLEAN at 1c15915a9, 27
+                     commits behind main. Merge origin/main into it, let CI go green,
+                     and merge while no prune.yml or digest.yml run is queued or running
+                     (quiet from about 01:23 to 07:23 UTC, deviation 129; outside that,
+                     check gh run list for both first). Then remove p50r8 and watch the
+                     first idhazh-gardener.yml run
+  resume row 12      its worker ended at about 23:09 UTC 2026-09-28 and never reported.
+                     Worktree p50r12, branch
+                     p50r12-the-closed-day-fold-moves-into-the-gardener, stacked on
+                     #1156 and merged with main at 06e1ec76c: 63 changed files, NOTHING
+                     committed or pushed. Backup: %TEMP%\p50r12\wip-202609290610.patch
+                     (tracked changes) and wip-untracked-202609290610.zip (6 new files).
+                     Its last local full suite read 2 failed, 2517 passed. The
+                     test_bench_targets.py two-second case is the known load flake; the
+                     real one is backend/tests/gardener/tasks/
+                     test_every_task_takes_what_its_pass_took.py::
+                     test_every_retention_task_declared_has_a_recorded_pass_to_answer_to.
+                     Its notes are %TEMP%\p50r12\s0NN.txt; report.md has no milestones.
+                     A resuming worker reads row 12 and deviations 96 and 134, reviews
+                     the diff, fixes that test, commits in small pieces, pushes, opens
+                     the PR. It merges after #1156, once its branch has taken main in;
+                     it edits digest.yml, so it needs the same quiet time
+  row 9              waits on a person: deviation 133 (how packed files first reach
+                     main, three options) and deviation 112 (the scores ledger's own
+                     attempt field). Plan 51's row 7 merged (#1154), so nothing else
+                     blocks it. Put 133 to the person in CLAUDE.md section 0c form
+                     before dispatching. Do not build sliceFromDisk() here
 
 STEP 3 - GATES. A worker runs `npm --prefix frontend run test:changed -- --list`, then only
 its row's named acceptance gates, then pushes and reports. CI is the one full-suite run
@@ -68,12 +84,8 @@ STEP 5 - CLOSE. When every row is DONE or COLLAPSED, follow the closing section 
 execute-a-plan.md.
 
 WATCH, whoever owns the plan on the day:
-  2026-09-29 onward  the corpus squash is due. prune.yml wakes at 23:37 UTC, and its runs
-                     start about two hours late (deviation 117), so the first due run is
-                     the one created about 01:30 to 02:00 UTC on 2026-09-29. This is the
-                     first live run of
-                     backend/utilities/corpus_history.py: it should record the run and
-                     push without force, because no commit is old enough (deviation 54)
+  after row 8 merges the first idhazh-gardener.yml run: every task is report-only except
+                     the squash, and each task's record lands under state/raw/gardener
   about 2026-10-29   the first squash that rewrites history replays six September merge
                      commits. If one carried a change of its own, the program stops with
                      exit 2 before any push, for a person (deviation 82)
