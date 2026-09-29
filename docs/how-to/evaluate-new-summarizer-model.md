@@ -1,6 +1,6 @@
 # Swap the Summarizer Model
 
-**Last Updated**: 2026-09-22
+**Last Updated**: 2026-09-29
 The swap is one line in `config/idhazh.json`:
 
 ```json
@@ -22,7 +22,7 @@ and are not changed here.
 | --- | --- |
 | The swap | one line in the committed config |
 | The revert | the same line back |
-| The walk | one dispatch, about 106 minutes. It says whether the real path runs at all |
+| The walk | one dispatch, as long as its slowest article. It says whether the real path runs at all |
 | The bench | one dispatch. It says how fast |
 | The qualification | one dispatch, hours of runner time, ten gates on a frozen corpus. It says how good |
 | The decision | a person's, and it stays one |
@@ -41,10 +41,10 @@ Three blocks follow: **measure the candidate**, **adopt**, **revert**.
 
 ## The cheapest check is the pipeline tests, and it uses the real prompts
 
-Reach for `idhazh-pipeline-tests.yaml` first. It draws two real articles and
-runs the production path over them - the real fetcher, the real extractor, the
-real prompts, the real two calls, the real model server - and it takes a models
-file, so it runs that path on a candidate:
+Reach for `idhazh-pipeline-tests.yaml` first. It draws a few real articles - two
+by default - and runs the production path over them - the real fetcher, the real
+extractor, the real prompts, the real two calls, the real model server - and it
+takes a models file, so it runs that path on a candidate:
 
 ```bash
 gh workflow run idhazh-pipeline-tests.yaml \
@@ -55,20 +55,30 @@ gh workflow run idhazh-pipeline-tests.yaml \
 Type nothing and it runs the configured model, which is what it did before the
 field existed.
 
-**What it costs.** One dispatch took 106 minutes on 2026-09-15 - three test
-cases over two articles, of which 105 minutes were the test cases themselves and
-under a minute was setup. One dispatch, so there is no spread. A bench dispatch of
-`measure.yml` on 2026-09-16 took 189 minutes, and one of the four that day took
-288. A candidate is always a cache miss, so it pays its own download: the same
-fetch in `Model validation` took 25 to 74 seconds on 2026-08-26, which is about
-one percent of the dispatch.
+**What it costs.** Every shard of every enabled test case runs on a runner of
+its own, all at the same time, and one article a shard is the default - so a
+dispatch takes about as long as its slowest article, plus each runner's cache
+restore or download and its model load. The first dispatch of this shape, on
+2026-09-29 (run 36540131911, `models/ornith-1.5-9b-q5km.json`, two articles
+under two test cases on four stock runners, each downloading the weights), took
+34 minutes, and its slowest article took 30 of them. One dispatch, so there is
+no spread. Before the runners split, one dispatch took 106 minutes on
+2026-09-15: three test cases, one after another, over two articles on one
+runner. A bench dispatch of `measure.yml` on 2026-09-16 took 189 minutes, and
+one of the four that day took 288. A candidate is always a cache miss on its
+first dispatch, so every runner pays its own download: the same fetch in
+`Model validation` took 25 to 74 seconds on 2026-08-26.
+
+Which test cases run is `enabled` in `config/pipeline-tests.json`, and nothing
+else. `parallel-summarization` is off by default, because its two slots each
+hold a full window; switch it on for a model small enough to fit twice.
 
 **What it settles.** Whether the weights load, whether the server serves the
 alias the config names, whether both calls come back inside the schema, and what
 one article costs end to end on a stock runner. A model that cannot do those
-things has failed, and it has failed for 106 minutes rather than for 189.
+things has failed, and it has failed inside one dispatch rather than a bench.
 
-**What it does not settle, and this is the larger half.** Two articles say
+**What it does not settle, and this is the larger half.** A few articles say
 nothing about quality. There is no gate, no frozen corpus, no repeat, no
 faithfulness scorer, and no comparison against the incumbent's recorded numbers.
 A green dispatch is permission to spend the bench and the qualification, never a

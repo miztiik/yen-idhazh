@@ -70,22 +70,18 @@ pytestmark = pytest.mark.workflow
 LOG_SUMMARY_STEP: Final = "Prompt cache log summary"
 
 #: Every place a server is started, and the config root that start reads its
-#: flags from. Five roots and three shapes: the committed tree, the scratch copy
-#: the candidate action cuts, and the per-test-case copies cut from that one.
+#: flags from. Four roots and three shapes: the committed tree, the scratch copy
+#: the candidate action cuts, and the per-test-case copies cut from that one. A
+#: start reached through the model-server action reads the root its caller hands
+#: the action.
 LAUNCH_ROOTS: Final = (
     ("digest.yml", "work", "Start the model", "config"),
     ("validate.yml", "qualify", "Start the candidate", "backend/var/candidate-config"),
     (
         "idhazh-pipeline-tests.yaml",
-        "test-cases",
+        "test-case",
         "Start the model",
-        "backend/var/test-cases/production-settings/config",
-    ),
-    (
-        "idhazh-pipeline-tests.yaml",
-        "test-cases",
-        "Restart the model with two slots",
-        "backend/var/test-cases/parallel-2/config",
+        "backend/var/test-cases/${{ matrix.test_case }}/config",
     ),
     ("measure.yml", "budgets", "Start the tokenizer", "backend/var/candidate-config"),
 )
@@ -171,10 +167,10 @@ def test_the_model_block_is_one_action_with_a_contract_its_callers_can_read() ->
     only removes that if nothing may go round it, so the caller set is
     closed-world and a caller that spells one of the five names again fails here.
 
-    `idhazh-pipeline-tests.yaml` spells four of them and is left alone on
-    purpose: it serves a candidate rather than the configured model, and it
-    restarts the server inside the job to move a slot count. A shared block that
-    took those two as parameters would be the duplication wearing one name.
+    `idhazh-pipeline-tests.yaml` calls it too. Each of its runners hands the
+    block one test case's own config root, so a slot count or a window a test
+    case moves reaches the server through that root, with no restart inside the
+    job and no parameter of the block's own for either.
 
     An action is a contract, so the contract is asserted rather than described.
     Every input carries a description, every optional one carries a default, and
@@ -630,13 +626,15 @@ def _uncommented(text: str) -> str:
     )
 
 
-def _the_five_roots(tmp_path: Path) -> dict[str, Path]:
-    """The five config roots a server is started from, built the way the jobs build them.
+def _the_launch_roots(tmp_path: Path) -> dict[str, list[Path]]:
+    """The config roots a server is started from, built the way the jobs build them.
 
-    Three of the five do not exist in this repository at all: a job cuts them at
-    run time, one from `config/` and two from that copy. Reading them off disk
-    would check nothing, so the real builders are driven here instead - which is
-    also what makes a builder that starts moving the weights file turn this red.
+    Two of the four do not exist in this repository at all: a job cuts them at
+    run time, one from `config/` and one per test case from that copy. Reading
+    them off disk would check nothing, so the real builders are driven here
+    instead - which is also what makes a builder that starts moving the weights
+    file turn this red. The per-test-case root is one name in the workflow and
+    one folder per declared test case on a runner, so every folder is checked.
     """
     committed = CONFIG_DIR
     scratch = tmp_path / "candidate-config"
@@ -650,12 +648,11 @@ def _the_five_roots(tmp_path: Path) -> dict[str, Path]:
     )
 
     return {
-        "config": committed,
-        "backend/var/candidate-config": scratch,
-        "backend/var/test-cases/production-settings/config": (
-            test_cases / "production-settings" / "config"
+        "config": [committed],
+        "backend/var/candidate-config": [scratch],
+        "backend/var/test-cases/${{ matrix.test_case }}/config": sorted(
+            test_cases.glob("*/config")
         ),
-        "backend/var/test-cases/parallel-2/config": test_cases / "parallel-2" / "config",
     }
 
 
@@ -664,7 +661,7 @@ def test_the_weights_path_a_launcher_derives_is_the_one_the_download_wrote(
 ) -> None:
     """A path composed twice can differ; composed once from the root the flags come from, it cannot.
 
-    Every one of these five steps used to be handed the weights path as text,
+    Every one of these steps used to be handed the weights path as text,
     through five expression hops from a job output, while reading its flags from
     a config root whose own entry already named the file. Two answers to one
     question, and the second one travelled.
@@ -675,7 +672,7 @@ def test_the_weights_path_a_launcher_derives_is_the_one_the_download_wrote(
     bytes nobody downloaded.
     """
     workflows = _load_workflows()
-    roots = _the_five_roots(tmp_path)
+    roots = _the_launch_roots(tmp_path)
     landed = _published(model_refs.pinned_rows(CONFIG_DIR))["summarizer_weights_path"]
 
     for filename, job_name, step_name, root_name in LAUNCH_ROOTS:
@@ -683,12 +680,23 @@ def test_the_weights_path_a_launcher_derives_is_the_one_the_download_wrote(
         step = _step(workflows[filename], job_name, "name", step_name)
         shell = _starter_shell(step)
         assert ARGV_MODULE_CALL in shell, f"{where} starts a server some other way"
-        assert root_name in shell or root_name in str(
+        named = root_name in shell or root_name in str(
             _mapping(step.get("env"), f"{where} env").values()
-        ), f"{where} reads its flags from some root other than {root_name}"
+        )
+        # A start inside the model-server action reads `inputs.config_root`, so
+        # the root is the one the job hands the action.
+        if not named and any(
+            one.get("uses") == MODEL_SERVER_ACTION
+            for one in _declared_steps(workflows[filename], job_name)
+        ):
+            given = _action_call(workflows[filename], job_name, MODEL_SERVER_ACTION)
+            named = given.get("config_root") == root_name
+        assert named, f"{where} reads its flags from some root other than {root_name}"
         assert MODEL_PATH_ENV not in shell, f"{where} is still told which model file to open"
 
-        derived = model_refs.list_model_files(roots[root_name])[0].landed_path
-        assert derived == landed, (
-            f"{root_name} declares {derived} and the download wrote {landed}"
-        )
+        assert roots[root_name], f"no {root_name} was built, so this is checking nothing"
+        for root in roots[root_name]:
+            derived = model_refs.list_model_files(root)[0].landed_path
+            assert derived == landed, (
+                f"{root} declares {derived} and the download wrote {landed}"
+            )

@@ -534,98 +534,184 @@ seed rather than its whole day, so a build never opens the stories past it.
 
 ## Pipeline tests
 
-A production run takes about 200 minutes and has been cancelling shards, so a
-change to the pipeline was tested the next day, against a day of eighty articles
-whose spread hid whatever the change did. `idhazh-pipeline-tests.yaml` closes
-that loop inside `pipeline-tests.budget_minutes`, which is 140. It runs the real
-path - the real fetcher, the real extractor, the real two calls, the real model
-server - over two articles, three times over, and reports what each pass cost.
-It publishes nothing a reader sees: no step writes `frontend/public/` and no
-page is on any reader's path. It does commit one thing. A second `commit` job
-appends what each test case measured - its span rollup and its traces - under
-that test case's own trial root, which no console page reads, and what the
-passes produced otherwise leaves as a 90-day artifact.
+`idhazh-pipeline-tests.yaml` checks that a model walks the production path, as
+fast as the runners allow. It runs the real fetcher, the real extractor, the
+real prompts, the real two calls and the real model server over a few drawn
+articles. It is a check, not a benchmark: measuring and tuning a server is
+`measure.yml`'s job, and how good a model's summaries are is `validate.yml`'s.
+It publishes nothing a reader sees. No step writes `frontend/public/`, and what
+the runners produced - the article text included - leaves only as a 90-day
+artifact.
 
-**The write is one job's, and the reading job never has it.** The `test-cases`
-job holds `contents: read`; the `commit` job holds `contents: write` and runs no
-test case. The two meet through an artifact, and the artifact is read before
-anything is staged: `backend/utilities/pipeline_test_ledgers.py` takes every
-downloaded row through the contract its ledger declares and every directory name
-out of `config/pipeline-tests.json`, so nothing a fetched page touched decides a
-path (Guardrail #11). A refusal ends the job with nothing staged. The split
-bounds what a bad push could reach; the check is the control.
+```mermaid
+%%{init: {"theme": "base", "themeVariables": {"background": "#0f1117", "primaryColor": "#222834", "primaryTextColor": "#e6e9f0", "primaryBorderColor": "#4b5468", "lineColor": "#8b93a7", "textColor": "#e6e9f0", "clusterBkg": "#1a1e27", "clusterBorder": "#3a4254", "titleColor": "#e6e9f0", "edgeLabelBackground": "#1a1e27", "fontSize": "14px"}}}%%
+flowchart TB
+ WHO["A person dispatches Pipeline tests,<br/>naming a models file or none"]
 
-**Each test case writes its own trial root.** The three test cases share one
-plan, so they share a run id, a shard, a job and an attempt - which is the whole
-of a writer's filename. Without a root each, the last test case to write would
-be the only one anybody could read.
+ subgraph PLAN["Pipeline tests - job plan"]
+  DRAW["Draw the articles,<br/>seeded by the run id"]
+  RUNPLAN["Write the one run plan"]
+  LIST["List one runner for every shard<br/>of every enabled test case"]
+ end
+
+ subgraph RUNNERS["Pipeline tests - job test-case, one per runner, all at once"]
+  SERVE["Start this test case's model server<br/>through the model-server action"]
+  PROVE{"the server proves<br/>the entry?"}
+  WORK["work, then record,<br/>on every shard this runner holds"]
+  STOP["This runner fails,<br/>the others carry on"]
+ end
+
+ subgraph AFTER["Pipeline tests - jobs report and commit"]
+  REPORT{"every enabled test case<br/>got an article summarized?"}
+  TABLE["The run page shows<br/>one row per test case"]
+  RED["The run fails,<br/>naming the test case"]
+  CHECK["Read every ledger file<br/>through its contract, then commit"]
+ end
+
+ CFG[("config/pipeline-tests.json<br/>which test cases are enabled")]
+ WEB["The open web<br/>the drawn pages"]
+ HUB["Hugging Face and GitHub releases<br/>the weights and llama.cpp"]
+ ART[("Run artifacts, kept 90 days<br/>article text included")]
+ STATE[("state/pipeline-tests-ID/<br/>one trial root per test case")]
+
+ WHO --> DRAW --> RUNPLAN --> LIST --> SERVE
+ CFG --> LIST
+ HUB --> SERVE
+ SERVE --> PROVE
+ PROVE -->|"yes"| WORK
+ PROVE -->|"no"| STOP
+ WEB --> WORK
+ WORK --> ART --> REPORT
+ REPORT -->|"yes"| TABLE
+ REPORT -->|"no"| RED
+ WORK -->|"ledgers"| CHECK --> STATE
+
+ classDef stage fill:#222834,stroke:#4b5468,stroke-width:1px,color:#e6e9f0;
+ classDef decision fill:#11141c,stroke:#5b6477,stroke-width:1.5px,color:#ffffff;
+ classDef yes fill:#176032,stroke:#2ea04f,stroke-width:1.5px,color:#ffffff;
+ classDef no fill:#a32020,stroke:#d23b3b,stroke-width:1.5px,color:#ffffff;
+ classDef ledger fill:#1b3a5c,stroke:#2d6ca3,stroke-width:1.5px,color:#ffffff;
+ classDef ext fill:#2a2233,stroke:#6b5480,stroke-width:1px,stroke-dasharray:5 3,color:#e6e9f0;
+ classDef sysEval fill:#1a1e27,stroke:#c79a2e,stroke-width:1.5px,color:#f0d79a;
+
+ class WHO,DRAW,RUNPLAN,LIST,SERVE,WORK,CHECK stage;
+ class PROVE,REPORT decision;
+ class TABLE yes;
+ class STOP,RED no;
+ class CFG,ART,STATE ledger;
+ class WEB,HUB ext;
+ class PLAN,RUNNERS,AFTER sysEval;
+```
+
+**Four jobs.**
+
+| Job | What it does |
+| --- | --- |
+| `plan` | Draws the articles once, writes the one run plan, reads which llama.cpp build to install, and lists the runners the enabled test cases need |
+| `test-case` | One job per runner, all at the same time. Each starts its own model server through `.github/actions/model-server`, proves the entry with `prove_the_entry.py`, then runs production's `work` and `record` commands on every shard it holds |
+| `report` | Puts every runner's articles back together per test case, and prints one row per enabled test case on the run page |
+| `commit` | Reads the ledgers the runners wrote, then commits them under each test case's own trial root |
+
+**The config decides which test cases run.** Each test case in
+`config/pipeline-tests.json` carries `enabled`, and the plan job starts one job
+for every runner an enabled test case needs. Switching a test case on or off is
+an edit to that file alone: the workflow names no test case. A dispatch reads the
+config from the branch it runs on, so a model's branch can switch test cases
+without touching `main`. A config with every test case off is refused when it
+loads, because that dispatch would run nothing.
+
+| Test case | Default | What it changes |
+| --- | --- | --- |
+| `production-settings` | on | nothing - the production path exactly |
+| `no-visual-plan` | on | no picture is reachable, so the summarize-and-plan call returns the summary alone |
+| `parallel-summarization` | off | two server slots, the window doubled with them, and two shards working against that one server at once |
+
+**The articles split into shards the way a production day does.** The plan job
+draws `articles_a_dispatch` articles, and they split into shards of
+`articles_a_shard`, which the production round-robin (`stages.common.shard_of`)
+hands out. At one article a shard - the default - every article gets a runner of
+its own, so a dispatch takes about as long as its slowest article. A test case
+whose `n_parallel` is two puts two shards on each runner, each one a `work`
+process posting to that runner's one server at the same time. That is the only
+way the server's second slot is ever asked for anything: one `work` process
+sends one request at a time.
+
+**`parallel-summarization` doubles `n_ctx` because llama-server divides the
+window it is given between its slots.** Two slots on the committed 65,536 is a
+32,768-token slot, and the worst article the truncation cap admits needs 64,699 -
+so leaving the window alone would make it a test of a smaller window. The cost is
+memory: every slot holds a full window, and one server with one slot already
+peaked at 12.57 to 13.16 GiB of the 16 GB runner on the model measured on
+2026-09-08. So it is off by default. Switch it on for a model small enough to
+hold two windows.
+
+**The draw happens once, before any runner starts.** `config/pipeline-tests.json`
+holds at least twenty candidate addresses, each one an article this pipeline has
+really fetched and summarized, and each naming the feed in `config/sources.json`
+that carried it. The plan job draws from them, seeded from the run id GitHub
+allocated, prints the seed beside the addresses, and uploads the one run plan
+every runner downloads - so every runner of every test case records the same
+item ids. A fixed pair would pass for as long as those two pages stayed up and
+say nothing about anything else the extractor meets; a draw with no seed printed
+could not be replayed.
+
+**What makes a run red.**
+
+- A runner that fails is red on its own, and the others carry on
+  (`fail-fast: false`). It files no run, so the report names the articles it
+  never filed.
+- The report fails the run when a test case got no article summarized. A refused
+  download, a failed extraction or an unusable answer for every article leaves
+  every step green, and a run that never reached the model has said nothing
+  about it.
+- The report also fails the run when a test case recorded an article the draw
+  did not choose, because that runner read another plan.
+
+**Runners are not compared by wall clock.** Prefill spans 4.2x between
+GitHub-hosted runners ([pipeline-cost.md](pipeline-cost.md)), so a time read
+across two runners says which hosts were drawn rather than what a test case
+changed.
+
+**One dispatch per model file at a time.** The concurrency group is named for
+`candidate_models_file`, so a second dispatch of one model waits for the first,
+and two models run side by side.
+
+**The write is one job's, and the reading jobs never have it.** The `plan`,
+`test-case` and `report` jobs hold `contents: read`; the `commit` job holds
+`contents: write` and runs no test case. They meet through artifacts, and the
+commit job reads what arrived before anything is staged:
+`backend/utilities/pipeline_test_ledgers.py` takes every downloaded row through
+the contract its ledger declares and every directory name out of
+`config/pipeline-tests.json`, so nothing a fetched page touched decides a path
+(Guardrail #11). A refusal ends the job with nothing staged. The split bounds
+what a bad push could reach; the check is the control.
+
+**Each test case writes its own trial root.** Every test case shares a run id,
+a job and an attempt, and two test cases share each shard number - which is the
+whole of a writer's filename. Without a root each, the last test case to write
+would be the only one anybody could read.
 `backend/utilities/pipeline_test_case_config.py` names them `pipeline-tests-<id>`,
 side by side under `state/` rather than nested, because `run.trial_state_dirname`
 is a slug and a slug holds no separator.
 
 **The dispatch takes one field, and it names the model.** Leave
 `candidate_models_file` empty and the test cases run the model
-`config/idhazh.json` already names, which is what every reading this workflow
-has taken. Name a file under `config/models/` and a scratch copy of `config/`
-points at it, every test case is cut from that copy, and the real prompts and
-the real two calls run on those weights - so the cheapest real-path check of a
-candidate is a dispatch here rather than a bench. What it settles and what it
-does not is in
+`config/idhazh.json` already names. Name a file under `config/models/` and a
+scratch copy of `config/` points at it, every test case is cut from that copy,
+and the real prompts and the real two calls run on those weights - so the
+cheapest real-path check of a candidate is a dispatch here rather than a bench.
+What it settles and what it does not is in
 [../how-to/evaluate-new-summarizer-model.md](../how-to/evaluate-new-summarizer-model.md#the-cheapest-check-is-the-pipeline-tests-and-it-uses-the-real-prompts).
 The committed config is never written: the scratch copy differs in one line, and
 in `run.trial_state_dirname`, which puts each test case's own ledgers under
 `state/pipeline-tests-<id>/` rather than beside the rows the console reads.
 
-**The two articles are drawn, not fixed.** `config/pipeline-tests.json` holds at
-least twenty candidate addresses, each one an article this pipeline has really
-fetched and summarized, and each naming the feed in `config/sources.json` that
-carried it. The dispatch draws two, seeded from the run id GitHub allocated, and
-prints the seed beside the pair. A fixed pair would pass for as long as those
-two pages stayed up and say nothing about anything else the extractor meets; a
-draw with no seed printed could not be replayed.
-
-**The draw happens once, before any test case starts.** One step draws, one step
-turns the pair into a run plan, and all three test cases run that one plan - so
-the three record the same two item ids and the numbers between them can be
-subtracted. The final step compares what each test case recorded against what the
-plan asked for and fails the job when they disagree, because an address that 404s
-would otherwise leave one test case with one item and three rows of plausible
-numbers. It also fails the job when a test case got no article summarized: two
-refused downloads leave two articles on file and every step green, and a run
-that never reached the model has said nothing about it.
-
-**Three test cases, in sequence, on one runner, and never a matrix.** Prefill
-spans 4.2x between GitHub-hosted runners ([pipeline-cost.md](pipeline-cost.md)),
-which is larger than anything a test case here is looking for, so three jobs
-would report the three hosts they drew. Sequential on one box cancels the host.
-
-| Test case | What it changes | What the difference prices |
-| --- | --- | --- |
-| `production-settings` | nothing - the production path exactly | the number the other two are read against |
-| `no-visual-plan` | no picture is reachable, so the summarize-and-plan call returns the summary alone | the visual plan's decode, on the same server process |
-| `parallel-2` | two server slots, and the window doubled with them | decode throughput at two slots, plus a second model load |
-
-Each test case is a step rather than an iteration of a loop, so the run page
-shows each test case's own wall clock. Every test case setting is in config
-(Guardrail #6): the addresses, the draw size, the job bound, the slot counts and
-the windows. One step writes a config root per test case from the committed
-`config/`, differing only in what that test case changes, and the committed
-config is never edited - a test case that edited it would leave the next test
-case reading whatever the last one wrote.
-
-**The parallel test case doubles `n_ctx` because llama-server divides the window
-it is given between its slots.** Two slots on the committed 65,536 is a
-32,768-token slot, and the worst article the truncation cap admits needs 64,699 -
-so leaving the window alone would make that test case a test of a smaller window
-wearing a concurrency test case's name. The slot count is fixed when the process
-starts, which is why that test case costs a restart and a second model load.
-
-Two things one dispatch cannot settle. **Whether two articles are representative
-of the eighty a production day carries - they are not**, and the draw is what
-stops them being representative of nothing instead. And the faithfulness scorer,
-which every test case skips: it is a second model download, it is identical
-across the test cases so it cancels from every comparison here, and it is not
-what the two-call path is being measured for.
+Two things one dispatch cannot settle. **Whether a few articles are
+representative of the eighty a production day carries - they are not**, and the
+draw is what stops them being representative of nothing instead. And the
+faithfulness scorer, which every test case skips: it is a second model download,
+and whether a summary is faithful is the qualification's question, not this
+one's.
 
 ## Display names and files
 
@@ -857,7 +943,7 @@ contract:
 | `measure.yml`, target `corpus` | What article lengths the open web really has |
 | `measure.yml`, target `bench` | What `bench.corpus_items` articles cost on this machine |
 | `validate.yml` | Is this model good enough on text that cannot move under it |
-| `idhazh-pipeline-tests.yaml` | What this code change cost on the same drawn pair |
+| `idhazh-pipeline-tests.yaml` | Does this model walk the production path, on a few drawn articles |
 
 A shared step would take a mode, and the mode would be the whole of the
 difference between them.
