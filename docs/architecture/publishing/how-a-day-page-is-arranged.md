@@ -60,14 +60,11 @@ stream at `minmax(0, 1fr)` and an `18rem` sticky column carrying the leading
 stories. Below that width nothing changes - the block draws above the stream
 exactly where `digest.sections` puts it.
 
-**Why it happens there and not sooner.** Measured 2026-09-02 at a 1536px
-viewport on the committed digest, the frame's content box is 1,216px, the item
-took all 1,216 of it, and the summary took 659.81 - so 230.19px of every card
-stood empty beside the prose, at every width from 1,280px up. The frame is not
-the problem and was not widened: at 801px the item already takes 91.9 percent of
-the frame. What is spendable is one column of at most 27.1rem, once a
-68-character measure and a 1.75rem source mark are paid for
-([../../reference/site-weight.md](../../reference/site-weight.md#what-the-reading-page-does-with-a-wide-screen-2026-09-02)).
+**Why it happens there and not sooner.** The aside uses width left over after
+the prose and source mark fit. It must not narrow the reading column. Check the
+used widths at the configured breakpoint and with larger text; the
+[shared prose measure](../../concepts/design-system.md#the-measure-is-one-block-not-one-class-per-line)
+is the constraint, not a pixel reading from one build.
 
 **One trailing column at a time.** The item's own footer rail wants the same
 slot, and keeping both leaves the summary 570px against a measure of 659.81. So

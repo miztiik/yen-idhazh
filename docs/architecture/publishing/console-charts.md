@@ -793,5 +793,5 @@ telemetry plan Row #22, 2026-09-21.
 - [../../concepts/console-design.md](../../concepts/console-design.md) - how a console figure may be worded, ranked and tinted.
 - [telemetry-series.md](telemetry-series.md) - the grain every figure was measured at.
 - [console-payloads.md](console-payloads.md) - what a browser may fetch.
-- [../../reference/site-weight.md](../../reference/site-weight.md) - what the engine chunk and each console route weigh.
+- [../../reference/site-weight.md](../../reference/site-weight.md) - size controls and the cost of lazy engine assets.
 - [../../how-to/run-the-gates.md](../../how-to/run-the-gates.md) - the page ceilings a chart has to stay under.

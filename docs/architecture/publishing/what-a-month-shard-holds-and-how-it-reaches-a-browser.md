@@ -12,7 +12,7 @@ payloads themselves sit is [layout.md](layout.md).
 
 `frontend/public/assist/index/<YYYY-MM>.json` is one month of published items in published order, and `<YYYY-MM>.bin` is that month's vectors laid end to end as raw int8. The contract is `backend/idhazh/contracts/search_index.py`; the writer is `assemble.rebuild_search_index`. The archive's story list reads the JSON, and on-device search reads both.
 
-The shard that exists costs **109.3 KB gzipped for 2,237 items, and 545 KB for their 2,235 vectors** ([../../reference/site-weight.md](../../reference/site-weight.md#the-month-search-index-as-written)). An entry is **50.03 gzipped bytes**, which is 10 percent more than the 45.5 the shape study priced, because a real entry carries real key names and a vector offset the study's did not.
+A recorded sample of 2,237 items had **109.3 KB of gzipped metadata and 545 KB of vectors**. These are sample sizes, not current limits. Measure both files when pricing a search download ([../../reference/site-weight.md](../../reference/site-weight.md#what-each-measure-counts)).
 
 **A month shard does not break the bounded-request rule, and here is why.** That rule rejects a scheme whose request count or index size grows with *total history* ([layout.md](layout.md#one-file-per-day)). A month shard's size is a function of one month, and the month ends; the hundredth month costs a reader exactly what the first one did. Request count is bounded the same way: a page reads the months it shows, which is one for a day page and a fixed pan for an archive view, not one per published day and never one per item. What the rule forbids is the file that has to get bigger every day forever, which is the global index in the rejected-alternatives table below - measured at 12.7 MB of browse entries for a single year at the structural ceiling.
 
@@ -119,6 +119,6 @@ That is a second copy of the day in the published bundle, and it is worth statin
 - [the-served-day-and-the-documents-that-stopped-being-written.md](the-served-day-and-the-documents-that-stopped-being-written.md) - the projection the staged day payloads are, and what one day costs.
 - [how-a-reader-finds-a-story.md](how-a-reader-finds-a-story.md) - the archive list and the search that read both files.
 - [the-on-device-encoder-and-its-vectors.md](the-on-device-encoder-and-its-vectors.md) - what made the vectors, and what makes two of them comparable.
-- [../../reference/site-weight.md](../../reference/site-weight.md#the-month-search-index-as-written) - the shard that exists: its bytes, its rebuild cost, and the bijection it holds.
+- [../../reference/site-weight.md](../../reference/site-weight.md#bounded-loading) - counting metadata and vectors in a bounded download.
 - [../../archive/measurements-2026-08.md](../../archive/measurements-2026-08.md#sizing-the-archive-index) - what a browse entry, a vector and a month shard actually cost.
 - [../sources/item-health.md](../sources/item-health.md) - the ledger whose shard period this one would follow.

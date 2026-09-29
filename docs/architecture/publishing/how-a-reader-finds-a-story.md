@@ -65,7 +65,9 @@ That table is the argument for decision 3 rather than an illustration of it. At 
 
 ## The archive lists stories, and fetches them a month at a time
 
-`/archive/` used to list five dates and no articles, and it inlined every committed day whole so on-device search could read the vectors without a request. Measured 2026-08-27 on one checkout, six committed days and 2,237 items: **1,766,682 gzipped bytes**, growing **489,843 bytes** for the one extra day that carried 621 stories. The page a reader opened to find one story carried all of them. It is **2,912 bytes** now, and one more day of 621 stories costs it **24 bytes** ([../../reference/site-weight.md](../../reference/site-weight.md#the-archive-stops-carrying-the-corpus)).
+`/archive/` fetches the months the reader opens instead of inlining the whole
+corpus. This keeps the initial story download bounded as the archive grows
+([../../reference/site-weight.md](../../reference/site-weight.md#bounded-loading)).
 
 What it renders now, top to bottom:
 
@@ -116,9 +118,10 @@ still grows with days:
 | Growth per published day | 11.05 B | 8.0 B |
 
 Both fixture archives cover the same 24 months, so the difference between the
-two rows of each column is days and nothing else. Measured 2026-09-01 on Intel
-Core a developer machine / / node 24.12.0; method and the full numbers in
-[../../reference/site-weight.md](../../reference/site-weight.md#the-archive-day-list-stops-growing-a-row-a-day).
+two rows of each column is days and nothing else. This comparison is from
+2026-09-01, using node 24.12.0. Apply the
+[growth measurement rules](../../reference/site-weight.md#growth-estimates)
+when measuring the current build.
 
 #### Why the document still grows with days
 
@@ -420,5 +423,5 @@ cost, Jony on the sentence, 2026-08-27.
 - [the-on-device-encoder-and-its-vectors.md](the-on-device-encoder-and-its-vectors.md) - the encoder a search downloads, and what makes two vectors comparable.
 - [what-a-story-shows-and-where-each-fact-sits.md](what-a-story-shows-and-where-each-fact-sits.md) - the pill row's own rulings, and the item a result renders as.
 - [layout.md](layout.md) - the month index, the dated addresses and the one-order rule.
-- [../../reference/site-weight.md](../../reference/site-weight.md) - what the archive weighs, and what a month shard costs.
+- [../../reference/site-weight.md](../../reference/site-weight.md#bounded-loading) - bounding archive and search downloads.
 - [../../concepts/search-quality.md](../../concepts/search-quality.md) - what the ranking is measured against.

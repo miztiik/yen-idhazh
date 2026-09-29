@@ -218,14 +218,10 @@ the summed ceiling grew from 85 slots to 246. Now the label set is frozen and
 every labelled answer already carries a vector, so the ceiling is 294 slots in
 both cases and B equals C exactly. Competition is the only mechanism left.
 
-**The slide has a rate, and the rate is the point.** Measured over all eleven
-committed days on one instrument in one run - the eleven points, their corpus
-sizes and the fit are in
-[../reference/site-weight.md](../reference/site-weight.md#how-fast-archive-search-slides-under-a-frozen-label-set) -
-recall falls **0.0134 for every published day** and **0.0000479 for every
-published item** once the labels close on 2026-08-26. The series reproduces the
-record: its 2026-08-26 point is 0.75571 over 2,237 items, against the 0.756 over
-2,237 items in the section above.
+**Archive growth changes what a frozen label set measures.** A new relevant
+item can displace a labelled answer without reducing search quality. Compare
+the same labelled population and separate coverage from competition before
+treating a lower recall as a regression.
 
 ## The bar, and what it is worth
 
@@ -462,5 +458,5 @@ Authority: owner, `CLAUDE.md` section 13.
 - [digest.md](digest.md) - what a reader is searching over.
 - [config/appearance.md](config/appearance.md) - `assist.recall_min` and the similarity floor.
 - [../architecture/publishing/frontend.md](../architecture/publishing/frontend.md) - the search control and what it downloads.
-- [../reference/site-weight.md](../reference/site-weight.md) - the index weight and the recall series.
+- [../reference/site-weight.md](../reference/site-weight.md#bounded-loading) - the transfer cost of search metadata and vectors.
 - [../../CLAUDE.md](../../CLAUDE.md) - Guardrail #10 (measured, not estimated).

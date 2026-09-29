@@ -255,5 +255,5 @@ declares the span and prints it in words.
 - [which-console-surfaces-follow-the-window-and-which-say-why-not.md](which-console-surfaces-follow-the-window-and-which-say-why-not.md) - the control this section answers to.
 - [visuals.md](visuals.md) - the drawing pipeline this section reports on.
 - [what-drawing-costs-and-what-has-been-retired-for-it.md](what-drawing-costs-and-what-has-been-retired-for-it.md) - the retirement rule at full length.
-- [../../reference/site-weight.md](../../reference/site-weight.md) - what every route weighs, and the chart vocabulary's own line.
+- [../../reference/site-weight.md](../../reference/site-weight.md) - page guardrails and asset measurement rules.
 - [../../concepts/console-design.md](../../concepts/console-design.md) - how a console figure is allowed to read.
