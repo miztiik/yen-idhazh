@@ -116,7 +116,7 @@ The paths come back ascending by the day each file covers, never by path string.
 | Compression | `ledger.compression_raw` (snappy) or `ledger.compression_compact` (zstd) | `none` - it is plain text |
 | For | every ledger by default | a payload a person reads in a pull request |
 
-The `ledger` block of `config/idhazh.json` holds four knobs: `format` (default `parquet`), `compression_raw` (default `snappy`, which every reader opens without a plugin), `compression_compact` (default `zstd`, about 2.2 times smaller at a thousand rows) and `published`, the ledgers a browser may fetch. **`published` ships empty**, because no page reads a compact file yet.
+The `ledger` block of `config/idhazh.json` holds five knobs: `format` (default `parquet`), `compression_raw` (default `snappy`, which every reader opens without a plugin), `compression_compact` (default `zstd`, about 2.2 times smaller at a thousand rows), `published`, the ledgers a browser may fetch, and `engine_extension_repository`, where the query engine that reads them downloads its add-ons (default DuckDB's own host, [../publishing/how-the-query-door-answers-a-panel.md](../publishing/how-the-query-door-answers-a-panel.md)). **`published` ships empty**, because no page reads a compact file yet.
 
 ### The column types
 

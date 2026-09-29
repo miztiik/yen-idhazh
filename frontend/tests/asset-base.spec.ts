@@ -21,7 +21,8 @@ import { expect, test } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { assetBaseUrl, connectSources, encoderOrigins, encoderSource } from '../asset-base.js';
+import { assetBaseUrl, connectSources, encoderOrigins, encoderSource, engineOrigins } from '../asset-base.js';
+import { engineExtensionRepository } from '../src/lib/server/config';
 
 const FRONTEND = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -33,7 +34,7 @@ test.describe('the asset base URL ships shut', () => {
 		expect(assetBaseUrl()).toBe('');
 	});
 
-	test('the committed CSP admits this origin and the encoder origins, and nothing else', () => {
+	test('the committed CSP admits this origin, the encoder origins and the engine add-on origin, and nothing else', () => {
 		// Read as source rather than through an import, because the config the
 		// module would read is the same one the test above just pinned - so an
 		// import would only prove the two agree, not that what is COMMITTED is the
@@ -45,8 +46,22 @@ test.describe('the asset base URL ships shut', () => {
 		// What is pinned instead is the SHAPE: `'self'` first, the drawings valve
 		// shut, and exactly the origins `config/idhazh.json` names for the encoder.
 		const config = readFileSync(join(FRONTEND, 'svelte.config.js'), 'utf8');
-		expect(config).toContain("'connect-src': connectSources(assetBaseUrl(), encoderOrigins())");
-		expect(connectSources(assetBaseUrl(), encoderOrigins())).toEqual(['self', ...encoderOrigins()]);
+		expect(config).toContain(
+			"'connect-src': connectSources(assetBaseUrl(), [...encoderOrigins(), ...engineOrigins()])"
+		);
+		expect(connectSources(assetBaseUrl(), [...encoderOrigins(), ...engineOrigins()])).toEqual([
+			'self',
+			...encoderOrigins(),
+			...engineOrigins()
+		]);
+	});
+
+	test('the engine add-on origin is the one the engine is told, and the committed config names it', () => {
+		// Two readers of one key: the page's policy here and the engine's address in
+		// the server config. If they disagreed the browser would refuse the add-on.
+		const repository = engineExtensionRepository();
+		expect(repository).toMatch(/^https:\/\//);
+		expect(engineOrigins()).toEqual([new URL(repository).origin]);
 	});
 
 	test('the encoder origins are the hosts the committed config names', () => {
@@ -66,7 +81,7 @@ test.describe('the asset base URL ships shut', () => {
 		// browser (no `Access-Control-Allow-Origin` on any hop, 15 refusals in 15
 		// attempts, measured 2026-09-09), so admitting one would widen the surface
 		// for a fetch that cannot work.
-		const shipped = connectSources(assetBaseUrl(), encoderOrigins());
+		const shipped = connectSources(assetBaseUrl(), [...encoderOrigins(), ...engineOrigins()]);
 		expect(shipped.filter((source) => source.includes('github'))).toEqual([]);
 		for (const source of shipped.slice(1)) {
 			expect(new URL(source).origin).toBe(source);
