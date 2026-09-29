@@ -8,7 +8,7 @@ cannot say what the machine was, what the calls cost, or how long the item
 waited.
 
 Two writers reach that ledger. Neither appends to it: each writes a segment and
-`stage_compact` folds them onto one head, and the fold settles two rows for one
+`closed_day_fold` folds them onto one head, and the fold settles two rows for one
 key rather than keeping whichever arrived first. The tests below take the
 question off the table at the source rather than relying on that settlement -
 both writers derive the row from the same sealed file, so they agree cell for

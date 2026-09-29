@@ -470,20 +470,6 @@ jobs:
             --job-budget-minutes "${{ fromJSON(inputs.job_budget_minutes) }}" \
             --runner ubuntu-latest
 
-      # The gates write a segment rather than the day file, so this is what turns
-      # it into the row the step below commits. `--config` points it at the same
-      # trial state root the gates wrote to, so the segment it drains is the one
-      # this dispatch left and no production head is opened.
-      #
-      # `if: always()` for the same reason the commit step carries it: a failed
-      # gate still leaves a verdict, and that is the dispatch whose record is
-      # worth having.
-      - name: Fold the verdict into its day
-        if: always()
-        run: >-
-          python -m idhazh compact --config backend/var/candidate-config
-          --date "${{ needs.plan.outputs.date }}"
-
       # The ten gates, failures first. `if: always()` because the step above
       # exits non-zero on an ESCALATE, and that is precisely the verdict a
       # reader opened this page for.
@@ -497,11 +483,15 @@ jobs:
       # redirected here by the config step above, so everything under this path
       # that is dirty on this runner was written by this runner.
       #
-      # The trial root rather than `state/pipeline-tests/candidate-models`, and that is
-      # the same trade the telemetry fold records: `git add` on a path the
-      # checkout does not hold aborts the whole step under `set -e`, and a
-      # dispatch whose gates wrote no verdict has no candidate-models directory at all.
-      # The trial root is in every checkout.
+      # The trial root rather than `state/pipeline-tests/candidate-models`, and
+      # that is the trade digest.yml's `Commit what this shard measured` records:
+      # `git add` on a path the checkout does not hold aborts the whole step
+      # under `set -e`, and a dispatch whose gates wrote no verdict has no
+      # candidate-models directory at all. The trial root is in every checkout.
+      #
+      # What it commits is the gates' writer file under the trial root's own
+      # candidate-models day, unfolded: nothing folds a trial root, and a fold
+      # would change no answer a reader gets.
       - name: Commit the candidate-models ledger
         env:
           COMMIT_MESSAGE: "qualify: ${{ needs.plan.outputs.candidate_id }} ${{ needs.plan.outputs.date }}"

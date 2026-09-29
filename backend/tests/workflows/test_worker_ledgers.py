@@ -15,7 +15,6 @@ from idhazh.contracts.ledger_name import DAY_TREES, LedgerName
 from idhazh.telemetry.publish import day_metrics
 
 from ._harness import (
-    CLOSED_DAY_FOLD_STEP,
     COMMIT_STAGED_PATHS,
     COMMIT_STEPS,
     FINGERPRINT_COMMAND,
@@ -275,9 +274,7 @@ def test_a_ledger_that_will_not_push_cannot_cost_the_day_a_worker() -> None:
         ("assemble", "actions/download-artifact@v8"),
         ("assemble", FINGERPRINT_STEP),
         ("assemble", HARVEST_STEP),
-        ("assemble", CLOSED_DAY_FOLD_STEP),
         ("assemble", REVIEW_STEP),
-        ("assemble", COMMIT_STEPS["fold"]),
     }
 
 

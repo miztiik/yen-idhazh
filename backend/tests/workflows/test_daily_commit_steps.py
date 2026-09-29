@@ -368,8 +368,6 @@ def test_both_daily_commit_steps_run_the_one_shared_program() -> None:
     assert plan != assemble
     assert plan["COMMIT_MESSAGE"] == f"plan: {SUBSTITUTED_DATE}"
     assert assemble["COMMIT_MESSAGE"] == f"digest: {SUBSTITUTED_DATE}"
-    # And the fold says a third thing, in the same job as the day's own commit.
-    assert _commit_call("fold")[1]["COMMIT_MESSAGE"] != assemble["COMMIT_MESSAGE"]
 
 
 def test_the_plan_job_takes_the_tips_state_before_anything_writes_into_it() -> None:

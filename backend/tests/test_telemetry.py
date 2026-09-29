@@ -1461,14 +1461,14 @@ def test_a_span_the_shard_never_opened_gets_no_row() -> None:
 
 def test_the_fold_writes_one_month_shard_and_a_re_run_adds_nothing(tmp_path: Path) -> None:
     """The shard's fold lands once. A re-run recomputes the same numbers, and the
-    compaction settles them against the grain rather than doubling every count.
+    closed-day fold settles them against the grain rather than doubling every count.
 
     Through the two calls the pipeline makes rather than through a seed, because
     the claim in the name is now shared between them: the shard writes its fold
-    to a segment named for its own attempt, and `stage_compact` merges the
-    segments into the month the rows name. A second attempt writes a second
-    segment, so the only thing standing between a re-run and a doubled count is
-    `SPAN_ROLLUP_KEY`.
+    to a segment named for its own attempt, and the gardener's closed-day fold
+    settles the segments into the day the rows name. A second attempt writes a
+    second segment, so the only thing standing between a re-run and a doubled
+    count is `SPAN_ROLLUP_KEY`.
     """
     state = tmp_path / "state"
     spans = [
@@ -1492,8 +1492,8 @@ def test_the_fold_writes_one_month_shard_and_a_re_run_adds_nothing(tmp_path: Pat
             )
             == 3
         )
-    report = fold(state, "2026-08-21")
-    assert report.trees_touched == (LedgerName.SPAN_ROLLUP,)
+    folded = fold(state, "2026-08-21")
+    assert {day.tree for day in folded.days} == {LedgerName.SPAN_ROLLUP}
 
     shard = ledger.path(state, LedgerName.SPAN_ROLLUP, "2026-08-21") / day_shards.SETTLED_NAME
     written = [

@@ -13,22 +13,6 @@ from idhazh.contracts.knobs.removed import refuse_a_removed_knob
 
 
 class RunConfig(Model):
-    settled_fold_after_days: int = Field(
-        default=7,
-        ge=1,
-        description=(
-            "How many days behind the run's own date a day has to be before its "
-            "writer files are folded into one settled file. Every job writes its "
-            "own file under the day its rows name, which is what stops two jobs "
-            "conflicting - and it leaves about a hundred small files in a busy "
-            "day. Folding a day nobody will write again costs nothing and changes "
-            "no answer, because a reader settles the rows either way. Seven days "
-            "rather than one, because a day can still gain rows: a re-run reaches "
-            "back, and a shard that died can be re-dispatched. Raise it if a late "
-            "writer is ever seen landing in a folded day; lower it only to save "
-            "files, and it saves none the day after it is lowered."
-        ),
-    )
     safety_ceiling_per_run: int = Field(
         default=80,
         ge=1,
@@ -214,10 +198,16 @@ class RunConfig(Model):
 #: which would now migrate an operator's number onto a key nothing reads.
 #: The judging shard's bound is the fourth and it did not die - it moved out of
 #: this block entirely, so its replacement is spelled as a whole path.
+#: `settled_fold_after_days` is the fifth and moved too: the gardener task that
+#: owns each CSV day tree folds its closed days now, and its declaration says
+#: when a day is closed.
 SUPERSEDED_RUN_NAMES: Final[Mapping[str, str]] = MappingProxyType(
     {
         "judge_shard_timeout_minutes": "council.shard_timeout_minutes",
         "route_budget_minutes": "",
+        "settled_fold_after_days": (
+            "fold.after_days in the declaration under config/gardener/ that owns the tree"
+        ),
         "two_calls_per_item": "",
         "visual_planner_budget_minutes": "",
     }

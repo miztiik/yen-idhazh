@@ -289,7 +289,6 @@
     "qualify_on_the_production_path": true,
     "safety_ceiling_per_day": 400,
     "safety_ceiling_per_run": 80,
-    "settled_fold_after_days": 7,
     "shard_size": 5,
     "shard_timeout_minutes": 200,
     "shard_wrap_up_minutes": 12,

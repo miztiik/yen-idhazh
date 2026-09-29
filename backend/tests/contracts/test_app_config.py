@@ -1342,6 +1342,17 @@ def test_a_config_still_spelling_the_judging_bound_under_run_is_refused() -> Non
         AppConfig.model_validate({"run": {"judge_shard_timeout_minutes": 200}})
 
 
+def test_a_config_still_spelling_the_fold_cover_under_run_is_refused() -> None:
+    """The closed-day fold is the gardener's now, and so is the rule for when a day is closed.
+
+    A number left under `run` would be read by nothing, and whoever set it would
+    believe they had moved a line that did not move - so it is refused, naming
+    where the rule lives now.
+    """
+    with pytest.raises(ValidationError, match=re.escape("fold.after_days")):
+        AppConfig.model_validate({"run": {"settled_fold_after_days": 7}})
+
+
 def test_a_band_that_cannot_draw_the_hardest_labelled_pair_is_refused() -> None:
     """The pair a wrong line publishes first has to be inside the band the fit judges.
 
