@@ -1,6 +1,6 @@
 # Plan 50 - Idhazh Gardener: one utility tends every ledger
 
-**Last Updated**: 2026-09-28
+**Last Updated**: 2026-09-29
 
 **Level**: 5 (CLAUDE.md section 6). It changes a persisted contract, the project's persistence format, and the one workflow that force-pushes `main`. The owner's rulings recorded in section 0 and in each row ARE the design consultation; the ESCALATE triggers name what still stops a worker.
 
@@ -10,7 +10,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 
 ## Execution handover (zero-context cold start)
 
-A paste-ready brief for an agent that picks this plan up with no prior context. [execute-a-plan.md](../docs/how-to/execute-a-plan.md) is the canonical contract; this brief adds only what this plan's run has learned. Written 2026-09-27, about 20:10 UTC, and brought up to date 2026-09-28, about 12:15 UTC, when the first owner handed over after row 5 merged, about 14:00 UTC, when the second owner's dispatch checks on row 7 added deviations 96 to 101 and row 12, and about 17:30 UTC, after row 7 merged.
+A paste-ready brief for an agent that picks this plan up with no prior context. [execute-a-plan.md](../docs/how-to/execute-a-plan.md) is the canonical contract; this brief adds only what this plan's run has learned. Written 2026-09-27, about 20:10 UTC, and brought up to date 2026-09-28, about 12:15 UTC, when the first owner handed over after row 5 merged, about 14:00 UTC, when the second owner's dispatch checks on row 7 added deviations 96 to 101 and row 12, about 17:30 UTC, after row 7 merged, and 2026-09-29, about 06:15 UTC, when the third owner's session ran out of context with row 8 ready to merge and row 12's worker ended mid-row, about 06:40 UTC, when the person ruled on row 9's two open questions, and about 07:30 UTC, when the fourth owner had merged row 8 and dispatched rows 12 and 9 side by side (deviation 137).
 
 ```text
 You are the OWNER of TODO/20260924-50-idhazh-gardener-plan.md. You have no prior context.
@@ -24,30 +24,41 @@ and docs/how-to/run-the-gates.md. Then read this plan's section 0, section 1 (th
 Reckoner, the only tracker) and each row just before you dispatch it.
 
 STEP 1 - ADOPT OR CLOSE. Run git worktree list, gh pr list and git branch -r. At the last
-update rows 1 to 7 and 11 had merged (#1127, #1131, #1142, #1139, #1145, #1141, #1151,
-#1136), row 10 is collapsed, and row 8 was in flight: #1156, worktree p50r8, its
-worker finished and reported. The owner's own worktree, p50own, holds no unpushed work.
+update (2026-09-29, 07:30 UTC) rows 1 to 8 and 11 had merged (#1127, #1131, #1142, #1139,
+#1145, #1141, #1151, #1156, #1136) and row 10 is collapsed. Rows 12 and 9 are in flight
+(STEP 2). If a worker ended without a report, read its worktree, its pushed branch and
+its report file (%TEMP%\p50r12\report.md, %TEMP%\p50r9\report.md) before dispatching it
+again. The owner's worktree, p50own, holds no unpushed work.
 Section 0's three plan-54 reads ran before row 5 and all three came back empty.
 
-STEP 2 - DISPATCH. Row 8 is built and waits only for its merge. Its worker reported on
-2026-09-28; its findings are deviations 118 to 131 and three open questions for a person
-(section "Open questions for a person, from row 8"). ESCALATE trigger 1 was answered: the
-owner chose A3 (deviation 130), and the change is on #1156. Refill a slot on a report,
-never on a merge. Two workers started together return together (deviation 94).
-  merge row 8        only after the squash's first live run (WATCH below) has recorded
-                     the run and pushed without force, and never while a prune.yml run
-                     is queued or running. Then remove p50r8. Its named observation is
-                     the first idhazh-gardener.yml run after the merge
-  after row 7        row 9. It also needs plan 51's row 7, the query door, merged. That
-                     row was in flight on 2026-09-28 (#1154). Read deviations 112, 132
-                     and 133 first: 133 is a person's call on how packed files first
-                     reach main, asked by plan 51's owner. If it is still open when
-                     row 9 is next, surface it to the person (CLAUDE.md section 0c). Do
-                     not build sliceFromDisk() here
-  in flight          row 12, dispatched stacked on #1156 (deviation 134), with its design
-                     settled at dispatch (row 12 decisions 3 to 7). It merges after
-                     #1156, once its branch has taken main in, and it edits digest.yml,
-                     so it needs a merge window
+STEP 2 - DISPATCH. Row 8's findings are deviations 118 to 131 and three open questions
+for a person (section "Open questions for a person, from row 8"); ESCALATE trigger 1 was
+answered with A3 (deviation 130). Refill a slot on a report, never on a merge. Two
+workers started together return together (deviation 94).
+  row 8              merged as #1156 at 07:05 UTC 2026-09-29, after its branch took main
+                     in and CI went green, with no digest.yml or prune.yml run queued or
+                     running. Worktree p50r8 and its branch are removed
+  row 12             IN-FLIGHT from about 07:30 UTC 2026-09-29, worker
+                     p50-r12-worker-2, worktree p50r12, branch
+                     p50r12-the-closed-day-fold-moves-into-the-gardener. It resumes 63
+                     UNCOMMITTED files (backup %TEMP%\p50r12\wip-202609290610.patch and
+                     wip-untracked-202609290610.zip), fixes
+                     test_every_retention_task_declared_has_a_recorded_pass_to_answer_to
+                     (the new span-rollup declaration has no recorded pass to answer
+                     to), commits in small pieces, takes main in, pushes, opens the PR.
+                     The test_bench_targets.py two-second case is the known load flake.
+                     Its worker merges it (deviation 138), and only while no digest.yml
+                     or idhazh-gardener.yml run is queued or running: it edits digest.yml
+  row 9              IN-FLIGHT from about 07:30 UTC 2026-09-29, worker p50-r9-worker,
+                     worktree p50r9, branch p50r9-the-console-ledgers-become-parquet,
+                     stacked on row 12's pushed branch (deviation 137). The person's
+                     rulings are deviations 135 and 136, read with 112, 132 and 133. It
+                     merges after row 12, once its branch has taken main in. It deletes
+                     CSV trees a digest run writes, so it merges as row 3 did (deviation
+                     52): no digest.yml or idhazh-gardener.yml run queued or running,
+                     and the migration run again just before the merge. sliceFromDisk()
+                     is on main in frontend/src/lib/server/ledger-disk.ts; do not build
+                     it here
 
 STEP 3 - GATES. A worker runs `npm --prefix frontend run test:changed -- --list`, then only
 its row's named acceptance gates, then pushes and reports. CI is the one full-suite run
@@ -68,12 +79,10 @@ STEP 5 - CLOSE. When every row is DONE or COLLAPSED, follow the closing section 
 execute-a-plan.md.
 
 WATCH, whoever owns the plan on the day:
-  2026-09-29 onward  the corpus squash is due. prune.yml wakes at 23:37 UTC, and its runs
-                     start about two hours late (deviation 117), so the first due run is
-                     the one created about 01:30 to 02:00 UTC on 2026-09-29. This is the
-                     first live run of
-                     backend/utilities/corpus_history.py: it should record the run and
-                     push without force, because no commit is old enough (deviation 54)
+  2026-09-30 02:40   the first idhazh-gardener.yml run (cron 00:40 UTC, created about two
+                     hours late): every task is report-only except the squash, and each
+                     task's record lands under state/raw/gardener. Once row 12 has
+                     merged, its fold is live as well
   about 2026-10-29   the first squash that rewrites history replays six September merge
                      commits. If one carried a change of its own, the program stops with
                      exit 2 before any push, for a person (deviation 82)
@@ -219,6 +228,10 @@ Every place where the tree, or a ruling, departs from the text further down. A w
 | 132 | 9 | The settled escalation: the build-time readers are `host-fingerprint.ts`, `machine-counters.ts` and `model-work.ts`, and `payload.ts` touches none of these ledgers | Measured on main at e5a0f8718: `model-work.ts` opens no `state/` path, because it computes from rows it is handed. `payload.ts` reads two of the three: `evalRows()` reads `state/scores` and `itemHealthRows()` reads `state/item-health`, and the loaders of `/console`, `/console/machine`, `/console/model` and `/console/voices` call them. `dayShardFiles()` returns no rows for a missing folder, so a row 9 that deletes the CSV and leaves these two in place ships four routes that draw nothing on a green build. Row 9 moves `evalRows()` and `itemHealthRows()` onto `sliceFromDisk()` with `host-fingerprint.ts` and `machine-counters.ts` | Plan 51's owner, 2026-09-28 |
 | 133 | 9 | (not in the plan) | `sliceFromDisk()` reads packed files only, and row 9's three packing declarations ship `dry_run: true` (deviation 98), so every reader row 9 moves returns "missing" until packed files exist. A live task also packs at most 8 days a pass from the first of the oldest month, so reaching the present from 1 August takes about eight wakes (estimate). How packed files first reach main is a person's call, asked by plan 51's owner on 2026-09-28: row 9's one-time migration packs every finished day with the packing code and the tasks stay report-only; or the three tasks go live in row 9's pull request with `max_periods_per_run` raised; or they onboard report-only and the four routes show "missing" until they go live. Plan 51's rows 3 and 8 wait on the answer | Plan 51's owner, 2026-09-28 |
 | 134 | 12 | Row 12 depends on row 8, and a row is ready when its dependencies are DONE | Row 12 was dispatched on 2026-09-28 stacked on #1156's green branch, because row 8 waited only for its merge condition (deviation 130) and every file row 12 shares with it is row 8's. Row 12's pull request shows row 8's changes until #1156 merges; then its branch takes main in, and it merges after #1156, inside a digest gap | Plan owner, 2026-09-28 |
+| 135 | 9 | Deviation 133: how packed files first reach main, three options | The person chose the first. Row 9's one-time migration packs every day the packing rule already admits, with the packing task's own code, and writes each day's file, `index/daily.json` and the daily watermark exactly as a live pass would, so a task turned on later resumes from the right day. Days the rule does not yet admit become raw files, as the row already says. The three packing tasks stay report-only (deviation 98), and turning them on is a later call for a person. The cost: the four routes deviation 132 names show data up to the day the migration ran, and stop there until the tasks go live. Rejected: the tasks going live in row 9's pull request, which switches on deletion in the same merge as the migration; and report-only with no packing, which ships four routes that draw nothing on a green build | Owner, 2026-09-29 |
+| 136 | 9 | Row 9's naming correction 4: `EvalRow.attempt` keeps its name and gains a description (owner decision, 2026-09-26) | Deviation 112: the person chose to rename it. `EvalRow.attempt` becomes `summary_attempt`, beside the other three renames, with a `version` stamp and a read-side alias in the same commit and the description correction 4 asked for. The writer's `attempt` on every row keeps its name. Rejected: renaming the writer's `attempt`, which changes a shape every ledger already on parquet has written | Owner, 2026-09-29 |
+| 137 | 9, 12 | Row 12's scope: row 9 may move `item-health`, `scores` and `host-fingerprint` first, so row 12 folds whichever trees are still CSV when it is dispatched. Section 1 pairs row 9 with row 8, and row 12 runs after row 8 | Row 12 was dispatched first and folds all eight trees, those three included. Compared at row 9's dispatch on 2026-09-29, the two rows share at least ten files - `.github/workflows/digest.yml`, `backend/idhazh/telemetry/silicon.py`, `backend/idhazh/day_shards.py`, `config/gardener/host-fingerprint.json`, `config/gardener/scores.json`, `config/gardener/telemetry-aggregate.json`, `frontend/src/lib/server/payload.ts`, `backend/tests/test_ledger.py`, `backend/tests/test_silicon.py` and `backend/tests/test_telemetry.py` - and row 9 must take away the live fold row 12 gives the three trees it moves. So row 9 runs beside row 12 stacked on row 12's pushed branch, as row 12 did on row 8 (deviation 134): it writes the files it does not share first, takes row 12's branch in before it edits a shared one, and merges after row 12. Its `Depends-on` gains 12. Holding row 9 until row 12 merged would leave one of the two slots empty for as long as row 12 waits for a quiet merge time | Plan owner, 2026-09-29 |
+| 138 | 12 | STEP 4, and the worker rule in `docs/how-to/execute-a-plan.md`: the owner merges and a worker does not | Row 12's worker merges its own pull request by hand once CI is green and no `digest.yml` or `idhazh-gardener.yml` run is queued or running, confirms the merge, and removes `p50r12`. The tool that starts workers hands both back only when both finish (deviation 94), so an owner-only merge would hold a green row 12 for as long as row 9 takes, and row 9 would take a branch in rather than main. The owner still merges row 9, because its migration runs again just before its merge | Plan owner, 2026-09-29 |
 
 ## 0. Operating contract
 
@@ -281,10 +294,10 @@ Every place where the tree, or a ruling, departs from the text further down. A w
 | 6 | The corpus squash becomes Python | 4 | D | DONE | p50r6 | #1141 | p50-r6-worker |
 | 7 | One compaction task a ledger, two compact periods, and the diagrams move into the page | 5, 11 | F | DONE | p50r7 | #1151 | p50-r7-worker |
 | 8 | `prune.yml` becomes `idhazh-gardener.yml`, and the whole garden is scheduled | 6, 7 | G | DONE | p50r8 | #1156 | p50-r8-worker |
-| 9 | The three ledgers the console's routes read become parquet | 7, and plan 51's row titled **The query door module and its two entry points** | H | PENDING | - | - | - |
+| 9 | The three ledgers the console's routes read become parquet | 7, 12, and plan 51's row titled **The query door module and its two entry points** | H | IN-FLIGHT | p50r9 | - | p50-r9-worker |
 | 10 | `span-rollup` becomes parquet | - | - | **COLLAPSED** | - | - | - |
 | 11 | The index and watermark shapes are declared | 2 | C | DONE | p50r11 | #1136 | p50-r11-worker |
-| 12 | The closed-day fold of the CSV day trees moves into the gardener | 7, 8 | I | PENDING | - | - | - |
+| 12 | The closed-day fold of the CSV day trees moves into the gardener | 7, 8 | I | IN-FLIGHT | p50r12 | - | p50-r12-worker-2 |
 
 **Row 5 now depends on row 3 as well as row 4.** Its `visual-prune` task calls the parquet writer row 3 creates; dispatched after row 4 alone it would write CSV through a door that does not exist.
 
