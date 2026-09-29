@@ -2141,7 +2141,7 @@
       "qwen3-5-9b-q4-k-m"
     ],
     "published_charts": 0,
-    "published_items": 145,
+    "published_items": 219,
     "runs": [
       {
         "charts_drafted": 18,
@@ -2172,9 +2172,24 @@
         "started_at": "2026-09-29T12:58:56Z",
         "status": "partial",
         "succeeded": 72
+      },
+      {
+        "charts_drafted": 16,
+        "decided": 74,
+        "decision_ms": 3,
+        "failed": 6,
+        "n": 3,
+        "planned": 80,
+        "prefiltered": 0,
+        "run_id": "2026-09-29-36598333761",
+        "skipped": 0,
+        "source_list_stale": false,
+        "started_at": "2026-09-29T16:32:01Z",
+        "status": "partial",
+        "succeeded": 74
       }
     ],
-    "site_bytes": 34605678,
+    "site_bytes": 34770230,
     "site_files": 78,
     "version": "2026-09-09"
   }
