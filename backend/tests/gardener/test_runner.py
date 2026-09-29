@@ -89,6 +89,7 @@ def ran(
             shard=0,
             git_sha=git(checkout, "rev-parse", "HEAD").strip(),
             committed_folders=None,
+            cone_bytes=None,
             package=tasks,
             clock=lambda: WAKE,
             say=said.append,
@@ -340,19 +341,31 @@ def test_modules_that_do_not_match_the_declarations_stop_the_shard(
     assert any("served by no module" in line for line in said)
 
 
-def test_a_history_task_run_by_name_records_the_history_job(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+@pytest.mark.parametrize("land", [True, False])
+def test_a_history_task_named_to_the_runner_is_refused_and_nothing_runs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, land: bool
 ) -> None:
-    quiet_git(tmp_path, monkeypatch)
-    _, checkout = an_origin(tmp_path, {"corpus/corpus.jsonl": "{}\n"})
-    settings = config.load_gardener(a_config(checkout, GARDENER_FIXTURES / "garden" / "history.json"))
+    """Run here, the squash's task would only stamp its day and hold off the real rewrite.
 
-    outcome, _ = ran(
-        ("history",), settings, checkout, "garden_tasks_history", monkeypatch, land=False
+    Both ways a person can name a task - landed through the utility, or run in
+    the checkout by the package's own verb - reach the runner, and it refuses
+    before anything runs, naming the one program that runs a history task.
+    """
+    quiet_git(tmp_path, monkeypatch)
+    origin, checkout = an_origin(tmp_path, {"corpus/corpus.jsonl": "{}\n"})
+    settings = config.load_gardener(a_config(checkout, GARDENER_FIXTURES / "garden" / "history.json"))
+    before = commits_on(origin)
+
+    outcome, said = ran(
+        ("history",), settings, checkout, "garden_tasks_history", monkeypatch, land=land
     )
 
-    assert outcome.exit_code == EXIT_OK
-    assert rows_of(outcome.record)["history"].job is ServerJob.HISTORY
+    assert (outcome.exit_code, outcome.record, outcome.landing) == (EXIT_INTEGRITY, None, None)
+    assert any(
+        "history rewrites history" in line and runner.HISTORY_PROGRAM in line for line in said
+    ), said
+    assert commits_on(origin) == before
+    assert git(checkout, "status", "--porcelain", "--", "corpus", "state") == ""
 
 
 def test_the_complement_owns_nothing_another_task_or_a_ledger_claims(tmp_path: Path) -> None:

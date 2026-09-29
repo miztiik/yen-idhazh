@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import pytest
+from conftest import CONFIG_DIR
 from pydantic import ValidationError
 
+from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.knobs.collect import SUPERSEDED_COLLECT_NAMES, CollectConfig
 from idhazh.contracts.knobs.observability import SUPERSEDED_RETENTION_NAMES, ObservabilityConfig
 
@@ -85,3 +87,23 @@ def test_an_unrelated_knob_in_a_block_with_no_removed_name_is_untouched() -> Non
     """The refusal fires on the removed name and on nothing else."""
     assert ObservabilityConfig.model_validate({"sample_rate": 0.5}).sample_rate == 0.5
     assert CollectConfig.model_validate({"max_per_source": 3}).max_per_source == 3
+
+
+def test_the_prune_block_is_refused_naming_both_collection_declarations() -> None:
+    """The two collections' ages left for the declarations of the tasks that prune them.
+
+    An old local config that still carries the block would otherwise fail with
+    "extra inputs are not permitted", and its operator would not know the age
+    they set now lives in two files under `config/gardener/`.
+    """
+    old = {
+        "collections": {"workflow-artifacts": {"retain_days": 30, "max_deletes_per_run": 50}},
+        "dry_run": True,
+    }
+    with pytest.raises(ValidationError) as raised:
+        AppConfig.model_validate({"prune": old})
+    refusal = str(raised.value)
+    assert "config.prune is now window.value in config/gardener/workflow-artifacts.json" in refusal
+    assert "config/gardener/workflow-runs.json" in refusal
+    for successor in ("workflow-artifacts", "workflow-runs"):
+        assert (CONFIG_DIR / "gardener" / f"{successor}.json").is_file(), successor

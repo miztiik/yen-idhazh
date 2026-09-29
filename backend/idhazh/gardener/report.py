@@ -12,8 +12,8 @@ list.
 
 **The row names the run that wrote it, and the pass cannot.** A pass knows what
 it walked; which run, attempt, job and shard it ran in, which task declared it,
-how long it took and when the shard finished its work are the runner's to say,
-so the runner hands them in.
+how long it took, when the shard finished its work and what the shard's owned
+folders weighed are the runner's to say, so the runner hands them in.
 """
 
 from __future__ import annotations
@@ -30,6 +30,7 @@ def row(
     context: TaskContext,
     duration_ms: int,
     work_ended_at: str,
+    cone_bytes: int | None,
 ) -> CollectionPruneRow:
     """The pass as the persisted shape, under the name and identity of the run that took it."""
     return CollectionPruneRow(
@@ -52,6 +53,7 @@ def row(
         resume_from=outcome.resume_from,
         duration_ms=duration_ms,
         work_ended_at=work_ended_at,
+        cone_bytes=cone_bytes,
     )
 
 

@@ -39,6 +39,7 @@ from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.appearance_config import AppearanceConfig
 from idhazh.contracts.base import SLUG_PATTERN
 from idhazh.contracts.knobs.gardener import (
+    CollectionTaskPolicy,
     CompactionPolicy,
     DaysWindow,
     ForeverWindow,
@@ -358,6 +359,22 @@ def refuse_what_the_declarations_break(
             _refuse_a_compaction_that_cuts_its_ledger(
                 name, policy, tasks, app=app, appearance=appearance
             )
+        if isinstance(policy, CollectionTaskPolicy):
+            _refuse_a_collection_named_for_another(name, policy)
+
+
+def _refuse_a_collection_named_for_another(name: str, policy: CollectionTaskPolicy) -> None:
+    """One collection, one task: a collection task is named for the collection it prunes.
+
+    A collection task owns no folder, so the overlap check cannot keep two tasks
+    off one collection. The file name can, because two files cannot share one.
+    """
+    if name != policy.collection.value:
+        raise ValueError(
+            f"config/{GARDENER_TASKS_DIR}/{name}.json prunes {policy.collection.value}, and a "
+            f"collection task is named for its collection: call it "
+            f"{policy.collection.value}.json"
+        )
 
 
 def _nested(one: str, other: str) -> bool:

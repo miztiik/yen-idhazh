@@ -2,6 +2,7 @@
   "attempt": 1,
   "bytes_freed": 804208640,
   "candidates_seen": 214,
+  "cone_bytes": 15672361,
   "date": "2026-09-27",
   "deleted": 50,
   "dry_run": false,
@@ -16,6 +17,6 @@
   "stopped_because": "ceiling",
   "task": "workflow-artifacts",
   "until": "2026-08-28",
-  "version": "2026-09-27",
+  "version": "2026-09-28",
   "work_ended_at": "2026-09-27T00:47:12Z"
 }

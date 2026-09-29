@@ -12,8 +12,8 @@ month's number were taken on different sets.
 
 **Article text lives in its own file**, `articles/<url_key>.txt`, one an article.
 Editing a label re-emits one short line rather than the whole article, which
-matters because `.github/workflows/prune.yml` rewrites this range of history on a
-schedule (`CLAUDE.md` section 8). `article_sha256`
+matters because the history job of `.github/workflows/idhazh-gardener.yml`
+rewrites this range of history on a schedule (`CLAUDE.md` section 8). `article_sha256`
 and `article_words` are what tie the line back to the file: a text somebody edited
 in place stops matching, and `build_reference_dataset.py verify` is what says so.
 

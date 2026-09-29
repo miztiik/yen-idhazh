@@ -140,7 +140,8 @@ def main(argv: Sequence[str] | None) -> int:
         parser.error(f"--git-sha takes the forty hex digits of a commit, not {args.git_sha!r}")
     names, shard = chosen(settings, args, parser)
     # No commit listing: this package starts no process, so a task walks its
-    # folders as the checkout holds them, and a complement task is refused.
+    # folders as the checkout holds them, a complement task is refused, and the
+    # record says the shard's weight was not read.
     outcome = runner.run(
         names,
         settings=settings,
@@ -150,6 +151,7 @@ def main(argv: Sequence[str] | None) -> int:
         shard=shard,
         git_sha=args.git_sha,
         committed_folders=None,
+        cone_bytes=None,
     )
     if outcome.record is not None:
         written = outcome.record.relative_to(args.repo_root).as_posix()

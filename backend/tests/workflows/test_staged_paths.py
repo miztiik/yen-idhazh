@@ -251,8 +251,8 @@ def test_only_the_scheduled_prune_may_force_push() -> None:
     every shipped script, and every Python program under `backend/` - so a
     second forcing push fails here whoever adds it and wherever they put it.
 
-    One file is named rather than none. The prune's push moved out of
-    `prune.yml` so a test could drive it against a real repository and watch it
+    One file is named rather than none. The squash's push moved out of the
+    workflow so a test could drive it against a real repository and watch it
     refuse a tip that moved, and the forcing flag moved with it.
     """
     forcing: set[str] = set()
@@ -282,9 +282,9 @@ def test_the_prune_reads_both_its_numbers_from_config() -> None:
     daily cron is the wake-up; this step is the schedule. Run against the real
     committed declaration, so a renamed knob fails here.
     """
-    workflow = _load_workflows()["prune.yml"]
-    step = _step(workflow, "prune", "id", "due")
-    assert "backend/utilities/corpus_squash_due.py" in _script(step, "prune due step")
+    workflow = _load_workflows()["idhazh-gardener.yml"]
+    step = _step(workflow, "history", "id", "due")
+    assert "backend/utilities/corpus_squash_due.py" in _script(step, "history due step")
     done = subprocess.run(
         [sys.executable, str(SQUASH_DUE_MODULE)],
         cwd=REPO_ROOT,
@@ -308,7 +308,7 @@ def test_the_prune_reads_both_its_numbers_from_config() -> None:
 
     schedule = _triggers(workflow)["schedule"]
     assert isinstance(schedule, list) and len(schedule) == 1
-    cron = _mapping(cast(list[object], schedule)[0], "prune cron")["cron"]
+    cron = _mapping(cast(list[object], schedule)[0], "gardener cron")["cron"]
     assert isinstance(cron, str)
     assert "*/" not in cron, (
         "a step-value cron is not an every-N-days cadence: */30 fires on the 1st and 31st"
@@ -320,20 +320,26 @@ def test_the_prune_only_clones_the_whole_history_when_it_is_due() -> None:
 
     The deep fetch, the Python setup, the install and the push are each gated on
     the same output, so a repository nobody is pruning costs a shallow checkout a
-    day rather than a full clone a day.
+    day rather than a full clone a day. Both checkouts take `main` as it is now,
+    because the gardener's shards push before this job starts: a rewrite of the
+    commit the run was created at would find `main` moved and refuse every time.
     """
-    workflow = _load_workflows()["prune.yml"]
-    steps = _steps(workflow, "prune")
-    depths = [
-        _mapping(step.get("with"), "checkout with").get("fetch-depth")
+    workflow = _load_workflows()["idhazh-gardener.yml"]
+    steps = _steps(workflow, "history")
+    checkouts = [
+        _mapping(step.get("with"), "checkout with")
         for step in steps
         if isinstance(step.get("uses"), str)
         and cast(str, step.get("uses")).startswith("actions/checkout@")
     ]
+    depths = [checkout.get("fetch-depth") for checkout in checkouts]
 
     assert depths == ["1", "0"], "a shallow read first, and the full history only when due"
+    assert [checkout.get("ref") for checkout in checkouts] == ["main", "main"], (
+        "the history job checks out main as the shards left it, not the run's own commit"
+    )
     gated = [
-        _normalize_condition(step["if"], "prune step condition")
+        _normalize_condition(step["if"], "history step condition")
         for step in steps
         if "if" in step
     ]

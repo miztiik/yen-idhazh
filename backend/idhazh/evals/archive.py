@@ -15,9 +15,9 @@ whole or not at all, so a month's input is at most 31 files.
 The summary is computed, written temp-then-rename, read back through its
 contract, and reconciled field by field against a second reading of the day
 files. Only then are they unlinked. Nothing is deleted on the strength of a write
-nobody checked, and `.github/workflows/prune.yml` force-pushes `main` on a
-schedule (`CLAUDE.md` section 8), so a day this removes stops being
-recoverable once the prune passes over it.
+nobody checked, and the history job of `.github/workflows/idhazh-gardener.yml`
+force-pushes `main` on a schedule (`CLAUDE.md` section 8), so a day this removes
+stops being recoverable once the squash passes over it.
 
 **The observation index is the half that is easy to forget.**
 `evals.writer.recorded_observations` is what stops a run scoring an old

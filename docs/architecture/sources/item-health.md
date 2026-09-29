@@ -64,7 +64,7 @@ fold is where the two grains meet: it reads a month's day directories - at most
 31 - writes one aggregate, reads it back, and only then unlinks them.
 
 **The step ships in dry run.** It logs every file a live run would remove and
-removes none of them, because `.github/workflows/prune.yml` force-pushes `main`
+removes none of them, because the `history` job of `.github/workflows/idhazh-gardener.yml` force-pushes `main`
 on a schedule and a deleted state file stops being recoverable from history once
 that prune passes over it (`CLAUDE.md` section 8). Turning the deletion on is a
 one-line commit taken after a scheduled run has printed the list. Measured on

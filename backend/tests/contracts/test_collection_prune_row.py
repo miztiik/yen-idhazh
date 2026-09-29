@@ -50,3 +50,16 @@ def test_a_failed_pass_names_where_it_failed_only_when_it_reached_a_member() -> 
 
 def test_a_row_may_carry_no_ceiling_at_all() -> None:
     assert a_row(max_deletes_per_run=None).max_deletes_per_run is None
+
+
+def test_a_shards_weight_is_whole_bytes_and_a_row_from_before_it_reads_as_not_weighed() -> None:
+    """`cone_bytes` is additive: a row written before it existed reads, and says it was not read."""
+    assert a_row().cone_bytes == 15_672_361
+    with pytest.raises(ValidationError, match="cone_bytes"):
+        a_row(cone_bytes=-1)
+    sample = json.loads(
+        read_text(CONTRACT_FIXTURES_DIR / "collection-prune-row" / "ceiling-reached.json")
+    )
+    sample.pop("cone_bytes")
+    older = CollectionPruneRow.model_validate(sample | {"version": "2026-09-27"})
+    assert older.cone_bytes is None

@@ -100,21 +100,9 @@ def test_a_last_run_is_compared_with_every_days(tmp_path: Path, last: str, due: 
     assert (outputs["due"], outputs["last_run"]) == (due, last)
 
 
-def test_the_old_name_is_read_when_the_new_one_is_absent(tmp_path: Path) -> None:
-    """A payload written before the rename. Read as never run, it would be a daily force push."""
-    outputs = answered(ask(a_checkout(tmp_path, meta(pruned_date=FAR_AHEAD))))
-    assert (outputs["due"], outputs["last_run"]) == ("false", FAR_AHEAD)
-
-
-def test_the_new_name_wins_when_a_file_carries_both(tmp_path: Path) -> None:
-    outputs = answered(ask(a_checkout(tmp_path, meta(last_run=FAR_AHEAD, pruned_date=LONG_AGO))))
-    assert (outputs["due"], outputs["last_run"]) == ("false", FAR_AHEAD)
-
-
-@pytest.mark.parametrize("fields", [{"last_run": None}, {"pruned_date": None}])
-def test_null_is_the_contract_saying_never_run(tmp_path: Path, fields: dict[str, None]) -> None:
+def test_null_is_the_contract_saying_never_run(tmp_path: Path) -> None:
     """A harvest before any squash writes null, and the first run's record replaces it."""
-    outputs = answered(ask(a_checkout(tmp_path, meta(**fields))))
+    outputs = answered(ask(a_checkout(tmp_path, meta(last_run=None))))
     assert (outputs["due"], outputs["last_run"]) == ("true", "never")
 
 
@@ -126,17 +114,17 @@ def test_null_is_the_contract_saying_never_run(tmp_path: Path, fields: dict[str,
         meta(last_run=20260830),
         meta(last_run="2026-13-45"),
         meta(last_run="20260830"),
-        meta(last_run="yesterday", pruned_date=FAR_AHEAD),
+        meta(pruned_date=FAR_AHEAD),
         "{not json",
         "[]",
     ],
     ids=[
-        "both-keys-absent",
+        "no-last-run",
         "a-word",
         "a-number",
         "not-a-calendar-day",
         "not-the-contract-spelling",
-        "a-bad-last-run-never-falls-back",
+        "only-the-old-name",
         "not-json",
         "not-an-object",
     ],

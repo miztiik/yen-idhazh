@@ -1,9 +1,12 @@
 """How does one gardener shard land its one commit on main, however many shards race it?
 
 This is the entry point a wake's shard runs: it reads the commit this checkout
-is at, runs the shard through `idhazh.gardener.runner`, and lands what the
-runner hands back. It sits here rather than in the package because landing runs
-git, and nothing under `backend/idhazh/` may start a process
+is at, which of the shard's owned folders that commit holds, adds to a sparse
+checkout the folders the complement task sweeps - which only the commit can
+name - weighs every owned folder there, runs the shard through
+`idhazh.gardener.runner`, and lands what the runner hands back. It sits here
+rather than in the package because landing and reading the commit run git, and
+nothing under `backend/idhazh/` may start a process
 (`backend/tests/test_canaries.py`): the package that reads the open web holds no
 machinery an injected instruction could use to act.
 
@@ -35,6 +38,7 @@ from __future__ import annotations
 
 import argparse
 import dataclasses
+import os
 import random
 import subprocess
 import sys
@@ -70,6 +74,10 @@ BRANCH: Final = "main"
 
 #: The longest one wait between two tries, in seconds.
 MAX_BACKOFF_SECONDS: Final = 8
+
+#: Git's switch that stops a partial clone downloading an object it lacks. The
+#: weighing read sets it, so a folder outside the checkout fails instead.
+NO_LAZY_FETCH_ENV: Final = "GIT_NO_LAZY_FETCH"
 
 
 class Checkout:
@@ -138,6 +146,62 @@ class Checkout:
             *(folder.rstrip("/") for folder in owned),
         )
         return frozenset(listed.split("\0")) - {""}
+
+    def is_sparse(self) -> bool:
+        """Whether this checkout holds only some folders, as a shard's does."""
+        return self._run("config", "--bool", "core.sparseCheckout").stdout.strip() == "true"
+
+    def add_to_the_checkout(self, folders: Sequence[str]) -> str | None:
+        """Widen a sparse checkout by these folders; None, or what git said when it refused.
+
+        The names go on standard input, so none of them can be read as an option,
+        and a partial clone downloads the folders' files in one request.
+        """
+        done = subprocess.run(
+            ["git", "sparse-checkout", "add", "--stdin"],
+            cwd=self._repo,
+            input="".join(f"{folder}\n" for folder in folders),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        return None if done.returncode == 0 else done.stderr.strip()
+
+    def cone_bytes(self, owned: Sequence[str]) -> dict[str, int]:
+        """What each owned folder weighs at the commit, in bytes. A folder it lacks weighs 0.
+
+        One `git ls-tree -r -l` over the commit, so a file a task writes cannot move
+        the number and nothing the checkout holds beside the commit is counted. Run
+        with lazy fetching off: every file named sits inside the shard's checkout,
+        and a folder outside it would otherwise download every file it holds just
+        to be weighed. Git prints such a file's size as `BAD` instead, and it is
+        left out: its folder is one the checkout lacks, so the runner fails the
+        task that owns it.
+        """
+        weights = dict.fromkeys(owned, 0)
+        if not owned:
+            return weights
+        done = subprocess.run(
+            ["git", "ls-tree", "-r", "-l", "-z", "HEAD", "--", *owned],
+            cwd=self._repo,
+            capture_output=True,
+            text=True,
+            check=False,
+            env={**os.environ, NO_LAZY_FETCH_ENV: "1"},
+        )
+        if done.returncode != 0:
+            raise RuntimeError(f"git ls-tree -r -l failed: {done.stderr.strip()}")
+        for entry in done.stdout.split("\0"):
+            if not entry:
+                continue
+            described, path = entry.split("\t", 1)
+            size = described.split()[3]
+            folder = next(
+                (held for held in owned if path == held or path.startswith(f"{held}/")), None
+            )
+            if folder is not None and size.isdigit():
+                weights[folder] += int(size)
+        return weights
 
 
 def sleep_with_jitter(attempt: int, *, sleep: Callable[[float], None] = time.sleep) -> None:
@@ -222,6 +286,25 @@ def publish(
     return EXIT_PUSH_KEPT_LOSING
 
 
+def find_the_swept_folders(
+    names: Sequence[str],
+    settings: GardenerSettings,
+    repo_root: Path,
+    committed: frozenset[str],
+) -> list[str]:
+    """Every folder the commit holds that this shard's complement task sweeps.
+
+    The plan job cannot name them: they are the folders under `state/` that no
+    declaration and no ledger claims, and only the commit says what is there.
+    """
+    swept: set[str] = set()
+    for name in names:
+        if settings.tasks[name].owns is None:
+            folders = runner.folders_of(name, settings.tasks, repo_root, committed)
+            swept.update(folders.walk, folders.missing)
+    return sorted(swept)
+
+
 def run_and_land(
     names: Sequence[str],
     *,
@@ -234,13 +317,28 @@ def run_and_land(
     clock: Callable[[], datetime] = runner.utc_now,
     say: Callable[[str], None] = print,
 ) -> Outcome:
-    """Read the commit, run the shard, and land what it hands back; the worst code wins."""
+    """Read the commit, run the shard, and land what it hands back; the worst code wins.
+
+    A sparse checkout is widened by the complement task's folders before
+    anything is weighed or run, and by nothing else: a declared folder the
+    checkout lacks means the plan was wrong, so its task still fails.
+    """
     checkout = Checkout(repo_root)
     sha = checkout.head()
     if sha is None:
         say(f"shard {shard}: {repo_root.name} is not a git checkout, so no record can name it")
         return Outcome(exit_code=EXIT_INTEGRITY, record=None, landing=None)
     owned = sorted({folder for name in names for folder in settings.tasks[name].owns or ()})
+    committed = checkout.committed_folders(owned)
+    swept = find_the_swept_folders(names, settings, repo_root, committed)
+    lacking = [folder for folder in swept if not (repo_root / folder).is_dir()]
+    if lacking and checkout.is_sparse():
+        refused = checkout.add_to_the_checkout(lacking)
+        say(
+            f"shard {shard}: added {', '.join(lacking)} to the checkout"
+            if refused is None
+            else f"shard {shard}: could not add {', '.join(lacking)} to the checkout: {refused}"
+        )
     ran = runner.run(
         names,
         settings=settings,
@@ -249,7 +347,8 @@ def run_and_land(
         attempt=attempt,
         shard=shard,
         git_sha=sha,
-        committed_folders=checkout.committed_folders(owned),
+        committed_folders=committed,
+        cone_bytes=checkout.cone_bytes([*owned, *swept]),
         package=package,
         clock=clock,
         say=say,

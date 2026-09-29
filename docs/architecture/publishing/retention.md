@@ -97,7 +97,8 @@ today, and the archive's own header says what happened. Today that header reads
 "Nothing here is deleted.", which is true and would stop being true - so the
 sentence is part of the change, not a follow-up to it.
 
-**What it costs, stated rather than implied.** `prune.yml` force-pushes `main`
+**What it costs, stated rather than implied.** The `history` job of
+`idhazh-gardener.yml` force-pushes `main`
 on a schedule ([../../../CLAUDE.md](../../../CLAUDE.md) section 8), so once a
 squash passes over the range, the unpublished day's bytes are gone from history
 as well as from the tree. Before that boundary an unpublish is a normal commit
@@ -196,7 +197,7 @@ Total 7,815,628 bytes over 8 files. **All three of the ledgers this table exists
 
 **`state/raw/visual-prunes/` is bounded by arithmetic rather than by a rule.** A row was 105 bytes as a CSV line, counted 2026-09-06. Through the ledger door one row is one parquet file of 8,008 bytes - 76 times as much, because every file carries its own column schema and writer envelope. Measured 2026-09-28 on a Windows development machine with pyarrow 25.0.1; the 21 CSV day files the move converted held 89 rows in 13,660 bytes and became 170,147 bytes of parquet. Five scheduled runs a day is 1,825 files a year, which is 14,614,600 bytes a year where the CSV rows took 191,625. Nothing deletes from it until its compaction task, `compact-visual-prunes`, runs live; from then it holds 13 month files and 45 to 76 day files, and asking it whether the backlog is shrinking across more than one year is the whole reason it is kept.
 
-**Every task ships in dry run, and that is what makes it safe to have written at all.** Each declaration under `config/gardener/` carries `dry_run: true`, so a pass names every file a live pass would take and takes none of them. The reason is `.github/workflows/prune.yml`: it squashes and force-pushes `main` on a schedule, so a state file deleted here stops being recoverable from history once that prune passes over it (`CLAUDE.md` section 8) - `git revert` is not a recovery path for a file older than the squash's `window` in `config/gardener/corpus-squash.json`. Turning one task's deletion on is a one-line commit to its own declaration, taken after a scheduled run has printed its list.
+**Every task ships in dry run, and that is what makes it safe to have written at all.** Each declaration under `config/gardener/` carries `dry_run: true`, so a pass names every file a live pass would take and takes none of them. The reason is the `history` job of `.github/workflows/idhazh-gardener.yml`: it squashes and force-pushes `main` on a schedule, so a state file deleted here stops being recoverable from history once that prune passes over it (`CLAUDE.md` section 8) - `git revert` is not a recovery path for a file older than the squash's `window` in `config/gardener/corpus-squash.json`. Turning one task's deletion on is a one-line commit to its own declaration, taken after a scheduled run has printed its list.
 
 **Measured on this checkout on 2026-09-13, that list is empty and stays empty for a year.** Every committed file is inside its own window, so a live run today would remove nothing at all. The first file to go is `state/seen/2026/08/23.csv` on **2026-11-22**, through the 90-day sight window; the first files the fourteen-month rules take are on **2027-10-01**, when `2026-08` falls below fourteen months and four go together - the day files under `state/item-health/2026/08/`, `frontend/public/telemetry/2026-08.csv`, the day files under `state/feed-health/2026/08/` and the day files under `state/scores/2026/08/`. The sight date was 2026-11-30 while that ledger filed by month, because a whole month shard survived if any of its days was in range; at day grain the file the window stops naming is the file that goes, which is 8 days earlier. Reading committed files against a fixed calendar is deterministic, so the spread is zero.
 
@@ -267,7 +268,8 @@ defect, whatever the number is.
 **It reports and removes nothing until it is told twice.** `--dry-run` is on by
 default and `--no-dry-run` is the second word. That is the precedent every
 gardener retention task sets by shipping `dry_run: true` in its declaration,
-taken for the same reason and not a new one: `.github/workflows/prune.yml`
+taken for the same reason and not a new one: the `history` job of
+`.github/workflows/idhazh-gardener.yml`
 squashes and force-pushes `main` on a schedule, so a state file deleted here
 stops being recoverable from history once that prune passes over the range
 ([../../../CLAUDE.md](../../../CLAUDE.md) section 8). What a dry run prints is
@@ -419,15 +421,12 @@ jobs upload and the workflow runs that produced them. Measured 2026-09-17 on
 `github-pages` is 30 artifacts holding 1,003.1 MB, 94 percent of the bytes in 5
 percent of the count - and 3,551 workflow runs.
 
-```
-python backend/utilities/prune_artifacts.py --collection workflow-artifacts
-```
-
-The steps, the flags and what each one costs are in
-[../../how-to/prune-a-collection.md](../../how-to/prune-a-collection.md). The
-policy is `prune` in `config/idhazh.json`: one `retain_days` and one
-`max_deletes_per_run` a collection, with `dry_run` true, so a fresh clone
-reports and deletes nothing.
+Both are gardener tasks, `workflow-artifacts` and `workflow-runs`, and each is
+one declaration under `config/gardener/` holding its window and its ceiling,
+with `dry_run` true, so a wake reports and deletes nothing
+([../../concepts/config/idhazh-gardener.md](../../concepts/config/idhazh-gardener.md#the-collection-declarations-that-ship)).
+How to read what a wake would take, and how to turn one live, is
+[../../how-to/prune-a-collection.md](../../how-to/prune-a-collection.md).
 
 **It is the same core the day files go through**, which is the whole reason it
 is one paragraph here and not a second retention design. A collection is three

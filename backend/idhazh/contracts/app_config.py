@@ -44,7 +44,6 @@ from idhazh.contracts.knobs.council import CouncilConfig
 from idhazh.contracts.knobs.evaluation import DriftConfig, EvaluationConfig
 from idhazh.contracts.knobs.extract import ElementsConfig, ExtractConfig
 from idhazh.contracts.knobs.finetune import FinetuneConfig, ReferenceDatasetConfig
-from idhazh.contracts.knobs.gardener import PruneConfig
 from idhazh.contracts.knobs.ledger import LedgerConfig
 from idhazh.contracts.knobs.model_server import ModelServerConfig
 from idhazh.contracts.knobs.models import SUPERSEDED_MODELS_NAMES, ModelsConfig
@@ -64,8 +63,18 @@ from idhazh.contracts.knobs.windows import months_a_window_can_touch
 #: every other knob lives in. It is a file of its own now and `models_file`
 #: names which one, so the old block is refused by name rather than lifted: a
 #: lift would read one model out of the shared file while `models_file` named
-#: another, and the run would stand a server up on whichever won.
-SUPERSEDED_APP_NAMES: Final[Mapping[str, str]] = MappingProxyType({"models": "models_file"})
+#: another, and the run would stand a server up on whichever won. `prune` held
+#: the two GitHub collections' ages for a utility a person ran by hand; each
+#: collection is a gardener task now, and its age lives in its own declaration.
+SUPERSEDED_APP_NAMES: Final[Mapping[str, str]] = MappingProxyType(
+    {
+        "models": "models_file",
+        "prune": (
+            "window.value in config/gardener/workflow-artifacts.json and "
+            "config/gardener/workflow-runs.json"
+        ),
+    }
+)
 
 
 #: Where the active model's whole entry lives, relative to `config/`. Pinned to
@@ -149,7 +158,6 @@ class AppConfig(Contract):
     evaluation: EvaluationConfig = Field(default_factory=EvaluationConfig)
     drift: DriftConfig = Field(default_factory=DriftConfig)
     retention: RetentionConfig = Field(default_factory=RetentionConfig)
-    prune: PruneConfig = Field(default_factory=PruneConfig)
     visuals: VisualsConfig = Field(default_factory=VisualsConfig)
     assemble: AssembleConfig = Field(default_factory=AssembleConfig)
     placement: PlacementConfig = Field(default_factory=PlacementConfig)
@@ -168,12 +176,11 @@ class AppConfig(Contract):
     @model_validator(mode="before")
     @classmethod
     def _a_removed_top_level_block_is_refused_by_name(cls, data: Any) -> Any:
-        """`models` left this file on 2026-09-14 and is answered by name.
+        """`models` left this file on 2026-09-14 and `prune` on 2026-09-28; both are refused.
 
-        The read-side migration `CLAUDE.md` section 11 owes for the removal. A
-        config that still carries the block would otherwise fail with "extra
-        inputs are not permitted", which does not tell an operator that their
-        eleven lines are now a file and a pointer.
+        A config that still carries either block would otherwise fail with "extra
+        inputs are not permitted", which does not tell an operator where their
+        lines went.
         """
         return refuse_a_removed_knob("config", data, SUPERSEDED_APP_NAMES)
 

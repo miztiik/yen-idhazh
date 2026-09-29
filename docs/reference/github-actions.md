@@ -4,10 +4,14 @@
 The exact workflow display names, files, and trigger classes. All scheduled
 times are UTC.
 
-**Three workflows push to `main`.** `digest.yml` does it on every run.
-`prune.yml` does it on the first wake the `every_days` of
-`config/gardener/corpus-squash.json` allows, and it is the one force-push this
-repository permits. `measure.yml` does it only from
+**Six workflows push to `main`.** `digest.yml` does it on every run, and
+`llm-council.yml` does it once a night with the rows its judges filed.
+`idhazh-gardener.yml` does it every day, once for each shard's record, and its
+`history` job does it on the first wake the `every_days` of
+`config/gardener/corpus-squash.json` allows - the one force-push this repository
+permits. `validate.yml` commits a candidate's verdict under `state/pipeline-tests/`,
+and `backfill.yml` commits only when a person dispatches it with `commit` set.
+`measure.yml` does it only from
 the `runtime` job, and only the machine that job drew - one row under
 `state/pipeline-tests/host-fingerprint/`. Nothing else in `measure.yml` writes
 anything back; every other job uploads an artifact and the runner takes the rest
@@ -24,7 +28,7 @@ so the others still cannot.
 | `drift.yml` | `Drift review` | Sunday at 08:00 (`0 8 * * 0`) | yes |
 | `validate.yml` | `Model validation` | none | yes |
 | `measure.yml` | `Measurements` | none | yes |
-| `prune.yml` | `Corpus prune` | `37 23 * * *`; squashes on the first wake the squash's `every_days` allows | yes |
+| `idhazh-gardener.yml` | `Idhazh Gardener` | `40 0 * * *`; every task at every wake, and the corpus squash on the first wake the squash's `every_days` allows | yes |
 | `backfill.yml` | `Vector backfill` | none | yes |
 | `idhazh-pipeline-tests.yaml` | `Pipeline tests` | none | yes |
 
@@ -45,41 +49,54 @@ the commit it made afterwards.
 
 ## The one force-push wakes when no digest can be running
 
-`prune.yml` ends in `git push --force origin main`, the only force-push this
-repository allows ([../../CLAUDE.md](../../CLAUDE.md) section 8). A digest job
-pushes the day it just built, so a force-push landing while one is in flight can
-discard it.
+The `history` job of `idhazh-gardener.yml` ends in `git push --force origin
+main`, the only force-push this repository allows
+([../../CLAUDE.md](../../CLAUDE.md) section 8). A digest or council job pushes
+the rows it just wrote, so a force-push landing while one is in flight can
+discard them.
 
-**The hour is derived from the digest cron list rather than chosen.** A scheduled
-run starts 40 to 70 minutes after its cron minute and then takes 164 to 184
-minutes end to end (`ubuntu-latest`, 2026-08-23/24, n=3 -
-[../architecture/sources/freshness.md](../architecture/sources/freshness.md)), so
-each `Content refresh` line at H:20 occupies H+1:00 to H+4:34:
+**The window is measured, not derived from the cron lines.** Scheduled runs now
+start so late that a span worked out from each cron line - its minute plus the
+longest delay plus the longest run - overlaps the next line's, and such a model
+finds no gap for any wake minute. The runs themselves leave the same quiet time
+every night. Read on 2026-09-28 with
+`gh run list --workflow <file> --event schedule --json createdAt,updatedAt`:
 
-| Cron line | Occupied, UTC |
-| :--- | :--- |
-| `20 2 * * *` | 03:00 - 06:34 |
-| `20 6 * * *` | 07:00 - 10:34 |
-| `20 10 * * *` | 11:00 - 14:34 |
-| `20 14 * * *` | 15:00 - 18:34 |
-| `20 18 * * *` | 19:00 - 22:34 |
+| Workflow | Runs read | Busy, UTC |
+| :--- | :--- | :--- |
+| `digest.yml`, its five cron lines | 60, 2026-09-16 to 28 | 07:23 to 00:52: no run was created before 07:23, and the last run of each day ended by 00:52 |
+| `llm-council.yml`, `0 22 * * *` | 9, 2026-09-19 to 28 | 23:57 to 01:23 |
 
-That leaves four gaps of 26 minutes and one of 266, from 22:34 to 03:00. Prune
-needs a 60-minute window - 40 minutes of queue drift through its own 30-minute
-`timeout-minutes` - so no short gap can hold it and the long one can. Centred
-there it has 103 minutes of margin on each side, which is `37 23 * * *`: the job
-starts between 00:17 and 00:47 and has pushed by 01:17. The old `20 4 * * *` sat
-inside the 02:20 run's span, so a prune that did fire force-pushed inside the
-digest window nearly every day.
+That leaves 01:23 to 07:23 quiet. The gardener wakes at `40 0 * * *`, and its
+push has three jobs in front of it: `plan` bounded at 5 minutes, `run-tasks` at
+20 and `history` at 30, 55 minutes in all. **How late a 00:40 wake starts is an
+estimate until its own runs say.** The two nearest cron lines bracket it:
+`prune.yml` at 23:37 was created 112 to 139 minutes late (10 runs, 2026-09-19
+to 28) and at 04:20 259 to 334 minutes late (10 runs, 2026-09-09 to 18). So the
+wake is estimated to start between 02:32 and 06:14, and its push lands between
+02:32 and 07:09: 69 minutes after the council at the earliest, and 14 minutes
+before the first digest at the latest. The install inside `run-tasks` is an
+estimate too: the whole job was estimated at 6 to 13 minutes against its
+20-minute bound, and the first scheduled runs' timings replace that. No squash
+is due before about 2026-10-29, so about 30 scheduled wakes measure the real
+delay before a force push depends on it: a delay outside 43 to 348 minutes
+moves the cron, which is one line.
+
+`backend/tests/workflows/test_triggers.py` holds these numbers, and each busy
+span holds the cron lines it was measured under, so a changed cron line fails
+there with "re-measure" before its span can go stale. The readings that stood
+here before - a start 40 to 70 minutes late and a digest run of 164 to 184
+minutes (n=3, 2026-08-23/24) - were disproved by these, and the 23:37 wake they
+derived is gone with them.
 
 **This lowers the odds; it does not close them.** GitHub queues scheduled runs by
-load, so a run later than the recorded normal still reaches 23:37 - the section
-below is why that cannot be relied on either way. Closing it needs a lock across
-two workflows, which GitHub does not offer. `concurrency` governs one group, and
-a group shared with `Content refresh` would let a waiting prune be deleted,
-which is a prune that never bounds the repository - and `Content refresh` has no
-group to share. What keeps a clash from costing another run its commits is the
-tip check the prune's push makes, not this hour.
+load, so a run later than the recorded normal still reaches the push - the
+section below is why that cannot be relied on either way. Closing it needs a
+lock across workflows, which GitHub does not offer. `concurrency` governs one
+group, and a group shared with `Content refresh` would let a waiting squash be
+deleted, which is a squash that never bounds the repository - and `Content
+refresh` has no group to share. What keeps a clash from costing another run its
+commits is the tip check the squash's push makes, not this minute.
 
 ## The schedule asks for five runs a day and gets fewer
 
@@ -613,6 +630,12 @@ what the two-call path is being measured for.
 A workflow display name is the label shown in the Actions UI. Its filename is
 the stable automation interface for repository paths, API calls, and CLI
 dispatch. Keep the ten filenames stable when a UI label changes.
+
+**`prune.yml` became `idhazh-gardener.yml` on 2026-09-28**, because the file
+stopped running one job and started running every task the gardener tends.
+GitHub treats a renamed file as a new workflow: its schedule started again from
+the next cron, and the runs before the rename stay listed under their old name,
+`Corpus prune`.
 
 GitHub's `workflow_run.workflows` selector is the exception: it matches a
 display name. `pages.yml` therefore names `Content refresh` in that selector.

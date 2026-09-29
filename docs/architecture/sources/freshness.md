@@ -13,11 +13,18 @@ construction. The exact workflow trigger contract is
 [../../reference/github-actions.md](../../reference/github-actions.md).
 
 **The 02:20 slot exists so the morning read is not waiting on the pipeline.** A
-scheduled run starts 40 to 70 minutes after its cron minute, then takes 164 to
-184 minutes end to end (`ubuntu-latest`, 2026-08-23/24, n=3). A first slot at
-06:20 therefore did not publish until about 10:30. At 02:20 it publishes before
-06:30. The slot also closes the gap after 18:20, so a story that broke late in
-the evening is read at the top of the next day rather than eight hours into it.
+scheduled run was measured starting 40 to 70 minutes after its cron minute and
+taking 164 to 184 minutes end to end (`ubuntu-latest`, 2026-08-23/24, n=3), and
+at those figures a first slot at 06:20 did not publish until about 10:30 while
+one at 02:20 publishes before 06:30. **The start is later now.** Read on
+2026-09-28 over 60 scheduled runs from 2026-09-16 to 28: full runs took 147 to
+201 minutes, no run was created before 07:23 UTC, and the last run of each day
+ended by 00:52. The runs arrive about 07:45, 11:45, 15:00, 18:25 and 21:30, so
+either the 02:20 slot is dropped or every slot starts three to five and a half
+hours late - the run list read here does not say which slot made each run. The
+slot also closes the gap after 18:20, so a story that
+broke late in the evening is read at the top of the next day rather than eight
+hours into it.
 
 Twenty past the hour, not the top of it. GitHub queues scheduled jobs by load, and the top of every hour is when everyone else asks.
 

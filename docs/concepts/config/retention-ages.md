@@ -316,7 +316,7 @@ whose window may not sit below `collect.seen_window_days`.
 
 **And every task ships in dry run.** Each declaration carries `dry_run: true`,
 so a pass lists every file a live pass would remove and removes none of them.
-`.github/workflows/prune.yml` squashes and force-pushes
+The `history` job of `.github/workflows/idhazh-gardener.yml` squashes and force-pushes
 `main` on a schedule, so a state file deleted here stops being recoverable from
 history once that prune passes over it (`CLAUDE.md` section 8) - which makes
 "read the list first" the only safe order. Turning one task's deletion on is a

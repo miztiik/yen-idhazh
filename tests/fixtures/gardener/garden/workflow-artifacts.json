@@ -1,4 +1,5 @@
 {
+  "collection": "workflow-artifacts",
   "dry_run": true,
   "kind": "collection",
   "lifecycle_status": "active",

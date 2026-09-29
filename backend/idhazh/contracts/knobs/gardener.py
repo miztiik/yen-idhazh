@@ -1,18 +1,15 @@
 """What may the gardener delete and rewrite, and how is each of its tasks declared?
 
-Three shapes, and they answer one question at three sizes. `GardenerConfig` is
-`config/idhazh_gardener.json`: how many shards a wake splits into and how many
-times a shard may try to land its record. `TaskPolicy` is one file under
-`config/gardener/`: one task, what it owns, how far back it keeps, and whether
-it may delete at all. `PruneConfig` is the `prune` block of `config/idhazh.json`
-that `backend/utilities/prune_artifacts.py` reads for a pass an operator runs
-by hand over the collections GitHub holds.
+Two shapes, and they answer one question at two sizes. `GardenerConfig` is
+`config/idhazh_gardener.json`: how many shards a wake splits into, how many
+times a shard may try to land its record, and how much one shard may check out.
+`TaskPolicy` is one file under `config/gardener/`: one task, what it owns, how
+far back it keeps, and whether it may delete at all.
 
 **Every default reports and deletes nothing.** A task has no default for
-`dry_run`, so a declaration says which it is in so many words, and the `prune`
-block ships `dry_run: true`. That is the same promise `RetentionConfig` makes
-and for the same reason: a fresh clone that starts deleting on its first run is
-a clone nobody can try out.
+`dry_run`, so a declaration says which it is in so many words. That is the same
+promise `RetentionConfig` makes and for the same reason: a fresh clone that
+starts deleting on its first run is a clone nobody can try out.
 
 **A declaration names its module by what it is, and never by a path.** Which
 Python runs a task is decided by `idhazh.gardener.registry` from the task's
@@ -37,13 +34,13 @@ from idhazh.contracts.ledger_name import LedgerName
 
 
 class PrunableCollection(StrEnum):
-    """Every collection a pass may take from, and the word an operator types.
+    """Every collection a gardener task may take from, and the word its declaration names.
 
     A closed vocabulary, so a word outside it is refused with the whole list
     rather than resolved against anything. The same rule `idhazh telemetry
-    prune` holds for its ledgers: a deletion command whose destination is an
-    arbitrary string is a deletion primitive pointed at whatever the caller
-    happened to pass (Guardrail #11).
+    prune` holds for its ledgers: a deletion whose destination is an arbitrary
+    string is a deletion primitive pointed at whatever the file happened to say
+    (Guardrail #11).
     """
 
     #: The files a job uploaded with `actions/upload-artifact`. Each one has its
@@ -55,79 +52,21 @@ class PrunableCollection(StrEnum):
     WORKFLOW_RUNS = "workflow-runs"
 
 
-#: How many members one pass takes when a collection names no ceiling of its
-#: own. An estimate and not a measurement (Guardrail #10): each delete is one
-#: REST call, and GitHub publishes no number for how many deletes a minute it
-#: will accept before it applies a secondary rate limit. Fifty is chosen to sit
-#: far under any plausible burst limit and to finish inside a step nobody is
-#: waiting on. What would settle it is a run that deletes in a loop until the
-#: API answers 403 with a `Retry-After` header, and reads the count off that.
-DEFAULT_CEILING: Final = 50
-
-
-class CollectionPolicy(Model):
-    """One collection's line: how old a member must be, and how many go in a pass."""
-
-    retain_days: int = Field(
-        ge=1,
-        description=(
-            "How many days a member is kept before a pass may take it. Whole days and "
-            "never zero: a window that includes today would delete the artifact the "
-            "running job just uploaded."
-        ),
-    )
-    max_deletes_per_run: int = Field(
-        default=DEFAULT_CEILING,
-        ge=0,
-        description=(
-            "The ceiling. One pass deletes at most this many and then stops cleanly, "
-            "naming where the next pass resumes. 0 surveys: it reports the first "
-            "member the window holds and deletes nothing, which is how an operator "
-            "sees what a window selects without committing to a number."
-        ),
-    )
-
-
-def default_collections() -> dict[PrunableCollection, CollectionPolicy]:
-    """Both collections, with a line drawn for each, taking nothing until dry_run is off.
-
-    The two ages differ because the two questions differ. An artifact is bytes a
-    job wrote for the next job, and once the run that produced it is read there
-    is nothing left to ask of it. A run is the record that the work happened,
-    and somebody reading a regression three months later still wants it.
-    """
-    return {
-        PrunableCollection.WORKFLOW_ARTIFACTS: CollectionPolicy(retain_days=30),
-        PrunableCollection.WORKFLOW_RUNS: CollectionPolicy(retain_days=90),
-    }
-
-
-class PruneConfig(Model):
-    """The collections a pass may take from, and whether it may take anything at all."""
-
-    dry_run: bool = Field(
-        default=True,
-        description=(
-            "Report what a live pass would delete and delete nothing. True by default, "
-            "so a fresh clone removes nothing it was not asked twice for. The CLI's "
-            "--no-dry-run is the second word."
-        ),
-    )
-    collections: dict[PrunableCollection, CollectionPolicy] = Field(
-        default_factory=default_collections,
-        description=(
-            "One policy per collection this may be pointed at. A collection absent "
-            "from this map is refused by name: the vocabulary says the word exists and "
-            "the map says whether this repository has drawn a line for it."
-        ),
-    )
-
-
 # --- config/idhazh_gardener.json ---------------------------------------------
 
 
+#: The most one shard's owned folders may weigh at the commit it checked out, in
+#: megabytes of 1024 * 1024 bytes. An estimate, not a measurement of a limit
+#: (Guardrail #10): the heaviest shard's trees sit inside a 390-day and a
+#: 14-month window, which at the rates read on 2026-09-28 fill at about 550 to
+#: 600 MB, and this leaves about 30 percent of room for the rates to rise. The
+#: first scheduled runs' checkout times say whether a shard that size still
+#: fits its job.
+DEFAULT_MAX_CONE_MB: Final = 768
+
+
 class GardenerConfig(Model):
-    """How a wake is split into shards, and how hard each shard tries to land its record."""
+    """How a wake is split into shards, how hard each tries to land, and how much one may hold."""
 
     version: DateStamp = Field(
         description="The UTC day this file's shape was last changed, as YYYY-MM-DD."
@@ -145,6 +84,16 @@ class GardenerConfig(Model):
         description=(
             "The most shards one wake splits its tasks into. Fewer run when there are "
             "fewer tasks, so no shard is ever empty."
+        ),
+    )
+    max_cone_mb: int = Field(
+        default=DEFAULT_MAX_CONE_MB,
+        ge=1,
+        description=(
+            "The most one shard's owned folders may weigh at the commit it checked out, "
+            "in megabytes of 1024 * 1024 bytes. The code every shard checks out is not "
+            "counted. A shard over it still runs its tasks and lands its record, then "
+            "exits 1 naming the size, this ceiling and its three heaviest folders."
         ),
     )
 
@@ -308,11 +257,26 @@ class RetentionPolicy(_Declared):
 class CollectionTaskPolicy(_Declared):
     """A task that deletes members of a collection GitHub holds for this repository.
 
-    Not `CollectionPolicy`: that name is the `prune` block's per-collection line,
-    which the hand-run utility still reads.
+    One module serves every declaration of this kind, so the collection is a typed
+    field rather than read off the file's name, and the loader refuses a
+    declaration not named for it - which is what keeps one collection to one task,
+    because `owns` is empty here and the overlap check has nothing to compare.
     """
 
     kind: Literal[TaskKind.COLLECTION]
+    collection: PrunableCollection = Field(
+        description=(
+            "The collection this task prunes. The declaration must be called "
+            "<collection>.json, so no collection has two windows."
+        )
+    )
+    window: DaysWindow = Field(
+        description=(
+            "How many whole days a member is kept, counted back from the wake's UTC day. "
+            "Days and nothing else: GitHub dates a member by its day, and the pass "
+            "counts whole days back from the wake."
+        )
+    )
 
 
 #: The compaction defaults, one line each so a declaration that omits a key and

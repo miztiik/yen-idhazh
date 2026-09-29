@@ -65,7 +65,7 @@ this checkout on 2026-09-08, before the fix:
 So `2025-13.csv` was left alone in `state/feed-health/` and was summarised into
 `state/score-archive/2025-13.json` and then **deleted** in `state/scores/` - one name,
 two dispositions, and the destructive one landing on the ledger that holds the evidence
-behind every published quality claim. `prune.yml` force-pushes `main`
+behind every published quality claim. The `history` job of `idhazh-gardener.yml` force-pushes `main`
 ([../../CLAUDE.md](../../CLAUDE.md) section 8), so a file it removed would not come
 back. The committed guard covered `notes.csv`, which every reader already refused.
 
@@ -437,7 +437,7 @@ commitment to convert any of them.
 | Collection | Path | Writer | Why not |
 | --- | --- | --- | --- |
 | Source health view | `frontend/public/source-health.json` | `telemetry.publish.source_health` | One document, rewritten whole each run. Row 20 of the constant-cost-reads plan bounded the read behind it to the recorded dates it needs (#485), so it no longer walks all history to write the same document. |
-| Training corpus | `corpus/corpus.jsonl`, `corpus/corpus.meta.json`, `corpus/holdout.txt` | `idhazh.corpus`, rolled by `backend/utilities/data_wrangler.py` | A rolling training window bounded by `finetune.corpus_rows` and by `prune.yml`, not by a calendar. Deliberately given no union merge driver, because the union of two rolls holds evicted rows again. |
+| Training corpus | `corpus/corpus.jsonl`, `corpus/corpus.meta.json`, `corpus/holdout.txt` | `idhazh.corpus`, rolled by `backend/utilities/data_wrangler.py` | A rolling training window bounded by `finetune.corpus_rows` and by the corpus squash in `idhazh-gardener.yml`, not by a calendar. Deliberately given no union merge driver, because the union of two rolls holds evicted rows again. |
 | Published days | `frontend/public/digest/<YYYY>/<MM>/<DD>/` | `stages.assemble.stage_assemble` | Partitioned by **day**, and listed here because it is the tree the day grain came from rather than because it is unpartitioned. A day is frozen the moment it is written. The month partitions above are keyed off this tree, and so is `state/published/`. |
 
 ## Design rationale

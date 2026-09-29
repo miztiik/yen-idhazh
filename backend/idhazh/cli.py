@@ -124,31 +124,6 @@ def _council_run(parser: argparse.ArgumentParser, stage: str, given: str | None)
     return given
 
 
-def _point_at_the_gardener() -> int:
-    """Say where each pass of the retired cleanup verb went, and run nothing.
-
-    Every flag it took still parses, so an old command line reaches this message
-    rather than an argument error. It exits 2, the command-line convention for a
-    request this program will not carry out, because the work it asked for runs
-    somewhere else now.
-    """
-    sys.stderr.write(
-        f"{RETIRED_CLEANUP_VERB} is retired. Each pass it ran is a gardener task now, "
-        "declared in config/gardener/<task>.json, and a task's dry run is that file's "
-        "dry_run. Run one task in this checkout with\n"
-        f"  python -m idhazh {gardener_cli.VERB} {gardener_cli.RUN_TASK} NAME "
-        "--run-id RUN_ID --attempt N --git-sha SHA\n"
-        "or run it and land what it did with\n"
-        "  python backend/utilities/gardener_publish.py NAME --run-id RUN_ID --attempt N\n"
-    )
-    return 2
-
-
-#: The cleanup verb whose passes are gardener tasks now. It stays only to say where
-#: each pass went, and it is removed once the gardener's own workflow runs them.
-RETIRED_CLEANUP_VERB: Final = "prune-state"
-
-
 #: Every verb this router accepts, and the whole of what `--help` lists. Named
 #: here rather than inline so that the workflows can be held against it: a
 #: workflow step spelling a verb this tuple does not carry is a run that dies
@@ -165,7 +140,6 @@ STAGES: Final[tuple[str, ...]] = (
     "harvest",
     "compact",
     "rebuild-score-index",
-    RETIRED_CLEANUP_VERB,
     "run",
     "validate",
     "decide",
@@ -532,14 +506,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="Harvest even when finetune.harvest_every_days says it is not due yet.",
     )
     parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help=(
-            "Accepted so an old cleanup command line still parses, and ignored: each "
-            "gardener task's dry run is its own declaration's `dry_run`."
-        ),
-    )
-    parser.add_argument(
         "--month",
         action="append",
         default=[],
@@ -560,8 +526,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         ),
     )
     args = parser.parse_args(argv)
-    if args.stage == RETIRED_CLEANUP_VERB:
-        return _point_at_the_gardener()
 
     settings = config.load(args.config)
     logging.basicConfig(

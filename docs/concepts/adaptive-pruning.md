@@ -200,7 +200,7 @@ repository means rewriting it, which is the one force-push exception in this
 project and what it costs is stated there. The squash is the gardener's one
 `history` task: `config/gardener/corpus-squash.json` declares how many days of
 history it keeps and how often it runs, and `backend/utilities/corpus_history.py`
-is the program `prune.yml` runs to do it
+is the program the `history` job of `idhazh-gardener.yml` runs to do it
 ([../how-to/fine-tune-a-model.md](../how-to/fine-tune-a-model.md)).
 
 ### `frontend/public/` - what a reader downloads

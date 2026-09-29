@@ -8,10 +8,10 @@ source asked to be removed, or a run wrote rows nobody wants kept.
     idhazh telemetry prune --target item-health --since 2026-08-24 --until 2026-08-26
 
 **It reports and removes nothing until it is told twice.** `--dry-run` is on by
-default and `--no-dry-run` is the second word. The reason is
-`.github/workflows/prune.yml`: it squashes and force-pushes `main` on a
+default and `--no-dry-run` is the second word. The reason is the history job of
+`.github/workflows/idhazh-gardener.yml`: it squashes and force-pushes `main` on a
 schedule, so a state file deleted here stops being recoverable from history once
-that prune passes over the range (CLAUDE.md section 8). `git revert` is not a
+that squash passes over the range (CLAUDE.md section 8). `git revert` is not a
 recovery path for a file older than the squash's window in
 `config/gardener/corpus-squash.json`. The precedent is the gardener's
 retention tasks, each of which ships with `dry_run: true` in its own
@@ -251,9 +251,9 @@ def add_arguments(parser: argparse.ArgumentParser) -> None:
         default=True,
         help=(
             "Report what a live run would remove and remove nothing. On by "
-            "default, because prune.yml force-pushes main and a file deleted "
-            "here stops being recoverable once that prune passes over it. Pass "
-            "--no-dry-run to delete."
+            "default, because the gardener's history job force-pushes main and a "
+            "file deleted here stops being recoverable once that squash passes over "
+            "it. Pass --no-dry-run to delete."
         ),
     )
 

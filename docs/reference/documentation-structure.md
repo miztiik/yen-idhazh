@@ -1,6 +1,6 @@
 # Documentation Structure
 
-**Last Updated**: 2026-09-22
+**Last Updated**: 2026-09-28
 How `docs/` is organised, and where a new statement of project knowledge belongs. Companion to [CLAUDE.md](../../CLAUDE.md) section 5 (Documentation Discipline) - this doc defines the _placement rules_; CLAUDE.md section 5 defines the _constraints_ (ASCII, single source of truth, no duplicate definitions).
 
 This reference is **domain-neutral** so it can be copied between projects unchanged (CLAUDE.md section 5).
@@ -496,7 +496,7 @@ classDef sysOps fill:#1a1e27,stroke:#8b93a7,stroke-width:1.5px,color:#c8cdd8;
 | `sysModel` | The summariser calls, classification, the visual plan | [../architecture/summarize/](../architecture/summarize/), the `work` stage |
 | `sysPublish` | Assemble, the digest tree, the published site | [../architecture/publishing/](../architecture/publishing/), the `assemble` stage |
 | `sysEval` | Model validation, the bench, drift review, the eval ledger | [github-actions.md](github-actions.md), `validate.yml`, `measure.yml` |
-| `sysOps` | CI, the prune, backfill, the operator console - work that serves the pipeline rather than the reader | [github-actions.md](github-actions.md), `ci.yml`, `prune.yml` |
+| `sysOps` | CI, the gardener, backfill, the operator console - work that serves the pipeline rather than the reader | [github-actions.md](github-actions.md), `ci.yml`, `idhazh-gardener.yml` |
 
 **Name the box for the thing a reader can go and look at.** `Content refresh - digest.yml` is a box title; `Stage 2` is not. The title is how a reader gets from the picture to the code, so it carries the workflow's own display name or the architecture directory's own name and nothing invented here (CLAUDE.md section 0b).
 

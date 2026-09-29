@@ -1,6 +1,6 @@
 # Atomic deletes
 
-**Last Updated**: 2026-09-27
+**Last Updated**: 2026-09-28
 
 What does "atomic" mean for a delete in this project, and why is a range not one?
 
@@ -57,7 +57,7 @@ resume point.
 
 That is the trade, and it is a trade rather than a free win. What buys it is
 that "the tree is exactly as you found it" was never a promise this project
-could keep. `.github/workflows/prune.yml` squashes and force-pushes `main` on a
+could keep. The `history` job of `.github/workflows/idhazh-gardener.yml` squashes and force-pushes `main` on a
 schedule ([CLAUDE.md](../../CLAUDE.md) section 8), so a state file deleted here
 stops being recoverable from git history once that prune passes over its range.
 A rollback only ever protected one process against one failure, never the data

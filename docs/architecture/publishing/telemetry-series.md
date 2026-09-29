@@ -345,7 +345,7 @@ on the pruner's:
 
 - **It ships in dry run.** The task's declaration carries `dry_run: true`, so a
  pass logs the files a live pass would remove and
- removes none of them, because `.github/workflows/prune.yml` force-pushes `main`
+ removes none of them, because the `history` job of `.github/workflows/idhazh-gardener.yml` force-pushes `main`
  on a schedule and a deleted file stops being recoverable once that prune passes
  over it (`CLAUDE.md` section 8). Measured 2026-09-02 on this checkout, a live
  run would take nothing today; the first shard it takes is `2026-08.csv` on

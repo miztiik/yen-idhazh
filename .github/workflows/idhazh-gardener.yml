@@ -1,0 +1,271 @@
+name: Idhazh Gardener
+
+# The gardener: every task that deletes, compacts or rewrites what this
+# repository keeps, on one daily wake. What a task is, how a wake splits into
+# shards and how a shard lands its one record is
+# docs/architecture/publishing/idhazh-gardener.md. This file names no task: the
+# `plan` job reads the declarations under config/gardener/, so adding a task is
+# a declaration, plus a module only when nothing serves its kind.
+#
+# Three jobs, in order:
+#   plan       splits the active tasks into shards, standard library only,
+#              before anything of ours is installed
+#   run-tasks  one job a shard. Each runs its tasks, writes one record under
+#              state/raw/gardener/ and pushes it, trying again on a newer tip
+#   history    the corpus squash, after every shard has pushed. It decides for
+#              itself whether the squash is due, and it is the one job in this
+#              repository that force-pushes main, the exception CLAUDE.md
+#              section 8 allows
+#
+# A push made with the default GITHUB_TOKEN starts no workflow. That is what
+# keeps the shards' pushes, one a shard every day, from starting a CI run each,
+# and it is why every job here uses that token and never a personal one.
+#
+# Why the squash exists, said out loud rather than implied: `corpus/` commits
+# article text, and git history is append-only - deleting a row from the window
+# does not delete its bytes from the repository. Left alone the history grows
+# about 2.96 MB per harvest commit, which is 154 MB a year at
+# `finetune.harvest_every_days: 7`. The only way to bound that is to rewrite the
+# range those bytes are in. What it costs: a squash boundary is per-commit and
+# not per-path, so the range it collapses carries `backend/`, `docs/` and
+# `state/` as well as `corpus/`. After a squash `git blame` and `git bisect`
+# reach back the `window` of `config/gardener/corpus-squash.json`, a commit SHA
+# older than the boundary stops resolving, and a clone taken before the squash
+# has to be re-fetched. Owner decision, 2026-08-28.
+#
+# Wired to nothing. A job that rewrites history must not sit inside the digest
+# pipeline, which runs for hours and must not be put at risk by a maintenance
+# task.
+#
+# This file was .github/workflows/prune.yml until 2026-09-28. GitHub treats a
+# renamed file as a new workflow, so the runs before the rename stay listed
+# under their old name, `Corpus prune`.
+
+on:
+  schedule:
+    # Daily. The squash's CADENCE is not here and cannot be: `on.schedule` is
+    # parsed before any step runs, so no value in `config/` can reach a cron
+    # line, and 5-field cron has no every-N-days field to write one with.
+    # `every_days` in `config/gardener/corpus-squash.json` is the cadence and
+    # this cron is only the wake-up. Every other task runs at every wake, and
+    # its own window decides what it takes.
+    #
+    # The MINUTE is after the UTC day boundary, so which days a compaction may
+    # take is decided by each day's own end and never by where the wake falls,
+    # and 40 minutes past the hour misses GitHub's top-of-hour surge.
+    #
+    # The force push at the end of the history job has to land while no other
+    # scheduled run is pushing main. Read from the run list on 2026-09-28: the
+    # last digest run of each day ended by 00:52 UTC and none was created
+    # before 07:23 (2026-09-16 to 28), and the council ran from 23:57 to 01:23
+    # (2026-09-19 to 28), which leaves 01:23 to 07:23 quiet. A 00:40 wake is
+    # not measured yet. The two nearest cron lines were created 112 to 139
+    # minutes late (23:37) and 259 to 334 minutes late (04:20), so this one is
+    # estimated at 02:32 to 06:14, and the three jobs' timeouts bound the chain
+    # in front of the push at 5 + 20 + 30 = 55 minutes. The push lands between
+    # 02:32 and 07:09: 69 minutes after the council at the earliest, 14 minutes
+    # before the first digest at the latest. The first scheduled wakes' own
+    # delays replace the estimate. backend/tests/workflows/test_triggers.py
+    # holds these numbers, and docs/reference/github-actions.md derives them.
+    #
+    # This lowers the odds; it does not close them. What keeps a clash from
+    # costing another run its commits is the tip check the push makes.
+    - cron: '40 0 * * *'
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Squash now, even if every_days in config/gardener/corpus-squash.json says it is not due. Every other task runs at every wake anyway'
+        type: boolean
+        default: false
+
+# Reading only, at workflow level. Each job names the whole of what it uses, so
+# the job that force-pushes holds no Actions permission it never calls.
+permissions:
+  contents: read
+
+# Never two of these at once, and never cancelled half way: the history job
+# rewrites a branch, and a second copy racing the first would push two different
+# histories. Not keyed on the ref, or a dispatch and a schedule would run together.
+concurrency:
+  group: idhazh-gardener
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      any_active_task: ${{ steps.shards.outputs.any_active_task }}
+      shard_count: ${{ steps.shards.outputs.shard_count }}
+      matrix: ${{ steps.shards.outputs.matrix }}
+      run_id: ${{ steps.run.outputs.run_id }}
+    steps:
+      # The two folders the planner reads and nothing else: it runs before any
+      # install, and it opens nothing outside `config/`.
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          filter: blob:none
+          sparse-checkout: |
+            config
+            backend/utilities
+
+      # Which shard runs which task, from the declarations alone. Three lines for
+      # $GITHUB_OUTPUT: whether any task runs, how many shards, and the matrix.
+      - id: shards
+        run: |
+          set -euo pipefail
+          python3 backend/utilities/gardener_shards.py | tee /dev/stderr >> "$GITHUB_OUTPUT"
+
+      # One run id for every shard, read once. Re-running a failed shard keeps
+      # this job's outputs, so the shard keeps the run it belongs to.
+      - id: run
+        run: |
+          set -euo pipefail
+          echo "run_id=$(date -u +%F)-${GITHUB_RUN_ID}" | tee /dev/stderr >> "$GITHUB_OUTPUT"
+
+  run-tasks:
+    needs: plan
+    if: needs.plan.outputs.any_active_task == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # `contents: write` pushes the shard's record. `actions: write` lets the two
+    # collection tasks list this repository's workflow artifacts and runs, and
+    # delete them once a person turns their dry run off.
+    permissions:
+      contents: write
+      actions: write
+    strategy:
+      matrix:
+        include: ${{ fromJSON(needs.plan.outputs.matrix).include }}
+      fail-fast: false
+      max-parallel: ${{ fromJSON(needs.plan.outputs.shard_count) }}
+    steps:
+      # The cone is this shard's tasks' `owns` folders, emitted by the `plan`
+      # job from the same config that declares them, plus the three folders the
+      # code lives in. A task whose folder sits outside the cone would list an
+      # empty directory and report success - the one failure no gate catches -
+      # so the runner fails a task whose folder the commit holds and this
+      # checkout lacks. `blob:none` downloads no file outside the cone. The one
+      # task that owns everything else under `state` adds no folder here, because
+      # only the commit can say what that is: gardener_publish.py reads it off
+      # the commit and adds those folders to this checkout before any task runs.
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          filter: blob:none
+          sparse-checkout: |
+            config
+            backend
+            .github
+            ${{ matrix.cone }}
+
+      # The commit loop's `git reset --mixed` expands the index to the whole
+      # repository unless the index is sparse, and actions/checkout leaves it not.
+      # A shard whose cone lacks the gardener's own ledger still expands it once,
+      # when it stages its record there; that costs time, never a wrong commit.
+      - name: Keep the index sparse
+        run: git config index.sparse true
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      # The parquet engine, because every shard writes its record through the
+      # ledger door whatever its tasks are.
+      - name: Install
+        run: pip install -e '.[parquet]'
+
+      # Runs the shard's tasks, writes its one record and pushes it, trying again
+      # on a newer tip when another shard pushed first. It exits with the worst
+      # code it earned: 2 ownership or integrity, 3 the push kept losing, 1 a
+      # task failed or the shard's owned folders are over max_cone_mb.
+      - name: Run the shard's tasks and land its record
+        env:
+          SHARD: ${{ matrix.shard }}
+          RUN_ID: ${{ needs.plan.outputs.run_id }}
+          ATTEMPT: ${{ github.run_attempt }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python backend/utilities/gardener_publish.py --shard "$SHARD" --run-id "$RUN_ID" --attempt "$ATTEMPT"
+
+  history:
+    # After every shard has pushed, so history is rewritten last. A skipped
+    # `needs` skips the job that needs it, so without `always()` the squash would
+    # never run on a day no task is active. Owner decisions, 2026-09-24 and
+    # 2026-09-26.
+    needs: [plan, run-tasks]
+    if: always() && (needs.run-tasks.result == 'success' || needs.run-tasks.result == 'skipped')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    steps:
+      # Shallow, because 29 wakes out of 30 only read one committed file. The
+      # full history is fetched below, and only when there is something to do.
+      # Both checkouts take `main` as it is now rather than the commit this run
+      # was created at: the shards pushed after that, and a rewrite of the old
+      # commit would find main moved and refuse on every due wake.
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 1
+
+      # Reads two committed files and writes nothing. The record of the run that
+      # closes the loop is written by the program further down. A stamp it cannot
+      # read ends the job here, before the full clone: it prints no `due`.
+      - id: due
+        env:
+          FORCE: ${{ inputs.force }}
+        run: |
+          set -euo pipefail
+          python3 backend/utilities/corpus_squash_due.py | tee /dev/stderr >> "$GITHUB_OUTPUT"
+
+      - name: Not due
+        if: steps.due.outputs.due != 'true'
+        run: |
+          echo "last run: ${{ steps.due.outputs.last_run }}, and the squash is ${{ steps.due.outputs.lifecycle_status }}"
+          echo "nothing to squash - fewer than every_days in config/gardener/corpus-squash.json have passed"
+
+      # Everything below only runs on the day the squash is due, which is why the
+      # full clone happens about twelve times a year rather than daily.
+      - uses: actions/checkout@v6
+        if: steps.due.outputs.due == 'true'
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v7
+        if: steps.due.outputs.due == 'true'
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install
+        if: steps.due.outputs.due == 'true'
+        run: pip install -e .
+
+      # The squash, the record of the run and the one force-push in this
+      # repository, in one program so the decision to force never crosses a step
+      # as an environment string. It remembers the tip before it rewrites
+      # anything, collapses what is older than the declaration's window into one
+      # root holding a complete copy of the tree, records the run whether or not
+      # anything was old enough, and pushes - with force only when it rewrote.
+      # It re-reads origin's tip first, and a tip that moved means another run
+      # pushed while this job was rewriting: it refuses rather than delete that
+      # run's work.
+      #
+      # A program rather than inline shell, so a test can drive it against a real
+      # repository and watch it refuse. `today` is the due step's own reading, so
+      # the job reads the clock once.
+      - name: Squash the history, record the run and push it
+        if: steps.due.outputs.due == 'true'
+        env:
+          TODAY: ${{ steps.due.outputs.today }}
+          RUN_ID: ${{ steps.due.outputs.today }}-${{ github.run_id }}
+          ATTEMPT: ${{ github.run_attempt }}
+        run: python backend/utilities/corpus_history.py --today "$TODAY" --run-id "$RUN_ID" --attempt "$ATTEMPT"

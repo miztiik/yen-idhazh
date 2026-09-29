@@ -1,6 +1,6 @@
 """Squash the corpus history older than its window, record the run, and push it.
 
-The history job in `.github/workflows/prune.yml` runs this once, after its full
+The history job in `.github/workflows/idhazh-gardener.yml` runs this once, after its full
 clone and its install. It is the one program in this repository that
 force-pushes `main` (CLAUDE.md section 8), and everything that push depends on
 happens in this one process, so no decision crosses a workflow step as an

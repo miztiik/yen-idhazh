@@ -16,6 +16,18 @@ module serves, and a module no declaration uses, are both exit 2 before any
 task runs. Every other refusal was made while the declarations loaded
 (`idhazh.config.load_gardener`).
 
+**A history task never runs here.** It rewrites history in a job of its own,
+and `backend/utilities/corpus_history.py` binds it itself; run here, it would
+only stamp the day it last ran and hold off the next real rewrite by a whole
+cadence. So a shard or a hand run that names one is exit 2 before anything runs.
+
+**A shard's weight is an alarm, not a gate.** What the folders its tasks own
+weighed at its commit arrives as data, read by the program that runs git, and
+lands on every row as `cone_bytes`. Over `max_cone_mb` the shard says so,
+naming its three heaviest folders, still runs every task and lands its record,
+and exits 1: stopping would save nothing the checkout has not already paid for,
+and it would stop the very passes that could shrink the tree.
+
 **A task that fails still has a row.** Its row says `failed`, its siblings still
 run, and the shard exits 1 when nothing worse happened. What it had already done
 is on the row, because the core carries it out of any failure part way.
@@ -63,6 +75,7 @@ from idhazh.gardener import tasks as shipped_tasks
 from idhazh.gardener.context import TaskContext
 from idhazh.gardener.one_at_a_time import Pass, PruneInterruptedError
 from idhazh.gardener.outcome import EXIT_INTEGRITY, EXIT_OK, EXIT_TASK_FAILED, Outcome, Shard
+from idhazh.site_weight import BYTES_PER_MB
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +84,12 @@ PRODUCER: Final = "gardener.runner"
 
 #: The timestamp shape every instant in a record takes: UTC, to the second.
 _INSTANT: Final = "%Y-%m-%dT%H:%M:%SZ"
+
+#: How many of a shard's folders an over-weight message names, heaviest first.
+_HEAVIEST_NAMED: Final = 3
+
+#: The one program that runs a history task, named in the refusal to run one here.
+HISTORY_PROGRAM: Final = "backend/utilities/corpus_history.py"
 
 
 class ShardRefusedError(Exception):
@@ -321,7 +340,13 @@ def _refuse_an_append_outside(ran: _Ran, today: str) -> None:
 
 
 def _record(
-    ran: Sequence[_Ran], *, state_dir: Path, today: str, identity: WriterIdentity, ended: str
+    ran: Sequence[_Ran],
+    *,
+    state_dir: Path,
+    today: str,
+    identity: WriterIdentity,
+    ended: str,
+    cone_bytes: int | None,
 ) -> Path:
     """The shard's one record: every task's row, in one file under the gardener's ledger."""
     rows: list[CollectionPruneRow] = [
@@ -331,6 +356,7 @@ def _record(
             context=each.context,
             duration_ms=each.duration_ms,
             work_ended_at=ended,
+            cone_bytes=cone_bytes,
         )
         for each in ran
     ]
@@ -359,6 +385,38 @@ def _record(
     return record
 
 
+def history_tasks_among(names: Sequence[str], tasks: Mapping[str, TaskPolicy]) -> list[str]:
+    """Which of these names are history tasks, which only their own job may run."""
+    return [
+        name
+        for name in names
+        if (policy := tasks.get(name)) is not None and policy.kind == TaskKind.HISTORY
+    ]
+
+
+def over_the_ceiling(
+    cone_bytes: Mapping[str, int], *, ceiling_mb: int, shard: int
+) -> str | None:
+    """What a shard over `max_cone_mb` says, naming its heaviest folders, or None when under.
+
+    Over means strictly more than the ceiling: a shard that weighs exactly the
+    ceiling is inside it.
+    """
+    total = sum(cone_bytes.values())
+    if total <= ceiling_mb * BYTES_PER_MB:
+        return None
+    heaviest = sorted(cone_bytes.items(), key=lambda held: (-held[1], held[0]))
+    named = ", ".join(
+        f"{folder} {weight / BYTES_PER_MB:.1f} MB" for folder, weight in heaviest[:_HEAVIEST_NAMED]
+    )
+    return (
+        f"shard {shard}: its owned folders weigh {total / BYTES_PER_MB:.1f} MB ({total:,} "
+        f"bytes) at this commit, over max_cone_mb {ceiling_mb} in "
+        f"config/idhazh_gardener.json. The heaviest: {named}. Its tasks still run and its "
+        "record still lands, and the shard exits 1"
+    )
+
+
 def run(
     names: Sequence[str],
     *,
@@ -369,6 +427,7 @@ def run(
     shard: int,
     git_sha: str,
     committed_folders: frozenset[str] | None,
+    cone_bytes: Mapping[str, int] | None,
     package: ModuleType = shipped_tasks,
     clock: Callable[[], datetime] = utc_now,
     say: Callable[[str], None] = print,
@@ -377,10 +436,18 @@ def run(
 
     `git_sha` is the commit this checkout is at, which the record's envelope
     names. `committed_folders` is what that commit holds of the folders these
-    tasks own, and every folder directly under `state/` (`folders_of`). Both are
-    read by whoever calls this, before any task runs, because reading them
-    starts git.
+    tasks own, and every folder directly under `state/` (`folders_of`).
+    `cone_bytes` is what each of those owned folders weighs at that commit. All
+    three are read by whoever calls this, before any task runs, because reading
+    them starts git; None for the last two means nobody could read the commit.
     """
+    refused = history_tasks_among(names, settings.tasks)
+    if refused:
+        say(
+            f"shard {shard}: {', '.join(refused)} rewrites history, and a history task runs "
+            f"only in its own job: {HISTORY_PROGRAM} binds and runs it. Nothing ran"
+        )
+        return Outcome(exit_code=EXIT_INTEGRITY, record=None, landing=None)
     state_dir = repo_root / ledger.STATE_DIRNAME
     try:
         bound = preflight(settings.tasks, registry.discover(package))
@@ -388,10 +455,17 @@ def run(
         say(f"shard {shard}: {refusal}")
         return Outcome(exit_code=EXIT_INTEGRITY, record=None, landing=None)
 
+    weighed = None if cone_bytes is None else sum(cone_bytes.values())
+    too_heavy = (
+        None
+        if cone_bytes is None
+        else over_the_ceiling(cone_bytes, ceiling_mb=settings.config.max_cone_mb, shard=shard)
+    )
+    if too_heavy is not None:
+        say(too_heavy)
     started = clock()
     today = started.date()
-    kinds = {TaskKind(settings.tasks[name].kind) for name in names}
-    job = ServerJob.HISTORY if kinds == {TaskKind.HISTORY} else ServerJob.RUN_TASKS
+    job = ServerJob.RUN_TASKS
     identity = WriterIdentity(
         run_id=run_id,
         attempt=attempt,
@@ -426,7 +500,12 @@ def run(
             ran.append(done)
         ended = clock().strftime(_INSTANT)
         record = _record(
-            ran, state_dir=state_dir, today=today.isoformat(), identity=identity, ended=ended
+            ran,
+            state_dir=state_dir,
+            today=today.isoformat(),
+            identity=identity,
+            ended=ended,
+            cone_bytes=weighed,
         )
     except ShardRefusedError as refusal:
         say(f"shard {shard}: {refusal}")
@@ -453,7 +532,8 @@ def run(
         ),
         message=f"gardener: {', '.join(names)} on {today.isoformat()}",
     )
-    tasks_code = EXIT_TASK_FAILED if any(each.failed for each in ran) else EXIT_OK
+    failed = any(each.failed for each in ran) or too_heavy is not None
+    tasks_code = EXIT_TASK_FAILED if failed else EXIT_OK
     return Outcome(exit_code=tasks_code, record=record, landing=landing)
 
 
