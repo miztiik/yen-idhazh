@@ -10,10 +10,9 @@ import { pipelineChanges, wasCut } from '$lib/server/model-work';
 import { loadRunTimeline, runTimelineView } from '$lib/server/run-timeline';
 import { loadSpanRollup, subStepReadout } from '$lib/server/span-rollup';
 import { chartConfig, consoleConfig, panelGroupsFor, retentionConfig, runConfig, summarizeConfig, visualsConfig } from '$lib/server/config';
+import { evalRows, itemHealthRows } from '$lib/server/ledger-rows';
 import {
 	dayMetrics,
-	evalRows,
-	itemHealthRows,
 	loadManifests,
 	publishedCharts,
 	publishedItems,

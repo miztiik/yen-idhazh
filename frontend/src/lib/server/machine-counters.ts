@@ -42,10 +42,10 @@ import { join } from 'node:path';
 // Relative, not `$lib`, for the reason in the module docstring.
 import { itemRead } from '../charts/machine';
 import { inferenceConfig, runConfig } from './config';
+import { itemHealthRows } from './ledger-rows';
 import {
 	DIGEST_ROOT,
 	HOST_FINGERPRINT_KEY,
-	itemHealthRows,
 	LEDGER_WINDOW_DAYS,
 	loadManifests,
 	mergedDayShards,
