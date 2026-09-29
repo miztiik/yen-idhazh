@@ -42,17 +42,25 @@ workers started together return together (deviation 94).
                      138), with no digest.yml or idhazh-gardener.yml run queued or
                      running. Its departures from the row are deviations 139 to 144.
                      Worktree p50r12 and its branch are removed
-  row 9              IN-FLIGHT again from about 08:40 UTC 2026-09-29, worker
-                     p50-r9-worker-2, worktree p50r9, branch
-                     p50r9-the-console-ledgers-become-parquet, cut from main. Its first
-                     worker ended with no report and nothing committed (deviation 146),
-                     and row 12 has merged, so it builds on main and not on a branch.
+  row 9              IN-FLIGHT, finishing in two waves from about 12:40 UTC 2026-09-29
+                     (deviation 153). Worker p50-r9-worker-3 in worktree p50r9, branch
+                     p50r9-the-console-ledgers-become-parquet, fixes the backend.
+                     Worker p50-r9-worker-fe in worktree p50r9fe, branch
+                     p50r9fe-the-console-readers-read-parquet, moves the frontend
+                     readers. Their reports are %TEMP%\p50r9\report.md and
+                     %TEMP%\p50r9fe\report.md. Then one worker merges p50r9fe into
+                     p50r9, runs the migration and opens the pull request. Its first
+                     worker ended with nothing committed (deviation 146), and its
+                     second pushed five commits (deviations 147 to 152).
                      The person's rulings are deviations 135 and 136, read with 112,
-                     132 and 133. It deletes CSV trees a digest run writes, so the
-                     owner merges it as row 3 was merged (deviation 52): no digest.yml
+                     132 and 133. It deletes CSV trees a digest run writes, so it
+                     merges as row 3 was merged (deviation 52): no digest.yml
                      or idhazh-gardener.yml run queued or running, and the migration run
                      again just before the merge. sliceFromDisk() is on main in
-                     frontend/src/lib/server/ledger-disk.ts; do not build it here
+                     frontend/src/lib/server/ledger-disk.ts; do not build it here.
+                     A plain git push here is refused (403); push with
+                     git -c credential.helper= -c 'credential.helper=!gh auth
+                     git-credential' push origin <branch>
 
 STEP 3 - GATES. A worker runs `npm --prefix frontend run test:changed -- --list`, then only
 its row's named acceptance gates, then pushes and reports. CI is the one full-suite run
@@ -234,6 +242,13 @@ Every place where the tree, or a ruling, departs from the text further down. A w
 | 144 | 12 | Decision 4: the record contract takes a version stamp | Stamped `2026-09-28T22:07`, when the shape was written; the row merged on 2026-09-29 | Row 12's worker, 2026-09-29 |
 | 145 | all | (not in the plan) | The local test selector reads two backend test helpers, `backend/tests/workflows/_harness.py` and `backend/tests/workflows/_ledger_derivation.py`, as inputs every frontend group shares, so an edit to either selects every frontend group and a site build. Found by row 12's worker. It is not this plan's to fix; closure hands it to a row that will | Row 12's worker, 2026-09-29 |
 | 146 | 9 | (not in the plan) | Row 9's first worker ended at about 07:46 UTC with no report, no commit and no push; its reading notes are `%TEMP%\p50r9\s001.txt` to `s026.txt`. Row 12 merged at 08:26 UTC, so the second worker builds on main and the stacking of deviation 137 is not needed | Plan owner, 2026-09-29 |
+| 147 | 9 | Naming corrections 1 and 3: `source_word_count` becomes `source_words` and `source_seen_word_count` becomes `source_words_before_cap` | By meaning the table is the wrong way round. `source_word_count` is the article's length before the cap, so it becomes `source_words_before_cap`; `source_seen_word_count` is what the model saw after the cap, so it becomes `source_words`. Each name now matches the `ItemHealthRow` field that holds the same fact | Row 9's second worker, 2026-09-29 |
+| 148 | 9 | (not in the plan) | `ItemHealthRow.job` and `ItemHealthRow.shard` become `machine_job` and `machine_shard`, with one version stamp, one changelog line and a read-side alias. The ledger door refused every item-health row, because the row's own `job` and `shard` collide with the writer identity the door stamps on every file. Deviation 136 settled the same collision for `attempt` by renaming the row's field and keeping the writer's. `persist` now checks the identity cells before it writes | Fowler and Carmack, 2026-09-29 |
+| 149 | 9 | Files touched: a cell-merge rule for `HOST_FINGERPRINT_KEY` in `backend/idhazh/ledger/keys.py` | No new rule. The door keeps its whole-row settle. The clock step reads back its own probe row and files the whole row as a later write of the same work unit, so the newest row carries both halves | Fowler and Carmack in debate, 2026-09-29; Fowler withdrew the cell merge |
+| 150 | 9 | Oracle: every row in each committed CSV tree reads back from the parquet | Every row today's CSV reader returns reads back. The migration files each day's rows as `day_shards.settled_day` returns them, one raw file a day, and the compaction's own daily step packs them. The parity check is a one-off operator run, not a test over `state/` (Guardrail #12) | Row 9's second worker, 2026-09-29 |
+| 151 | 9 | `UNREAD_CELLS` names 39 of item-health's 122 columns | It names 6 | Found at execution |
+| 152 | 9 | (not in the plan) | `DayMetrics`: an instrument's `column` reads a renamed eval column under its new name, with a version stamp and a changelog entry, so a window that spans the rename does not split one instrument into two | Row 9's second worker, 2026-09-29 |
+| 153 | 9 | One worker carries a row, and the owner merges it (STEP 4) | Row 9's second worker ended at about 11:55 UTC partway through its tests: five commits pushed, and a rerun of 56 test files read 228 failed, 46 errors and 793 passed. Row 9 finishes in two waves. First, a backend worker in `p50r9` and a frontend worker in `p50r9fe`, on a branch cut from row 9's, whose files do not overlap. Then one worker merges the two, runs the migration, opens the pull request and merges it itself in a quiet time, as deviation 138 allowed row 12 | Plan owner, 2026-09-29 |
 
 ## 0. Operating contract
 
@@ -296,7 +311,7 @@ Every place where the tree, or a ruling, departs from the text further down. A w
 | 6 | The corpus squash becomes Python | 4 | D | DONE | p50r6 | #1141 | p50-r6-worker |
 | 7 | One compaction task a ledger, two compact periods, and the diagrams move into the page | 5, 11 | F | DONE | p50r7 | #1151 | p50-r7-worker |
 | 8 | `prune.yml` becomes `idhazh-gardener.yml`, and the whole garden is scheduled | 6, 7 | G | DONE | p50r8 | #1156 | p50-r8-worker |
-| 9 | The three ledgers the console's routes read become parquet | 7, 12, and plan 51's row titled **The query door module and its two entry points** | H | IN-FLIGHT | p50r9 | - | p50-r9-worker-2 |
+| 9 | The three ledgers the console's routes read become parquet | 7, 12, and plan 51's row titled **The query door module and its two entry points** | H | IN-FLIGHT | p50r9, p50r9fe | - | p50-r9-worker-3, p50-r9-worker-fe |
 | 10 | `span-rollup` becomes parquet | - | - | **COLLAPSED** | - | - | - |
 | 11 | The index and watermark shapes are declared | 2 | C | DONE | p50r11 | #1136 | p50-r11-worker |
 | 12 | The closed-day fold of the CSV day trees moves into the gardener | 7, 8 | I | DONE | p50r12 | #1161 | p50-r12-worker-2 |
