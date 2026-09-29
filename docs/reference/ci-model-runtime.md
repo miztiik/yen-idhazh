@@ -1,6 +1,6 @@
 # The model on a runner
 
-**Last Updated**: 2026-09-22
+**Last Updated**: 2026-09-29
 
 How a job gets the inference runtime and the weights, and how it proves it got
 the ones it asked for. Every value here is exact: a pin, a cache key, a digest,
@@ -67,7 +67,8 @@ one home rather than copying it.
 ### What the cache key holds
 
 The weights cache key is `llm-<digest over every declared file>-<build>-v5`,
-written in the shared action and in `idhazh-pipeline-tests.yaml`.
+written once, in the shared action - so the daily run's workers, the council's
+shards and the pipeline tests' runners restore one entry.
 
 The digest covers `repo`, `revision`, `file` and `sha256` **per file, in
 declared order** - the weights first, then every companion. It does not cover a
@@ -77,16 +78,16 @@ the config root, which is how the files were found rather than part of what they
 are. That last exclusion is what lets a trial dispatch reading a scratch config
 restore the entry the daily run already paid to download.
 
-**Three key formats sit over `backend/models`, in six steps, and they are
+**Three key formats sit over `backend/models`, in five steps, and they are
 deliberately different.**
 
 | Format | Where | Why it is its own format |
 | --- | --- | --- |
-| `llm-` | the shared action, and `idhazh-pipeline-tests.yaml` | the production entry. Written twice because one is reached through a composite action and one is not, so the two are held equal by what they RESOLVE to |
+| `llm-` | the shared action | the production entry, which every caller of the action restores |
 | `qualify-` | `validate.yml` | a candidate under qualification. Production must not share an entry with it |
 | `bench-` | `measure.yml`, three steps | a bench candidate, same reason |
 
-An equality across all six would be false by construction, so only `llm-` carries
+An equality across all five would be false by construction, so only `llm-` carries
 one.
 
 **The suffix is the manual eviction handle.** It moved to `v5` when the model
@@ -233,11 +234,10 @@ answering under any other alias makes the whole run a measurement of something
 else wearing the candidate's name (Guardrail #10). Nothing in the report would
 look wrong: every figure would be internally consistent.
 
-Four server starts exist across the workflows and **all four now ask
-`GET /v1/models` before anything is measured** - the daily run's worker, the
-bench's runtime job, the bench's vocabulary job, and both starts in
-`idhazh-pipeline-tests.yaml`. Two of those learned it on 2026-09-15; the daily
-run and the validation job already did it.
+Every server start across the workflows **asks `GET /v1/models` before anything
+is measured**: the shared action's start, which the daily run's workers, the
+council's shards and the pipeline tests' runners all go through, the bench's
+runtime job, the bench's vocabulary job and the validation job.
 
 The alias comes from the same config the server's flags came from, never from a
 second copy, so the two cannot disagree (Guardrail #6). The test is discovery-

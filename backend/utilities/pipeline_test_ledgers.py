@@ -1,9 +1,9 @@
 """Which trees did a pipeline-test dispatch write, and may they be pushed?
 
-The test cases run on one runner and write their ledgers under `state/`, one tree
-per test case. The job that pushes them is a second job holding `contents: write`,
-and an artifact is the only thing between the two - so this module is what moves
-the trees onto and off that artifact, and what reads them before anything is
+Every runner of every test case writes its ledgers under `state/`, one tree per
+test case. The job that pushes them is a separate job holding `contents: write`,
+and artifacts are the only thing between them - so this module is what moves
+the trees onto and off those artifacts, and what reads them before anything is
 staged.
 
 **The check is the control, not the job split.** Every byte here is downstream of
@@ -21,13 +21,9 @@ one's trial root is called - and a copy of either in a `run:` body is a second
 spelling that drifts. They also fix the artifact's root directory, which a glob
 would leave to whichever test cases happened to produce a file.
 
-**Two streams, and the split is not tidiness.** A line another program reads goes
-to stdout: `gather`'s `ledgers=<true|false>`, which the step appends to
-`$GITHUB_OUTPUT`, and `place`'s staged paths, which the step reads with
-`mapfile`. Every line a person reads goes to stderr. `$GITHUB_OUTPUT` takes
-`key=value` and nothing else, so a progress line on stdout is not untidy output -
-it is a step that fails on a line it cannot parse, and it takes the push of a
-whole dispatch's ledgers with it.
+**Two streams, and the split is not tidiness.** `place`'s staged paths go to
+stdout, where the step reads them with `mapfile`, and every line a person reads
+goes to stderr - so a progress line can never be staged as a path.
 """
 
 from __future__ import annotations
@@ -48,10 +44,6 @@ from idhazh.contracts.pipeline_tests import PipelineTestsConfig
 DAY_SHARD_PARTS = 5
 TRACES = "traces"
 
-#: What `gather` prints for the step output the commit job reads. A dispatch that
-#: died before the first test case wrote nothing, and a download of an artifact
-#: nobody uploaded fails the step it is in.
-FOUND_KEY = "ledgers"
 
 
 def _roots(config_root: Path) -> list[str]:
@@ -112,7 +104,14 @@ def _refuse_trace(path: Path, relative: str) -> list[str]:
 
 
 def refusals(tree: Path, *, roots: frozenset[str]) -> list[str]:
-    """Why this tree may not be pushed, one line each, or an empty list."""
+    """Why this tree may not be pushed, one line each, or an empty list.
+
+    A tree that never arrived holds nothing to refuse: a dispatch whose runners
+    all failed before writing a ledger uploads nothing, and the download makes
+    no folder for it.
+    """
+    if not tree.is_dir():
+        return []
     found: list[str] = []
     for path in sorted(entry for entry in tree.rglob("*") if entry.is_file()):
         relative = path.relative_to(tree).as_posix()
@@ -136,7 +135,7 @@ def gather(state: Path, tree: Path, *, roots: list[str]) -> list[str]:
     """Copy every declared test case's trial root into one directory, and say which arrived.
 
     One fixed destination rather than a glob over `state/`, so the artifact's
-    root directory is the same whether three test cases produced a file or one.
+    root directory is the same whichever test cases produced a file.
     """
     if tree.exists():
         shutil.rmtree(tree)
@@ -183,13 +182,11 @@ def main(argv: list[str] | None = None) -> int:
     if args.verb == "gather":
         for name in gather(args.state, args.tree, roots=roots):
             print(f"gathered {name}", file=sys.stderr)
-        found = any(args.tree.rglob("*"))
-        if not found:
+        if not any(args.tree.rglob("*")):
             print(
                 "no test case left a ledger tree behind, so there is nothing to push",
                 file=sys.stderr,
             )
-        print(f"{FOUND_KEY}={'true' if found else 'false'}")
         return 0
 
     if args.verb == "check":
@@ -198,6 +195,9 @@ def main(argv: list[str] | None = None) -> int:
             print(f"refused: {line}", file=sys.stderr)
         if refused:
             return 1
+        if not args.tree.is_dir():
+            print("no ledger arrived, so there is nothing to check", file=sys.stderr)
+            return 0
         for path in sorted(entry for entry in args.tree.rglob("*") if entry.is_file()):
             print(f"read {path.relative_to(args.tree).as_posix()}", file=sys.stderr)
         return 0

@@ -1,4 +1,4 @@
-"""Which two articles does this dispatch run, and what plan do they make?"""
+"""Which articles does this dispatch run, and what plan do they make?"""
 
 from __future__ import annotations
 
@@ -89,7 +89,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--config-root", type=Path, default=Path("config"))
     sub = parser.add_subparsers(dest="command", required=True)
 
-    drawn = sub.add_parser("pick", help="Draw the two addresses for this run.")
+    drawn = sub.add_parser("pick", help="Draw the addresses for this run.")
     drawn.add_argument("--seed", default=os.environ.get("GITHUB_RUN_ID", ""))
 
     made = sub.add_parser("plan", help="Write the run plan the test cases all share.")

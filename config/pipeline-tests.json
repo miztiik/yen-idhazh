@@ -1,5 +1,6 @@
 {
   "articles_a_dispatch": 2,
+  "articles_a_shard": 1,
   "budget_minutes": 140,
   "candidates": [
     {"source_id": "ai2-blog","title": "How Goodfire used Ai2's open post-training stack to trace unwanted model behavior","url": "https://allenai.org/blog/goodfire-olmo"},
@@ -25,9 +26,9 @@
     {"source_id": "hindustan-times","title": "Assam ordered to pay Rs 2 lakh to family of woman pushed into Bangladesh: 'Expelled without information to husband'","url": "https://hindustantimes.com/india-news/gauhati-hc-orders-assam-to-pay-rs-2-lakh-to-family-of-woman-pushed-to-bangladesh-101788794423171.html"}
   ],
   "test_cases": [
-    {"asks_for_a_visual_plan": true,"id": "production-settings","n_ctx": null,"n_parallel": null},
-    {"asks_for_a_visual_plan": false,"id": "no-visual-plan","n_ctx": null,"n_parallel": null},
-    {"asks_for_a_visual_plan": true,"id": "parallel-2","n_ctx": 131072,"n_parallel": 2}
+    {"asks_for_a_visual_plan": true,"enabled": true,"id": "production-settings","n_ctx": null,"n_parallel": null},
+    {"asks_for_a_visual_plan": false,"enabled": true,"id": "no-visual-plan","n_ctx": null,"n_parallel": null},
+    {"asks_for_a_visual_plan": true,"enabled": false,"id": "parallel-summarization","n_ctx": 131072,"n_parallel": 2}
   ],
-  "version": "2026-09-28"
+  "version": "2026-09-29"
 }
