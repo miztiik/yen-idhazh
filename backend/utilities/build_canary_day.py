@@ -38,7 +38,7 @@ from itertools import combinations
 from pathlib import Path
 from typing import Final, NamedTuple
 
-from idhazh import config, ledger
+from idhazh import config, day_shards, ledger
 from idhazh.assemble import (
     build_embeddings,
     collapse_same_story,
@@ -62,10 +62,14 @@ from idhazh.contracts.feed_health import (
     RobotsOutcome,
     derive_endpoint_key,
 )
+from idhazh.contracts.file_envelope import WriterIdentity
 from idhazh.contracts.fingerprint import PipelineInputs
+from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.item_health import FailureCode as ItemFailureCode
 from idhazh.contracts.item_health import ItemHealthRow, ItemOutcome, ItemStage, TimeSource
+from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
 from idhazh.contracts.knobs.evaluation import EvaluationConfig
+from idhazh.contracts.knobs.gardener import CompactionPolicy
 from idhazh.contracts.knobs.models import ModelRef
 from idhazh.contracts.knobs.visuals import VisualsConfig
 from idhazh.contracts.ledger_name import LedgerName
@@ -84,6 +88,8 @@ from idhazh.contracts.visual_data import (
 from idhazh.contracts.visual_decision import VisualDecision, VisualKind, VisualState
 from idhazh.embed import Embedder
 from idhazh.evals import metrics, score, writer
+from idhazh.gardener.context import TaskContext
+from idhazh.gardener.tasks import compaction
 from idhazh.render import asset_relpath, render_planned_visual
 from idhazh.render.write import write_bytes_atomic
 from idhazh.telemetry.publish import (
@@ -107,6 +113,31 @@ SCORE_RUN_ID: Final = f"{DATE}-1"
 SCORE_ATTEMPT: Final = 1
 SCORE_JOB: Final = ServerJob.ASSEMBLE
 SCORE_SHARD: Final = 0
+
+#: The name every file this fixture files through the ledger door carries.
+PRODUCER: Final = "utilities.build_canary_day"
+
+type FixtureRow = ItemHealthRow | HostFingerprintRow
+
+#: The two ledgers `build-canary.mjs` writes rows for, and what settles a day of
+#: each. That script writes them as CSV, one file a run, under its own folder
+#: beside the state tree, and `--file-fixture-rows` files them through the door.
+FIXTURE_ROW_LEDGERS: Final[dict[LedgerName, tuple[type[FixtureRow], tuple[str, ...]]]] = {
+    LedgerName.ITEM_HEALTH: (ItemHealthRow, ledger.ITEM_HEALTH_KEY),
+    LedgerName.HOST_FINGERPRINT: (HostFingerprintRow, ledger.HOST_FINGERPRINT_KEY),
+}
+
+#: The ledgers the console reads from packed files, so the fixture packs them.
+PACKED_LEDGERS: Final = (LedgerName.ITEM_HEALTH, LedgerName.HOST_FINGERPRINT, LedgerName.SCORES)
+
+#: The UTC day the fixture's packing pass runs on: two days after the attack
+#: day, the first day the declared rule admits it. A fixed day rather than the
+#: clock, so every day of the fixture is packed the same way on every build.
+PACKED_ON: Final = calendar_date.fromisoformat(DATE) + timedelta(days=2)
+
+#: How many days one packing pass may take here. The declared budget paces a
+#: daily wake; the fixture is packed whole, once.
+PACK_EVERY_DAY: Final = 100_000
 
 #: Quiet days before the attack day. The console's run strip is a time axis, and
 #: a time axis with one column cannot be read, scrolled or mislabelled - so it
@@ -1487,25 +1518,112 @@ def score_rows(items: Sequence[DigestItem], evaluation: EvaluationConfig) -> lis
     ]
 
 
-def append_scores(state: Path, items: Sequence[DigestItem], evaluation: EvaluationConfig) -> int:
-    """Write the day's rows through the writer the pipeline writes with.
-
-    Not a CSV written by hand: the contract validates every field, the writer
-    owns the column order and the index beside the rows, and a column added to
-    `EvalRow` lands here without this file being told about it.
-
-    A day is a directory of writer-owned files, so this names its own file the
-    way `health` does - one run, one attempt, one shard, because one process
-    builds the whole fixture.
-    """
-    return writer.append_segment(
-        state,
-        score_rows(items, evaluation),
-        run_id=SCORE_RUN_ID,
+def _fixture_writer(run_id: str) -> WriterIdentity:
+    """The writer a fixture file names: one process, so one attempt and one shard."""
+    return WriterIdentity(
+        run_id=run_id,
         attempt=SCORE_ATTEMPT,
         job=SCORE_JOB,
         shard=SCORE_SHARD,
+        producer=PRODUCER,
+        git_sha=FIXTURE_SHA,
     )
+
+
+def file_scores(state: Path, items: Sequence[DigestItem], evaluation: EvaluationConfig) -> int:
+    """File the day's rows through the writer the pipeline files with.
+
+    Not rows written by hand: the contract validates every field, the writer
+    owns the index beside the rows, and a column added to `EvalRow` lands here
+    without this file being told about it.
+    """
+    return writer.file_measurements(
+        state, score_rows(items, evaluation), identity=_fixture_writer(SCORE_RUN_ID)
+    )
+
+
+def scored_keys(state: Path) -> dict[str, str]:
+    """Each scored item's url key, read back through the door the scores were filed through.
+
+    `build-canary.mjs` joins its item-health rows to the scores on this key. It
+    reads the key rather than deriving it a second time in JavaScript, because
+    two derivations of one key is how a fixture comes to disagree with the
+    contract it stands in for.
+    """
+    days = ledger.held_days(state, LedgerName.SCORES)
+    return {
+        row.item_id: row.url_key
+        for row in ledger.load_days(state, LedgerName.SCORES, days, model=EvalRow)
+    }
+
+
+def file_fixture_rows(state: Path, staged: Path) -> dict[LedgerName, int]:
+    """File the rows `build-canary.mjs` wrote as CSV through the door, then delete the CSV.
+
+    That script writes one file a run under `<staged>/<ledger>/<YYYY>/<MM>/<DD>/`.
+    Each day is settled the way a CSV day was read and filed as one raw file a
+    run, under the run's own id, so a run the fixture names is a writer the
+    door names too.
+    """
+    filed: dict[LedgerName, int] = {}
+    for which, (model, key) in FIXTURE_ROW_LEDGERS.items():
+        root = staged / which.value
+        if not root.is_dir():
+            continue
+        days = sorted(
+            day
+            for dates in day_shards.dates_by_month(root, days=UNBOUNDED_WINDOW).values()
+            for day in dates
+        )
+        count = 0
+        for day in days:
+            by_run: dict[str, list[FixtureRow]] = {}
+            for cells in day_shards.settled_day(root, day, key, model):
+                by_run.setdefault(cells["run_id"], []).append(model.from_csv_row(cells))
+            for run_id, rows in by_run.items():
+                ledger.persist(
+                    state, rows, ledger=which, covers=day, identity=_fixture_writer(run_id)
+                )
+                count += len(rows)
+        shutil.rmtree(root)
+        filed[which] = count
+    return filed
+
+
+def pack_fixture_ledgers(state: Path, repo_root: Path) -> None:
+    """Pack every fixture day of the console's ledgers, as a live compaction pass would.
+
+    The console reads these ledgers from packed files only, so a fixture day
+    left raw is a day the browser suite cannot see. The pass is the gardener's
+    own compaction task, under the ledger's own declaration made live, so the
+    fixture is packed by the code that packs production.
+    """
+    declared = config.load_gardener().tasks
+    for which in PACKED_LEDGERS:
+        policy = declared.get(f"compact-{which.value}")
+        if not isinstance(policy, CompactionPolicy):
+            raise SystemExit(f"config/gardener/compact-{which.value}.json declares no compaction")
+        outcome = compaction.run(
+            TaskContext(
+                state_dir=state,
+                repo_root=repo_root,
+                today=PACKED_ON,
+                policy=policy.model_copy(
+                    update={"dry_run": False, "max_periods_per_run": PACK_EVERY_DAY}
+                ),
+                run_id=SCORE_RUN_ID,
+                attempt=SCORE_ATTEMPT,
+                job=ServerJob.RUN_TASKS,
+                shard=SCORE_SHARD,
+                git_sha=FIXTURE_SHA,
+                owned_folders=(),
+            )
+        )
+        if outcome.resume_from is not None:
+            raise SystemExit(
+                f"packing {which.value} stopped {outcome.stopped_because.value} at "
+                f"{outcome.resume_from}"
+            )
 
 
 def main() -> int:
@@ -1522,7 +1640,32 @@ def main() -> int:
             "telemetry, because none of those exists when the day itself is built."
         ),
     )
+    parser.add_argument(
+        "--scored-keys",
+        action="store_true",
+        help="Print each scored item's url key as JSON, read back through the ledger door.",
+    )
+    parser.add_argument(
+        "--file-fixture-rows",
+        type=Path,
+        metavar="DIR",
+        help=(
+            "File the item-health and host-fingerprint CSV rows `build-canary.mjs` "
+            "wrote under DIR through the ledger door, delete them, and pack every "
+            "fixture day of the console's ledgers."
+        ),
+    )
     args = parser.parse_args()
+    if args.scored_keys:
+        print(json.dumps(scored_keys(args.state), sort_keys=True))
+        return 0
+    if args.file_fixture_rows is not None:
+        filed = file_fixture_rows(args.state, args.file_fixture_rows)
+        pack_fixture_ledgers(args.state.resolve(), Path.cwd().resolve())
+        for which, count in filed.items():
+            print(f"filed {count} {which.value} fixture rows through the ledger door")
+        print(f"packed {', '.join(which.value for which in PACKED_LEDGERS)} as of {PACKED_ON}")
+        return 0
     if args.console_payloads_only:
         written = console_payloads(state_root=args.state, digest_root=args.out)
         print(f"wrote {written} console payload file(s) the browser suite fetches")
@@ -1548,11 +1691,11 @@ def main() -> int:
     checks = health(args.state)
     marks = holdout(args.state, day)
     census = write_source_health(args.out.parent)
-    scored = append_scores(args.state, day.items, evaluation)
+    scored = file_scores(args.state, day.items, evaluation)
     # The day record the console now reads its per-day counts back from, written
     # by the same producer the pipeline's publication step calls - one writer, so
     # the fixture record is built exactly as a real one is (Fowler). The attack
-    # day's score rows are on disk from `append_scores(...)` above; this date's
+    # day's score rows are on disk from `file_scores(...)` above; this date's
     # item-health is owned by `build-canary.mjs` and is not written yet, so the
     # record carries no throughput and no stage timing - neither of which the
     # console reads from it. The distinct-published counts it does read are
@@ -1593,15 +1736,7 @@ def main() -> int:
         f"wrote {(args.out.parent / source_health.PUBLIC_FILENAME).as_posix()}: "
         f"{census} sources"
     )
-    score_file = ledger.day_shard_relpath(
-        LedgerName.SCORES,
-        date=DATE,
-        run_id=SCORE_RUN_ID,
-        attempt=SCORE_ATTEMPT,
-        job=SCORE_JOB,
-        shard=SCORE_SHARD,
-    )
-    print(f"wrote {score_file}: {scored} scored items")
+    print(f"filed {scored} scored items into {LedgerName.SCORES.value} through the ledger door")
     print(f"wrote {metrics_path.as_posix()}: 1 day-metrics record")
     print(
         f"wrote {index_root.as_posix()}: {len(indexed)} month(s), "

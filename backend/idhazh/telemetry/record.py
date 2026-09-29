@@ -177,7 +177,7 @@ class ItemRecorder:
         """The three cells that say which item a short record is about."""
         return {
             "item_id": self._cells.get("item_id"),
-            "shard": self._cells.get("shard"),
+            "shard": self._cells.get("machine_shard"),
             "item_index": self._cells.get("item_index"),
             **extra,
         }
