@@ -345,9 +345,10 @@ jobs:
 
       # The canary day is built by the backend, through the same contracts and
       # the same encoder the pipeline uses. Building it any other way would test
-      # a payload shape nothing actually writes.
+      # a payload shape nothing actually writes. `.[parquet]`, because the
+      # builder files the census, host and eval rows through the ledger door.
       - name: Install the backend, for the canary day builder
-        run: pip install -e .
+        run: pip install -e ".[parquet]"
 
       # The oracle for the assist row: delete the whole model directory, build,
       # and the digest must be untouched. If it degrades at all, the feature is

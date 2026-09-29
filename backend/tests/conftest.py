@@ -27,6 +27,7 @@ from idhazh.contracts.element import ElementTable
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome
 from idhazh.contracts.file_envelope import WriterIdentity
+from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.knobs.extract import ElementsConfig
 from idhazh.contracts.knobs.gardener import DEFAULT_CLOSED_AFTER_DAYS
@@ -45,6 +46,7 @@ from idhazh.fetch import FetchResult
 from idhazh.gardener import closed_day_fold
 from idhazh.llm.server import TurnMarkers, server_argv
 from idhazh.stages import common
+from idhazh.telemetry import silicon
 from utilities.capture_request_bodies import RENDERINGS, markers_for
 
 REPO_ROOT: Final = Path(__file__).resolve().parents[2]
@@ -135,6 +137,43 @@ def seed_item_health(state_dir: Path, date: str, rows: Iterable[ItemHealthRow]) 
         ),
     )
     return len(kept) if filed else 0
+
+
+#: The producer the jobs themselves file their machine rows under, read off the
+#: module rather than spelled here, so a seeded row lands in the job's own unit.
+_HOST_PRODUCER: Final = silicon.PRODUCER
+
+
+def seed_host_fingerprint(
+    state_dir: Path, rows: Iterable[HostFingerprintRow], *, attempt: int = 1
+) -> int:
+    """Put machine rows on disk the way the jobs that drew the machines leave them.
+
+    One raw file a job, filed through the ledger door under the writer the job
+    itself uses: the row's own run, job and shard, and the machine probe's
+    producer. So a second call for one job is a later write of that job's work
+    unit and replaces the first, which is what the clock step does to the
+    probe's half-row, and a higher `attempt` replaces a lower one, which is what
+    a re-run does.
+
+    Returns how many rows were filed.
+    """
+    by_job: dict[tuple[str, ServerJob, int], list[HostFingerprintRow]] = {}
+    for row in rows:
+        by_job.setdefault((row.run_id, row.job, row.shard), []).append(row)
+    filed = 0
+    for (run_id, job, shard), held in by_job.items():
+        if ledger.persist(
+            state_dir,
+            held,
+            ledger=LedgerName.HOST_FINGERPRINT,
+            covers=held[0].date,
+            identity=writer_identity(
+                run_id, attempt=attempt, job=job, shard=shard, producer=_HOST_PRODUCER
+            ),
+        ):
+            filed += len(held)
+    return filed
 
 
 def seed_span_rollup(state_dir: Path, date: str, rows: Iterable[SpanRollupRow]) -> int:
