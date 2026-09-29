@@ -98,7 +98,7 @@ flowchart TB
  subgraph FACTS["1.1 - read the facts, never recall them"]
   HUB["the hub's own API<br/>commit, SHA-256, byte count"] --> FILE
   HDR["the GGUF header itself<br/>general.architecture"] --> FILE
-  TMPL["the model's chat template<br/>the four turn markers"] --> FILE
+  TMPL["the model's chat template<br/>the reasoning switch"] --> FILE
   FILE[("config/models/NAME.json")]
  end
 
@@ -173,8 +173,17 @@ a fact about them.
 | `byte_count` | the size the hub reports, cross-checked against the file the run opened |
 | `hf_base_repo` | the base an adapter is trained against, which the fine-tuning notebook checks |
 | `arch` | the architecture name inside the GGUF |
-| `inference` | every runtime knob, including the window and the sampler |
-| `turns` | where the system text goes, what opens and closes a turn, and which keyword turns thinking off |
+| `server` | llama-server's own flags, spelled as the binary spells them: the window (`--ctx-size`), the slots (`-np`), the threads |
+| `sampling` | the sampler values a request sends, spelled as the request body spells them |
+| `request_timeout_minutes` | how long one request may wait for an answer |
+| `thinking_kwarg`, `thinking_close` | the template variable that switches the model's reasoning, and what the model writes to end it. Null `thinking_close` means no reasoning |
+| `declared_for` | the `sha256` the settings above were measured against |
+| `companion_files` | any extra file the weights need, such as a draft head |
+
+The turn markers are not in the file. The server reads them off the model's own
+chat template when it starts (`idhazh.llm.server.derive_turn_markers`), and the
+loader refuses, by name, the two keys that used to hold the markers and the
+settings: `turns` and `inference`.
 
 #### Where each fact comes from
 
@@ -201,45 +210,42 @@ it rather than guessing from the family name: Gemma 4's main weights read
 answers from one repository. Row #5's fourth case compares this field against the
 file the server opened, so a wrong value fails the run rather than degrading it.
 
-**The four turn markers come from the model's own chat template**, which the
+**The reasoning switch comes from the model's own chat template**, which the
 publisher ships as `chat_template.jinja` in the safetensors repository. Read the
-literals it emits - the strings inside `{{- '...' -}}` - rather than assuming a
-family convention. Two traps, both seen: a model can share an architecture with
-the incumbent and still write different markers, and a template can change
-between major versions of the same model. Gemma 3 had no system role; Gemma 4
-emits `<|turn>system`, so `system_role` is `own_turn` for it and
-`fold_into_first_user` would have been wrong.
+variable the template tests to turn reasoning off - `enable_thinking` for the
+incumbent - into `thinking_kwarg`, and what the model writes to close its
+reasoning into `thinking_close`, rather than assuming a family convention. A
+model can share an architecture with the incumbent and still spell either one
+differently.
 
 **When in doubt, let the start-up probe settle it.** The five claims in 1.5 are
-checked against the running server before the first item, so a marker read wrong
-here refuses the shard with a named cause instead of quietly producing worse
-summaries. That is the difference between a guess that costs a dispatch and a
-guess that costs a month of degraded output.
+checked against the running server before the first item, so a wrong `arch`, or
+a window the model was not trained for, refuses the shard with a named cause
+instead of quietly producing worse summaries. That is the difference between a
+guess that costs a dispatch and a guess that costs a month of degraded output.
 
-**`inference` is the one block with no external source, and one external
-ceiling.** Nothing about a candidate has been measured yet, so start from the
-incumbent's numbers with the window matched - a throughput comparison at two
-different windows measures the window, not the model - and let 1.3 and 1.4
-replace them with readings. The ceiling is `max_position_embeddings` in the base
-repository's `config.json`: a candidate whose base declares less than the window
-you were going to match cannot be compared like for like, and the only other
-place that fact turns up is a server that quietly serves a shorter context than
-the entry asked for. Both candidates written on 2026-09-14 cleared it with room
-- 262,144 and 131,072 against a matched 65,536.
+**`server` and `sampling` are the blocks with no external source, and one
+external ceiling.** Nothing about a candidate has been measured yet, so start
+from the incumbent's numbers with the window matched - a throughput comparison
+at two different windows measures the window, not the model - and let 1.3 and
+1.4 replace them with readings. The ceiling is `max_position_embeddings` in the
+base repository's `config.json`: a candidate whose base declares less than the
+window you were going to match cannot be compared like for like, and the only
+other place that fact turns up is a server that quietly serves a shorter context
+than the entry asked for. Both candidates written on 2026-09-14 cleared it with
+room - 262,144 and 131,072 against a matched 65,536.
 
 **`declared_for` is the safety catch, and it holds this model's own digest.**
-Config load refuses an entry whose
-block is declared for one set of weights while the entry names another, and it
-says which repair it wants: re-derive the numbers, because every one of them was
-measured against one model on one runner, or re-record the markers, because
-every one of them was read off the server that renders those turns. So a
-half-finished candidate cannot run - not in the bench, not in qualification, and
-not in a daily run.
+Config load refuses an entry whose settings are declared for one set of weights
+while the entry names another, and it says the repair it wants: re-derive the
+settings for these weights, because every one of them was measured against one
+model on one runner. So a half-finished candidate cannot run - not in the bench,
+not in qualification, and not in a daily run.
 
-The sanitizer reads `turns` too. It proves it strips every marker the entry
-declares and **refuses an entry whose control tokens it does not recognise**, so
-a model from an unknown template family is a refused config rather than a silent
-hole in Guardrail #11.
+The sanitizer checks the markers too. The server hands it every marker it
+derives from the template, and **a marker it cannot strip refuses the run**, so
+a model from an unknown template family stops before the first article rather
+than becoming a silent hole in Guardrail #11.
 
 Do not point `models_file` at the new file yet. Nothing below needs it, and
 keeping the pointer still means the adopt arrives later as a one-line diff a
@@ -255,7 +261,8 @@ One changed input a run, or the run measures a bundle. Hold constant:
 - the extraction and sanitization versions; and
 - the truncation cap.
 
-The candidate's own `inference` block is not a control - it is part of the
+The candidate's own `server` and `sampling` blocks are not a control - they are
+part of the
 candidate. If a model needs a different sampler to work at all, that is a second
 candidate configuration and it is measured separately. Do not adopt a vendor
 default silently.
