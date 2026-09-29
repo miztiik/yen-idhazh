@@ -7,6 +7,13 @@
  * the same rows from the same files. It lives under `$lib/server/`, so SvelteKit
  * refuses to put it, or the engine's Node half it starts, into anything a
  * browser receives. A console panel calls `slice()` in `$lib/data/ledger` instead.
+ *
+ * **Each call keeps what it read for itself alone.** It makes a fresh page
+ * keeper, so it reads the indexes as the disk holds them now, and when it ends
+ * it drops every file it handed the engine. A build reads many ledgers and days
+ * in one process, and a development server reads `state/` again as it changes,
+ * so a keeper that outlived the call would hold every file for the life of the
+ * process and answer from indexes the disk no longer holds.
  */
 
 import { readFile } from 'node:fs/promises';
@@ -15,7 +22,8 @@ import { join } from 'node:path';
 // Relative, not `$lib`: the logic suite imports this module in plain Node, where
 // no Vite alias exists to resolve one.
 import { nodeEngine } from '../data/engine';
-import { readSlice, type ByteSource } from '../data/slice-reader';
+import { pageKeeper, type ByteSource } from '../data/page-keeper';
+import { readSlice } from '../data/slice-reader';
 import type { LedgerName, SliceOptions, SliceResult } from '../data/slice-shapes';
 import { engineExtensionRepository } from './config';
 
@@ -38,6 +46,11 @@ export function diskBytes(stateDir: string): ByteSource {
 }
 
 /** The same query as `slice()`, over the same compacted files, read from disk while the site is built. */
-export function sliceFromDisk(stateDir: string, ledger: LedgerName, options: SliceOptions): Promise<SliceResult> {
-	return readSlice(diskBytes(stateDir), () => nodeEngine(locate, engineExtensionRepository()), ledger, options);
+export async function sliceFromDisk(stateDir: string, ledger: LedgerName, options: SliceOptions): Promise<SliceResult> {
+	const keeper = pageKeeper(diskBytes(stateDir), () => nodeEngine(locate, engineExtensionRepository()));
+	try {
+		return await readSlice(keeper, ledger, options);
+	} finally {
+		await keeper.release();
+	}
 }

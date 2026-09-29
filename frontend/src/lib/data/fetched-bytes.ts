@@ -3,10 +3,11 @@
  *
  * The published tree is the committed one, copied unchanged, so a file sits at
  * `<prefix>/state/<its path under the state root>`. An index is asked for with
- * `cache: 'no-store'`, because file selection acts on it and a stale index is a
- * wrong selection. A data file is asked for with `?v=<rows>-<bytes>` from its
- * entry: a compact file is written once, so a cache may keep it for as long as
- * that version names it.
+ * `cache: 'no-store'`, so a page's one read of it gets what the site holds now
+ * rather than a copy an HTTP cache kept from an earlier visit; the page keeper
+ * (`page-keeper.ts`) then keeps it for the page's life. A data file is asked for
+ * with `?v=<rows>-<bytes>` from its entry: a compact file is written once, so a
+ * cache may keep it for as long as that version names it.
  *
  * A 404 is an absent file; any other failure is thrown, and the reader turns it
  * into `unreachable`. The length the reader checks is the length of the bytes
@@ -17,7 +18,7 @@
  * tied to one environment: the caller hands it `fetch`.
  */
 
-import type { ByteSource } from './slice-reader';
+import type { ByteSource } from './page-keeper';
 
 /** How the source asks for one URL: `fetch` in a browser, a recorded response in a test. */
 export type Fetcher = (url: string, init: RequestInit) => Promise<Response>;

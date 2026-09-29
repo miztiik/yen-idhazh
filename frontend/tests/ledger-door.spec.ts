@@ -7,9 +7,11 @@ import { fileURLToPath } from 'node:url';
 import { COMPACT_INDEX_STAMP, readIndex, type CompactEntry } from '../src/lib/data/compact-index';
 import { nodeEngine } from '../src/lib/data/engine';
 import { fetchedBytes, type Fetcher } from '../src/lib/data/fetched-bytes';
+import { readReach } from '../src/lib/data/ledger-reach';
+import { pageKeeper, type EngineOpener, type PageKeeper } from '../src/lib/data/page-keeper';
 import { daysBetween, filesFor } from '../src/lib/data/slice';
 import { cellOf, SliceValueError, statementFor } from '../src/lib/data/slice-query';
-import { indexPath, readSlice, type EngineOpener } from '../src/lib/data/slice-reader';
+import { dataPath, indexPath, readSlice } from '../src/lib/data/slice-reader';
 import { checkedRequest, SliceRequestError, type SliceOptions, type SliceResult } from '../src/lib/data/slice-shapes';
 import { engineExtensionRepository } from '../src/lib/server/config';
 import { sliceFromDisk } from '../src/lib/server/ledger-disk';
@@ -20,8 +22,10 @@ import { sliceFromDisk } from '../src/lib/server/ledger-disk';
  * state a panel draws rather than as an error it has to inspect.
  *
  * The door is driven through its core and its disk entry point, never through
- * `ledger.ts`, which imports `$app/paths` and so cannot load in plain Node. The
- * browser's byte source is exercised with recorded responses: every request is
+ * `ledger.ts`, which imports `$app/paths` and so cannot load in plain Node. A
+ * browser page is a page keeper over the browser's byte source, made here the
+ * way `ledger.ts` makes one. That byte source is exercised with recorded
+ * responses: every request is
  * answered from the fixture files under `tests/fixtures/ledger-door/`, read
  * inside the test that asks, and a case that needs a 404, a short body, a
  * refused fetch or a different stamp says so by path. Nothing here touches the
@@ -83,16 +87,52 @@ const reshaped =
 	(change: Record<string, unknown>): Rule =>
 	(onDisk) => ({ status: 200, body: encoded({ ...decoded(onDisk), ...change }) });
 
-/** An engine opener that counts how often the door reached for the engine. */
-function counted(): { open: EngineOpener; opened: () => number } {
-	let count = 0;
-	return {
-		open: () => {
-			count += 1;
-			return nodeEngine(locate, engineExtensionRepository());
-		},
-		opened: () => count
+interface CountedEngine {
+	open: EngineOpener;
+	/** How often the door reached for the engine. */
+	opened: () => number;
+	/** Every name the engine gave a file the door handed it, in order. */
+	registered: string[];
+	/** Every name the door asked the engine to drop, in order. */
+	dropped: string[];
+}
+
+/**
+ * The real Node engine, counting what the door asks of it. It is a wrapper, not
+ * a stand-in: every file is registered in DuckDB and every statement runs there.
+ * It takes each buffer the way a browser's engine does - moved, leaving the
+ * caller's copy empty - because the Node engine copies instead, and a door that
+ * handed one buffer over twice would pass on a copy here and read an empty file
+ * in a browser.
+ */
+function counted(): CountedEngine {
+	let opened = 0;
+	const registered: string[] = [];
+	const dropped: string[] = [];
+	const open: EngineOpener = async () => {
+		opened += 1;
+		const engine = await nodeEngine(locate, engineExtensionRepository());
+		return {
+			async register(bytes) {
+				const moved = structuredClone(bytes, { transfer: [bytes.buffer as ArrayBuffer] });
+				const name = await engine.register(moved);
+				registered.push(name);
+				return name;
+			},
+			async drop(names) {
+				dropped.push(...names);
+				await engine.drop(names);
+			},
+			rows: (sql, params) => engine.rows(sql, params)
+		};
 	};
+	return { open, opened: () => opened, registered, dropped };
+}
+
+/** A page that has read nothing yet: a keeper over recorded responses, as
+ *  `ledger.ts` makes one over `fetch`. */
+function freshPage(fetcher: Fetcher, engine: CountedEngine = counted()): PageKeeper {
+	return pageKeeper(fetchedBytes(PREFIX, fetcher), engine.open);
 }
 
 /** Every console warning `work` prints, and its result. */
@@ -125,6 +165,17 @@ const ask = (from: string, to: string, extra: Partial<SliceOptions> = {}): Slice
 });
 const dataAsked = (asked: Asked[]): string[] => asked.filter((one) => one.path.endsWith('.parquet')).map((one) => one.path);
 
+/** How many times each path was asked for. */
+function askedCounts(asked: Asked[]): Record<string, number> {
+	const counts: Record<string, number> = {};
+	for (const one of asked) counts[one.path] = (counts[one.path] ?? 0) + 1;
+	return counts;
+}
+
+/** A fixture day file's path, and its bytes read from the fixture. */
+const dayFile = (covers: string): string => dataPath(LEDGER, 'daily', covers);
+const bytesOf = (relative: string): Uint8Array => new Uint8Array(readFileSync(path.join(STATE, ...relative.split('/'))));
+
 test.describe('which files a range needs', () => {
 	test('each day is read through the coarsest period that holds it, one file a day', () => {
 		const selection = filesFor('2026-08-30', '2026-09-01', fixtureEntries('daily'), fixtureEntries('monthly'));
@@ -151,7 +202,7 @@ test.describe('the four states, before the engine is needed', () => {
 	test('a ledger with no daily index is missing, and nothing else is asked', async () => {
 		const { fetcher, asked } = recorded({ [DAILY_INDEX]: { status: 404 } });
 		const engine = counted();
-		expect(await readSlice(fetchedBytes(PREFIX, fetcher), engine.open, LEDGER, ask('2026-09-01', '2026-09-02'))).toEqual({
+		expect(await readSlice(freshPage(fetcher, engine), LEDGER, ask('2026-09-01', '2026-09-02'))).toEqual({
 			state: 'missing',
 			rows: []
 		});
@@ -162,7 +213,7 @@ test.describe('the four states, before the engine is needed', () => {
 	test('a span of zero-row days is quiet, fetches no data file and starts no engine', async () => {
 		const { fetcher, asked } = recorded();
 		const engine = counted();
-		expect(await readSlice(fetchedBytes(PREFIX, fetcher), engine.open, LEDGER, ask('2026-09-03', '2026-09-03'))).toEqual({
+		expect(await readSlice(freshPage(fetcher, engine), LEDGER, ask('2026-09-03', '2026-09-03'))).toEqual({
 			state: 'quiet',
 			rows: [],
 			through: '2026-09-05'
@@ -173,7 +224,7 @@ test.describe('the four states, before the engine is needed', () => {
 
 	test('a span wholly after the newest compacted day is quiet, and says how far the data reaches', async () => {
 		const { fetcher, asked } = recorded();
-		expect(await readSlice(fetchedBytes(PREFIX, fetcher), counted().open, LEDGER, ask('2026-09-06', '2026-09-10'))).toEqual({
+		expect(await readSlice(freshPage(fetcher), LEDGER, ask('2026-09-06', '2026-09-10'))).toEqual({
 			state: 'quiet',
 			rows: [],
 			through: '2026-09-05'
@@ -183,7 +234,7 @@ test.describe('the four states, before the engine is needed', () => {
 
 	test('a day past the newest compacted day is clamped away rather than asked for', async () => {
 		const { fetcher, asked } = recorded();
-		await readSlice(fetchedBytes(PREFIX, fetcher), counted().open, LEDGER, ask('2026-09-05', '2026-09-10'));
+		await readSlice(freshPage(fetcher), LEDGER, ask('2026-09-05', '2026-09-10'));
 		expect(dataAsked(asked)).toEqual(['compact/host-fingerprint/daily/2026/09/05.parquet']);
 	});
 
@@ -191,7 +242,7 @@ test.describe('the four states, before the engine is needed', () => {
 		const { fetcher, asked } = recorded();
 		const engine = counted();
 		const { result, warned } = await warnings(() =>
-			readSlice(fetchedBytes(PREFIX, fetcher), engine.open, LEDGER, ask('2026-09-02', '2026-09-05'))
+			readSlice(freshPage(fetcher, engine), LEDGER, ask('2026-09-02', '2026-09-05'))
 		);
 		expect(result).toEqual({ state: 'unreachable', rows: [], at: '2026-09-04' });
 		expect(dataAsked(asked)).toEqual([]);
@@ -201,16 +252,16 @@ test.describe('the four states, before the engine is needed', () => {
 
 	test('monthly.json is asked for only when the span starts before the oldest daily day', async () => {
 		const later = recorded();
-		await readSlice(fetchedBytes(PREFIX, later.fetcher), counted().open, LEDGER, ask('2026-08-31', '2026-09-01'));
+		await readSlice(freshPage(later.fetcher), LEDGER, ask('2026-08-31', '2026-09-01'));
 		expect(later.asked.map((one) => one.path)).not.toContain(MONTHLY_INDEX);
 		const earlier = recorded();
-		await readSlice(fetchedBytes(PREFIX, earlier.fetcher), counted().open, LEDGER, ask('2026-08-30', '2026-09-01'));
+		await readSlice(freshPage(earlier.fetcher), LEDGER, ask('2026-08-30', '2026-09-01'));
 		expect(earlier.asked.map((one) => one.path)).toContain(MONTHLY_INDEX);
 	});
 
 	test('a day both indexes name is fetched once, from the month', async () => {
 		const { fetcher, asked } = recorded();
-		await readSlice(fetchedBytes(PREFIX, fetcher), counted().open, LEDGER, ask('2026-08-30', '2026-09-01'));
+		await readSlice(freshPage(fetcher), LEDGER, ask('2026-08-30', '2026-09-01'));
 		expect(dataAsked(asked)).toEqual([
 			'compact/host-fingerprint/monthly/2026/08.parquet',
 			'compact/host-fingerprint/daily/2026/09/01.parquet'
@@ -220,7 +271,7 @@ test.describe('the four states, before the engine is needed', () => {
 	test('with no monthly.json, a day before the oldest daily day is a hole', async () => {
 		const { fetcher } = recorded({ [MONTHLY_INDEX]: { status: 404 } });
 		const { result } = await warnings(() =>
-			readSlice(fetchedBytes(PREFIX, fetcher), counted().open, LEDGER, ask('2026-08-30', '2026-09-01'))
+			readSlice(freshPage(fetcher), LEDGER, ask('2026-08-30', '2026-09-01'))
 		);
 		expect(result).toEqual({ state: 'unreachable', rows: [], at: '2026-08-30' });
 	});
@@ -228,7 +279,7 @@ test.describe('the four states, before the engine is needed', () => {
 	test('an index stamped newer than this build is refused: both stamps on the console, no data fetched', async () => {
 		const { fetcher, asked } = recorded({ [DAILY_INDEX]: reshaped({ version: '2099-01-01' }) });
 		const { result, warned } = await warnings(() =>
-			readSlice(fetchedBytes(PREFIX, fetcher), counted().open, LEDGER, ask('2026-08-30', '2026-09-02'))
+			readSlice(freshPage(fetcher), LEDGER, ask('2026-08-30', '2026-09-02'))
 		);
 		expect(result).toEqual({ state: 'unreachable', rows: [], at: '2026-08-30' });
 		expect(asked.map((one) => one.path)).toEqual([DAILY_INDEX]);
@@ -238,7 +289,7 @@ test.describe('the four states, before the engine is needed', () => {
 
 	test('an index stamped older than this build is read', async () => {
 		const { fetcher } = recorded({ [DAILY_INDEX]: reshaped({ version: '2026-09-01' }) });
-		expect(await readSlice(fetchedBytes(PREFIX, fetcher), counted().open, LEDGER, ask('2026-09-03', '2026-09-03'))).toEqual({
+		expect(await readSlice(freshPage(fetcher), LEDGER, ask('2026-09-03', '2026-09-03'))).toEqual({
 			state: 'quiet',
 			rows: [],
 			through: '2026-09-05'
@@ -248,7 +299,7 @@ test.describe('the four states, before the engine is needed', () => {
 	test('a monthly index stamped newer than this build is refused too', async () => {
 		const { fetcher } = recorded({ [MONTHLY_INDEX]: reshaped({ version: '2099-01-01' }) });
 		const { result } = await warnings(() =>
-			readSlice(fetchedBytes(PREFIX, fetcher), counted().open, LEDGER, ask('2026-08-30', '2026-09-01'))
+			readSlice(freshPage(fetcher), LEDGER, ask('2026-08-30', '2026-09-01'))
 		);
 		expect(result).toEqual({ state: 'unreachable', rows: [], at: '2026-08-30' });
 	});
@@ -265,7 +316,7 @@ test.describe('the four states, before the engine is needed', () => {
 		test(`a daily index that is ${what} is unreachable from the first day asked`, async () => {
 			const { fetcher, asked } = recorded({ [DAILY_INDEX]: rule });
 			const { result, warned } = await warnings(() =>
-				readSlice(fetchedBytes(PREFIX, fetcher), counted().open, LEDGER, ask('2026-09-01', '2026-09-02'))
+				readSlice(freshPage(fetcher), LEDGER, ask('2026-09-01', '2026-09-02'))
 			);
 			expect(result).toEqual({ state: 'unreachable', rows: [], at: '2026-09-01' });
 			expect(dataAsked(asked)).toEqual([]);
@@ -277,7 +328,7 @@ test.describe('the four states, before the engine is needed', () => {
 		const { fetcher } = recorded({ 'compact/host-fingerprint/daily/2026/09/02.parquet': { status: 404 } });
 		const engine = counted();
 		const { result } = await warnings(() =>
-			readSlice(fetchedBytes(PREFIX, fetcher), engine.open, LEDGER, ask('2026-09-01', '2026-09-02'))
+			readSlice(freshPage(fetcher, engine), LEDGER, ask('2026-09-01', '2026-09-02'))
 		);
 		expect(result).toEqual({ state: 'unreachable', rows: [], at: '2026-09-02' });
 		expect(engine.opened()).toBe(0);
@@ -289,7 +340,7 @@ test.describe('the four states, before the engine is needed', () => {
 		});
 		const engine = counted();
 		const { result, warned } = await warnings(() =>
-			readSlice(fetchedBytes(PREFIX, fetcher), engine.open, LEDGER, ask('2026-08-30', '2026-09-01'))
+			readSlice(freshPage(fetcher, engine), LEDGER, ask('2026-08-30', '2026-09-01'))
 		);
 		expect(result).toEqual({ state: 'unreachable', rows: [], at: '2026-08-30' });
 		expect(engine.opened()).toBe(0);
@@ -300,7 +351,7 @@ test.describe('the four states, before the engine is needed', () => {
 
 	test('an index is asked for fresh, and a data file under the version its entry names', async () => {
 		const { fetcher, asked } = recorded();
-		await readSlice(fetchedBytes(PREFIX, fetcher), counted().open, LEDGER, ask('2026-08-30', '2026-09-01'));
+		await readSlice(freshPage(fetcher), LEDGER, ask('2026-08-30', '2026-09-01'));
 		const entries = new Map([...fixtureEntries('daily'), ...fixtureEntries('monthly')].map((entry) => [entry.covers, entry]));
 		for (const one of asked) {
 			if (one.path.endsWith('.json')) {
@@ -318,8 +369,9 @@ test.describe('the four states, before the engine is needed', () => {
 		const { fetcher } = recorded();
 		const { result, warned } = await warnings(() =>
 			readSlice(
-				fetchedBytes(PREFIX, fetcher),
-				() => Promise.reject(new Error('this browser has no WebAssembly exception handling')),
+				pageKeeper(fetchedBytes(PREFIX, fetcher), () =>
+					Promise.reject(new Error('this browser has no WebAssembly exception handling'))
+				),
 				LEDGER,
 				ask('2026-09-01', '2026-09-02')
 			)
@@ -342,7 +394,7 @@ test.describe('a request the door refuses before it fetches anything', () => {
 	for (const [what, options] of refused) {
 		test(`it refuses ${what} by name`, async () => {
 			const { fetcher, asked } = recorded();
-			await expect(readSlice(fetchedBytes(PREFIX, fetcher), counted().open, LEDGER, options)).rejects.toThrow(SliceRequestError);
+			await expect(readSlice(freshPage(fetcher), LEDGER, options)).rejects.toThrow(SliceRequestError);
 			expect(asked).toEqual([]);
 		});
 	}
@@ -350,7 +402,7 @@ test.describe('a request the door refuses before it fetches anything', () => {
 	test('it refuses a ledger outside the closed set', async () => {
 		const { fetcher, asked } = recorded();
 		await expect(
-			readSlice(fetchedBytes(PREFIX, fetcher), counted().open, 'state/../../secrets' as typeof LEDGER, ask('2026-09-01', '2026-09-02'))
+			readSlice(freshPage(fetcher), 'state/../../secrets' as typeof LEDGER, ask('2026-09-01', '2026-09-02'))
 		).rejects.toThrow(SliceRequestError);
 		expect(asked).toEqual([]);
 	});
@@ -367,9 +419,9 @@ test.describe('the statement, and the values it hands back', () => {
 				{ column: 'shard', op: '>=', value: 1 }
 			]
 		});
-		const { sql, params } = statementFor("['slice1-0.parquet']", new Set(['date', 'shard', 'job']), request, '2026-09-02');
+		const { sql, params } = statementFor("['door/1.parquet']", new Set(['date', 'shard', 'job']), request, '2026-09-02');
 		expect(sql).toBe(
-			`SELECT "date", "shard", NULL AS "absent" FROM read_parquet(['slice1-0.parquet'], union_by_name = true) ` +
+			`SELECT "date", "shard", NULL AS "absent" FROM read_parquet(['door/1.parquet'], union_by_name = true) ` +
 				`WHERE "date" >= ? AND "date" <= ? AND "job" IN (?, ?) AND "shard" >= ? ORDER BY ALL`
 		);
 		expect(params).toEqual(['2026-09-01', '2026-09-02', "work'); drop table x; --", 'plan', 1]);
@@ -391,7 +443,7 @@ test.describe('THE ORACLE through the engine, at both entry points', () => {
 	async function bothWays(options: SliceOptions): Promise<{ browser: SliceResult; disk: SliceResult; warned: string[] }> {
 		const { fetcher } = recorded();
 		const { result: browser, warned } = await warnings(() =>
-			readSlice(fetchedBytes(PREFIX, fetcher), () => nodeEngine(locate, engineExtensionRepository()), LEDGER, options)
+			readSlice(freshPage(fetcher), LEDGER, options)
 		);
 		const { result: disk, warned: more } = await warnings(() => sliceFromDisk(STATE, LEDGER, options));
 		return { browser, disk, warned: [...warned, ...more] };
@@ -429,4 +481,298 @@ test.describe('THE ORACLE through the engine, at both entry points', () => {
 		expect(nothing.disk, nothing.warned.join('\n')).toEqual({ state: 'quiet', rows: [], through: '2026-09-05' });
 		expect(nothing.browser).toEqual(nothing.disk);
 	});
+});
+
+test.describe('what a page keeps', () => {
+	const MONTH_FILE = dataPath(LEDGER, 'monthly', '2026-08');
+	/** Both indexes and every file a span from 2026-08-30 to 2026-09-02 reads, each once. */
+	const ONCE_EACH = {
+		[DAILY_INDEX]: 1,
+		[MONTHLY_INDEX]: 1,
+		[MONTH_FILE]: 1,
+		[dayFile('2026-09-01')]: 1,
+		[dayFile('2026-09-02')]: 1
+	};
+
+	/** The index as the fixture holds it after a deploy: each entry passed through
+	 *  `change`, and an entry it answers `null` for gone. */
+	const redeployed = (onDisk: Uint8Array, change: (entry: CompactEntry) => CompactEntry | null): Uint8Array => {
+		const index = decoded(onDisk) as { entries: CompactEntry[] };
+		const entries = index.entries.map(change).filter((entry): entry is CompactEntry => entry !== null);
+		return encoded({ ...index, entries });
+	};
+
+	test('two slices over overlapping spans fetch and register each file once, and the second answers what a fresh page would', async () => {
+		const { fetcher, asked } = recorded();
+		const engine = counted();
+		const page = freshPage(fetcher, engine);
+		expect(await readSlice(page, LEDGER, ask('2026-08-30', '2026-09-01'))).toMatchObject({ state: 'ok' });
+		const second = await readSlice(page, LEDGER, ask('2026-09-01', '2026-09-02'));
+		expect(askedCounts(asked)).toEqual(ONCE_EACH);
+		expect(engine.registered).toHaveLength(3);
+		expect(new Set(engine.registered).size).toBe(3);
+		// The engine took every buffer the way a browser's does, so a second slice
+		// that handed one over again would have read an empty file.
+		const fresh = await readSlice(freshPage(recorded().fetcher), LEDGER, ask('2026-09-01', '2026-09-02'));
+		expect(fresh).toMatchObject({ state: 'ok' });
+		expect(second).toEqual(fresh);
+	});
+
+	test('two slices asked at the same moment share every fetch and every registration', async () => {
+		const { fetcher, asked } = recorded();
+		const engine = counted();
+		const page = freshPage(fetcher, engine);
+		const [one, two] = await Promise.all([
+			readSlice(page, LEDGER, ask('2026-08-30', '2026-09-02')),
+			readSlice(page, LEDGER, ask('2026-08-30', '2026-09-02'))
+		]);
+		expect(one).toMatchObject({ state: 'ok' });
+		expect(two).toEqual(one);
+		expect(askedCounts(asked)).toEqual(ONCE_EACH);
+		expect(engine.registered).toHaveLength(3);
+	});
+
+	test('a fetch that threw is not kept, so the next slice asks again', async () => {
+		let indexAsks = 0;
+		let fileAsks = 0;
+		const { fetcher, asked } = recorded({
+			[DAILY_INDEX]: (onDisk) => (++indexAsks === 1 ? 'throw' : { status: 200, body: onDisk }),
+			[dayFile('2026-09-01')]: (onDisk) => (++fileAsks === 1 ? 'throw' : { status: 200, body: onDisk })
+		});
+		const engine = counted();
+		const page = freshPage(fetcher, engine);
+		const turns: { result: SliceResult; warned: string[] }[] = [];
+		for (let turn = 0; turn < 3; turn += 1) {
+			turns.push(await warnings(() => readSlice(page, LEDGER, ask('2026-09-01', '2026-09-02'))));
+		}
+		expect(turns.map(({ result }) => result.state)).toEqual(['unreachable', 'unreachable', 'ok']);
+		expect(turns[0].warned.join('\n')).toContain('daily.json cannot be read: it could not be fetched');
+		expect(turns[1].warned.join('\n')).toContain(`${dayFile('2026-09-01')} could not be fetched`);
+		// The second slice fetched 2026-09-02 whole but could not be answered, so it
+		// registered nothing, and a page keeps no bytes: the third fetches it again.
+		expect(askedCounts(asked)).toEqual({ [DAILY_INDEX]: 2, [dayFile('2026-09-01')]: 2, [dayFile('2026-09-02')]: 2 });
+		expect(engine.registered).toHaveLength(2);
+	});
+
+	test('a file that is not there is kept as absent, and asked for once', async () => {
+		const { fetcher, asked } = recorded({ [dayFile('2026-09-02')]: { status: 404 } });
+		const page = freshPage(fetcher);
+		for (let turn = 0; turn < 2; turn += 1) {
+			const { result } = await warnings(() => readSlice(page, LEDGER, ask('2026-09-02', '2026-09-02')));
+			expect(result).toEqual({ state: 'unreachable', rows: [], at: '2026-09-02' });
+		}
+		expect(askedCounts(asked)).toEqual({ [DAILY_INDEX]: 1, [dayFile('2026-09-02')]: 1 });
+	});
+
+	test('a file of the wrong length is neither registered nor kept, so the next slice fetches it again', async () => {
+		let asks = 0;
+		const { fetcher, asked } = recorded({
+			[dayFile('2026-09-02')]: (onDisk) => ({ status: 200, body: ++asks === 1 ? onDisk.slice(0, -1) : onDisk })
+		});
+		const engine = counted();
+		const page = freshPage(fetcher, engine);
+		const { result } = await warnings(() => readSlice(page, LEDGER, ask('2026-09-02', '2026-09-02')));
+		expect(result).toEqual({ state: 'unreachable', rows: [], at: '2026-09-02' });
+		expect(engine.registered).toEqual([]);
+		expect(await readSlice(page, LEDGER, ask('2026-09-02', '2026-09-02'))).toMatchObject({ state: 'ok' });
+		expect(askedCounts(asked)[dayFile('2026-09-02')]).toBe(2);
+		expect(engine.registered).toHaveLength(1);
+	});
+
+	test('a file whose entry names a new version is fetched and registered again by the next page, and the open page keeps what it holds', async () => {
+		// A page keeps its index, so an entry can change only for the next page: a
+		// reload in a browser, the next call at build time. The deploy re-packs
+		// 2026-09-02 - the site serves other bytes for it, and daily.json names their
+		// length. The stand-in bytes are 2026-09-05's file, so the re-packed day holds
+		// no row dated 2026-09-02, which is how the two answers tell the files apart.
+		const repacked = bytesOf(dayFile('2026-09-05'));
+		let deployed = false;
+		const { fetcher, asked } = recorded({
+			[DAILY_INDEX]: (onDisk) => ({
+				status: 200,
+				body: deployed
+					? redeployed(onDisk, (entry) => (entry.covers === '2026-09-02' ? { ...entry, bytes: repacked.byteLength } : entry))
+					: onDisk
+			}),
+			[dayFile('2026-09-02')]: (onDisk) => ({ status: 200, body: deployed ? repacked : onDisk })
+		});
+		const engine = counted();
+		const open = freshPage(fetcher, engine);
+		const before = await readSlice(open, LEDGER, ask('2026-09-02', '2026-09-02'));
+		expect(before).toMatchObject({ state: 'ok' });
+		deployed = true;
+		expect(await readSlice(open, LEDGER, ask('2026-09-02', '2026-09-02'))).toEqual(before);
+		expect(await readSlice(freshPage(fetcher, engine), LEDGER, ask('2026-09-02', '2026-09-02'))).toEqual({
+			state: 'quiet',
+			rows: [],
+			through: '2026-09-05'
+		});
+		const entry = fixtureEntries('daily').find((one) => one.covers === '2026-09-02');
+		expect(asked.filter((one) => one.path === dayFile('2026-09-02')).map((one) => one.version)).toEqual([
+			`${entry?.rows}-${entry?.bytes}`,
+			`${entry?.rows}-${repacked.byteLength}`
+		]);
+		expect(engine.registered).toHaveLength(2);
+		expect(new Set(engine.registered).size).toBe(2);
+	});
+
+	test('an open page answers unreachable for a day file removed or re-packed after it opened, and the next page reads the day', async () => {
+		// The deploy takes 2026-08-31 into its month, so daily.json stops naming it and
+		// its day file goes; and it re-packs 2026-09-05, which the open page has not
+		// read yet, with other bytes.
+		const repacked = bytesOf(dayFile('2026-09-02'));
+		let deployed = false;
+		const { fetcher } = recorded({
+			[DAILY_INDEX]: (onDisk) => ({
+				status: 200,
+				body: deployed
+					? redeployed(onDisk, (entry) => {
+							if (entry.covers === '2026-08-31') return null;
+							return entry.covers === '2026-09-05' ? { ...entry, bytes: repacked.byteLength } : entry;
+						})
+					: onDisk
+			}),
+			[dayFile('2026-08-31')]: (onDisk) => (deployed ? { status: 404 } : { status: 200, body: onDisk }),
+			[dayFile('2026-09-05')]: (onDisk) => ({ status: 200, body: deployed ? repacked : onDisk })
+		});
+		const open = freshPage(fetcher);
+		// The page reads daily.json before the deploy.
+		expect(await readSlice(open, LEDGER, ask('2026-09-03', '2026-09-03'))).toMatchObject({ state: 'quiet' });
+		deployed = true;
+		const removed = await warnings(() => readSlice(open, LEDGER, ask('2026-08-31', '2026-08-31')));
+		expect(removed.result).toEqual({ state: 'unreachable', rows: [], at: '2026-08-31' });
+		expect(removed.warned.join('\n')).toContain(`${dayFile('2026-08-31')} is named in daily.json and is not there`);
+		const changed = await warnings(() => readSlice(open, LEDGER, ask('2026-09-05', '2026-09-05')));
+		expect(changed.result).toEqual({ state: 'unreachable', rows: [], at: '2026-09-05' });
+		expect(changed.warned.join('\n')).toContain(`arrived as ${repacked.byteLength} bytes`);
+		const reloaded = freshPage(fetcher);
+		expect(await readSlice(reloaded, LEDGER, ask('2026-08-31', '2026-08-31', { columns: ['date', 'run_id', 'shard'] }))).toEqual({
+			state: 'ok',
+			rows: [{ date: '2026-08-31', run_id: '2026-08-31-17810000001', shard: 0 }],
+			through: '2026-09-05'
+		});
+	});
+
+	test('every file the engine holds is named door/<n>.parquet, and the engine mints the name', async () => {
+		const engine = counted();
+		await readSlice(freshPage(recorded().fetcher, engine), LEDGER, ask('2026-08-30', '2026-09-02'));
+		expect(engine.registered).toHaveLength(3);
+		for (const name of engine.registered) expect(name).toMatch(/^door\/\d+\.parquet$/);
+	});
+
+	test('a page keeps its files registered, and a build-time call drops every file it registered when it ends', async () => {
+		const real = await nodeEngine(locate, engineExtensionRepository());
+		const held = async (): Promise<string[]> =>
+			(await real.rows(`SELECT file FROM glob('door/*') ORDER BY file`, [])).map((row) => String(row.file));
+		const engine = counted();
+		await readSlice(freshPage(recorded().fetcher, engine), LEDGER, ask('2026-08-30', '2026-09-02'));
+		expect(await held()).toEqual(expect.arrayContaining(engine.registered));
+		expect(engine.dropped).toEqual([]);
+		const before = await held();
+		const { result, warned } = await warnings(() => sliceFromDisk(STATE, LEDGER, ask('2026-08-30', '2026-09-02')));
+		expect(result, warned.join('\n')).toMatchObject({ state: 'ok' });
+		expect(await held()).toEqual(before);
+	});
+});
+
+test.describe('how far a ledger reaches', () => {
+	test('from the first day of the oldest month to the newest day, both indexes asked at once, and no engine started', async () => {
+		const { fetcher, asked } = recorded();
+		let inFlight = 0;
+		let mostInFlight = 0;
+		const watched: Fetcher = async (url, init) => {
+			inFlight += 1;
+			mostInFlight = Math.max(mostInFlight, inFlight);
+			try {
+				return await fetcher(url, init);
+			} finally {
+				inFlight -= 1;
+			}
+		};
+		const engine = counted();
+		expect(await readReach(freshPage(watched, engine), LEDGER)).toEqual({
+			state: 'ok',
+			first: '2026-08-01',
+			through: '2026-09-05'
+		});
+		expect(asked.map((one) => one.path).sort()).toEqual([DAILY_INDEX, MONTHLY_INDEX].sort());
+		expect(mostInFlight, 'the two indexes were asked for one after the other').toBe(2);
+		expect(engine.opened()).toBe(0);
+	});
+
+	test('with no monthly.json, it reaches back to the oldest day daily.json names', async () => {
+		const { fetcher } = recorded({ [MONTHLY_INDEX]: { status: 404 } });
+		const { result, warned } = await warnings(() => readReach(freshPage(fetcher), LEDGER));
+		expect(result).toEqual({ state: 'ok', first: '2026-08-31', through: '2026-09-05' });
+		expect(warned).toEqual([]);
+	});
+
+	const unread: [string, Rule][] = [
+		['stamped newer than this build', reshaped({ version: '2099-01-01' })],
+		['not JSON', { status: 200, body: new TextEncoder().encode('{"entries": [') }],
+		['a refused fetch', 'throw']
+	];
+	for (const [what, rule] of unread) {
+		test(`a monthly.json that is ${what} leaves the days daily.json names, and the console says why`, async () => {
+			const { fetcher } = recorded({ [MONTHLY_INDEX]: rule });
+			const { result, warned } = await warnings(() => readReach(freshPage(fetcher), LEDGER));
+			expect(result).toEqual({ state: 'ok', first: '2026-08-31', through: '2026-09-05' });
+			expect(warned.join('\n')).toMatch(/^\[ledger\] host-fingerprint: monthly\.json .*reaches back only to 2026-08-31/);
+		});
+
+		test(`a daily.json that is ${what} is unreachable, with no day, and the console says why`, async () => {
+			const { fetcher } = recorded({ [DAILY_INDEX]: rule });
+			const engine = counted();
+			const { result, warned } = await warnings(() => readReach(freshPage(fetcher, engine), LEDGER));
+			expect(result).toStrictEqual({ state: 'unreachable' });
+			expect(warned.join('\n')).toMatch(/^\[ledger\] host-fingerprint: daily\.json /);
+			expect(engine.opened()).toBe(0);
+		});
+	}
+
+	test('a daily.json that names no day is quiet', async () => {
+		const { fetcher } = recorded({ [DAILY_INDEX]: reshaped({ entries: [] }) });
+		expect(await readReach(freshPage(fetcher), LEDGER)).toStrictEqual({ state: 'quiet' });
+	});
+
+	test('a ledger with no daily.json is missing', async () => {
+		const { fetcher } = recorded({ [DAILY_INDEX]: { status: 404 } });
+		expect(await readReach(freshPage(fetcher), LEDGER)).toStrictEqual({ state: 'missing' });
+	});
+
+	test('it refuses a ledger outside the closed set, and asks for nothing', async () => {
+		const { fetcher, asked } = recorded();
+		await expect(readReach(freshPage(fetcher), 'state/../../secrets' as typeof LEDGER)).rejects.toThrow(SliceRequestError);
+		expect(asked).toEqual([]);
+	});
+
+	test('a slice on the same page agrees with it, and reads neither index again', async () => {
+		const { fetcher, asked } = recorded();
+		const page = freshPage(fetcher);
+		const reach = await readReach(page, LEDGER);
+		expect(reach).toMatchObject({ state: 'ok' });
+		if (reach.state !== 'ok') return;
+		// Up to 2026-09-03: 2026-09-04 is the fixture's hole.
+		expect(await readSlice(page, LEDGER, ask(reach.first, '2026-09-03'))).toMatchObject({
+			state: 'ok',
+			through: reach.through
+		});
+		expect(asked.filter((one) => one.path.endsWith('.json')).map((one) => one.path).sort()).toEqual(
+			[DAILY_INDEX, MONTHLY_INDEX].sort()
+		);
+	});
+
+	const nothings: [SliceResult['state'], Record<string, Rule>][] = [
+		['missing', { [DAILY_INDEX]: { status: 404 } }],
+		['quiet', { [DAILY_INDEX]: reshaped({ entries: [] }) }],
+		['unreachable', { [DAILY_INDEX]: reshaped({ version: '2099-01-01' }) }]
+	];
+	for (const [state, rules] of nothings) {
+		test(`where a slice on the same page is ${state}, so is the reach`, async () => {
+			const page = freshPage(recorded(rules).fetcher);
+			const { result: reach } = await warnings(() => readReach(page, LEDGER));
+			const { result: drawn } = await warnings(() => readSlice(page, LEDGER, ask('2026-09-01', '2026-09-02')));
+			expect([reach.state, drawn.state]).toEqual([state, state]);
+		});
+	}
 });
