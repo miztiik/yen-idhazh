@@ -74,12 +74,12 @@ SIGNAL_COLUMNS: Final = (
     "determinism_violation",
 )
 
-#: Numeric columns of the eval row, each stored as a moment. `attempt` is here
-#: with the scores because it is a number a later reader asks about - how often
-#: the summarizer had to try twice - and dropping it would make that
+#: Numeric columns of the eval row, each stored as a moment. `summary_attempt` is
+#: here with the scores because it is a number a later reader asks about - how
+#: often the summarizer had to try twice - and dropping it would make that
 #: unanswerable for the month rather than merely coarse.
 MEASUREMENT_COLUMNS: Final = (
-    "attempt",
+    "summary_attempt",
     "hhem",
     "hhem_full",
     "hhem_delta",
@@ -87,9 +87,9 @@ MEASUREMENT_COLUMNS: Final = (
     "extractiveness",
     "verbatim_run",
     "unsupported_numbers",
-    "source_word_count",
-    "source_seen_word_count",
-    "summary_word_count",
+    "source_words_before_cap",
+    "source_words",
+    "summary_words",
     "score_ms",
     "evidential_density",
     "speculative_density",
@@ -207,10 +207,10 @@ def _cohort(rows: Sequence[Mapping[str, str]]) -> ScoreCohort:
             value = _number(row.get(name))
             if value is not None:
                 columns[name].append(value)
-        full = _number(row.get("source_word_count"))
+        full = _number(row.get("source_words_before_cap"))
         if full is not None:
             cut_known += 1
-            if full > (_number(row.get("source_seen_word_count")) or 0.0):
+            if full > (_number(row.get("source_words")) or 0.0):
                 cut += 1
         premise = (row.get("source_digest") or "").strip()
         if premise:

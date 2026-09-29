@@ -506,9 +506,9 @@ def test_a_truncated_article_files_two_different_lengths() -> None:
     row = _row_for(article)
 
     assert article.truncated, "the fixture has to be an article that was actually cut"
-    assert row.source_word_count == article.source_word_count == 5240
-    assert row.source_seen_word_count == article.word_count == 4310
-    assert row.source_seen_word_count < row.source_word_count, "930 words never reached the model"
+    assert row.source_words_before_cap == article.source_word_count == 5240
+    assert row.source_words == article.word_count == 4310
+    assert row.source_words < row.source_words_before_cap, "930 words never reached the model"
 
 
 def test_an_untruncated_article_reads_the_same_length_twice() -> None:
@@ -517,7 +517,7 @@ def test_an_untruncated_article_reads_the_same_length_twice() -> None:
     row = _row_for(article)
 
     assert not article.truncated
-    assert row.source_word_count == row.source_seen_word_count == 1320
+    assert row.source_words_before_cap == row.source_words == 1320
 
 
 def test_the_lengths_do_not_move_when_the_scored_text_does() -> None:
@@ -546,8 +546,8 @@ def test_the_lengths_do_not_move_when_the_scored_text_does() -> None:
         scored_at="2026-08-21T06:18:02Z",
     )
 
-    assert other.source_word_count == row.source_word_count
-    assert other.source_seen_word_count == row.source_seen_word_count
+    assert other.source_words_before_cap == row.source_words_before_cap
+    assert other.source_words == row.source_words
 
 
 def test_an_old_payload_that_was_cut_cannot_say_how_long_the_article_was() -> None:
@@ -562,8 +562,8 @@ def test_an_old_payload_that_was_cut_cannot_say_how_long_the_article_was() -> No
     row = _row_for(article.model_copy(update={"source_word_count": None}))
 
     assert article.truncated
-    assert row.source_word_count is None
-    assert row.source_seen_word_count == 4310, "the seen count is still a measurement"
+    assert row.source_words_before_cap is None
+    assert row.source_words == 4310, "the seen count is still a measurement"
 
 
 def test_an_old_payload_that_was_never_cut_knows_its_own_length() -> None:
@@ -576,7 +576,7 @@ def test_an_old_payload_that_was_never_cut_knows_its_own_length() -> None:
     row = _row_for(article.model_copy(update={"source_word_count": None}))
 
     assert not article.truncated
-    assert row.source_word_count == row.source_seen_word_count == 1320
+    assert row.source_words_before_cap == row.source_words == 1320
 
 
 # --- The flag that says extract cut the body ---------------------------------

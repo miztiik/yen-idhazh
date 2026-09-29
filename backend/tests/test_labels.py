@@ -95,8 +95,8 @@ def _an_eval_row(
             "hhem_delta": 0.0,
             "band": _band_of(hhem),
             "scorer_version": scorer,
-            "source_seen_word_count": words,
-            "source_word_count": max(words, 1320),
+            "source_words": words,
+            "source_words_before_cap": max(words, 1320),
         }
     )
 
@@ -363,7 +363,7 @@ class TestTheDraw:
         """Extraction failures are the sample, not noise to be tidied out of it."""
         records = ledger()
         pool = labels.eligible(records, scorer_version=live_scorer(records))
-        assert any(int(row["source_seen_word_count"]) < 50 for row in pool)
+        assert any(int(row["source_words"]) < 50 for row in pool)
 
 
 class TestWhatTheLedgerHolds:

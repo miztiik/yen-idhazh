@@ -116,10 +116,10 @@ def _observation(row: Mapping[str, str]) -> Observation:
     parsed = urlsplit(address)
     if parsed.scheme not in {"http", "https"} or not parsed.hostname:
         raise ValueError("source_url must be an HTTP or HTTPS address")
-    raw_words = row["source_word_count"].strip()
+    raw_words = row["source_words_before_cap"].strip()
     words = int(raw_words) if raw_words else None
     if words is not None and words < 0:
-        raise ValueError("source_word_count must not be negative")
+        raise ValueError("source_words_before_cap must not be negative")
     return Observation(
         address,
         _score(row, "hhem"),
@@ -169,7 +169,13 @@ def read_windows(state_dir: Path, *, today: date, recent_days: int, baseline_day
             where = f"{ledger.tree_relpath(LedgerName.SCORES)}/{path.relative_to(root).as_posix()}"
             with path.open(encoding="utf-8", newline="") as handle:
                 reader = csv.DictReader(handle)
-                required = {"date", "source_url", "hhem", "extractiveness", "source_word_count"}
+                required = {
+                    "date",
+                    "source_url",
+                    "hhem",
+                    "extractiveness",
+                    "source_words_before_cap",
+                }
                 if not required.issubset(reader.fieldnames or []):
                     raise ValueError(f"{where} misses required drift columns")
                 for row in reader:
