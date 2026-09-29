@@ -1,168 +1,117 @@
 # UI Shell
 
-**Last Updated**: 2026-09-15
-The chrome around the content: what the published site is made of, what each surface owns, and the states every page must handle. The visual vocabulary lives in [design-system.md](design-system.md); the item itself lives in [digest.md](digest.md). This page is the *structure*.
+**Last Updated**: 2026-09-29
 
-## The shell is deliberately thin
+**Known noncompliance:** Existing prerendering does not meet [Telemetry Intent](telemetry-intent.md) and will be removed as existing pages migrate. All new designs, charts and visuals must render in the browser; none may be prerendered.
 
-The whole site is a small number of static pages rendering committed payloads. There is no router-driven application, no session and no client state worth persisting. Everything a page draws is a same-origin file that shipped in the same commit, with one exception a reader has to ask for twice: the search encoder falls back to Hugging Face when this origin cannot serve the weights, behind a committed digest manifest ([../architecture/publishing/frontend.md](../architecture/publishing/frontend.md)). Nothing else reaches off this origin, and nothing at all reports a reader anywhere (Guardrail #1).
+What the shared page frame provides, what each surface owns, and how it handles
+loading and failure. Visual styling belongs to [design-system.md](design-system.md);
+story content belongs to [digest.md](digest.md). This page states the intended
+design, not a claim that the existing implementation already meets it.
 
-That means the shell's job is small and worth stating plainly: **load a payload, render it, and be honest when it is missing.** Since 2026-09-01 a reading page has fetched the day it draws, so "be honest when it is missing" gained a second half too: be honest when it has not arrived yet, and when it never will. From 2026-09-09 a dated page fetches the whole day rather than the tail of one - there is no head in the document any more, because there is no document per date any more. `/` is the one page that still holds its day inline.
+## Rendering policy
+
+Static hosting does not require prerendered content. Publish code, assets and data
+files; the browser fetches what the current view needs and draws it there.
+
+- Do not add prerendered pages, charts or visuals, or bake their data into HTML.
+- Move existing prerendered surfaces to browser rendering. Their current behavior is a migration task, not a pattern for new work.
+- Use shared browser data readers for loading, validation and queries. Presentation components receive validated data rather than each inventing a fetch path.
+- Browser filtering, sorting and chart queries are allowed. Do not recompute editorial scores or silently change the pipeline's publication decisions.
+
+The console's data and chart rules are owned by
+[Telemetry Intent](telemetry-intent.md) and
+[how a console chart gets its data](console-design/how-a-console-chart-gets-its-data.md).
+Current implementation details belong to the
+[frontend architecture](../architecture/publishing/frontend.md).
 
 ## The surfaces
 
 | Surface | Owns | Reads |
 | --- | --- | --- |
-| **Digest** | The day's items, grouped by topic when the day has more than one, and the run-level notice when a run was partial. | The published digest payload. |
-| **Archive** | Reaching a previous day. A reader who missed a day wants to catch up, not start over ([../../.github/agents/reader.agent.md](../../.github/agents/reader.agent.md)). | The index of published days. |
-| **Dashboard** | The eval ledger rendered as a trend - band counts over time. It never recomputes a score ([evaluation.md](evaluation.md)). | The committed CSV. |
-| **Console** | Whether the pipeline itself is working: a chronological strip of runs and the feeds that failed. An operator surface, not a reading one ([../architecture/publishing/frontend.md](../architecture/publishing/frontend.md)). Since 2026-08-30 it is one surface on prerendered routes - `/console/` (Pipelines), `/console/model/` (Summaries) and `/console/machine/` (Hardware), joined on 2026-09-12 by `/console/judgement/` (Judgement) and `/console/voices/` (Voices), which were opened empty by the row that added the tabs and have drawn panels since 2026-09-14 and 2026-09-17 - sharing a navigation strip of real anchors, a standing band under it and one window control under that, on every route that has panels for it to govern. | The committed run manifests, the feed-health ledger, and since 2026-09-03 the source-health view the run publishes - the four facts about every address a curator has left active. |
+| **Digest** | Published stories and notices about a partial run. | The digest payload. |
+| **Archive** | Finding and opening a previous day. | The published-day index. |
+| **Dashboard** | Evaluation trends without recomputing scores. | The evaluation records. |
+| **Console** | Pipeline operation, model results and source health. | The telemetry ledgers, queried for the current view. |
 
-Four surfaces is the whole site, and only two of them are for a reader. A fifth needs an argument.
-
-The two operator surfaces are held to a different standard on purpose. They sit off the reading path, so they spend no reader attention and take no ornament: no display face, no gradient, no illustration. What they owe instead is **legibility** - a figure the operator can read at a glance, a table that fits the screen it is on, and a page that can be scanned in one pass. Correctness is the floor, not the ceiling. An instrument that is right and unreadable has not done its job ([vision.md](vision.md)).
-
-**An operator is a reader, so an operator surface names things in plain words too** (`CLAUDE.md` section 0b). A stage name is a term the pipeline uses on itself; it is not a term for the person reading the page, and no operator surface earns an exemption for being technical. The console renamed its chart-drawing section on 2026-08-31 for exactly this: `router` was what the code called the stage, so the page named the actor in plain words and dropped the word entirely where it was only modifying a number. Two route labels moved the same day for the same reason - `Machine` became **Hardware**, which is the plainest word for a processor and a clock, and `Model` became **Summaries**, because every panel on that route is about a published summary. Every panel title on the three routes is a noun phrase rather than a question, because a question asks the reader to hold it while he reads the panel. The identifiers - route ids, `data-` attributes, config keys, ledger columns - kept the old names that day, because those are addresses and a label may change where an address may not; the ones that were not published moved on 2026-09-05 ([../architecture/publishing/frontend.md](../architecture/publishing/frontend.md)).
-
-**The actor is "the visual planner", singular, on every surface.** The page said "the visuals planner" from 2026-08-31 to 2026-09-05, which was a third spelling beside the module `visual_planner.py` - so an operator reading the page had to translate before editing the config. Singular is also the accurate word: one picture is decided for one story, and the plural came from the `visuals` job, which was plural because one job rendered a whole day. That job retired on 2026-09-13 and the wording did not move with it: what the page names is still one actor deciding one picture. Which strings moved, and what the rename costs while every visual is still a chart, is in [../architecture/publishing/frontend.md](../architecture/publishing/frontend.md).
+Keep operator health off the main reading path. A new surface needs a named user
+need. All surfaces owe readable figures, tables that fit the screen, and plain
+labels. Technical content does not excuse technical shorthand. Use noun phrases
+for panel titles and "the visual planner" for that actor.
 
 ## What the shell provides, once
 
-- **The page frame** - header, footer, and the space scale that separates items. Shared, not re-implemented per page.
-- **The payload loader** - one place that reads a same-origin committed file, validates it against the generated contract, and hands a typed value to the page. Validation at the boundary is what turns a malformed payload into a designed empty state instead of a stack trace. There are two of them since 2026-09-01 and that is a seam rather than a second implementation: `frontend/src/lib/server/payload.ts` reads the committed day at build time, and `frontend/src/lib/assist/day.ts` fetches the served day in the browser. **The build no longer proves every committed day renders**, because it never opens the stories past a document's seed - `idhazh check-publication` opens them instead, in CI and before every publish, and the guarantee is now that a broken day cannot be merged rather than that it cannot be built.
-- **The empty and degraded states** - see below.
-- **The console log** - the browser console is the entire logging surface ([telemetry.md](telemetry.md)). What a page logs is what a reader would need to hand back when something looks wrong: which payload it tried to load, and what was wrong with it.
-- **Reader state, in `localStorage` and nowhere else** - the read mark and the theme choice. Never a cookie: a cookie is sent on every request and would put a reading history into the host's access logs. It is a convenience, so it degrades to nothing under a quota error or private mode, and it is bounded by a window rather than kept forever ([../architecture/publishing/frontend.md](../architecture/publishing/frontend.md)). The service worker's caches are not an exception to this: they hold copies of files this site served, and nothing about the reader.
-
-An item component never fetches. It receives a validated slice and renders it.
+- **Page frame:** shared header, navigation, footer and spacing.
+- **Data loading:** validate fetched and cached payloads at the same boundary. A malformed payload must not leave a blank page. Publication checks still run before publishing; a successful static build is not proof that every day is valid.
+- **Page states:** shared loading, empty, missing and degraded behavior.
+- **Local logging:** the browser console records which payload failed and why. No remote log collector or reader tracking.
+- **Reader preferences:** read marks and theme choice use `localStorage`, never cookies. Bound reading history and tolerate unavailable or full storage.
 
 ## Every page handles five states
 
-These are designed, not discovered:
+Loaded content is the normal case. Design these five additional states:
 
-1. **Loaded** - the normal case.
-2. **Empty** - the payload exists and has nothing in it. A run can legitimately produce zero items. The page says so.
-3. **Missing** - there is no payload for that date, because the day has not run, the address is wrong, or the deploy raced. The page says so and offers the archive.
-4. **Waiting** - the page has asked for something and it has not arrived. It reads two ways on two kinds of page, and both are designed. **A reading page says one sentence**: it stays silent until `ui.payload_slow_ms` and then names the wait, never a spinner, a skeleton or a bar. **The console draws the shape it is waiting for**: every panel's box is on the page from the first frame at the size the numbers will need, still until `console.shimmer_after_ms` and shimmering after that, so nothing moves when the payload lands (owner decision D3, 2026-09-08). It stopped being a dated-route state on 2026-09-09, when the console began fetching its months.
-5. **Unreachable** - the fetch for the day failed for any reason that is not the host saying it has no such day. Whatever is already on screen stays exactly as it is, the page names the day that did not arrive, it offers a retry, and it lists the days this device can still read with no network.
-6. **Degraded** - the payload loaded but individual items are marked low-confidence, truncated, or without a visual. This is the *common* case, not an exception, and it is rendered inline rather than as an error ([digest.md](digest.md)).
+1. **Empty:** the payload exists but has no items. Say so.
+2. **Missing:** the host returns 404 or 410 for the requested day. Offer the archive.
+3. **Waiting:** the request is pending. A reading page names the wait after `ui.payload_slow_ms`, without a spinner, skeleton or progress bar. Console panels reserve their dimensions immediately and shimmer only after `console.shimmer_after_ms`.
+4. **Unreachable:** another fetch failure occurred. Keep existing content, name the failed request, offer retry and list days available offline.
+5. **Degraded:** show low-confidence, truncated or missing-visual items inline.
 
-Six entries and five states, because Loaded is the one that is not a failure of any kind.
-
-**Missing and Unreachable are two sentences and they never merge**, because telling a reader a day was never published when their train went into a tunnel is a lie they can check. Until 2026-09-09 they could not be confused: a dated route was a page a build wrote, so a date nobody published had no page and Missing was settled before any request. One document answers every dated URL now, so both are decided in the browser - and what separates them is the host's own answer. A 404 or a 410 for `digest/<Y>/<M>/<D>/digest.json` is the host saying it holds no such day. Every other failure is the connection.
-
-**A page that white-screens on missing data is a failure**, and it is an explicit gate in `CLAUDE.md` section 12. States 2, 3 and 5 are the most often skipped and the most likely to be seen by a real reader.
-
-**Waiting and Unreachable are new since 2026-09-01**, and they are what a reading route bought by stopping carrying its whole day. Before that a document held every story it published, so there was nothing to wait for and nothing that could fail after the page arrived.
+Never report a failed connection as an unpublished day. Never clear usable content
+or leave a blank page because another request failed.
 
 ## The day runs newest first, and every story carries its own time
 
-The stream orders by the time on the story, newest first. What it replaced was the published order, which until 2026-09-13 was desk-blocked rather than ranked - the whole of one desk, then the whole of the next - so a reader met the same desk ninety times before the next one began. **Nothing editorial is lost by re-ordering it**: what the day thinks is important is the leading block, chosen across the whole day, and it is unchanged. Measured 2026-09-02 over the 12 committed days and 4,713 stories, the re-ordered set is the published set on every day. **The payload now carries one scored order with a frame over its head** ([placement.md](placement.md)), so the page is re-ordering something defensible rather than rescuing something broken, and plan 25 row #10 is where the page stops re-ordering at all.
+The stream runs newest first without dropping published stories or changing the
+editorial leading block ([placement.md](placement.md)). Put each story's own
+absolute UTC timestamp beside its heading, not on a shared rail or behind hover.
 
-**The time is beside the heading, on the story it belongs to.** It sat on a shared rail down the stream's leading edge from 2026-09-02 to 2026-09-12, and the rail is deleted. The rail grouped stories into hour-wide runs and drew one marker per run, so the time a reader could see was the time of the story that opened the group rather than the story they were looking at - and most stories carried nothing. Re-measured 2026-09-12 over the 22 committed days and 8,922 stories at the 60-minute default: **1,218 markers, so 86.3 percent of stories carried no time at all.** The choice was never "33 timestamps or 627"; it was "596 stories with no time, or every story with its own".
+Use a numeric clock. Add a date when it differs from the viewed day, and the year
+when needed. Mark first-sighting time as such; never present it as the feed's time.
+If `time_source` is unknown, show no time. If an older record has no attribution,
+do not invent one. A relative time may supplement, never replace, the absolute one.
 
-**No relative time, and no words at all.** A page is rendered once and read for the next 24 hours, and its times are in the document before any script runs and stay there if none ever does - so `3 hours ago` baked in at 06:20 is wrong by 18:20 and wrong for ever on an archived day. A device may add a relative form beside a correct absolute string; it may never replace one. The stamp is digits: a clock, and a date in front of it when the stamp is not from the day being read.
-
-Four shapes, and the third is the one that matters:
-
-| The reader sees | When |
-| --- | --- |
-| `14:05` | the story's stamp is on the day being read |
-| `08-19 23:40`, or `2019-06-11 08:15` across a year boundary | it is on any other day. The day before is common rather than an edge case: feed-to-arrival reaches 25.7 hours against a 24-hour age limit |
-| `06:20` with a mark | the feed's own time was absent or rejected as impossible, so the clock printed is **ours** |
-| nothing | neither clock answered, so the story carries no time at all and there is no number to print |
-
-The third exists because the fallback behind it is silent. `published_at` is the feed's own date where the feed gave a usable one and our first sight of the address where it did not, and both are the same kind of string - so a page printing the time cannot say whose it is without `time_source` ([../architecture/publishing/layout.md](../architecture/publishing/layout.md)). **The page never prints a time it rejected as a feed time.** That is the same class of failure as an invented axis label. The mark carries that, because the words no longer can.
-
-A story published before `time_source` existed prints the stamp with **no attribution at all** and no mark. The run recorded no answer, so "the feed said this" and "we said this" are both claims we cannot back, and 3,733 committed stories are in that state - 41.8 percent of the archive on 2026-09-12, and the count is frozen because every day since carries the field.
-
-**The fourth shape draws nothing, and it has never happened.** `time_source: unknown` is the one state no committed day has ever held - 0 of 8,922 items on 2026-09-12 - so the canary day plants one on purpose and the browser gate is what proves the branch renders.
-
-**It is the eyebrow's fourth and last fact, in the eyebrow's own type.** Not smaller, not lighter, and not a new step on any scale: a fifth typographic weight on a line that already repeats on every item is the wallpaper a per-story time could become, and the stamp is not it. On a dated page it **replaces the day link**, because the date is the page. A search result spans days, so there the day link keeps the slot and no clock is drawn - two dates on a line capped at four things is the duplicate this rule exists to refuse.
-
-The zone is named once, in one line above the stream: `Times shown in UTC.` Not a suffix on 627 stamps, and not a band of its own at the top of the page - it is a fact about the page, so it is drawn where the page's own facts are. It outlived the rail that used to carry it: the rail was the duplicate, and this sentence is what makes every bare clock on the page readable.
+Use the same type as the other item metadata. On a dated page the stamp replaces
+the day link; search results keep the day link instead. State `Times shown in UTC.`
+once above the stream. These rules apply to browser-rendered content too.
 
 ## What the shell must never do
 
-- Run anything off the reader's device, report a reader's behaviour anywhere, or load a third-party script that phones home (Guardrail #1). A static asset is judged on bytes, licence and privacy behaviour, never on hostname - and this project self-hosts its font because the request is the larger cost, not because the origin is forbidden.
-- Show a spinner. **The ban survives, on narrower ground than the one it was written on.** Its old reason was that the frame a reader already has is readable, so there is nothing for a spinner to fill - and since 2026-09-09 that is false on the pages that wait. A dated URL loaded cold is served the fallback document, whose body is a boot script and nothing else, and the console draws reserved boxes rather than content. **What still holds is the other half, and it was always the load-bearing half: a spinner measures nothing.** It spins at the same rate on a 200-millisecond wait and a dead connection, so it tells the reader only that the page has not given up, which is the one thing they can already see. What replaces it says something: a reading page names the wait in one sentence past `ui.payload_slow_ms`, and the console shows the shape and the size of what is coming. If a wait is long enough to need more than that, the payload is too big and that is a build-time problem.
-- Ask the reader for anything - no cookie banner, no signup, no notification permission, no rating widget. Every interruption is a reason to close the tab.
-- Recompute a score, re-rank items, or derive anything the pipeline already decided. The page renders; it does not think.
-- Hide a low-confidence item to make the page look better.
-- **Call `Notification` or `PushManager`. Ever.** The reader decides when to read, and a feature that depends on a push notification is one of the named anti-patterns (CLAUDE.md section 10). This is written down rather than implied because installability makes the temptation concrete: an installed app is exactly the context in which "just a gentle daily reminder" starts to sound reasonable. It is not. Since 2026-09-02 background sync is on the same list, and for the same reason - work on the reader's device that they did not ask for, on a schedule we chose. `frontend/tests/manifest.spec.ts` greps the source, the worker included, and fails on any of those names.
+- Depend on a runtime backend, send reader behavior elsewhere, or load tracking code. A third-party static asset is judged on bytes, licence and privacy, not hostname.
+- Interrupt reading with signup, cookie banners, rating requests or notifications.
+- Hide a low-confidence item or truncate the day to make the page look better.
+- Use `Notification`, `PushManager` or background sync. Installation does not grant permission to schedule work or contact the reader.
 
 ## Installable, and readable with no network
 
-The site ships a web app manifest, an icon set, a `theme-color` and a service worker. A manifest is a static JSON file: no request, no account, no code outliving the tab. It sits inside Guardrail #1 for the same reason the font does, and so does the worker: it runs on the reader's own device, over files this site already serves, and reports nothing anywhere.
+The manifest and service worker support rereading days already opened. They do not
+create an account, report reader activity or prefetch the archive.
 
-**The worker exists so a day a reader has already opened can be read again with no network.** That is the whole feature. An installed window is then a reader rather than a bookmark.
-
-**Until 2026-09-02 there was no worker, and that was the right answer at the time.** A day used to sit inside its own document, so a worker would have cached HTML and given a reader nothing an ordinary browser cache does not already give. The 2026-09-01 migration made the day a separate addressable file, and offline reading became a real thing to have rather than a word for what the browser did anyway.
-
-**The way out was designed before the way in, and it is checked before a single byte is spent.** A worker is the only code this project ships that survives the tab closing, so a broken one cannot be fixed by the reader closing it, and a stale worker serving a stale bundle is the hardest bug class available to a static site. So:
-
-- `config/appearance.json` names two numbers: `ui.offline_version`, the version this build's worker carries, and `ui.offline_retired_through`, the version through which workers must retire. The build writes the second into `service-worker-kill.json` at the site root and bakes the first into the worker.
-- A worker whose version is at or below the number that file names **deletes every cache it owns and unregisters itself**. Zero retires none, because the lowest version a worker can carry is one.
-- **Both the worker and the page read it**, and that is not one check written twice. The worker reads it at install, so a retired worker keeps nothing, and at activate, which is where a retirement normally lands. The page reads it before it registers anything, and that half does not depend on the worker being well - a worker whose own activate handler is broken is precisely the reader-pinned-to-a-bad-bundle failure the switch exists for. It is also what makes a retirement converge: the shell registers on every page load, and a registration pending removal is resurrected by the next `register`, so a worker that could only retire itself would come straight back on the next page.
-- A switch that cannot be read is not a switch that says yes. A worker that retired itself whenever the network was down would be a worker that never works offline.
-- The bill for leaving it on is one 27-byte file per page load and nothing else: a retired worker precaches nothing, and the page stops registering it.
-
-**It caches what a reader has already opened, and nothing else.** On install, the shell's own assets and its stylesheets - the font, the icons, the manifest, the CSS. **Not the app's JavaScript**, and that was measured rather than assumed: the built client is 23.56 MB, of which 21.60 MB is the search encoder's runtime and 1.47 MB is two libraries only the console and the search panel ever load (measured 2026-09-02 on a developer machine / / node 24.12.0). Downloading those for a reader who opened one day is the same spend that argued against precaching days. The code a page needs is kept when that page asks for it, which is what makes a day already opened read again.
-
-A day payload is kept only after that day has been fetched once, and never a day nobody asked for. The kept days are bounded twice: by `ui.offline_days_kept` (14), and by `ui.offline_bytes_kept` (20,000,000 bytes) since 2026-09-06. Two bounds because a day count cannot bound bytes - measured 2026-09-06 on a developer machine / over the 17 committed days, one day payload runs 11,547 to 1,924,051 bytes, a factor of 167, so fourteen days is anything between 162 KB and 27 MB. The day count still binds first on what is published today: the fourteen newest committed days are 18,148,471 bytes together, 9.3 percent under the ceiling. The ceiling is the backstop for the day the payloads grow, and the worker measures a day off the body it keeps rather than off `content-length`, which names the compressed length of what came down the wire. One day is always kept whatever it costs, because a ceiling that evicts a day as fast as it arrives makes the reader pay the download and keep nothing. Never the encoder's model and runtime, which are 43.2 MB together and keep their own `Cache`, and never the switch itself.
-
-**The shell cache keeps this build and the pages the reader opened, and refuses the rest.** Until 2026-09-06 it took any successful same-origin GET, so a drawing, a telemetry shard or a month index landed in it the moment a page asked for one - and what it held grew with the archive inside a cache named for one build. What it keeps now is what the build emitted, the documents a reader navigated to, and the data SvelteKit serves beside them. Reading data is not on that list: a day payload has its own cache, its own two bounds and its own rule, because it has to survive the deploy that empties this one. A drawing is served and forgotten, which costs a reader its picture on a day read with no network and costs them nothing they can read - and it was already gone at the next deploy, which is several times a day.
-
-**The shell is network-first, and a day is served from the device first.** The shell changes on every deploy, so a stale one is the bug the switch exists for. A day is different: an archived day never changes again, so reading it off the device is correct. **Today's day is the exception, and it is why this is not a plain cache-first.** The pipeline republishes the current day several times an hour, so a reader who opened it at nine would otherwise be held at nine for the rest of the day. What ships returns the copy on the device at once and refreshes it behind the reader, which costs exactly the request they would have made with no worker at all.
-
-**A cached day goes through the same boundary check a fetched one does.** The worker hands the response to the page, and `frontend/src/lib/assist/day.ts` drops a story missing any of the four names it dereferences - so a day off the device is validated exactly as a day off the network is.
-
-**A reader offline on a day they never opened is not left with a button that cannot work.** The Unreachable state names the day, offers the retry, and lists the days this device still holds - read straight off the cache by the page, which already owns that question.
-
-The manifest's own paths are relative - `start_url` and `scope` are `.`, and every icon `src` starts `./` - so they resolve against the manifest's URL and survive the project path without being templated. A manifest that validates at a domain root and 404s every icon under a project path is the standard failure, and the oracle resolves each path the way a browser would, from a deep route rather than only from the root.
+- Keep a retirement mechanism. `ui.offline_version` and `ui.offline_retired_through` control it. Both the worker and the page check retirement; a retired worker deletes its own caches and unregisters, and the page must not register it again. Failure to fetch the retirement declaration is not an instruction to retire.
+- Precache basic shell assets, not all application JavaScript or unopened days. Cache requested code as needed. Keep day data separate from the build's shell cache so a new deployment does not discard offline reading.
+- Bound saved days by both `ui.offline_days_kept` and `ui.offline_bytes_kept`. Measure cached body bytes, not compressed transfer headers. Retain at least one day even when it exceeds the byte limit. Do not put the search model, runtime or retirement declaration in that day cache.
+- Fetch the shell from the network first. Serve a saved day immediately; refresh the current UTC day in the background so the saved copy does not freeze the news.
+- Validate cached data as fetched data. Missing optional visuals may degrade the page, but must not prevent the saved text from being read.
+- Restrict the shell cache to its declared assets and opened routes. It must not collect every same-origin request or duplicate telemetry and search caches.
 
 ## Base-path discipline
 
-The site is served from a project path on GitHub Pages, not from a domain root. Every internal link, asset reference and payload path must resolve under that prefix, and a link that works in development and 404s in production is the standard way this breaks. The deployment runbook is [../how-to/ship-to-github-pages.md](../how-to/ship-to-github-pages.md).
+Resolve internal links, assets, payloads and manifest paths under the GitHub Pages
+project prefix, including on deep routes. Keep manifest paths relative to its URL.
+See [deployment](../how-to/ship-to-github-pages.md).
 
 ## Design rationale
 
-**"They earn no design budget" was struck on 2026-08-29, and it is the sentence that produced the console.** It conflated a design budget with an ornament budget. The console does not need a gradient; it needs a table that fits the screen, charts that are not 164px wide, and a page that is not 6562px tall - and those are not decoration, they are whether the instrument can be read at all. Measured 2026-08-28 at a 1209px viewport: a 10-column table rendered at 627px and seven elements with horizontal scrollbars, while 582px of screen sat empty beside them. The sentence also contradicted [design-system.md](design-system.md)'s own console-copy section, which spends a large budget on nine labels and five numbering rules - so the page both granted and refused the budget, and the refusal won in practice because it was shorter and sounded like a principle. The rejected alternative was softening it; a softened absolute is still read as an absolute. Authority: owner, 2026-08-29.
-
-**The cross-origin bullet was corrected in the same commit and is an independent fix.** It read "Fetch anything cross-origin: no CDN font, no analytics snippet, no third-party widget", which contradicts `CLAUDE.md` Guardrail #1 as amended 2026-08-23 - the rule draws its line at a *service*, not at an origin, and explicitly permits a third-party static asset judged on bytes, licence and privacy behaviour. Guardrail #4 makes the contract win, so this doc was simply stale and was a trap for the next agent reading it. What did not change: this project still self-hosts its font, because the HTTP cache is partitioned per site so the shared-cache argument is dead, and `script-src` and `default-src` are `self` only.
-
-Putting payload loading and validation in exactly one place per side of the build, rather than in each page, is what makes the states above a shared implementation rather than five inconsistent ones - and it is the reason a malformed payload degrades instead of white-screening. The rejected alternative, per-page fetching, produces a site where the empty state is correct on the page someone remembered to test. Authority: Fowler (contract shape), Jony (what the states look like).
-
-Keeping the site to three surfaces is a delete-first decision. Per-source views and tag pages are both reachable and neither has a named reader yet; a static page that nobody asked for is rent paid forever. Filtering and search were on that list until the owner overruled it, and what shipped is not a page: they are two controls in one panel above a list that already exists, described in [../architecture/publishing/frontend.md](../architecture/publishing/frontend.md). Authority: Jony, with Reader as the check.
-
-The console is the one surface added since, and it was added for a named person doing a named job: the owner, asking whether the pipeline is still working. That is a question the digest cannot answer - a quiet news day and a broken collector produce the same short page. It sits off the reading path, so it costs a reader nothing and costs the shell one route.
-
-## Rejected alternatives
-
-| Option | Why rejected | Authority |
-| --- | --- | --- |
-| A client-side router with per-item pages | Multiplies the surface for a reader who skims one page in two minutes, and every generated page is bytes committed forever. | Jony |
-| Fetching the payload per component | Three inconsistent empty states and no single place to validate at the boundary. | Fowler |
-| A loading spinner while the payload parses | The frame a reader already has is readable, so a spinner would fill nothing. **That reason expired on 2026-09-09** and the ruling did not: a cold dated URL and a cold console both start with no content at all, so there is now a frame to fill - and a spinner still may not fill it, because it reports the same thing on a short wait and a dead connection. What survives is one sentence past `ui.payload_slow_ms` on a reading page, and a reserved box that shimmers past `console.shimmer_after_ms` on the console. Both say something a spinner cannot. | Carmack |
-| Client-side filtering or search over the ledger | Moves computation to read time for a surface whose whole premise is that nothing computes at read time. | Carmack |
-| Run health shown on the digest page | The reader is not the operator. A grid of squares above the news answers a question they did not ask. | owner |
-| A cookie for the read mark | Sent on every request, so it would put a reading history into the host's access logs. | Reader |
-| A day-level chart of the confidence bands | Its proportions were the same every day, and it shared its colours with the item mark that does vary. Colour is spent per item. | Jony, Reader |
-| Truncating a long day so the page looks like a digest | It would stop being one. The day's leading stories give the page a first screen without dropping a published item, and the stream below carries the whole day. | Jony |
-| Our own pipeline arrival time as a story's stamp | Puts our run schedule into the news timeline. A reader wants to know when the news happened, not when we found it. The one exception is the story that has no other time, and there the stamp carries a mark. | owner |
-| Keeping the published order and using time only as a label | Numbers that jump up and down as the reader scrolls, which trains them to stop reading them. | Editor |
-| A relative time rewritten by script | Two clocks on one page, and a wrong one for every reader with script off. | Editor |
-| Words beside the clock: `Yesterday 23:40`, `First seen 06:20`, `No time given` | A run of numbers is read by shape, and a word in it is a stop. What `First seen` said is now said by the mark that was already beside it, and what `Yesterday` said is said by the date in front of the clock. `No time given` labelled a state with no number in it, so nothing is printed there. Cost, stated rather than hidden: a reader who does not notice the mark reads our first-sight clock as a feed time, and that is 18 of 8,922 committed stories, re-measured 2026-09-12. | owner, 2026-09-06 |
-| A shared time rail down the stream's leading edge | Shipped 2026-09-02, deleted 2026-09-12. It grouped stories into hour-wide runs and drew one marker per run, so a reader could see the time of the story that opened a group and not the time of the story they were reading. Re-measured 2026-09-12 over 8,922 committed stories: 1,218 markers, so 86.3 percent carried no time at all. It also spent a 5.5rem leading column that a 360px screen could not afford, so a phone got no rail. What the reader loses is the hairline that made a column of times read as one axis; what they get back is a time on every story and 5.5rem of every line. | Susan and Jony, 2026-09-11 |
-| Keeping the rail and printing a per-item time under it | The same number twice on one story, and nothing on the page saying which is the story's. It is the exact duplicate the rail was built to remove, arriving from the other direction. | Jony |
-| Hovering to reveal the time | Unreachable on the surface most readers use, and a fact worth having is a fact worth drawing. | owner, 2026-09-11 |
-| A midnight stamp read as "the feed gave a date and no clock" | 47 of the 4,713 stories committed by 2026-09-02 are stamped exactly `T00:00:00Z`, which is what a date-only feed date parses to - and it is also what a story genuinely published at midnight parses to. The payload cannot tell them apart, so blanking the stamp on that guess would hide a real midnight story's time, which is the invented-label failure this whole section exists to avoid. | agent, 2026-09-02 |
-| A service worker with no kill-switch | The one failure a static site cannot recover from: a reader pinned to a broken bundle with no way to reach the fix. This page named the condition before the worker existed, and the worker shipped with the switch written first. | Fowler |
-| Precaching every published day on install | It spends a stranger's data on days they may never open, and it grows without bound as the archive grows. | Carmack |
-| Background sync, so a day is ready before the reader arrives | Work on the reader's device that they did not ask for, on a schedule we chose. It is the same instinct push notifications come from. | owner |
+- Browser rendering follows the owner's no-prerender direction (2026-09-29) and [Telemetry Intent](telemetry-intent.md). A shipped implementation cannot override it.
+- Shared loading and validation keep error handling consistent across surfaces.
+- Readability is a requirement for operator pages too, not decoration.
+- A spinner reports neither progress nor failure. A named wait and stable panel dimensions communicate what is missing without moving content.
+- Cookies transmit reader state with requests. Local preferences need not leave the device. Offline caches retain requested content without fetching the archive.
+- A service worker can outlive a broken page, so retirement must work from both the worker and the page before registration.
 
 ## See also
 
+- [telemetry-intent.md](telemetry-intent.md) - browser-owned data loading and the no-prerender goal.
 - [digest.md](digest.md) - the item this shell frames.
 - [design-system.md](design-system.md) - the tokens and states the chrome uses.
 - [telemetry.md](telemetry.md) - the browser-console logging rule.
