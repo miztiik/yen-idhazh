@@ -56,6 +56,7 @@ from ._harness import (
     BUDGETS_JOB,
     COMMIT_PROGRAM,
     COMMIT_STAGED_PATHS,
+    COMMIT_STEPS,
     FINGERPRINT_BENCH_JOB,
     FINGERPRINT_COMMAND,
     FINGERPRINT_JOB_FLAG,
@@ -63,8 +64,11 @@ from ._harness import (
     MODELS_POINTER_KEY,
     PINNED_LLAMA_BUILD,
     _artifact_upload,
+    _bash,
+    _commit_call,
     _declared_dispatch_inputs,
     _expression,
+    _isolated_env,
     _job,
     _load_workflows,
     _mapping,
@@ -75,6 +79,7 @@ from ._harness import (
     _step,
     _steps,
     _string_list,
+    requires_bash,
 )
 
 #: The step that stands the tokenizer up for the budgets job. Named here rather
@@ -437,20 +442,38 @@ def test_a_bench_machine_row_cannot_land_where_the_console_reads(tmp_path: Path)
     )
 
 
-def test_the_folder_the_bench_commits_is_in_a_fresh_checkout() -> None:
+@requires_bash
+def test_a_bench_whose_probe_wrote_nothing_says_so_and_stages_nothing(tmp_path: Path) -> None:
     """`git add` on a path that is not there aborts the whole step.
 
-    The bench's commit step names its one folder and nothing wider, so that
-    folder has to be in every checkout - including the one a bench whose probe
-    wrote nothing commits from. The ledger door files one raw file per write and
-    has no empty file to seed a folder with, so something committed has to hold
-    the folder open.
+    No commit holds the bench's machine folder open: the ledger door files one
+    raw file per write and has no empty file to seed a folder with. So the step
+    asks whether the one folder it stages is there, and commits only then. Run
+    in a checkout without that folder, it prints its nothing-staged message and
+    exits 0 without starting the commit program.
     """
-    staged = COMMIT_STAGED_PATHS["bench"]
-    assert (REPO_ROOT / staged[0]).is_dir(), (
-        f"{staged[0]} is not in a fresh checkout, so a bench whose probe wrote nothing "
-        "fails its commit step at `git add`"
+    step = _step(_load_workflows()["measure.yml"], BENCH_SERVER_JOB, "name", COMMIT_STEPS["bench"])
+    body = _script(step, COMMIT_STEPS["bench"])
+    staged, settings = _commit_call("bench")
+    (folder,) = staged
+    asked = [words for line in body.splitlines() if "-d" in (words := line.split())]
+    assert len(asked) == 1 and folder in asked[0], (
+        f"the step does not ask whether {folder}, the one folder it stages, is there"
     )
+    shell = _bash()
+    assert shell is not None
+
+    done = subprocess.run(
+        [shell, "-c", body],
+        cwd=tmp_path,
+        env={**_isolated_env(tmp_path), **settings},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.strip() == settings["NOTHING_STAGED_MESSAGE"], done.stdout
 
 
 def test_the_bench_reads_its_own_config_when_it_records_the_machine() -> None:

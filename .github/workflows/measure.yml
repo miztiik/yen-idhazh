@@ -796,6 +796,12 @@ jobs:
       # because the whole state root moved, but nothing reads them back and
       # committing them would grow the repository for no reader (Guardrail #12).
       #
+      # Staged only when the probe wrote it. No commit holds the folder open -
+      # the ledger door files one raw file per write and has no empty file to
+      # seed a folder with - and `git add` on a path that is not there fails the
+      # step. A bench whose probe wrote nothing prints its nothing-staged
+      # message instead.
+      #
       # The file is named by the ledger door for its writer, the writer is keyed
       # on the run id, the run id is `github.run_id`, and no second dispatch can
       # reproduce one - so two dispatches never write one path, and this path
@@ -812,9 +818,12 @@ jobs:
           COMMIT_MESSAGE: "bench: the machine ${{ inputs.runtime_candidate }} drew"
           NOTHING_STAGED_MESSAGE: "no machine recorded"
           PUSH_FAILED_MESSAGE: "could not push the bench host record"
-        run: >-
-          python backend/utilities/commit_and_push.py
-          state/pipeline-tests/raw/host-fingerprint
+        run: |
+          if [ -d state/pipeline-tests/raw/host-fingerprint ]; then
+            python backend/utilities/commit_and_push.py state/pipeline-tests/raw/host-fingerprint
+          else
+            echo "$NOTHING_STAGED_MESSAGE"
+          fi
 
       - name: Upload runtime sweep
         if: always()

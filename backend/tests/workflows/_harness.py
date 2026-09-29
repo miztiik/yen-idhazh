@@ -1814,17 +1814,24 @@ def _substitute(text: str) -> str:
 
 
 def _commit_call(label: str) -> tuple[list[str], dict[str, str]]:
-    """The paths and the strings one commit step hands the shared program."""
+    """The paths and the strings one commit step hands the shared program.
+
+    The call is read from the one line of the step that makes it, because a step
+    may guard it: the bench stages its folder only when its probe wrote one.
+    """
     workflow = _load_workflows()[COMMIT_WORKFLOWS[label]]
     job_name = COMMIT_JOBS[label]
     step = _step(workflow, job_name, "name", COMMIT_STEPS[label])
-    command = shlex.split(_script(step, f"job {job_name} commit step {label}"))
-    assert tuple(command[:2]) == COMMIT_PROGRAM_CALL, (
-        f"{label} must commit through {COMMIT_PROGRAM_CALL[1]}"
-    )
+    script = _script(step, f"job {job_name} commit step {label}")
+    calls = [
+        words
+        for line in script.splitlines()
+        if tuple((words := shlex.split(line))[:2]) == COMMIT_PROGRAM_CALL
+    ]
+    assert len(calls) == 1, f"{label} must commit through {COMMIT_PROGRAM_CALL[1]}, once"
     declared = _mapping(step.get("env"), f"job {job_name} commit env {label}")
     settings = {name: _substitute(str(value)) for name, value in declared.items()}
-    return command[2:], settings
+    return calls[0][2:], settings
 
 
 def _git_calls(source: str) -> list[str]:
