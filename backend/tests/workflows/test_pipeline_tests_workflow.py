@@ -151,14 +151,22 @@ def _required_environment(script: str) -> set[str]:
     return set(re.findall(r':\s*"\$\{([A-Z_][A-Z0-9_]*):\?', script))
 
 
-def _recorded(root: Path, test_case: str, item_ids: Sequence[str]) -> None:
-    """Write what one test case's work stage would have left under the test case folder."""
+def _recorded(
+    root: Path, test_case: str, item_ids: Sequence[str], *, summary_status: str | None = "ok"
+) -> None:
+    """Write what one test case's work stage would have left under the test case folder.
+
+    `summary_status` None is an article that stopped before the model - a refused
+    download or a failed extraction - which the work stage files with no summary.
+    """
     items = root / pipeline_test_case.TEST_CASES_ROOT / test_case / "run" / "items"
     items.mkdir(parents=True, exist_ok=True)
     for item_id in item_ids:
         (items / f"{item_id}.article.json").write_text("{}", encoding="utf-8")
+        if summary_status is None:
+            continue
         (items / f"{item_id}.summary.json").write_text(
-            json.dumps({"status": "ok", "summarize_ms": 1000}), encoding="utf-8"
+            json.dumps({"status": summary_status, "summarize_ms": 1000}), encoding="utf-8"
         )
 
 
@@ -349,12 +357,12 @@ def test_the_report_holds_the_test_cases_to_the_two_items_the_draw_chose() -> No
 def test_a_failed_test_case_costs_the_run_that_test_case_and_nothing_else() -> None:
     """Three test cases are three readings, and one broken test case may not take the other two.
 
-    The first dispatch failed exactly that way. The baseline step could not
-    start, the two test cases behind it never ran, and the run reported one
-    failure where it had three to report - which read as a problem with the
-    baseline rather than as a problem with the call all three share. A test case
-    is read against the test cases beside it, so a test case that did not run is
-    evidence lost.
+    The first dispatch failed exactly that way. The first test case's step could
+    not start, the two test cases behind it never ran, and the run reported one
+    failure where it had three to report - which read as a problem with that
+    test case rather than as a problem with the call all three share. A test
+    case is read against the test cases beside it, so a test case that did not
+    run is evidence lost.
 
     `parallel-2` is the one test case that reads a step as well, and the reason
     is what a failed restart leaves behind: a healthy ONE-slot server. The test
@@ -410,12 +418,11 @@ def test_the_report_names_a_test_case_that_recorded_nothing_and_prints_the_rest(
 
 
 def test_the_report_refuses_a_comparison_across_different_articles(tmp_path: Path) -> None:
-    """The half that still raises, and the reason it has to.
+    """One of the two things the report fails the job over, and the reason it has to.
 
     Two test cases that read different articles produce two numbers nobody may
     subtract, and the table is three rows of plausible milliseconds either way.
-    This is the one thing the report fails the job over, and a test case that
-    recorded nothing must not be able to trip it.
+    A test case that recorded nothing must not be able to trip it.
     """
     shutil.copytree(CONFIG_DIR, tmp_path / "config")
     expected = ["ai-0000000001", "world-0000000002"]
@@ -428,6 +435,37 @@ def test_the_report_refuses_a_comparison_across_different_articles(tmp_path: Pat
     assert completed.returncode != 0, "a disagreement about the articles fails the job"
     assert "did not all read the same two articles" in completed.stderr
     assert test_cases[-1] in completed.stderr, "the test case that disagreed is named"
+
+
+@pytest.mark.parametrize(
+    "summary_status",
+    [None, "failed"],
+    ids=["every article stopped before the model", "every call failed"],
+)
+def test_the_report_fails_a_test_case_that_got_no_article_summarized(
+    summary_status: str | None, tmp_path: Path
+) -> None:
+    """The other thing the report fails the job over: a pass that said nothing about the model.
+
+    Two refused downloads leave two articles on file and no summary, and every
+    step still exits 0 - so the run read green while the model was never asked
+    anything. The test case is named, and the one that did get its articles
+    summarized is not.
+    """
+    shutil.copytree(CONFIG_DIR, tmp_path / "config")
+    expected = ["ai-0000000001", "world-0000000002"]
+    test_cases = [test_case.id for test_case in _settings().test_cases]
+    for test_case in test_cases[1:]:
+        _recorded(tmp_path, test_case, expected)
+    _recorded(tmp_path, test_cases[0], expected, summary_status=summary_status)
+
+    completed = _report(tmp_path, expected)
+    assert completed.returncode != 0, "a test case that summarized nothing fails the job"
+    assert "no article came back summarized" in completed.stderr
+    named = completed.stderr.rsplit(":", 1)[-1]
+    assert test_cases[0] in named, "the test case that summarized nothing is named"
+    for test_case in test_cases[1:]:
+        assert test_case not in named, f"{test_case} summarized its articles"
 
 
 def test_it_publishes_nothing_a_reader_sees_and_writes_only_the_trial_roots() -> None:
@@ -1029,7 +1067,7 @@ def _ran_a_test_case(tmp_path: Path, argv: list[str]) -> subprocess.CompletedPro
     ("argv", "message"),
     [
         ([], "usage:"),
-        (["baseline"], "usage:"),
+        (["production-settings"], "usage:"),
         (["not-a-test-case", "2026-09-14"], "unknown test case"),
     ],
 )
@@ -1056,8 +1094,10 @@ def test_the_test_case_runner_refuses_to_run_without_the_plan_the_test_cases_sha
     a reader of the log has to go and find. This one names what is missing and
     which step writes it.
     """
-    (tmp_path / pipeline_test_case.TEST_CASES_ROOT / "baseline" / "config").mkdir(parents=True)
-    completed = _ran_a_test_case(tmp_path, ["baseline", "2026-09-14"])
+    (tmp_path / pipeline_test_case.TEST_CASES_ROOT / "production-settings" / "config").mkdir(
+        parents=True
+    )
+    completed = _ran_a_test_case(tmp_path, ["production-settings", "2026-09-14"])
     assert completed.returncode == 2
     assert "no plan to run" in completed.stderr
 
@@ -1076,13 +1116,13 @@ def test_a_test_case_whose_pipeline_failed_is_not_reported_as_a_call_it_could_no
     The half-written run goes with it: a test case that failed leaves no `run`
     directory for the report to read as a measurement.
     """
-    test_case_root = tmp_path / pipeline_test_case.TEST_CASES_ROOT / "baseline"
+    test_case_root = tmp_path / pipeline_test_case.TEST_CASES_ROOT / "production-settings"
     (test_case_root / "config").mkdir(parents=True)
     plan = tmp_path / "backend" / "var" / "pipeline-tests" / "plan.json"
     plan.parent.mkdir(parents=True)
     plan.write_text("{}", encoding="utf-8")
 
-    completed = _ran_a_test_case(tmp_path, ["baseline", "2026-09-14"])
+    completed = _ran_a_test_case(tmp_path, ["production-settings", "2026-09-14"])
     assert completed.returncode != 0, "a failed pipeline fails the step that ran it"
     assert completed.returncode != 2, (
         "2 is reserved for a call this program cannot serve, so a failed "

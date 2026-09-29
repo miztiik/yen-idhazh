@@ -69,9 +69,9 @@ concurrency:
   group: pipeline-tests
   cancel-in-progress: false
 
-# No llama.cpp pin here. It is `.github/scripts/llama-cpp-pin.sh`, which the
-# fetch step sources and the step above reads, so this workflow cannot spell a
-# build the binary it unpacks disagrees with.
+# No llama.cpp pin here. It is `config/llama-cpp-pin.json`, which the pin step
+# below reads, so this workflow cannot spell a build the binary it unpacks
+# disagrees with.
 env:
   MODEL_SERVER_PROBE: 'http://127.0.0.1:8080'
 
@@ -254,7 +254,7 @@ jobs:
           # case's config, so the server this test case measures is the server
           # that test case's config describes (Guardrail #6).
           python3 backend/utilities/model_runtime.py start-server \
-            --config-root backend/var/test-cases/baseline/config
+            --config-root backend/var/test-cases/production-settings/config
           for _ in $(seq 1 120); do
             curl -sf "${MODEL_SERVER_PROBE}/health" > /dev/null && break
             sleep 5
@@ -297,22 +297,22 @@ jobs:
       # the cause on the run page. A test case still needs the one plan, and the
       # runner refuses by name without it rather than summarizing nothing
       # quietly.
-      - name: Test case baseline
+      - name: Test case production-settings
         if: ${{ !cancelled() }}
         env:
           RUN_DATE: ${{ steps.plan.outputs.date }}
-        run: python3 backend/utilities/pipeline_test_case.py baseline "$RUN_DATE"
+        run: python3 backend/utilities/pipeline_test_case.py production-settings "$RUN_DATE"
 
       # Test case two. No picture is reachable, so the summarize-and-plan call
       # comes back with the summary alone and the plan's decode is not spent. The
       # server is the same process test case one used - nothing about this test
       # case is a start-time setting - so what the difference measures is the
       # decode and nothing else.
-      - name: Test case no-visual-decision
+      - name: Test case no-visual-plan
         if: ${{ !cancelled() }}
         env:
           RUN_DATE: ${{ steps.plan.outputs.date }}
-        run: python3 backend/utilities/pipeline_test_case.py no-visual-decision "$RUN_DATE"
+        run: python3 backend/utilities/pipeline_test_case.py no-visual-plan "$RUN_DATE"
 
       # The slot count is fixed when the process starts, so this test case costs
       # a restart and a second model load. That load is itself one of the
@@ -333,7 +333,7 @@ jobs:
             kill -0 "$(cat llama-server.pid)" 2>/dev/null || break
             sleep 1
           done
-          mv llama-server.log backend/var/test-cases/baseline/llama-server.log
+          mv llama-server.log backend/var/test-cases/production-settings/llama-server.log
           python3 backend/utilities/model_runtime.py start-server \
             --config-root backend/var/test-cases/parallel-2/config
           for _ in $(seq 1 120); do
@@ -401,7 +401,7 @@ jobs:
             --expected "$EXPECTED_ITEM_IDS" | tee -a "$GITHUB_STEP_SUMMARY"
 
       # Ninety days, because a change is often argued about weeks after the
-      # dispatch that measured it, and re-running is 45 minutes.
+      # dispatch that measured it, and re-running it costs another dispatch.
       #
       # The article text this produced goes with it. An article body is never
       # republished to a reader, and this is not that: nothing under
