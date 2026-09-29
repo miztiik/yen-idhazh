@@ -457,7 +457,7 @@ Authority: Fowler.
 - [what-drawing-costs-and-what-has-been-retired-for-it.md](what-drawing-costs-and-what-has-been-retired-for-it.md) - what drawing has cost, and what was retired for it.
 - [`../../concepts/digest.md`](../../concepts/digest.md) - the visual rule this serves.
 - [`../contracts/schemas.md`](../contracts/schemas.md) - where a persisted shape lives, and what binds the frontend's copy of one.
-- [`../../reference/github-actions.md`](../../reference/github-actions.md) - the commit loop that drops a raced chart.
+- [../../reference/github-actions.md](../../reference/github-actions.md) - workflow triggers and publication rules.
 - [`../sources/trust-boundary.md`](../sources/trust-boundary.md) - why article text is data.
 - [`../contracts/determinism.md`](../contracts/determinism.md) - why decoding is pinned in one place.
 - [`../../reference/benchmarks/articles-that-state-a-whole.md`](../../reference/benchmarks/articles-that-state-a-whole.md) - how often an article declares a whole its parts add up to, which is what decides whether `pie` may be drawn at all.

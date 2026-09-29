@@ -92,7 +92,7 @@ do not share a prompt and neither copy is redundant.
 
 ## See also
 
-- [../reference/github-actions.md](../reference/github-actions.md) - every artifact a run leaves, how long each is kept, and the platform limits behind those windows.
+- [../reference/github-actions.md](../reference/github-actions.md) - workflow roles, committed records and expiring artifacts.
 - [../architecture/sources/item-health.md](../architecture/sources/item-health.md) - the ledger `--health` reads, column by column.
 - [../architecture/summarize/prompt.md](../architecture/summarize/prompt.md) - what the two calls ask for, and why in that order.
 - [../../CLAUDE.md](../../CLAUDE.md) - Guardrail #11 on fetched text. A rendered prompt is never committed because it carries the article body inside it.
