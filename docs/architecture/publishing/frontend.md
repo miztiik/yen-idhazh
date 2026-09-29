@@ -233,7 +233,7 @@ heading, so one table over both would be two tables with a line between them.
 - [console.md](console.md) - the operator's surface: which panel is on which route, and the ruling behind its shape.
 - [layout.md](layout.md) - the routes, the dated addresses and retention.
 - [../sources/health.md](../sources/health.md) - the feed ledger, and the quarantine rule the console mirrors.
-- [../../reference/github-actions.md](../../reference/github-actions.md) - the four-run cadence.
+- [../../reference/github-actions.md](../../reference/github-actions.md) - workflow schedules and publication triggers.
 - [../../concepts/digest.md](../../concepts/digest.md) - what an item carries and the visual rule.
 - [../../concepts/design-system.md](../../concepts/design-system.md) - typography, tokens and the colour rule.
 - [../../concepts/ui-shell.md](../../concepts/ui-shell.md) - the shell's obligations and the five states.

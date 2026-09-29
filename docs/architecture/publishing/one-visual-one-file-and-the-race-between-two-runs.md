@@ -134,4 +134,4 @@ file before it can be enabled.
 - [where-a-drawing-becomes-pixels.md](where-a-drawing-becomes-pixels.md) - what the file this page names actually holds.
 - [layout.md](layout.md) - the published tree, the item id a reader lands on, and the no-hash-in-a-path rule.
 - [committing.md](committing.md) - the retry loop the drop runs inside.
-- [../../reference/github-actions.md](../../reference/github-actions.md) - the commit loop that drops a raced chart.
+- [../../reference/github-actions.md](../../reference/github-actions.md) - workflow triggers and publication rules.
