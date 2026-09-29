@@ -7,6 +7,9 @@
   "deleted": 50,
   "dry_run": false,
   "duration_ms": 41250,
+  "fold_dry_run": null,
+  "folded_days": null,
+  "folded_files": null,
   "job": "run-tasks",
   "max_deletes_per_run": 50,
   "resume_from": "4529182755",
@@ -17,6 +20,6 @@
   "stopped_because": "ceiling",
   "task": "workflow-artifacts",
   "until": "2026-08-28",
-  "version": "2026-09-28",
+  "version": "2026-09-28T22:07",
   "work_ended_at": "2026-09-27T00:47:12Z"
 }

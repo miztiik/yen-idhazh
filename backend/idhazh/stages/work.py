@@ -702,7 +702,8 @@ def stage_work(
         # shard opens. Eight shards folding one month file is the collision the
         # segment ledger exists to stop, and the attempt is in the name, so a
         # re-run corrects its first try rather than adding a second fold of the
-        # same spans. `stage_compact` merges them into the month the rows name.
+        # same spans. A reader settles them by key, and the gardener's closed-day
+        # fold writes that answer into one file once the day is closed.
         landed = ledger.write_segment(
             common.STATE_ROOT,
             LedgerName.SPAN_ROLLUP,

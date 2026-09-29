@@ -119,8 +119,16 @@ class Checkout:
         return self.git("hash-object", "--", path).strip()
 
     def staged_names(self) -> set[str]:
-        """Every path the next commit would change."""
-        return set(self.git("diff", "--cached", "--name-only", "-z").split("\0")) - {""}
+        """Every path the next commit would change, a deletion always named as itself.
+
+        Rename detection is off. A shard that deletes a file and writes one much
+        like it - a fold replacing a day's one writer file with its settled file -
+        is a pair git would otherwise report as one move, naming only the new
+        path, so the deletion would read as unstaged and the shard would refuse
+        to land.
+        """
+        listed = self.git("diff", "--cached", "--name-only", "--no-renames", "-z")
+        return set(listed.split("\0")) - {""}
 
     def committed_folders(self, owned: Sequence[str]) -> frozenset[str]:
         """Which of these folders the commit holds, and every folder directly under `state/`.

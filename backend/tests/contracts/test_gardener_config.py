@@ -11,6 +11,7 @@ one nobody can fix at the first reading.
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, Final
 
@@ -18,14 +19,18 @@ import pytest
 from gardener._garden import GARDENER_FIXTURES, a_config
 from pydantic import ValidationError
 
-from idhazh import config
+from idhazh import config, ledger
 from idhazh.contracts.knobs.gardener import (
+    DEFAULT_CLOSED_AFTER_DAYS,
+    DEFAULT_COMPACT_AFTER_DAYS,
     CollectionTaskPolicy,
     CompactionPolicy,
+    FoldPolicy,
     GardenerConfig,
     HistoryPolicy,
     RetentionPolicy,
 )
+from idhazh.contracts.ledger_name import DAY_TREES, LedgerName
 
 pytestmark = pytest.mark.contract
 
@@ -70,15 +75,49 @@ def a_compaction(ledger: str, **changes: Any) -> dict[str, Any]:
 
 MONTHS = {"unit": "months", "value": 14}
 
-#: The declarations that ship live, each beside the decision that put it there.
-#: Every other declaration ships `dry_run: true`: a task earns its first deletion
-#: from a person reading its records, never from the change that added it.
+#: Why every closed-day fold ships live while the window beside it only reports.
+FOLD_ALREADY_RAN_LIVE: Final = (
+    "the fold copies the closed-day fold digest.yml ran live on every run until "
+    "the gardener took it over, and a fold changes no answer a reader gets"
+)
+
+#: Every switch that ships live, keyed by its task and by the key a person edits
+#: to turn it off, each beside the decision that put it there. Every other switch
+#: ships `dry_run: true`: a task earns its first deletion from a person reading
+#: its records, never from the change that added it.
 LIVE_BY_DECISION: Final = {
-    "corpus-squash": (
+    ("corpus-squash", "dry_run"): (
         "the squash has run live since 2026-08-28 by owner decision (CLAUDE.md "
         "section 8), so its declaration transcribes a live squash rather than starting one"
     ),
+    ("counterfactual-scores", "fold.dry_run"): FOLD_ALREADY_RAN_LIVE,
+    ("feed-health", "fold.dry_run"): FOLD_ALREADY_RAN_LIVE,
+    ("host-fingerprint", "fold.dry_run"): FOLD_ALREADY_RAN_LIVE,
+    ("scores", "fold.dry_run"): FOLD_ALREADY_RAN_LIVE,
+    ("span-rollup", "fold.dry_run"): FOLD_ALREADY_RAN_LIVE,
+    ("telemetry-aggregate", "fold.dry_run"): FOLD_ALREADY_RAN_LIVE,
 }
+
+#: The CSV day trees no task folds, each with why. A tree that joins `DAY_TREES`
+#: is folded by the task that owns it, or it is named here with its reason.
+UNFOLDED_BY_DECISION: Final = {
+    LedgerName.CANDIDATE_MODELS: (
+        "no candidate-models tree is committed under state/: only a qualification's "
+        "trial root holds one, and nothing folds a trial root"
+    ),
+}
+
+
+def _switches(declared: Mapping[str, Any], prefix: str = "") -> dict[str, bool]:
+    """Every `dry_run` a declaration carries, at any depth, by the dotted key a person edits."""
+    found: dict[str, bool] = {}
+    for key, value in declared.items():
+        path = f"{prefix}{key}"
+        if key == "dry_run" and isinstance(value, bool):
+            found[path] = value
+        elif isinstance(value, Mapping):
+            found |= _switches(value, f"{path}.")
+    return found
 
 
 def test_the_committed_gardener_config_loads_and_the_squash_is_its_one_history_task() -> None:
@@ -88,23 +127,61 @@ def test_the_committed_gardener_config_loads_and_the_squash_is_its_one_history_t
     assert history == ["corpus-squash"]
 
 
-def test_a_declaration_ships_in_dry_run_unless_a_named_decision_put_it_live() -> None:
+def test_a_switch_ships_in_dry_run_unless_a_named_decision_put_it_live() -> None:
     """The review gate on onboarding: a new task deletes nothing until a person has read it.
 
     Held over the committed tree rather than over one change, because a test
-    cannot see which change added a file. So every declaration is `dry_run: true`
-    except the ones named above, and turning one live is an edit to that list - a
-    line a reviewer reads, with its reason beside it.
+    cannot see which change added a file. Every `dry_run` a declaration carries
+    is found by walking the declaration, a fold's as well as the task's own, and
+    the switches that are live must be exactly the ones named above. So turning
+    one live is an edit to that list - a line a reviewer reads, with its reason
+    beside it - and a decision left behind after its switch went is caught too.
     """
     tasks = config.load_gardener().tasks
     assert tasks, "nothing is declared, so this checks nothing"
+    live = {
+        (name, key)
+        for name, policy in tasks.items()
+        for key, dry_run in _switches(policy.model_dump(mode="json")).items()
+        if not dry_run
+    }
+    assert live == set(LIVE_BY_DECISION), (
+        f"{sorted(live - set(LIVE_BY_DECISION))} ship live with no decision named, and "
+        f"{sorted(set(LIVE_BY_DECISION) - live)} are named and do not. A switch ships in "
+        "dry run, and one goes live only by a decision named in LIVE_BY_DECISION with its "
+        "reason"
+    )
+
+
+def test_every_csv_day_tree_is_folded_by_the_task_that_owns_it() -> None:
+    """A tree nobody folds keeps a file per writer per day for ever (Guardrail #12).
+
+    And a fold on a task that owns no such tree folds nothing, so it is a switch
+    a reviewer could believe does something.
+    """
+    tasks = config.load_gardener().tasks
+    trees = {ledger.tree_relpath(tree): tree for tree in DAY_TREES}
+    folding: dict[str, str] = {}
     for name, policy in tasks.items():
-        assert policy.dry_run is (name not in LIVE_BY_DECISION), (
-            f"config/gardener/{name}.json ships dry_run {str(policy.dry_run).lower()}. A "
-            "declaration ships in dry run, and one goes live only by a decision named in "
-            "LIVE_BY_DECISION with its reason"
+        if not isinstance(policy, RetentionPolicy) or policy.fold is None:
+            continue
+        owned = set(policy.owns or ()) & set(trees)
+        assert owned, f"config/gardener/{name}.json folds and owns no CSV day tree"
+        folding |= dict.fromkeys(owned, name)
+    for relpath, tree in sorted(trees.items()):
+        if tree in UNFOLDED_BY_DECISION:
+            assert relpath not in folding, f"{relpath} is folded and still excused from it"
+            continue
+        assert relpath in folding, (
+            f"{relpath} is a CSV day tree and no declaration that owns it folds it. Give "
+            "its owner a fold block, or name it in UNFOLDED_BY_DECISION with its reason"
         )
-    assert set(LIVE_BY_DECISION) <= set(tasks), "an exception names a task nobody declares"
+
+
+def test_a_fold_closes_a_day_by_the_same_default_a_compaction_does() -> None:
+    """One rule decides when a day is closed, for a CSV day tree and a raw ledger alike."""
+    assert FoldPolicy(dry_run=True).after_days == DEFAULT_CLOSED_AFTER_DAYS
+    assert DEFAULT_COMPACT_AFTER_DAYS == DEFAULT_CLOSED_AFTER_DAYS
 
 
 def test_attempts_at_or_below_shards_is_refused_naming_both() -> None:

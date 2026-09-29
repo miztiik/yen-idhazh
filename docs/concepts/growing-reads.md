@@ -255,6 +255,7 @@ reads are here and not how many. These are `backend/`'s;
 | `gardener_publish.Checkout.committed_folders`, which the `trials` task's folders come from | one `git ls-tree -d --name-only HEAD -- state/ <each owned folder>` over the object database, no `-r` | the folders directly under `state/` plus one entry per owned folder, never a file. It grows only when a family or a task is added, not with the rows any of them hold. A bounded input cannot answer it: "what under `state/` does nothing claim" is a question about every child of `state/`, and a wake whose checkout is empty for this task can only ask the commit |
 | the `trials` task's walk of each folder the listing hands it | every file under the trial trees - today `state/pipeline-tests/` alone | the trial trees and nothing else, and its own window empties them: what it walks is what the last 90 days of trial runs wrote, and a tree it empties is removed whole |
 | the compaction's listing of a ledger's days, `raw_files.raw_days` and `raw_files.listed_days` | the day folder names under `state/raw/<ledger>/` and the file names under its `index/`, never a file's contents | the raw days not compacted yet, and the listings `raw_index_keep_days` keeps, committed at 90. A live compaction empties both as it goes, so it names about two raw days and 90 listings. One that only reports names every raw day the ledger has, and each record's `candidates_seen` shows that count growing. A bounded input cannot answer it: which days hold rows nothing has compacted is a question about every day folder |
+| the gardener's closed-day fold, `closed_day_fold` | the day folder and file names of each CSV day tree its task owns, then every file of each closed day that still holds a writer file | what it opens is the days closed since the last wake - about one a tree a day - plus any a failed wake left. What it lists is every day folder of the tree, the listing the task's window pass already makes over the same tree. A bounded input cannot answer it: which days still hold a writer file is a question about every day, and a day a failed wake skipped is still waiting however old it is |
 
 ### Unbounded, and it says so
 
@@ -471,9 +472,9 @@ writer. On the two five-run days measured on 2026-09-17 and 2026-09-20 that is
 before the day directory landed. A day whose writers have been folded to one
 `settled.csv` costs one open again. So the read is bounded by the number of days
 still unfolded times the writers a day, plus one file for every folded day in
-the window - and by nothing in the archive behind it. The fold closes a day
-`run.settled_fold_after_days` behind the run's own date, so the unfolded half is
-that many days rather than the whole 91-day window.
+the window - and by nothing in the archive behind it. The gardener folds a day
+one whole day after it ends, so the unfolded half is at most the newest two days
+rather than the whole 91-day window.
 
 **The holdout read is the one on this page whose cover is a file rather than a
 number, and it is the one that reaches outside the window.** It asks whether the
@@ -706,29 +707,41 @@ five runs a day, and about 169,000 at twenty-five. Nothing reads all of them -
 every reader carries a cover - but `git add`, a clone and a checkout all rise
 roughly linearly with the file count, and that cost lands on every job.
 
-**So a day past the live window folds once into `settled.csv`, and the writer
-files it read are deleted.** The knob is `run.settled_fold_after_days`, default
-7: a day older than that has no run still writing to it, so folding it cannot
-race a writer. With the fold, `state/` settles at **about 3,200 files at today's
-five runs a day and about 6,000 at twenty-five**, against 33,800 and 169,000
-with no fold. Read that as a ratio: the fold takes about 96 percent of the files
-off the tree in both cases.
+**So a closed day folds once into `settled.csv`, and the writer files it read are
+deleted.** Since 2026-09-28 the gardener task that owns each tree does it, and a
+day is closed one whole day after it ends - `fold.after_days` in that task's
+declaration under `config/gardener/`, the same rule a compaction reads. Of 755
+writer files filed from 2026-09-22 to 28, the latest landed 0.9 hours after its
+day ended and none after 24 hours, so a fold at that age does not race a writer,
+and a re-run that lands later costs one more fold of that day, never a row.
+Before that it was `digest.yml`'s step after each day's commit, seven days behind
+the run's own date. With the fold, `state/` settles at **about 2,750 files at
+today's five runs a day and about 3,550 at twenty-five**, against 33,800 and
+169,000 with no fold. Those two are estimates: this page's 2026-09-22 figures of
+3,200 and 6,000, with the live window moved from seven days to two. Read them as
+a ratio: the fold takes about 92 percent of the files off the tree at five runs
+a day and about 98 percent at twenty-five.
 
 **The floor is about 2,550 settled files and it does not move with the run rate
 at all.** One `settled.csv` per ledger per retained day is a function of the
 calendar and the ledger count, not of how many runs happen at once. Only the
-live window scales with the run rate - seven days of unfolded writer files - so
-the difference between 3,200 and 6,000 is that window and nothing else. **That
-is what makes this a bounded step rather than a growing one**: the steady state
-is set by a knob and a retention period, both of which a person chose, and a
-busier day raises the window rather than the archive.
+live window scales with the run rate - two days of unfolded writer files, where
+it was seven - so the difference between 2,750 and 3,550 is that window and
+nothing else. **That is what makes this a bounded step rather than a growing
+one**: the steady state is set by a rule and a retention period, both of which a
+person chose, and a busier day raises the window rather than the archive.
 
-**The fold is itself a bounded read.** It opens one day, reads the files in it,
-writes one file and deletes the rest. It never walks the tree to find work: the
-day it folds is computed from the run's own date minus the knob, so its cost is
-one day's writers however many days the archive holds.
+**What the fold opens is bounded; what it lists is not.** It opens a closed day
+only while the day still holds a writer file - about one a tree a day, plus any
+a failed wake left - reads the files in it, writes one file and deletes the
+rest. To find those days it lists every day folder of the tree, which is the
+listing the task's window pass already makes over the same tree, and it has to:
+which days still hold a writer file is a question about every day. The listing
+reads names only, and its row is in the inventory above.
 
-Authority: Fowler and Carmack, converged, 2026-09-22.
+Authority: Fowler and Carmack, converged, 2026-09-22. The move into the
+gardener, the one-day rule and the fold's own switch: Fowler and Carmack,
+2026-09-28.
 
 ## What a walk over the archive costs a test
 

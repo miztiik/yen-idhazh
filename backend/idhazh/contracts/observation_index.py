@@ -32,10 +32,10 @@ against 6,111.8 KB of rows - 10.8 times smaller, and no spread, because both
 figures are file sizes rather than timings.
 
 CSV rather than one JSON document a partition, because four to eight work shards
-write in parallel: each files its own segment and `idhazh compact` merges them
-into the head a row at a time, and a digest set does not care if a line survives
-twice. A JSON index would have to be merged as one document, which no row-wise
-merge can do.
+write in parallel: each files its own segment and the gardener's closed-day fold
+merges them into one settled file a row at a time, and a digest set does not care
+if a line survives twice. A JSON index would have to be merged as one document,
+which no row-wise merge can do.
 """
 
 from __future__ import annotations

@@ -173,9 +173,9 @@ opening one head.
 **A staging directory sat above all of them until 2026-09-22 and is gone.** A
 writer filed into `state/segments/` and a later fold read it into a `<DD>.csv`
 head, which left every ledger with one path two runs of one day both computed
-bytes for. Now the day directory is the ledger. `idhazh compact` still runs, but
-only over a day no run will write again: it folds that day's writer files into
-one `settled.csv` to save files, and it changes no answer.
+bytes for. Now the day directory is the ledger. The gardener's closed-day fold
+still runs, but only over a day no run will write again: it folds that day's
+writer files into one `settled.csv` to save files, and it changes no answer.
 
 See [../architecture/sources/freshness.md](../architecture/sources/freshness.md) for the first two and [../architecture/sources/health.md](../architecture/sources/health.md) for the third.
 

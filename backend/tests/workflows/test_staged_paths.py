@@ -16,8 +16,6 @@ from idhazh import ledger
 from idhazh.telemetry.publish import series
 
 from ._harness import (
-    CLOSED_DAY_FOLD_COMMAND,
-    CLOSED_DAY_FOLD_STEP,
     COMMIT_STAGED_PATHS,
     COMMIT_STEPS,
     CORPUS_SEED,
@@ -115,37 +113,6 @@ def test_the_review_tree_is_an_artifact_and_no_commit_step_can_reach_it() -> Non
     assert staged, "no commit step declares a staged path, so this test proves nothing"
     for value in staged:
         assert "review" not in value, f"a commit step stages the review tree: {value}"
-
-
-def test_the_closed_day_fold_runs_only_once_the_day_is_committed() -> None:
-    """A fold that ran first could delete writer files from a tree nothing pushed.
-
-    The fold unlinks committed files. Run before the day's own commit, a lost
-    push would hand the day's paths back to origin's tip and rebuild against it,
-    so the deletion would be half-reverted while the settled file it wrote stayed.
-    Behind the commit, the worst it can cost is one run's worth of bytes.
-
-    Neither the fold nor its commit may fail the job. What assemble owes a reader
-    is the published day, and no bookkeeping pass is worth the run.
-    """
-    workflow = _load_workflows()["digest.yml"]
-    names = [step.get("name") for step in _steps(workflow, "assemble")]
-    fold = _step(workflow, "assemble", "name", CLOSED_DAY_FOLD_STEP)
-
-    assert CLOSED_DAY_FOLD_COMMAND in _script(fold, "assemble fold step")
-    assert names.index(COMMIT_STEPS["assemble"]) < names.index(CLOSED_DAY_FOLD_STEP)
-    assert names.index(CLOSED_DAY_FOLD_STEP) < names.index(COMMIT_STEPS["fold"])
-    for step_name in (CLOSED_DAY_FOLD_STEP, COMMIT_STEPS["fold"]):
-        step = _step(workflow, "assemble", "name", step_name)
-        assert step.get("continue-on-error") == TOLERATED, (
-            f"{step_name} must never be what costs a reader the day"
-        )
-
-
-def test_every_path_the_fold_commit_stages_exists_in_a_fresh_checkout() -> None:
-    """`git add` on a path that is not there aborts the step, and the fold's commit with it."""
-    for relative in COMMIT_STAGED_PATHS["fold"]:
-        assert (REPO_ROOT / relative).is_dir(), f"{relative} must be in a fresh checkout"
 
 
 def test_the_corpus_is_committed_but_never_rebuilt() -> None:

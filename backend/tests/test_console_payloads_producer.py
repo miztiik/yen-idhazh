@@ -13,7 +13,7 @@ import itertools
 import json
 import sys
 from collections.abc import Iterator
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from pathlib import Path
 from typing import Any, Final
 
@@ -33,7 +33,7 @@ from idhazh.contracts.knobs.collect import CollectConfig
 from idhazh.contracts.knobs.console import ConsoleConfig
 from idhazh.contracts.knobs.models import ModelRef
 from idhazh.contracts.knobs.run import RunConfig
-from idhazh.contracts.ledger_name import LedgerName
+from idhazh.contracts.ledger_name import DAY_TREES, LedgerName
 from idhazh.contracts.run_manifest import (
     ModelRole,
     ModelUse,
@@ -48,7 +48,7 @@ from idhazh.contracts.source_health_view import (
 )
 from idhazh.contracts.span_rollup import RollupSpan, SpanRollupRow
 from idhazh.contracts.visual_decision import VisualKind, VisualState
-from idhazh.stages.compact import stage_compact
+from idhazh.gardener import closed_day_fold
 from idhazh.telemetry.publish import (
     console_band,
     day_metrics,
@@ -1145,7 +1145,13 @@ def _band_after_folding(state: Path, digest: Path) -> Any:
     has to drain. The fields stay on the payload because a reader holding an
     older day still finds them there.
     """
-    stage_compact(state, date=NEWEST_DAY, after_days=7)
+    closed_day_fold.fold(
+        state,
+        DAY_TREES,
+        now=datetime.combine(date.fromisoformat(NEWEST_DAY), time.min, tzinfo=UTC),
+        after_days=7,
+        dry_run=False,
+    )
     _publish_all(state, digest, months=None)
     console_band.publish(
         state_root=state,

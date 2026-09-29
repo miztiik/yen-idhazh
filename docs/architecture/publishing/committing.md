@@ -1,6 +1,6 @@
 # How a run's rows reach the repository
 
-**Last Updated**: 2026-09-28
+**Last Updated**: 2026-09-29
 
 Ten jobs of one run commit to one branch, and every one of them can lose the
 push race. This page owns what they run to win it: the rebase loop and the clock
@@ -270,17 +270,16 @@ named for this job, so putting it back is not a resolution this program may make
 The message prints one identity, because one is all there is: a second field
 would always be empty.
 
-**A conflicted closed-day fold is refused whole, and the refusal is the
-mechanism rather than a gap in it.** `settled.csv` carries no writer's name, so
-the rule above answers no and the push stops. Settling it per path is what loses
-rows: taking the tip's copy leaves this job's *deletion* of a straggler file
-standing - a deletion is not a conflict, so git keeps it - and the straggler's
-rows then exist in no file at all, at exit 0. Refusing means the whole fold
-commit dies with the runner, the tip keeps both its `settled.csv` and the
-straggler, and the next run folds that day again. The step is
-`continue-on-error: true`, so the job carries on. What a refused fold costs is
-the telemetry month fold that shares the step, and that month is folded on the
-next run.
+**No job here commits a closed-day fold any more, and a conflicted one would be
+refused whole.** The gardener now folds each CSV day tree and lands
+the fold through its own commit loop
+([idhazh-gardener.md](idhazh-gardener.md#the-closed-day-fold)), so this program
+never writes a `settled.csv`. If one ever reached the resolver it carries no
+writer's name, so the rule above answers no and the push stops - and that is the
+right answer rather than a gap. Settling it per path is what loses rows: taking
+the tip's copy leaves this job's *deletion* of a straggler file standing - a
+deletion is not a conflict, so git keeps it - and the straggler's rows then exist
+in no file at all, at exit 0.
 
 Two things were considered and neither is taken. A file listing what each job
 owns restates the identity the filename already carries and gives it somewhere

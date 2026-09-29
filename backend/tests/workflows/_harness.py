@@ -454,18 +454,6 @@ BENCH_CORPUS_STEP: Final = "Build the fixed bench corpus"
 
 BENCH_FINGERPRINT_STEP: Final = "What machine this bench drew"
 
-#: The step that turns the probe's segment into the row the bench commits. The
-#: probe writes `state/pipeline-tests/segments/host-fingerprint/...`, and this
-#: workflow has no `assemble` to drain it - so without this step the bench stages
-#: a day file nothing wrote and records no machine at all.
-BENCH_COMPACT_STEP: Final = "Fold the machine record into its day"
-
-BENCH_COMPACT_COMMAND: Final = "python -m idhazh compact"
-
-#: The fold takes the run's own date and folds the days closed behind it. A call
-#: that names no date has no cover to fold against and refuses.
-COMPACT_DATE_FLAG: Final = "--date"
-
 #: The one composite action in this repository. The step above was byte-identical
 #: in two workflows apart from the job it read the models file from, and a step
 #: duplicated across two files is a step that drifts the day one of them is
@@ -561,10 +549,10 @@ METRICS_SERIES: Final = ("llamacpp:n_busy_slots_per_decode", "llamacpp:n_tokens_
 # commit, which is what makes the retry behaviour executable by a test instead
 # of only greppable in YAML.
 #
-# Keyed by a label rather than by a job, because the assemble job commits twice:
-# the day, and then the telemetry months the fold took out of full grain. The
-# second one has to come after the first (see the workflow's own comment), so
-# they cannot be one call.
+# Keyed by a label rather than by a job, because a label names one commit step
+# wherever it lives: `bench` is a job of another workflow. Until 2026-09-28 the
+# assemble job committed twice - the day, then the closed-day fold - and the
+# fold is the gardener's now.
 COMMIT_PROGRAM: Final = REPO_ROOT / "backend" / "utilities" / "commit_and_push.py"
 
 COMMIT_PROGRAM_CALL: Final = ("python", "backend/utilities/commit_and_push.py")
@@ -582,7 +570,6 @@ COMMIT_WORKFLOWS: Final = {
     "plan": "digest.yml",
     "work": "digest.yml",
     "assemble": "digest.yml",
-    "fold": "digest.yml",
     "bench": "measure.yml",
 }
 
@@ -590,7 +577,6 @@ COMMIT_JOBS: Final = {
     "plan": "plan",
     "work": "work",
     "assemble": "assemble",
-    "fold": "assemble",
     "bench": BENCH_SERVER_JOB,
 }
 
@@ -598,7 +584,6 @@ COMMIT_STEPS: Final = {
     "plan": "Commit what the plan saw",
     "work": "Commit what this shard measured",
     "assemble": "Commit the day",
-    "fold": "Commit the folded telemetry",
     "bench": "Commit the machine this bench drew",
 }
 
@@ -656,7 +641,7 @@ COMMIT_BASE_ENV: Final = frozenset(
 # `state/` has two writers now, so those commit steps settle nothing after their
 # rebase.
 #
-# Four of the five name a push deadline. The bench does not: `measure.yml` has no
+# Three of the four name a push deadline. The bench does not: `measure.yml` has no
 # job that reads config before the one that commits, so it takes the script's
 # own value for a caller that names none.
 COMMIT_SCRIPT_ENV: Final = {
@@ -669,7 +654,6 @@ COMMIT_SCRIPT_ENV: Final = {
         "REGENERATE_COMMAND",
         "DROP_RACED_ASSETS_COMMAND",
     },
-    "fold": COMMIT_BASE_ENV | {"PUSH_DEADLINE_SECONDS"},
     "bench": COMMIT_BASE_ENV,
 }
 
@@ -712,13 +696,6 @@ COMMIT_STAGED_PATHS: Final = {
         "state",
         "corpus",
     ],
-    # `state` whole, and deliberately not the directories the fold touches:
-    # `state/item-health-summary/` does not exist in a fresh checkout, and
-    # `git add` on a path that is not there aborts the whole step.
-    # `frontend/public/telemetry` is named beside it because the fold deletes the
-    # browser's copy of a folded month, and `git add` records a removal only for
-    # a path it is handed. That directory IS in every checkout.
-    "fold": ["state", "frontend/public/telemetry"],
     # Under the trial root and nowhere near the production ledger. A bench runs
     # many times a day against unmerged branches, so one of its rows beside the
     # rows the console reads would mean every panel filtering by job for ever.
@@ -728,13 +705,6 @@ COMMIT_STAGED_PATHS: Final = {
     # because the whole state root moved, and nothing reads them back.
     "bench": [f"{BENCH_LEDGER_ROOT}/{LedgerName.HOST_FINGERPRINT}"],
 }
-
-# The step that replaces a closed day's writer files with the one file they
-# settle to. It runs after the day's own commit: it deletes committed files, so a
-# fold that loses its push may never cost a published day.
-CLOSED_DAY_FOLD_STEP: Final = "Fold the days that can gain no more rows"
-
-CLOSED_DAY_FOLD_COMMAND: Final = "python -m idhazh compact"
 
 # The step that fills the two ledgers the step above commits, and the two things
 # that decide which items are this shard's.

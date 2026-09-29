@@ -49,18 +49,16 @@ VALIDATION_CONFIG_JOBS = ("plan", "qualify", "decide")
 #: qualification marks real addresses seen.
 VALIDATION_PLAN_STEP = "Read the feeds"
 
-#: The three steps of the decide job, in the order they have to run: the gates
-#: write a segment, the fold turns it into the day file, and the commit stages
-#: what the fold wrote.
+#: The two steps of the decide job, in the order they have to run: the gates
+#: write the verdict into the trial root's own day, and the commit stages it.
+#: Nothing folds a trial root, so the verdict lands as the writer file the gates
+#: wrote.
 VALIDATION_GATES_STEP = "Run the gates"
-
-VALIDATION_COMPACT_STEP = "Fold the verdict into its day"
 
 VALIDATION_COMMIT_STEP = "Commit the candidate-models ledger"
 
 #: Every stage this dispatch runs, and the job that runs it.
 VALIDATION_STAGES = (
-    ("decide", "compact"),
     ("decide", "qualify-decide"),
     ("plan", "plan"),
     ("qualify", "qualify"),
@@ -145,11 +143,8 @@ def test_the_gates_are_run_through_the_config_the_job_just_built() -> None:
     workflow = _load_workflows()[VALIDATION_WORKFLOW]
     names = [step.get("name") for step in _steps(workflow, "decide")]
     assert names.index(BENCH_CONFIG_STEP) < names.index(VALIDATION_GATES_STEP)
-    assert names.index(VALIDATION_GATES_STEP) < names.index(VALIDATION_COMPACT_STEP), (
-        "the fold turns the gates' segment into the day file, so it runs after them"
-    )
-    assert names.index(VALIDATION_COMPACT_STEP) < names.index(VALIDATION_COMMIT_STEP), (
-        "a commit before the fold stages a segment and no head"
+    assert names.index(VALIDATION_GATES_STEP) < names.index(VALIDATION_COMMIT_STEP), (
+        "a commit before the gates stages a verdict nobody has written yet"
     )
 
 

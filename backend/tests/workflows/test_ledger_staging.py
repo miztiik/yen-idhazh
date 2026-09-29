@@ -415,10 +415,11 @@ def _rewritten_ledgers() -> set[str]:
     merged copy and the settler is the only thing that can take
     one of them back out again.
 
-    A head the compaction fills is the same case one step further out. It settles its
-    rows by key as it folds them (`stages.compact._settle`) rather than as it writes,
-    and it has no `append_*`/`write_*` name at all - so it is added here from the
-    declared head table. `state/host-fingerprint` is the case.
+    A day tree the closed-day fold rewrites is the same case one step further out.
+    The fold settles its rows by key as it folds them (`day_shards.settle`, run by
+    the gardener's `closed_day_fold`) rather than as they are written, and it has no
+    `append_*`/`write_*` name at all - so it is added here from `DAY_TREES`.
+    `state/host-fingerprint` is the case.
     """
     ledgers = _writer_ledgers()
     replaced = {

@@ -297,7 +297,7 @@ Every place where the tree, or a ruling, departs from the text further down. A w
 | 9 | The three ledgers the console's routes read become parquet | 7, 12, and plan 51's row titled **The query door module and its two entry points** | H | IN-FLIGHT | p50r9 | - | p50-r9-worker |
 | 10 | `span-rollup` becomes parquet | - | - | **COLLAPSED** | - | - | - |
 | 11 | The index and watermark shapes are declared | 2 | C | DONE | p50r11 | #1136 | p50-r11-worker |
-| 12 | The closed-day fold of the CSV day trees moves into the gardener | 7, 8 | I | IN-FLIGHT | p50r12 | - | p50-r12-worker-2 |
+| 12 | The closed-day fold of the CSV day trees moves into the gardener | 7, 8 | I | DONE | p50r12 | #1161 | p50-r12-worker-2 |
 
 **Row 5 now depends on row 3 as well as row 4.** Its `visual-prune` task calls the parquet writer row 3 creates; dispatched after row 4 alone it would write CSV through a door that does not exist.
 

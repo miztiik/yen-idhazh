@@ -16,10 +16,10 @@ spells and the walk refuses it with every other stray.
 formats is how a tree ends up with two grammars.
 
 **The fold is the compaction's, moved rather than copied.** `settle` runs the
-identical three cases `stages.compact` ran into a head - join, supersede, repeat
-- and `stages.compact` calls this one now. Six ledgers with six read-side folds
-would be six answers to one question, and a reader that forgot to call one would
-read double-counted rows.
+identical three cases the closed-day fold writes into a day's settled file -
+join, supersede, repeat - and the gardener's `closed_day_fold` calls this one.
+Six ledgers with six read-side folds would be six answers to one question, and
+a reader that forgot to call one would read double-counted rows.
 
 **Three names here are reserved rather than a writer's.** `settled.csv` is what
 a closed-day fold leaves behind, `before-partition.csv` is what a committed head
@@ -90,9 +90,9 @@ class Held:
 class Waiting:
     """One shard row, read, with enough provenance to name it in a refusal.
 
-    `date` and `run_date` belong to a caller that routes rows into heads.
-    `stages.compact` fills both; a read-time settlement routes nothing and
-    leaves them empty, and `settle` reads neither.
+    `date` and `run_date` belong to a caller that routes rows into heads. No
+    caller routes any now: a settlement reads one day or one cover, leaves both
+    empty, and `settle` reads neither.
     """
 
     path: Path

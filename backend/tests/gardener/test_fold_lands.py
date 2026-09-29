@@ -1,0 +1,290 @@
+"""Does a live fold inside a dry task land on main, and leave alone what the window only reported?
+
+One shard at a time through `backend/utilities/gardener_publish.py`, the way a
+wake runs it, against a bare repository standing in for origin - no network
+(CLAUDE.md section 13). The task is the shipped `host-fingerprint` module under
+the committed declarations, whose window reports and whose fold is live, over
+the committed `tests/fixtures/day-shards/closed-day/` tree and a few writer
+files the real producer adds. What reached origin is read back from origin, so
+a settled file written and never staged, or a writer file deleted and never
+staged, fails here.
+
+The clock is handed in rather than read, so the wake is one written out below,
+in UTC.
+"""
+
+from __future__ import annotations
+
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Final
+
+import pytest
+from conftest import CONFIG_DIR, FIXTURES_DIR
+
+from idhazh import config, day_shards, ledger
+from idhazh.config import GardenerSettings
+from idhazh.contracts.base import ServerJob
+from idhazh.contracts.collection_prune import CollectionPruneRow, StopReason
+from idhazh.contracts.host_fingerprint import HostFingerprintRow
+from idhazh.contracts.ledger_name import LedgerName
+from idhazh.gardener import runner
+from idhazh.gardener.outcome import EXIT_OK, EXIT_TASK_FAILED
+from utilities import gardener_publish
+
+from ._garden import (
+    GARDENER_FIXTURES,
+    a_config,
+    an_origin,
+    commits_on,
+    git,
+    on_origin,
+    quiet_git,
+)
+from ._garden import task_package as a_package
+
+pytestmark = pytest.mark.slow
+
+#: A wake on the 28th. The 27th ended at its first instant, so it is still open;
+#: the fixture's three September days closed weeks ago.
+WAKE: Final = datetime(2026, 9, 28, 0, 40, tzinfo=UTC)
+RUN_ID: Final = "2026-09-28-18099999999"
+OPEN_DAY: Final = "2026-09-27"
+CLOSED_DAYS: Final = ("2026-09-05", "2026-09-06", "2026-09-07")
+#: A day the 14-month window has aged out. The window is a dry run, so it only
+#: reports this day's files, and the fold leaves the day to the window.
+REPORTED_DAY: Final = "2025-06-10"
+
+TREE: Final = LedgerName.HOST_FINGERPRINT
+CLOSED_DAY_FIXTURE: Final = FIXTURES_DIR / "day-shards" / "closed-day"
+
+
+def a_machine(day: str, *, job: ServerJob, shard: int, run: str) -> HostFingerprintRow:
+    return HostFingerprintRow.model_validate(
+        {
+            "date": day,
+            "run_id": run,
+            "job": job,
+            "shard": shard,
+            "fingerprint": "0123456789abcdef",
+            "measured_at": f"{day}T00:00:00Z",
+            "cpu_model": f"{job.value}-{shard} on {day}",
+        }
+    )
+
+
+def writer_files(scratch: Path, day: str, *, run: str, shards: int) -> dict[str, str]:
+    """Writer files for one day, filed by the real producer, as repository paths and text."""
+    state = scratch / ledger.STATE_DIRNAME
+    for shard in range(shards):
+        ledger.write_segment(
+            state,
+            TREE,
+            [a_machine(day, job=ServerJob.WORK, shard=shard, run=run)],
+            run_id=run,
+            attempt=1,
+            job=ServerJob.WORK,
+            shard=shard,
+        )
+    folder = ledger.path(state, TREE, day)
+    return {
+        path.relative_to(scratch).as_posix(): path.read_text(encoding="utf-8")
+        for path in sorted(folder.iterdir())
+    }
+
+
+def the_tree(scratch: Path) -> dict[str, str]:
+    """Three closed days from the fixture, one day the window ages out, and one open day."""
+    files = {
+        path.relative_to(CLOSED_DAY_FIXTURE).as_posix(): path.read_text(encoding="utf-8")
+        for path in sorted(CLOSED_DAY_FIXTURE.rglob("*.csv"))
+    }
+    files |= writer_files(scratch, REPORTED_DAY, run=f"{REPORTED_DAY}-900000001", shards=2)
+    files |= writer_files(scratch, OPEN_DAY, run=f"{OPEN_DAY}-900000001", shards=2)
+    return files
+
+
+def folder_of(day: str) -> str:
+    """Where one day of the tree sits, as a repository path."""
+    return f"{ledger.STATE_DIRNAME}/{TREE.value}/{day[:4]}/{day[5:7]}/{day[8:10]}"
+
+
+def settled_rows(state: Path, day: str) -> list[dict[str, str]]:
+    return day_shards.settled_day(
+        ledger.tree_root(state, TREE), day, ledger.segment_key(TREE), ledger.segment_contract(TREE)
+    )
+
+
+def a_garden(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> tuple[Path, Path, dict[str, str], GardenerSettings]:
+    """The committed declarations over a clone of an origin holding the tree."""
+    quiet_git(tmp_path, monkeypatch)
+    files = the_tree(tmp_path / "scratch")
+    origin, checkout = an_origin(tmp_path, files)
+    settings = config.load_gardener(a_config(checkout, CONFIG_DIR / "gardener"))
+    return origin, checkout, files, settings
+
+
+def only_row(record: Path | None, task: str) -> CollectionPruneRow:
+    assert record is not None, "the shard wrote no record"
+    rows = {row.task: row for row in ledger.load([record], model=CollectionPruneRow)}
+    return rows[task]
+
+
+def test_a_live_fold_inside_a_dry_task_lands_and_the_window_s_report_stays_a_report(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The window is dry and the fold is live, so main gains the fold and nothing else.
+
+    After the push, main holds each closed day's `settled.csv` with the rows its
+    writer files settled to, none of those writer files, every file the window
+    only reported - untouched and unfolded - and the open day as it was.
+    """
+    origin, checkout, files, settings = a_garden(tmp_path, monkeypatch)
+    policy = settings.tasks[TREE.value]
+    assert policy.dry_run is True, "the window has to be the dry half, or this proves less"
+    before = {day: settled_rows(checkout / ledger.STATE_DIRNAME, day) for day in CLOSED_DAYS}
+    said: list[str] = []
+
+    outcome = gardener_publish.run_and_land(
+        (TREE.value,),
+        settings=settings,
+        repo_root=checkout,
+        run_id=RUN_ID,
+        attempt=1,
+        shard=0,
+        clock=lambda: WAKE,
+        say=said.append,
+    )
+
+    assert outcome.exit_code == EXIT_OK, said
+    for day in CLOSED_DAYS:
+        folder = folder_of(day)
+        settled = on_origin(origin, f"{folder}/{day_shards.SETTLED_NAME}")
+        assert settled is not None, f"{day}'s settled file was written and never landed"
+        assert settled == (checkout / folder / day_shards.SETTLED_NAME).read_text(encoding="utf-8")
+        assert settled_rows(checkout / ledger.STATE_DIRNAME, day) == before[day]
+        for relpath in files:
+            if relpath.startswith(f"{folder}/"):
+                assert on_origin(origin, relpath) is None, f"{relpath} was folded and not deleted"
+    untouched = [
+        (relpath, text)
+        for relpath, text in files.items()
+        if relpath.startswith((f"{folder_of(REPORTED_DAY)}/", f"{folder_of(OPEN_DAY)}/"))
+    ]
+    assert len(untouched) == 4, "two reported files and two open-day files, or this proves less"
+    for relpath, text in untouched:
+        assert on_origin(origin, relpath) == text, f"{relpath} changed on main"
+    assert on_origin(origin, f"{folder_of(REPORTED_DAY)}/{day_shards.SETTLED_NAME}") is None, (
+        "the fold wrote a day the window was reporting"
+    )
+    assert commits_on(origin)[0].endswith(f": gardener: {TREE.value} on 2026-09-28")
+
+    row = only_row(outcome.record, TREE.value)
+    assert (row.dry_run, row.deleted) == (True, 2), "the window reports the aged-out day's files"
+    assert (row.fold_dry_run, row.folded_days, row.folded_files) == (False, 3, 6)
+    assert row.stopped_because is StopReason.EXHAUSTED
+
+
+def test_a_writer_file_that_lands_while_the_fold_runs_survives_beside_the_settled_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A re-run's file reaches main between the fold and its push, and its rows are kept.
+
+    The push loses to the re-run, so the shard stages its own paths again on the
+    new tip. The re-run's file is not one of them, so it stays beside the settled
+    file, and the next wake folds it in.
+    """
+    origin, checkout, _, settings = a_garden(tmp_path, monkeypatch)
+    ran = runner.run(
+        (TREE.value,),
+        settings=settings,
+        repo_root=checkout,
+        run_id=RUN_ID,
+        attempt=1,
+        shard=0,
+        git_sha=git(checkout, "rev-parse", "HEAD").strip(),
+        committed_folders=None,
+        cone_bytes=None,
+        clock=lambda: WAKE,
+        say=lambda _: None,
+    )
+    assert ran.landing is not None
+    day = CLOSED_DAYS[0]
+    seed = tmp_path / "seed"
+    ledger.write_segment(
+        seed / ledger.STATE_DIRNAME,
+        TREE,
+        [a_machine(day, job=ServerJob.WORK, shard=9, run=f"{day}-900000002")],
+        run_id=f"{day}-900000002",
+        attempt=1,
+        job=ServerJob.WORK,
+        shard=9,
+    )
+    git(seed, "add", "--all")
+    git(seed, "commit", "--quiet", "-m", "a re-run files a machine on a closed day")
+    git(seed, "push", "--quiet", "origin", "HEAD:refs/heads/main")
+
+    said: list[str] = []
+    pushed = gardener_publish.publish(
+        ran.landing, attempts=settings.config.attempts, repo=checkout, say=said.append
+    )
+
+    assert pushed == EXIT_OK, said
+    after = tmp_path / "after"
+    git(tmp_path, "clone", "--quiet", str(origin), str(after))
+    folder = ledger.path(after / ledger.STATE_DIRNAME, TREE, day)
+    names = sorted(path.name for path in folder.iterdir())
+    assert day_shards.SETTLED_NAME in names and len(names) == 2, names
+    machines = [row["cpu_model"] for row in settled_rows(after / ledger.STATE_DIRNAME, day)]
+    assert f"work-9 on {day}" in machines, "the re-run's rows are in no file"
+
+
+def test_a_window_that_fails_leaves_the_fold_for_the_next_wake(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A failed window hands on a list of what it took that nothing has checked.
+
+    So the fold does not run that wake, the closed days keep every file, and the
+    row's fold cells are empty - "did not run" - rather than zero.
+    """
+    quiet_git(tmp_path, monkeypatch)
+    files = {
+        path.relative_to(CLOSED_DAY_FIXTURE).as_posix(): path.read_text(encoding="utf-8")
+        for path in sorted(CLOSED_DAY_FIXTURE.rglob("*.csv"))
+    }
+    _, checkout = an_origin(tmp_path, files)
+    config_dir = a_config(checkout, GARDENER_FIXTURES / "breaks")
+    broken = config_dir / "gardener" / "broken.json"
+    broken.write_text(
+        broken.read_text(encoding="utf-8").replace(
+            '"state/broken"', f'"state/{TREE.value}"'
+        ).replace('"dry_run": false,', '"dry_run": false,\n  "fold": {"dry_run": false},'),
+        encoding="utf-8",
+    )
+    settings = config.load_gardener(config_dir)
+
+    outcome = runner.run(
+        ("broken",),
+        settings=settings,
+        repo_root=checkout,
+        run_id=RUN_ID,
+        attempt=1,
+        shard=0,
+        git_sha=git(checkout, "rev-parse", "HEAD").strip(),
+        committed_folders=None,
+        cone_bytes=None,
+        package=a_package("garden_tasks_breaks", monkeypatch),
+        clock=lambda: WAKE,
+        say=lambda _: None,
+    )
+
+    assert outcome.exit_code == EXIT_TASK_FAILED
+    row = only_row(outcome.record, "broken")
+    assert row.stopped_because is StopReason.FAILED
+    assert (row.fold_dry_run, row.folded_days, row.folded_files) == (None, None, None)
+    for relpath, text in files.items():
+        assert (checkout / relpath).read_text(encoding="utf-8") == text
+    assert outcome.landing is not None
+    assert outcome.landing.deleted_paths == frozenset()

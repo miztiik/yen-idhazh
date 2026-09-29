@@ -7,7 +7,8 @@ read once rather than sampled.
 Two steps write it, because two of its cells are only knowable at opposite ends
 of a job: `stage_fingerprint` probes the machine before the heaviest step, and
 `stage_job_clock` records the clock and the weight-load cost after the last item.
-Both go to the job's own segment and `stages.compact` unites them.
+Both go to the job's own segment and the settlement unites them: every reader
+settles a day by key, and the gardener's closed-day fold writes that answer down.
 
 Every reading here degrades to nothing. None of these files or services exists
 on a developer machine, and a missing instrument records an empty cell rather
@@ -446,7 +447,7 @@ def stage_job_clock(
     them as a second row of the same key, into the same segment, filling nothing
     the probe already filled.
 
-    `stages.compact` is what unites the two. Neither row is ever edited: the
+    The settlement is what unites the two. Neither row is ever edited: the
     probe's cells and these four are disjoint, so the fold takes the union and the
     day file holds one row a job.
 

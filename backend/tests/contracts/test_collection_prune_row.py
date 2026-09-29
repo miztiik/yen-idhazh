@@ -63,3 +63,44 @@ def test_a_shards_weight_is_whole_bytes_and_a_row_from_before_it_reads_as_not_we
     sample.pop("cone_bytes")
     older = CollectionPruneRow.model_validate(sample | {"version": "2026-09-27"})
     assert older.cone_bytes is None
+
+
+def a_folding_row(**changes: Any) -> CollectionPruneRow:
+    sample = json.loads(
+        read_text(
+            CONTRACT_FIXTURES_DIR / "collection-prune-row" / "a-live-fold-beside-a-dry-window.json"
+        )
+    )
+    return CollectionPruneRow.model_validate(sample | changes)
+
+
+def test_a_fold_is_said_on_the_task_s_own_row_on_its_own_switch() -> None:
+    """The window is dry and the fold is live, and one row says both."""
+    row = a_folding_row()
+    assert (row.dry_run, row.fold_dry_run) == (True, False)
+    assert (row.folded_days, row.folded_files) == (6, 770)
+
+
+@pytest.mark.parametrize(
+    ("changes", "refusal"),
+    [
+        ({"folded_days": None}, "or none of them"),
+        ({"fold_dry_run": None}, "or none of them"),
+        ({"folded_files": 5}, "at least one file"),
+        ({"folded_files": -1}, "folded_files"),
+    ],
+)
+def test_a_fold_that_lies_is_refused(changes: dict[str, Any], refusal: str) -> None:
+    with pytest.raises(ValidationError, match=refusal):
+        a_folding_row(**changes)
+
+
+def test_a_row_from_before_the_fold_reads_as_a_task_that_did_not_fold() -> None:
+    """The three fold cells are additive: a row written before them reads, and says no fold ran."""
+    sample = json.loads(
+        read_text(CONTRACT_FIXTURES_DIR / "collection-prune-row" / "ceiling-reached.json")
+    )
+    for key in ("fold_dry_run", "folded_days", "folded_files"):
+        sample.pop(key)
+    older = CollectionPruneRow.model_validate(sample | {"version": "2026-09-28"})
+    assert (older.fold_dry_run, older.folded_days, older.folded_files) == (None, None, None)

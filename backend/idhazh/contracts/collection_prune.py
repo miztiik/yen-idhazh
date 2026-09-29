@@ -33,6 +33,14 @@ started to publish, so a slow push is never read as a slow task. `cone_bytes`
 is what the shard's owned folders weighed at the commit it checked out, the
 same on every row of one record, so where the weight sits is read off the
 record rather than measured again.
+
+**A task that folds says so on the same row.** `dry_run`, `deleted` and
+`bytes_freed` describe the task's window. A retention task that owns a CSV day
+tree also folds its closed days into one file each, on a switch of its own, and
+`fold_dry_run`, `folded_days` and `folded_files` say what that fold did. They
+are empty when the task has no fold, and when its fold did not run because the
+window failed first: empty says "did not run", where 0 says "ran and found
+nothing".
 """
 
 from __future__ import annotations
@@ -85,6 +93,11 @@ class CollectionPruneRow(Contract):
 
     __schema_stem__: ClassVar[str] = "collection-prune-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-28T22:07",
+            change="fold_dry_run, folded_days, folded_files, additive; empty with no fold.",
+            why="A task folds its closed days on its own switch, and says what it folded.",
+        ),
         ChangelogEntry(
             version="2026-09-28",
             change="cone_bytes, additive: what the shard's owned folders weighed; None if unread.",
@@ -175,7 +188,12 @@ class CollectionPruneRow(Contract):
             "whose members have no size we can read - a workflow run's logs are one."
         ),
     )
-    stopped_because: StopReason = Field(description="Why the pass ended.")
+    stopped_because: StopReason = Field(
+        description=(
+            "Why the pass ended. `failed` as well when the task's fold stopped part way, "
+            "so one field says whether the task failed."
+        )
+    )
     resume_from: MemberId | None = Field(
         default=None,
         description=(
@@ -208,10 +226,34 @@ class CollectionPruneRow(Contract):
             "the commit: a task run by hand in a checkout reads none."
         ),
     )
+    fold_dry_run: bool | None = Field(
+        default=None,
+        description=(
+            "True when the task's fold only reported, false when it settled days for "
+            "real. `dry_run` beside it is the window's. Empty when the task has no fold, "
+            "or its fold did not run because the window failed first."
+        ),
+    )
+    folded_days: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "How many day folders the fold settled into one settled.csv each, or would "
+            "have on a dry run. Empty when the fold did not run."
+        ),
+    )
+    folded_files: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "How many files those folds replaced, or would replace: every file of a "
+            "folded day but its settled.csv. Empty when the fold did not run."
+        ),
+    )
 
     @model_validator(mode="after")
     def _the_arithmetic_holds(self) -> Self:
-        """Seven cross-field rules, each one a way a hand-written row could lie."""
+        """Nine cross-field rules, each one a way a hand-written row could lie."""
         if self.job not in TASK_JOBS:
             raise ValueError(
                 f"job {self.job.value} runs no task. A row is written by "
@@ -229,4 +271,15 @@ class CollectionPruneRow(Contract):
             raise ValueError("a pass its ceiling stopped names where the next one begins")
         if self.since is not None and self.until is not None and self.since > self.until:
             raise ValueError("since is after until, so the window names no day")
+        fold = (self.fold_dry_run, self.folded_days, self.folded_files)
+        if None in fold and any(value is not None for value in fold):
+            raise ValueError(
+                "a fold fills fold_dry_run, folded_days and folded_files, or none of them"
+            )
+        if (
+            self.folded_days is not None
+            and self.folded_files is not None
+            and self.folded_files < self.folded_days
+        ):
+            raise ValueError("every day a fold settles held at least one file it replaced")
         return self

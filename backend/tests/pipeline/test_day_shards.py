@@ -3,10 +3,10 @@
 Two claims, and they answer different questions.
 
 **Parity.** `day_shards.settled_rows` over a day directory returns exactly what
-`stages.compact` writes into that day's `settled.csv` for the same bytes. The
-fixture files are the same files in both runs, so a difference is a difference
-in the fold rather than in the input. That is the whole of what moving the
-settlement out of the writer is allowed to change: nothing.
+the gardener's closed-day fold writes into that day's `settled.csv` for the same
+bytes. The fixture files are the same files in both runs, so a difference is a
+difference in the fold rather than in the input. That is the whole of what
+moving the settlement out of the writer is allowed to change: nothing.
 
 **The move.** Parity cannot say whether every production reader was moved onto
 the walker, so the second half of this module reads the modules decision 5.2 of
@@ -23,6 +23,7 @@ from __future__ import annotations
 import csv
 import shutil
 from collections.abc import Callable
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Final
 
@@ -30,9 +31,10 @@ import pytest
 
 from idhazh import day_shards, ledger
 from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
+from idhazh.contracts.knobs.gardener import DEFAULT_CLOSED_AFTER_DAYS
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.span_rollup import SpanRollupRow
-from idhazh.stages import compact
+from idhazh.gardener import closed_day_fold
 
 pytestmark = pytest.mark.contract
 
@@ -75,17 +77,21 @@ def test_a_day_directory_settles_to_what_the_fold_writes_into_its_settled_file(
     day.mkdir(parents=True)
     for name in WRITERS:
         shutil.copy(root / "2026" / "09" / "18" / name, day / name)
-    report = compact.stage_compact(
-        tmp_path / ledger.STATE_DIRNAME, date="2026-09-30", after_days=7
+    folded = closed_day_fold.fold(
+        tmp_path / ledger.STATE_DIRNAME,
+        [LedgerName.SPAN_ROLLUP],
+        now=datetime(2026, 9, 30, tzinfo=UTC),
+        after_days=DEFAULT_CLOSED_AFTER_DAYS,
+        dry_run=False,
     )
-    assert report.files_replaced == len(WRITERS)
-    folded = _rows_of(day / day_shards.SETTLED_NAME)
+    assert folded.files == len(WRITERS)
+    folded_rows = _rows_of(day / day_shards.SETTLED_NAME)
 
     # `days=1` is the newest recorded day, which is the day directory alone -
     # the same rows the three writer files above carried.
     settled = day_shards.settled_rows(root, ledger.SPAN_ROLLUP_KEY, SpanRollupRow, days=1)
 
-    assert settled == folded
+    assert settled == folded_rows
     assert [(row["shard"], row["span_name"]) for row in settled] == [
         ("0", "item"),
         ("0", "robots"),

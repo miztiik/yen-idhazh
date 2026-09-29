@@ -79,7 +79,6 @@ from idhazh.stages import (
 from idhazh.stages import (
     backfill_vectors,
     common,
-    compact,
     decide,
     harvest,
     qualify,
@@ -138,7 +137,6 @@ STAGES: Final[tuple[str, ...]] = (
     "job-clock",
     "assemble",
     "harvest",
-    "compact",
     "rebuild-score-index",
     "run",
     "validate",
@@ -480,9 +478,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         type=Path,
         default=None,
         help=(
-            "Where the ledgers under `state/` are read and written - where `compact` "
-            "finds the segments waiting, for one. It defaults to the committed state "
-            "tree; name it to point a run at a scratch copy."
+            "Where the ledgers under `state/` are read and written. It defaults to the "
+            "committed state tree; name it to point a run at a scratch copy."
         ),
     )
     parser.add_argument(
@@ -662,23 +659,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         return 0
 
-    if args.stage == "compact":
-        # Above the fetcher because it reads and rewrites committed files only.
-        #
-        # `--date` says which run this fold belongs to, and the knob says how far
-        # behind that date a day has to be before it is closed. A day a run is
-        # still writing is never touched, so the two together are what keep this
-        # off a file somebody else holds open.
-        compact.stage_compact(
-            common.STATE_ROOT if args.state_root is None else args.state_root,
-            date=args.date or _today(),
-            after_days=settings.app.run.settled_fold_after_days,
-        )
-        return 0
-
     if args.stage == "rebuild-score-index":
-        # Above the fetcher for the same reason `compact` is: it reads and
-        # rewrites committed files only.
+        # Above the fetcher because it reads and rewrites committed files only.
         #
         # The cover is stated, never defaulted. `--month` names what to rewrite;
         # `--every-shard` reads every score row on record, which is the read the

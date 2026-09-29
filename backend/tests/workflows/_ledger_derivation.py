@@ -31,7 +31,6 @@ from idhazh.contracts.ledgers import Grain
 from idhazh.gardener import registry as gardener_registry
 from idhazh.gardener import runner as gardener_runner
 from idhazh.ledger import paths
-from idhazh.stages import compact as compact_stage
 from idhazh.telemetry import sinks, traces
 
 from ._harness import SUBSTITUTED_DATE, _steps, _strings
@@ -558,16 +557,9 @@ def _verb_ledgers() -> dict[str, dict[str, str]]:
     """
     ledgers = _writer_ledgers()
     sunk = _sink_ledgers()
-    compacted = _compacted_ledgers()
     charged: dict[str, dict[str, str]] = {}
     for verb, reachable in _reachable_modules().items():
         for module in sorted(reachable, key=lambda entered: entered.__name__):
-            if module is compact_stage:
-                for ledger_path, which in sorted(compacted.items()):
-                    charged.setdefault(verb, {})[ledger_path] = (
-                        f"`python -m idhazh {verb}` reaches {module.__name__}, "
-                        f"which folds every waiting {which} segment into this head"
-                    )
             for writer in sorted(_writers_called_by(module)):
                 assert writer in ledgers, (
                     f"{module.__name__} calls ledger.{writer}, which idhazh.ledger does "
@@ -619,17 +611,17 @@ def _folded_day(which: LedgerName, date: str) -> str:
 
 
 def _compacted_ledgers() -> dict[str, str]:
-    """Every tree the fold writes into, and the ledger a job has to stage for it.
+    """Every tree the closed-day fold rewrites, and the ledger that tree is.
 
     The fold writes generically - one function over every declared tree, and no
     `append_*` name for `_writer_ledgers` to find - so it is read out of
-    `DAY_TREES` rather than named here. That is what keeps a ledger joining the
-    set from leaving its folded day charged to no job, which is the loss this whole
-    file exists to catch.
+    `DAY_TREES` rather than named here. The gardener runs it and stages what it
+    wrote itself, so no daily job is charged with it; what this answers is which
+    trees hold a file somebody rewrites whole.
 
     The ledger is the prefix two dates share, taken from the one helper that names a
     day shard for any tree. Reading it per tree from `day_shard_relpath` is what
-    reaches all nine: a tree also has a `*_relpath` helper of its own only where a
+    reaches all of them: a tree also has a `*_relpath` helper of its own only where a
     reader outside the fold asks for one day of it by date.
     """
     found: dict[str, str] = {}

@@ -345,7 +345,8 @@ jobs:
       # The other end of `What machine this job drew`, exactly as in `work`: the
       # probe opens the row before anything heavy, and what the job cost is only
       # knowable near its end, so this writes a second row of the same key and
-      # the fold in assemble unites them.
+      # the settlement unites them - every reader settles a day by key, and the
+      # gardener's fold writes that answer down once the day is closed.
       #
       # Before the commit step and not after the artifact upload, because the
       # commit below is what carries this row off the runner - a segment written
@@ -688,8 +689,8 @@ jobs:
       # before the model server starts, because the bandwidth reading wants a
       # gigabyte and an idle machine; the four cells below are only knowable once
       # the job is over. So the host row is written in two halves that fill
-      # different cells, into the one segment this job owns, and the fold in
-      # assemble unites them - one row a job in the day file either way.
+      # different cells, into the one segment this job owns, and the settlement
+      # unites them - one row a job in the day either way.
       #
       # Every reading is already on this runner: `JOB_STARTED_AT` was stamped by
       # the first step of this job, before the checkout, so the clock covers the
@@ -750,7 +751,7 @@ jobs:
       # runs under `set -euo pipefail`, so a path missing from the checkout
       # aborts the whole step and costs every ledger beside it. `state` is in
       # every checkout; a collection inside it need not be. It is also what the
-      # plan job and the two assemble commits have always staged.
+      # plan job and the assemble commit have always staged.
       #
       # Every path this shard writes under it carries this writer's run,
       # attempt, job and shard in the file name - the item census, the eval
@@ -1127,11 +1128,9 @@ jobs:
       # now, and both this step and the tests read it.
       #
       # Through `$GITHUB_OUTPUT` and never `$GITHUB_ENV`. An env var set here
-      # reaches every later step of this job, and `Commit the folded telemetry`
-      # is a later step with no `REGENERATE_COMMAND` - the script refuses a
-      # refresh with no rebuild and exits 2, and that step is
-      # `continue-on-error`, so the fold would silently stop happening on every
-      # run.
+      # reaches every later step of this job, and a later step that ran the
+      # commit script with no `REGENERATE_COMMAND` would be refused - the script
+      # refuses a refresh with no rebuild and exits 2.
       #
       # `DAY_DIR` through `env`, not pasted into the line below: a value read by
       # name is a value, whatever it contains.
@@ -1191,48 +1190,7 @@ jobs:
           frontend/public/machine frontend/public/span-rollup
           frontend/public/run-timeline state corpus
 
-      # The closed-day fold, and this job is its only caller. A day older than
-      # `run.settled_fold_after_days` can gain no more rows, so its writer files
-      # are replaced by the one settled file they agree on.
-      #
-      # AFTER `Commit the day`, and that order is the whole of why it sits here
-      # rather than in the plan job. The day's commit carries `REFRESH_PATHS`,
-      # so a push that loses its race hands those paths back to the tip and runs
-      # the producer again - and `idhazh assemble` does not write a settled file.
-      # A fold that ran before that commit would be half-reverted by the
-      # rebuild, silently, with the writer files already gone.
-      #
-      # `always()` because `Commit the day` above deliberately carries no
-      # `continue-on-error` - marking a lost publish as success is worse than
-      # failing - and without it the whole tail of the job is skipped with it.
-      # `continue-on-error` because the day has already published by here, and
-      # no bookkeeping pass is worth the run.
-      - name: Fold the days that can gain no more rows
-        if: always()
-        continue-on-error: true
-        run: >-
-          python -m idhazh compact
-          --date "${{ needs.plan.outputs.date }}"
-
-      # The `id` is here for the same reason the day's commit carries one. This
-      # step stages `frontend/public/telemetry`, which the console pages read,
-      # so a rebase here moves the built site exactly as a rebase there does.
-      # `always()` for the reason the step above it carries one: a day's push
-      # that lost its race must not also cost the fold.
-      - name: Commit the folded telemetry
-        id: commit_fold
-        if: always()
-        continue-on-error: true
-        env:
-          COMMIT_MESSAGE: "state: retire the shards past their reading window"
-          NOTHING_STAGED_MESSAGE: "every month is still at full grain"
-          PUSH_FAILED_MESSAGE: "could not push the folded telemetry"
-          PUSH_DEADLINE_SECONDS: ${{ needs.plan.outputs.push_deadline_seconds }}
-        run: >-
-          python backend/utilities/commit_and_push.py
-          state frontend/public/telemetry
-
-      # The commit steps above rebase when the push loses a race, and the
+      # The commit step above rebases when the push loses a race, and the
       # rebuild there rewrites the day against the tip that won. `frontend/build`
       # still holds the build made before any of that, so the gate below would
       # weigh one tree's pages against another tree's records. Run 33270983446
@@ -1240,12 +1198,12 @@ jobs:
       # with the rebase, while the build it measured was 5 B off the record its
       # own source carried. The day was fine and had already published.
       #
-      # So this runs when a commit step above rewrote the checkout and not
-      # otherwise. Both of them are named: the day's commit stages the digest,
-      # the fold's stages `frontend/public/telemetry`, and the console pages read
-      # that - so either one rebasing leaves this build's input stale. An `if:`
-      # naming only the first would skip the rebuild on the second and put run
-      # 33270983446 back.
+      # So this runs when the day's commit rewrote the checkout and not
+      # otherwise. Until 2026-09-28 a second commit step came after it - the
+      # closed-day fold's, which staged `frontend/public/telemetry` - and was
+      # named here too, because either one rebasing left this build's input
+      # stale. That fold is the gardener's now, and nothing in this job commits
+      # after the day.
       #
       # An output nobody wrote is the empty string, so a commit step that was
       # skipped or that died before it could answer reads as "no rebase" and
@@ -1267,9 +1225,7 @@ jobs:
       # reinstall would delete node_modules on every run to cover the rarer of
       # the two. The build alone is 17 s and writes only gitignored output.
       - name: Rebuild the site against the tree that was pushed
-        if: >-
-          steps.commit_day.outputs.rebased == 'true'
-          || steps.commit_fold.outputs.rebased == 'true'
+        if: steps.commit_day.outputs.rebased == 'true'
         working-directory: frontend
         run: npm run build
 
