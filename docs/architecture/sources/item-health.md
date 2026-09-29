@@ -1,6 +1,6 @@
 # Item Health
 
-**Last Updated**: 2026-09-28
+**Last Updated**: 2026-09-29
 
 What every planned item did on every run, where that record lives, and which
 failures count against a source. This is item-grain evidence. Feed health is
@@ -26,29 +26,30 @@ the day - `<run_id>-<attempt>-<job>-<shard>.csv`, through `ledger.write_segment`
 the row beside the item's other payloads, which is
 [the file below](#the-row-on-the-shard-before-the-ledger-has-it).
 
-The row carries 123 columns. `ItemHealthRow.csv_columns` in
-`backend/idhazh/contracts/item_health.py` is the list, and this page does not
-restate it - a second copy of 123 names is a second thing to keep in step, and
-it drifts. [item-health-columns.md](item-health-columns.md) is the generated
-answer to "where does this cell come from": every column, the eight questions
-they group into, which module puts a value under each name, whether that value
-reaches this row, and whether any committed row carries it. The columns a
-reader asks about most are described one by one further down.
+The complete column list and field descriptions belong to
+[`ItemHealthRow`](../../../backend/idhazh/contracts/item_health.py).
+`csv_columns()` derives the list from the contract; this page does not keep a
+second copy or a fixed column count. Common fields are described further down.
 
 **`stage_gap_ms` is the one to watch.** It is `item_total_ms` minus every named
 stage. Unattributed time is the only column that can catch a regression in a
 stage nobody has thought to name yet, which is how a five-fold slowdown ran for
 six days in September 2026 without any surface reporting it.
 
-### What actually fills today
+### Diagnosing missing columns
 
-**Most of these columns are empty on every committed row**, and the count is on
-[item-health-columns.md](item-health-columns.md) beside the column it is about,
-so it moves when the wiring does rather than needing this paragraph edited.
-Read an absence as "nothing carries this into the row" rather than "this item
-had no value": the columns landed with the instrument that measures them, and
-the producer wiring that carries the same value into the ledger row did not
-land with them.
+Run these from the repository root when investigating a field:
+
+```text
+python backend/utilities/item_health_provenance.py
+python backend/utilities/empty_column_census.py
+```
+
+The first reports producers and recorded values. The second checks populated
+columns against the contracts' reader maps. Both read committed history, so their
+cost grows with the data; run them on demand, not as tests. Do not paste their
+dated output into architecture docs. A static producer scan cannot prove a value
+reaches the row or is correct, and a blank cell is not evidence of zero work.
 
 The ledger is append-only: a writer adds a file to the day and nothing edits a
 file that is already there. It is not kept for ever: a month older than the
@@ -108,10 +109,7 @@ place is how it starts missing rows.
 `NULL` literal, because both of those get averaged by accident one day.
 
 The columns a reader asks about most, in file order. This is the subset the
-prose below turns on, not the whole list, and nothing here counts them - a
-count of a subset is one more number to keep in step.
-[item-health-columns.md](item-health-columns.md) is every column, grouped by
-the question it answers:
+prose below turns on, not the complete list defined by the contract:
 
 | Column | Type | Present when | What it answers |
 | --- | --- | --- | --- |
@@ -151,13 +149,10 @@ the question it answers:
 | `summary_*` | int | a second call ran, from 2026-09-12 | the second call's own five |
 | `truncation_cap_tokens` | int | the body was cut, from 2026-09-14 | which cap did the cutting |
 
-Seventy more columns landed on 2026-09-15. Every one is nullable, every one is
-empty on a row an earlier run wrote, and each one's own description is on the
-field in
-[`backend/idhazh/contracts/item_health.py`](../../../backend/idhazh/contracts/item_health.py)
-rather than repeated here - the table above is long enough that a second copy of
-it would be the thing that goes stale. Which question each of them answers, and
-what fills it, is [item-health-columns.md](item-health-columns.md).
+Optional fields are nullable, and an older row can lack a field added later.
+Each field's description is on the contract. Use
+[column diagnostics](#diagnosing-missing-columns) to inspect what produces and
+populates it rather than relying on a saved snapshot.
 
 **`stage_gap_ms` is the load-bearing one.** It is `item_total_ms` minus every
 named stage, and it is the only column that can catch a regression in a stage
@@ -1037,9 +1032,6 @@ by the row identity above. Authority: Fowler, over Carmack's original ruling.
 
 ## See also
 
-- [item-health-columns.md](item-health-columns.md) - every column, the eight
-  questions they group into, which module fills each one, and whether anything
-  carries it into this row.
 - [health.md](health.md) - the feed-grain ledger.
 - [../summarize/throughput.md](../summarize/throughput.md) - what the two model rates mean, and why the spread inside a run is wide.
 - [../publishing/what-drawing-costs-and-what-has-been-retired-for-it.md](../publishing/what-drawing-costs-and-what-has-been-retired-for-it.md) - what the picture costs, which this ledger deliberately does not carry.
