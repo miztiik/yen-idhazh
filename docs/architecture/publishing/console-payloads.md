@@ -491,8 +491,9 @@ sees a row, exactly as `feedResults` below applies `settled` from
 `frontend/src/lib/feed-health.ts`. A panel reading the raw files counts every
 item of that day twice and a list keyed by item id draws one story twice, which
 is how this surfaced: `MemoryBoard.svelte` threw on a repeated key. **It is only
-ever the newest day.** A day older than `retention.settled_fold_after_days` has
-been folded into one settled file; the day a run is publishing still holds one
+ever the newest day.** A closed day has been folded into one settled file by the
+gardener - one whole day after it ends, `fold.after_days` in the declaration that
+owns the tree; the day a run is publishing still holds one
 file per writer, and that is the day every panel here opens on - so the defect
 is invisible in any fixture built from folded days. Measured 2026-09-23 over the
 committed ledger: thirteen folded days held 0 repeated keys between them, and

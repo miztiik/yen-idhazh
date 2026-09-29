@@ -1,6 +1,6 @@
 # The gardener's knobs and declarations
 
-**Last Updated**: 2026-09-28
+**Last Updated**: 2026-09-29
 
 What the gardener may delete and rewrite, and how each of its tasks is declared.
 Two inputs, both under `config/`: the gardener's own knobs in
@@ -27,7 +27,7 @@ naming both values.
 ## One declaration a task
 
 A task is named by its file: `config/gardener/seen.json` declares the task
-`seen`. A missing `config/gardener/` means no tasks. Sixteen ship today: ten
+`seen`. A missing `config/gardener/` means no tasks. Seventeen ship today: eleven
 `retention` tasks, two `collection` tasks, three `compaction` tasks (below) and
 `corpus-squash`, the one `history` task (below).
 **There is no index file and no `name` key**, so a task can never be listed under
@@ -49,7 +49,7 @@ Each kind adds its own keys, and a key on the wrong kind is refused by name:
 
 | Kind | Its own keys |
 | --- | --- |
-| `retention` | `series`, one window per series, for two tasks alone: `telemetry-aggregate` keeps `full-grain`, `aggregate` and `public-copy`, and `scores` keeps `full-grain` and `archive` |
+| `retention` | `series`, one window per series, for two tasks alone: `telemetry-aggregate` keeps `full-grain`, `aggregate` and `public-copy`, and `scores` keeps `full-grain` and `archive`. `fold`, `{after_days, dry_run}`, on a task that owns a CSV day tree - a tree that files one small file per writer under each day's folder: once `after_days` whole days have passed since a day ended (default 1), its files become one `settled.csv`. The fold has a `dry_run` of its own because it changes no answer a reader gets ([how it runs](../../architecture/publishing/idhazh-gardener.md#the-closed-day-fold)) |
 | `collection` | `collection` (required): `workflow-artifacts` or `workflow-runs`, the GitHub collection it deletes from, and the file is named for it. Its `window` is whole days and nothing else, because a pass counts a member's age in days |
 | `compaction` | `ledger` (required); `raw_index_keep_days` (90), `daily_keep_days` (45), `monthly_window` (13 months), `max_periods_per_run` (8), `max_raw_files_per_period` (2000), `compact_after_days` (1). Its `window` is always `{unit: forever}` and its `max_deletes_per_run` always `null`: the two periods are how far back it keeps, and `max_periods_per_run` is its budget |
 | `history` | `every_days`, how many whole days apart two rewrites may run. Its `window` is whole days and nothing else, because the squash cuts history at 00:00 UTC on the day that many days back |
@@ -59,6 +59,11 @@ Each kind adds its own keys, and a key on the wrong kind is refused by name:
 Each deletes what it owns past its window, and each ships `dry_run: true`. The
 windows were keys in `config/idhazh.json` until 2026-09-28 and moved here with
 no value changed, because each task is the only thing that reads its number.
+Six of them also fold the closed days of the CSV day trees they own, and that
+fold ships live, `fold.dry_run: false`: `telemetry-aggregate`, `scores`,
+`feed-health`, `host-fingerprint`, `counterfactual-scores` and `span-rollup`.
+The digest workflow ran that same fold live on every run until the gardener
+took it over, and a fold changes no answer a reader gets.
 Why each tree gets the age it has is
 [retention-ages.md](retention-ages.md#every-tree-names-its-own-cleanup-age).
 
@@ -71,6 +76,7 @@ Why each tree gets the age it has is
 | `seen` | `state/seen` | 90 days | at least `collect.seen_window_days`, the days the collector reads |
 | `counterfactual-scores` | `state/counterfactual-scores` | 30 days | at least `lens_weights.window_days`, the days a reader opens |
 | `traces` | `state/traces` | 7 days | a trace is opened to see one recent run, and the span rollup is the record that stays |
+| `span-rollup` | `state/span-rollup` | forever | nobody has said how long a span total is wanted, so it keeps every month. The task exists so the tree's closed days are folded, and no old cleanup ever deleted from it |
 | `trials` | everything under `state` that no other task owns and no ledger claims | 90 days | nothing reads a trial's rows, and 90 days is the artifact retention used everywhere else |
 | `digest-fragments` | `state/digest-fragments` | 390 days | 30 days times `retention.image_months`, the window the archive page states; past it a run's block of a day is a second copy nothing reads |
 | `visual-prune` | `frontend/public/digest` | 390 days, at most 200 files a pass | the same stated window. It deletes rendered charts only, and files a report of every pass into `visual-prunes` |
@@ -125,11 +131,13 @@ Both numbers were `finetune.prune_keep_days` and `finetune.prune_every_days` unt
 2026-09-28. They moved here because the squash is the only thing that reads them,
 and a copy left in `config/idhazh.json` is now refused by name, pointing here.
 
-**Every other declaration ships `dry_run: true`**, and a contract test holds the
-committed tree to that, naming `corpus-squash` as its one exception with the
-decision beside it. A task earns its first deletion from a person reading its
-records, so turning one live is an edit to that list, never a side effect of the
-change that added the task.
+**Every other switch ships `dry_run: true`**, and a contract test holds the
+committed tree to that. It finds every `dry_run` a declaration carries, a
+fold's as well as the task's own, and names the live ones as its exceptions,
+each with the decision beside it: `corpus-squash`'s `dry_run` and the six
+`fold.dry_run` switches above. A task earns its first deletion from a person
+reading its records, so turning one live is an edit to that list, never a side
+effect of the change that added the task.
 
 ## What the loader refuses
 

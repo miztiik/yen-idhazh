@@ -5,8 +5,9 @@
 How the one program that deletes and rewrites what this repository keeps is put
 together: where its tasks come from, how a wake is split into shards, what a
 shard checks before and after its tasks run, how its one record lands on
-`main` however many shards race it, and how its compaction task moves a
-ledger's rows from raw files into day and month files. What each knob means is
+`main` however many shards race it, how its compaction task moves a ledger's
+rows from raw files into day and month files, and how a retention task folds
+the closed days of a CSV day tree into one file each. What each knob means is
 [../../concepts/config/idhazh-gardener.md](../../concepts/config/idhazh-gardener.md);
 the workflow that wakes it is `.github/workflows/idhazh-gardener.yml`, once a
 day at 00:40 UTC or when a person dispatches it.
@@ -280,8 +281,8 @@ Each row also carries `cone_bytes`, what the shard's owned folders weighed
 `backend/utilities/gardener_publish.py` is the only code that pushes. It is the
 entry point a shard runs: it reads the commit the checkout is at, calls the
 runner, and lands the `Shard` the runner hands back - the record, every path the
-shard's live tasks wrote and deleted, every report any of its tasks filed, and
-the commit message. Each attempt
+shard's live tasks and live folds wrote and deleted, every report any of its
+tasks filed, and the commit message. Each attempt
 fetches `main`, resets the index to it with `--mixed`, stages exactly those
 writes and deletions, checks what it staged, commits as
 `miztiik <miztiik@users.noreply.github.com>` and pushes. A lost push waits a
@@ -347,11 +348,9 @@ its knobs are in
 flowchart TB
   subgraph REFRESH["Content refresh - digest.yml"]
     W["work and assemble, and a re-run of either<br/>one raw file per writer per day"]
-    FOLD["Fold the days that can gain no more rows<br/>the CSV day trees only, folded in place"]
   end
 
   RAWF[("state/raw/ledger/YYYY/MM/DD/file_id.parquet<br/>written once, many writers")]
-  CSV[("the CSV day trees under state/")]
 
   subgraph GARDEN["Idhazh Gardener - the run-tasks job, gardener/tasks/compaction.py"]
     DROP["1 and 2. drop the month files, listings<br/>and raw days the windows no longer keep"]
@@ -372,7 +371,6 @@ flowchart TB
   READER["ledger_files.py: each date from one file<br/>its month, else its day, else its raw files"]
 
   W --> RAWF
-  FOLD --> CSV
   RAWF --> DROP
   DROP --> MDONE
   MDONE -->|"not yet"| MWAIT
@@ -402,19 +400,19 @@ flowchart TB
   classDef sysOps fill:#1a1e27,stroke:#8b93a7,stroke-width:1.5px,color:#c8cdd8;
   classDef sysPublish fill:#1a1e27,stroke:#3f8fb8,stroke-width:1.5px,color:#a5d6ea;
 
-  class W,FOLD,DROP,ABSORB,TAKE,READER stage;
+  class W,DROP,ABSORB,TAKE,READER stage;
   class MDONE,DDUE,DRY decision;
   class LAND yes;
   class MHOLE no;
   class MWAIT,DHOLD,REPORT warn;
-  class RAWF,CSV,DAILY,MONTHLY ledger;
+  class RAWF,DAILY,MONTHLY ledger;
   class REFRESH sysPublish;
   class GARDEN sysOps;
 ```
 
-**The CSV day trees are not on this path.** `digest.yml` still folds a closed
-CSV day in place, in its step named `Fold the days that can gain no more rows`,
-and nothing here reads or writes those trees.
+**The CSV day trees are not on this path.** A compaction never reads or writes
+them; their closed days are folded in place by the retention task that owns each
+tree, in [the closed-day fold](#the-closed-day-fold) below.
 
 ### One pass, in order
 
@@ -517,6 +515,55 @@ every file it read or weighed, so a listing that grows while a compaction only
 reports shows in every row. `until` is the newest day that was due. A pass that
 used its budget stops `ceiling`, with `resume_from` naming the day or month the
 next pass starts at; one that refused a period stops `failed`, naming it.
+
+## The closed-day fold
+
+**A CSV day tree files one file per writer, and a closed day folds into one.**
+`state/<tree>/<YYYY>/<MM>/<DD>/` holds one CSV per writer -
+`<run_id>-<attempt>-<job>-<shard>.csv` - which is what lets two jobs push at
+once, and it leaves about a hundred small files in a busy day. Once the day is
+closed, `backend/idhazh/gardener/closed_day_fold.py` reads it through the
+settlement every reader uses, writes the answer as `settled.csv`, and deletes
+the files it read. It changes no answer a reader gets
+([../../concepts/partitions.md](../../concepts/partitions.md)).
+
+**The retention task that owns each tree folds it**, when its declaration
+carries a `fold` block: `feed-health`, `host-fingerprint`,
+`counterfactual-scores`, `scores` (with `score-index`), `telemetry-aggregate`
+(`item-health`) and `span-rollup`, whose window is `forever` so the fold is its
+only live action. Which trees a task folds is read off the folders it walks, so
+one job writes each tree a wake and no tree is checked out twice. No
+`candidate-models` tree is committed under `state/`, so nothing folds one.
+
+| Step | What happens |
+| --- | --- |
+| 1 | The task's window runs first, dry or live, and returns what it took |
+| 2 | The runner calls the fold, unless the window failed - then the fold waits a wake, and the row's fold cells stay empty |
+| 3 | The fold lists every day of each tree the task walks and takes each day that is closed - `fold.after_days` whole days after it ended, default 1, the rule `compact_after_days` reads - and still holds a writer file |
+| 4 | It skips a day folder the window took, or would take on a dry run: a shard refuses a path it both writes and deletes |
+| 5 | It settles the day, writes `settled.csv` and deletes the rest - or, on a dry run, reads and settles the day and changes nothing |
+
+**The fold lands on its own switch.** `fold.dry_run` is the fold's, apart from
+the window's `dry_run`, and the runner lands the fold's writes and deletions
+whenever the fold is live - a live fold inside a dry task would otherwise change
+the disk and stage nothing. Every path the fold touches is held to what the task
+owns, like every other. All six folds ship live, because they copy the fold
+`digest.yml` ran after each day's commit until 2026-09-28; every window beside
+them still only reports.
+
+**The row says what the fold did.** `fold_dry_run`, `folded_days` and
+`folded_files` sit on the task's own row beside the window's `dry_run`, `deleted`
+and `bytes_freed`, and are empty when the fold did not run. A fold that stops
+part way - a row that will not read, a stray file - keeps the days it settled,
+turns the row's `stopped_because` to `failed`, and the task exits 1.
+
+**A re-run that lands after a fold is folded in at the next wake.** Its writer
+file sits beside the day's `settled.csv`, and the next fold reads both. One that
+lands while the fold's push is still trying survives too: each try stages the
+fold's own paths on the new tip, and the re-run's file is not one of them.
+Staging names a deleted file as deleted even where git would call the pair a
+rename - a day of one writer file settles to nearly the same bytes, and a
+deletion read as a move would look unstaged and stop the shard.
 
 ## Design rationale
 
@@ -635,6 +682,18 @@ complement failed at every wake, and a red shard skips the squash. The shard
 adds those folders - 952 bytes on 2026-09-28 - then weighs them with the rest.
 Copying the ledger rule into the plan job would give one rule two writers
 (Fowler and Carmack).
+
+**2026-09-28: the task that owns each CSV day tree folds it, on a switch of its
+own.** A fifth task kind was considered and dropped: it would put five of six
+folds in a different shard from the tree they fold, so a tree would be checked
+out twice. One switch for window and fold was dropped too: the fold runs live
+and every window reports, so one `dry_run` would record a deletion as a dry run.
+The runner calls the fold rather than each task module, so a module cannot
+forget a fold its declaration asks for, and a failed window stops that wake's
+fold, because what it took is then a list nothing has checked (Fowler and
+Carmack). A day is closed one whole day after it ends, the compaction's rule: of
+755 writer files filed from 2026-09-22 to 28, the latest landed 0.9 hours after
+its day ended (Carmack's reading).
 
 ## See also
 
