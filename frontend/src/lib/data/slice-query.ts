@@ -28,16 +28,15 @@ export const DATE_COLUMN = 'date';
 /** A value a statement binds. */
 export type Bound = string | number;
 
-/** The engine, as the door needs it: files in, rows out. */
+/** The engine, as the door needs it: bytes in, a name out, and rows out of a
+ *  statement over names. */
 export interface QueryEngine {
-	/** Registers `files` for the length of `work`, and drops them again however it ends. */
-	withFiles<T>(files: readonly Uint8Array[], work: (session: EngineSession) => Promise<T>): Promise<T>;
-}
-
-/** One registration of files, and the statements run over them. */
-export interface EngineSession {
-	/** The SQL list naming every registered file, in the order they were handed over. */
-	readonly files: string;
+	/** Hands `bytes` to the engine and answers the name it now reads them under,
+	 *  which the engine mints. A browser's engine takes the buffer and leaves
+	 *  `bytes` empty, so a caller hands one buffer over once. */
+	register(bytes: Uint8Array): Promise<string>;
+	/** Forgets files registered earlier, by the names `register` gave them. */
+	drop(names: readonly string[]): Promise<void>;
 	/** Every row `sql` returns with `params` bound in order, as the engine hands them back. */
 	rows(sql: string, params: readonly Bound[]): Promise<Record<string, unknown>[]>;
 }
@@ -52,7 +51,13 @@ export class SliceValueError extends Error {
 
 const quoted = (column: string): string => `"${column}"`;
 
-/** The table every statement reads: the session's files, matched by column name. */
+/** The SQL list naming every file, in the order given. The engine minted every
+ *  name, and each is still quoted as a string literal rather than trusted. */
+function listOf(names: readonly string[]): string {
+	return `[${names.map((name) => `'${name.replaceAll("'", "''")}'`).join(', ')}]`;
+}
+
+/** The table every statement reads: the files, matched by column name. */
 function source(files: string): string {
 	return `read_parquet(${files}, union_by_name = true)`;
 }
@@ -101,21 +106,24 @@ export function cellOf(column: string, value: unknown): Row[string] {
 	throw new SliceValueError(`${column} holds a value of type ${typeof value}, and a row holds strings, numbers, booleans and nulls`);
 }
 
-/** Every row the files hold for this request, each keyed by the requested columns in order. */
+/** Every row the files the engine holds under `names` hold for this request,
+ *  each keyed by the requested columns in order. */
 export async function rowsFor(
-	session: EngineSession,
+	engine: QueryEngine,
+	names: readonly string[],
 	request: Required<SliceOptions>,
 	until: DateStamp,
 	warn: (message: string) => void
 ): Promise<Row[]> {
-	const described = await session.rows(`DESCRIBE SELECT * FROM ${source(session.files)}`, []);
+	const files = listOf(names);
+	const described = await engine.rows(`DESCRIBE SELECT * FROM ${source(files)}`, []);
 	const present = new Set(described.map((row) => String(row.column_name)));
 	const named = new Set([...request.columns, ...request.where.map((p) => p.column), DATE_COLUMN]);
 	for (const column of named) {
 		if (!present.has(column)) warn(`no file in this span holds the column ${column}, so it reads as null`);
 	}
-	const { sql, params } = statementFor(session.files, present, request, until);
-	const raw = await session.rows(sql, params);
+	const { sql, params } = statementFor(files, present, request, until);
+	const raw = await engine.rows(sql, params);
 	return raw.map((cells) =>
 		Object.fromEntries(request.columns.map((column) => [column, cellOf(column, cells[column])]))
 	);

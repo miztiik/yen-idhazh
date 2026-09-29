@@ -1,10 +1,19 @@
 /**
- * How does the query engine start, in a browser and in Node, and how does it run one statement?
+ * How does the query engine start, in a browser and in Node, and how does it take a file and run one statement?
  *
  * **The only module in `frontend/` that imports `@duckdb/duckdb-wasm`**, so the
  * engine stays replaceable: a second importer is a second place to change when
  * it moves. Everything else reaches it through `QueryEngine` in `slice-query.ts`,
  * and the query door reaches this module only through a dynamic `import()`.
+ *
+ * **Every file it is handed gets a name it mints**, `door/<n>.parquet` from a
+ * counter, never from an index, a `covers` value or a caller, so no fetched text
+ * can name a file. Every file the door registers sits under that one directory,
+ * which is what an engine that admits one directory alone can still read.
+ *
+ * **In a browser the engine takes the buffer it is handed**: registering moves it
+ * to the engine's worker and leaves the caller's copy empty. In Node the engine
+ * copies it. So a caller hands a buffer over once, and keeps the name instead.
  *
  * **In a browser** it loads the single-threaded build that needs WebAssembly
  * exception handling, and nothing else: the threaded build needs response
@@ -32,7 +41,7 @@
  * user's home directory, so only a machine's first query downloads it.
  */
 
-import type { Bound, EngineSession, QueryEngine } from './slice-query';
+import type { Bound, QueryEngine } from './slice-query';
 
 /** The engine package, spelled once. */
 const PACKAGE = '@duckdb/duckdb-wasm';
@@ -52,14 +61,10 @@ interface ResultTable {
 
 let minted = 0;
 
-/** File names for one registration, never taken from an index or a caller. */
-function mintNames(count: number): string[] {
+/** The name one registered file is read under, never taken from an index or a caller. */
+function mintName(): string {
 	minted += 1;
-	return Array.from({ length: count }, (_, at) => `slice${minted}-${at}.parquet`);
-}
-
-function listOf(names: readonly string[]): string {
-	return `[${names.map((name) => `'${name}'`).join(', ')}]`;
+	return `door/${minted}.parquet`;
 }
 
 function plainRows(table: ResultTable): Record<string, unknown>[] {
@@ -107,24 +112,20 @@ async function startInBrowser(repository: string): Promise<QueryEngine> {
 		const connection = await db.connect();
 		for (const statement of repositorySetting(repository)) await connection.query(statement);
 		return {
-			async withFiles(files, work) {
-				const names = mintNames(files.length);
-				await Promise.all(files.map((bytes, at) => db.registerFileBuffer(names[at], bytes)));
+			async register(bytes) {
+				const name = mintName();
+				await db.registerFileBuffer(name, bytes);
+				return name;
+			},
+			async drop(names) {
+				await db.dropFiles([...names]);
+			},
+			async rows(sql: string, params: readonly Bound[]) {
+				const prepared = await connection.prepare(sql);
 				try {
-					const session: EngineSession = {
-						files: listOf(names),
-						async rows(sql: string, params: readonly Bound[]) {
-							const prepared = await connection.prepare(sql);
-							try {
-								return plainRows(await prepared.query(...params));
-							} finally {
-								await prepared.close();
-							}
-						}
-					};
-					return await work(session);
+					return plainRows(await prepared.query(...params));
 				} finally {
-					await db.dropFiles(names);
+					await prepared.close();
 				}
 			}
 		};
@@ -154,24 +155,20 @@ async function startInNode(locate: (specifier: string) => string, repository: st
 	const connection = db.connect();
 	for (const statement of repositorySetting(repository)) connection.query(statement);
 	return {
-		async withFiles(files, work) {
-			const names = mintNames(files.length);
-			files.forEach((bytes, at) => db.registerFileBuffer(names[at], bytes));
+		async register(bytes) {
+			const name = mintName();
+			db.registerFileBuffer(name, bytes);
+			return name;
+		},
+		async drop(names) {
+			db.dropFiles([...names]);
+		},
+		async rows(sql: string, params: readonly Bound[]) {
+			const prepared = connection.prepare(sql);
 			try {
-				const session: EngineSession = {
-					files: listOf(names),
-					async rows(sql: string, params: readonly Bound[]) {
-						const prepared = connection.prepare(sql);
-						try {
-							return plainRows(prepared.query(...params));
-						} finally {
-							prepared.close();
-						}
-					}
-				};
-				return await work(session);
+				return plainRows(prepared.query(...params));
 			} finally {
-				db.dropFiles(names);
+				prepared.close();
 			}
 		}
 	};

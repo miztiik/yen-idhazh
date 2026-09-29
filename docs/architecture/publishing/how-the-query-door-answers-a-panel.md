@@ -1,9 +1,10 @@
 # How the query door answers a panel
 
-**Last Updated**: 2026-09-28
+**Last Updated**: 2026-09-29
 
 The query door is the one module a console panel calls to read a committed
-ledger: `slice()` in `frontend/src/lib/data/ledger.ts`, in a reader's browser.
+ledger: `slice()` for rows and `ledgerReach()` for how far a ledger reaches, both
+in `frontend/src/lib/data/ledger.ts`, in a reader's browser.
 A page built at build time calls its twin, `sliceFromDisk()` in
 `frontend/src/lib/server/ledger-disk.ts`, over the same files on disk. Both run
 one reader, so a build-time page and a browser panel asking for the same span get
@@ -70,9 +71,66 @@ gardener's compaction task and declared as `CompactIndex` in
    so is one that does not arrive. The decoded length, never `Content-Length`,
    because Pages compresses what it serves.
 
-An index is asked for with `cache: 'no-store'`, because file selection acts on it.
-A data file is asked for with `?v=<rows>-<bytes>` from its entry: a compact file is
-written once, so the browser may keep it for as long as that version names it.
+An index is asked for with `cache: 'no-store'`, so a page's one read of it gets
+what the site holds now rather than a copy an HTTP cache kept, and the page then
+keeps it (next section). A data file is asked for with `?v=<rows>-<bytes>` from
+its entry: a compact file is written once, so the browser may keep it for as long
+as that version names it.
+
+## What a page keeps
+
+A page keeps what the door read for it, so nothing crosses the network or enters
+the engine twice. The keeper is `frontend/src/lib/data/page-keeper.ts`.
+
+- **Each index is read once a page and kept.** Every slice and every reach on the
+  page acts on the same `daily.json` and `monthly.json`. Two asks at the same
+  moment share one fetch. A 404 is kept, because it is an answer; a fetch that
+  threw is not, so the next ask tries again.
+- **Each data file enters the engine once, and the page keeps its name, never its
+  bytes.** A file is known by its path and the version its entry names. A
+  browser's engine takes the buffer it is handed and leaves the page's copy empty,
+  so bytes kept on the page would read as an empty file the second time. A file
+  of the wrong length is neither registered nor kept, and a file that is not there
+  is kept as absent.
+- **The engine starts only when every file a slice needs has arrived whole**, so
+  a slice that cannot be answered never loads it.
+
+`ledger.ts` makes one keeper when a panel first asks and keeps it until the page
+is reloaded. `sliceFromDisk()` makes a fresh one for each call, so it reads the
+indexes as the disk holds them then, and drops every file it registered when the
+call ends: a build reads many ledgers in one process, and a development server
+reads `state/` again as it changes.
+
+**What an open tab shows after a deploy: the data it opened with.** A day
+compacted after the page opened appears only after a reload. A day file the
+deploy re-packed or removed, and that the page had not read yet, answers
+`unreachable`, and the console says why - it arrived at a length its kept entry
+does not give, or it is not there. A reload fixes both.
+
+**Why the index is kept rather than read again.** A console route anchors its
+span on a first and a newest day fixed for the page, and a panel that read a
+newer index than its neighbour would draw a different span beside it. Reading the
+index again before every slice would also put one more round trip in front of
+each one, where a cold load allows four serial round trips in all
+(`frontend/tests/console-cold-load.spec.ts`).
+
+## How far a ledger reaches
+
+`ledgerReach(ledger)` answers the oldest and the newest day a ledger holds, so a
+route can anchor its span on the data rather than on the clock:
+
+| # | Answer | When |
+| --- | --- | --- |
+| 1 | `ok`, with `first` and `through` | `through` is the newest day `daily.json` names, the same day a slice returns. `first` is the oldest day either index names, a month counting from its first day |
+| 2 | `quiet` | `daily.json` names no day yet |
+| 3 | `missing` | There is no `daily.json`, so the ledger is not published |
+| 4 | `unreachable` | `daily.json` is one this build will not act on, or could not be read. It carries no day, because the reach asks for none; the console says why |
+
+It reads both indexes at the same time through the page's keeper, so a slice
+asked after it reads neither again, and it starts no engine. A `monthly.json` this
+build will not act on leaves the days `daily.json` names, and the console says
+why. The logic is `frontend/src/lib/data/ledger-reach.ts`, which reads each index
+with the slice's own reader, so the two never disagree about what an index says.
 
 ## Where each file is asked for
 
@@ -115,6 +173,11 @@ red on the pull request that raised the version (owner ruling, 2026-09-28).
 `frontend/tests/chart-vocabulary.spec.ts` holds that to one importer, holds every
 panel to `ledger.ts`, and holds `sliceFromDisk()` to the modules under
 `frontend/src/lib/server/`.
+
+**Every file the engine holds is named `door/<n>.parquet`**, and the engine mints
+the name from a counter, never from an index, a `covers` value or a caller, so no
+fetched text can name a file. So every file the door registers sits under one
+directory, which an engine that admits a single directory can still read.
 
 **One build ships to the browser**: the single-threaded one that needs WebAssembly
 exception handling. The threaded build needs response headers a static host cannot
@@ -199,13 +262,29 @@ where somebody wants to learn it.
 ## Design rationale
 
 **The door is split so a Node test can load its logic.** The states, the index
-guard, the address and the query sit in modules that import nothing tied to one
-environment and take a byte source and an engine as arguments. `ledger.ts` binds
-the published site, which needs `$app/paths`; `ledger-disk.ts` binds the disk under
-`$lib/server/`, where SvelteKit refuses a browser import. So
-`frontend/tests/ledger-door.spec.ts` drives the real reader over recorded
-responses and over the disk, with no browser, and no network but the engine's own
-first download of its add-on.
+guard, the address, the page keeper and the query sit in modules that import
+nothing tied to one environment and take a byte source and an engine as
+arguments. `ledger.ts` binds the published site, which needs `$app/paths`;
+`ledger-disk.ts` binds the disk under `$lib/server/`, where SvelteKit refuses a
+browser import. So `frontend/tests/ledger-door.spec.ts` drives the real reader
+over recorded responses and over the disk, with no browser, and no network but
+the engine's own first download of its add-on. The engine it drives takes each
+buffer the way a browser's engine does, leaving the caller's copy empty, because
+the Node engine copies instead and would hide a door that handed one buffer over
+twice.
+
+**A page keeps names, not bytes.** Keeping each file's bytes and handing them to
+the engine again for every slice is the smaller change, and it fails only in a
+browser: the browser's engine takes a registered buffer and leaves the page's copy
+empty, so the second slice would hand it an empty file, while the Node engine
+copies and every Node test would pass. Weighed and refused on 2026-09-29.
+
+**No retry after a deploy.** A kept index that names a file the deploy re-packed
+or removed answers `unreachable` rather than reading both indexes again and
+retrying once. The retry is about twenty lines, and it would move a page's first
+and newest day under panels already drawn. It is the move if an open tab is ever
+seen answering `unreachable` after a deploy; nothing has shown one yet. Ruled on
+2026-09-29.
 
 **The add-on comes from DuckDB's host, not ours.** It is what every site running
 this engine does, and it keeps 3.2 MB off the site and a download step out of the
