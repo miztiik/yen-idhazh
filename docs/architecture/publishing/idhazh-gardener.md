@@ -1,6 +1,6 @@
 # The gardener
 
-**Last Updated**: 2026-09-28
+**Last Updated**: 2026-09-29
 
 How the one program that deletes and rewrites what this repository keeps is put
 together: where its tasks come from, how a wake is split into shards, what a
@@ -548,8 +548,8 @@ the window's `dry_run`, and the runner lands the fold's writes and deletions
 whenever the fold is live - a live fold inside a dry task would otherwise change
 the disk and stage nothing. Every path the fold touches is held to what the task
 owns, like every other. All six folds ship live, because they copy the fold
-`digest.yml` ran after each day's commit until 2026-09-28; every window beside
-them still only reports.
+`digest.yml` ran after each day's commit until the gardener took it over; every
+window beside them still only reports.
 
 **The row says what the fold did.** `fold_dry_run`, `folded_days` and
 `folded_files` sit on the task's own row beside the window's `dry_run`, `deleted`

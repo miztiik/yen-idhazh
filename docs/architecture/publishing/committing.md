@@ -1,6 +1,6 @@
 # How a run's rows reach the repository
 
-**Last Updated**: 2026-09-28
+**Last Updated**: 2026-09-29
 
 Ten jobs of one run commit to one branch, and every one of them can lose the
 push race. This page owns what they run to win it: the rebase loop and the clock
@@ -271,7 +271,7 @@ The message prints one identity, because one is all there is: a second field
 would always be empty.
 
 **No job here commits a closed-day fold any more, and a conflicted one would be
-refused whole.** Since 2026-09-28 the gardener folds each CSV day tree and lands
+refused whole.** The gardener now folds each CSV day tree and lands
 the fold through its own commit loop
 ([idhazh-gardener.md](idhazh-gardener.md#the-closed-day-fold)), so this program
 never writes a `settled.csv`. If one ever reached the resolver it carries no
