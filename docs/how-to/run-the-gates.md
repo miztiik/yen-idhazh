@@ -473,11 +473,10 @@ by the marker count in `frontend/tests/payload-weight.spec.ts`, which runs in th
 browser suite. A route the config does not name is reported by the gate without
 failing it.
 
-**The unit is `gzip -5`.** Nine is a level no origin serves, so measuring at `-9`
-understates the wire - on a number meant to catch growth, by more growth than the
-number is watching for. `-5` lands within a fraction of a percent of what the
-Pages origin serves; the readings are in
-[../reference/site-weight.md](../reference/site-weight.md).
+**The comparison unit is `gzip -5`.** Use the same compression level as the gate
+when comparing against its limits. A local compressed size is not a guarantee of
+the origin's transfer size; distinguish them as described in
+[../reference/site-weight.md](../reference/site-weight.md#what-each-measure-counts).
 
 **The payload guardrail bounds a file a browser fetches**, which no page
 guardrail can see. `page_weight.payload_ceilings_bytes` maps a build-relative
@@ -504,7 +503,7 @@ outcome is a bigger number catches nothing.
 drifts loose above the page it bounds, so a check that cannot tell correct from
 far-too-loose is not an instrument, and no value of the constant fixes that. The
 readings are in
-[../reference/site-weight.md](../reference/site-weight.md#the-page-guardrails-and-what-each-route-weighs-2026-09-10).
+[../reference/site-weight.md](../reference/site-weight.md#page-and-payload-guardrails).
 
 **What stands in their place checks the cause instead of the symptom.** The one
 regression this surface has ever had is a layout inlining a day payload, and that

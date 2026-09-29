@@ -403,9 +403,10 @@ rewrite. What bounds each collection is
 of the publishing doc.
 
 **Rows go from a partition that stays.** That is a correction and it takes the path
-above. Taking one published day back off the site is the worked case, and the eleven
-artefacts it owes - three of them month-grain - are
-[designed but not built](../architecture/publishing/retention.md#unpublishing-a-day-a-range-or-a-month-the-design-2026-09-06).
+above. Taking a day off the site must also update its search entries and derived
+published data without removing neighbouring days.
+[Unpublishing a day](../architecture/publishing/retention.md#unpublishing-a-day)
+has no implemented command.
 
 ### A late arrival
 

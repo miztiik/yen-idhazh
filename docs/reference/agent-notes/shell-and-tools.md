@@ -1,231 +1,44 @@
 # Agent Notes - Shell and Tools
 
-**Last Updated**: 2026-09-28
-Traps in PowerShell, MSYS, the editor's own file and search tools, the Python
-environment, npm and the libraries that lie about what they returned. Index and
-scope: [../agent-notes.md](../agent-notes.md).
+**Last Updated**: 2026-09-29
+
+Checks before trusting command output or an editor operation. Keep instructions portable; omit machine configuration and session transcripts.
 
 ## PowerShell
 
-**Send one line.** The terminal tool takes a single command; a multi-line block is not reliably delivered. Chain with `;`, and write anything longer to a `.ps1` with the file-creation tool and run the file. There is no heredoc: a multi-line here-string sent as one command arrives mangled, and the variable then holds the PREVIOUS script - which runs happily and answers the previous question. The tell is a launcher tag from the previous run, not the command you just sent. The same applies to `python -c` with a multi-line string; it exits 1 and writes a zero-byte file even with `*> out.txt` on it, which reads exactly like the interpreter crashing on the import you were checking.
-
-**`[System.IO.File]` resolves a relative path against the process directory, not the shell's.** `Set-Location` and `Push-Location` move the PowerShell location only, so `WriteAllText('docs/x.md',...)` lands in whatever directory the host started in - usually the shared checkout, so an edit meant for a worktree silently modifies `main`. Two tells: a size that matches the file before your edit, and a `git status` that is dirty in the OTHER checkout. `Get-Content` and `Select-String` are unaffected, because PowerShell resolves their paths itself. Always pass an absolute path, or call `[IO.Directory]::SetCurrentDirectory($w)` right after the `Set-Location`. The same trap applies to reads: `ReadAllText` on a relative path can return the shared checkout's copy of a file just edited in the worktree, which reads as an edit that did not apply.
-
-**A function that logs with `Write-Output` returns the log as part of its value.** Every uncaptured expression joins the return value, so a caller doing `if (Test-Thing) { }` tests a non-empty array and always takes the true branch. A build-hash oracle printed `IDENTICAL=` with nothing after it for that reason, and the two cases agreed because the second build had failed and the helper hashed the first build's leftover file. Log with `Write-Host`, return exactly one object, and return an explicit sentinel on failure rather than falling through.
-
-**`Start-Process -Wait` does not set `$LASTEXITCODE`.** It stays at whatever the last native command left, so a failing child reads as success and a timed-out wait looks like a finished one. Capture the process:
-
-```powershell
-$p = Start-Process -FilePath pwsh -ArgumentList '-NoProfile','-File','x.ps1' -Wait -PassThru; $p.ExitCode
-```
-
-**`Start-Process pwsh -Wait` can also report exit 1 while the child succeeded and is still running** even when the child finished cleanly. Re-launching on that code starts a second copy of the work against the same output files, which is the real damage. Believe the child's own sentinel, not the parent's code.
-
-**`Start-Process -ArgumentList` splits an element that holds spaces.** It joins the array with single spaces and adds no quotes. A seven-word `--title` came back from `gh` as `unknown arguments [...]`, which reads like a wrong flag rather than a shell fault. The same split ran `C:\Program` for a path under `C:\Program Files`, and turned `'--grep','THE ORACLE'` into two arguments, so the grep matched every test with no error. Put double quotes inside any element that holds a space - `'"THE ORACLE"'`, `('"{0}"' -f $npm)` - and read the child's command line before trusting what it reports. Inside a detached script, call the program directly and redirect there rather than passing its arguments through `-ArgumentList`.
-
-```powershell
-(Get-CimInstance Win32_Process -Filter "ProcessId=$($p.Id)").CommandLine
-```
-
-**A command that goes IDLE is killed at 16 to 45 seconds** and reported as "may be waiting for input", even with `-NonInteractive`. The trigger is idleness rather than duration, which is why a long `pytest` streaming dots outlives a short sleep. Anything long must be detached with `Start-Process -WindowStyle Hidden` writing to a file, then read the file. Never `Start-Sleep`.
-
-**Redirecting both streams of one command to the SAME file runs nothing.** The file is opened twice, the second open fails, and under `$ErrorActionPreference = 'Continue'` the whole call is skipped in silence - so a detached gate script steps over every step and the sentinel reads `RUFF= MYPY= EXPORT=` beside an 83-byte log. **An empty exit code is a shell fault; a non-zero one is your gate.** Give each command its own `1> <step>.out 2> <step>.err` pair, and never use `2>&1` in a detached script when you also want the exit code.
-
-**`python` redirected to a file writes nothing until it exits.** Redirection makes stdout a pipe, so Python block-buffers it, and a long run shows only whatever it flushed - a measurement that printed its first line with `flush=True` and its results without looked hung for 25 minutes while it was working the whole time. Pass `-u`, or `flush=True` on every print you intend to poll. `Get-Process <name> | Select-Object CPU` tells you it is alive; it cannot tell you where it is.
-
-**A killed redirect leaves the output file present and empty**, which reads as "the command produced nothing" rather than "the command was cut off". Always write `$LASTEXITCODE` into a separately named sentinel and read that; never infer a pass from an empty log, and run one long child per call.
-
-**A long command PIPED into a filter prints nothing until it finishes**, and the tool backgrounds it first, so a working command and a hung one look identical. `Select-String` and `Select-Object` read their input to the end before writing anything. Three common victims are `pytest | Select-String`, `npm run test:browser | Select-Object -Last 45 | Out-File`, which can leave a zero-byte log beside exit 0 after a nine-minute run, and `pip install | Select-Object` on a fresh venv, where it looks exactly like a resolver stall. Redirect the whole stream to a file, then filter the file.
-
-**A double-quoted string carrying a backtick escape can leave the shell on a `>>` continuation prompt**, after which every later command is swallowed as more input - so a later failure gets blamed on the wrong command. No output appears at all, which is how it differs from the idle kill. **`\"` does the same**: PowerShell does not read a backslash as an escape, so `\"` ends the string and the next `"` opens another. Prefer single quotes, and match a literal quote in a regex with `.`; where a literal control character is needed, `[char]13` and `[Environment]::NewLine` have no escape grammar to survive the trip. To leave the prompt without running anything, send a line that closes the open quote and adds a stray `)`: the parser rejects the whole input, so nothing in it runs.
-
-**`-like '??*'` treats `?` as a wildcard**, so a filter meant to find untracked lines in `git status --porcelain` matches every line of two or more characters and returns the whole status. Ask git instead (`git ls-files --others --exclude-standard`), or use `.StartsWith('??')`.
-
-**`-match` against an ARRAY filters it instead of answering yes or no.** `if ($lines -notmatch 'x')` is true whenever ANY line fails to match, so a check-run poller broke on its first tick and wrote its "done" sentinel over a log reading `browser=in_progress... gates=in_progress`. Nothing errors and the exit code is 0. Join before you match - `if (($r -join ' ') -notmatch 'in_progress|queued')` - and remember `-eq`, `-like` and `-ne` filter an array too.
-
-**`(...)[0]` on a filtered result is the first CHARACTER when only one line matched.** A pipeline that yields one object hands back the object itself rather than an array of one, so `($lines | Where-Object { ... })[0]` gives the first letter of the line. Two matches give the first line, as meant, so the code passes on the data it was written against and fails on a narrower day; the tell is a one-character value where a line belonged. Wrap the pipeline in `@(...)`, which is always an array: `@($lines | Where-Object { ... })[0]`.
-
-**`.Substring()` throws on a line shorter than the cut, and in a wait loop the throw ended the whole command.** `(Get-Content $log -Tail 1).Substring(0, 60)` works while the last line is long and throws the first time it is not - an empty line, or a file with nothing in it yet - and the terminal tool reported only `exited with code 1`, which reads as a crashed child rather than a crashed poll. Cast to `[string]` and bound the cut: `$s = [string](Get-Content $log -Tail 1); $s.Substring(0, [Math]::Min(60, $s.Length))`.
-
-**`Select-String` matches case-insensitively unless you pass `-CaseSensitive`.** Hunting a merge failure a search for `INDEX_ROOT` reported five hits in a file whose real content was five `_index_root` calls, which read as "the constant is still there" and pointed the diagnosis at the wrong side of the merge. It also has no `-Recurse`; feed it `Get-ChildItem -Recurse` output.
-
-**A git revision carrying `@{` is eaten before git sees it.** `git diff HEAD@{1} HEAD` answers `fatal: ambiguous argument 'HEAD@'` - one character short of what you typed, because PowerShell reads `@{` as a hashtable literal - which reads as a repository with no reflog. Single-quote the whole argument, or name the two shas from `git log --oneline -3`.
-
-**A multi-paragraph commit message goes through a file.** Write it with `[System.IO.File]::WriteAllText` (not `Set-Content`, which adds a BOM that lands in the message), then `git commit -F.tmp_commit_msg.txt`. `.tmp_*` is gitignored.
-
-**`git show <ref>:<path> | Set-Content` writes CRLF** and produces a phantom whole-file diff; `-NoNewline` is worse, because PowerShell splits the output into lines and joins them with nothing, so a Python file arrives as one line and fails to import while the copy still reports success. Use `git restore --source=<ref> --worktree -- <path>`, which touches no encoding and leaves the index alone. The same pipe defeats `sha256sum --check`, whose error then names the file with a trailing `$'\r'`.
-
-**A string piped into a native program arrives with a carriage return on the end.** PowerShell ends each pipeline string with CRLF when it feeds a native program's standard input. `git hash-object --stdin-paths` and `git cat-file --batch-check` strip the CR. `git check-ignore --stdin` keeps it, so a rule on a file name misses (`*.tsbuildinfo` matched `a/b/c.tsbuildinfo` passed as an argument and missed the same path piped), a rule on a parent folder still matches, and every path comes back quoted with `\r` inside it, so comparing the output with the input matches nothing. Both failures are silent. Pass paths to `check-ignore` as arguments.
-
-**`git add -- $paths` with a PowerShell array stages nothing** and exits 0, so the following commit lands one file instead of twelve. Pass the paths as separate literal arguments and read `git diff --cached --name-status` before committing.
-
-**A scratch directory under `$env:TEMP` outlives the session, so the next run reads the last run's files.** A refusal to overwrite is the lucky case; a reader that opens a stale output and reports its number as a result is the dangerous one. Prefix every scratch file with the row tag - `r15-smoke.cjs`, not `smoke.cjs` - and clear the directory before the first write rather than after the last read, because a killed run never reaches the cleanup.
-
-**`DONE.txt` beside `done.txt` is the same file.** Windows paths are case-insensitive, so a gate script writing `$out\ruff.txt` and then `$out\RUFF.txt` silently overwrites the result with the word `RUFF-DONE` - the run looks like it passed and the exit code you needed is gone. Give a sentinel a name that is not the stem of any output file, and anchor the pattern you poll for, because `PIP_EXIT` also matches `ENSUREPIP_EXIT`.
-
-**A log that stops growing is not a stalled process.** A detached script's redirect buffers, so the file sits at one size for minutes while the child works: a healthy `pytest` run can be killed for looking frozen at 94 percent, when the suite is 1,599 tests and 579 s and `backend/tests/workflows/` alone spends minutes inside `git` subprocesses with nothing to print. Ask the process, not the file - `UserModeTime` is in 100-ns units, so a value climbing between two samples is work and only a value that does not move is a stall:
-
-```powershell
-Get-CimInstance Win32_Process -Filter "Name='python.exe'" |
- Where-Object CommandLine -like '*<your worktree>*' | Select-Object ProcessId, UserModeTime
-```
-
-**A killed command is indeterminate in BOTH directions** - the same kill left `gh pr create` having done nothing and left `git push -u` having pushed the branch and skipped only the upstream write. Verify by side effect (the file it writes, the remote ref it pushes), never by exit code.
-
-**`Set-Location` does not move .NET's idea of the current directory, so a `[IO.File]` call on a relative path reads another worktree.** The shell was at `...p23-r6`, `Get-Content .\tests\fixtures\...` worked, and `[IO.File]::ReadAllBytes('tests\fixtures\...')` failed naming `...p23-r3\frontend\tests\fixtures\...` - a path in a different agent's checkout that this run had never touched. The shell's location and `[Environment]::CurrentDirectory` are two variables, and only cmdlets read the first. Worse than the error is the success: the same call on a path that happens to exist in the stale directory returns another worktree's bytes and reads like your own file. **Pass `[IO.File]` an absolute path, always** - `[IO.File]::ReadAllText("$w\backend\tests\test_rank.py")`.
-
-**A missing command leaves `$LASTEXITCODE` at whatever the previous command left, so an absent linter reads as a pass.** Command-not-found is a PowerShell error rather than a process exit, so nothing writes a code - and a run that reports `shellcheck 0` after a shell-only change is reporting the last successful command, not a clean lint. **`shellcheck` is not installed on this machine.** Guard every external tool before trusting its code, and tell a worker which tools the box does not have:
-
-```powershell
-if (-not (Get-Command shellcheck -ErrorAction SilentlyContinue)) { 'shellcheck ABSENT - not checked' }
-```
+- Confirm the working directory before running a command. Stop if changing directories fails; do not continue in the previous checkout.
+- Quote paths and use `-LiteralPath` when a path can contain wildcard characters. Pass absolute paths to .NET file APIs, which do not follow PowerShell's location.
+- Verify that a native command exists, then capture its exit code immediately. For `Start-Process`, read the returned process's `ExitCode`; `$LASTEXITCODE` belongs to the last directly invoked native command.
+- Keep diagnostic output out of a function's returned value. Wrap pipeline results in `@(...)` when they must remain a collection with zero or one member.
+- Quote shell-sensitive arguments as complete values. Do not assume native programs receive PowerShell arrays, globs or revision expressions unchanged.
 
 ## The terminal tool itself
 
-**A sync call can return "Command produced no output" without having run**, about one call in four under load, and it can also return ANOTHER worktree's output. An empty result announces itself; a plausible one does not, and a correct answer about the wrong tree is indistinguishable from a correct answer about yours. Tag every command, increment the tag, and discard anything that does not carry it:
-
-```powershell
-"TAG=<row> PWD=$($PWD.Path)"; <command>
-```
-
-The tag finds the fault and does not get the answer back, so have the command write its result to a file and read the file with `Get-Content` - a lost return then costs one read rather than a re-run.
-
-**A sync call can also run in a terminal that is not yours, including a person's.** On 2026-09-28 one ran in the owner's own terminal and hung there, and ending it meant killing a terminal a person had opened; the person's own command in it had already finished. A sync call cannot name the terminal it runs in. Open one private terminal in async mode and send every later command to it by its id.
-
-**Re-issue only after checking whether the first copy is running.** Three launches each reported nothing and all three ran, so three builds wrote one shared output directory and the byte gate measured a half-written tree.
-
-**`Set-Location -LiteralPath` to a path that does not exist fails, and the rest of the line still runs** - in the previous directory, which under parallel agents is often a sibling's worktree, and the tag above does not catch it because the tag prints first. Gate on `$PWD` in the same line, so exit 9 means the command never ran rather than ran somewhere else:
-
-```powershell
-$t='<abs>'; Set-Location -LiteralPath $t; if ($PWD.Path -ne $t) { exit 9 }; <command>
-```
-
-**A queued command can execute long after you sent it**, on top of live work. A `Remove-Item -Recurse -Force.venv` ran about 25 minutes after it was issued, under a `pytest` that had started in the meantime: the suite froze at a fixed percentage, `pytest --version` answered `No module named pytest`, and `import pydantic` still worked - a half-deleted environment that reads exactly like a broken toolchain. Never queue a destructive command against a path a later command needs.
-
-**A foreground `pytest` can be killed mid-run and reported as though it finished** - exit 1 and an empty output file, the same shape as a collection error. `--collect-only` tells the two apart: a suite that collects cleanly and then dies partway through was interrupted. Run long suites detached with two sentinels, and anchor any pattern you grep for, because `PASSED` also matches `XPASSED`.
-
-**What kills them is a Ctrl+C from a shell that is not yours**, and `-NoNewWindow` is what exposes you to it: a child started that way joins the caller's console process group, so a break sent anywhere in that group reaches every member. With several agents live the tells are three different-looking faults with one cause - `mypy` printing `Interrupted` and nothing else, `gate_lock.py` ending in `KeyboardInterrupt` inside its own `time.sleep`, and a `git rebase` stopping after it wrote `done` with the pick unapplied, which leaves HEAD detached and reads as data loss. It is not: the branch ref never moved, `git rebase --abort` restores it, and the rebase state lives in `<git-dir>/worktrees/<name>/rebase-merge`, so `Test-Path .git/rebase-merge` in a worktree answers `False` while a rebase is running. Start a long child with `Start-Process -WindowStyle Hidden` and its own `-RedirectStandardOutput`/`-RedirectStandardError`, which puts it in a new group where no other shell's break can reach it.
-
-**The launch itself can silently not happen.** `Start-Process` returns, no child appears, and no log file is ever created, so the missing gate reads as a slow one. `Test-Path <log>` immediately afterwards is the check; false means send the launch again rather than keep polling.
-
-**A sleeping poll loop is sometimes detached rather than killed**, and re-reading that terminal returns the command line followed by empty lines - so the sentinel arrives on time and the poll cannot say so. Print one line per iteration, which keeps the call in the foreground and shows the log growing.
-
-**Ending a turn to wait for a detached run reads as waiting, and is actually stopping.** The tool reports the end of a command it started; a child launched with `Start-Process` is not one, so its exit sends nothing. On 2026-09-27 a 49-minute gate finished with no notice, and the agent sat idle until a person asked whether it was stuck. The tell is a log that already ends in its result line while nothing has reported it. Before ending a turn on a detached run, block on it from the terminal tool, so the tool's own notice fires when the wait returns:
-
-```powershell
-Wait-Process -Id ([int](Get-Content "$t\gate.pid")); Get-Content "$t\gate.out" -Tail 5
-```
-
-**`pwsh -NoProfile -File <script>.ps1` can exit 1 having done nothing**, with no error text. Call the absolute path instead: `& 'C:\...\script.ps1'`.
-
-## Git Bash on Windows
-
-**MSYS rewrites any argument that looks like a path, including `<rev>:<path>`.** `git show "origin/main:docs/a.md"` is delivered as `origin\main;docs\a.md` and git answers `fatal: Not a valid object name` - and the quiet version does the damage: with `2>/dev/null` on the call the fatal goes nowhere, the command writes nothing, and a comparison reads the empty stream as content. That reported 22 files as differing from `main` or missing from it; every one was byte-identical to a commit already in history, and the failure is indistinguishable from the honest negative answer.
-
-Build any check that decides whether something can be deleted on an argument the shell cannot rewrite. A 40-character object id has no `:` and no `/`:
-
-```bash
-git hash-object <file> # then: git cat-file -e <40-hex sha>
-git ls-tree <rev> -- <path> # no colon, so nothing to rewrite
-MSYS_NO_PATHCONV=1 git show 'origin/main:docs/a.md' # the fallback, per shell
-```
-
-`git grep` is case-sensitive by default (`-i` makes it not) and exits 1 when it finds nothing, which a `&&` chain reads as a failure. It also reads anything after the pattern as a revision until it meets `--`, so a context flag placed the way ripgrep takes it becomes a commit-ish: `git grep -n -A 20 'pattern' -- <path>`.
-
-**A path holding `[` or `]` reads as an empty directory to every PowerShell cmdlet that takes `-Path`.** The brackets are a wildcard character class, so `Get-ChildItem -Name 'frontend/src/routes/[date]/[vertical]/'` matches nothing and returns nothing - no error, no warning, just the same output a genuinely empty folder gives. A worker concluded that route directory did not exist and reported the plan-doc wrong; `git ls-files` showed four files in it. Every SvelteKit dynamic route in this repository is such a path. Use `-LiteralPath`, which takes the string as written, or ask git. The same applies to `Test-Path`, `Remove-Item`, `Copy-Item` and `Select-String`, each of which has its own `-LiteralPath`.
+- Use the command's completion status. An empty log proves neither success nor failure; before retrying, check whether the first command is still active.
+- Keep output paths unique per run. Wait for commands you started and read their results; do not leave an unattended check running after reporting completion.
+- Never queue a destructive command against files another task uses. An interrupted command may have completed some work; inspect its result before repeating it.
 
 ## The editor's own file and search tools
 
-**A workspace search reads the folder VS Code has open, never your worktree.** `includePattern` is resolved against the workspace root, so a pattern prefixed with the worktree directory matches nothing and the same pattern without it happily searches the SHARED checkout and returns its stale copy. Both failure modes are silent and the second is worse - you read `main`'s text and conclude your edit did not apply. **The third failure mode is the quietest: the hit is real and its line number is not.** A worker editing a file in a worktree got line numbers from the shared checkout's copy of the same file, three hundred lines out, and one edit anchored on them silently went to the wrong place. In a worktree, use `Select-String -Path` with absolute paths, or read the file by absolute path.
-
-**A read-only subagent uses the same tools, so its audit of `origin/main` reads the shared checkout.** Asked to verify three merged pull requests against the trunk, one reported a merged refactor as never executed and its package as missing, because the shared checkout's `main` was two commits behind. The tell is an audit that says a merged commit did not happen. Brief it to read the ref, which no checkout can shadow: `git grep <pattern> origin/main -- <paths>` and `git ls-tree -r --name-only origin/main -- <path>`.
-
-**The search index is unreliable in both directions**, even inside the open folder: one session got an empty result for a function that was in the file it named, and minutes earlier real matches from a sibling worktree nobody had asked about. It can also return a line of code that no longer exists anywhere - a hit quoted an assertion a merged pull request had removed, at a line number that was blank, and a worker nearly restored the deleted rule. When two tools disagree, the byte reader wins; a hit you cannot reproduce with `Select-String` or `Get-Content` is not there.
-
-**The file-reading tool can hand back a file's previous contents** after a detached script rewrote it, for minutes - including a sentinel format that no longer exists on disk, which reads as "the script did not run" and sends you after a launcher bug that is not there. Read anything a script just wrote with `Get-Content`. The editing tool reads the same stale copy, so it refuses to match text that `Get-Content` and a byte dump both show is in the file - and the refusal reads as a whitespace problem in your search string rather than as a cache . Re-run the script with the edit folded into it rather than hand-editing afterwards. Copying to a fresh filename defeats the cache, unless the file is still being appended to: a poll returned test 907 twice while the run had reached 967, because the copy is only as fresh as the read it was made from. Track a long run by a side effect the child finishes with, never by how far its log appears to have got.
-
-**The replace tool deletes whatever the old text held and the new text drops.** It is a literal swap and it reports success, so a line inside the matched block that is missing from the replacement is gone with no warning - a workflow edit silently dropped an `actions/setup-python` step sitting between the two steps being changed, and nothing failed until the job ran. Two edits to a tab-indented TypeScript file written with space-indented replacement text dropped a closing brace, and `svelte-check` then reported 37 errors in 12 files, none of them about the change; the one real error is the `'}' expected.` line. Match tightly, match the file's indentation character exactly, and run `git diff --stat` after EVERY structural edit - an unexpected line count is the only early warning. Inserting a heading is the same hazard: markdown has no closing tag, so a new `###` takes ownership of everything below it until the next one.
-
-**Two replace calls on one file in one parallel batch can land one of them at the wrong place.** Three edits to `frontend/src/routes/console/+page.svelte` issued together all reported success; one left its own block untouched and spliced its new text into `const WINDOW_KEY = ...` forty lines lower, so the page failed to compile on a line nobody had edited. Edit one file with calls in sequence, never side by side, and read `git diff -U0` for the file before the next step.
-
-**A file created in the same parallel batch as the command that reads it may not exist yet when that command runs.** The calls in one batch start together and finish in any order: a `git commit -F` beside the call writing its message file stopped on an empty message, and a poller launched beside its own script died at once. Neither result names the file. Create the file in one step and run whatever reads it in the next.
-
-**The editor can write a moved file back at its old path.** A worker ran `git mv` on two files it had edited with the editing tools, and committed. About two minutes later the editor saved every file its editing tools had touched in that window at one instant, scratch files outside the repository included, and its buffers for the two old paths came back as untracked files holding the content from before the move. A local lint or type check then reads modules that import names the commit renamed. Run `git status --short` after a move and again before reporting, and delete a stray only after proving it equals a committed copy (`git show <commit>:<old path>`).
+- Verify which checkout a search or edit tool targets. For a worktree outside the open workspace, use explicit paths or a search rooted in that worktree.
+- Confirm a claimed absence with a direct search or file read before deleting or redoing work. When tool results disagree, check the current file bytes and Git diff.
+- Edit one file sequentially. Create an input before starting its reader, inspect structural diffs, and check for unintended files after a move.
 
 ## Nested subagents
 
-**A worker cannot delegate until the harness is configured to let it, and the failure is silent refusal rather than an error.** In VS Code, enable `chat.subagents.allowInvocationsFromSubagents` in the active user or workspace settings. Every custom agent that delegates must include `agent` in its `tools` list; a prompt carrying its own `tools` list must include it too, because that list takes precedence. If an `agents` list is present it must allow the requested delegate. Verify with one real, read-only nested invocation before relying on it - see [VS Code's nested-subagent documentation](https://code.visualstudio.com/docs/agents/run/subagents#_nested-subagents).
-
-**A worker that starts a ten-minute gate returns one useless line and leaves its work uncommitted.** The nested turn ends while the suite is still running, so the report carries nothing and no pull request exists - which reads exactly like a worker that did no work. It is not: the edits are sitting in the worktree, and re-dispatching the row throws them away. Three workers on one plan ended this way. Ask the worktree before concluding anything:
-
-```powershell
-git -C <the worker's worktree> status --porcelain
-```
-
-The fix belongs in the brief rather than in the tool: tell a worker to commit before any long gate, and to leave the full browser project to CI.
-
-**A search subagent's "it is not there" is the answer to check.** A read-only reconnaissance agent reported several symbols absent from this tree; `git grep` found 79 hits for one of them and the others were present too, so a row dispatched on that report would have skipped most of its own surface. The two directions are not symmetric: a wrong positive costs one grep to disprove and is usually right, while a wrong negative shrinks the work silently and nothing downstream can notice. Confirm every absence with `git grep` before acting on it.
+- Check the [host's delegation requirements](https://code.visualstudio.com/docs/agents/run/subagents#_nested-subagents) before relying on nested calls. Verify required tools are available; report a blocked consultation to the coordinating agent.
 
 ## The Python environment
 
-**An install on an unsupported interpreter does not fail, it stops answering.** pip writes nothing into `site-packages` until it has resolved and built every distribution, so a large download, a backtracking resolver and a source build all look identical from outside - `python -m venv.venv` can take a 3.14 that `python` happened to resolve to, and ten minutes later `site-packages` held `pip` and nothing else. `pyproject.toml` now bounds the interpreter (`requires-python = ">=3.12,<3.15.0a0"`), so pip refuses one it cannot resolve for with a message that names the version. Print it before trusting an install:
+- Use an interpreter supported by the project's declared version range. Verify imports and package paths in the intended checkout before running checks.
+- Isolate environment changes to the task. Do not rebuild or change a shared environment while another task uses it.
 
-```powershell
-& <python> -c "import sys; print(sys.version)"
-```
+## Downloads
 
-**On a machine outside the bound, do not build a venv - borrow the shared one.** Set `PYTHONPATH` to the worktree's `backend` and run the shared interpreter, so the code under test is yours and the dependencies are the ones already installed. Three follow-on traps. The venv's `.pth` holds the ABSOLUTE path of the checkout it was installed from, so without the variable `pytest` collects your tests while `import idhazh` resolves to the other tree and a green run says nothing across ten worktrees. The variable then leaks into every later terminal and beats a CORRECT `.pth` just as reliably, so a command run here reads the other tree's code while `git status` here stays clean. And it reaches the browser suite through a spec that shells out to `python`, where the system interpreter finds your package and dies on `ModuleNotFoundError: No module named 'feedparser'` - one spec of 989 inside a 14-minute suite, naming a dependency rather than a path. Print the resolved path before every gate run, and clear the variable before switching worktrees:
-
-```powershell
-$env:PYTHONPATH = '<abs path to your worktree>\backend' # or '' when not borrowing
-& <shared venv>\Scripts\python.exe -c "import idhazh; print(idhazh.__file__)"
-```
-
-`npm run test:changed` deletes `DIGEST_ROOT`, `STATE_ROOT`, `TELEMETRY_ROOT` and `PYTHONPATH` from each check's environment, so this never bites through the launcher - only through a hand-rolled script that sets the variable and then runs a browser gate in the same process.
-
-**`ModuleNotFoundError: pydantic_core._pydantic_core` is an ABI mismatch, not a missing package.** A venv built for one minor version and run by another finds the package and cannot load its extension, and nothing reinstalls or repairs it because pip sees the distributions as present. Diagnose by counting interpreter tags on the `.pyd` files - a count under `cp312-win_amd64` while `python -V` says anything else IS the diagnosis (269 of them beside a 3.14.2 launcher) - and fix by building a fresh venv under `$env:TEMP`, never by reinstalling into the broken one. Redirect that install to a file rather than piping it, and when it runs from a detached script confirm with an actual import: the log says `Successfully installed` before the environment can be used.
-
-```powershell
-Get-ChildItem.\.venv\Lib\site-packages -Recurse -Filter *.pyd |
- Group-Object { ($_.Name -split '\.')[-2] } | Select-Object Name, Count
-```
-
-**The shared venv can simply be missing a declared dependency**, which reads as a broken tree rather than a stale environment: `mypy` names a source file and `pytest` dies loading `conftest.py`, for a distribution declared in `pyproject.toml` for weeks (`protego`). `pip install --dry-run` separates the two cases and costs a download of nothing. One distribution and nothing else moving means a plain install repairs the venv for every sibling sharing it; a version something else pins means stop and build a separate venv.
-
-## Pydantic
-
-**`model_copy(update=...)` accepts a key the model does not have.** It sets the attribute without validating - no exception, no warning, no type error - so a config key renamed everywhere except here leaves a test silently running on the committed default. One occurrence held a 22-minute timeout where the test wanted 0.01, and CI's own 15-minute bound killed the job: `gates: cancelled`, every sibling green, no failing assertion anywhere, twice before the cause was found. After renaming a field, grep `model_copy(update=` as well as the attribute path, and put one `assert copy.<field> == <value>` after the copy.
-
-## npm
-
-**`npm ci` can stop making progress after the tree looks complete**, and it can exit 0 with a package only partly extracted, and it can report every binary present while the next process cannot resolve one. Gate on the specific shim you are about to run, not on the exit code:
-
-```powershell
-Test-Path frontend/node_modules/.bin/svelte-kit.cmd
-```
-
-`.package-lock.json` plus a plausible file count means the install is effectively done; do not re-run `npm ci`, which contends with the first. **Never diagnose a toolchain from the first run after an install** - `npm run check`, `npm run build` and `npm run bundle-gate` can all return 1 with `'svelte-kit' is not recognized`, and the identical script passed a minute later. A missing module belonging to a transitive dependency nothing in the change touched is a partial extraction, not a code fault. A brand-new worktree has no `node_modules` at all, and `npm run build` gets a surprising distance before failing, because its first three steps are plain `node`: four lines of success and then `'vite' is not recognized`.
-
-**From a detached hidden shell, `& npm ci` resolves nothing and leaves `$LASTEXITCODE` unset.** `npm` and `npx` are batch shims that are not on `PATH` in a freshly spawned terminal, and the empty exit code is the tell - it looks exactly like a broken lockfile. Call the script directly and redirect the two streams separately:
-
-```powershell
-& node "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" ci 1> $out 2> $err
-```
-
-## Hugging Face
-
-**The ETag on a weights download is not the SHA-256, and it looks exactly like one.** A `HEAD` on `/resolve/<commit>/<file>` returns a 64-character hex ETag that disagrees with the recorded digest, because Xet-backed storage returns a content hash there - read as a mismatch it says the weights moved, which would stop a change that is fine. Take one of the two cheap reads: the `X-Linked-ETag` header on the **302** is the file's SHA-256, so `curl -sI` without `-L` settles it, and the recursive tree listing gives every file's `lfs.oid` for a whole revision in one call.
-
-```
-GET https://huggingface.co/api/models/<repo>/tree/<commit>?recursive=1
-GET https://huggingface.co/<repo>/raw/<rev>/<file> # the LFS pointer, oid sha256:
-```
-
-The revision-scoped `?blobs=true` API returns `lfs.oid` as null, so a check written against it silently compares against `None`. And a file's digests do not identify one commit - walking `Xenova/all-MiniLM-L6-v2`, the head and its parent carried the same five digests because the head added other variants - so pin the revision explicitly and say you picked the branch head at the fetch date. A `resolve/<40-hex-sha>/` URL redirects where `resolve/main/` does not, and the small files answer `307` on `huggingface.co` while the model answers `302` to the CDN, so a hop count or a CSP source list has to allow for both.
+- Pin the source revision and verify downloaded bytes against the published file checksum. Do not treat an HTTP ETag as a SHA-256 checksum.
 
 ## See also
 
-- [../agent-notes.md](../agent-notes.md) - the index and what belongs on these pages.
-- [git-and-github.md](git-and-github.md) - the git commands these quoting traps break.
-- [gates-and-builds.md](gates-and-builds.md) - running a gate through a detached script.
-- [browser.md](browser.md) - the integrated browser, which fails in its own ways.
+- [../../how-to/run-the-gates.md](../../how-to/run-the-gates.md) - supported setup and commands.
+- [git-and-github.md](git-and-github.md) - repository operations.
+- [../agent-notes.md](../agent-notes.md) - related command checks.

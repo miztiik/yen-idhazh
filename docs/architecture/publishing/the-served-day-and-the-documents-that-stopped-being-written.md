@@ -214,5 +214,5 @@ So (b) is a persisted-contract change that buys a cleaner diagram and zero bytes
 - [frontend.md](frontend.md) - the shell that answers a dated address, and the eight routes still prerendered.
 - [retention.md](retention.md) - the next lever, now that the document tricks are spent.
 - [../contracts/schemas.md](../contracts/schemas.md) - `DigestView`, its version stamp and the read-side migration rule.
-- [../../reference/site-weight.md](../../reference/site-weight.md#days-to-the-1-gb-pages-ceiling) - the cap date and the per-published-day growth rate.
+- [../../reference/site-weight.md](../../reference/site-weight.md#growth-estimates) - the inputs and units for a site-growth estimate.
 - [../../archive/measurements-2026-08.md](../../archive/measurements-2026-08.md#the-site-page-by-page-after-the-payload-narrowing-2026-08-27) - what each page and the whole site weighed after the first narrowing.

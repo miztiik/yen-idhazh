@@ -1,5 +1,6 @@
 {
   "articles_a_dispatch": 2,
+  "articles_a_shard": 1,
   "budget_minutes": 140,
   "candidates": [
     {"source_id": "ai2-blog","title": "How Goodfire used Ai2's open post-training stack to trace unwanted model behavior","url": "https://allenai.org/blog/goodfire-olmo"},
@@ -8,10 +9,8 @@
     {"source_id": "techcrunch-ai","title": "Mistral raises EUR3B as sovereign AI becomes big business","url": "https://techcrunch.com/2026/09/08/mistral-raises-e3b-as-sovereign-ai-becomes-big-business"},
     {"source_id": "simon-willison","title": "Some thoughts on the Navier-Stokes Millennium Prize Problem","url": "https://simonwillison.net/2026/Sep/8/on-navier-stokes"},
     {"source_id": "ars-technica-ai","title": "Six Chinese AI firms accused of aggressively copying US frontier models","url": "https://arstechnica.com/tech-policy/2026/09/six-chinese-ai-firms-accused-of-aggressively-copying-us-frontier-models"},
-    {"source_id": "apnews-world","title": "Kentucky farm alpha-gal tick ostrich steak allergy","url": "https://apnews.com/article/kentucky-farm-alphagal-tick-ostrich-steak-allergy-15cedc20aac4f0650e0d24d05a577139"},
     {"source_id": "abc-au-world","title": "'Nothing to hide': Brazil's presidential candidate Flavio Bolsonaro under corruption investigation","url": "https://abc.net.au/news/2026-09-12/brazil-flavio-bolsonaro-corruption-investigation/107146062"},
     {"source_id": "npr-world","title": "Yemen's Houthis capture a Red Sea island in threat to shipping","url": "https://npr.org/2026/09/12/g-s1-143044/yemens-houthis-capture-red-sea-island"},
-    {"source_id": "japan-times","title": "Katsutada Kaminuma Antarctic research","url": "https://japantimes.co.jp/environment/2026/09/06/earth-science/katsutada-kaminuma-antarctic-research"},
     {"source_id": "fed-press","title": "Agencies reduce regulatory burden for community banks, increase eligibility for 18-month exam cycle","url": "https://federalreserve.gov/newsevents/pressreleases/bcreg20260910a.htm"},
     {"source_id": "fred-blog","title": "A new calculation for subprime credit risk","url": "https://fredblog.stlouisfed.org/2026/09/a-new-calculation-for-subprime-credit-risk"},
     {"source_id": "guardian-business","title": "JP Morgan boss meets Burnham and Healey to warn against bank tax rise","url": "https://theguardian.com/business/2026/sep/09/jp-morgan-boss-jamie-dimon-to-warn-uk-chancellor-against-bank-tax-hike"},
@@ -27,9 +26,9 @@
     {"source_id": "hindustan-times","title": "Assam ordered to pay Rs 2 lakh to family of woman pushed into Bangladesh: 'Expelled without information to husband'","url": "https://hindustantimes.com/india-news/gauhati-hc-orders-assam-to-pay-rs-2-lakh-to-family-of-woman-pushed-to-bangladesh-101788794423171.html"}
   ],
   "test_cases": [
-    {"asks_for_a_visual_plan": true,"id": "baseline","n_ctx": null,"n_parallel": null},
-    {"asks_for_a_visual_plan": false,"id": "no-visual-decision","n_ctx": null,"n_parallel": null},
-    {"asks_for_a_visual_plan": true,"id": "parallel-2","n_ctx": 131072,"n_parallel": 2}
+    {"asks_for_a_visual_plan": true,"enabled": true,"id": "production-settings","n_ctx": null,"n_parallel": null},
+    {"asks_for_a_visual_plan": false,"enabled": true,"id": "no-visual-plan","n_ctx": null,"n_parallel": null},
+    {"asks_for_a_visual_plan": true,"enabled": false,"id": "parallel-summarization","n_ctx": 131072,"n_parallel": 2}
   ],
-  "version": "2026-09-28"
+  "version": "2026-09-29"
 }

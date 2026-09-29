@@ -180,7 +180,7 @@ through the doubt line is the day an operator opened the panel for, so the floor
 drops to meet it.
 
 What these panels weigh, and every live page ceiling, is
-[../../reference/site-weight.md](../../reference/site-weight.md#the-page-guardrails-and-what-each-route-weighs-2026-09-10);
+[../../reference/site-weight.md](../../reference/site-weight.md#page-and-payload-guardrails);
 what to do when one fires is
 [../../how-to/run-the-gates.md](../../how-to/run-the-gates.md).
 
@@ -210,5 +210,5 @@ control rather than in the plot (Guardrail #8).
 - [../../concepts/console-design/what-the-quality-and-source-panels-draw.md](../../concepts/console-design/what-the-quality-and-source-panels-draw.md) - how the measure cards, the distributions and the compression chart are allowed to draw.
 - [../../concepts/evaluation.md](../../concepts/evaluation.md) - what the checker measures and what a verdict means.
 - [which-console-surfaces-follow-the-window-and-which-say-why-not.md](which-console-surfaces-follow-the-window-and-which-say-why-not.md) - the control these panels answer to.
-- [../../reference/site-weight.md](../../reference/site-weight.md) - what this route weighs.
+- [../../reference/site-weight.md](../../reference/site-weight.md#page-and-payload-guardrails) - how route and fetched-payload costs are bounded.
 - [telemetry-series.md](telemetry-series.md) - the published projection and the grain of every figure.

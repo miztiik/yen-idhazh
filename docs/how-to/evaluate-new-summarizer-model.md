@@ -1,6 +1,6 @@
 # Swap the Summarizer Model
 
-**Last Updated**: 2026-09-22
+**Last Updated**: 2026-09-29
 The swap is one line in `config/idhazh.json`:
 
 ```json
@@ -22,7 +22,7 @@ and are not changed here.
 | --- | --- |
 | The swap | one line in the committed config |
 | The revert | the same line back |
-| The walk | one dispatch, about 106 minutes. It says whether the real path runs at all |
+| The walk | one dispatch, as long as its slowest article. It says whether the real path runs at all |
 | The bench | one dispatch. It says how fast |
 | The qualification | one dispatch, hours of runner time, ten gates on a frozen corpus. It says how good |
 | The decision | a person's, and it stays one |
@@ -41,10 +41,10 @@ Three blocks follow: **measure the candidate**, **adopt**, **revert**.
 
 ## The cheapest check is the pipeline tests, and it uses the real prompts
 
-Reach for `idhazh-pipeline-tests.yaml` first. It draws two real articles and
-runs the production path over them - the real fetcher, the real extractor, the
-real prompts, the real two calls, the real model server - and it takes a models
-file, so it runs that path on a candidate:
+Reach for `idhazh-pipeline-tests.yaml` first. It draws a few real articles - two
+by default - and runs the production path over them - the real fetcher, the real
+extractor, the real prompts, the real two calls, the real model server - and it
+takes a models file, so it runs that path on a candidate:
 
 ```bash
 gh workflow run idhazh-pipeline-tests.yaml \
@@ -55,20 +55,30 @@ gh workflow run idhazh-pipeline-tests.yaml \
 Type nothing and it runs the configured model, which is what it did before the
 field existed.
 
-**What it costs.** One dispatch took 106 minutes on 2026-09-15 - three test
-cases over two articles, of which 105 minutes were the test cases themselves and
-under a minute was setup. One dispatch, so there is no spread. A bench dispatch of
-`measure.yml` on 2026-09-16 took 189 minutes, and one of the four that day took
-288. A candidate is always a cache miss, so it pays its own download: the same
-fetch in `Model validation` took 25 to 74 seconds on 2026-08-26, which is about
-one percent of the dispatch.
+**What it costs.** Every shard of every enabled test case runs on a runner of
+its own, all at the same time, and one article a shard is the default - so a
+dispatch takes about as long as its slowest article, plus each runner's cache
+restore or download and its model load. The first dispatch of this shape, on
+2026-09-29 (run 36540131911, `models/ornith-1.5-9b-q5km.json`, two articles
+under two test cases on four stock runners, each downloading the weights), took
+34 minutes, and its slowest article took 30 of them. One dispatch, so there is
+no spread. Before the runners split, one dispatch took 106 minutes on
+2026-09-15: three test cases, one after another, over two articles on one
+runner. A bench dispatch of `measure.yml` on 2026-09-16 took 189 minutes, and
+one of the four that day took 288. A candidate is always a cache miss on its
+first dispatch, so every runner pays its own download: the same fetch in
+`Model validation` took 25 to 74 seconds on 2026-08-26.
+
+Which test cases run is `enabled` in `config/pipeline-tests.json`, and nothing
+else. `parallel-summarization` is off by default, because its two slots each
+hold a full window; switch it on for a model small enough to fit twice.
 
 **What it settles.** Whether the weights load, whether the server serves the
 alias the config names, whether both calls come back inside the schema, and what
 one article costs end to end on a stock runner. A model that cannot do those
-things has failed, and it has failed for 106 minutes rather than for 189.
+things has failed, and it has failed inside one dispatch rather than a bench.
 
-**What it does not settle, and this is the larger half.** Two articles say
+**What it does not settle, and this is the larger half.** A few articles say
 nothing about quality. There is no gate, no frozen corpus, no repeat, no
 faithfulness scorer, and no comparison against the incumbent's recorded numbers.
 A green dispatch is permission to spend the bench and the qualification, never a
@@ -88,7 +98,7 @@ flowchart TB
  subgraph FACTS["1.1 - read the facts, never recall them"]
   HUB["the hub's own API<br/>commit, SHA-256, byte count"] --> FILE
   HDR["the GGUF header itself<br/>general.architecture"] --> FILE
-  TMPL["the model's chat template<br/>the four turn markers"] --> FILE
+  TMPL["the model's chat template<br/>the reasoning switch"] --> FILE
   FILE[("config/models/NAME.json")]
  end
 
@@ -163,8 +173,17 @@ a fact about them.
 | `byte_count` | the size the hub reports, cross-checked against the file the run opened |
 | `hf_base_repo` | the base an adapter is trained against, which the fine-tuning notebook checks |
 | `arch` | the architecture name inside the GGUF |
-| `inference` | every runtime knob, including the window and the sampler |
-| `turns` | where the system text goes, what opens and closes a turn, and which keyword turns thinking off |
+| `server` | llama-server's own flags, spelled as the binary spells them: the window (`--ctx-size`), the slots (`-np`), the threads |
+| `sampling` | the sampler values a request sends, spelled as the request body spells them |
+| `request_timeout_minutes` | how long one request may wait for an answer |
+| `thinking_kwarg`, `thinking_close` | the template variable that switches the model's reasoning, and what the model writes to end it. Null `thinking_close` means no reasoning |
+| `declared_for` | the `sha256` the settings above were measured against |
+| `companion_files` | any extra file the weights need, such as a draft head |
+
+The turn markers are not in the file. The server reads them off the model's own
+chat template when it starts (`idhazh.llm.server.derive_turn_markers`), and the
+loader refuses, by name, the two keys that used to hold the markers and the
+settings: `turns` and `inference`.
 
 #### Where each fact comes from
 
@@ -191,45 +210,42 @@ it rather than guessing from the family name: Gemma 4's main weights read
 answers from one repository. Row #5's fourth case compares this field against the
 file the server opened, so a wrong value fails the run rather than degrading it.
 
-**The four turn markers come from the model's own chat template**, which the
+**The reasoning switch comes from the model's own chat template**, which the
 publisher ships as `chat_template.jinja` in the safetensors repository. Read the
-literals it emits - the strings inside `{{- '...' -}}` - rather than assuming a
-family convention. Two traps, both seen: a model can share an architecture with
-the incumbent and still write different markers, and a template can change
-between major versions of the same model. Gemma 3 had no system role; Gemma 4
-emits `<|turn>system`, so `system_role` is `own_turn` for it and
-`fold_into_first_user` would have been wrong.
+variable the template tests to turn reasoning off - `enable_thinking` for the
+incumbent - into `thinking_kwarg`, and what the model writes to close its
+reasoning into `thinking_close`, rather than assuming a family convention. A
+model can share an architecture with the incumbent and still spell either one
+differently.
 
 **When in doubt, let the start-up probe settle it.** The five claims in 1.5 are
-checked against the running server before the first item, so a marker read wrong
-here refuses the shard with a named cause instead of quietly producing worse
-summaries. That is the difference between a guess that costs a dispatch and a
-guess that costs a month of degraded output.
+checked against the running server before the first item, so a wrong `arch`, or
+a window the model was not trained for, refuses the shard with a named cause
+instead of quietly producing worse summaries. That is the difference between a
+guess that costs a dispatch and a guess that costs a month of degraded output.
 
-**`inference` is the one block with no external source, and one external
-ceiling.** Nothing about a candidate has been measured yet, so start from the
-incumbent's numbers with the window matched - a throughput comparison at two
-different windows measures the window, not the model - and let 1.3 and 1.4
-replace them with readings. The ceiling is `max_position_embeddings` in the base
-repository's `config.json`: a candidate whose base declares less than the window
-you were going to match cannot be compared like for like, and the only other
-place that fact turns up is a server that quietly serves a shorter context than
-the entry asked for. Both candidates written on 2026-09-14 cleared it with room
-- 262,144 and 131,072 against a matched 65,536.
+**`server` and `sampling` are the blocks with no external source, and one
+external ceiling.** Nothing about a candidate has been measured yet, so start
+from the incumbent's numbers with the window matched - a throughput comparison
+at two different windows measures the window, not the model - and let 1.3 and
+1.4 replace them with readings. The ceiling is `max_position_embeddings` in the
+base repository's `config.json`: a candidate whose base declares less than the
+window you were going to match cannot be compared like for like, and the only
+other place that fact turns up is a server that quietly serves a shorter context
+than the entry asked for. Both candidates written on 2026-09-14 cleared it with
+room - 262,144 and 131,072 against a matched 65,536.
 
 **`declared_for` is the safety catch, and it holds this model's own digest.**
-Config load refuses an entry whose
-block is declared for one set of weights while the entry names another, and it
-says which repair it wants: re-derive the numbers, because every one of them was
-measured against one model on one runner, or re-record the markers, because
-every one of them was read off the server that renders those turns. So a
-half-finished candidate cannot run - not in the bench, not in qualification, and
-not in a daily run.
+Config load refuses an entry whose settings are declared for one set of weights
+while the entry names another, and it says the repair it wants: re-derive the
+settings for these weights, because every one of them was measured against one
+model on one runner. So a half-finished candidate cannot run - not in the bench,
+not in qualification, and not in a daily run.
 
-The sanitizer reads `turns` too. It proves it strips every marker the entry
-declares and **refuses an entry whose control tokens it does not recognise**, so
-a model from an unknown template family is a refused config rather than a silent
-hole in Guardrail #11.
+The sanitizer checks the markers too. The server hands it every marker it
+derives from the template, and **a marker it cannot strip refuses the run**, so
+a model from an unknown template family stops before the first article rather
+than becoming a silent hole in Guardrail #11.
 
 Do not point `models_file` at the new file yet. Nothing below needs it, and
 keeping the pointer still means the adopt arrives later as a one-line diff a
@@ -245,7 +261,8 @@ One changed input a run, or the run measures a bundle. Hold constant:
 - the extraction and sanitization versions; and
 - the truncation cap.
 
-The candidate's own `inference` block is not a control - it is part of the
+The candidate's own `server` and `sampling` blocks are not a control - they are
+part of the
 candidate. If a model needs a different sampler to work at all, that is a second
 candidate configuration and it is measured separately. Do not adopt a vendor
 default silently.

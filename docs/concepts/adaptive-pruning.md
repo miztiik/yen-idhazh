@@ -308,13 +308,13 @@ way round so that the first evidence of what the window selects arrives before
 the deletion rather than after it.
 
 **The window is an archive policy and not a cap defence, and the measurement is
-what says so.** Rendered visuals arrive at 324,580 bytes a published day, which
-is 10.7 percent of what the whole site adds in a day. At that rate 390 days of
+what says so.** The recorded 2026-09-13 sample added 324,580 visual bytes per
+published day, 10.7 percent of that sample's site growth. At that rate 390 days of
 them stand at 120.7 MiB for ever - 11.8 percent of the 1 GiB ceiling - and with
 no window at all they would take 3,308 published days, about nine years, to fill
-the cap on their own. The reading, its spread and the two-hop argument that lets
-a payload-tree rate be spent against a built-site cap are
-[site-weight.md](../reference/site-weight.md#what-a-published-day-adds-in-rendered-visuals-2026-09-13).
+the cap on their own. Recheck these estimates against the current build before
+using them; the measurement rules are in
+[site-weight.md](../reference/site-weight.md#what-a-published-day-adds-in-rendered-visuals).
 
 **Between 12, 13 and 14 months the byte budget does not choose.** They stand
 111.4, 120.7 and 130.0 MiB apart-to-end, so the whole range is 18.6 MiB, 1.8

@@ -1,195 +1,35 @@
 # Agent Notes - Browser
 
-**Last Updated**: 2026-09-28
-Traps in Playwright, the integrated browser, the service worker, and the Svelte
-components a spec drives. Index and scope:
-[../agent-notes.md](../agent-notes.md).
+**Last Updated**: 2026-09-29
+
+Checks before trusting a browser result. Follow the [browser smoke procedure](../../how-to/run-the-gates.md).
 
 ## The integrated browser
 
-It never drives layout and never paints, so a whole class of assertions returns
-zero and reads as broken code. Verify anything geometric, animated or
-interactive in the Playwright suite instead.
-
-**Its page starts with no viewport, so `page.screenshot` throws `Cannot take screenshot with 0 width`** and aborts the whole snippet - every assertion after it is lost, which reads as a page failure. First line of any snippet that screenshots:
-
-```javascript
-await page.setViewportSize({ width: 1280, height: 900 });
-```
-
-**Every geometric answer is that same zero until you do.** `window.innerHeight` is 0, so "is it on screen" is always false and the maximum scroll position equals the whole document height - a deep-link check can read `scrollY` one pixel beyond the whole document while every story measures 10,000 to 31,000 px tall. `getBoundingClientRect` returns zero width for every element, so any guard that returns early on a non-positive width takes that branch every time and the feature reads as unwired. Print `window.innerHeight` beside the assertion so a repeat is obvious. The `style` attribute is still correct and still worth asserting.
-
-**`document.visibilityState` is `hidden` here, so `requestAnimationFrame` never fires** and anything gated on a frame never starts. A screenshot forces a frame, which is why the viewport fix above is needed in the same snippet.
-
-**`locator.click`, `page.fill`, `locator.screenshot` and `scrollIntoViewIfNeeded` all hang the same way here**, because Playwright decides "stable" by comparing the box across two animation frames and none arrive. `{ force: true }` does not help - it fails the viewport check instead of the stability one. Drive from the DOM instead: set the value and dispatch the event the framework listens for, call `scrollIntoView` inside `page.evaluate`, set `details.open = true` where a click would have. Read the state first:
-
-```javascript
-await page.evaluate( => ({ hidden: document.hidden, state: document.visibilityState }));
-```
-
-**"waiting for element to be stable" does not mean the element is moving.** Sampling one box six times 400 ms apart can give an identical `top`, `height` and `width` every time, with `document.getAnimations` reporting zero running. The page was still; the browser was not painting. Take that sample before you go looking for an animation, then run a headless Chromium from `frontend/` for the shot - not from a scratch directory, where node reports `Cannot find package`.
-
-**This browser runs at a device scale of 1.25**, so every pixel figure read from it is 1.25 times the CSS number. `{ width: 1024 }` can produce `window.innerWidth` 819, so a `@media (min-width: 1024px)` rule does not match - which reads exactly like a breakpoint that was never written. Confirm with `document.documentElement.clientWidth`, remembering the media query counts the scrollbar and `clientWidth` does not. The Playwright suite has no scale factor, so it settles a breakpoint question.
-
-**The host swallows a real `Escape` keypress**, so a dismiss handler reads as unwired. Dispatch it inside the page, where it reaches the same listener a reader's key does.
-
-**`page.route` reports `blocked: 0` here even when the pattern is right**, because there is no context to create and the site's worker answers first. Unregister every worker AND empty every cache, navigate again, and only then install the block; a fresh registration does not control the page it was made on, so the request reaches the network. Count the aborts - that count is the only thing that tells the two outcomes apart.
-
-**Under load it may refuse to connect at all**, timing out at 30 s with `browserType.connectOverCDP: Timeout 30000ms exceeded` on every following call, which reads as a broken build rather than a busy host. Do not keep retrying; drive Chromium yourself from `frontend/`, which also drives layout, so every quirk above stops applying.
-
-**A `file://` page outside a trusted folder answers `403`, `File does not reside within a trusted folder`**, so a scratch page under `%TEMP%` never loads and reads as a broken page. Serve its folder instead - `python -m http.server 8765 --bind 127.0.0.1 --directory <folder>` in a terminal of its own - open `http://127.0.0.1:8765/<page>`, and kill that terminal after. A `data:` URL loads too, for a page short enough to type.
-
-**Mermaid clips long labels here**, because it measures each label before this browser has laid anything out, so a box comes out narrower than its text. The diagrams already on `main` clip the same way (2026-09-28), so a clipped label here is not a defect in the diagram. Count nodes, classes and boxes through the DOM, and read widths on the pull request's own rendering.
+- Set a viewport and verify its actual CSS dimensions before measuring layout.
+- If embedded tools cannot paint or deliver input, repeat the affected check through the project's Playwright runner. DOM-dispatched events do not prove native pointer or keyboard input works.
 
 ## Waiting and routing
 
-**A count taken straight after `goto` or `reload` measures the shell, not the day.** One document answers every dated address, so the stories arrive when the day's fetch resolves - after the load event - and whether a one-shot count finds them is a property of the machine. `service-worker.spec.ts` passed on a Windows box three runs out of three and took `main` red on `ubuntu-latest` with `Expected: 8, Received: 0`. Wait for the page's own `data-payload-state` to read `ready` through `frontend/tests/support/day-ready.ts`, and write the assertion so it retries:
-
-```javascript
-await expect(locator, 'why').toHaveCount(n); // retries
-expect(await locator.count).toBe(n); // does not
-```
-
-The helper exists because seven specs already waited longhand and the eighth, written without it, was the one that broke. The same shape applies to fragment-focus tests: red on `ubuntu-latest` with `Expected: > 0, Received: 0`, green on a re-run with no edit. It is a fragment-focus test, so the day it had to wait for was never what it was about - which is how a spec comes to read a dated route with no wait at all. Ask what the page fetches, not what the test is called.
-
-**`waitUntil: 'networkidle'` never returns on `/console/`**, so `page.goto` dies on its timeout and reads as a broken console page. The console keeps fetching telemetry after first paint, so the idle window never opens. The tell is that the same wait settles on `/`, `/archive/` and `/evals/` in the same snippet - a condition that works on three routes and hangs on the fourth is about that route's fetching, not about navigation. Name the thing you are about to assert on instead:
-
-```javascript
-await page.goto(url, { waitUntil: 'domcontentloaded' });
-```
-
-**A negated `toHaveAttribute` passes when the element is absent**, so it is the wrong shape for "the page is not in state X" - it reports a state the page never reached. Playwright special-cases only `toHaveCount`, `toBeVisible`, `toBeHidden`, `toBeAttached`, `toBeDetached` and `toBeInViewport` for a locator resolving to nothing; everything else falls through to `matches = options.isNot`. Assert the positive form of the state you do want. It is strictly stronger and fails with "element(s) not found" rather than passing.
-
-**A vacuity guard built on a pixel threshold is a cross-platform time bomb.** A spec kept "every panel with `top < 900`" and asserted the set was non-empty; the first panel sits at 894 on Windows, the runner's taller fonts pushed it past 900, the set emptied and the guard fired - green locally every time, red on `main` every time. Cut the set on something the page itself draws (the first panel's own top), never on a number you chose, and print the margin rather than the verdict when it fires: the failure said the set was empty and did not say the nearest item missed by six pixels, which is the difference between a minute and an hour. Any pixel out of a browser moves between platforms: fonts, scrollbar width, form-control metrics, fractional rounding. Measured 2026-09-09 at 1280x900 on a developer machine against the canary build.
-
-**A polled `page.evaluate` straight after `page.goto` fails on a page that is fine**, with `Execution context was destroyed, most likely because of a navigation` - the client router does its own first navigation under the poll. Two tests out of a large suite can fail this way with nothing wrong with the page. A locator assertion retries against the live document and does not race: `await expect(page.locator('html')).toHaveAttribute('data-theme', theme)`.
-
-**A "two readings that agree" wait is satisfied by the very state it exists to wait out.** Primed with a reading taken before the change, its first comparison asks "has nothing happened yet", which is true exactly when the page has not answered - so the loop returns fastest in the one case it was written to catch. `item-visual.spec.ts` resized the viewport and then waited for two equal readings of each chart's laid-out width. On a widening step nothing but the redraw moves that width: the card is CSS and grows with the viewport, while the svg carries its own `width` attribute and `max-width: 100%` clamps a drawing too wide for its card but never stretches one too narrow. So the wait returned on its first reading and the case measured a card that had grown against a drawing that had not. Red once on pull request #784 with zero frontend files changed and green on a re-run - at 390 px the card gave 282 and the drawing was still the 252 it drew at 360. **Take both readings inside the page a rendering frame apart, and make the viewport part of the reading**, so a pair taken before the resize reached the renderer cannot settle either:
-
-```typescript
-const before = geometry();
-await new Promise((wake) => requestAnimationFrame(() => requestAnimationFrame(wake)));
-return window.innerWidth === asked && geometry() === before;
-```
-
-Ask what moves the number you are watching. A `ResizeObserver` delivers in the rendering update that follows the layout change, so a frame is the separation that can see it and a round trip is not - the old wait spent a poll interval and still read the stale frame. Keep the comparison to the geometry and never to the property under test, or the oracle's own message becomes a timeout.
-
-**A page carrying a meta refresh makes three Playwright calls lie.** In order: `page.goto('/evals/')` rejected with `net::ERR_ABORTED; maybe frame was detached?` because the document retired the navigation that delivered it; a locator reading that document timed out having logged the new address; and a multi-route walk reported a `requestfailed` on the destination from every case, which reads exactly like a dead link in the footer. Poll `page.url`, which is a property rather than an evaluate, and ignore a DOCUMENT request whose failure is `net::ERR_ABORTED`.
-
-```typescript
-await page.goto('/evals/', { waitUntil: 'commit' }).catch( => {});
-await expect.poll( => page.url).toMatch(/\/console\/$/);
-```
-
-**The same redirect makes `layout-overflow.spec.ts` blame `/evals/` for a console fault.** The spec still lists `/evals/`, so it measures the console after the refresh and reports the overflow under the old address. On 2026-09-27 a console chart drawn wider than a phone until the page hydrated failed that spec about one run in four, under the name `/evals/`. Read a failure there as the console's, and reproduce it with `console-frame.spec.ts`, which draws the console at 360 px with scripts off, so the same fault fails every run.
-
-**`page.url` read straight after a click still says the page you left**, because every route is prerendered and the client router takes the click - so a smoke reports that a link went nowhere. Wait for the address alongside the click: `await Promise.all([page.waitForURL('**/archive/'), locator.click])`.
-
-**`page.goto` to the same path with a different fragment never re-mounts the shell.** It is a same-document navigation, so `afterNavigate` does not fire and anything the layout does on arrival does not run - a restore spec can resolve its locator dozens of times and never see the attribute. A repeated case also measures nothing: three visits read 680, 26 and 30 ms, and the 26 is a navigation that did no work. Navigate somewhere else first, and give every visit its own browser context.
-
-**A `page.route` pattern written as a glob can intercept nothing and say nothing.** `page.route('**/digest/**/digest.json')` counted zero aborts against a URL it should have matched, where the same handler as a `RegExp` counted one. Prefer a `RegExp`, and print the count - a route that never fired is a null result, not a pass. A pattern one segment too wide counts the page's own assets: `**/digest/**` catches an item's picture as well, so a case asserting "this reached the network for nothing" failed at 2 on a fetch nobody made.
-
-**A right pattern also fires zero times when the request never reaches the network**, and this site has two things that serve one: the service worker, and the day `Cache` `daysHeldOffline` reads. Both survive `page.goto`, so an abort case re-run in the same page keeps passing on the answer the FIRST load cached - repeated attempts can report `blockedCount: 0` and `data-payload-state="ready"` with the route registered correctly, which reads as the page ignoring the interception. The tell is a hit count of zero next to a page that plainly has the data. Clear the registrations, the caches and the databases in the page before the case, then navigate:
-
-```typescript
-await page.evaluate(async () => {
-	for (const r of (await navigator.serviceWorker?.getRegistrations?.()) ?? []) await r.unregister();
-	for (const k of (await caches?.keys?.()) ?? []) await caches.delete(k);
-	for (const d of (await indexedDB.databases?.()) ?? []) indexedDB.deleteDatabase(d.name);
-});
-```
-
-That the day was served from the device is not a bug - it is the offline path working - so do not "fix" it by widening the pattern.
-
-**`page.route` cannot block what the service worker answers.** The worker's fetches do not pass through the page's route table, so an interception case silently covers nothing: four aborted navigations left a day page fully rendered with `aborted: 0`, and a `**/*.svg` 404 route let all 43 drawings draw. Block workers for the spec, and use `context.route` so a page opened later is covered too:
-
-```javascript
-test.use({ serviceWorkers: 'block' }); // the suite's own default in playwright.config.ts
-const context = await browser.newContext({ serviceWorkers: 'block' });
-```
-
-`PerformanceResourceTiming.workerStart` is how you tell what a worker answered - read it over `getEntriesByType('navigation')` and `('resource')` and count the entries above zero. Each Playwright test gets its own `CacheStorage`, so a warm-cache scenario must warm it inside the test, and a faked error response is never written because transformers.js caches only a 200.
-
-**A payload the cold document already carries is never fetched**, so a spec waiting for its request waits for ever and reports `blocked: 0` twice. The console's band is read by a universal `load`, so SvelteKit resolves that fetch against the staged payload at build time; a move between two routes under the same layout reuses layout data too. The one moment a browser really fetches it is when the layout is ENTERED from outside it - start on a page under a different layout, install the block, then click a link in, and prove the move was client-side with `performance.getEntriesByType('navigation').length === 1`.
-
-**A request-wave count reads as a round-trip guard and cannot fail.** Grouping a trace into waves - open a new wave when a request starts after every request in the current wave has finished - lets one slow download hold its wave open and absorb a whole serial chain running beside it, so the number does not move when the chain lengthens. Prove it against `frontend/tests/console-cold-load.spec.ts`: two round trips inserted ahead of the telemetry fetches took the real chain from three to five and left the wave count at three. Count the longest run of requests that each ended before the next began, and take the times from Chromium rather than from the handler - `performance.now` inside `requestfinished` measures when Playwright's socket delivered the event, so quick local responses arrive batched and every chain reads as one hop.
-
-```typescript
-const t = request.timing; // ms, and responseEnd is relative to startTime
-const end = t.responseEnd >= 0 ? t.startTime + t.responseEnd : t.startTime;
-```
-
-**A cross-origin failure is invisible to Playwright's `response` event.** The event never fires for a response the browser refuses on the same-origin policy, so a chain recorded from it stops at the last hop that passed and prints "no request left the browser" for a request that had left and come back refused. Listen for `requestfailed` as well; it is the only listener that names the hop that broke. `curl` cannot answer this either - it enforces no same-origin policy and prints a 200 with the right bytes.
-
-**A route answering 500 does not simulate a failed download.** transformers.js treats only a 404 from a same-origin path as a miss; any other status is read as the file, so it takes the error body as the model, fires its own `done` event, and dies about 200 ms later inside the ONNX runtime with `protobuf parsing failed` - neither where the route is nor in the library the route names. The route is also not total: a pattern matching only `.onnx` still lets the tokenizer files and the 21.6 MB wasm through, and that arriving file is what made a retry test flaky by reporting progress after the failure.
-
-**A lazy fetch fires only for what is near the viewport.** `ItemVisual.svelte` observes with a `100%` root margin, so a single jump to the bottom steps over every slot and the observer never fires. Scroll one viewport at a time; zero fetches at the top of a long page is a null result.
-
-**Aborting a fetch makes Chrome log a console error of its own**, so a zero-console-error assertion (`CLAUDE.md` section 12) reports a failure the page did not cause. Classify rather than count: match the errors your own abort produced by URL, and report how many of each there were.
-
-**Proving a page survives a missing file is three separate traps, and each one returns a green that means nothing.** `CLAUDE.md` section 12 requires the missing-data case on every published-site change, so this is the check most often passed without being run. The same shape applies while proving the drawing-absent branch of a digest page.
-
-- **A service worker serves the deleted file from cache, at 200.** The canary preview registers one, so `page.route` never sees the payload fetch and the file you deleted answers anyway. The case reports "the page rendered fine" because the page did render fine - on the old bytes. Use a fresh origin on a port the worker has never claimed.
-- **`vite preview` does not serve `frontend/build/`.** It serves `.svelte-kit/output/client/` and `static/`, so hiding a file under `build/` proves nothing at all. There are three copies and all three have to go. `docs/how-to/run-the-gates.md` and this page disagreed about the preview command until the pages were aligned; the form that serves the tree you just built is `npm run preview`.
-- **A null result needs a control.** Delete one file and leave its sibling: `ai-01.svg` must answer 404 while `ai-02.svg` answers 200. Without the sibling, "nothing was drawn" is equally consistent with the case never having run.
-
-The green that counts names what the page did instead - here, `[digest] digest/2026/08/20/ai-01.svg: not available (404), so it is not drawn`, all eight stories still rendered, zero `<img>`, no `pageerror`.
+- Wait for page readiness and enabled controls with retrying assertions. Assert the intended state positively; an absent element must not pass a state check.
+- Use fresh browser contexts for cold-load cases. Distinguish full navigation, client-side routing and fragment-only changes.
+- Prove that a failure test reached its target request. Account for service workers, caches and data already in the document; zero interceptions do not exercise a network failure.
 
 ## Driving components
 
-**A test driving a hydrated control must wait for hydration**, not for the element. Every `[data-window-preset]` input is `disabled` in the prerendered document and enabled on mount, so a click issued before that lands times out at about 15 s with no useful message:
-
-```typescript
-await expect(page.locator(`[data-window-preset="${DEFAULT_DAYS}"] input`)).toBeEnabled;
-```
-
-**A bare `[data-attr]` selector can match a wrapper and a child at once**, so a geometry read off the wrong one is silently wrong rather than an error. On the digest page `[data-band]` is on the `<article>` and on the confidence chip inside it. Name the element as well as the attribute: `span[data-band]`.
-
-**A CSS length read off `style` is the browser's serialisation** - a bar drawn at `inline-size: 100.0000%` comes back as `100%` while every other row at `52.9412%` round-trips, so a string comparison fails on exactly one row and reads like a bug in the one case the arithmetic cannot get wrong. Compare parsed numbers against `Number(expected.toFixed(4))`.
-
-**`getComputedStyle(document.body).backgroundColor` is `rgba(0, 0, 0, 0)`.** `app.css` puts the background on `html` and the browser propagates the root element's background to the canvas, so the body genuinely has none and a theme assertion written against it fails on every route at once - which reads exactly like the stylesheet not loading. Read `documentElement`, the element that paints.
-
-**A transitioned paint property read straight after `hover` or `focus` returns an interpolation**, so a card eased over `--dur-fast` reported `rgb(86, 78, 230)` against an accent of `rgb(79, 70, 229)`. One `requestAnimationFrame` lands mid-ease. Poll until it settles and let the poll be the assertion, resolving the expected value through a throwaway element so the comparison is against the token rather than a string somebody typed.
-
-**`locator.hover` scrolls the element into view**, so a viewport-relative rect taken afterwards says the element moved - `top` 332 before and 18 after, a 314 px jump the CSS does not contain. Take `rect.top + window.scrollY`, and scroll before the first reading as well.
-
-**A console panel scrolled into view lands below the stuck tab strip, not at the top of the window.** From `frame.breakpoints_px[1]` up the strip sticks, and `frontend/src/lib/console/strip.ts` sets the page's `scroll-padding-top` to the stuck strip's height, which `scrollIntoView` honours. So on a wide screen a panel lands lower than arithmetic without the strip says, and a capture or a measurement taken after the scroll is off by the strip. Read `getComputedStyle(document.documentElement).scrollPaddingTop` into the arithmetic, or place the page exactly with `window.scrollTo`.
-
-**A chart below the fold cannot be pointed at**, and the failure is silent: `boundingBox` returns PAGE coordinates, so `page.mouse.move` at y=8,000 in a 1,000 px viewport lands nowhere, the pointer handler never fires, and the readout prints its resting string. `await plot.scrollIntoViewIfNeeded` before every hover on a long page. A chart also follows a reactive option change in place - `Chart.svelte` hands the live chart each new option through `update`, so assert that the option count rose while the instance count held, not that it re-rendered.
-
-**`locator.screenshot` on a console panel times out on "waiting for element to be stable"**, because something above it is still settling and the wait is for the whole page. Scroll it into view inside an `evaluate`, wait once, then take a VIEWPORT screenshot - the element form failed twice at 10 s on `/console/model/` where the viewport one returned immediately.
-
-**A `page.screenshot` clip that runs past the window is cut to the window with no error.** Only a clip wholly outside the window fails; one that overhangs it comes back short and looks deliberate, so a tall panel at 390 loses its bottom - which is where its readout strip sits. `fullPage` avoids the cut by painting the whole page for every shot. The panel captures instead grow the window until the clip fits, and then read the image's own size back: a PNG names its width and height in bytes 16 to 23, so `image.readUInt32BE(16)` and `image.readUInt32BE(20)` against the clip is the whole check (`frontend/tests/panel-captures.spec.ts`).
-
-**Walking the reading page's pager runs past the test timeout.** `Show N more` adds twelve stories and re-renders the list, so a 627-story day is 52 clicks over a list that grows to 627 nodes - 1.3 minutes on a quiet machine and past the 180 s timeout on a loaded one, for a comparison the control's own label answers in one read. Read the label.
-
-**Playwright prints the code frame from disk and runs the version loaded at collection**, so after an edit the frame and the behaviour can disagree. Re-run rather than reasoning about the frame.
-
-**One case of a two-case test failing is a race, not a regression**, when the other case passes on the same commit. `layout-overflow.spec.ts` runs the same routes and widths in dark and then light, and a theme changes colour and not text metrics: the dark case can fail in 5.3 s on a `scrollWidth` of 789 while the light case passed the identical assertions 1.1 min later, and the spec alone passed 6 of 6. A per-day figure and a per-article figure need different degraded cases - emptying every ledger reaches only the whole-surface empty state, so drop one real day and one real item instead.
-
-**Two fixtures that both fit inside the narrowest preset make a window oracle pass on a route that ignores the window.** Every preset then selects every row, so the assertion is true for the wrong reason. Pick a fixture with a row only the widest preset can reach; a stronger assertion does not fix it.
-
-**A new chart component that draws a `<path>` fails the icon gate.** `icons.spec.ts::no component holds a path of its own` forbids path data outside `frontend/src/lib/icons/`, and its exemption for charts is a NAME regex - the existing charts draw with `line`, `rect` and `polyline` and never needed it. The failure names the icon rule, which is nowhere near the row that caused it.
-
-**A spec cannot import a client module that imports `$app/paths` as a value.** The WHOLE suite fails at load time with `Error: Cannot find package '$app' imported from...` - not one test, all of them, before a browser opens, and the error naming a package rather than a test is the tell. Split the module, or bundle it: UMD output rather than IIFE, because the wrapper assigns the global itself; `addInitScript` rather than `addScriptTag`, because it is a debugger injection and `script-src 'self'` need not be relaxed; and a stub holding a PROJECT path rather than the empty string the preview server uses, or a URL built without `base` cannot match the route pattern and the interception count silently falls to zero.
+- Scope locators to the intended component. Scroll lazy content into view and wait for its rendered state before measuring or interacting.
+- Compare coordinates in the same reference frame. Check that screenshots contain the whole target and rendered text does not overlap or overflow.
+- Check desktop and small-screen layouts in both themes with representative text. A small fixture does not prove longer real text fits.
+- Exercise loaded, absent and empty data separately. Verify the expected degraded state and that unaffected content still works.
+- Read page errors, console errors and failed requests. Exempt only failures deliberately caused by the case, matched to the affected request.
 
 ## Svelte
 
-**A `<style>` inside `<noscript>` compiles, and it is the only way to write a no-script rule** - Svelte treats the root `<style>` as the component's CSS block and every nested one as an ordinary element, so the rule reaches the prerendered document verbatim. But the rule is unscoped, and a Svelte scoped class rule outranks it: `.field.svelte-<hash>` is specificity (0,2,0) against (0,1,0) for the attribute selector a `<noscript>` block has to use, so the control it should hide stays on the page and the symptom only appears with scripting off. Keep `display` off the element carrying the attribute and put the layout on a child, or the fix becomes an `!important`.
-
-**`$service-worker`'s `files` is every file under `static/`, and `build` is not the shell.** `frontend/static/digest/` is staged from the pipeline's output, so the default baked every published day and every rendered visual into `build/service-worker.js` - 16,888 bytes of strings and grew with every published day, with the file size the only tell because the worker filters them at run time. `kit.serviceWorker.files` is the filter and the same worker is 4,825 bytes with it. And `build` is the whole client bundle, 23.56 MB across 57 files of which 21.60 MB is the search encoder's ONNX runtime, so `cache.addAll(build)` in the install handler downloads 23.5 MB to a reader who opened one day.
-
-**SvelteKit's own service-worker registration has no `.catch`**, so any browser that refuses - a policy, a private window, `serviceWorkers: 'block'` - becomes an unhandled rejection on every page, and every spec counting console errors goes red at once. `kit.serviceWorker.register: false` plus one registration call of your own fixes it, and leaves exactly one file naming the worker API for a test to assert on.
-
-**Widening a Svelte action's node type to a union breaks its listeners**, because `addEventListener` overload sets do not merge across element types - `SVGSVGElement | HTMLElement` produced eight errors on lines that were not edited. Keep one `[type, handler]` list and attach through a single `const events: EventTarget = node`, so the add and remove halves cannot drift apart.
-
-**Svelte 5 drops the space at the start or end of a tag's content**, so `<span> Worst</span>` renders `Worst` and the text on either side runs together - which reads as a space missing from the data. Write the space as an expression, which the compiler keeps: `{' '}`, as `ConsoleNav.svelte` does between a tab's `Worst:` mark and its worst state.
-
-**Svelte deletes a style rule for an attribute that only a script sets.** The compiler keeps a scoped rule only when it can see an element in the template that the rule could match, so a rule on an attribute `strip.ts` sets at run time is pruned from the built CSS and the page ignores the attribute; the compiler's only complaint is an unused-selector warning. Wrap the attribute in `:global(...)`, as `.console-strip:global([data-console-strip-live='yes'])` in `frontend/src/routes/console/+layout.svelte` and `:global([data-console-strip-stuck='yes']) .tab-line` in `ConsoleNav.svelte` do.
+- Verify hydration through an enabled, working control; populated HTML alone does not prove the client started.
+- Test no-script rendering separately. Scoped component CSS can override unscoped rules inside `<noscript>`; keep layout on a child when the wrapper's visibility is controlled there.
 
 ## See also
 
-- [../agent-notes.md](../agent-notes.md) - the index and what belongs on these pages.
-- [gates-and-builds.md](gates-and-builds.md) - running the browser suite, and serving a build to measure it.
-- [shell-and-tools.md](shell-and-tools.md) - reading a long browser-suite log.
-- [../../concepts/design-system.md](../../concepts/design-system.md) - the surfaces these specs assert on.
+- [../../concepts/design-system.md](../../concepts/design-system.md) - visual and interaction requirements.
+- [gates-and-builds.md](gates-and-builds.md) - selecting and serving the correct build.
+- [../agent-notes.md](../agent-notes.md) - related command checks.

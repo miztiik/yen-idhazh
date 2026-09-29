@@ -6,8 +6,8 @@ costs more as the archive grows (CLAUDE.md Guardrail #12) - which section 13
 forbids a test to do, and which would put a fuse on the answer besides: a test
 asserting a column empty goes red on the day the column first fills, which is a
 date on the calendar rather than a change anybody made. So it lives here, where
-pytest does not run it, and the tables it prints are pasted into
-`docs/architecture/sources/item-health-columns.md` rather than asserted.
+pytest does not run it. Read its output on demand rather than pasting a snapshot
+into architecture docs; usage is in `docs/architecture/sources/item-health.md`.
 
 Run it from the repository root:
 
