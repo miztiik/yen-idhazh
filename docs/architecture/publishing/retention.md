@@ -68,7 +68,7 @@ that constrain them belong to
 | Published identities | Preserve the information that prevents duplicate publication. The manual prune refuses this ledger. |
 | Item health | Write and validate the required day-and-stage summary before deleting an aged source month and its published copy. |
 | Feed health | Delete expired records when no reader needs them; do not invent an unused aggregate. Feed retirements have a separate policy so cleanup does not revive retired sources. |
-| Scores and score index | Archive a complete eligible month, verify it, then remove its source rows and live index together. |
+| Scores and score index | Archive a complete eligible month, verify it, then remove its source rows and live index together. Nothing archives a month today: the archive was built from the CSV day files, which moved to the ledger door, so the `scores` compaction - which deletes the rows now - stays report-only until an archive is built from the door's rows. |
 | Raw and compact ledgers | Follow the ledger's compaction declaration. A legacy task's retirement must not silently shorten the period retained. |
 | Trial records and other task-owned data | Follow the owning declaration, not a blanket cleanup of `state/`. |
 
@@ -110,7 +110,8 @@ idhazh telemetry prune --target <ledger> --since <YYYY-MM-DD> --until <YYYY-MM-D
 - Dry run is the default and reports the selected paths. `--no-dry-run` permits deletion.
 - `--max-deletes` bounds a pass and reports where to resume. Without it, the supplied range sets the default bound.
 - `published` and `seen` are refused because forgetting their records permits repeat publication or discovery.
-- Keep `scores` and `score-index` in step. Prune the same range from both, or rebuild the affected index from the remaining source rows.
+- `item-health`, `scores` and `host-fingerprint` are not targets: they file through the ledger door rather than as CSV day files, so this command cannot take a day of them out. Until each ledger's compaction runs live and bounds its raw tree, nothing offers a range delete for them, the same as `visual-prunes`.
+- `score-index` is still a target. Pruning a range of it makes those measurements look new to the next run, so rebuild the affected index from the scores rows that remain with `idhazh rebuild-score-index --month <YYYY-MM>`.
 - Do not point the command at unsupported raw trees or file layouts. Their owning tasks decide retention.
 
 The procedure and failure handling are in

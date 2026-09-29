@@ -17,13 +17,15 @@ growing its own ledger.
 
 ## Every item, every run, one row
 
-`state/item-health/<YYYY>/<MM>/<DD>/`. One row is written for each planned
+`state/raw/item-health/<YYYY>/<MM>/<DD>/`, packed later under
+`state/compact/item-health/`. One row is written for each planned
 item on each run, whether the item succeeds or fails. Two stages write it: a
 worker commits the rows for its own items as each one settles, and Assemble
-writes the whole day's census afterwards. Each writer gets its own file inside
-the day - `<run_id>-<attempt>-<job>-<shard>.csv`, through `ledger.write_segment`
-- and nothing else ever opens that path. A worker also leaves its own copy of
-the row beside the item's other payloads, which is
+writes the whole day's census afterwards. Each write is a parquet file of its
+own inside the day, through `ledger.persist`: the ledger door names it, and
+nothing else ever opens that path
+([../contracts/persistence.md](../contracts/persistence.md)). A worker also
+leaves its own copy of the row beside the item's other payloads, which is
 [the file below](#the-row-on-the-shard-before-the-ledger-has-it).
 
 The complete column list and field descriptions belong to
@@ -54,30 +56,34 @@ reaches the row or is correct, and a blank cell is not evidence of zero work.
 The ledger is append-only: a writer adds a file to the day and nothing edits a
 file that is already there. It is not kept for ever: a month older than the
 `full-grain` series of `config/gardener/telemetry-aggregate.json` (14 months) is
-folded to one
-row per `(date, stage)` in `state/item-health-summary/<YYYY-MM>.csv` and that
-month's day directories are deleted, by the gardener's `telemetry-aggregate`
-task. The browser's copy of that same month under
-`frontend/public/telemetry/` goes in the same pass.
+summarised to one row per `(date, stage)` in
+`state/item-health-summary/<YYYY-MM>.csv` by the gardener's `telemetry-aggregate`
+task, and the browser's copy of that same month under
+`frontend/public/telemetry/` goes in the same pass. The month's rows go later,
+when the 15-month `monthly_window` of `config/gardener/compact-item-health.json`
+passes, so a month is always summarised before its rows can be deleted.
 
-**The boundary is still a month and only the directories below it are days.** The
-fold is where the two grains meet: it reads a month's day directories - at most
-31 - writes one aggregate, reads it back, and only then unlinks them.
+**The boundary is still a month and only the files below it are days.** The
+summary is where the two grains meet: it reads a month's days - at most 31 -
+through `ledger.load_days`, writes one aggregate and reads it back. It deletes
+no row of this ledger; the item-health compaction takes the month's rows later.
 
 **The step ships in dry run.** It logs every file a live run would remove and
 removes none of them, because the `history` job of `.github/workflows/idhazh-gardener.yml` force-pushes `main`
 on a schedule and a deleted state file stops being recoverable from history once
 that prune passes over it (`CLAUDE.md` section 8). Turning the deletion on is a
 one-line commit taken after a scheduled run has printed the list. Measured on
-this checkout on 2026-09-02, the earliest a live run would touch this ledger is
-**2027-10-01**, when `state/item-health/2026/08/` falls below the window.
+this checkout on 2026-09-02, the earliest a live run would remove anything is
+**2027-10-01**, when August 2026 falls below the window and its published copy
+goes. The month's rows are not this step's to remove: they are the
+`item-health` compaction's, which ships report-only too.
 
 The 30-day window on this page is a read-side parameter and is unrelated to that
 age. Day files follow `state/published/`, and `state/seen/` and
 `state/feed-health/` followed it too in the days after - owner instruction,
 2026-09-10, and the reason is in
 [../../concepts/partitions.md](../../concepts/partitions.md#a-ledger-and-its-mirror-may-file-at-different-grains).
-What the fold keeps, what it costs and why fourteen is
+What the summary keeps, what it costs and why fourteen is
 [../publishing/retention.md](../publishing/retention.md#what-bounds-the-committed-state-tree).
 
 ## The structure
@@ -88,25 +94,29 @@ Three files carry one item-health row, and each owns one thing:
 | --- | --- |
 | `backend/idhazh/contracts/item_health.py` | the shape: field order, types, enums, the validator, and `csv_columns` |
 | `ItemHealthRow` | the contract. Every column is declared here first (Guardrail #3) |
-| `backend/idhazh/ledger/rows.py` | the header guard, `write_segment`, and the writer file path |
-| `backend/idhazh/day_shards.py` | the walk over a day, and the settlement a reader gets |
+| `backend/idhazh/ledger/persist.py` | the ledger door: the raw file each write becomes, its name and its envelope |
+| `backend/idhazh/ledger/ledger_files.py` | the read: `load_days` for named days and `load_ledger_rows` for the whole ledger, each day settled |
 
-**One definition of the column list.** `ItemHealthRow.csv_columns` returns
-`tuple(model_fields)`, so the CSV header IS the contract's field order. A writer
-and a reader cannot disagree, and there is no second list to forget.
+**One definition of the column list.** A raw file's columns are the contract's
+fields in order, typed by `backend/idhazh/ledger/arrow_schema.py`, and
+`ItemHealthRow.csv_columns` returns the same `tuple(model_fields)` for the
+published projection. A writer and a reader cannot disagree, and there is no
+second list to forget.
 
 **The file layout.** One directory per calendar day of the `date` column, nested
-`<YYYY>/<MM>/<DD>/`, and one file inside it per writer. A row is placed by the
-digest date it describes, not by
-the clock when it was written, so a run that publishes just after midnight UTC
-still files under the day it published. Header on line 1, `\n` endings, `utf-8`,
-no quoting beyond what `csv` needs. `day_shards.shard_files` is the walk, and it
-refuses a name it cannot place rather than skipping it - a file the reader cannot
-place is how it starts missing rows.
+`<YYYY>/<MM>/<DD>/` under `state/raw/item-health/`, and one parquet file inside it
+per write. A row is placed by the digest date it describes, not by the clock when
+it was written, so a run that publishes just after midnight UTC still files under
+the day it published. The reader lists a day's files by their envelopes, and a
+file it cannot read is skipped with a warning naming it; the compaction, which
+deletes what it read, stops that day instead
+([../contracts/persistence.md](../contracts/persistence.md#reading-a-raw-ledger)).
 
-**Every cell is a string.** `csv_row` writes `""` for an absent optional and
-`from_csv_row` reads `""` back as `None`. There is no sentinel number and no
-`NULL` literal, because both of those get averaged by accident one day.
+**An absent optional is a null, never a sentinel.** A raw file stores it as a
+null cell. Where a CSV is still made - the published projection - `csv_row`
+writes `""` for it and `from_csv_row` reads `""` back as `None`. There is no
+sentinel number and no `NULL` literal, because both of those get averaged by
+accident one day.
 
 The columns a reader asks about most, in file order. This is the subset the
 prose below turns on, not the complete list defined by the contract:
@@ -114,7 +124,7 @@ prose below turns on, not the complete list defined by the contract:
 | Column | Type | Present when | What it answers |
 | --- | --- | --- | --- |
 | `version` | date-stamp | always | which contract wrote this row (section 11) |
-| `date` | `YYYY-MM-DD` | always | the digest day, and the file this row lives in |
+| `date` | `YYYY-MM-DD` | always | the digest day, and the day folder this row is filed under |
 | `run_id` | `<date>-<execution>` | always | which execution wrote it. The trailing field is the CI run id, and a small ordinal on rows written before 2026-08-31 |
 | `item_id` | slug | always | `<vertical>-<ten decimal digits>` on a row written before 2026-09-12 and `<vertical>-<sixteen base32 symbols>` after it, derived from the address either way. Join on `url_key`, and see below |
 | `url_key` | sha256 | always | the stable article key. Join on this, not `item_id` |
@@ -138,7 +148,7 @@ prose below turns on, not the complete list defined by the contract:
 | `output_tokens` | int | when the runtime reports it | tokens written, added over every call below |
 | `cached_tokens` | int | when the runtime reports it | prompt tokens reused instead of read, added over every call below |
 | `source_words_before_cap` | int | once extract ran, from 2026-08-28 | how long the body was before the cap cut it |
-| `shard` | int | a worker wrote the row, from 2026-08-30 | which of the run's workers produced it |
+| `machine_shard` | int | a worker wrote the row, from 2026-08-30; named `shard` until the ledger moved to the door | which of the run's workers took its readings |
 | `span_integrity` | bool | the item carried text, from 2026-09-08 | did every element span cut its own characters out of the article |
 | `elements_found` | int | `span_integrity` is true, from 2026-09-08 | Tier 1 elements the candidate pass kept |
 | `element_class` | enum | `span_integrity` is true, from 2026-09-08 | `chartable`, `narrative` or `unclassified` |
@@ -178,17 +188,18 @@ because a rate needs its denominator beside its numerator.
 
 **A row is one planned item on one run.** `(date, run_id, item_id)` is the
 identity, and a read settles the day on it. That is what lets two stages
-record the same item: each writes its own file under the day, and
-`day_shards.settled_rows` keeps one
-row for the key. Where the two rows disagree the one that names a job wins, for
+record the same item: each writes its own file under the day, and the ledger
+door's reader keeps one row for the key. Where the two rows disagree the one
+that names a machine, `machine_job`, wins, for
 the reason the next section gives - `assemble` runs once for the whole day and
 cannot say which machine an item was for.
 
-**Every reader settles, including the one outside this package.** The console
-opens this ledger at build time through `itemHealthRows` in
-`frontend/src/lib/server/payload.ts`, which restates the key and the rule rather
-than reading the files raw - because a reader that does not settle counts the
-newest day's items twice and draws each of them twice
+**Every reader gets a settled day, including the one outside this package.** The
+console opens this ledger at build time through `itemHealthRows` in
+`frontend/src/lib/server/ledger-rows.ts`, which reads the packed days. The
+packing settles each day on this key and this rule before it writes the day's
+file, so the frontend restates neither - and a reader that did not settle would
+count a day's items twice and draw each of them twice
 ([../publishing/console-payloads.md](../publishing/console-payloads.md)).
 
 **A worker records only settled items.** It writes an article payload for every
@@ -294,10 +305,12 @@ counted, which was about three times low.
 ## Which worker wrote the row
 
 A run splits into as many as eight `work` jobs, each on its own disposable
-machine. `shard` is the number `stages.common.shard_of` gave the job that produced this
-row. `state/host-fingerprint/` carries `job` and `shard` for the same run,
-so `(run_id, shard)` joins the two files: the cells here say what the work cost,
-and the row there says which host paid it.
+machine. `machine_shard` is the number `stages.common.shard_of` gave the job that
+took this row's readings. The host-fingerprint ledger carries `job` and `shard`
+for the same run, so `run_id` with `machine_shard` against `shard` joins the two:
+the cells here say what the work cost, and the row there says which host paid
+it. It was called `shard` until the ledger moved to the door, where `shard` names
+the writer of a file.
 
 The column exists because the hosts are not alike. Measured over the seven runs
 committed on 2026-08-30, the fastest shard of a run read
@@ -318,21 +331,22 @@ leaving the cell empty. An empty cell means no worker sealed a row for the item
 - it was planned and never reached - and it is also what every row written
 before 2026-08-30 holds. **It is never shard 0.**
 
-`shard` is not in the published projection
+`machine_shard` is not in the published projection
 ([../publishing/telemetry-series.md](../publishing/telemetry-series.md)). Which
 machine ran an item is an operator's question, and the page that asks it reads
 `state/` at build time rather than fetching it in the browser.
 
 ## Which machine read it, and what that machine was
 
-`job` is the workflow job whose machine took this row's readings - never which
-job wrote the row. It reads `work` on every row a shard sealed, because that is
+`machine_job` is the workflow job whose machine took this row's readings - never
+which job wrote the row, which the ledger door's own `job` names. It reads
+`work` on every row a shard sealed, because that is
 the job the model server runs in, and `assemble` never fills it: that stage runs
 once for the whole day on a machine that read none of these items.
 
-**With `shard` it is the whole of `ledger.HOST_FINGERPRINT_KEY`**, which is
-`date`, `run_id`, `job`, `shard` - the key
-`state/host-fingerprint/<YYYY>/<MM>/<DD>/` files one row a job under
+**With `machine_shard` it matches the whole of `ledger.HOST_FINGERPRINT_KEY`**,
+which is `date`, `run_id`, `job`, `shard` - the key the host-fingerprint ledger
+files one row a job under
 ([../../reference/host-metrics.md](../../reference/host-metrics.md)). So the
 question "which processor summarized this item, and what could it do" is one
 equality:
@@ -342,10 +356,10 @@ SELECT ih.item_id, hf.fingerprint, hf.cpu_model, hf.microcode, hf.flags
 FROM item_health ih
 JOIN host_fingerprint hf
   ON hf.date = ih.date AND hf.run_id = ih.run_id
- AND hf.job  = ih.job  AND hf.shard  = ih.shard
+ AND hf.job  = ih.machine_job  AND hf.shard  = ih.machine_shard
 ```
 
-**Three of the four columns are not a key, and that is why `job` exists.**
+**Three of the four columns are not a key, and that is why `machine_job` exists.**
 `plan`, `work`, `assemble` and `runtime` each draw their own machine and each
 write shard 0, so a lookup on `date`, `run_id` and `shard` alone finds every job
 of the run. The item row could spell three of the four and stopped there.
@@ -353,16 +367,16 @@ of the run. The item row could spell three of the four and stopped there.
 **The rule is one-directional: a row that names a job names a shard too, and not
 the converse.** A job with no shard is half a key and resolves to every shard
 that job ran, so the contract refuses it. A shard with no job is what every row
-written before 2026-09-17 holds, and every reader of this ledger takes those
-rows back through `from_csv_row` - so a two-directional rule would refuse the
+written before 2026-09-17 holds, and every reader of this ledger validates those
+rows against the same contract - so a two-directional rule would refuse the
 whole archive on the first run after the column landed.
 
-**The pair is also what settles a contested row.** The key has no `job` cell, so
-a work shard and `assemble` recording one item are the same record to a reader.
-The day's writer files are read in filename order and `assemble` sorts before
-`work`, so
-without a rule the row that knows neither cell would win. `ledger.ITEM_HEALTH_RULE`
-is that rule: a row naming a job beats a row that does not.
+**The pair is also what settles a contested row.** The key has no machine cell,
+so a work shard and `assemble` recording one item are the same record to a
+reader. File order cannot be what decides between them - a reader that ordered
+files by name would put `assemble` first - so `ledger.ITEM_HEALTH_RULE` says it
+out loud: a row naming a `machine_job` beats a row that does not, and the door's
+reader applies it ([../contracts/persistence.md](../contracts/persistence.md#reading-a-raw-ledger)).
 
 ### What the machine had, against what a process held
 
@@ -583,8 +597,8 @@ charges. Every live feed stays where it was, because only 37 thin articles came
 from active feeds in that window, across 17 feeds, none losing more than 5, against
 an alarm that needs 30 decisions. So a feed that breaks in bulk is caught at once
 and a feed that occasionally runs short is left alone. Re-measure before quoting
-this: walk `state/item-health/**` for `code == "too_short"` and group by
-`source_id`.
+this: read the window's days of the item-health ledger through
+`ledger.load_days`, keep `code == "too_short"` and group by `source_id`.
 
 `boilerplate` left that list on 2026-09-17 and came back the same day, and it is
 the only code that has ever moved. It went when a ledger started feeding the
@@ -640,60 +654,27 @@ address into our own words. The article was fine both times and the model wrote
 the words, so counting either against the feed would quarantine a wire service
 for a defect we own.
 
-## Adding a column is a two-part change
+## Adding or removing a column
 
-A new column on this row is not finished when the contract and the schema agree.
-`ledger.extend_ledger_file` calls `require_matching_header` before it writes, and that
-refuses any header that is not the contract's column list exactly. The day file
-the pipeline is currently appending to already exists with the old header, so
-the first run after the contract changes would raise:
+A raw file keeps the shape it was written under: its columns are the contract's
+fields at the time, and nothing rewrites it. So the change is to the contract
+alone, and what an older file does with it depends on the kind of change.
 
-```text
-2026-09-17.csv has 113 columns and the contract has 113.
-Migrate the ledger before appending to it.
-```
+1. **An added column costs no code.** A nullable field reads as absent from an
+ older file, and empty is correct: those runs measured nothing. A field with no
+ default would make every older file fail to read.
+2. **A removed column is named in `DROPPED_CELLS`, in the same commit.** The
+ row's before-validator drops it from an older file's rows. Without the entry,
+ every file that still carries it is refused: a reader skips each one with a
+ warning, and the compaction stops at its day.
+3. **A renamed column is named in the row's rename map, in the same commit**, the
+ way `job` and `shard` became `machine_job` and `machine_shard`
+ (`MACHINE_CELLS_RENAMED`). The same map reads a sealed per-item payload and a
+ committed CSV heading under the new name.
 
-**The two counts are equal there and it still raised**, which is the clearest
-thing this message says: the guard compares the whole tuple. That is the real
-shape of the 2026-09-17 change - one column added, one retired - and a check on
-the width alone would have called it clean.
-
-That is a failed scheduled run, not a failed lint. **This is the one ledger that
-migrates itself, and the reason is that it is the one that has retired a
-heading.** The gardener's closed-day fold settles a day by reading every file in it through
-`ItemHealthRow.from_csv_row`, which maps by name and carries a retired heading to
-the column it moved to, then writes the day whole from the contract's current
-column list. A day the fold touches comes back under the current header, so the
-migration ships in the same commit as the contract (`CLAUDE.md` section 11)
-rather than as a step somebody runs by hand. A day the fold does not touch is
-widened through `backend/utilities/widen_ledger_header.py`, which is the one door
-onto `ledger.migrate_header`.
-
-Three things follow, and the first is the one most often got wrong:
-
-1. **A column may be filed beside the one it relates to.** `migrate_header` maps
- by name, never by position, so an appended column buys nothing here. Order
- still matters for `FeedHealthRow` and the other eight ledgers, which reach
- `extend_ledger_file` with no migration of their own - that is where
- `backend/tests/contracts/test_repo_structure.py::test_the_feed_health_ledger_columns_are_defined_once`
- spells the appending rule and why.
-2. **An added column costs no code at all.** `from_csv_row` reads each field
- with `row.get(name, "")`, so a file written before the widening reads the new
- cell as absent. Empty is correct: those runs measured nothing.
-3. **A removed column must be named in `ledger.ITEM_HEALTH_CARRIED`, in the same
- commit.** `migrate_header` refuses any heading that is neither a current
- column nor one the reader carries, rather than dropping cells silently - so a
- retired column with no entry there makes the widening above refuse the file
- and leave it byte-identical. `runner_name` and `cgroup_peak_bytes` are in that
- set for exactly this reason.
-
-**The committed files are not rewritten by the pull request, and no run will
-rewrite them either.** Nothing appends to a file a writer already closed, so
-the only thing that widens a committed heading is
-`backend/utilities/widen_ledger_header.py`, run by a person. A branch that
-rewrote the tree whole would be rebasing that rewrite onto the files the
-pipeline wrote while the branch was open, which is a conflict somebody has to
-resolve by hand over machine output nobody should be editing.
+Each file's envelope records the version stamp of the shape it was written under,
+and the door refuses a file written under a newer shape than the build reading it
+([../contracts/persistence.md](../contracts/persistence.md#the-door)).
 
 **A check on the migration reads rows, never files.** A file the
 pipeline writes after the migration holds no pre-migration row at all, and every
@@ -703,9 +684,6 @@ rows and none of them older than either column. The population a migration check
 is about is the rows, and the way to get one that cannot age out is to build the
 older generation rather than to look for it
 (`backend/tests/test_ledger.py::A_RETIRED_GENERATION`).
-
-The guard in `extend_ledger_file` is deliberate and stays. Widening it to tolerate a prefix
-would let a column land silently in the wrong position on a file nobody re-read.
 
 ## Caveats
 
@@ -743,7 +721,7 @@ this row is our arithmetic, which is the point - see
 
 **A copied field is one instrument, and there is now a second.** Each `work`
 shard also commits what its server counted for the whole shard, onto its own row
-of `state/host-fingerprint/`. `backend/utilities/reconcile_prefill.py` pools both
+of the host-fingerprint ledger. `backend/utilities/reconcile_prefill.py` pools both
 sides of a run and prints the gap, which is how a rate quoted off this file stops
 being an assertion. Measured on run `2026-08-26-5`: 11.1755 tok/s from this
 ledger against 11.1796 from the server, 0.037 percent apart
@@ -844,19 +822,20 @@ Three limits, in the order they will actually bite:
  day-grain file with the per-item rows kept for the operator only. Nothing
  here is measured against a slow connection yet, so that is the next
  measurement rather than the next change.
-2. **Git history, second.** A day file is appended to several times a day and
- each append rewrites it as a new blob, so the repository grows with
- `appends x file size` rather than with rows. Day sharding is what keeps that
- bounded: an append rewrites one day and not the month. The lever if it bites
- is the projection width again, or a shorter retention on the ledger itself.
+2. **Git history, second.** Every write is a new file under its day, and the
+ packing replaces a day's raw files with one day file, so the repository grows
+ with the rows written rather than with rewrites of one file. The lever if it
+ bites is the projection width again, or a shorter retention on the ledger itself.
 3. **The 1 GB published site, last and least.** `state/` is never served, so it
  does not count against that cap at all. Only the projection under
  `frontend/public/telemetry/` does, and at 10 MB gzipped a year it is not the
  thing that fills a gigabyte - the day payloads and their SVG assets are.
 
-What is deliberately **not** planned: pruning. The ledger is the only durable
-record of what a bad day did, and a retention pass over it would delete exactly
-the evidence it exists to keep. Windows are applied on read.
+What is deliberately **not** planned: pruning inside the window. The ledger is
+the only durable record of what a bad day did, and a retention pass over it would
+delete exactly the evidence it exists to keep. Windows are applied on read, and a
+month's rows go only once it is past the compaction's 15-month `monthly_window`,
+after its summary is written ([Every item, every run, one row](#every-item-every-run-one-row)).
 
 ## A cell is fitted to its column, by the column
 
