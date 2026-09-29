@@ -76,11 +76,9 @@ time it moved.
 
 **The `Site size` fact carries the level, a track against the cap, the window's
 delta and a runway.** The runway is headroom over the per-article cost, and what
-it counts is **articles**: `(cap - bytes) / bytesPerItem`. Published days are rejected because they divide by `run.safety_ceiling_per_run`
-articles a day, and that knob bounds one **run**, not one day. Up to five runs a day is normal, so
-the band priced a day at 160 articles while the days it measured ran a median of
-334, and the printed runway was 2.09 times too long
-([../../reference/site-weight.md](../../reference/site-weight.md#days-to-the-1-gb-pages-ceiling)).
+it counts is **articles**: `(cap - bytes) / bytesPerItem`. A per-run item limit
+does not supply a daily publication rate
+([../../reference/site-weight.md](../../reference/site-weight.md#growth-estimates)).
 Articles need no daily rate at all, which is why the fix removed the assumption
 instead of correcting it. Where no published day grew the tree over an article
 it published there is no rate, so the fact says there is no runway instead of
@@ -232,7 +230,7 @@ much room is left.
 ## See also
 
 - [console.md](console.md) - the console index: the two questions every panel names, the five routes, the standing band and the shared window.
-- [../../reference/site-weight.md](../../reference/site-weight.md) - what the reader actually downloads, measured page by page.
+- [../../reference/site-weight.md](../../reference/site-weight.md) - site-size controls and transfer measurements.
 - [retention.md](retention.md) - what is deleted as the site grows, which is the other lever on the same ceiling.
 - [layout.md](layout.md) - the published-size arithmetic behind the rate.
 - [../../../CLAUDE.md](../../../CLAUDE.md) - Guardrail #2: the 1 GB site is GitHub's, and crossing it fails the deploy.

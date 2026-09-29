@@ -181,8 +181,9 @@ directory, which an engine that admits a single directory can still read.
 
 **One build ships to the browser**: the single-threaded one that needs WebAssembly
 exception handling. The threaded build needs response headers a static host cannot
-send. A browser without the feature gets `unreachable`. What it adds to the site
-is in [../../reference/site-weight.md](../../reference/site-weight.md).
+send. A browser without the feature gets `unreachable`. Count the emitted engine
+assets in deployed size even though they load lazily
+([../../reference/site-weight.md](../../reference/site-weight.md#optional-assets)).
 
 **None of it is first-load.** `ledger.ts` reaches the engine only through a
 dynamic `import()`, and the engine reaches its package, its wasm and its worker
@@ -311,5 +312,5 @@ wrong count nobody can see.
 
 - [../../concepts/console-design/how-a-console-chart-gets-its-data.md](../../concepts/console-design/how-a-console-chart-gets-its-data.md) - the seven rules a panel's data obeys.
 - [../contracts/schemas.md](../contracts/schemas.md) - the hand copy of the index shapes and the test that binds it.
-- [../../reference/site-weight.md](../../reference/site-weight.md) - what the engine adds to the site, and what Pages sends again after a deploy.
+- [../../reference/site-weight.md](../../reference/site-weight.md#optional-assets) - deployed size, lazy downloads and cache assumptions.
 - [../../how-to/run-the-gates.md](../../how-to/run-the-gates.md) - the bundle gate that keeps the engine off the first load.

@@ -83,7 +83,7 @@ A megabyte figure and a headroom figure are both levels. **Neither is a rate, so
 
 **`by_directory` - the top-level children of `build/`.** One total cannot say whether the visuals grew or the telemetry did, so the day the total moves is the day somebody starts guessing. The split is asserted to sum exactly to the total, because a split that quietly loses bytes names the wrong directory on the one occasion it is used to decide what to cut.
 
-**`bytes_per_published_item` - the unit that holds still.** A rate per day is not stable here: the day rate moves with the item mix, where the per-item figure holds. So the day rate is derived - per-item times `run.safety_ceiling_per_run`, the ceiling in force - rather than averaged over whichever days happen to be on disk. That is a worst-case day by construction, which is what a runway needs (Guardrail #10). The readings are in [../../reference/site-weight.md](../../reference/site-weight.md#days-to-the-1-gb-pages-ceiling).
+**`bytes_per_published_item` - the average built bytes per item.** The derived day rate multiplies this average by `run.safety_ceiling_per_run`. That knob bounds a run, not a day, so the result is a projection under an assumed daily count, not a measured growth rate or a worst-case day. The distinction is in [../../reference/site-weight.md](../../reference/site-weight.md#growth-estimates).
 
 **`days_to_alarm` and `days_to_cap` - the runway.** Headroom divided by that rate, in published days rather than calendar days. It is printed on every run, including the runs nowhere near either line, because the day the alarm fires is not the day anybody wanted to first learn the date.
 
@@ -93,7 +93,7 @@ A megabyte figure and a headroom figure are both levels. **Neither is a rate, so
 
 **A runway from nothing raises rather than returning a comfortable number.** Zero published items divides into an infinite runway, and an infinite runway reads exactly like a healthy site. So the per-item property raises on an empty tree, the CLI checks before it asks, and a tree carrying no day payloads prints `runway: unknown` instead.
 
-**The printed runway is a floor, not an estimate of the date.** The rate averages the whole tree, so it charges the on-device encoder and the JavaScript bundle - neither of which grows with a day - to every future item. `by_directory` is on the same output so a reader can take them out rather than read the floor as the answer.
+**The printed runway is an estimate, not a guaranteed minimum.** Charging fixed assets to every future item overstates marginal growth, while an assumed daily count can understate publication. These effects do not establish a safe bound. Use `by_directory` to separate fixed assets and measure growth under the same code before forecasting a date.
 
 ## Why retention is the third lever and not the first
 
@@ -120,7 +120,7 @@ Retention was demoted after the byte arithmetic showed that encoding and the exi
 - [the-served-day-and-the-documents-that-stopped-being-written.md](the-served-day-and-the-documents-that-stopped-being-written.md) - the two migrations that more than doubled the runway, and the date they bought.
 - [retention.md](retention.md) - the third lever: what may be deleted and when.
 - [console-site-size.md](console-site-size.md) - the operator panel this instrument feeds.
-- [../../reference/site-weight.md](../../reference/site-weight.md#days-to-the-1-gb-pages-ceiling) - the readings themselves, and the units error that made them wrong until 2026-08-27.
+- [../../reference/site-weight.md](../../reference/site-weight.md#growth-estimates) - the units and assumptions a growth estimate needs.
 - [../../how-to/run-the-gates.md](../../how-to/run-the-gates.md) - the page ceilings, the bundle gate, and what runs where.
 - [../../reference/github-actions.md](../../reference/github-actions.md) - the jobs the measurement is a step in.
 - [../../concepts/config/run-limits.md](../../concepts/config/run-limits.md) - the alarm point and the cap, and why one reports and one stops.
