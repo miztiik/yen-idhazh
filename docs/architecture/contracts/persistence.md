@@ -121,7 +121,7 @@ The paths come back ascending by the day each file covers, never by path string.
 | Compression | `ledger.compression_raw` (snappy) or `ledger.compression_compact` (zstd) | `none` - it is plain text |
 | For | every ledger by default | a payload a person reads in a pull request |
 
-The `ledger` block of `config/idhazh.json` holds five knobs: `format` (default `parquet`), `compression_raw` (default `snappy`, which every reader opens without a plugin), `compression_compact` (default `zstd`, about 2.2 times smaller at a thousand rows), `published`, the ledgers a browser may fetch, and `engine_extension_repository`, where the query engine that reads them downloads its add-ons (default DuckDB's own host, [../publishing/how-the-query-door-answers-a-panel.md](../publishing/how-the-query-door-answers-a-panel.md)). **`published` ships empty**, because no page reads a compact file yet.
+The `ledger` block of `config/idhazh.json` holds five knobs: `format` (default `parquet`), `compression_raw` (default `snappy`, which every reader opens without a plugin), `compression_compact` (default `zstd`, about 2.2 times smaller at a thousand rows), `published`, the ledgers a browser may fetch, and `engine_extension_repository`, where the query engine that reads them downloads its add-ons (default DuckDB's own host, [../publishing/how-the-query-door-answers-a-panel.md](../publishing/how-the-query-door-answers-a-panel.md)). **`published` ships empty**, because no page fetches a compact file in a browser yet. The four console routes read the packed files of the three console ledgers while the site is built, from `state/` on disk, and a browser receives only what they drew.
 
 ### The column types
 
@@ -147,7 +147,7 @@ A date stays a string: it is a stamp a person reads in a diff and in a path, and
 
 1. Rewrite `render`, `read`, `read_envelope` and `engine_version` in `ledger/parquet.py` against the new engine. Keep their signatures.
 2. Keep the envelope as the file's key-value metadata, and keep the column types `arrow_schema.py` names.
-3. Update the one-module rule in the single-engine test to the new engine's import name, and the `parquet` extra in `pyproject.toml`.
+3. Update the one-module rule in the single-engine test to the new engine's import name, and the engine's line in `pyproject.toml`'s base dependencies.
 4. Run `backend/tests/ledger`. The round-trip test reads back every model in both formats, and the committed files under `tests/fixtures/parquet/` are what an earlier engine wrote, so a swap that cannot read them fails there.
 
 **A footer records its engine's version, so two engines never write identical bytes.** That breaks nothing: nothing compares a data file's bytes, only whether a path exists.
@@ -164,7 +164,7 @@ Five ledgers have moved, producer and reader together. Two moved on 2026-09-28: 
 | scores, the eval ledger | `evals.writer.file_measurements`, called by the same two stages. It files a measurement only once, and writes the `state/score-index/` CSV day tree beside it | the same two | the day its `date` names |
 | host-fingerprint, the machine record | `telemetry.silicon`: `idhazh fingerprint` files the job's row when the job starts, and `idhazh job-clock` files it again with the job-end cells under the same writer, so the later file replaces the first | the same two | the day its `date` names |
 
-Each writer names the commit its run checked out, which is why `idhazh plan`, `record`, `fingerprint` and `job-clock` take `--commit` as `idhazh assemble` always did, and a gardener run takes `--git-sha`. Every workflow job that reaches one of these ledgers installs `.[parquet]`. A test holds both for every step that runs an `idhazh` command: `backend/tests/workflows/test_ledger_door_jobs.py`. It does not follow a script under `backend/utilities/`, so a job that reaches a ledger only through one is held by reading it: `drift.yml`, whose report reads the eval ledger, and `ci.yml`'s browser job, whose canary day builder files the census, machine and eval rows, install `.[parquet]` for that reason.
+Each writer names the commit its run checked out, which is why `idhazh plan`, `record`, `fingerprint` and `job-clock` take `--commit` as `idhazh assemble` always did, and a gardener run takes `--git-sha`. `backend/tests/workflows/test_ledger_door_jobs.py` holds that for every step that runs an `idhazh` command. No job has to ask for the parquet engine to reach these ledgers, because pyarrow is part of the base install ([What it costs to install](#what-it-costs-to-install)).
 
 **The first two ledgers' committed CSV moved once, on 2026-09-28, through a one-shot migration.** It read the CSV, wrote one file per day through the door, read each file back field for field and cell for cell against the CSV row it came from, and only then deleted the CSV. The files it wrote carry `job=migrate`, `attempt=1`, `shard=0` and `producer=utilities.migrate_csv`, which is why `ServerJob` keeps `migrate`: a reader names those files' writer from it. No CSV of either ledger is left on `main`, and a run that checked out the CSV layout cannot push its append over the deleted file, so the program had nothing left to move and was deleted on 2026-09-28; git history holds it.
 
@@ -174,9 +174,13 @@ Running it again is safe. Every file it writes carries `job=migrate`, `attempt=1
 
 ## What it costs to install
 
-pyarrow is the largest thing the project installs, so it is the `parquet` optional extra rather than a runtime dependency: only a job that touches a parquet file installs `.[parquet]`, and `dev` pulls it in for the suite. **Its install time on ubuntu-latest was not measured before the first workflow job installed it**, by owner ruling (2026-09-27); the first digest run that installs it is where that reading comes from, and it is written here when it is taken. The reading in hand is from Windows, whose wheel bundles different shared objects, so it is not quoted.
+pyarrow is the largest thing the project installs, and it is a base dependency: `pip install -e .` installs it for every job, whether or not that job opens a parquet file. Its beneficiary is the one module that writes and reads parquet, `ledger/parquet.py`. **An optional extra that only the jobs reaching the door install is the smaller install, and it is the one this project could not hold.** A check that follows a job's imports misses the next way in - a Node script that starts Python, or a verb held in a variable - and a job it misses fails at its first read of the door. A base dependency cannot be missed.
 
-The jobs that install it share `setup-python`'s pip cache key with the jobs that do not, because that action keys on the OS, the interpreter and the dependency file and offers no input that names the extras. A cache saved by a job without the engine costs the next job that needs it a download of pyarrow, never a failed run.
+**What that costs is an estimate from GitHub's own step timings on ubuntu-latest (2026-09-29), not a paired measurement.** A plain install took 10 to 16 seconds (mean 12.9, over 13 runs) and an install with the engine 13 to 22 seconds (mean 15.2, over 10 runs). So the engine adds about 2 seconds to an average install - inside the spread between runs - and about 12 seconds at the widest, on each of about 12 installs that never open a parquet file. pyarrow 25.0.1 declares no dependencies of its own, so it moves no version the project already installs. A reading taken on Windows is not quoted, because that wheel bundles different shared objects.
+
+**Installed everywhere is not imported everywhere.** pyarrow is imported in `ledger/parquet.py` and nowhere else, and `ledger/persist.py` loads that module only inside the calls that write or read a parquet file, so importing the door loads no engine. `backend/tests/ledger/test_single_engine_import.py` holds the first half, and `test_the_facade_does_not_load_pyarrow` in `backend/tests/contracts/test_ledger_package.py` holds the second.
+
+Every job installs the same set, so whichever job saves `setup-python`'s pip cache saves pyarrow in it.
 
 ## Design rationale
 

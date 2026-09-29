@@ -125,21 +125,15 @@ and that oracle is stronger for being exact. A panel outside the list proves it
 honours the control in its own spec, by driving the control to each preset and
 reading the control's own attribute back against the panel's.
 
-## Known defect: three readers walk the whole score ledger
+## The model-change markers read the window as well
 
 `pipelineChanges`, which draws the model-change markers on `/console/` and
 `/console/machine/`, and `scoredDays` with `modelByDate` on `/console/model/`,
-all read every committed score row rather than the window. That is deliberate - a
-change marker has to sit on the day it happened, whatever span is being read -
-but the gardener's `scores` compaction deletes a month's rows once its monthly
-window has passed, and a score archive that summarised such a month carries
-cohort totals rather than dated rows. So from the first live
-deletion those three lose the dates in the deleted month. **No number a reader
-sees moves; a date list silently shortens.**
-
-Left as it is, because the compaction still only reports. Before that switch is
-thrown, either teach the readers to union the archive's cohort dates or say on
-the page how far back the marker list reaches.
+read the score record's newest packed days - the widest window preset, the cover
+every other panel on those routes reads - and never the whole ledger. The
+`scores` compaction deletes a month only once it is past the 15-month
+`monthly_window`, far behind any day those three draw, so turning it live moves
+none of their dates.
 
 ## The prerendered seed carries the window, and no more
 

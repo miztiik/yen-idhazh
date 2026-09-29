@@ -1,6 +1,6 @@
 # Contracts and Schemas
 
-**Last Updated**: 2026-09-28
+**Last Updated**: 2026-09-29
 
 The persisted-shape subsystem: where the models live, how a schema is obtained from one, the small hand copy the frontend carries, and the tests that stop the two drifting apart. This is the operational home of Guardrail #3 (contracts before logic) and `CLAUDE.md` sections 1a and 11.
 
@@ -42,11 +42,13 @@ export const SERVER_JOB = [
 export type ServerJob = (typeof SERVER_JOB)[number];
 ```
 
-The union alone cannot be tested against at run time, and a reader that has to narrow a CSV cell would otherwise retype the members. `host-fingerprint.ts` narrows the `job` column against that array and `watchedFlags()` hands back `WATCHED_FLAG`, so no second list of jobs and no second list of instruction-set flags is typed anywhere in the frontend.
+The union alone cannot be tested against at run time, and a reader that has to narrow a cell read as text would otherwise retype the members. `host-fingerprint.ts` narrows the `job` column against that array and `watchedFlags()` hands back `WATCHED_FLAG`, so no second list of jobs and no second list of instruction-set flags is typed anywhere in the frontend.
 
 **An optional field is copied optional.** Pydantic marks a field with a default as not required, so `cpu_model?: string | null` is what the contract says: the key may be absent, and present-but-null is the reading nobody took. A reader that fills every key says so by deriving from the copied type - `Required<HostFingerprintRow>` - rather than by declaring a second interface.
 
 **The query door carries a copy of the compact index, and the stamp it reads.** `frontend/src/lib/data/compact-index.ts` declares `CompactEntry` and `CompactIndex` by hand, because the door runs in a browser that fetches `state/compact/<ledger>/index/<period>.json` and cannot import the Pydantic model. Beside them sit `COMPACT_INDEX_STAMP`, the `CompactIndex` stamp this build reads, and `COMPACT_PERIODS`. **The stamp rule is the backend's own**: an index stamped at that stamp or older is read when the fields the door acts on pass its guard, and a newer one is refused with both stamps in the console, because only a build at least that new knows what the shape means. The door's rules are [../publishing/how-the-query-door-answers-a-panel.md](../publishing/how-the-query-door-answers-a-panel.md).
+
+**The census row's column names are spelled once, in `frontend/src/lib/server/ledger-rows.ts`.** The door answers only the columns a read asks for, so `ITEM_HEALTH_COLUMNS` names every column `ItemHealthRow` declares, in its order, and `backend/tests/contracts/test_frontend_console_lists.py` fails when the contract gains, loses or renames one. The two other records a console route reads keep no second list. `SCORE_COLUMNS` is built from the keys of `frontend/src/lib/console/eval-instruments.ts`, which the same test already holds to `EvalRow`, and `HOST_FINGERPRINT_COLUMNS` is keyed by the `HostFingerprintRow` copy above, so the compiler refuses a column that copy does not name.
 
 ## What holds the copy in step
 
@@ -56,7 +58,7 @@ Four tests in `backend/tests/contracts/`, each named for what it proves.
 | --- | --- |
 | `test_frontend_field_set.py` | the hand-written `HostFingerprintRow` names exactly the columns the Pydantic one declares, in the same order, with the same TypeScript type for each. Types are computed from `json_schema()` by a narrow mapper that refuses a node kind it has not met, so a field with an unfamiliar shape fails rather than passes |
 | `test_frontend_vocabularies.py` | `SERVER_JOB` and `WATCHED_FLAG` hold exactly their Python enums' members, in order |
-| `test_frontend_console_lists.py` | five console lists still name what their contracts declare - the eval panel's column map, the settings vocabulary, the doubt reasons, the bandwidth margin and the prompt-reuse column grammar |
+| `test_frontend_console_lists.py` | six console lists still name what their contracts declare - the eval panel's column map, the census row's column list in `ledger-rows.ts`, the settings vocabulary, the doubt reasons, the bandwidth margin and the prompt-reuse column grammar |
 | `test_frontend_index_shapes.py` | the query door's `CompactEntry` and `CompactIndex` copy each field with the contract's type in its order, by the same kind of narrow mapper; `COMPACT_INDEX_STAMP` is `CompactIndex.schema_version()`; `COMPACT_PERIODS` is `Period`; every ledger the door may query is a `LedgerName`; and the cell it filters days on is the ledger's own date cell |
 
 A fourth, `test_no_generated_layer.py`, refuses the generated trees coming back one file at a time.
@@ -87,6 +89,7 @@ A JSON Schema is a good interchange format and a poor authoring format: it canno
 | `backend/idhazh/contracts/__init__.py` | `CONTRACTS`, the registry of every top-level persisted document. What a check over all of them iterates. |
 | `backend/idhazh/contracts/<name>.py` | One module per persisted shape. |
 | `frontend/src/lib/server/host-fingerprint.ts` | The hand copy of `HostFingerprintRow`, `ServerJob` and `WatchedFlag`. |
+| `frontend/src/lib/server/ledger-rows.ts` | `ITEM_HEALTH_COLUMNS`, the column names of `ItemHealthRow` a console route asks the door for. |
 | `frontend/src/lib/server/config.ts` | The hand copy of `ConsolePanelGroup`. |
 | `frontend/src/lib/data/compact-index.ts` | The hand copy of `CompactEntry` and `CompactIndex`, and the stamp the query door reads. |
 | `frontend/src/lib/payload/types.ts` | The published payload's TypeScript shapes, mirroring `DigestDay`. Hand-written, and bound by nothing. |
@@ -106,13 +109,13 @@ The shapes, and where each one lives once written:
 | `VisualDecision` | `visual-decision` | one file per item under the run directory |
 | `VisualPlan` | `visual-plan` | not persisted yet - the shape lands ahead of its producers (Guardrail #3), and what a plan may not carry is as much of it as what it holds ([../publishing/what-a-visual-plan-may-say-and-what-happens-to-one-that-is-refused.md](../publishing/what-a-visual-plan-may-say-and-what-happens-to-one-that-is-refused.md)) |
 | `ElementTable` | `element-table` | not persisted yet - the shape lands ahead of its producers (Guardrail #3), and where an article's elements are written is settled by the row that writes them |
-| `EvalRow` | `eval-row` | one row of `state/scores/<YYYY>/<MM>/<DD>/`, in the file its writer owns |
+| `EvalRow` | `eval-row` | one row of `state/raw/scores/<YYYY>/<MM>/<DD>/`, in the raw file its writer files through the ledger door, packed later under `state/compact/scores/` |
 | `ObservationIndexRow` | `observation-index-row` | one row of `state/score-index/<YYYY>/<MM>/<DD>/`, the identity of one measurement the day beside it holds |
 | `SeenRow` | `seen-row` | one appended row of `state/seen/<YYYY>/<MM>/<DD>.csv` |
 | `PublishedRow` | `published-row` | one appended row of `state/published/YYYY/MM/DD.csv` |
 | `FeedHealthRow` | `feed-health-row` | one row of `state/feed-health/<YYYY>/<MM>/<DD>/`, in the file its writer owns |
 | `FeedRetirementRow` | `feed-retirement-row` | one row of `state/raw/feed-retirements/<YYYY>/<MM>/<DD>/`, in the file its writer owns, filed under the day the address was retired |
-| `ItemHealthRow` | `item-health-row` | one row of `state/item-health/<YYYY>/<MM>/<DD>/`, in the file its writer owns |
+| `ItemHealthRow` | `item-health-row` | one row of `state/raw/item-health/<YYYY>/<MM>/<DD>/`, in the raw file its writer files through the ledger door, packed later under `state/compact/item-health/` |
 | `PublicTelemetryRow` | `public-telemetry` | one row of `frontend/public/telemetry/<YYYY-MM>.csv`, the browser-safe projection of the row above |
 | `ItemHealthSummaryRow` | `item-health-summary-row` | one row of `state/item-health-summary/<YYYY-MM>.csv`, rewritten whole |
 | `ScoreArchive` | `score-archive` | `state/score-archive/<YYYY-MM>.json`, one whole document per archived score month |
@@ -135,7 +138,7 @@ Everything under `state/` is a row contract rather than a file contract, because
 
 `ItemHealthSummaryRow` is the one exception and says so in its own line above: its file is derived from the item-health shard it replaces, so every run of the fold writes the same bytes and the file is rewritten rather than appended to. Appending would double a month whenever the fold ran twice over a shard a lost race had restored. What decides when a month is folded is the `full-grain` series of `config/gardener/telemetry-aggregate.json`, and its deletion safeguards are in [../publishing/retention.md](../publishing/retention.md#what-bounds-the-committed-state-tree).
 
-`ScoreArchive` is the second exception and is a stronger one: it is not a row at all. A month of `state/scores/` past the `full-grain` series of `config/gardener/scores.json` becomes one JSON document, and a document is the right shape here because two of the three things it holds are whole-month facts rather than per-row facts - the SHA-256 of that month's day files in day order, and the sorted index of every distinct measurement it held. A CSV would have had to spread both across rows that do not mean anything on their own. It is written temp-then-rename, read back through this contract, and reconciled field by field against a second reading of those day files before any of them is unlinked; the `history` job of `.github/workflows/idhazh-gardener.yml` force-pushes `main` on a schedule (`CLAUDE.md` section 8), so a file deleted on the strength of an unchecked summary does not come back. What archiving preserves and gives up is in [../publishing/retention.md](../publishing/retention.md#what-bounds-the-committed-state-tree).
+`ScoreArchive` is the second exception and is a stronger one: it is not a row at all. A month of the scores ledger past the `full-grain` series of `config/gardener/scores.json` becomes one JSON document, and a document is the right shape here because two of the three things it holds are whole-month facts rather than per-row facts - the SHA-256 of that month's day files in day order, and the sorted index of every distinct measurement it held. A CSV would have had to spread both across rows that do not mean anything on their own. It is written temp-then-rename, read back through this contract, and reconciled field by field against a second reading of those day files before any of them is unlinked; the `history` job of `.github/workflows/idhazh-gardener.yml` force-pushes `main` on a schedule (`CLAUDE.md` section 8), so a file deleted on the strength of an unchecked summary does not come back. What archiving preserves and gives up is in [../publishing/retention.md](../publishing/retention.md#what-bounds-the-committed-state-tree). **Nothing builds one today.** The `scores` task built the archive from a month's CSV day files and hashed their bytes; since the eval ledger moved to the ledger door those files are gone, so no month is archived and the `scores` compaction stays report-only until an archive is built from the door's rows ([../publishing/idhazh-gardener.md](../publishing/idhazh-gardener.md#design-rationale)).
 
 `DayMetrics` is the third, and a document for the same reason `ScoreArchive` is: it is a whole-day fact, not a per-row one. A run writes one `state/day-metrics/<YYYY>/<MM>/<DD>.json` per published day - the day's counts and sums stored directly, and each median, distinct count or ranked list stored as the day's own value plus whatever lets a reader combine days in a defined way, because a percentile cannot be re-added into a window's percentile. It nests by year and month to mirror the published digest-day layout, and it is never a running total: a correction rewrites the whole record for that day. The console reads it back instead of walking every score, item-health, feed-health and published-day row for a figure that never changes once the day is frozen (Guardrail #12). It was authored as a contract in row 21 of the constant-cost-reads plan (#486), written by the producer in row 22 (#489), and read by the console reducers in rows 23 and 24 (#500, #501).
 
@@ -170,7 +173,7 @@ every row of a payload the reader downloads, which no panel reads.
 The stamp is not lost: it is a field of the shape, and
 `PublicTelemetryRow` is where a reader of an old shard looks it
 up. What the row loses is the ability to say which *row* predates a change, which
-is the thing `state/scores/` needs and this file does not - the console reads the
+is the thing the scores ledger needs and this file does not - the console reads the
 projection for rates and never branches on a row's age.
 
 It is also the only contract here whose forbidden fields are a rule rather than
@@ -206,10 +209,10 @@ mirrors the digest tree its rows are derived from.
 | --- | --- | --- | --- |
 | `state/seen/` | day files | how old is this address? | yes, `collect.seen_window_days` - and it is the one window here counted in days, so the prune keeps exactly the files the read opens |
 | `state/feed-health/` | day files | is this source still working? | yes, `ledger.HEALTH_WINDOW_DAYS` |
-| `state/item-health/` | day files | what did every planned item do? | yes - the console pans a window (`default_window_days` 30) and the read opens the days it names |
+| `state/raw/item-health/` and `state/compact/item-health/` | a raw file per write by day, packed into day and month files | what did every planned item do? | yes - the console pans a window (`default_window_days` 30), and `ledger.load_days` opens only the days it names |
 | `state/item-health-summary/` | monthly shards | what did a month past the `full-grain` series of `config/gardener/telemetry-aggregate.json` do, in totals? | it inherits the shard boundary of the file it replaces |
 | `state/published/` | day files | have we already published this? | yes, `collect.published_window_days` - committed at `-1`, so the read is whole today |
-| `state/scores/` | day files | how did every scored item do? | no - sharded by month from 2026-08-31 and filed by **day** since 2026-09-13, and a month past the `full-grain` series of `config/gardener/scores.json` becomes [one `ScoreArchive` document](../publishing/retention.md#what-bounds-the-committed-state-tree) |
+| `state/raw/scores/` and `state/compact/scores/` | a raw file per write by day, packed into day and month files | how did every scored item do? | no - filed by **day** since 2026-09-13 and through the ledger door since it moved; nothing turns a month into a `ScoreArchive` today ([persistence.md](persistence.md#moving-a-ledger-onto-the-door)) |
 | `state/score-index/` | day files | which measurements does the day file beside this one already hold? | no, and deliberately - `OBSERVATION_KEY` carries no date, so the same address, output and scorer is one measurement whenever it is re-taken. It files by the ledger's day rather than a grain of its own, because two grains in one relationship would be a mapping somebody maintains |
 | `state/score-archive/` | monthly documents | what did a month past the `full-grain` series of `config/gardener/scores.json` do, in totals and distributions - and which measurements did it hold? | it inherits the shard boundary of the file it replaces |
 | `state/raw/feed-retirements/` | a file per writer, by day | is this address gone for good? | no - a retirement is permanent for one endpoint |
@@ -223,20 +226,20 @@ mirrors the digest tree its rows are derived from.
 A window turns a partition into a skipped file open. `day_partition.days_in_window`
 names both ends of a day cover, so a plan run opens the days it names and no
 others. It is exact where the month rule it replaced was generous: a 90-day cover
-over `state/item-health/` opens 91 day files and reads 90 days of rows, where four
-month shards could hold up to 120 days of them.
+opens 91 days and reads 90 days of rows, where four month shards could hold up to
+120 days of them.
 
 `month_partition.shards_in_window` is that rule one grain up, and **no ledger is read with
 it any more** - `drift.read_windows` was the last and moved on 2026-09-13 with
 `state/scores/`. What it still answers is how many month-shaped buckets a
 day-counted window reaches, which is what sizes the `keep_months` knobs.
 
-**A ledger and its published mirror may file at different grains, and
-`state/item-health/` is the worked example.** The ledger files by day because a
+**A ledger and its published mirror may file at different grains, and the
+item-health ledger is the worked example.** The ledger files by day because a
 run writes one day; the projection under `frontend/public/telemetry/` stays
 monthly because the console prices a window in the files a browser fetches. The
-publisher is the bridge: it folds a month from that month's day files, reading at
-most 31. Both rules and what the bridge costs are in
+publisher is the bridge: it folds a month from that month's days, read through
+`ledger.load_days`, at most 31. Both rules and what the bridge costs are in
 [../../concepts/partitions.md](../../concepts/partitions.md#a-ledger-and-its-mirror-may-file-at-different-grains).
 
 Without a window, sharding is a cost with no matching saving. A question with no
@@ -254,8 +257,8 @@ Two consequences worth stating so nobody re-derives them:
 - **A monthly shard is not the only shard period available.** A ledger whose
  month file grows past what a reader should download moves to a shorter period
  rather than losing rows - `state/item-health/` did exactly that on 2026-09-13,
- from `<YYYY-MM>.csv` to `<YYYY>/<MM>/<DD>.csv`. The readers walk the tree, so
- the period is a layout change and not a contract change; see
+ from `<YYYY-MM>.csv` to `<YYYY>/<MM>/<DD>.csv`. Its readers asked for days, not
+ files, so the period was a layout change and not a contract change; see
  [../sources/item-health.md](../sources/item-health.md).
 
 **A ledger read with no window gains nothing from sharding, and the burden is
@@ -267,8 +270,8 @@ There were four single files read that way until 2026-09-13, three until
 `state/fingerprints.csv` was the fourth, and it was deleted rather than sharded:
 its read had no window because it had no reader left at all.
 `state/runtime-counters.csv` was the third and went the same way - every cell a
-reader still wanted moved onto `state/host-fingerprint/`, which is already a day
-tree. `state/feed-retirements.csv` was the last, and it pays the walk on
+reader still wanted moved onto the host-fingerprint ledger, which already files
+by day. `state/feed-retirements.csv` was the last, and it pays the walk on
 purpose: it moved through the ledger door, which gives every writer a file of
 its own under the day it covers ([persistence.md](persistence.md)). What that
 bought is one writer per file and no merge driver; the walk grows with the
@@ -298,7 +301,7 @@ omission, and how to decide it for a collection this table does not list are in
 
 Authority: Carmack (cache and shard economics), 2026-08-25.
 
-The eval ledger and source-state CSV ledgers compare the committed header to the row contract before writing. A mismatch stops the append and tells the operator to migrate the ledger. Padding is forbidden: readers map cells by header position, so a stale header would put correct-looking names over the wrong values.
+The source-state CSV ledgers compare the committed header to the row contract before writing. A mismatch stops the append and tells the operator to migrate the ledger. Padding is forbidden: readers map cells by header position, so a stale header would put correct-looking names over the wrong values. The eval ledger files parquet through the ledger door now, where each file records the shape it was written under.
 
 ### Narrowing a row ledger is one commit, not three
 
@@ -328,7 +331,7 @@ The rewrite is small enough to be reviewed as a diff rather than run as a utilit
 
 ### Design rationale: one widener for every ledger, rather than one per widening
 
-`backend/utilities/widen_ledger_header.py` is the operator's door onto `ledger.migrate_header`. Until 2026-09-21 nothing in the repository could widen a header from a command line: `migrate_header` was reached only from the compaction verb, which folds a segment into a head and takes no ledger argument. So every widening before it shipped its own utility - one for the feed-health header, another for the item-health header - each one a new file doing what the engine already did. Both are deleted; this door is what re-files either ledger now.
+`backend/utilities/widen_ledger_header.py` is the operator's door onto `ledger.migrate_header`. Until 2026-09-21 nothing in the repository could widen a header from a command line: `migrate_header` was reached only from the compaction verb, which folds a segment into a head and takes no ledger argument. So every widening before it shipped its own utility - one for the feed-health header, another for the item-health header - each one a new file doing what the engine already did. Both are deleted; this door is what re-files a CSV ledger now. The item-health ledger has since moved to the ledger door, where a file keeps the shape it was written under and nothing re-files it.
 
 One utility is possible because the two things it needs are already registered elsewhere. The ledger comes from the prune vocabulary, so a word means the same ledger in every command an operator types. The contract that reads a row comes from whichever of the two reader registries holds that ledger: `ledger.keys._TREE_SHAPES` through `segment_contract` and `segment_carried` for a day tree, and `ledger.keyed_paths` for a ledger the post-merge settlement covers. No list is restated in the utility, so none can drift from it, and a ledger that ships before its writer reports nothing rather than failing.
 
@@ -377,6 +380,8 @@ record earlier changes; they are not instructions to an agent.
 **Old entries are deleted, not archived.** Every entry is copied verbatim into the schema a contract computes, so an unbounded changelog is a list nobody reads carried by every reader that asks for the shape. Git already holds every word, so a fifth entry pointing a reader at the file's history costs one line and loses nothing. A commit hash is not the pointer: hashes do not survive the scheduled history prune (`CLAUDE.md` section 8), and a hash that no longer resolves is worse than no pointer at all.
 
 **Dropping an entry does not stamp a new `version`.** The stamp answers how old the *shape* is, and deleting history moves no field, no type, no default and no validator - a payload that validated before the trim validates after it. A version bump here would announce a shape change that did not happen. Trimming is the one edit to a contract module that is exempt, and the rule that made it is dated once in `CLAUDE.md` rather than restamped across every contract.
+
+**Moving where rows live stamps nothing either.** A change of address or file format that moves no field - a ledger moving onto the ledger door, say - takes no changelog entry and no version stamp: where rows live is `config/ledgers.json`'s fact, and its git history dates the move. The door writes the stamp into every file and refuses a file stamped newer than the build that reads it, so a stamp that moved with no field moving would tell that reader something false.
 
 Additive change: append the entry, stamp today, drop the oldest if that takes the list past five - older payloads still validate. Breaking change: append, stamp today, **and write the read-side migration in the same commit.** A payload written by yesterday's run that today's build cannot read is a release blocker.
 
@@ -473,7 +478,7 @@ The shapes this subsystem owns. `CLAUDE.md` section 11 states the three rules th
 | Surface | Written by | Read by |
 | --- | --- | --- |
 | **Stage payloads** | Each pipeline stage | The next stage, and any re-run |
-| **The eval ledger** | The evaluate stage, appended | The dashboard, and any trend query |
+| **The eval ledger** | The record and assemble stages, through the ledger door | The dashboard, and any trend query |
 | **The fingerprint ledger** | Nothing since 2026-09-12 | Anyone reading the ten rows it already holds |
 | **The source ledgers** | Plan and assemble, appended | The next run, deciding an article's age, whether it already ran, and whether a feed should rest |
 | **The run manifest** | The assemble stage | A later run, and anyone auditing what produced what |
