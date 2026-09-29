@@ -112,7 +112,7 @@ file it cannot read is skipped with a warning naming it; the compaction, which
 deletes what it read, stops that day instead
 ([../contracts/persistence.md](../contracts/persistence.md#reading-a-raw-ledger)).
 
-**An absent optional is a null, never a sentinel.** A raw file stores it as a
+**An absent optional is a null, never a sentinel.** A raw file holds it as a
 null cell. Where a CSV is still made - the published projection - `csv_row`
 writes `""` for it and `from_csv_row` reads `""` back as `None`. There is no
 sentinel number and no `NULL` literal, because both of those get averaged by
