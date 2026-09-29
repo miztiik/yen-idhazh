@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+import itertools
 import json
 import threading
 import time
@@ -25,6 +26,7 @@ from idhazh.contracts.digest_day import DigestDay
 from idhazh.contracts.element import ElementTable
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome
+from idhazh.contracts.file_envelope import WriterIdentity
 from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.knobs.extract import ElementsConfig
 from idhazh.contracts.knobs.gardener import DEFAULT_CLOSED_AFTER_DAYS
@@ -55,54 +57,84 @@ CONTRACT_FIXTURES_DIR: Final = FIXTURES_DIR / "contracts"
 #: settings it loads name.
 INCUMBENT_MODEL: Final = "qwen3.5-9b-q4km.json"
 
+#: The commit every file a test files through the ledger door says it came from.
+#: A tree under `tmp_path` has no commit, and the door refuses a writer with none.
+SEED_COMMIT: Final = "0" * 40
+
+#: Numbers each `seed_item_health` call, so every call is a writer of its own.
+_SEED_CALLS: Final = itertools.count(1)
+
+
+def writer_identity(
+    run_id: str,
+    *,
+    attempt: int = 1,
+    job: ServerJob = ServerJob.ASSEMBLE,
+    shard: int = 0,
+    producer: str = "tests.conftest",
+) -> WriterIdentity:
+    """Who a test says filed the rows it hands the ledger door.
+
+    Two calls with the same arguments name one work unit, so the reader keeps
+    only the later file of the higher attempt - which is what a re-run of one job
+    does. A caller that wants two writers side by side names two producers.
+    """
+    return WriterIdentity(
+        run_id=run_id,
+        attempt=attempt,
+        job=job,
+        shard=shard,
+        producer=producer,
+        git_sha=SEED_COMMIT,
+    )
+
+
+def _item_health_key(row: ItemHealthRow) -> tuple[str, ...]:
+    """The cells that make two census rows one record."""
+    return tuple(str(getattr(row, name)) for name in ledger.ITEM_HEALTH_KEY)
+
 
 def seed_item_health(state_dir: Path, date: str, rows: Iterable[ItemHealthRow]) -> int:
-    """Put an item census on disk the way a finished run leaves it.
+    """Put an item census on disk the way a finished run leaves it: raw files under `state/raw/`.
 
-    A fixture builder and not a copy of a writer. The pipeline no longer appends
-    to this head: a work shard and `assemble` each write a segment and the
-    gardener's closed-day fold settles them, so there is no longer one call a
-    test can make to reach a settled day file. Every caller of this helper wants
-    the day ALREADY settled - it is checking what the planner, the fold or a
-    projection does with a census, not how the census got written - so this
-    leaves the fold itself to `tests/gardener/test_closed_day_fold.py` and puts
-    the finished file there.
+    A fixture builder and not a copy of a writer. A work shard and `assemble`
+    each file their own raw file through the ledger door, and every reader
+    settles those files when it reads them, so a caller that wants a census on
+    disk wants exactly those files. How the reader settles them is tested in
+    `tests/ledger/`.
 
-    Settled means what the compaction means by it. A day file carrying a heading
-    from an earlier build is re-filed onto the current one first, through the
-    contract's own reader, and then the first row for an `ITEM_HEALTH_KEY` wins:
-    a row repeating a key already in the file is dropped rather than appended.
+    Each call is one more writer of the day, so a second call adds rows to the
+    first rather than replacing it. A row whose `ITEM_HEALTH_KEY` the ledger
+    already holds is left out, so the first row filed for a key is the one every
+    reader sees, whichever order the files sort in.
 
-    The file is the day's own `settled.csv`, which is the name the fold writes
-    and the one name in a day directory no writer can take.
-
-    Returns the rows the file gained, so a caller that asserted on the old
-    writer's count asserts on the same number.
+    Returns how many rows were filed.
     """
-    path = ledger.path(state_dir, LedgerName.ITEM_HEALTH, date) / day_shards.SETTLED_NAME
-    columns = ItemHealthRow.csv_columns()
-    ledger.migrate_header(
-        path, columns, ledger.refiler(ItemHealthRow), carried=ledger.ITEM_HEALTH_CARRIED
-    )
-    held = ledger.recorded_item_health(path)
-    kept: list[dict[str, str]] = []
-    for row in rows:
-        cells = row.csv_row()
-        key = tuple(cells[name] for name in ledger.ITEM_HEALTH_KEY)
+    pending = list(rows)
+    days = {date, *(row.date for row in pending)}
+    held = {
+        _item_health_key(row)
+        for row in ledger.load_days(state_dir, LedgerName.ITEM_HEALTH, days, model=ItemHealthRow)
+    }
+    kept: list[ItemHealthRow] = []
+    for row in pending:
+        key = _item_health_key(row)
         if key in held:
             continue
         held.add(key)
-        kept.append(cells)
+        kept.append(row)
     if not kept:
         return 0
-    path.parent.mkdir(parents=True, exist_ok=True)
-    exists = path.exists()
-    with path.open("a", encoding="utf-8", newline="") as handle:
-        out = csv.DictWriter(handle, fieldnames=columns, lineterminator="\n")
-        if not exists:
-            out.writeheader()
-        out.writerows({name: cells[name] for name in columns} for cells in kept)
-    return len(kept)
+    filed = ledger.persist(
+        state_dir,
+        kept,
+        ledger=LedgerName.ITEM_HEALTH,
+        covers=date,
+        identity=writer_identity(
+            f"{date}-1", producer=f"tests.conftest:seed-{next(_SEED_CALLS)}"
+        ),
+    )
+    return len(kept) if filed else 0
 
 
 def seed_span_rollup(state_dir: Path, date: str, rows: Iterable[SpanRollupRow]) -> int:
@@ -191,8 +223,10 @@ def seed_scores(
     put rows down without one would find every measurement offered again as new.
     `run_id` has no default because the index is filed under the run's own day.
     """
-    return eval_writer.append_segment(
-        state_dir, rows, run_id=run_id, attempt=attempt, job=job, shard=shard
+    return eval_writer.file_measurements(
+        state_dir,
+        rows,
+        identity=writer_identity(run_id, attempt=attempt, job=job, shard=shard),
     )
 
 
