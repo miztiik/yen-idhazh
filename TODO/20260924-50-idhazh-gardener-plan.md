@@ -10,7 +10,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 
 ## Execution handover (zero-context cold start)
 
-A paste-ready brief for an agent that picks this plan up with no prior context. [execute-a-plan.md](../docs/how-to/execute-a-plan.md) is the canonical contract; this brief adds only what this plan's run has learned. Written 2026-09-27, about 20:10 UTC, and brought up to date 2026-09-28, about 12:15 UTC, when the first owner handed over after row 5 merged, about 14:00 UTC, when the second owner's dispatch checks on row 7 added deviations 96 to 101 and row 12, about 17:30 UTC, after row 7 merged, and 2026-09-29, about 06:15 UTC, when the third owner's session ran out of context with row 8 ready to merge and row 12's worker ended mid-row.
+A paste-ready brief for an agent that picks this plan up with no prior context. [execute-a-plan.md](../docs/how-to/execute-a-plan.md) is the canonical contract; this brief adds only what this plan's run has learned. Written 2026-09-27, about 20:10 UTC, and brought up to date 2026-09-28, about 12:15 UTC, when the first owner handed over after row 5 merged, about 14:00 UTC, when the second owner's dispatch checks on row 7 added deviations 96 to 101 and row 12, about 17:30 UTC, after row 7 merged, and 2026-09-29, about 06:15 UTC, when the third owner's session ran out of context with row 8 ready to merge and row 12's worker ended mid-row, and about 06:40 UTC, when the person ruled on row 9's two open questions.
 
 ```text
 You are the OWNER of TODO/20260924-50-idhazh-gardener-plan.md. You have no prior context.
@@ -24,10 +24,11 @@ and docs/how-to/run-the-gates.md. Then read this plan's section 0, section 1 (th
 Reckoner, the only tracker) and each row just before you dispatch it.
 
 STEP 1 - ADOPT OR CLOSE. Run git worktree list, gh pr list and git branch -r. At the last
-update (2026-09-29, 06:15 UTC) rows 1 to 7 and 11 had merged (#1127, #1131, #1142, #1139,
+update (2026-09-29, 06:40 UTC) rows 1 to 7 and 11 had merged (#1127, #1131, #1142, #1139,
 #1145, #1141, #1151, #1136) and row 10 is collapsed. Row 8 is open as #1156 (worktree
 p50r8, pushed, clean). Row 12 is UNCOMMITTED work in worktree p50r12 (STEP 2). Row 9
-waits on a person (deviation 133). The owner's worktree, p50own, holds no unpushed work.
+is ready: the person ruled on it on 2026-09-29 (deviations 135 and 136). The owner's
+worktree, p50own, holds no unpushed work.
 Section 0's three plan-54 reads ran before row 5 and all three came back empty.
 
 STEP 2 - DISPATCH. Row 8's findings are deviations 118 to 131 and three open questions
@@ -59,11 +60,14 @@ workers started together return together (deviation 94).
                      the diff, fixes that test, commits in small pieces, pushes, opens
                      the PR. It merges after #1156, once its branch has taken main in;
                      it edits digest.yml, so it needs the same quiet time
-  row 9              waits on a person: deviation 133 (how packed files first reach
-                     main, three options) and deviation 112 (the scores ledger's own
-                     attempt field). Plan 51's row 7 merged (#1154), so nothing else
-                     blocks it. Put 133 to the person in CLAUDE.md section 0c form
-                     before dispatching. Do not build sliceFromDisk() here
+  row 9              ready now. The person ruled on 2026-09-29. Deviation 135: row 9's
+                     one-time migration packs every day the packing rule already
+                     admits, with the packing task's own code, and the three packing
+                     tasks stay report-only. Deviation 136: EvalRow.attempt becomes
+                     summary_attempt. Plan 51's row 7 merged (#1154), so nothing else
+                     blocks it. Rows 9 and 12 both edit digest.yml: compare their file
+                     lists before running them side by side. Do not build
+                     sliceFromDisk() here
 
 STEP 3 - GATES. A worker runs `npm --prefix frontend run test:changed -- --list`, then only
 its row's named acceptance gates, then pushes and reports. CI is the one full-suite run
@@ -231,6 +235,8 @@ Every place where the tree, or a ruling, departs from the text further down. A w
 | 132 | 9 | The settled escalation: the build-time readers are `host-fingerprint.ts`, `machine-counters.ts` and `model-work.ts`, and `payload.ts` touches none of these ledgers | Measured on main at e5a0f8718: `model-work.ts` opens no `state/` path, because it computes from rows it is handed. `payload.ts` reads two of the three: `evalRows()` reads `state/scores` and `itemHealthRows()` reads `state/item-health`, and the loaders of `/console`, `/console/machine`, `/console/model` and `/console/voices` call them. `dayShardFiles()` returns no rows for a missing folder, so a row 9 that deletes the CSV and leaves these two in place ships four routes that draw nothing on a green build. Row 9 moves `evalRows()` and `itemHealthRows()` onto `sliceFromDisk()` with `host-fingerprint.ts` and `machine-counters.ts` | Plan 51's owner, 2026-09-28 |
 | 133 | 9 | (not in the plan) | `sliceFromDisk()` reads packed files only, and row 9's three packing declarations ship `dry_run: true` (deviation 98), so every reader row 9 moves returns "missing" until packed files exist. A live task also packs at most 8 days a pass from the first of the oldest month, so reaching the present from 1 August takes about eight wakes (estimate). How packed files first reach main is a person's call, asked by plan 51's owner on 2026-09-28: row 9's one-time migration packs every finished day with the packing code and the tasks stay report-only; or the three tasks go live in row 9's pull request with `max_periods_per_run` raised; or they onboard report-only and the four routes show "missing" until they go live. Plan 51's rows 3 and 8 wait on the answer | Plan 51's owner, 2026-09-28 |
 | 134 | 12 | Row 12 depends on row 8, and a row is ready when its dependencies are DONE | Row 12 was dispatched on 2026-09-28 stacked on #1156's green branch, because row 8 waited only for its merge condition (deviation 130) and every file row 12 shares with it is row 8's. Row 12's pull request shows row 8's changes until #1156 merges; then its branch takes main in, and it merges after #1156, inside a digest gap | Plan owner, 2026-09-28 |
+| 135 | 9 | Deviation 133: how packed files first reach main, three options | The person chose the first. Row 9's one-time migration packs every day the packing rule already admits, with the packing task's own code, and writes each day's file, `index/daily.json` and the daily watermark exactly as a live pass would, so a task turned on later resumes from the right day. Days the rule does not yet admit become raw files, as the row already says. The three packing tasks stay report-only (deviation 98), and turning them on is a later call for a person. The cost: the four routes deviation 132 names show data up to the day the migration ran, and stop there until the tasks go live. Rejected: the tasks going live in row 9's pull request, which switches on deletion in the same merge as the migration; and report-only with no packing, which ships four routes that draw nothing on a green build | Owner, 2026-09-29 |
+| 136 | 9 | Row 9's naming correction 4: `EvalRow.attempt` keeps its name and gains a description (owner decision, 2026-09-26) | Deviation 112: the person chose to rename it. `EvalRow.attempt` becomes `summary_attempt`, beside the other three renames, with a `version` stamp and a read-side alias in the same commit and the description correction 4 asked for. The writer's `attempt` on every row keeps its name. Rejected: renaming the writer's `attempt`, which changes a shape every ledger already on parquet has written | Owner, 2026-09-29 |
 
 ## 0. Operating contract
 
