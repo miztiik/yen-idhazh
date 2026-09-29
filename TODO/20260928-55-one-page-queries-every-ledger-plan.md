@@ -14,9 +14,9 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | --- | --- |
 | Why this plan exists | Every figure on the console is a panel somebody wrote for one question. A question nobody anticipated has no surface, and answering it means a clone, a Python session and a morning. This plan gives the owner one page that reads every ledger the project declares, over any span including today, with the query written by hand and the answer drawn as a table and as a chart. |
 | The page, in one sentence | **An empty shell that prerenders nothing.** It arrives with no data in it; the reader picks ledgers and days, types a query and presses run, or arrives on an address that carries a query and presses run themselves. |
-| Hard scope - in | - `/console/data-explorer/` is a sixth console tab, labelled `Records`, that **prerenders nothing** - a shell answered by the existing `404.html` fallback, which fetches everything it draws.<br>- The query door gains `ask()`: one read-only statement over a chosen set of ledgers and days, on an engine sealed after its add-ons are loaded.<br>- Every ledger `config/ledgers.json` declares reaches the page's picker; every published one is queryable; an unpublished one says so by name.<br>- A span reaches **today**: packed month files, packed day files, and the writers' own files for days not packed yet, with each date read through exactly one tier.<br>- **What the build copies to the site is capped at the widest span the console can ask for**, and a date older than the cap is read from the committed repository instead.<br>- The answer is a table and, where its columns can carry one, a chart from the vocabulary the chart-vocabulary row established.<br>- A query is saved in this browser, found again, and carried in the page address.<br>- The shared span control gets smaller and the console's default span becomes 14 days. |
+| Hard scope - in | - `/console/data-explorer/` is a sixth console tab, labelled `Records`, that **prerenders nothing** - a shell answered by the existing `404.html` fallback, which fetches everything it draws.<br>- The query door gains `ask()`: one read-only statement over a chosen set of ledgers and days, on the engine plan 51 shipped, unchanged.<br>- Every ledger `config/ledgers.json` declares reaches the page's picker; every published one is queryable; an unpublished one says so by name.<br>- A span reaches **today**: packed month files, packed day files, and the writers' own files for days not packed yet, with each date read through exactly one tier.<br>- **What the build copies to the site is capped at the widest span the console can ask for**, and a date older than the cap is read from the committed repository instead.<br>- The answer is a table and, where its columns can carry one, a chart from the vocabulary the chart-vocabulary row established.<br>- A query is saved in this browser, found again, and carried in the page address.<br>- The shared span control gets smaller and the console's default span becomes 14 days. |
 | Hard scope - out | see the table below |
-| ESCALATE triggers | 1. **The page prerenders, or a loader returns data to it.** It ships an empty shell or it is not this page.<br>2. **The sealing statements in section 2.6 are weakened, reordered so that the lock lands before the add-ons, or dropped because a query failed.** A query that fails after the seal is a missing add-on to add to the pre-load list, never a reason to leave the configuration open.<br>3. A statement that is not read-only reaches the engine, or the door builds an identifier from anything but `LEDGER_NAMES`.<br>4. An address runs a query instead of loading it into the editor.<br>5. A ledger is published that `config/ledgers.json` does not declare.<br>6. A second module imports `@duckdb/duckdb-wasm`, or a module other than `ledger.ts` builds a published address.<br>7. `ConsoleBand` changes beyond gaining one route id.<br><br>**A new chart type is not an escalation** - it is Susan's call on the vocabulary page. |
+| ESCALATE triggers | 1. **The page prerenders, or a loader returns data to it.** It ships an empty shell or it is not this page.<br>2. **`connect-src` is widened beyond the four origins section 2.6 names**, or the engine is handed a file the page did not fetch - `registerFileURL` called, or a registered name taken from an index, a cell or a caller.<br>3. A statement that is not read-only reaches the engine, or the door builds an identifier from anything but `LEDGER_NAMES`.<br>4. An address runs a query instead of loading it into the editor.<br>5. A ledger is published that `config/ledgers.json` does not declare.<br>6. A second module imports `@duckdb/duckdb-wasm`, or a module other than `ledger.ts` builds a published address.<br>7. `ConsoleBand` changes beyond gaining one route id.<br><br>**A new chart type is not an escalation** - it is Susan's call on the vocabulary page. |
 | Chosen strategy | Three independent rows first - the chrome, the reader, the data - then the page that needs all three, then what the page does with an answer, then the reach past the cap and the polish. Ruled by Fowler (CLAUDE.md section 14). |
 | Execution | autonomous orchestrator per docs/how-to/execute-a-plan.md. Parallel N = 3, because wave 1 holds exactly three file-disjoint rows and every later wave holds one. |
 
@@ -25,8 +25,8 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | What is out | What it costs to leave out | What would bring it in |
 | --- | --- | --- |
 | Taking the six existing prerendered routes off prerender | `/`, `/archive/`, `/evals/` and the three console pages keep their documents. Telemetry-intent N4 stays in tension with plan 26's ruling, and this plan does not resolve it - it only stops N4 being read as a bar on a page that bakes nothing | [`20260911-26-retire-prerender-plan.md`](20260911-26-retire-prerender-plan.md) section 6, which is already written as executable rows and needs only the owner's word |
-| A switch on the page that opens the engine seal | Nothing an operator can reach another way. The one capability the seal genuinely removes is joining a ledger against a file of your own, and a file the **page** reads and hands the engine as a buffer restores it without opening anything. Reading past the site's cap needs no switch either - row 6 does it with the page's own fetch | A config value in `config/appearance.json`, default off, with its removal condition on its declaring line - never a control in the page, because a switch reached by a shared address is a switch a stranger's query can find already on |
-| Dropping a local file onto the page and joining a ledger against it | You cannot compare a ledger against a spreadsheet you hold. It is the only real loss the seal causes, and the seal is not what would need to move: the page reads the file with the browser's own file API and registers it as one more buffer | Its own row. About one component, one buffer registration and a column-type check, and it opens no network path |
+| A control on the page that widens `connect-src` | Nothing an operator can reach another way. The one capability the content policy genuinely removes is joining a ledger against a file of your own, and a file the **page** reads and hands the engine as a buffer restores it without widening anything. Reading past the site's cap needs no control either - row 6 does it with the page's own fetch | A config value in `config/idhazh.json`, which is where every origin on the list already comes from - never a control in the page, because a switch reached by a shared address is a switch a stranger's query can find already on |
+| Dropping a local file onto the page and joining a ledger against it | You cannot compare a ledger against a spreadsheet you hold. It is the only real loss, and no boundary would need to move for it: the page reads the file with the browser's own file API and registers it as one more buffer | Its own row. About one component, one buffer registration and a column-type check, and it opens no network path |
 | A download of any kind - CSV, Parquet, Arrow | You cannot open an answer in a spreadsheet. Row 5's copy-to-clipboard covers the case it was wanted for, and refusing a file also refuses the formula-injection surface a cell beginning `=` opens | Owner decision. It is one function and one button, and the cell-escaping rule comes with it |
 | Writing anything back - a saved query committed to the repository, a query the pipeline runs | A saved query notices nothing when a column is renamed; it simply fails the next time you run it | A row that gives a saved query a file under `config/`, its own contract and a test that runs it |
 | A second engine, a second dialect, or a query language of our own | One dialect. An operator learns DuckDB SQL, which they can use anywhere else | Nothing. This is a refusal, not a deferral |
@@ -52,7 +52,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | The span control shrinks and the strip gains a sixth tab | - | A | PENDING | - | - | - |
-| 2 | The door answers a written question on a sealed engine | - | A | PENDING | - | - | - |
+| 2 | The door answers a written question, on the engine plan 51 shipped | - | A | PENDING | - | - | - |
 | 3 | Every declared ledger reaches the site, capped at the widest span | - | A | PENDING | - | - | - |
 | 4 | The page: pick the ledgers and the days, write the question, read the table | 1, 2, 3 | B | PENDING | - | - | - |
 | 5 | The answer gets a shape, and a question is kept, found again and shared | 4 | C | PENDING | - | - | - |
@@ -95,7 +95,7 @@ The query door shipped. **It is ten modules, not the three an earlier draft of t
 | 3 | `frontend/src/lib/data/slice.ts` | Pure: `daysBetween()`, `filesFor()` - the coarsest file that holds each day, or the first hole | **Row 2 adds the third tier** (the writers' own files); **row 6 adds the fourth** (the repository) |
 | 4 | `frontend/src/lib/data/slice-query.ts` | `QueryEngine`, `statementFor()`, `rowsFor()`, `cellOf()`, `SliceValueError`, `DATE_COLUMN` | Row 2 reuses `cellOf()` unchanged and adds nothing to `statementFor()` |
 | 5 | `frontend/src/lib/data/page-keeper.ts` | `pageKeeper()`, `ByteSource`, `WantedFile`, `Holding`, `FileShortfall` - one fetch and one registration per file, for the page's life | **Row 2 calls `hold()` and never registers a file itself** |
-| 6 | `frontend/src/lib/data/engine.ts` | The only importer of `@duckdb/duckdb-wasm`. `browserEngine()`, `nodeEngine()`, minted names `door/<n>.parquet` | **Row 2 adds the pre-load and the seal at start** (section 2.6) |
+| 6 | `frontend/src/lib/data/engine.ts` | The only importer of `@duckdb/duckdb-wasm`. `browserEngine()`, `nodeEngine()`, minted names `door/<n>.parquet` | **Untouched.** No setting, no pre-load, no pin (section 2.6) |
 | 7 | `frontend/src/lib/data/compact-index.ts` | The hand copy of `CompactIndex` / `CompactEntry` | Row 2 adds the hand copy of `RawDayIndex` |
 | 8 | `frontend/src/lib/data/fetched-bytes.ts` | The `ByteSource` that fetches from this site | **Row 6 gives it the archive prefix** |
 | 9 | `frontend/src/lib/data/ledger-reach.ts`, `slice-reader.ts` | How far a ledger reaches; the slice read itself | Untouched |
@@ -105,8 +105,8 @@ The query door shipped. **It is ten modules, not the three an earlier draft of t
 
 | # | Fact, read from `engine.ts` on `main` | What follows |
 | --- | --- | --- |
-| 1 | **The parquet reader is an add-on the engine downloads at first use**, from `ledger.engine_extension_repository`, which is `https://extensions.duckdb.org` in `config/idhazh.json` | Turning auto-install and auto-load off before that add-on is loaded stops every query over every ledger. The pre-load in section 2.6 exists for exactly this |
-| 2 | **The browser worker starts from a `blob:` bootstrap, so it inherits the page's `connect-src`** | The browser's own policy is a real boundary on the engine, not only on the page. `connect-src` already names three origins: this site, the asset base and the extension repository |
+| 1 | **The parquet reader is an add-on the engine downloads at first use**, from `ledger.engine_extension_repository`, which is `https://extensions.duckdb.org` in `config/idhazh.json` | The engine needs the network to work at all, so a database setting that closes it is a setting that breaks every panel. This is the first of the two reasons section 2.6 adds no engine setting |
+| 2 | **The browser worker starts from a `blob:` bootstrap, so it inherits the page's `connect-src`** | The browser's own policy is already the boundary on the engine, not only on the page - the second reason. `connect-src` names three origins today: this site, the asset base and the extension repository |
 | 3 | **`register()` mints the name** `door/<n>.parquet` from a counter, and a registered buffer is a **file**, not a table | A statement cannot say `FROM "item-health"` until something creates that name. Section 2.4 is where it is created |
 
 ### 2.2 The address, the tab, and the route id
@@ -189,7 +189,9 @@ export function askCost(ledgers: readonly LedgerName[], from: DateStamp, to: Dat
 
 **`ask` rather than `query`.** The module is already the query door, so `query()` beside `slice()` would put the same word in two jobs one sentence apart (CLAUDE.md section 0b).
 
-**A registered buffer is a file, so `ask()` creates one view per ledger.** This is the step with no other home: the engine mints `door/<n>.parquet` and a statement cannot name a ledger until something binds the name.
+**A registered buffer is a file, so `ask()` creates one view per ledger.** The engine mints every registered name - `door/<n>.parquet` from a counter - and a statement cannot name a ledger until something binds the name.
+
+**Why the registered name is not simply the ledger's name.** Not for a security reason first, but an arithmetic one: **one ledger is many files.** Fourteen days of `item-health` is one month file, plus the day files after it, plus the writers' files for the days not packed yet, and five parquet blobs cannot share one name. The minted name names a **file**; the ledger name names the **set**. The view is the one statement that binds the second to the first, and the minting rule then costs nothing, because the name a person types was never going to be the name a file was registered under.
 
 ```ts
 // For each selected ledger, in order, after `hold()` has returned its names:
@@ -205,7 +207,7 @@ export function askCost(ledgers: readonly LedgerName[], from: DateStamp, to: Dat
 | 2 | The file list is the minted names `hold()` returned, each quoted as a string literal, exactly as `slice-query.ts` already does in `listOf()` | The engine minted every one of them |
 | 3 | **Every unselected ledger's view is dropped on every call** | A view left behind from an earlier run points at files the keeper still holds, so a statement could read a ledger the operator did not select and did not see the cost of. Dropping is one statement per unselected name and it runs before the operator's statement |
 | 4 | `union_by_name = true`, matching the panel path | A day written before a column existed reads that column as null rather than failing the read |
-| 5 | The door's own view statements are not subject to section 2.6 control 3 | That control reads the operator's text. The door's statements are built from a closed union and minted names |
+| 5 | The door's own view statements are not subject to section 2.6 control 4 | That control reads the operator's text. The door's statements are built from a closed union and minted names |
 
 **`LEDGER_NAMES` widens from three to twenty-six.** It stays a hand-written closed union in `slice-shapes.ts` and a backend test binds it to the registry in both directions, the binding `test_frontend_vocabularies.py` already uses. A panel still names a ledger and never a path.
 
@@ -222,56 +224,38 @@ export function askCost(ledgers: readonly LedgerName[], from: DateStamp, to: Dat
 | 5 | Guardrail #12 is satisfied by the span, not by the archive: the first view fetches `console.default_window_days` of the selected ledgers and no more, however long the project has been running |
 | 6 | **A browser page keeps every file it has fetched for the page's life** (`page-keeper.ts`), so bytes accumulate across runs on one page. `maxFetchBytes` bounds one call; the reload bounds the page. Row 4 prints the running total beside the cost line so the ceiling is never the first news of it |
 
-### 2.6 The seal, which is applied after the add-ons load and not before
+### 2.6 The boundary is the browser's, and this plan adds nothing to it
 
-**The earlier draft of this section would have stopped every query on the site.** The engine links only DuckDB's core functions and downloads the parquet reader at first use (section 2.1 fact 1), so turning auto-install and auto-load off at start removes the ability to read a parquet file at all. The order below is the whole of the fix, and ESCALATE trigger 2 exists to stop it being quietly reordered by somebody debugging a failed query.
+**This is the design plan 51 approved and shipped, unchanged. No row here sets an engine option, pins the engine's version, or pre-loads an add-on** (owner, 2026-09-29).
 
-**In `engine.ts`, in `startInBrowser` and `startInNode`, immediately after the `custom_extension_repository` statement and before the connection is handed back:**
+A database setting would have been a second lock on a door the browser already holds shut, and it would have broken the door on the way: the engine links only DuckDB's core functions and fetches its parquet reader over the network at first use, so a setting that closes the network closes every panel on the console (section 2.1 facts 1 and 2). **A static site's boundary is its content policy. That is how every site does this, and this one is not special.**
 
-```
-INSTALL parquet;
-LOAD parquet;
-SET enable_external_access = false;
-SET autoinstall_known_extensions = false;
-SET autoload_known_extensions = false;
-SET lock_configuration = true;
-```
-
-| # | Rule about that block | Why |
-| --- | --- | --- |
-| 1 | The pre-load list is **derived by row 2, not guessed by this document.** The row runs one parquet read on an unsealed engine, then `SELECT extension_name FROM duckdb_extensions() WHERE loaded`, and the list it prints is the list that goes above `SET enable_external_access = false`. `parquet` is where it starts | Guardrail #10. A guessed list is a query that fails on a site nobody is watching |
-| 2 | The lock is last | `lock_configuration = true` refuses every later `SET`, including the three above it |
-| 3 | The block runs in both halves, browser and Node | A seal only the browser has is a seal a build-time reader can be used to get around, and the Node half is what the oracle can drive without a browser |
-| 4 | A query that fails after the seal is a **missing add-on**, added to the pre-load list in the same commit | ESCALATE trigger 2. Reaching for the setting instead is how a seal becomes a comment |
-
-**Four controls, strongest first.** Row 2 proves each one rather than assuming it.
+**Four controls, and three of them are already on `main`.**
 
 | # | Control | What it stops | Where it lives |
 | --- | --- | --- | --- |
-| 1 | Only buffers the keeper registered are visible, under names the engine minted. **`registerFileURL` is never called** | The statement cannot reach a file the door did not fetch | `engine.ts`, already true on `main` |
-| 2 | The block above, in that order | `read_csv('https://...')`, `COPY ... TO`, `ATTACH`, `INSTALL`, `LOAD`, and the statement turning any of them back on | `engine.ts`, row 2 |
-| 3 | The page refuses, before the engine sees it: more than one statement; anything that is not `SELECT`, `WITH ... SELECT`, `DESCRIBE`, `SUMMARIZE` or `EXPLAIN`; and a statement longer than `console.explorer_query_max_chars` | A write, a schema change, and a paste large enough to stop the tab responding | `frontend/src/lib/data/statement.ts`, row 2 |
-| 4 | `connect-src`, which the browser enforces on the engine's worker as well as on the page, because the worker starts from a `blob:` bootstrap | Anything that got past 1 to 3 reaching a fourth origin | `frontend/asset-base.js`, already true on `main` |
+| 1 | Only buffers the page fetched are visible. `registerFileBuffer` only; **`registerFileURL` is never called** | The engine cannot open a file the page did not fetch | `engine.ts`, shipped |
+| 2 | **Every registered name is minted by the engine** - `door/<n>.parquet` from a counter, never from an index, a `covers` value, a cell or a caller | No fetched text and no typed text can name a file | `engine.ts`, shipped |
+| 3 | `connect-src`, which the browser enforces **on the engine's worker as well as on the page**, because the worker starts from a `blob:` bootstrap | Any request to an origin not on the list, from the page or from inside a statement | `asset-base.js`, shipped |
+| 4 | The page refuses, before the engine sees it: more than one statement; anything that is not `SELECT`, `WITH ... SELECT`, `DESCRIBE`, `SUMMARIZE` or `EXPLAIN`; and a statement longer than `console.explorer_query_max_chars` | A write, a schema change, and a paste large enough to stop the tab responding | `statement.ts`, row 2 |
 
-**What control 4 admits today, stated rather than implied.** `connect-src` names three origins: this site, `visuals.asset_base_url`, and `ledger.engine_extension_repository`. Row 3 adds a fourth, `ledger.archive_base_url`, computed from the same config file. **That is the residual, and it is named rather than denied**: with controls 1 to 3 in place a statement cannot reach any of them, and if control 2 were ever removed a statement could read a public file on one of four hosts and nowhere else. It is what the browser can enforce, it is smaller than the open web by every host that is not on that list, and no row here widens it beyond the one address the owner asked for.
+**Control 4 is a courtesy, and it is written down as one.** It gives the operator a fast, readable refusal for an obvious mistake, in their own words rather than the engine's. A denylist over a language with function syntax is not a boundary, and **nothing in this plan rests on it**.
 
-**The engine is not pinned to an exact version, and the seal is held by a test rather than by a pin.** `frontend/package.json` takes `@duckdb/duckdb-wasm` at a caret range, the way every other dependency here is taken. The hostile set below runs against whatever version is installed, so a release that changed one of these settings turns that test red on the pull request that raised the version - which is where somebody wants to find out, and which a pin would only have delayed. **If a release ever removes one of them, the answer is the previous working version, not a text rule over the statement**: a text rule is a denylist, and a denylist over a language with function syntax is not a boundary.
+**What `connect-src` admits, stated rather than implied.** Three origins today - this site, `visuals.asset_base_url`, and `ledger.engine_extension_repository`. Row 3 adds a fourth, `ledger.archive_base_url`, computed from the same config file. **A statement can read a public file on one of those four and nowhere else.** That is the whole residual. It is the same exposure every panel on the console already has, it is what a browser can actually enforce, and no row here widens it past the one address the owner asked for.
 
-**The hostile set the oracle runs**, each asserted refused, and **each asserted refused after a well-formed query over the same engine has succeeded** - so the test cannot pass by having sealed the engine into uselessness:
+**The engine takes a caret range, not a pin.** There is no setting whose removal could break a boundary, because no boundary here is a setting.
+
+**What the oracle asserts, and what it deliberately does not.** Row 2 proves the boundary that exists:
 
 ```
-SELECT * FROM read_csv('https://example.invalid/x.csv')
-SELECT * FROM read_parquet('https://example.invalid/x.parquet')
-COPY (SELECT 1) TO 'x.csv'
-ATTACH 'x.db' AS other
-INSTALL httpfs
-LOAD httpfs
-SET enable_external_access = true
-SET lock_configuration = false
-SELECT 1; DROP VIEW "item-health"
-CREATE TABLE t AS SELECT 1
-SELECT * FROM "scores"          -- refused: the call did not select that ledger
+SELECT * FROM read_csv('https://example.invalid/x.csv')   -- the browser refuses the request
+SELECT 1; DROP VIEW "item-health"                         -- statement.ts: two statements
+CREATE TABLE t AS SELECT 1                                -- statement.ts: not read-only
+SELECT * FROM "scores"                                    -- the call did not select that ledger
+SELECT * FROM 'door/1.parquet'                            -- a minted file name is not a table on offer
 ```
+
+**It does not assert that `INSTALL httpfs` fails.** With no seal it may well succeed, because the extension host is one of the four origins - and succeeding buys nothing, since every request the loaded add-on could then make is still refused by the same policy. **An oracle that asserted a refusal we do not enforce would be a test that passes for the wrong reason** and goes red on an engine upgrade that changed nothing that matters.
 
 ### 2.7 A span reaches today, through four kinds of file
 
@@ -303,7 +287,7 @@ SELECT * FROM "scores"          -- refused: the call did not select that ledger
 | 3 | **The number is read from config, never written down.** Adding a wider preset widens the copy with no source edit, which is the substitution test (Guardrail #6) |
 | 4 | **What `state/` holds is a different question and belongs to the gardener's keep windows.** Git keeps the history; the site carries the part a reader can reach |
 
-**Past the cap, the page reads the repository, and the seal stays shut.** `state/` is committed, the repository is public, and a browser can read a committed file directly. So a date older than the site carries is fetched from the repository instead, and only the address changes.
+**Past the cap, the page reads the repository, and no engine setting changes.** `state/` is committed, the repository is public, and a browser can read a committed file directly. So a date older than the site carries is fetched from the repository instead, and only the address changes.
 
 **Measured 2026-09-28**, against a committed file on `main`:
 
@@ -516,39 +500,38 @@ The owner's reference is a query workbench screenshot and its HTML, kept at `tes
 
 ---
 
-### Row #2 - The door answers a written question on a sealed engine
+### Row #2 - The door answers a written question, on the engine plan 51 shipped
 
-- **Scope:** `ask()` and `askCost()` join `slice()` and `ledgerReach()` in `frontend/src/lib/data/ledger.ts`; `LEDGER_NAMES` widens to all twenty-six; `engine.ts` pre-loads its add-ons and then seals itself (section 2.6); `statement.ts` refuses anything that is not one read-only statement; `slice.ts` gains the writers'-files tier. **No page, no chart, no publishing, and no config file** - this is the reader, shipped with its own witness.
+- **Scope:** `ask()` and `askCost()` join `slice()` and `ledgerReach()` in `frontend/src/lib/data/ledger.ts`; `LEDGER_NAMES` widens to all twenty-six; `statement.ts` refuses anything that is not one read-only statement; `slice.ts` gains the writers'-files tier. **`engine.ts` is not touched** - no setting, no pre-load, no pin (section 2.6). **No page, no chart, no publishing, and no config file** - this is the reader, shipped with its own witness.
 
 - **Files touched:**
   - `frontend/src/lib/data/ledger.ts` (`ask`, `askCost`; still the only module that composes a published address)
   - `frontend/src/lib/data/slice-shapes.ts` (`LEDGER_NAMES` widens to twenty-six; `AskOptions`, `AskResult`, `Column`, `FetchCost`, `SpanCost`)
   - `frontend/src/lib/data/ask-reader.ts` (new: hold the files, create and drop the views, run the statement, cap the rows - the body `ledger.ts` calls, beside `slice-reader.ts`)
-  - `frontend/src/lib/data/statement.ts` (new: is this one read-only statement? - pure, no engine import, unit-testable on its own)
-  - `frontend/src/lib/data/engine.ts` (the pre-load, the four `SET` statements and the lock, in both halves)
+  - `frontend/src/lib/data/statement.ts` (new: is this one read-only statement? - pure, no engine import, unit-testable on its own; its docstring says it is a courtesy and not the boundary)
   - `frontend/src/lib/data/slice.ts` (the third tier, reading `RawDayIndex`)
   - `frontend/src/lib/data/compact-index.ts` (the hand copy of `RawDayIndex`)
   - `frontend/src/lib/console/waiting.ts` (`PanelState` gains `refused`, with its sentence)
-  - `frontend/tests/ledger-door.spec.ts` (widened), `frontend/tests/explorer-seal.spec.ts` (new), `frontend/tests/statement.spec.ts` (new)
+  - `frontend/tests/ledger-door.spec.ts` (widened), `frontend/tests/explorer-boundary.spec.ts` (new), `frontend/tests/statement.spec.ts` (new)
   - `frontend/scripts/test-groups.ts` (the two new specs join the `logic` group)
   - `tests/fixtures/ledger-door/` (the fixture ledger gains an unpacked day: a `RawDayIndex` and two writer files for it, one holding a row whose cells carry the hostile text in section 2.10)
   - `backend/tests/contracts/test_frontend_ledger_names.py` (new: the union in `slice-shapes.ts` and the registry in `config/ledgers.json` are each other, in both directions)
   - `backend/tests/contracts/test_frontend_index_shapes.py` (the hand copy gains `RawDayIndex`)
   - `frontend/tests/chart-vocabulary.spec.ts` (the single-engine walk still finds one importer)
-  - `docs/architecture/publishing/how-the-query-door-answers-a-panel.md` (the second entry point, the views, and the seal order)
-- **Acceptance gates:** local `npm --prefix frontend run test:changed -- --list` then the selected checks; `pytest backend/tests/contracts -q`, `ruff check .`, `mypy backend`. CI runs the full suite. No browser smoke - this row draws nothing.
-- **Oracle:** **the engine still reads parquet after it is sealed, and nothing else gets through.** In one Node run on the fixture ledger, in this order: a well-formed statement over two ledgers returns exactly the rows the same statement returns from the same files read in Python - **this assertion runs first, so the test cannot pass by sealing the engine into uselessness** - and then each of the eleven hostile statements in section 2.6 returns `refused`. Also: a date present in both a packed day and a writer file is read once; the unpacked day returns its rows and its date appears in `unpackedDays`; a zero-row span returns `quiet`; a date named by no index returns `unreachable`; an answer past `maxRows` returns `capped` with exactly `maxRows` rows; a span whose indexes exceed `maxFetchBytes` returns `refused` **with no data file fetched**; and a second call selecting one ledger cannot read the ledger the first call selected. It cannot settle whether an operator can write a useful query; row 4 and the owner do.
+  - `docs/architecture/publishing/how-the-query-door-answers-a-panel.md` (the second entry point, the views, and what holds the boundary)
+- **Acceptance gates:** local `npm --prefix frontend run test:changed -- --list` then the selected checks; `pytest backend/tests/contracts -q`, `ruff check .`, `mypy backend`. **One browser check, because it is the only place the boundary can be proven**: a scratch page starts the engine and runs `SELECT * FROM read_csv('https://example.invalid/x.csv')`, and the console shows a content-policy refusal rather than a fetch. CI runs the full suite. No panel smoke - this row draws nothing.
+- **Oracle:** **a written question over two ledgers returns exactly the right rows, and nothing the call did not select is reachable.** In one Node run on the fixture ledger: a statement joining two ledgers returns exactly the rows the same statement returns from the same files read in Python; a date present in both a packed day and a writer file is read once; the unpacked day returns its rows and its date appears in `unpackedDays`; a zero-row span returns `quiet`; a date named by no index returns `unreachable`; an answer past `maxRows` returns `capped` with exactly `maxRows` rows; a span whose indexes exceed `maxFetchBytes` returns `refused` **with no data file fetched**; each of the five statements in section 2.6 is refused for the reason named beside it; and **a second call selecting one ledger cannot read the ledger the first call selected**, which is the view-drop rule. It cannot settle whether the content policy refuses a request made from inside the engine's worker - no Node run can, which is why that one assertion is a browser check in the gates above.
 - **Decisions:**
 
   | # | Decision | Authority |
   | --- | --- | --- |
-  | 1 | **The pre-load comes before the seal, and the list is measured rather than guessed.** The engine links only core functions and downloads the parquet reader at first use, so sealing first stops every query on the site. The row runs `SELECT extension_name FROM duckdb_extensions() WHERE loaded` after one parquet read on an unsealed engine and pre-loads exactly that list | Carmack; section 2.1 fact 1 |
-  | 2 | **The seal ships in both halves, browser and Node.** A seal only the browser has is one a build-time reader can be used around, and the Node half is what the oracle drives without a browser | Carmack |
-  | 3 | **The oracle proves a good query works before it proves a bad one fails.** A seal that broke parquet would pass every refusal assertion, which is the failure this ordering exists to catch | Fowler |
+  | 1 | **No seal. The boundary is the browser's content policy** - plan 51's approved design, and the one every static site uses. A database setting would be a second lock on a door the browser already holds shut, and closing the network would break the engine's own add-on fetch | Owner, 2026-09-29; section 2.6 |
+  | 2 | **`engine.ts` is not edited by this row.** It is shared with every panel, and a row that needs no change there makes none | Fowler |
+  | 3 | **`statement.ts` is named a courtesy in the plan and in its own docstring.** A refusal list nothing rests on has to say so, or the next reader takes it for the boundary and starts widening it | Andre, with Carmack |
   | 4 | **A registered buffer is a file, so the door creates one view per selected ledger and drops every unselected one on every call.** Without the drop, a view from an earlier run lets a statement read a ledger the operator did not select and did not see the cost of | Fowler; section 2.4 |
   | 5 | **The operator's text is a statement, and the structured predicate stays for panels.** The door refused raw SQL because the caller there is a panel and fetched text could reach it. The caller here is a person typing into their own browser, and the text they type never leaves it. Both are true at once, which is why this is a second entry point and not a change to the first | Fowler and Andre, 2026-09-28; owner asked for the box |
-  | 6 | **The seal is settings and registration, never a text rule over SQL.** A denylist over a language with function syntax is not a boundary. `statement.ts` exists to give a fast, readable refusal, not to be the boundary | Carmack, with Andre |
-  | 7 | **The engine takes a caret range, not a pin, and the seal test is the guard.** A pin would only delay the day a setting changed; the hostile set fails on the upgrade that changed it, in the pull request that raised the version | Carmack, on the owner's ruling of 2026-09-28 |
+  | 6 | **The minted file name and the ledger name are two layers, not two options.** One ledger is many files, so a registered name could never have been a ledger's name; the view is what binds the set to its files | Fowler; section 2.4 |
+  | 7 | **The engine takes a caret range, not a pin.** No boundary here is a setting, so no release can remove one | Carmack |
   | 8 | **This row reads no config file, and its two ceilings arrive as arguments.** It is what makes wave 1 three-wide: the knobs that bound the page are minted by the row that reads them, row 4 | Fowler |
   | 9 | **`ask()` goes through the page keeper and never calls `engine.register()`.** The keeper is what stops a file crossing the network or entering the engine twice, and in a browser registering takes the buffer, so a second registration would read an empty file | Carmack; section 2.1 module 5 |
   | 10 | **`LEDGER_NAMES` widens to the whole registry, and a test binds it both ways.** A ledger declared and not published answers `missing` by name, which is more useful than being absent from the list | Fowler |
@@ -558,14 +541,14 @@ The owner's reference is a query workbench screenshot and its HTML, kept at `tes
 
   | # | Option | Why rejected | What it would cost to take | Authority |
   | --- | --- | --- | --- | --- |
-  | 1 | Seal the engine at start and drop the settings that break parquet | There is no subset that both seals and reads: `enable_external_access` off blocks the add-on download and `autoload` off blocks its use. Pre-loading is what makes both true | Zero to write; costs either the seal or every query | Carmack |
-  | 2 | Ship the seal without the pre-load and add add-ons as queries fail | The first failure is on a deployed site, and the reach for the setting is the reach ESCALATE trigger 2 exists to stop | Zero now; costs a broken site and a weakened seal | Carmack |
+  | 1 | Seal the engine with `enable_external_access = false` and the two auto-load settings | It breaks the engine. The parquet reader is fetched over the network at first use, so the setting that closes the network closes every panel on the console. Pre-loading the add-on first would work, and would be two more moving parts holding up a property `connect-src` already holds on its own | Zero to write; costs every query, or costs two mechanisms for nothing | Owner, 2026-09-29 |
+  | 2 | Pin the engine's version so a release cannot change a setting we rely on | We rely on no setting. A pin buys a slower upgrade path and nothing else | Zero; costs the normal upgrade path | Carmack |
   | 3 | Build the page's own engine module, separate from the door | Two importers of the engine, and the single-engine rule becomes unenforceable | Zero; costs the single-engine rule | Fowler |
-  | 4 | Register each ledger's files under a name the caller chooses, so no view is needed | The engine mints names precisely so no caller and no fetched text can name a file. Changing that to save one statement per ledger trades the property for a line | Zero; costs the minting rule | Carmack |
+  | 4 | Register each ledger's files under a name the caller chooses, so no view is needed | The engine mints names precisely so no caller and no fetched text can name a file - and it would not work anyway, because one ledger is many files and they cannot share a name | Zero; costs the minting rule and does not remove the view | Carmack |
   | 5 | Keep the structured predicate and add operators until it can express a join | It becomes a query language of our own, badly, and an operator has to learn it | Months, and the result is worse than SQL | Owner, 2026-09-28 |
   | 6 | Parse the statement ourselves and allow only what we understand | A SQL parser is a dependency or a mistake. The engine's own settings are the boundary and they are enforced inside the engine | A parser dependency, and a false sense of a boundary | Carmack |
   | 7 | Read only packed files, as panels do | The answer stops two days short of now, which is the question an operator most often opens this page to ask | Zero; costs the page its point | Owner, 2026-09-28 |
-  | 8 | **Open the engine's own URL access** - `enable_external_access` on, the remote-file add-on loaded - so a statement can name `https://...` directly | It is the one thing the whole seal exists to prevent, and it buys nothing row 6 does not already buy. **What the reader would lose by not having it**: writing a URL inside the statement rather than picking dates and letting the door choose the address - a keystroke, not a capability | Zero to write, and it converts every hostile statement from refused to allowed | Carmack and Andre; ESCALATE trigger 2 |
+  | 8 | **Let a statement name an `https://` address directly**, by loading the remote-file add-on and widening `connect-src` to the open web | The content policy is the only boundary this page has, so widening it to the open web removes it. **What the reader would lose by not having it**: writing a URL inside the statement rather than picking dates and letting the door choose the address - a keystroke, not a capability | Zero to write; costs the page its only boundary | Carmack and Andre; ESCALATE trigger 2 |
 
 ---
 
@@ -707,7 +690,7 @@ The owner's reference is a query workbench screenshot and its HTML, kept at `tes
   | 5 | **No new chart type is added here.** If an answer wants one, that is Susan's call on the vocabulary page and a separate change | Susan |
   | 6 | **No point is highlighted as an anomaly and nothing animates to draw attention.** The page has no rule that makes a value anomalous, and a mark that says "look here" without one is a verdict nobody issued | Susan |
   | 7 | **The address carries the question, in query parameters, with no fragment** | Owner, 2026-09-28 |
-  | 8 | **An address never runs a query.** A link that executed a stranger's statement would be the one hole the seal cannot close, because the statement would be running with the reader's consent implied rather than given | Fowler and Andre; ESCALATE trigger 4 |
+  | 8 | **An address never runs a query.** A link that executed a stranger's statement would run it with the reader's consent implied rather than given, in a browser holding the reader's own origin - and no content policy can tell that apart from a query the reader typed | Fowler and Andre; ESCALATE trigger 4 |
   | 9 | **The statement is compressed before it is encoded.** SQL compresses several times over, so the practical ceiling stops being a design constraint | Carmack |
   | 10 | **The limit is measured before it is used.** There is no limit in the URL specification; the binding one belongs to the host, and 8 KB is a common default rather than a reading | Guardrail #10 |
   | 11 | **Saved questions live in this browser and nowhere else.** A committed, named query would be a reader of the columns it names and would go red when one is renamed; this one simply fails for the person who saved it, which is the right cost for a scratchpad | Fowler |
@@ -773,10 +756,10 @@ The owner's reference is a query workbench screenshot and its HTML, kept at `tes
 
 ## Dependent plans
 
-- [`20260924-51-console-fetches-and-draws-its-own-data-plan.md`](20260924-51-console-fetches-and-draws-its-own-data-plan.md). Its row titled **The query door module and its two entry points** is DONE and is what section 2.1 maps; every frontend row here extends it. Its row titled **The three ledgers the console reads are published** is PENDING and **row 3 here supersedes it** - whichever lands first, the other reads its pull request (row 3 decision 9). Its row titled **One panel end to end** depends on that publishing row and is satisfied by either.
-- [`20260924-50-idhazh-gardener-plan.md`](20260924-50-idhazh-gardener-plan.md). Row 3 here publishes what that plan has packed, and row 2 reads the `RawDayIndex` its row titled **The index and watermark shapes are declared** already delivered (#1136). The more ledgers that plan migrates, the more of the picker works; **no row here blocks on any of them**, because an unmigrated ledger is declared, listed and answers `missing` by name.
+- [`20260924-51-console-fetches-and-draws-its-own-data-plan.md`](20260924-51-console-fetches-and-draws-its-own-data-plan.md). Its row titled **The query door module and its two entry points** is DONE and is what section 2.1 maps; every frontend row here extends it, and section 2.6 keeps its boundary exactly as it shipped. Its row titled **The three ledgers the console reads are published** is **PENDING and never started** - no branch, no pull request, and `ledger.published` is still `[]` on `main` (read 2026-09-29). **Row 3 here supersedes it**: whichever lands first, the other reads its pull request (row 3 decision 9).
+- [`20260924-50-idhazh-gardener-plan.md`](20260924-50-idhazh-gardener-plan.md). Row 2 here reads the `RawDayIndex` its row titled **The index and watermark shapes are declared** already delivered (#1136). **Row 3 here can publish only what that plan has packed, and on 2026-09-29 that is nothing**: its row titled **The three ledgers the console's routes read become parquet** is PENDING and `state/compact/` does not exist. **So row 3 is buildable and testable today against its fixture, and ships a real picker over an empty published set until that row lands.** The page is honest in that state - every one of the twenty-six ledgers is listed and answers `missing` by name - but **the owner cannot ask a real question until plan 50 packs a ledger**, and no row here can move that.
 - [`20260911-26-retire-prerender-plan.md`](20260911-26-retire-prerender-plan.md). Delivered (#613, #614, #645, #649). Its ruling keeps the six prerendered routes and its section 6 is the executable price of reversing that. **This plan neither reverses it nor depends on it**: the new route simply never prerenders, the way the two dated routes already do. **It also inherits one contradiction and does not repair it** - telemetry-intent N4 says the existing prerendered routes come off, and plan 26 ruled they stay. That disagreement is older than this plan and belongs to whichever of the two moves next.
-- [`20260926-52-fifty-panels-move-and-six-projections-go-plan.md`](20260926-52-fifty-panels-move-and-six-projections-go-plan.md). It moves fifty panels onto the query door. **It takes the seal in row 2 whether it wants it or not**, because the seal lives in the one engine module both use - which is why the oracle there proves a good query works before it proves a bad one fails.
+- [`20260926-52-fifty-panels-move-and-six-projections-go-plan.md`](20260926-52-fifty-panels-move-and-six-projections-go-plan.md). It moves fifty panels onto the query door. **Row 2 here changes nothing it uses**: `engine.ts` is untouched, and `ask()` is a second entry point beside the `slice()` its panels call. The two can run beside each other.
 
 ## See also
 
