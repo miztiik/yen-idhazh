@@ -8,10 +8,9 @@
   "lifecycle_status": "active",
   "max_deletes_per_run": null,
   "owns": [
-    "state/host-fingerprint"
+    "state/span-rollup"
   ],
   "window": {
-    "unit": "months",
-    "value": 14
+    "unit": "forever"
   }
 }

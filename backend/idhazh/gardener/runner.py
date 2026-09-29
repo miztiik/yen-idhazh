@@ -49,6 +49,16 @@ held to that ledger and the wake's day instead, and it lands on a dry run too.
 
 **One record per shard, always.** Every task adds its row, a dry run included,
 so a shard of nothing but dry runs still writes one file and still lands it.
+
+**A task that folds folds after its window, on a switch of its own.** A
+retention task whose declaration carries a `fold` block settles the closed days
+of the CSV day trees it walks (`closed_day_fold`), once its window's pass has
+returned, skipping every day folder that pass took. What the fold writes and
+deletes is held to what the task owns like everything else, and it lands when
+the fold is live whatever the window's `dry_run` says - a live fold inside a
+dry task would otherwise change the disk and stage nothing. A window that
+failed stops the fold for that wake: what it took is then a list nothing has
+checked, and a closed day loses nothing by waiting.
 """
 
 from __future__ import annotations
@@ -68,9 +78,14 @@ from idhazh.config import GardenerSettings
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.collection_prune import CollectionPruneRow, StopReason
 from idhazh.contracts.file_envelope import Format, WriterIdentity
-from idhazh.contracts.knobs.gardener import TaskKind, TaskLifecycleStatus, TaskPolicy
+from idhazh.contracts.knobs.gardener import (
+    RetentionPolicy,
+    TaskKind,
+    TaskLifecycleStatus,
+    TaskPolicy,
+)
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.gardener import registry, report, shards
+from idhazh.gardener import closed_day_fold, registry, report, shards
 from idhazh.gardener import tasks as shipped_tasks
 from idhazh.gardener.context import TaskContext
 from idhazh.gardener.one_at_a_time import Pass, PruneInterruptedError
@@ -261,6 +276,8 @@ class _Ran:
     outcome: Pass
     duration_ms: int
     failed: bool
+    #: What the task's fold did. None when it has no fold, or the fold did not run.
+    folded: closed_day_fold.Folded | None = None
 
 
 def _run_one(
@@ -269,6 +286,7 @@ def _run_one(
     """One task, timed, with any failure turned into the row that says so."""
     started = time.monotonic()
     failed = True
+    folded: closed_day_fold.Folded | None = None
     for folder in folders.absent:
         logger.info(
             "%s owns %s, which the commit does not hold yet, so it walks none", name, folder
@@ -290,14 +308,46 @@ def _run_one(
         except Exception:
             logger.exception("%s failed before it reached a member", name)
             outcome = _nothing_reached(name, context.policy)
+    policy = context.policy
+    if not failed and isinstance(policy, RetentionPolicy) and policy.fold is not None:
+        try:
+            folded = closed_day_fold.run(context, policy.fold, skip=outcome.taken)
+        except closed_day_fold.FoldInterruptedError as stop:
+            logger.error("%s's fold failed part way: %s", name, stop)
+            folded, failed = stop.so_far, True
+        except Exception:
+            logger.exception("%s's fold failed before it settled a day", name)
+            folded = closed_day_fold.Folded(dry_run=policy.fold.dry_run, failed=True)
+            failed = True
     elapsed = int((time.monotonic() - started) * 1000)
-    return _Ran(name=name, context=context, outcome=outcome, duration_ms=elapsed, failed=failed)
+    return _Ran(
+        name=name,
+        context=context,
+        outcome=outcome,
+        duration_ms=elapsed,
+        failed=failed,
+        folded=folded,
+    )
+
+
+def _fold_changes(ran: _Ran) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """What a task's fold wrote and deleted, or would have, as repository paths."""
+    if ran.folded is None:
+        return (), ()
+    root = ran.context.repo_root
+    return (
+        tuple(day.settled.relative_to(root).as_posix() for day in ran.folded.days),
+        tuple(
+            path.relative_to(root).as_posix() for day in ran.folded.days for path in day.replaced
+        ),
+    )
 
 
 def _touched(ran: _Ran) -> tuple[str, ...]:
-    """Every repository path a task touched: what it wrote, and what it took from the tree."""
+    """Every repository path a task touched: what it wrote, what it took, and what it folded."""
     taken = () if ran.context.policy.kind == TaskKind.COLLECTION else ran.outcome.taken
-    return (*taken, *ran.outcome.written)
+    settled, replaced = _fold_changes(ran)
+    return (*taken, *ran.outcome.written, *settled, *replaced)
 
 
 def _refuse_a_path_outside(ran: _Ran, tasks: Mapping[str, TaskPolicy]) -> None:
@@ -357,6 +407,7 @@ def _record(
             duration_ms=each.duration_ms,
             work_ended_at=ended,
             cone_bytes=cone_bytes,
+            folded=each.folded,
         )
         for each in ran
     ]
@@ -514,22 +565,30 @@ def run(
     for each in ran:
         for line in report.lines(each.outcome):
             say(line)
+        if each.folded is not None:
+            for line in report.fold_lines(each.name, each.folded):
+                say(line)
     live = [each for each in ran if not each.context.policy.dry_run]
+    # A fold lands on its own switch, so a live fold inside a dry task still lands.
+    folding = [each for each in ran if each.folded is not None and not each.folded.dry_run]
     recorded = record.relative_to(repo_root).as_posix()
     wrote = {path for each in live for path in each.outcome.written}
+    wrote |= {path for each in folding for path in _fold_changes(each)[0]}
     # A report lands dry run or not: it is what a dry run exists to produce.
     reported = {path for each in ran for path in each.outcome.appended}
+    deleted = {
+        path
+        for each in live
+        if each.context.policy.kind != TaskKind.COLLECTION
+        for path in each.outcome.taken
+    }
+    deleted |= {path for each in folding for path in _fold_changes(each)[1]}
     landing = Shard(
         index=shard,
         task_names=tuple(names),
         record_path=recorded,
         written_paths=frozenset({recorded, *wrote, *reported}),
-        deleted_paths=frozenset(
-            path
-            for each in live
-            if each.context.policy.kind != TaskKind.COLLECTION
-            for path in each.outcome.taken
-        ),
+        deleted_paths=frozenset(deleted),
         message=f"gardener: {', '.join(names)} on {today.isoformat()}",
     )
     failed = any(each.failed for each in ran) or too_heavy is not None
