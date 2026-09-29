@@ -665,7 +665,7 @@ the width alone would have called it clean.
 
 That is a failed scheduled run, not a failed lint. **This is the one ledger that
 migrates itself, and the reason is that it is the one that has retired a
-heading.** `stages.compact` folds a day by reading every file in it through
+heading.** The gardener's closed-day fold settles a day by reading every file in it through
 `ItemHealthRow.from_csv_row`, which maps by name and carries a retired heading to
 the column it moved to, then writes the day whole from the contract's current
 column list. A day the fold touches comes back under the current header, so the

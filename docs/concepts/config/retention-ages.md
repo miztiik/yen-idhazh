@@ -1,6 +1,6 @@
 # Instrument switches and cleanup ages
 
-**Last Updated**: 2026-09-28
+**Last Updated**: 2026-09-29
 
 Which instruments run at all, and how long what they write is kept. The switches
 live in one JSON block - `observability` in `config/idhazh.json` - with the ages
@@ -117,6 +117,7 @@ that mapping yet, because no console read opens one of its shards today
 | `state/visuals/` | 14 months | forever, in `state/visual-aggregate/` | `visuals_full_grain_months` and `visual_aggregate_keep_months` (null) in `observability` |
 | `state/feed-health/` | 14 months | none - a per-feed-per-run record is not a total worth keeping | `config/gardener/feed-health.json` |
 | `state/host-fingerprint/` | 14 months | none - one job's silicon on one run, and a total over an old month names no machine | `config/gardener/host-fingerprint.json` |
+| `state/span-rollup/` | forever - nobody has said how long a span total is wanted | none | `config/gardener/span-rollup.json` |
 
 And one for each published copy, because a reader fetches those and our own disk
 is not what bounds them:

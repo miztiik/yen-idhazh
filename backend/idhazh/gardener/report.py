@@ -14,11 +14,17 @@ list.
 it walked; which run, attempt, job and shard it ran in, which task declared it,
 how long it took, when the shard finished its work and what the shard's owned
 folders weighed are the runner's to say, so the runner hands them in.
+
+**A task's fold is said beside its pass, on the same row.** It has a switch of
+its own, so its lines say whether it was live, and a fold that stopped part way
+turns the row's `stopped_because` to `failed` - the task failed, whichever half
+of it did.
 """
 
 from __future__ import annotations
 
 from idhazh.contracts.collection_prune import CollectionPruneRow, StopReason
+from idhazh.gardener.closed_day_fold import Folded
 from idhazh.gardener.context import TaskContext
 from idhazh.gardener.one_at_a_time import Pass
 
@@ -31,8 +37,12 @@ def row(
     duration_ms: int,
     work_ended_at: str,
     cone_bytes: int | None,
+    folded: Folded | None = None,
 ) -> CollectionPruneRow:
     """The pass as the persisted shape, under the name and identity of the run that took it."""
+    stopped = (
+        StopReason.FAILED if folded is not None and folded.failed else outcome.stopped_because
+    )
     return CollectionPruneRow(
         version=CollectionPruneRow.schema_version(),
         date=context.today.isoformat(),
@@ -49,12 +59,34 @@ def row(
         selected=outcome.selected,
         deleted=len(outcome.taken),
         bytes_freed=outcome.bytes_freed,
-        stopped_because=outcome.stopped_because,
+        stopped_because=stopped,
         resume_from=outcome.resume_from,
         duration_ms=duration_ms,
         work_ended_at=work_ended_at,
         cone_bytes=cone_bytes,
+        fold_dry_run=None if folded is None else folded.dry_run,
+        folded_days=None if folded is None else len(folded.days),
+        folded_files=None if folded is None else folded.files,
     )
+
+
+def fold_lines(task: str, folded: Folded) -> list[str]:
+    """What a task's fold did, one settled day folder per line, and whether it was live."""
+    verb = "would settle" if folded.dry_run else "settled"
+    head = (
+        f"{task} fold: {verb} {len(folded.days)} closed days, replacing "
+        f"{folded.files} files with one settled.csv each"
+    )
+    days = [f"  {day.tree.value} {day.day}: {len(day.replaced)} files" for day in folded.days]
+    said = [head, *days]
+    if folded.failed:
+        said.append(
+            "  the fold stopped part way - the days above are settled, and the next wake "
+            "starts again from the oldest day still waiting"
+        )
+    elif folded.dry_run and folded.days:
+        said.append("  nothing was written - set the fold's dry_run to false to settle these")
+    return said
 
 
 def lines(outcome: Pass) -> list[str]:

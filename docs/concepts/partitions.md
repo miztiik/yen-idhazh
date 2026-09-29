@@ -171,8 +171,8 @@ month's day directories is a name no writer spells, so the walk refuses it with
 every other stray.
 
 **The settlement is a read, not a write.** `day_shards.settled_rows` runs the
-three cases a compaction ran into a head - join, supersede, repeat - and
-`stages.compact` calls the same code, so there is one fold rather than one per
+three cases a compaction ran into a head - join, supersede, repeat - and the
+gardener's closed-day fold calls the same code, so there is one fold rather than one per
 ledger. Ascending attempt is the order, so a correction always arrives after
 what it corrects, and the tie-break is the path relative to the ledger root:
 `settled.csv` has the same basename in every day directory, and a reader

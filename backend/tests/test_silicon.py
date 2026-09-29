@@ -434,7 +434,7 @@ def test_a_day_file_written_before_the_two_prompt_cells_still_folds(tmp_path: Pa
     before anything reads it and a short line under a wide header is padded by
     the CSV reader, so this case passes whether or not the contract can read a
     narrow row. What can fail is a segment under its own header, and that case
-    lives in `tests/pipeline/test_compact.py`.
+    lives in `tests/gardener/test_closed_day_fold.py`.
 
     Built here rather than read off `state/`: a committed head is re-filed by the
     first fold that touches it, so a test that read one would pass today by

@@ -7,8 +7,8 @@ import io
 import json
 import tracemalloc
 from collections.abc import Iterator
+from datetime import UTC, datetime, time, timedelta
 from datetime import date as date_type
-from datetime import timedelta
 from pathlib import Path
 from typing import Any, Final
 
@@ -41,14 +41,15 @@ from idhazh.contracts.item_health import (
     ItemStage,
 )
 from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
+from idhazh.contracts.knobs.gardener import DEFAULT_CLOSED_AFTER_DAYS
 from idhazh.contracts.ledger_name import DAY_TREES, LedgerName
 from idhazh.contracts.seen import PublishedRow, SeenRow
 from idhazh.contracts.span_rollup import RollupSpan, SpanRollupRow
 from idhazh.contracts.story_similarity_pair import StorySimilarityPair
 from idhazh.contracts.visual_prune import VisualPruneRow
+from idhazh.gardener import closed_day_fold
 from idhazh.ledger import csv_file
 from idhazh.ledger import rows as ledger_rows
-from idhazh.stages import compact as compact_stage
 from idhazh.telemetry import silicon
 from idhazh.telemetry.source_health import feed_reliability, reliability
 from utilities import split_published_ledger as split_ledger
@@ -182,9 +183,9 @@ def a_fingerprint_day(
     """The machine day built the way production builds it: a segment each, then the fold.
 
     Nothing appends to this head any more. Ten jobs of one run each draw a
-    machine and each write their own segment, and the compaction is the one
-    writer of the day file - so a test that wants a day asks for it the same way
-    rather than reaching past the writer that no longer exists.
+    machine and each write their own segment, and the gardener's closed-day fold
+    is the one writer of the day's settled file - so a test that wants a day asks
+    for it the same way rather than reaching past the writer that no longer exists.
     """
     for row in rows:
         ledger.write_segment(
@@ -196,7 +197,13 @@ def a_fingerprint_day(
             job=row.job,
             shard=row.shard,
         )
-    compact_stage.stage_compact(state_dir, date=AFTER_THE_FOLD, after_days=7)
+    closed_day_fold.fold(
+        state_dir,
+        [LedgerName.HOST_FINGERPRINT],
+        now=datetime.combine(date_type.fromisoformat(AFTER_THE_FOLD), time.min, tzinfo=UTC),
+        after_days=DEFAULT_CLOSED_AFTER_DAYS,
+        dry_run=False,
+    )
 
 
 def test_a_ledger_that_is_not_a_day_tree_is_refused_by_name(tmp_path: Path) -> None:

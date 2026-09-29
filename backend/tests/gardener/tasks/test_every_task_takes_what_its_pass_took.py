@@ -9,6 +9,9 @@ Each task now runs over the same tree with its committed declaration.
 A dry run names every file a live run takes and every file it writes, and
 changes nothing on disk but the report a task appends through the ledger door.
 A live run takes exactly those files and writes exactly those files.
+
+A retention task that replaced no pass has no record to be held to. It is named
+below with why it has none, and its own test file holds what it takes.
 """
 
 from __future__ import annotations
@@ -30,6 +33,15 @@ _FILE_ID: Final = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[
 #: The recorded entry that is not a task: the old visual pass's own report rows.
 _NOT_A_TASK: Final = "visual-prune-rows"
 
+#: Each retention task that replaced no pass of the old cleanup, and why it has none.
+_REPLACED_NO_PASS: Final = {
+    "span-rollup": (
+        "the old cleanup never pruned state/span-rollup: no pass named it, and its sweep "
+        "of trial folders skipped every folder a ledger owns. The task exists so the "
+        "tree's owner folds its closed days; test_span_rollup_task.py holds what it takes"
+    ),
+}
+
 
 def _normal(path: str) -> str:
     return _FILE_ID.sub("<file_id>", path)
@@ -39,9 +51,14 @@ def _recorded_tasks() -> list[str]:
     return sorted(name for name in oracle() if name != _NOT_A_TASK and name in declared())
 
 
-def test_every_retention_task_declared_has_a_recorded_pass_to_answer_to() -> None:
-    retention = sorted(name for name, policy in declared().items() if policy.kind == "retention")
-    assert [name for name in retention if name not in oracle()] == []
+def test_every_retention_task_has_a_recorded_pass_or_a_named_reason_it_has_none() -> None:
+    """Both ways round, so a name above can neither hide a task nor outlive one."""
+    retention = {name for name, policy in declared().items() if policy.kind == "retention"}
+    recorded = set(oracle())
+    named = set(_REPLACED_NO_PASS)
+    assert sorted(retention - recorded - named) == [], "a retention task with nothing to answer to"
+    assert sorted(named - retention) == [], "named as replacing no pass, and not a retention task"
+    assert sorted(named & recorded) == [], "named as replacing no pass, and a pass is recorded"
 
 
 @pytest.mark.parametrize("name", _recorded_tasks())

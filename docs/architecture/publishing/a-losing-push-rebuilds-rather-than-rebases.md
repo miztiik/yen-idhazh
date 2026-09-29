@@ -1,6 +1,6 @@
 # Why a losing push should rebuild rather than rebase
 
-**Last Updated**: 2026-09-28
+**Last Updated**: 2026-09-29
 
 Ten jobs of one run push to one branch, so losing the push race is ordinary and
 not a fault. [committing.md](committing.md) owns the loop those jobs run today.
@@ -185,7 +185,7 @@ against can happen.
 | C4 | The conflict-ownership policy: who wrote a path decides it, and a filename carries the identity that decides | `.github/scripts/commit-and-push.sh` header, and `committing.md` | It settled a conflicted path without a person | There are no conflicted paths, so it settles nothing | Delete it with the code. Note the consequence below |
 | C5 | The never-force rule | Same header | Forcing deletes another writer's rows at exit 0 | Still true, and now unreachable | Keep it. It stops being load-bearing |
 | C6 | `committing.md` documents the rebase loop as the design | `docs/architecture/publishing/committing.md` | It is a living snapshot of current behaviour | It will be wrong the moment the code changes | Rewrite in the same commit as the code |
-| C7 | The workflow tests encode the rebase | `backend/tests/workflows/test_commit_script.py`, `test_closed_day_fold_push.py`, `test_prune_push.py`, `test_state_from_the_tip.py` | They hold the loop to its behaviour | The behaviour changes | Rewrite with the code, in the same commit (CLAUDE.md section 9) |
+| C7 | The workflow tests encode the rebase | `backend/tests/workflows/test_commit_script.py`, `test_prune_push.py`, `test_state_from_the_tip.py` | They hold the loop to its behaviour | The behaviour changes | Rewrite with the code, in the same commit (CLAUDE.md section 9) |
 
 **C1 is the only real relaxation.** Everything else on that list is a deletion, a
 rewrite, or a note.

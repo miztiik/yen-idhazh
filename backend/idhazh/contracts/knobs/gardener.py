@@ -241,6 +241,39 @@ class _Declared(Model):
         return tuple(self.owns if self.owns is not None else self.owns_everything_else_under or ())
 
 
+#: How many whole days after a UTC day ends before the gardener acts on it. One
+#: rule decides when a day is closed, so a fold and a compaction agree about it.
+DEFAULT_CLOSED_AFTER_DAYS: Final = 1
+
+
+class FoldPolicy(Model):
+    """When a closed day of a CSV day tree becomes one file, and whether that happens yet.
+
+    A CSV day tree files one file per writer under `YYYY/MM/DD/`, so a busy day
+    holds a hundred small files. Once the day is closed, the fold settles them the
+    way every reader does and writes that answer as `settled.csv` in their place.
+    It changes no answer a reader gets, which is why it has a switch of its own:
+    it may run live while the window beside it only reports.
+    """
+
+    after_days: int = Field(
+        default=DEFAULT_CLOSED_AFTER_DAYS,
+        ge=1,
+        description=(
+            "How many whole days after a UTC day ends before its writer files are "
+            "folded, measured from 00:00 UTC on the day after it - the rule "
+            "compact_after_days reads. Whole days, so every wake of one UTC day folds "
+            "the same days."
+        ),
+    )
+    dry_run: bool = Field(
+        description=(
+            "True reads and settles every day the fold would take and changes nothing. "
+            "The fold's own switch, apart from the window's. No default."
+        )
+    )
+
+
 class RetentionPolicy(_Declared):
     """A task that deletes what its window has aged out of the trees it owns."""
 
@@ -250,6 +283,14 @@ class RetentionPolicy(_Declared):
         description=(
             "One window per series, for the one task that keeps several series of one "
             "tree family at different ages. Absent on every other task."
+        ),
+    )
+    fold: FoldPolicy | None = Field(
+        default=None,
+        description=(
+            "Folds each closed day of the CSV day trees this task owns into one "
+            "settled.csv, after the window has run. Absent on a task that owns no such "
+            "tree."
         ),
     )
 
@@ -286,7 +327,7 @@ DEFAULT_DAILY_KEEP_DAYS: Final = 45
 DEFAULT_MONTHLY_WINDOW_MONTHS: Final = 13
 DEFAULT_MAX_PERIODS_PER_RUN: Final = 8
 DEFAULT_MAX_RAW_FILES_PER_PERIOD: Final = 2000
-DEFAULT_COMPACT_AFTER_DAYS: Final = 1
+DEFAULT_COMPACT_AFTER_DAYS: Final = DEFAULT_CLOSED_AFTER_DAYS
 
 #: How many days after a workflow run GitHub still lets it be re-run. A re-run
 #: writes into the day its run first wrote, so a month must stay open to it for

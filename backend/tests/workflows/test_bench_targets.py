@@ -9,6 +9,7 @@ import shutil
 import subprocess
 import sys
 import time
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -17,9 +18,10 @@ from conftest import REPO_ROOT, read_text
 from idhazh import cli, config, day_shards, ledger
 from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.base import ServerJob
+from idhazh.contracts.knobs.gardener import DEFAULT_CLOSED_AFTER_DAYS
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.run_plan import RunPlan
-from idhazh.stages import compact as compact_stage
+from idhazh.gardener import closed_day_fold
 from idhazh.stages.common import CAPTURES_DIRNAME
 from idhazh.telemetry import silicon
 from utilities import (
@@ -34,8 +36,6 @@ from ._harness import (
     BENCH_ARTIFACTS,
     BENCH_CACHE_KEY,
     BENCH_CANDIDATE_CONFIG,
-    BENCH_COMPACT_COMMAND,
-    BENCH_COMPACT_STEP,
     BENCH_CONFIG_FLAG,
     BENCH_CONFIG_STEP,
     BENCH_CORPUS_STEP,
@@ -58,7 +58,6 @@ from ._harness import (
     BUDGETS_JOB,
     COMMIT_PROGRAM,
     COMMIT_STAGED_PATHS,
-    COMPACT_DATE_FLAG,
     FINGERPRINT_BENCH_JOB,
     FINGERPRINT_COMMAND,
     FINGERPRINT_JOB_FLAG,
@@ -84,10 +83,8 @@ from ._harness import (
 #: than in the shared harness because one module reads it.
 BUDGETS_START_STEP = "Start the tokenizer"
 
-#: The cover the bench-tree test folds with. A fold takes the days closed behind
-#: its date, so the date has to be the cover past the day the probe wrote.
-A_DAY_AFTER_THE_PROBE = "2026-10-01"
-FOLD_AFTER_DAYS = 7
+#: A wake late enough that the day the probe wrote is closed behind it.
+A_WAKE_AFTER_THE_PROBE = datetime(2026, 10, 1, tzinfo=UTC)
 
 pytestmark = pytest.mark.workflow
 
@@ -380,16 +377,20 @@ def test_a_bench_machine_row_cannot_land_where_the_console_reads(tmp_path: Path)
     silicon.stage_fingerprint(
         plan, settings=settings, state_root=production_root, shard=0, job=ServerJob.WORK
     )
-    # The probe writes a segment now, and each state root is drained by its own
-    # caller: the bench by the step after its probe, production by `assemble`. A
-    # compaction of one root must not reach the other, and the two calls below
-    # are how that is asked rather than assumed - the bench root is INSIDE the
-    # production root, so a ledger built one directory higher would fold the
-    # bench's row into the ledger the console reads.
-    compact_stage.stage_compact(bench_root, date=A_DAY_AFTER_THE_PROBE, after_days=FOLD_AFTER_DAYS)
-    compact_stage.stage_compact(
-        production_root, date=A_DAY_AFTER_THE_PROBE, after_days=FOLD_AFTER_DAYS
+    # The probe writes a writer file into its own root's day, and only the
+    # production root is folded: the gardener's host-fingerprint task walks
+    # `state/host-fingerprint` and nothing folds a trial root. The bench root is
+    # INSIDE the production root, so a fold that walked one directory higher
+    # would settle the bench's row into the ledger the console reads - and the
+    # call below is how that is asked rather than assumed.
+    folded = closed_day_fold.fold(
+        production_root,
+        [LedgerName.HOST_FINGERPRINT],
+        now=A_WAKE_AFTER_THE_PROBE,
+        after_days=DEFAULT_CLOSED_AFTER_DAYS,
+        dry_run=False,
     )
+    assert [day.day for day in folded.days] == ["2026-09-17"]
 
     written = {
         path.relative_to(tmp_path).as_posix()
@@ -398,10 +399,12 @@ def test_a_bench_machine_row_cannot_land_where_the_console_reads(tmp_path: Path)
     }
     bench_day = f"{BENCH_LEDGER_ROOT}/{LedgerName.HOST_FINGERPRINT}/2026/09/17"
     production_day = f"{ledger.STATE_DIRNAME}/{LedgerName.HOST_FINGERPRINT}/2026/09/17"
-    assert written == {
-        f"{bench_day}/{day_shards.SETTLED_NAME}",
-        f"{production_day}/{day_shards.SETTLED_NAME}",
-    }, "one fold reached the other root, or a probe row landed off its own day"
+    bench_files = sorted(path for path in written if path.startswith(f"{bench_day}/"))
+    assert len(bench_files) == 1, "a probe row landed off its own day"
+    assert not bench_files[0].endswith(day_shards.SETTLED_NAME), "the fold reached the bench"
+    assert written - set(bench_files) == {f"{production_day}/{day_shards.SETTLED_NAME}"}, (
+        "the production probe's row landed off its own day, or its day did not fold"
+    )
 
     staged = COMMIT_STAGED_PATHS["bench"]
     assert staged == [f"{BENCH_LEDGER_ROOT}/{LedgerName.HOST_FINGERPRINT}"]
@@ -456,36 +459,6 @@ def test_the_bench_reads_its_own_config_when_it_records_the_machine() -> None:
     assert with_block.get("trial_state") == BENCH_TRIAL_STATE
 
 
-def test_the_bench_folds_its_own_segment_before_it_commits_the_row() -> None:
-    """The probe writes a segment, and this workflow has no `assemble` to drain it.
-
-    Without the fold the commit step stages a day file the dispatch never wrote,
-    reports `no machine recorded`, and the segment goes to the bin with the
-    runner - the same loss the segment ledger exists to stop, arriving from the
-    one workflow that has no second caller to catch it.
-
-    It sits before the sweep rather than beside the commit because the commit is
-    `if: always()` and this is not: a fold further down would be skipped on
-    exactly the dispatch whose machine record is worth having.
-    """
-    workflow = _load_workflows()["measure.yml"]
-    names = [step.get("name") for step in _steps(workflow, BENCH_SERVER_JOB)]
-    assert names.index(BENCH_FINGERPRINT_STEP) < names.index(BENCH_COMPACT_STEP)
-    assert names.index(BENCH_COMPACT_STEP) < names.index("Measure runtime candidate")
-
-    step = _step(workflow, BENCH_SERVER_JOB, "name", BENCH_COMPACT_STEP)
-    script = _script(step, f"measure.yml/{BENCH_SERVER_JOB}/{BENCH_COMPACT_STEP}")
-    assert BENCH_COMPACT_COMMAND in script
-    words = shlex.split(script)
-    assert words[words.index(BENCH_CONFIG_FLAG) + 1] == BENCH_CANDIDATE_CONFIG, (
-        "without the candidate config the fold reads the production state root, so it "
-        "drains segments the daily run is still waiting to commit"
-    )
-    assert COMPACT_DATE_FLAG in words and words[words.index(COMPACT_DATE_FLAG) + 1], (
-        "the fold names no date, so it has no cover and folds nothing"
-    )
-
-
 def test_no_bench_stage_can_reach_the_production_state_root() -> None:
     """Every pipeline stage a bench runs is told the config that redirects it.
 
@@ -521,7 +494,6 @@ def test_no_bench_stage_can_reach_the_production_state_root() -> None:
         invocations.append((job_name, stage))
 
     assert sorted(invocations) == [
-        (BENCH_SERVER_JOB, "compact"),
         (BENCH_SERVER_JOB, "fingerprint"),
         (BENCH_SERVER_JOB, "plan"),
     ], "a job started running a pipeline stage, or one stopped"

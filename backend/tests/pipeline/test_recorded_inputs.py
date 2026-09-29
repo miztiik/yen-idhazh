@@ -184,7 +184,8 @@ def test_a_traced_work_shard_writes_a_reconciling_span_rollup(
     Read at the segment rather than at the month head, because the shard is no
     longer what writes the head: eight of them fold one month, so each writes
     `state/segments/span-rollup/<run>-<attempt>-work-<shard>.csv` and
-    `stage_compact` merges them. The head is `tests/pipeline/test_compact.py`.
+    the gardener's closed-day fold settles them. The fold is
+    `tests/gardener/test_closed_day_fold.py`.
     """
     run_plan = plan()
     monkeypatch.setattr(common, "VAR_ROOT", tmp_path / "run")

@@ -523,11 +523,11 @@ export function readCsv(path: string): CsvTable {
  * and the rows agree. Measured 2026-09-23 over the committed ledger, they agree
  * cell for cell in all 204 repeated keys of the publishing day.
  *
- * **It is the newest day that carries the repeat.** A day older than
- * `retention.settled_fold_after_days` has been folded into one settled file and
- * holds no repeated key at all. Measured the same day: the publishing day held
- * 441 rows over 237 keys, and the thirty-two folded days before it held 0
- * repeats between them.
+ * **It is the newest day that carries the repeat.** A closed day has been folded
+ * into one settled file by the gardener - `fold.after_days` in the declaration
+ * under `config/gardener/` that owns the tree - and holds no repeated key at all.
+ * Measured the same day: the publishing day held 441 rows over 237 keys, and the
+ * thirty-two folded days before it held 0 repeats between them.
  *
  * There is no published mirror of this ledger. `frontend/public/scores/` was one
  * until 2026-09-16 and no route ever fetched it, so it went with its producer.
@@ -857,12 +857,12 @@ function unionOf(
  * panel - the placement `feedResults` takes below, for the same reason.
  *
  * **It is the newest day that carries the repeat, which is why this surfaced
- * late.** A day older than `retention.settled_fold_after_days` has been folded
- * into one settled file and holds no repeated key at all; the day a run is
- * publishing still holds one file per writer, and that is the day every panel
- * here opens on. Measured 2026-09-23 over the committed ledger: the thirteen
- * folded days held 0 repeated keys between them, and the unfolded day held 240
- * repeats over 240 items - every item of it, twice.
+ * late.** A closed day has been folded into one settled file by the gardener and
+ * holds no repeated key at all; the day a run is publishing still holds one file
+ * per writer, and that is the day every panel here opens on. Measured 2026-09-23
+ * over the committed ledger: the thirteen folded days held 0 repeated keys
+ * between them, and the unfolded day held 240 repeats over 240 items - every
+ * item of it, twice.
  */
 export function itemHealthRows(days: number = LEDGER_WINDOW_DAYS): CsvTable {
 	return settledDayShards(join(STATE_ROOT, 'item-health'), ITEM_HEALTH_KEY, ITEM_HEALTH_RULE, days);
