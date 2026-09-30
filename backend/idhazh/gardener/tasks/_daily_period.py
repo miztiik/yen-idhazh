@@ -56,7 +56,7 @@ from idhazh.contracts.collection_prune import StopReason
 from idhazh.contracts.file_envelope import Period, WriterIdentity
 from idhazh.contracts.knobs.gardener import CompactionPolicy
 from idhazh.contracts.ledger_index import CompactEntry
-from idhazh.gardener import schedule
+from idhazh.gardener import named_trees, schedule
 from idhazh.gardener.tasks import _index_day
 from idhazh.gardener.tasks._compact_tree import CompactTree, Stop
 
@@ -68,7 +68,7 @@ def drop(
 ) -> tuple[Stop, ...]:
     """Listings past `raw_index_keep_days`, and raw days the monthly window no longer keeps."""
     waiting = set(tree.raw_days)
-    for day in ledger.listed_days(tree.state_dir, tree.ledger):
+    for day in named_trees.listed_days(tree.listing, tree.state_dir, tree.ledger):
         if tree.daily_through is None or day > tree.daily_through or day in waiting:
             continue
         if schedule.is_eligible(
@@ -77,6 +77,8 @@ def drop(
             tree.delete(ledger.raw_index_path(tree.state_dir, tree.ledger, day))
     if first_kept is None:
         return ()
+    past = [day for day in tree.raw_days if day[:7] < first_kept]
+    tree.listing.fetch([tree.raw_day_folder(day) for day in past])
     stops: list[Stop] = []
     kept: list[str] = []
     for day in tree.raw_days:
@@ -142,7 +144,7 @@ def _take[C: Contract](
             None,
         )
     existing = (
-        ledger.compact_file(tree.state_dir, tree.ledger, Period.DAILY, day)
+        named_trees.compact_file(tree.listing, tree.state_dir, tree.ledger, Period.DAILY, day)
         if day in tree.daily
         else None
     )
@@ -214,8 +216,18 @@ def compact(
             continue
         again.append(day)
     newest = schedule.newest_eligible(now=now, after_days=policy.compact_after_days)
+    days = again + _new_days(tree, newest=newest, first_kept=first_kept)
+    # Every day the budget can reach, fetched in one call before the first is read:
+    # a day that fails costs nothing, so the ones waiting again may all fail first.
+    reached = days[: len(again) + policy.max_periods_per_run]
+    tree.listing.fetch(
+        [
+            *(tree.raw_day_folder(day) for day in reached),
+            *sorted({tree.daily_month_folder(day[:7]) for day in reached if day in tree.daily}),
+        ]
+    )
     taken = 0
-    for day in again + _new_days(tree, newest=newest, first_kept=first_kept):
+    for day in days:
         if taken == policy.max_periods_per_run:
             stops.append(Stop(StopReason.CEILING, day))
             break

@@ -25,7 +25,7 @@ from gardener._garden import GARDENER_FIXTURES, a_config
 from pydantic import ValidationError
 
 from idhazh import config
-from idhazh.contracts.gardener_plan import GardenerPlan, join_cone, split_cone
+from idhazh.contracts.gardener_plan import GardenerPlan
 from idhazh.gardener import shards
 from utilities import gardener_shards
 
@@ -40,13 +40,6 @@ def a_fixture_config(root: Path, garden: str | None) -> Path:
     if garden is None:
         (config_dir / "gardener").rmdir()
     return config_dir
-
-
-def test_a_cone_round_trips_through_the_one_string_a_checkout_reads() -> None:
-    folders = ("state/scores", "state/score-index")
-    assert split_cone(join_cone(folders)) == folders
-    assert join_cone(folders) == "state/scores\nstate/score-index"
-    assert split_cone(join_cone(())) == ()
 
 
 @pytest.mark.parametrize("garden", ["garden", "runner", None])
@@ -104,12 +97,10 @@ def _a_plan() -> dict[str, object]:
         "any_active_task": True,
         "shard_count": 2,
         "shards": [
-            {"index": 0, "task_names": ["seen"], "cone": "state/seen"},
-            {"index": 1, "task_names": ["traces"], "cone": "state/traces"},
+            {"index": 0, "task_names": ["seen"]},
+            {"index": 1, "task_names": ["traces"]},
         ],
-        "matrix": {
-            "include": [{"shard": 0, "cone": "state/seen"}, {"shard": 1, "cone": "state/traces"}]
-        },
+        "matrix": {"include": [{"shard": 0}, {"shard": 1}]},
     }
 
 
@@ -118,12 +109,12 @@ def _a_plan() -> dict[str, object]:
     [
         ({"shard_count": 3}, "shard_count is 3"),
         ({"any_active_task": False}, "any_active_task"),
-        ({"matrix": {"include": [{"shard": 0, "cone": "state/seen"}]}}, "one leg per shard"),
+        ({"matrix": {"include": [{"shard": 0}]}}, "one leg per shard"),
         (
             {
                 "shards": [
-                    {"index": 0, "task_names": ["seen"], "cone": "state/seen"},
-                    {"index": 2, "task_names": ["traces"], "cone": "state/traces"},
+                    {"index": 0, "task_names": ["seen"]},
+                    {"index": 2, "task_names": ["traces"]},
                 ]
             },
             "numbered from 0",
@@ -131,8 +122,8 @@ def _a_plan() -> dict[str, object]:
         (
             {
                 "shards": [
-                    {"index": 0, "task_names": ["seen"], "cone": "state/seen"},
-                    {"index": 1, "task_names": ["seen"], "cone": "state/traces"},
+                    {"index": 0, "task_names": ["seen"]},
+                    {"index": 1, "task_names": ["seen"]},
                 ]
             },
             "never two",
@@ -150,8 +141,8 @@ def test_a_plan_that_disagrees_with_itself_is_refused(
 def test_a_shard_with_no_task_is_refused() -> None:
     empty = _a_plan()
     empty["shards"] = [
-        {"index": 0, "task_names": [], "cone": ""},
-        {"index": 1, "task_names": ["traces"], "cone": "state/traces"},
+        {"index": 0, "task_names": []},
+        {"index": 1, "task_names": ["traces"]},
     ]
     with pytest.raises(ValidationError, match="at least 1"):
         GardenerPlan.model_validate(empty)

@@ -197,6 +197,7 @@ def test_a_writer_file_that_lands_while_the_fold_runs_survives_beside_the_settle
         git_sha=git(checkout, "rev-parse", "HEAD").strip(),
         committed_folders=None,
         cone_bytes=None,
+        listing=None,
         clock=lambda: WAKE,
         say=lambda _: None,
     )
@@ -260,6 +261,7 @@ def test_a_window_that_fails_leaves_the_fold_for_the_next_wake(
         git_sha=git(checkout, "rev-parse", "HEAD").strip(),
         committed_folders=None,
         cone_bytes=None,
+        listing=None,
         package=a_package("garden_tasks_breaks", monkeypatch),
         clock=lambda: WAKE,
         say=lambda _: None,

@@ -41,7 +41,7 @@ from idhazh.contracts.collection_prune import StopReason
 from idhazh.contracts.file_envelope import Period, WriterIdentity
 from idhazh.contracts.knobs.gardener import CompactionPolicy, DaysWindow, ForeverWindow, Window
 from idhazh.contracts.ledger_index import CompactEntry
-from idhazh.gardener import schedule
+from idhazh.gardener import named_trees, schedule
 from idhazh.gardener.tasks._compact_tree import CompactTree, Stop
 
 logger = logging.getLogger(__name__)
@@ -83,7 +83,9 @@ def drop(tree: CompactTree, *, first_kept: str | None) -> tuple[Stop, ...]:
         return ()
     gone = [month for month in sorted(tree.monthly) if month < first_kept]
     for month in gone:
-        found = ledger.compact_file(tree.state_dir, tree.ledger, Period.MONTHLY, month)
+        found = named_trees.compact_file(
+            tree.listing, tree.state_dir, tree.ledger, Period.MONTHLY, month
+        )
         if found is not None:
             tree.delete(found)
         else:
@@ -143,6 +145,12 @@ def absorb(
         month = min(tree.daily)[:7]
     else:
         return ()
+    ready: list[str] = []
+    while len(ready) < policy.max_periods_per_run and _ready(
+        tree, shift(month, len(ready)), now=now, after_days=policy.daily_keep_days
+    ):
+        ready.append(shift(month, len(ready)))
+    tree.listing.fetch([tree.daily_month_folder(held) for held in ready])
     taken = 0
     while _ready(tree, month, now=now, after_days=policy.daily_keep_days):
         if taken == policy.max_periods_per_run:
@@ -159,7 +167,8 @@ def absorb(
                 ledger.LedgerFault.DAY_MISSING,
             )
         files = [
-            ledger.compact_file(tree.state_dir, tree.ledger, Period.DAILY, day) for day in days
+            named_trees.compact_file(tree.listing, tree.state_dir, tree.ledger, Period.DAILY, day)
+            for day in days
         ]
         absent = [day for day, found in zip(days, files, strict=True) if found is None]
         if absent:

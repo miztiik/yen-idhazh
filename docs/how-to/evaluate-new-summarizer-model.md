@@ -845,7 +845,7 @@ gh cache delete <old-summary-cache-id>
 **Measure the cache, do not derive it.** The key names the model file and the
 pinned llama.cpp build, so the outgoing model may already have aged out and
 there may be nothing to delete
-([../reference/pipeline-cost.md](../reference/pipeline-cost.md#the-cache-transition-measured-2026-08-27)).
+([Cache-aware throughput measurement](../reference/pipeline-cost.md#inference-throughput)).
 
 Production derives the worker count as
 `min(ceil(items / run.shard_size), run.max_parallel)`, so a full day at

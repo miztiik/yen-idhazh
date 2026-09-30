@@ -12,8 +12,9 @@ list.
 
 **The row names the run that wrote it, and the pass cannot.** A pass knows what
 it walked; which run, attempt, job and shard it ran in, which task declared it,
-how long it took, when the shard finished its work and what the shard's owned
-folders weighed are the runner's to say, so the runner hands them in.
+how long it took, when the shard finished its work, what the shard's owned
+folders weighed and what it downloaded are the runner's to say, so the runner
+hands them in.
 
 **A task's fold is said beside its pass, on the same row.** It has a switch of
 its own, so its lines say whether it was live, and a fold that stopped part way
@@ -37,6 +38,7 @@ def row(
     duration_ms: int,
     work_ended_at: str,
     cone_bytes: int | None,
+    downloaded_bytes: int | None,
     folded: Folded | None = None,
 ) -> CollectionPruneRow:
     """The pass as the persisted shape, under the name and identity of the run that took it."""
@@ -64,6 +66,7 @@ def row(
         duration_ms=duration_ms,
         work_ended_at=work_ended_at,
         cone_bytes=cone_bytes,
+        downloaded_bytes=downloaded_bytes,
         fold_dry_run=None if folded is None else folded.dry_run,
         folded_days=None if folded is None else len(folded.days),
         folded_files=None if folded is None else folded.files,

@@ -138,6 +138,40 @@ def test_the_committed_gardener_config_loads_and_the_squash_is_its_one_history_t
     assert (settings.config.attempts, settings.config.shards) == (6, 5)
     history = [name for name, policy in settings.tasks.items() if isinstance(policy, HistoryPolicy)]
     assert history == ["corpus-squash"]
+    squash = settings.tasks["corpus-squash"]
+    assert isinstance(squash, HistoryPolicy)
+    assert (squash.push_attempts, squash.push_retry_delay_seconds) == (3, 60)
+
+
+@pytest.mark.parametrize("key", ["push_attempts", "push_retry_delay_seconds"])
+def test_a_history_declaration_without_a_push_key_is_refused_by_name(
+    tmp_path: Path, key: str
+) -> None:
+    """Neither has a default: the file says how often the squash pushes and how long it waits."""
+    declared = {name: value for name, value in fixture("history").items() if name != key}
+    message = refused(a_garden(tmp_path, history=declared))
+    assert "config/gardener/history.json is refused" in message and key in message
+
+
+@pytest.mark.parametrize(
+    ("changes", "loads"),
+    [
+        ({"push_attempts": 0}, False),
+        ({"push_attempts": 1}, True),
+        ({"push_retry_delay_seconds": -1}, False),
+        ({"push_retry_delay_seconds": 0}, True),
+    ],
+)
+def test_a_squash_pushes_at_least_once_and_never_waits_less_than_nothing(
+    tmp_path: Path, changes: dict[str, int], loads: bool
+) -> None:
+    config_dir = a_garden(tmp_path, history=fixture("history", **changes))
+    if loads:
+        config.load_gardener(config_dir)
+    else:
+        message = refused(config_dir)
+        assert "config/gardener/history.json is refused" in message
+        assert all(key in message for key in changes)
 
 
 def test_a_switch_ships_in_dry_run_unless_a_named_decision_put_it_live() -> None:
@@ -296,6 +330,39 @@ def test_a_folder_that_only_shares_a_prefix_of_letters_is_not_nested(tmp_path: P
 def test_one_task_at_most_takes_the_complement(tmp_path: Path) -> None:
     second = fixture("trials", owns_everything_else_under=["frontend/public"])
     assert "One task may take the complement" in refused(a_garden(tmp_path, strays=second))
+
+
+@pytest.mark.parametrize("reads", [["state/traces"], ["state/traces/2026"], ["state"]])
+def test_a_task_does_not_read_a_folder_it_owns_or_one_that_holds_it(
+    tmp_path: Path, reads: list[str]
+) -> None:
+    """A folder a task owns is listed for it already, so naming it again is a mistake."""
+    message = refused(a_garden(tmp_path, traces=fixture("traces", reads=reads)))
+    assert "config/gardener/traces.json is refused" in message and "is in reads" in message
+
+
+def test_the_task_that_takes_the_complement_reads_nothing_more(tmp_path: Path) -> None:
+    """Everything under its root is listed for it already."""
+    trials = fixture("trials", reads=["frontend/public/digest"])
+    assert "declares no reads" in refused(a_garden(tmp_path, trials=trials))
+
+
+def test_a_task_may_read_a_folder_another_task_owns(tmp_path: Path) -> None:
+    tasks = config.load_gardener(
+        a_garden(tmp_path, traces=fixture("traces", reads=["state/seen"]))
+    ).tasks
+    assert tasks["traces"].reads == ["state/seen"] and tasks["seen"].owns == ["state/seen"]
+
+
+def test_the_census_summary_reads_both_folders_of_the_census_it_summarises() -> None:
+    """Its due months and its rows sit in folders the census compaction owns.
+
+    A folder it did not declare is refused when it asks, so the summary cannot
+    report success over a census it could not see from another shard.
+    """
+    tasks = config.load_gardener().tasks
+    census = tasks["compact-item-health"].owns or []
+    assert sorted(tasks["telemetry-aggregate"].reads) == sorted(census)
 
 
 def test_a_file_named_as_owned_is_refused(tmp_path: Path) -> None:
