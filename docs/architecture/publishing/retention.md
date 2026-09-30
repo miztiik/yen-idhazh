@@ -68,32 +68,21 @@ that constrain them belong to
 | Published identities | Preserve the information that prevents duplicate publication. The manual prune refuses this ledger. |
 | Item health | Write and validate the required day-and-stage summary before deleting an aged source month and its published copy. |
 | Feed health | Delete expired records when no reader needs them; do not invent an unused aggregate. Feed retirements have a separate policy so cleanup does not revive retired sources. |
-| Scores and score index | Archive a complete eligible month, verify it, then remove its source rows and live index together. Nothing archives a month today: the archive was built from the CSV day files, which moved to the ledger door, so the `scores` compaction - which deletes the rows now - stays report-only until an archive is built from the door's rows. |
+| Scores and score index | Keep every row and every index day. Nothing summarises a month and nothing deletes an eval row: the `scores` compaction may pack a month and never drops one, and an index day dropped would make every measurement in it new again. |
 | Raw and compact ledgers | Follow the ledger's compaction declaration. A legacy task's retirement must not silently shorten the period retained. |
 | Trial records and other task-owned data | Follow the owning declaration, not a blanket cleanup of `state/`. |
 
-### Score archives and identity
+An aggregate must outlive the full-detail data it replaces. A summary can be
+larger than a very small source partition; that alone does not make it invalid.
+Claims about aggregated data must stay within what the aggregate preserves.
 
-A score archive preserves the source checksum and row count, exact observation
-identities, and cohort statistics: counts, faithfulness bands and deciles, signal
-counts, and numeric counts, sums, squared sums, minima and maxima. Write it with
-temp-file-plus-rename, read it through its contract, and reconcile it against the
-source before unlinking anything.
+### Eval rows and identity
 
-Keep observation identity across the live index and archives so an old measurement
-cannot be counted as new merely because its rows aged out. The archiving pass
-removes the superseded live index in the same pass as the source rows. A stale
-index can be rebuilt with `idhazh rebuild-score-index --month <YYYY-MM>`.
-
-| Archiving gives up | Archiving preserves |
-| --- | --- |
-| Per-item lookup and human label-queue input | Cohort totals, rates and distributions |
-| Re-banding under new thresholds and exact percentiles | Recorded bands, deciles and numeric summaries |
-| Cross-column correlations and slices outside the cohort key | Exact deduplication, source checksum and row count |
-
-An aggregate or archive must outlive the full-detail data it replaces. A summary
-can be larger than a very small source partition; that alone does not make it
-invalid. Claims about archived data must stay within what the archive preserves.
+Every eval row is kept for ever, and so is every day of the score index, so an
+old measurement is never counted as new because its rows aged out, and a monthly
+figure is computed from the rows when a chart draws it
+([../../concepts/evaluation.md](../../concepts/evaluation.md#design-rationale)).
+A stale index can be rebuilt with `idhazh rebuild-score-index --month <YYYY-MM>`.
 
 ## A named prune: one ledger, one range of days
 

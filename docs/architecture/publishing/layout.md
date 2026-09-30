@@ -4,7 +4,7 @@
 
 Where the pipeline writes what a reader reads, what a reader's URL looks like, and what a day is once five runs have added to it. Assemble is the stage that produces all of it ([../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md)); this page owns the shape it writes into and the promises that shape makes.
 
-What happens to any of it afterwards is the other half, and it is [retention.md](retention.md): unpublishing a day, what bounds the committed state tree, and the score shards that turn into summaries once they age out.
+What happens to any of it afterwards is the other half, and it is [retention.md](retention.md): unpublishing a day, what bounds the committed state tree, and the eval rows that are kept for ever.
 
 ## Where each part is written up
 
@@ -36,9 +36,8 @@ frontend/public/digest/<YYYY>/<MM>/<DD>/run.json append-only runs[] for that dat
 frontend/public/digest/<YYYY>/<MM>/<DD>/<item_id>.json  optional visual, drawn in the browser
 frontend/public/assist/index/<YYYY-MM>.json one month of items, for browsing and search
 frontend/public/assist/index/<YYYY-MM>.bin that month's vectors, raw int8
-state/raw/scores/<YYYY>/<MM>/<DD>/ the ledger - one row per measurement, never published twice
+state/raw/scores/<YYYY>/<MM>/<DD>/ the ledger - one row per measurement, never published twice, kept for ever
 state/score-index/<YYYY>/<MM>/<DD>/ the identity of every measurement that day holds, 76 bytes each
-state/score-archive/<YYYY-MM>.json a score month past its full-grain window, as totals plus a dedupe index
 ```
 
 ```

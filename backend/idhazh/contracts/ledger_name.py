@@ -66,7 +66,6 @@ class LedgerName(StrEnum):
     TRACES = "traces"
     DAY_METRICS = "day-metrics"
     DIGEST_FRAGMENTS = "digest-fragments"
-    SCORE_ARCHIVE = "score-archive"
     GARDENER = "gardener"
 
 

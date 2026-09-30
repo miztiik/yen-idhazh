@@ -295,7 +295,6 @@ MOVED: Final = (
         "day_files(tree)",
         "shard_files(",
     ),
-    ("backend/idhazh/gardener/tasks/scores.py", "day_files(index)", "shard_files("),
     ("backend/idhazh/evals/writer.py", "day_files(state_dir / INDEX_DIRNAME)", "shard_files("),
     (
         "backend/idhazh/telemetry/inventory.py",

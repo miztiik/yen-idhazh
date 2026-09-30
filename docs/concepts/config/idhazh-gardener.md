@@ -50,7 +50,7 @@ Each kind adds its own keys, and a key on the wrong kind is refused by name:
 
 | Kind | Its own keys |
 | --- | --- |
-| `retention` | `series`, one window per series, for two tasks alone: `telemetry-aggregate` keeps `full-grain`, `aggregate` and `public-copy`, and `scores` keeps `full-grain` and `archive`. `fold`, `{after_days, dry_run}`, on a task that owns a CSV day tree - a tree that files one small file per writer under each day's folder: once `after_days` whole days have passed since a day ended (default 1), its files become one `settled.csv`. The fold has a `dry_run` of its own because it changes no answer a reader gets ([how it runs](../../architecture/publishing/idhazh-gardener.md#the-closed-day-fold)) |
+| `retention` | `series`, one window per series, for one task alone: `telemetry-aggregate` keeps `full-grain`, `aggregate` and `public-copy`. `fold`, `{after_days, dry_run}`, on a task that owns a CSV day tree - a tree that files one small file per writer under each day's folder: once `after_days` whole days have passed since a day ended (default 1), its files become one `settled.csv`. The fold has a `dry_run` of its own because it changes no answer a reader gets ([how it runs](../../architecture/publishing/idhazh-gardener.md#the-closed-day-fold)) |
 | `collection` | `collection` (required): `workflow-artifacts` or `workflow-runs`, the GitHub collection it deletes from, and the file is named for it. Its `window` is whole days and nothing else, because a pass counts a member's age in days |
 | `compaction` | `ledger` (required); `raw_index_keep_days` (90), `daily_keep_days` (45), `monthly_window` (13 months), `max_periods_per_run` (8), `max_raw_files_per_period` (2000), `compact_after_days` (1). Its `window` is always `{unit: forever}` and its `max_deletes_per_run` always `null`: the two periods are how far back it keeps, and `max_periods_per_run` is its budget |
 | `history` | `every_days`, how many whole days apart two rewrites may run; `push_attempts`, how many pushes one run makes in all, at least 1; `push_retry_delay_seconds`, how long a run waits after a refused push before it squashes again, at least 0. None of the three has a default. Its `window` is whole days and nothing else, because the squash cuts history at 00:00 UTC on the day that many days back |
@@ -72,7 +72,7 @@ Why each tree gets the age it has is
 | Task | Owns | Window | Why that window |
 | --- | --- | --- | --- |
 | `telemetry-aggregate` | `state/item-health-summary`, `frontend/public/telemetry` | 14 months: `full-grain` 14 months, `aggregate` forever, `public-copy` 14 months | a 366-day console read can open 14 month files; the summary is what a year-over-year claim reads, and it is written from the item-health ledger through the ledger door before `compact-item-health` can delete the month's rows; the browser's copy ages with its source. It `reads` `state/raw/item-health` and `state/compact/item-health`, which `compact-item-health` owns, so it finds its due months whichever shard it lands in |
-| `scores` | `state/score-index`, `state/score-archive` | 14 months: `full-grain` 14 months, `archive` forever | an index day goes once an archive covers its month. It builds no archive now: the archive was built from the CSV day files, which moved to the ledger door, so `compact-scores` stays report-only until an archive is built from the door's rows |
+| `scores` | `state/score-index` | forever | the index a run dedupes against, and an observation key carries no date, so a dropped day would make every measurement in it new again. Every eval row is kept for ever and nothing summarises a month, so the task takes nothing; it exists so the index's closed days are folded |
 | `feed-health` | `state/feed-health` | 14 months | the same 14; deleted rather than summarised, because no older total has a reader |
 | `host-fingerprint` | `state/host-fingerprint` | 14 months | retired: its module is deleted and nothing runs it. The declaration stays because its window is the floor `compact-host-fingerprint` must reach, and the published machine shard is folded from that ledger, so it keeps at least `public_machine_keep_months` |
 | `seen` | `state/seen` | 90 days | at least `collect.seen_window_days`, the days the collector reads |
@@ -98,7 +98,7 @@ other four ship `dry_run: true`. Each owns its ledger's two folders,
 | `compact-visual-prunes` | `visual-prunes`, the picture cleanup's report of every pass | the defaults | the same |
 | `compact-feed-retirements` | `feed-retirements`, the addresses the pipeline stopped fetching | day files for 45 to 76 days, then 60 month files | a retirement the window deletes is a feed the pipeline asks for again, so it keeps five years (owner, 2026-09-27). The price: an address retired more than 60 months ago is asked for once more, and is retired again if it is still gone |
 | `compact-item-health` | `item-health`, the census | day files for 31 to 62 days, then 15 month files | its floor is the `full-grain` series of `telemetry-aggregate`, 14 months, and a month is summarised before this can delete it. It packs live, with `daily_keep_days` 31: the shortest wait no GitHub re-run can outlast ([why 31](../../architecture/publishing/idhazh-gardener.md#design-rationale)) |
-| `compact-scores` | `scores`, the eval ledger | day files for 45 to 76 days, then 15 month files | its floor is the `full-grain` series of `scores`, 14 months. It stays report-only until the score archive is built from the door's rows |
+| `compact-scores` | `scores`, the eval ledger | day files for 45 to 76 days, then every month file for ever | every eval row is kept for ever and nothing summarises a month, so it may pack a month and never drops one |
 | `compact-host-fingerprint` | `host-fingerprint`, the machine record | day files for 31 to 62 days, then 14 month files | its floor is the retired `host-fingerprint` window, 14 months, which `public_machine_keep_months` holds. It packs live, with `daily_keep_days` 31, as `compact-item-health` does |
 
 **The last three are the ledgers the console reads**, and the console reads their
@@ -179,11 +179,11 @@ names the file an operator edits and the rule it broke.
 | An owned entry that is a file | A shard lists the files under each folder a task owns, so a file would list nothing |
 | `seen` keeping less than `collect.seen_window_days` | The planner still reads those days |
 | `counterfactual-scores` keeping less than `lens_weights.window_days` | A reader still opens those days |
-| `telemetry-aggregate` or `scores` with no series, a series that is not one of its trees, or one of its trees with no series | A tree with no window is a tree nothing bounds |
+| `telemetry-aggregate` with no series, a series that is not one of its trees, or one of its trees with no series | A tree with no window is a tree nothing bounds |
 | A task's `window` that differs from its `full-grain` series, or a ceiling on a task that keeps series | One number is spelled once; a ceiling could stop a month's summary part way through |
-| An `aggregate` or `archive` series that does not keep longer than the `full-grain` series beside it | A month would be deleted before it was ever summarised |
+| An `aggregate` series that does not keep longer than the `full-grain` series beside it | A month would be deleted before it was ever summarised |
 | A `public-copy` series that is not equal to the `full-grain` series | The copy is the browser's copy of that ledger |
-| A `feed-health` window, a `full-grain` series or a `public-copy` series under the month files the widest console read selects | A panel blanks for a month that ran |
+| A `feed-health` or `scores` window, a `full-grain` series or a `public-copy` series under the month files the widest console read selects | A panel blanks for a month that ran |
 | The retired `host-fingerprint` declaration keeping less than `observability.public_machine_keep_months` | The published machine shard is folded from the host-fingerprint ledger, and that window is the floor its compaction must reach |
 | `digest-fragments` or `visual-prune` keeping anything but 30 days times `retention.image_months`, or anything but forever when that is `-1` | The archive page states that window to a reader |
 | `series` on any other task | One task keeps several series |
