@@ -207,8 +207,8 @@ class _Declared(Model):
         default=None,
         description=(
             "The repository-relative folders this task may delete or write under. A "
-            "folder, never a file: a shard checks out folders, so a file here would "
-            "match nothing."
+            "folder, never a file: a shard lists the files under each folder, so a "
+            "file here would list nothing."
         ),
     )
     owns_everything_else_under: list[RelPath] | None = Field(

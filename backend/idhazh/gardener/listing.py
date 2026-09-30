@@ -38,15 +38,13 @@ def tasks(settings: GardenerSettings) -> list[str]:
 
 
 def plan(planned: GardenerPlan) -> list[str]:
-    """One line a shard - its tasks and the folders it checks out - and the fullest shard."""
+    """One line a shard - the tasks it runs - and the fullest shard."""
     fullest = shards.fullest(planned)
     if fullest is None:
         return ["this wake runs no shard: no active task is one the matrix runs"]
     lines = [f"{planned.shard_count} shards"]
     lines += [
-        f"  shard {shard.index}: {', '.join(shard.task_names)}; checks out "
-        f"{', '.join(shard.cone) or 'no folder'}"
-        for shard in planned.shards
+        f"  shard {shard.index}: {', '.join(shard.task_names)}" for shard in planned.shards
     ]
     lines.append(f"fullest: shard {fullest.index}, with {len(fullest.task_names)} tasks")
     return lines

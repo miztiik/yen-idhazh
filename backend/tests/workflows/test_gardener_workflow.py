@@ -24,10 +24,10 @@ from typing import Any, Final, cast
 import pytest
 from conftest import CONFIG_DIR, REPO_ROOT, read_text
 
-from idhazh import ledger
+from idhazh import config, ledger
 from idhazh.contracts.base import ServerJob
 from idhazh.ledger.paths import COMPACT_DIRNAME, RAW_DIRNAME
-from utilities import gardener_shards
+from utilities import gardener_publish, gardener_shards
 
 from ._harness import (
     WORKFLOWS_DIR,
@@ -56,7 +56,7 @@ PLANNER: Final = REPO_ROOT / "backend" / "utilities" / "gardener_shards.py"
 #: Without `${{ }}` the `!` would open a YAML tag. The person's ruling, 2026-09-29.
 HISTORY_GATE: Final = "${{ !cancelled() }}"
 
-#: The folders a cone may never be: a whole root that holds every ledger.
+#: The folders a shard may never list for a task: a whole root that holds every ledger.
 BARE_ROOTS: Final = frozenset(
     {
         ledger.STATE_DIRNAME,
@@ -116,30 +116,29 @@ def test_every_shard_count_the_matrix_can_run_is_a_partition_of_the_tasks(tmp_pa
         assert sorted(placed) == sorted(tasks), f"at {shards} shards a task is missing or twice"
         assert planned["shard_count"] == min(shards, len(tasks)) == len(dealt)
         legs = planned["matrix"]["include"]
-        assert [(leg["shard"], leg["cone"]) for leg in legs] == [
-            (shard["index"], shard["cone"]) for shard in planned["shards"]
-        ]
+        assert [leg["shard"] for leg in legs] == [shard["index"] for shard in planned["shards"]]
 
 
-def test_every_owned_folder_is_in_exactly_one_cone_and_no_cone_is_a_whole_root() -> None:
-    """A complement task adds no folder: it reads what it needs from the commit."""
+def test_a_shard_lists_what_its_tasks_own_or_read_and_never_a_whole_root() -> None:
+    """Every owned folder is listed by the one shard that runs its owner, and none is a root.
+
+    A shard checks out none of these folders: it lists their files from the
+    commit. A whole root here would list every ledger's files for one task.
+    """
+    settings = config.load_gardener()
     planned = gardener_shards.plan(CONFIG_DIR)
-    declared = gardener_shards.declarations(CONFIG_DIR)
-    cones = [
-        folder
-        for shard in planned["shards"]
-        for folder in shard["cone"].split(gardener_shards.CONE_SEPARATOR)
-        if folder
-    ]
-    owned = [
-        folder
-        for shard in planned["shards"]
-        for name in shard["task_names"]
-        for folder in declared[name].get("owns") or []
-    ]
-    assert sorted(cones) == sorted(owned)
-    assert len(cones) == len(set(cones)), "one folder is in two shards' cones"
-    assert BARE_ROOTS.isdisjoint(cones)
+    owner: dict[str, int] = {}
+    for shard in planned["shards"]:
+        owned, read = gardener_publish.declared_folders(shard["task_names"], settings)
+        named = [settings.tasks[name] for name in shard["task_names"]]
+        assert {*owned, *read} == {
+            folder for policy in named for folder in (*(policy.owns or ()), *policy.reads)
+        }
+        for folder in owned:
+            assert folder not in owner, f"{folder} is owned in two shards"
+            owner[folder] = shard["index"]
+        assert BARE_ROOTS.isdisjoint([*owned, *read])
+    assert owner, "no shard owns a folder, so this checks nothing"
 
 
 def test_every_job_the_workflow_spells_is_a_job_a_record_can_name() -> None:

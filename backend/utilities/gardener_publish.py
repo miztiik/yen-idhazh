@@ -498,6 +498,15 @@ def read_the_listing(
     return FileListing.from_commit(repo_root, chosen, entries, sizes, widen=widen)
 
 
+def declared_folders(
+    names: Sequence[str], settings: GardenerSettings
+) -> tuple[list[str], list[str]]:
+    """The folders these tasks own, and the ones they only read, each sorted."""
+    owned = sorted({folder for name in names for folder in settings.tasks[name].owns or ()})
+    read = sorted({folder for name in names for folder in settings.tasks[name].reads})
+    return owned, read
+
+
 def folder_weights(listing: FileListing, folders: Sequence[str]) -> dict[str, int]:
     """What each folder weighs at the commit, in bytes. A folder the commit lacks weighs 0."""
     return {
@@ -532,8 +541,7 @@ def run_and_land(
     if sha is None:
         say(f"shard {shard}: {repo_root.name} is not a git checkout, so no record can name it")
         return Outcome(exit_code=EXIT_INTEGRITY, record=None, landing=None)
-    owned = sorted({folder for name in names for folder in settings.tasks[name].owns or ()})
-    read = sorted({folder for name in names for folder in settings.tasks[name].reads})
+    owned, read = declared_folders(names, settings)
     committed = checkout.committed_folders([*owned, *read])
     swept = find_the_swept_folders(names, settings, repo_root, committed)
     try:
