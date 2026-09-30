@@ -51,11 +51,10 @@ PLAN, RUN_TASKS, HISTORY = "plan", "run-tasks", "history"
 #: The program the plan job runs before anything of ours is installed.
 PLANNER: Final = REPO_ROOT / "backend" / "utilities" / "gardener_shards.py"
 
-#: The owner's gate on the history job, word for word: after every shard, and on
-#: a day no task is active too. Owner decisions, 2026-09-24 and 2026-09-26.
-HISTORY_GATE: Final = (
-    "always() && (needs.run-tasks.result == 'success' || needs.run-tasks.result == 'skipped')"
-)
+#: The person's gate on the history job, word for word and wrapper included:
+#: after every shard, whatever the shards did, unless the run was cancelled.
+#: Without `${{ }}` the `!` would open a YAML tag. The person's ruling, 2026-09-29.
+HISTORY_GATE: Final = "${{ !cancelled() }}"
 
 #: The folders a cone may never be: a whole root that holds every ledger.
 BARE_ROOTS: Final = frozenset(
@@ -361,11 +360,16 @@ def test_a_shard_checks_out_its_cone_and_the_code_and_runs_the_landing_program()
     }
 
 
-def test_the_history_job_runs_last_and_on_a_day_no_task_is_active() -> None:
-    """Everything else is pushed before history is rewritten, and an idle day still squashes."""
+def test_the_history_job_runs_last_and_unless_the_run_was_cancelled() -> None:
+    """Every shard has ended before history is rewritten, and only a cancel stops the squash.
+
+    A day no task is active and a day a shard failed both still squash. The
+    condition is read as written rather than normalised, because the wrapper is
+    what keeps the `!` from being read as a YAML tag.
+    """
     job = _job(gardener(), HISTORY)
     assert job.get("needs") == [PLAN, RUN_TASKS]
-    assert _normalize_condition(job["if"], "history if") == HISTORY_GATE
+    assert job["if"] == HISTORY_GATE
     assert str(job["timeout-minutes"]) == "30"
 
 

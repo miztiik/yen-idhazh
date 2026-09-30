@@ -52,7 +52,7 @@ Each kind adds its own keys, and a key on the wrong kind is refused by name:
 | `retention` | `series`, one window per series, for two tasks alone: `telemetry-aggregate` keeps `full-grain`, `aggregate` and `public-copy`, and `scores` keeps `full-grain` and `archive`. `fold`, `{after_days, dry_run}`, on a task that owns a CSV day tree - a tree that files one small file per writer under each day's folder: once `after_days` whole days have passed since a day ended (default 1), its files become one `settled.csv`. The fold has a `dry_run` of its own because it changes no answer a reader gets ([how it runs](../../architecture/publishing/idhazh-gardener.md#the-closed-day-fold)) |
 | `collection` | `collection` (required): `workflow-artifacts` or `workflow-runs`, the GitHub collection it deletes from, and the file is named for it. Its `window` is whole days and nothing else, because a pass counts a member's age in days |
 | `compaction` | `ledger` (required); `raw_index_keep_days` (90), `daily_keep_days` (45), `monthly_window` (13 months), `max_periods_per_run` (8), `max_raw_files_per_period` (2000), `compact_after_days` (1). Its `window` is always `{unit: forever}` and its `max_deletes_per_run` always `null`: the two periods are how far back it keeps, and `max_periods_per_run` is its budget |
-| `history` | `every_days`, how many whole days apart two rewrites may run. Its `window` is whole days and nothing else, because the squash cuts history at 00:00 UTC on the day that many days back |
+| `history` | `every_days`, how many whole days apart two rewrites may run; `push_attempts`, how many pushes one run makes in all, at least 1; `push_retry_delay_seconds`, how long a run waits after a refused push before it squashes again, at least 0. None of the three has a default. Its `window` is whole days and nothing else, because the squash cuts history at 00:00 UTC on the day that many days back |
 
 ## The retention declarations that ship
 
@@ -124,12 +124,25 @@ matrix.
 | --- | --- | --- |
 | `window` | `{unit: days, value: 60}` | How many days of history a squash keeps |
 | `every_days` | `30` | How many whole days apart two squashes may run |
+| `push_attempts` | `3` | How many pushes one run makes in all. Git refuses a push when `main` moved after the run read it, and each refusal is followed by the whole squash again on the new tip. After the last refusal the run is not recorded, so the squash is due again at the next daily wake |
+| `push_retry_delay_seconds` | `60` | How long a run waits after a refused push before it fetches `main` and squashes again |
 | `owns` | `["corpus"]` | The one file the task writes, `corpus/corpus.meta.json`, sits under it |
 | `dry_run` | `false` | The squash has run live since 2026-08-28 by owner decision (`CLAUDE.md` section 8), so the declaration transcribes a live squash rather than starting one |
 
 Both numbers were `finetune.prune_keep_days` and `finetune.prune_every_days` until
 2026-09-28. They moved here because the squash is the only thing that reads them,
 and a copy left in `config/idhazh.json` is now refused by name, pointing here.
+
+**Three pushes a minute apart is an estimate, and one number decides whether it
+fits.** A run pays for its clone and its install once, then for one whole squash
+a push and one wait before each push after the first. So three pushes fit the
+history job's 30 minutes only while one squash takes under about 8 minutes on
+the runner. A squash replays every commit after its boundary - about 4,800 when
+the window is full, at September 2026's rate of about 80 commits a day - and that
+replay has not been timed on a runner. The first due run's step time is the
+measurement that settles it. A job stopped at its timeout has pushed nothing and
+recorded nothing, so the squash is due again at the next wake, as after a last
+refused push. The person's ruling of 2026-09-29 added the two keys.
 
 **Every other switch ships `dry_run: true`**, and a contract test holds the
 committed tree to that. It finds every `dry_run` a declaration carries, a

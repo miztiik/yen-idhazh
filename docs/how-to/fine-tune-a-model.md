@@ -1,6 +1,6 @@
 # Fine-tune a summarizer
 
-**Last Updated**: 2026-09-28
+**Last Updated**: 2026-09-29
 
 How the training corpus is built, what maintains it, and what a person does with
 it. Training itself does not happen here: the runner has no GPU, 4 vCPU and a
@@ -169,10 +169,11 @@ The `history` job of `idhazh-gardener.yml` wakes daily, reads `last_run` out of 
 doing anything. When the `every_days` of `config/gardener/corpus-squash.json` have
 passed it takes a full clone and runs `backend/utilities/corpus_history.py`: one
 program that squashes every commit older than that declaration's `window`,
-records the run in the meta file and force-pushes `main` - unless `main` moved
-while it was rewriting, which is the one case it refuses and pushes nothing. A
-wake that finds nothing old enough still records the run, and pushes without
-force.
+records the run in the meta file and force-pushes `main` with a lease on the
+tip it read. If `main` moved while it was rewriting, git refuses that push and
+the program squashes again on the new tip, up to `push_attempts` pushes in all;
+after the last refusal it has pushed nothing. A wake that finds nothing old
+enough still records the run, and pushes without force.
 
 **The boundary is read off author dates.** The squash replays every later
 commit, and a replay gives each one the day of the squash as its committer date,
@@ -208,27 +209,40 @@ What it costs, said rather than implied:
 Owner decision, 2026-08-28, taken over the alternative of keeping the corpus on a
 branch nobody works from.
 
-**The prune refuses rather than forcing when `main` moved under it.** A force
-push is a whole-ref operation: it replaces the branch with whatever the prune
-holds, so a commit another run pushed while the squash was running is deleted
-and nothing records that it existed. The prune therefore reads origin's tip
-again immediately before the push and compares it with the commit it checked
-out. If the two differ it pushes nothing and fails the run.
+**The prune never forces over a commit it did not read.** A force push is a
+whole-ref operation: it replaces the branch with whatever the prune holds, so a
+commit another run pushed while the squash was running would be deleted and
+nothing would record that it existed. So the push carries a lease,
+`--force-with-lease=refs/heads/main:<tip>`, naming the commit the prune read
+before it rewrote anything. Git replaces `main` only while origin still holds
+that commit, and it checks and updates in one step, so nothing can land between
+the two. Until 2026-09-29 the prune read origin's tip again just before a plain
+force push, which left a gap between that read and the push.
 
-**Refusing costs one wake, which is one day.** The record that says the squash
-ran is written by the same run, so a refused push leaves `last_run` on origin
-where it was, and `corpus_squash_due.py` calls the squash due again. The cron
-wakes daily, so the next morning's wake runs it again. Nothing else changes: the
-boundary is recomputed from that day, and a day of extra history is a day of
-extra history.
+**A refused push is followed by a new squash, not the same one.** The prune
+waits `push_retry_delay_seconds`, fetches `main`, puts its own `main` there and
+squashes again - the boundary, the new root, the replay, the tree check and the
+record - so the other run's commits are replayed with the rest and land inside
+the rewritten history. It never pushes the refused rewrite again, because that
+rewrite does not hold the commit that moved `main`. It stops after
+`push_attempts` pushes in all.
+
+**The last refusal costs one wake, which is one day.** The record that says the
+squash ran is written by the same run, so a refused push leaves `last_run` on
+origin where it was, and `corpus_squash_due.py` calls the squash due again. The
+cron wakes daily, so the next morning's wake runs it again. Nothing else
+changes: the boundary is recomputed from that day, and a day of extra history is
+a day of extra history.
 
 Until 2026-09-22 the only thing holding a clash off was the cron minute, placed
 in the one 266-minute window the serial digest schedule leaves idle. A gap is not
 a lock - GitHub queues scheduled runs by load, and no workflow here can hold a
-lock against another one. The hour still lowers the odds; the tip check is what
-makes losing that bet cost a day rather than another run's commits.
+lock against another one. The hour still lowers the odds; the lease is what
+makes losing that bet cost another squash, or at worst a day, rather than
+another run's commits.
 
-Owner decision, 2026-09-22.
+Owner decision, 2026-09-22; the lease and the retry are the person's ruling of
+2026-09-29.
 
 **No data is lost, only deltas.** `git checkout --orphan` at the boundary
 produces a root commit holding a complete copy of the tree, and the tip holds
@@ -475,13 +489,15 @@ All in the `finetune` block of `config/idhazh.json`, except the squash's two.
 | `epochs` | 2 | GPU hours |
 | `sequence_length` | 16384 | GPU memory on the training machine, quadratically in attention |
 
-The squash's two are in its own declaration, `config/gardener/corpus-squash.json`,
+The squash's knobs are in its own declaration, `config/gardener/corpus-squash.json`,
 because nothing else reads them:
 
 | Knob | Committed | What it costs |
 | --- | --- | --- |
-| `every_days` | 30 | one force-push each time it fires, or a day's delay when `main` moved |
+| `every_days` | 30 | one force-push each time it fires, or a day's delay when every push found `main` moved |
 | `window.value` | 60 | storage, and how far `git blame` reaches |
+| `push_attempts` | 3 | one whole squash each; three fit the history job's 30 minutes only while one squash takes under about 8 minutes |
+| `push_retry_delay_seconds` | 60 | job time before each squash after the first |
 
 `train_rows` and `corpus_rows` are two knobs because they price differently: the
 window costs storage, the sample costs wall-clock. Window 2000 with sample 1000

@@ -12,10 +12,10 @@ name: Idhazh Gardener
 #              before anything of ours is installed
 #   run-tasks  one job a shard. Each runs its tasks, writes one record under
 #              state/raw/gardener/ and pushes it, trying again on a newer tip
-#   history    the corpus squash, after every shard has pushed. It decides for
-#              itself whether the squash is due, and it is the one job in this
-#              repository that force-pushes main, the exception CLAUDE.md
-#              section 8 allows
+#   history    the corpus squash, once every shard has ended, unless the run was
+#              cancelled. It decides for itself whether the squash is due, and it
+#              is the one job in this repository that force-pushes main, the
+#              exception CLAUDE.md section 8 allows
 #
 # A push made with the default GITHUB_TOKEN starts no workflow. That is what
 # keeps the shards' pushes, one a shard every day, from starting a CI run each,
@@ -69,7 +69,8 @@ on:
     # holds these numbers, and docs/reference/github-actions.md derives them.
     #
     # This lowers the odds; it does not close them. What keeps a clash from
-    # costing another run its commits is the tip check the push makes.
+    # costing another run its commits is the lease the push carries: git will
+    # not replace a main that moved after the job read it.
     - cron: '40 0 * * *'
   workflow_dispatch:
     inputs:
@@ -193,12 +194,14 @@ jobs:
         run: python backend/utilities/gardener_publish.py --shard "$SHARD" --run-id "$RUN_ID" --attempt "$ATTEMPT"
 
   history:
-    # After every shard has pushed, so history is rewritten last. A skipped
-    # `needs` skips the job that needs it, so without `always()` the squash would
-    # never run on a day no task is active. Owner decisions, 2026-09-24 and
-    # 2026-09-26.
+    # After every shard has ended, so history is rewritten last, and whatever
+    # the shards did: a red shard's push has already ended, and its work is
+    # tried again at the next wake either way. A skipped `needs` would skip this
+    # job too, so it runs on `!cancelled()`: a day no task is active and a day a
+    # shard failed both still squash, and only a cancel stops it. The person's
+    # ruling, 2026-09-29.
     needs: [plan, run-tasks]
-    if: always() && (needs.run-tasks.result == 'success' || needs.run-tasks.result == 'skipped')
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -208,7 +211,8 @@ jobs:
       # full history is fetched below, and only when there is something to do.
       # Both checkouts take `main` as it is now rather than the commit this run
       # was created at: the shards pushed after that, and a rewrite of the old
-      # commit would find main moved and refuse on every due wake.
+      # commit would find main moved, so its first push would be refused on
+      # every due wake.
       - uses: actions/checkout@v6
         with:
           ref: main
@@ -254,10 +258,11 @@ jobs:
       # as an environment string. It remembers the tip before it rewrites
       # anything, collapses what is older than the declaration's window into one
       # root holding a complete copy of the tree, records the run whether or not
-      # anything was old enough, and pushes - with force only when it rewrote.
-      # It re-reads origin's tip first, and a tip that moved means another run
-      # pushed while this job was rewriting: it refuses rather than delete that
-      # run's work.
+      # anything was old enough, and pushes - with force only when it rewrote,
+      # and then with a lease on the tip it remembered, so git refuses the push
+      # if another run pushed while this job was rewriting. A refused push is
+      # followed by the whole squash again on the new tip, up to `push_attempts`
+      # pushes in all; after the last refusal the run is not recorded.
       #
       # A program rather than inline shell, so a test can drive it against a real
       # repository and watch it refuse. `today` is the due step's own reading, so
