@@ -1,6 +1,6 @@
 # Telemetry
 
-**Last Updated**: 2026-09-29
+**Last Updated**: 2026-09-30
 
 The structured-event vocabulary: the envelope every event carries, the event names that are emitted, the two shapes those names take, the span tree a developer can switch on, and the rule that there is no network sink. "Telemetry" here means a **local, structured log**; it is not a runtime analytics SDK, and this project ships none ([principles.md](principles.md), [../../CLAUDE.md](../../CLAUDE.md) section 1b).
 
@@ -453,7 +453,7 @@ Thirteen ledgers under `state/` is not thirteen designs. It is six grains, and t
 
 **The ladder is day, month, year, and each rung answers a different question.** Day files, because a day is the unit a prune deletes and the unit a window fetches - both stay cheap only while the file boundary is the day boundary. Month folds at the `full-grain` series of `config/gardener/telemetry-aggregate.json`, because a trend over a year does not need every item. Year is unbuilt and stays unbuilt until a month fold is too big to read, which at kilobytes a month it is not.
 
-**The published mirror is a redaction step, not a copy.** `state/` is committed and never published; `frontend/public/` is published and never holds a ledger. Between them sits a projection that drops the columns a reader may not have - `PublicTelemetryRow` exists to strip 77 of them. Calling the published copy pollution mistakes the safety control for the leak. What it costs is 8.8 MB of a 39.2 MB site, under 1 percent of the 1 GB cap, and it is bounded: the `public-copy` series of `config/gardener/telemetry-aggregate.json` deletes a published month in the same pass that summarises its source, so the mirror plateaus rather than grows. The site reaches its cap on pictures and stories, not on telemetry.
+**The published mirror is a projection, not a copy.** `frontend/public/` is published and never holds a ledger. Between it and `state/` sits a projection, `PublicTelemetryRow`, that drops 77 of the item ledger's columns. What it costs is 8.8 MB of a 39.2 MB site, under 1 percent of the 1 GB cap, and it is bounded: the `public-copy` series of `config/gardener/telemetry-aggregate.json` deletes a published month in the same pass that summarises its source, so the mirror plateaus rather than grows. The site reaches its cap on pictures and stories, not on telemetry. **The ledgers the browser queries are copies, not projections**: the compact files of the ledgers `ledger.published` names reach the site whole, every column included, and the repository that commits them is public, so no column of theirs was private ([../architecture/publishing/how-the-query-door-answers-a-panel.md](../architecture/publishing/how-the-query-door-answers-a-panel.md#what-the-site-holds-for-the-door)).
 
 **A published payload with no reader is deleted rather than kept for later.** `scores/` and `feed-health/` were 6,455,733 bytes that no console route fetched, and on 2026-09-16 they went with their two projections. A mirror nobody reads drifts from the ledger it mirrors and nobody notices, which is the same failure as a column nobody writes. The scores and feed-health ledgers stay - they are the record, and the console reads them at build time.
 

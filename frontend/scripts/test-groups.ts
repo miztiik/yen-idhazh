@@ -12,7 +12,7 @@ const FILES: Record<Exclude<FrontendGroup, 'console'>, readonly string[]> = {
 		'appearance-config', 'archive-scope', 'asset-base', 'chart-vocabulary', 'day-list', 'day-metrics', 'day-search',
 		'day-shards',
 		'extraction-trend', 'extraction-window', 'frame',
-		'glance-and-rank', 'holdout', 'holdout-domain', 'ledger-door', 'ledger-rows', 'memory-held', 'merge-line', 'model-cards',
+		'glance-and-rank', 'holdout', 'holdout-domain', 'ledger-copy', 'ledger-door', 'ledger-rows', 'memory-held', 'merge-line', 'model-cards',
 		'one-pass-reductions',
 		'preview-port',
 		'processor-lost', 'prompt-reuse',
@@ -39,7 +39,7 @@ const FILES: Record<Exclude<FrontendGroup, 'console'>, readonly string[]> = {
 	'model-search': ['search'],
 	publishing: [
 		'assist-guard', 'canaries', 'charts', 'day-seam', 'empty-day', 'icons',
-		'malformed-day', 'payload-weight', 'served-day', 'staged-day'
+		'malformed-day', 'payload-weight', 'published-ledgers', 'served-day', 'staged-day'
 	]
 };
 

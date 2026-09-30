@@ -1,6 +1,6 @@
 # The Ledger Door: Parquet and JSON Lines Under state/raw and state/compact
 
-**Last Updated**: 2026-09-29
+**Last Updated**: 2026-09-30
 
 How a contract payload reaches disk under `state/raw/` and `state/compact/`, how it comes back, and how the parquet engine is swapped. The door is `backend/idhazh/ledger/persist.py`; everything a producer needs is two calls, `ledger.persist` and `ledger.load`. The registry and the lifecycle statuses are [ledger-registry.md](ledger-registry.md), the CSV trees are [state-ledgers.md](state-ledgers.md), and the shape of a contract is [schemas.md](schemas.md).
 
@@ -121,7 +121,7 @@ The paths come back ascending by the day each file covers, never by path string.
 | Compression | `ledger.compression_raw` (snappy) or `ledger.compression_compact` (zstd) | `none` - it is plain text |
 | For | every ledger by default | a payload a person reads in a pull request |
 
-The `ledger` block of `config/idhazh.json` holds five knobs: `format` (default `parquet`), `compression_raw` (default `snappy`, which every reader opens without a plugin), `compression_compact` (default `zstd`, about 2.2 times smaller at a thousand rows), `published`, the ledgers a browser may fetch, and `engine_extension_repository`, where the query engine that reads them downloads its add-ons (default DuckDB's own host, [../publishing/how-the-query-door-answers-a-panel.md](../publishing/how-the-query-door-answers-a-panel.md)). **`published` ships empty**, because no page fetches a compact file in a browser yet. The four console routes read the packed files of the three console ledgers while the site is built, from `state/` on disk, and a browser receives only what they drew.
+The `ledger` block of `config/idhazh.json` holds five knobs: `format` (default `parquet`), `compression_raw` (default `snappy`, which every reader opens without a plugin), `compression_compact` (default `zstd`, about 2.2 times smaller at a thousand rows), `published`, the ledgers a browser may fetch, and `engine_extension_repository`, where the query engine that reads them downloads its add-ons (default DuckDB's own host, [../publishing/how-the-query-door-answers-a-panel.md](../publishing/how-the-query-door-answers-a-panel.md)). **`published` names the three console ledgers**, `host-fingerprint`, `item-health` and `scores`: the site build copies each one's indexes and compact files into the site for the browser's query door ([../publishing/how-the-query-door-answers-a-panel.md](../publishing/how-the-query-door-answers-a-panel.md#what-the-site-holds-for-the-door)). The four console routes still read the same packed files while the site is built, from `state/` on disk, until a panel moves onto the door.
 
 ### The column types
 

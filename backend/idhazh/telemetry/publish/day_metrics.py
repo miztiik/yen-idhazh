@@ -722,9 +722,9 @@ def backfill(state_root: Path, days: Iterable[tuple[str, DigestDay, RunManifest]
 
 # --- the browser's copy ------------------------------------------------------
 #
-# The record above is written under `state/`, which is never served. The console
-# reads one record a date, so the copy files by month: one fetch answers for
-# every day of the month an operator is panning over.
+# The record above is written under `state/`, and the site does not serve this
+# ledger. The console reads one record a date, so the copy files by month: one
+# fetch answers for every day of the month an operator is panning over.
 
 
 PUBLIC_DIRNAME: Final = series.DAY_METRICS_DIRNAME

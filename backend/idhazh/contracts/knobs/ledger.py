@@ -7,8 +7,11 @@ the compaction reads once, and zstd for a compact file, which is smaller and is
 read by this project alone. `published` names the ledgers whose compact files a
 browser may fetch.
 
-**`published` ships empty.** No page reads a compact file yet, and an entry here
-would publish files that no page opens.
+**`published` names the three ledgers the console reads**: `host-fingerprint`,
+`item-health` and `scores`. The site build copies each one's two indexes and
+every compact file they name, unchanged, and refuses a ledger that lacks either
+index. A backend test holds every ledger a console panel asks the browser's
+query door for to this list.
 
 The fifth, `engine_extension_repository`, is read by the site build alone: it is
 where the query engine that reads these files downloads its add-ons, and the one
@@ -54,8 +57,9 @@ class LedgerConfig(Model):
     published: list[LedgerName] = Field(
         default_factory=list,
         description=(
-            "The ledgers whose compact files a browser may fetch. Empty until a console "
-            "page reads one, because an entry here publishes files."
+            "The ledgers whose compact files a browser may fetch. The site build copies "
+            "each one's two indexes and the compact files they name, unchanged. Empty by "
+            "default, because an entry here publishes files."
         ),
     )
     engine_extension_repository: str = Field(

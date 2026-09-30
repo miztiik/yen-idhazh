@@ -1,6 +1,6 @@
 # Item Health
 
-**Last Updated**: 2026-09-29
+**Last Updated**: 2026-09-30
 
 What every planned item did on every run, where that record lives, and which
 failures count against a source. This is item-grain evidence. Feed health is
@@ -826,10 +826,13 @@ Three limits, in the order they will actually bite:
  packing replaces a day's raw files with one day file, so the repository grows
  with the rows written rather than with rewrites of one file. The lever if it
  bites is the projection width again, or a shorter retention on the ledger itself.
-3. **The 1 GB published site, last and least.** `state/` is never served, so it
- does not count against that cap at all. Only the projection under
- `frontend/public/telemetry/` does, and at 10 MB gzipped a year it is not the
- thing that fills a gigabyte - the day payloads and their SVG assets are.
+3. **The 1 GB published site, last and least.** The ledger reaches the site
+ twice: as the projection under `frontend/public/telemetry/`, about 10 MB gzipped
+ a year, and as its compact files, copied whole for the browser's query door and
+ bounded by the ledger's keep windows - 4.71 MB on 2026-09-30
+ ([../publishing/how-the-query-door-answers-a-panel.md](../publishing/how-the-query-door-answers-a-panel.md#what-the-site-holds-for-the-door)).
+ Neither is the thing that fills a gigabyte - the day payloads and their SVG
+ assets are.
 
 What is deliberately **not** planned: pruning inside the window. The ledger is
 the only durable record of what a bad day did, and a retention pass over it would
