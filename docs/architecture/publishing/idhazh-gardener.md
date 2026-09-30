@@ -501,6 +501,11 @@ of each key. It writes the day's listing,
 last. A pass that stops part way leaves the watermark behind the truth, so the
 next wake takes that one day again and loses nothing.
 
+**A watermark records what the data covers, never when a job ran.** It names
+the newest day taken, so a lost watermark write costs one repeat and never a
+skipped day: the next wake finds the mark behind and takes that day again, from
+its day file and any raw files still there.
+
 **A quiet day still gets a file.** A day with no raw files gets a day file with
 no rows and an index entry. So the newest day `index/daily.json` names is always
 the watermark's day, and a reader can tell a quiet day from a missing one
@@ -539,6 +544,8 @@ would put the missing day in no file.
 
 Absorbing is five steps in this order: the month file, `index/monthly.json`, the
 deletion of its day files, `index/daily.json`, and `monthly/watermark.json` last.
+A live pass lands all five in the shard's one commit, so no commit on `main`
+holds one of the month's dates in both periods, or in neither.
 The day files are joined as they are and never settled across days: a key with
 no date in it may repeat on two days, and both rows are facts.
 

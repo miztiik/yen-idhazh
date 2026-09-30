@@ -1,6 +1,6 @@
 # The ledger registry
 
-**Last Updated**: 2026-09-29
+**Last Updated**: 2026-09-30
 
 A ledger is a committed file or folder under `state/` that one run writes so that a later run can read it. A ledger exists in code only when it is registered, and registering it takes two edits. The first is one member of `LedgerName`, the ledger's one name in code. The second is one entry in `config/ledgers.json`, which puts the ledger in a family - one top-level folder under `state/` - and says where its files sit. When the code loads, it checks that the two edits agree, and the build stops if they do not.
 
@@ -48,6 +48,29 @@ A ledger that goes through the ledger door files under two roots rather than one
 **For this grain the `prefix` is the path inside each of the two roots.** Everywhere else it is the path from `state/`, but `["gardener"]` means `state/raw/gardener/` and `state/compact/gardener/`. The family check still passes, because the prefix still opens on the family's name, and the registry refuses any other prefix, because the root builders file the ledger under its own name.
 
 **The four builders above refuse the grain by name.** `path`, `relpath`, `tree_root` and `tree_relpath` each answer with an error that names the ledger and points at the ones that build its addresses: `raw_path`, `raw_index_path`, `compact_path`, `compact_index_path` and `watermark_path`, with `raw_root` for the folder a reader walks. So nothing reads or writes a moved ledger at its old CSV address by accident. `ledger_families.py` counts its files under each root on a line of its own.
+
+## The ledgers still on CSV
+
+[Telemetry intent](../../concepts/telemetry-intent.md) N1 and N11 still have these ledgers to move, because each still writes CSV, and N6 still has the `merge=union` driver on seven of them to retire - the largest, `state/seen/`, held 13,939,571 bytes in 39 day files on 2026-09-30, over seven times what `state/published/` held.
+
+| Ledger under `state/` | Writer, under `backend/idhazh/` | What reads its rows, besides upkeep: backend under `backend/idhazh/`, console under `frontend/src/lib/server/` | Two writers on one file |
+| --- | --- | --- | --- |
+| `seen` | `stages/plan.py` | `stages/plan.py` | the union driver keeps both |
+| `published` | `stages/assemble.py` | `stages/plan.py` | the union driver keeps both |
+| `feed-health` | `stages/plan.py` | `stages/plan.py`, `telemetry/source_health.py`, `telemetry/publish/source_health.py`, `telemetry/publish/console_band.py`, `payload.ts` | cannot happen: one file per writer |
+| `score-index` | `evals/writer.py` | `evals/writer.py` | cannot happen: one file per writer |
+| `span-rollup` | `stages/work.py` | `telemetry/publish/span_rollup.py`, `telemetry/inventory.py`, `span-rollup.ts` | cannot happen: one file per writer |
+| `counterfactual-scores` | `stages/plan.py` | nothing yet | cannot happen: one file per writer |
+| `candidate-models` | `stages/decide.py`, `stages/qualify_decide.py` | nothing yet | cannot happen: one file per writer |
+| `item-health-summary` | `gardener/tasks/telemetry_aggregate.py` | nothing yet | cannot happen: one writer rewrites a month whole |
+| `content-similarity-judge/scored-pairs` | `stages/count_verdicts.py` | `stages/set_merge_line.py` | the union driver keeps both |
+| `content-similarity-judge/fitted-thresholds` | `stages/set_merge_line.py` | `stages/set_merge_line.py`, `similarity/applied.py`, `similarity-ledger.ts` | the union driver keeps both |
+| `content-similarity-judge/metrics` | `stages/count_verdicts.py` | nothing yet | the union driver keeps both |
+| `content-similarity-judge/merge-line-holdout-scores` | `stages/score_merge_line_holdout.py` | `similarity-holdout.ts` | the union driver keeps both |
+| `content-similarity-judge/holdout-pairs.csv` | a person, by hand | `similarity/holdout.py`, `similarity-holdout.ts` | `merge=text` stops the push for a person |
+| `llm-council/shard-outcomes` | `council/session.py` | nothing yet | the union driver keeps both |
+
+`corpus/corpus.jsonl` and `corpus/corpus.meta.json` are not ledgers, have no merge driver of their own and carry no writer in their names, so a push race that conflicts on them stops the push: `backend/utilities/commit_and_push.py` keeps a conflicted file only when its name carries the job's own identity.
 
 ## What the registry refuses when it loads
 
