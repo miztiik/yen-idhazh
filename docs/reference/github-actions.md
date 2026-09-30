@@ -1,6 +1,6 @@
 # GitHub Actions Workflows
 
-**Last Updated**: 2026-09-29
+**Last Updated**: 2026-09-30
 
 Which workflows run, when they run, and what they may publish.
 The [workflow declarations](../../.github/workflows/) are authoritative.
@@ -94,6 +94,15 @@ and [weight rules](site-weight.md).
   pushes with a lease on the tip it read, so git refuses the push if another run
   pushed meanwhile; it then squashes again on the new tip, up to `push_attempts`
   pushes in all. A quiet cron window cannot replace that lease.
+- The gardener still wakes at 00:40 so that the force push lands in the quiet
+  time, 01:23 to 07:23: the council's runs of 2026-09-19 to 28 had ended by
+  01:23, and none of the digest runs of 2026-09-16 to 28 was created before 07:23.
+  A scheduled wake is estimated to start 112 to 334 minutes late, the delays of
+  the two nearest cron lines, and the three jobs' time limits add 55 minutes, so
+  the push lands between 02:32 and 07:09. The first scheduled wake, on
+  2026-09-30, started 315 minutes late, inside that estimate.
+  `backend/tests/workflows/test_triggers.py` holds these readings and fails when
+  a cron line they were read under changes.
 - A skipped speed case must not skip the remaining measurement jobs. A failed one
   still blocks dependent runtime work. Label missing results; do not emit a complete
   model dossier from partial evidence. Skipping also moves the weight download cost.
