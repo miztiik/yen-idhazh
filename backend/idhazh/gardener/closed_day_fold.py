@@ -28,11 +28,12 @@ folded by nobody.
 a dry run, is left to the window: a shard refuses a path it both writes and
 deletes, and a day the window is removing needs no fold.
 
-**Listing a tree reads every day folder it holds.** The question is which days
-still hold a writer file, and no bounded input answers it, so the cost of the
-listing grows with the tree (Guardrail #12, `docs/concepts/growing-reads.md`).
-It is the listing the window's pass makes over the same tree, and only a day
-that still holds a writer file is opened.
+**Listing a tree reads every day folder's name it holds.** The question is
+which days still hold a writer file, and no bounded input answers it, so the
+cost of the listing grows with the tree (Guardrail #12,
+`docs/concepts/growing-reads.md`). The names come from the task's listing, and
+only the days that still hold a writer file are fetched and opened, a tree's
+days in one fetch.
 """
 
 from __future__ import annotations
@@ -43,11 +44,11 @@ from datetime import UTC, date, datetime, time
 from pathlib import Path
 
 from idhazh import day_shards, ledger
-from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
 from idhazh.contracts.knobs.gardener import FoldPolicy
 from idhazh.contracts.ledger_name import DAY_TREES, LedgerName
-from idhazh.gardener import retention_files, schedule
+from idhazh.gardener import named_trees, retention_files, schedule
 from idhazh.gardener.context import TaskContext
+from idhazh.gardener.file_listing import FileListing
 
 
 @dataclass(frozen=True, slots=True)
@@ -128,6 +129,7 @@ def run(context: TaskContext, declared: FoldPolicy, *, skip: Iterable[str]) -> F
         after_days=declared.after_days,
         dry_run=declared.dry_run,
         skip={(context.repo_root / taken).parent for taken in skip},
+        listing=context.listing,
     )
 
 
@@ -139,26 +141,38 @@ def fold(
     after_days: int,
     dry_run: bool,
     skip: Collection[Path] = (),
+    listing: FileListing | None = None,
 ) -> Folded:
     """Settle every closed day of these trees that still holds a file other than its settled one.
 
     `now` is the instant the question is asked at. A day folder in `skip` is left
     as it stands. A dry run reads and settles every day it would fold, so a row
     that will not parse stops it the way it would stop a live fold, and it writes
-    and deletes nothing.
+    and deletes nothing. `listing` is where the names come from; a caller that
+    folds a tree on disk passes none, and the trees are listed as the disk holds
+    them.
     """
+    chosen = sorted(trees, key=lambda which: which.value)
+    if listing is None:
+        roots = [ledger.tree_root(state_dir, tree) for tree in chosen]
+        listing = FileListing.from_disk(
+            state_dir.parent, [root.relative_to(state_dir.parent).as_posix() for root in roots]
+        )
     done: list[SettledDay] = []
-    for tree in sorted(trees, key=lambda which: which.value):
+    for tree in chosen:
         root = ledger.tree_root(state_dir, tree)
         where = tree.value
         try:
             key = ledger.segment_key(tree)
             model = ledger.segment_contract(tree)
-            for day in _closed_days(root, now=now, after_days=after_days):
+            days = [
+                (day, root / day[:4] / day[5:7] / day[8:10])
+                for day in _closed_days(listing, root, now=now, after_days=after_days)
+            ]
+            waiting = [(day, folder) for day, folder in days if folder not in skip]
+            listing.fetch([folder for _, folder in waiting])
+            for day, folder in waiting:
                 where = f"{tree.value} {day}"
-                folder = root / day[:4] / day[5:7] / day[8:10]
-                if folder in skip:
-                    continue
                 replaced = _fold_day(root, day, key, model, dry_run=dry_run)
                 if replaced:
                     done.append(SettledDay(tree=tree, day=day, folder=folder, replaced=replaced))
@@ -168,13 +182,15 @@ def fold(
     return Folded(dry_run=dry_run, days=tuple(done))
 
 
-def _closed_days(root: Path, *, now: datetime, after_days: int) -> Iterator[str]:
+def _closed_days(
+    listing: FileListing, root: Path, *, now: datetime, after_days: int
+) -> Iterator[str]:
     """Every day of one tree closed at `now` that holds a file besides its settled one.
 
-    Read off the paths, so no file is opened to answer it, oldest day first.
+    Read off the listing's names, so no file is opened to answer it, oldest day first.
     """
     waiting: dict[str, bool] = {}
-    for shard in day_shards.shard_files(root, days=UNBOUNDED_WINDOW):
+    for shard in named_trees.shard_files(listing, root):
         day = day_shards.date_of(shard)
         waiting[day] = waiting.get(day, False) or shard.name != day_shards.SETTLED_NAME
     for day, unsettled in waiting.items():

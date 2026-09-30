@@ -464,3 +464,19 @@ def test_a_fold_that_cannot_be_read_back_leaves_the_browser_copy(
 
     assert public_telemetry.shard_path(public, doomed[0]).exists()
     assert len(month_shards(public)) == HISTORY_MONTHS
+
+
+def test_a_census_the_declaration_does_not_read_is_refused_and_never_read_as_empty(
+    tmp_path: Path,
+) -> None:
+    """The census sits in folders another task owns, so the task names them under `reads`.
+
+    Without them its listing does not cover the census, and asking about it is
+    refused. A task that saw no month due would report success over a census it
+    never saw, and the compaction would later delete rows with nothing kept.
+    """
+    state = a_state_tree(tmp_path)
+    assert declared()[NAME].reads, "the shipped task reads the census, or this proves nothing"
+
+    with pytest.raises(ValueError, match="owns or reads"):
+        run_task(NAME, state.parent, reads=[])

@@ -12,10 +12,10 @@ name: Idhazh Gardener
 #              before anything of ours is installed
 #   run-tasks  one job a shard. Each runs its tasks, writes one record under
 #              state/raw/gardener/ and pushes it, trying again on a newer tip
-#   history    the corpus squash, after every shard has pushed. It decides for
-#              itself whether the squash is due, and it is the one job in this
-#              repository that force-pushes main, the exception CLAUDE.md
-#              section 8 allows
+#   history    the corpus squash, once every shard has ended, unless the run was
+#              cancelled. It decides for itself whether the squash is due, and it
+#              is the one job in this repository that force-pushes main, the
+#              exception CLAUDE.md section 8 allows
 #
 # A push made with the default GITHUB_TOKEN starts no workflow. That is what
 # keeps the shards' pushes, one a shard every day, from starting a CI run each,
@@ -69,7 +69,8 @@ on:
     # holds these numbers, and docs/reference/github-actions.md derives them.
     #
     # This lowers the odds; it does not close them. What keeps a clash from
-    # costing another run its commits is the tip check the push makes.
+    # costing another run its commits is the lease the push carries: git will
+    # not replace a main that moved after the job read it.
     - cron: '40 0 * * *'
   workflow_dispatch:
     inputs:
@@ -143,15 +144,14 @@ jobs:
       fail-fast: false
       max-parallel: ${{ fromJSON(needs.plan.outputs.shard_count) }}
     steps:
-      # The cone is this shard's tasks' `owns` folders, emitted by the `plan`
-      # job from the same config that declares them, plus the three folders the
-      # code lives in. A task whose folder sits outside the cone would list an
-      # empty directory and report success - the one failure no gate catches -
-      # so the runner fails a task whose folder the commit holds and this
-      # checkout lacks. `blob:none` downloads no file outside the cone. The one
-      # task that owns everything else under `state` adds no folder here, because
-      # only the commit can say what that is: gardener_publish.py reads it off
-      # the commit and adds those folders to this checkout before any task runs.
+      # The checkout holds only the three folders the code and config live in.
+      # Every name a task decides from comes from the commit: gardener_publish.py
+      # lists the files under the folders the shard's tasks own or read with
+      # `git ls-tree`, and downloads none of them. A task that reads a file's
+      # content first widens this checkout by the day or month folders that step
+      # reads, in one download. `blob:none` downloads no file outside the
+      # checkout, and a task never takes a file it lacks for a member that is not
+      # there: it fetches the file or it fails.
       - uses: actions/checkout@v6
         with:
           fetch-depth: 1
@@ -160,12 +160,10 @@ jobs:
             config
             backend
             .github
-            ${{ matrix.cone }}
 
-      # The commit loop's `git reset --mixed` expands the index to the whole
-      # repository unless the index is sparse, and actions/checkout leaves it not.
-      # A shard whose cone lacks the gardener's own ledger still expands it once,
-      # when it stages its record there; that costs time, never a wrong commit.
+      # Each widening rewrites the checkout's index, which expands it to the
+      # whole repository unless the index is sparse, and actions/checkout leaves
+      # it not. The commit a shard lands is built in an index of its own.
       - name: Keep the index sparse
         run: git config index.sparse true
 
@@ -181,7 +179,9 @@ jobs:
       # Runs the shard's tasks, writes its one record and pushes it, trying again
       # on a newer tip when another shard pushed first. It exits with the worst
       # code it earned: 2 ownership or integrity, 3 the push kept losing, 1 a
-      # task failed or the shard's owned folders are over max_cone_mb.
+      # task failed, the shard downloaded more than max_downloaded_mb, or the
+      # files under its folders could not be listed. The token also reads the
+      # size of each file the clone never downloaded, from GitHub's trees API.
       - name: Run the shard's tasks and land its record
         env:
           SHARD: ${{ matrix.shard }}
@@ -191,12 +191,14 @@ jobs:
         run: python backend/utilities/gardener_publish.py --shard "$SHARD" --run-id "$RUN_ID" --attempt "$ATTEMPT"
 
   history:
-    # After every shard has pushed, so history is rewritten last. A skipped
-    # `needs` skips the job that needs it, so without `always()` the squash would
-    # never run on a day no task is active. Owner decisions, 2026-09-24 and
-    # 2026-09-26.
+    # After every shard has ended, so history is rewritten last, and whatever
+    # the shards did: a red shard's push has already ended, and its work is
+    # tried again at the next wake either way. A skipped `needs` would skip this
+    # job too, so it runs on `!cancelled()`: a day no task is active and a day a
+    # shard failed both still squash, and only a cancel stops it. The person's
+    # ruling, 2026-09-29.
     needs: [plan, run-tasks]
-    if: always() && (needs.run-tasks.result == 'success' || needs.run-tasks.result == 'skipped')
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -206,7 +208,8 @@ jobs:
       # full history is fetched below, and only when there is something to do.
       # Both checkouts take `main` as it is now rather than the commit this run
       # was created at: the shards pushed after that, and a rewrite of the old
-      # commit would find main moved and refuse on every due wake.
+      # commit would find main moved, so its first push would be refused on
+      # every due wake.
       - uses: actions/checkout@v6
         with:
           ref: main
@@ -252,10 +255,11 @@ jobs:
       # as an environment string. It remembers the tip before it rewrites
       # anything, collapses what is older than the declaration's window into one
       # root holding a complete copy of the tree, records the run whether or not
-      # anything was old enough, and pushes - with force only when it rewrote.
-      # It re-reads origin's tip first, and a tip that moved means another run
-      # pushed while this job was rewriting: it refuses rather than delete that
-      # run's work.
+      # anything was old enough, and pushes - with force only when it rewrote,
+      # and then with a lease on the tip it remembered, so git refuses the push
+      # if another run pushed while this job was rewriting. A refused push is
+      # followed by the whole squash again on the new tip, up to `push_attempts`
+      # pushes in all; after the last refusal the run is not recorded.
       #
       # A program rather than inline shell, so a test can drive it against a real
       # repository and watch it refuse. `today` is the due step's own reading, so

@@ -1,6 +1,6 @@
 # CLAUDE.md - Yen Idhazh: Engineering Contract
 
-**Last Updated**: 2026-09-28
+**Last Updated**: 2026-09-29
 
 Non-negotiable contract for any human or AI agent working in this repo.
 
@@ -196,32 +196,26 @@ When in doubt, choose the higher level. Counting files is not the test: four fil
 
 ## 8. Git Hygiene
 
-User saying finish / ship / merge authorizes the normal reversible git workflow: inspect, named branch, stage exact paths, commit, push, gates, merge.
+`finish`, `ship` or `merge` authorizes the normal Git workflow below, not destructive or history-rewriting operations.
 
-Avoid (broad / lossy / history-rewriting):
+- **Protect existing work.** Confirm the checkout and branch with `git status --porcelain`. Leave unrelated changes alone. Start code changes in a dedicated worktree and named branch.
+- **Commit only intended changes.** Stage explicit paths and verify them with `git diff --cached --name-only`. Keep commits small and reversible. Branch names and commit messages describe the change.
+- **Preserve published history.** Update pushed branches by merging, not rebasing or amending. Merge only after required checks pass.
+- **Verify before cleanup.** Confirm the PR is merged and no local work will be lost. Delete its remote branch, remove only your clean worktree, and prune its obsolete local branch. A `: gone` marker alone does not prove a merge.
+- **Use one commit identity:** `miztiik <miztiik@users.noreply.github.com>`. No attribution tags, including `Co-authored-by` trailers. [.mailmap](.mailmap) normalizes GitHub's squash-merge identity.
 
-- `git stash`
-- `git reset --hard`
-- `git clean -fd`
-- `git checkout .` / broad `git restore .`
-- `git add .` / `git add -A`
-- `git push --force` / `git push --force-with-lease`
-- Amending pushed commits
-- Leaving a merged PR's remote branch undeleted or its `: gone]` local tracking branches unpruned.
+Avoid `git stash`, `git reset --hard`, `git clean -fd`, broad checkout/restore, `git add .`, `git add -A`, force pushes and amendments to pushed commits.
 
-**The standing exception is the `history` job of `.github/workflows/idhazh-gardener.yml`.** It squashes commits older than the `window` of `config/gardener/corpus-squash.json` and force-pushes `main`, every `every_days` of that same declaration. The workflow's other jobs push without force, and the exception does not reach them. The standing exception exists because the corpus commits article text (section 0a) and git history is append-only, so deleting a row does not delete its bytes - the only way to bound the repository is to rewrite the range those bytes are in.
+### History Exception
 
-**The exception does not cover forcing over another run.** The job reads origin's tip again immediately before the push and refuses if it moved, because a force push replaces the whole ref and would delete a commit that landed while the squash ran. A refused prune writes no stamp, so it is due again at the next daily wake - it costs one day, not one cadence. Owner decision, 2026-09-22.
+Only the `history` job in [.github/workflows/idhazh-gardener.yml](.github/workflows/idhazh-gardener.yml) may perform scheduled history rewrites. Its retention and cadence come from [config/gardener/corpus-squash.json](config/gardener/corpus-squash.json). Deleting corpus files alone does not remove their historical bytes.
 
-What it costs, stated rather than implied: a squash boundary is per-commit, not per-path, so the range it collapses carries `backend/`, `docs/` and `state/` as well as `corpus/`. `git blame` and `git bisect` reach back `window` to `window + every_days` and no further, and a commit SHA older than that stops resolving. A clone taken before a prune has to be re-fetched.
+- Push with `--force-with-lease=refs/heads/main:<tip>`, using the tip read **before rewriting**.
+- If rejected, fetch the new tip and rebuild the squash. Allow at most `push_attempts` total pushes.
+- On exhaustion, write no success stamp; retry at the next daily wake.
+- This permission does not extend to other jobs or manual force pushes.
 
-Safe workflow: `git status --porcelain`, leave unrelated dirty files alone, stage only explicit paths, verify with `git diff --cached --name-only`, small reversible commits on a named branch, push, merge after gates pass.
-
-Commit messages describe the change. **No AI co-author / attribution tags** - a `Co-authored-by` trailer is one, whoever generated it.
-
-**One identity commits here: `miztiik <miztiik@users.noreply.github.com>`.** A machine account in the author field tells a reader nothing the commit message does not already say. Every place that commits sets it, and [`.mailmap`](.mailmap) folds the one identity a commit cannot choose - GitHub signs the squash commit it makes on a merge.
-
-**A branch name reaches the permanent record, so it is written like a commit message** (section 0b). Merge commits are off at the repository, leaving squash only, so a branch name no longer reaches a commit message at all.
+Rewriting affects whole commits, including code and docs. History available to blame and bisect spans `window` to `window + every_days`; older commit IDs stop resolving. Existing clones must re-fetch.
 
 ## 9. Definition of Done
 
@@ -299,11 +293,11 @@ Does not apply to backend-only, tooling, docs, or schema-only changes.
 
 Four tiers - **Unit / Contract / Integration / End-to-end**. Change without an appropriate-tier test in the same commit is a Definition-of-Done failure. No test touches the network; fixtures live in `tests/fixtures/`. Mock carve-outs require an explicit user request.
 
-**A test's cost belongs to the code it checks, never to what the pipeline has piled up.** So a test does not walk a collection that a run appends to - the committed days, the telemetry and state shards, the search index, the corpus, or any collection added after this sentence was written (Guardrail #12). A per-item rule is driven from a bounded fixture, and the canary day under `backend/var/canary/` is the one to reach for: it is fixed in size and it can carry a case the archive has never produced. Where a question really is about the whole tree, it is asked once and asserted on the total rather than once per story - and the producer has already validated every payload at write time, so re-checking a frozen day on every later run buys nothing. Where a walk is genuinely the right answer, Guardrail #12's escape hatch applies: say next to the test what it reads and why a fixture cannot answer it. What a walk actually costs, measured: [`docs/concepts/growing-reads.md`](docs/concepts/growing-reads.md).
+1. **Keep test cost bounded.** Use bounded fixtures for per-item rules, preferably the canary day. Do not scan collections that pipeline runs grow or repeatedly validate frozen output. A necessary growing read requires approval under Guardrail #12; document its inputs, scaling cost and why a fixture cannot answer beside the test. Check whole-tree properties once on the total, not per item.
 
-**A test goes red because somebody edited the tree.** If a run can turn it red - the data is malformed, the last unmigrated row aged out, a store has not been created yet, a day is too short to sample - the assertion belongs to production rather than to the code, and no reviewer can see it coming. It has three fates and no fourth: delete it where a fixture already covers the rule; move it into the producer that writes the data; or make it an operator surface under `backend/utilities/`, which pytest does not collect. Before writing one, name the edit that would make it fail.
+2. **Test behavior, not current production data.** Before writing a test, name the repository edit that would make it fail. If a pipeline run alone could make it fail, move the check into the producer or an operator utility outside pytest. Delete it only when fixture tests already cover the rule.
 
-**A test reads its fixture inside the test, never at module scope.** A fixture opened while the module is loading is opened before any test exists to own the failure, so one unexpected shape raises inside a module constant and takes every test in the file with it - including the ones that had nothing to do with that fixture. The same read inside a test fails one test, with a message naming what it wanted and how to produce it. This costs nothing: a fixture is small by rule, and a helper called from three tests reads it three times. It is the difference between a suite that reports a defect and a suite that reports a stack trace.
+3. **Load fixtures inside tests.** Read fixture files inside the test or a helper it calls, never at module import. A bad fixture must fail the test using it, not prevent unrelated tests from running. Report what was expected and how to produce the fixture.
 
 Per tier:
 

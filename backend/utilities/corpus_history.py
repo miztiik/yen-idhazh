@@ -14,12 +14,14 @@ environment string:
 4. Replay every later commit onto that root, and refuse if the tip's tree moved.
 5. Record the run through the `corpus-squash` task, bound the way a shard binds
    its tasks, and commit what it wrote.
-6. Push, and refuse if origin's tip moved while this ran.
+6. Push with a lease on the tip from step 1. If origin's `main` moved, wait,
+   take origin's new tip as step 1 and go round again, up to `push_attempts`
+   pushes in all.
 
 **The run is recorded whether or not anything was old enough**, and pushed
 without force when nothing was rewritten. An unrecorded run is due again at the
-next wake, and a clone and an install every day is what that costs. Only a
-refused push leaves the run unrecorded.
+next wake, and a clone and an install every day is what that costs. Only a run
+whose every push was refused is left unrecorded.
 
 **The boundary is read off author dates, because a squash rewrites committer
 dates.** The replay gives every commit it moves the day of the squash as its
@@ -33,15 +35,29 @@ boundary past newer work. The error that walk can make is keeping more history,
 never less. The new root carries the boundary's author date, so the next squash
 can reach past it.
 
-**The push refuses if `main` moved.** A forcing push is a whole-ref operation: it
-replaces the branch with this checkout, so a commit another run pushed while the
-squash ran would be deleted, and nothing would record that it existed. So the
-tip is read again immediately before the push and compared with the commit this
-job checked out. A tip that moved means another run pushed while the squash ran,
-and this refuses instead of forcing. Nothing is retried and nothing is rebased:
-the commits below this checkout have already been rewritten, so there is no base
-left to replay them onto. The refusal leaves the run unrecorded, and the squash
-is due again the next day - one wake, not one cadence.
+**The push carries a lease on the tip this run read.** A forcing push is a
+whole-ref operation: it replaces the branch with this checkout, so a commit
+another run pushed while the squash ran would be deleted, and nothing would
+record that it existed. `--force-with-lease=refs/heads/main:<tip>` names the
+commit step 1 read, and git replaces origin's `main` only while it still holds
+that commit. The check and the update are one step where the push is received,
+so nothing can land between them. A run that rewrote nothing pushes without
+force, and git refuses that push too once `main` has moved, because it is no
+longer a fast-forward. After a refused push origin's tip is read again, which
+tells a moved `main` apart from any other failure.
+
+**A refused push is followed by a new squash, never by the same one.** The
+rewrite replaced every commit below the old tip, and pushing it again would be
+refused again: it does not hold the commit that moved `main`. So the program
+waits `push_retry_delay_seconds`, fetches `main`, puts this checkout's `main`
+on it, and runs steps 2 to 6 on the new tip, so the other run's commits are
+replayed with every other commit after the boundary. The task's context - the
+run id and the attempt - is made once for the run, and every pass records into
+the same file, `corpus/corpus.meta.json`, written from the new tip's copy so a
+change another run made to it is kept. Both numbers are in
+`config/gardener/corpus-squash.json`. After the last refused push the run is
+left unrecorded, and the squash is due again the next day - one wake, not one
+cadence.
 
 It sits here and not in `backend/idhazh/` because it runs git, and nothing in
 the package may start a process (`backend/tests/test_canaries.py`). Its module
@@ -50,11 +66,12 @@ that reads the declaration and binds the task.
 
 Exit codes:
   0  squashed and pushed, or nothing was old enough and the run was pushed, or a dry run
-  1  the push was refused because origin's tip moved, so the run is not recorded
+  1  every push was refused because origin's tip moved, so the run is not recorded
   2  this cannot rewrite the repository: a detached head, a dirty tree, a boundary
      that does not resolve, a replay that conflicts or moves the tip's tree, a
      declaration that does not load or is not active, or a run it cannot record
-A git command that fails ends the program with git's own exit code.
+A git command that fails ends the program with git's own exit code, and so does
+a push git refused while origin's tip stayed where this run read it.
 """
 
 from __future__ import annotations
@@ -68,6 +85,7 @@ import traceback
 from collections.abc import Callable, Sequence
 from datetime import UTC, date, datetime, time, timedelta
 from pathlib import Path
+from time import sleep
 from typing import Final
 
 #: The checkout this file sits in, which is the one the history job cloned.
@@ -95,12 +113,35 @@ EXIT_OK: Final = 0
 EXIT_TIP_MOVED: Final = 1
 EXIT_CANNOT_REWRITE: Final = 2
 
+#: What a push refused because `main` moved prints first, on every pass. The
+#: words have not changed since the push was a program of its own: they are what
+#: an operator reads.
+MAIN_MOVED: Final = (
+    "main moved while the prune was rewriting it, so nothing was pushed",
+    "  this job checked out {read}",
+    "  origin/main is now {now}",
+    "pushing would discard every commit between the two.",
+)
+
+#: The line that ends the refusal of the last push a run may make, and only
+#: that one: before it, another pass may still record the run.
+DUE_AGAIN: Final = "the prune is unstamped, so it is due again at the next daily wake."
+
 #: A day as `--today` takes one, `YYYY-MM-DD`.
 _A_DAY: Final = re.compile(r"\d{4}-\d{2}-\d{2}")
 
 
 class CannotRewriteError(Exception):
     """The repository is not one this can rewrite. `squash_history` exits 2 on it."""
+
+
+class MainMovedError(Exception):
+    """Origin's `main` is no longer the commit this run read, so its push was refused."""
+
+    def __init__(self, *, read: str, now: str) -> None:
+        super().__init__(f"{BRANCH} moved from {read} to {now}")
+        self.read = read
+        self.now = now
 
 
 def _run(
@@ -239,44 +280,73 @@ def _commit_the_record(repo: Path, written: Sequence[str], *, today: date) -> No
     _git(repo, "commit", "--quiet", "-m", RECORD_MESSAGE.format(today=today.isoformat()))
 
 
-def push_rewritten(repo: Path, *, tip_before: str, rewritten: bool) -> int:
-    """Push `main`, forcing only when it was rewritten, and refuse if origin's tip moved.
+def _push(repo: Path, *, tip_before: str, rewritten: bool) -> int:
+    """Push `main` once. Returns 0 or git's own code, and raises `MainMovedError` when it moved.
 
-    The refusal, its words and its exit code 1 are the ones the history job has
-    always had. A plain push loses the same race anyway - git refuses a
-    non-fast-forward - so a run that rewrote nothing takes the same answer, and
-    it names which commit moved rather than leaving an operator to read a
-    rejection message.
-
-    It is `--force` and not `--force-with-lease`, because a lease compares
-    against a ref this job fetched at checkout, and the rewrite has already
-    replaced every commit the lease would name.
+    A rewrite goes with a lease on `tip_before`, so git replaces origin's `main`
+    only while it still holds that commit. A run that rewrote nothing goes
+    without force, which git refuses once `main` moved because it is no longer a
+    fast-forward. Origin's tip is read again after a refused push, so a moved
+    `main` is told apart from any other failure, which keeps git's own code.
     """
-    _git(repo, "fetch", REMOTE, BRANCH)
-    tip = _git(repo, "rev-parse", "FETCH_HEAD").strip()
-
-    if tip != tip_before:
-        for line in (
-            "main moved while the prune was rewriting it, so nothing was pushed",
-            f"  this job checked out {tip_before}",
-            f"  origin/main is now {tip}",
-            "pushing would discard every commit between the two.",
-            "the prune is unstamped, so it is due again at the next daily wake.",
-        ):
-            print(line, file=sys.stderr)
-        return EXIT_TIP_MOVED
-
     # Written as two whole command lines rather than one with a computed flag,
     # so the one forcing push in this repository is legible to a reader and to
-    # the test that holds it to being the only one.
+    # the test that holds it to being the only one. The lease names the commit
+    # this run read before it rewrote anything, never what origin holds when the
+    # push starts.
     #
     # Not captured either: this is the push whose output a person reads in the
     # step log when it fails.
     if rewritten:
-        return subprocess.run(
-            ["git", "push", "--force", "origin", "main"], cwd=repo, check=False
+        pushed = subprocess.run(
+            ["git", "push", "--force-with-lease=refs/heads/main:" + tip_before, "origin", "main"],
+            cwd=repo,
+            check=False,
         ).returncode
-    return subprocess.run(["git", "push", "origin", "main"], cwd=repo, check=False).returncode
+    else:
+        pushed = subprocess.run(["git", "push", "origin", "main"], cwd=repo, check=False).returncode
+    if pushed == EXIT_OK:
+        return EXIT_OK
+    _git(repo, "fetch", REMOTE, BRANCH)
+    tip = _git(repo, "rev-parse", "FETCH_HEAD").strip()
+    if tip != tip_before:
+        raise MainMovedError(read=tip_before, now=tip)
+    return pushed
+
+
+def _say_main_moved(moved: MainMovedError, *, then: str) -> None:
+    """The refusal an operator reads, ending with what happens next."""
+    for line in MAIN_MOVED:
+        print(line.format(read=moved.read, now=moved.now), file=sys.stderr)
+    print(then, file=sys.stderr)
+
+
+def push_rewritten(repo: Path, *, tip_before: str, rewritten: bool) -> int:
+    """Push `main` once, and refuse for good, naming both commits, if origin's tip moved.
+
+    The last push a run may make. The refusal, its words and its exit code 1 are
+    the ones the history job has always had. A plain push loses the same race
+    anyway - git refuses a non-fast-forward - so a run that rewrote nothing takes
+    the same answer, and it names which commit moved rather than leaving an
+    operator to read a rejection message.
+    """
+    try:
+        return _push(repo, tip_before=tip_before, rewritten=rewritten)
+    except MainMovedError as moved:
+        _say_main_moved(moved, then=DUE_AGAIN)
+        return EXIT_TIP_MOVED
+
+
+def _take_origins_tip(repo: Path) -> str:
+    """Put this checkout's `main` on origin's tip, leaving the refused rewrite behind.
+
+    `--keep` rather than `--hard`: the record is committed by now, so the tree is
+    clean, and a reset that met an uncommitted change would refuse rather than
+    lose it. Returns the tip, read the way the first pass read its own.
+    """
+    _git(repo, "fetch", REMOTE, BRANCH)
+    _git(repo, "reset", "--keep", "FETCH_HEAD")
+    return _tip_to_rewrite(repo)
 
 
 def squash_history(
@@ -287,14 +357,19 @@ def squash_history(
     message: str,
     dry_run: bool,
     record: Callable[[], Sequence[str]],
+    push_attempts: int,
+    push_retry_delay_seconds: int,
 ) -> int:
     """The whole squash, in order. `record` records the run and returns the files it wrote.
 
     Resolve the boundary; squash and replay when there is one; record the run
-    and commit it; then push. A refused push leaves the record on this checkout
-    alone, so the squash is due again at the next wake. A dry run resolves the
-    boundary, says what a squash would collapse, and writes, records and pushes
-    nothing, so it is due again at the next wake too.
+    and commit it; then push with a lease on the tip this pass started from. A
+    push refused because origin's `main` moved is followed, after
+    `push_retry_delay_seconds`, by the whole squash again on origin's new tip, up
+    to `push_attempts` pushes in all. The last refusal leaves the record on this
+    checkout alone, so the squash is due again at the next wake. A dry run
+    resolves the boundary, says what a squash would collapse, and writes,
+    records and pushes nothing, so it is due again at the next wake too.
     """
     try:
         tip_before = _tip_to_rewrite(repo)
@@ -307,24 +382,47 @@ def squash_history(
         _say_what_a_squash_would_do(repo, boundary)
         return EXIT_OK
 
-    try:
-        if boundary is not None:
-            behind = int(_git(repo, "rev-list", "--count", boundary))
-            root = squash_below(repo, boundary=boundary, message=message)
-            replay_above(repo, boundary=boundary, onto=root)
-            _refuse_a_moved_tree(repo, tip_before)
-            print(f"{behind} commits collapsed into {root}")
-        written = record()
-    except CannotRewriteError as refusal:
-        print(f"nothing was pushed: {refusal}", file=sys.stderr)
-        return EXIT_CANNOT_REWRITE
-    except Exception:
-        traceback.print_exc()
-        print("nothing was pushed: the run could not be recorded", file=sys.stderr)
-        return EXIT_CANNOT_REWRITE
+    push = 1
+    while True:
+        try:
+            if boundary is not None:
+                behind = int(_git(repo, "rev-list", "--count", boundary))
+                root = squash_below(repo, boundary=boundary, message=message)
+                replay_above(repo, boundary=boundary, onto=root)
+                _refuse_a_moved_tree(repo, tip_before)
+                print(f"{behind} commits collapsed into {root}")
+            written = record()
+        except CannotRewriteError as refusal:
+            print(f"nothing was pushed: {refusal}", file=sys.stderr)
+            return EXIT_CANNOT_REWRITE
+        except Exception:
+            traceback.print_exc()
+            print("nothing was pushed: the run could not be recorded", file=sys.stderr)
+            return EXIT_CANNOT_REWRITE
 
-    _commit_the_record(repo, written, today=today)
-    return push_rewritten(repo, tip_before=tip_before, rewritten=boundary is not None)
+        _commit_the_record(repo, written, today=today)
+        rewritten = boundary is not None
+        if push >= push_attempts:
+            return push_rewritten(repo, tip_before=tip_before, rewritten=rewritten)
+        try:
+            return _push(repo, tip_before=tip_before, rewritten=rewritten)
+        except MainMovedError as moved:
+            _say_main_moved(
+                moved,
+                then=(
+                    f"waiting {push_retry_delay_seconds} s, then squashing again on the new "
+                    f"tip: push {push + 1} of {push_attempts}"
+                ),
+            )
+        sleep(push_retry_delay_seconds)
+        push += 1
+        try:
+            tip_before = _take_origins_tip(repo)
+        except CannotRewriteError as refusal:
+            print(f"nothing was pushed: {refusal}", file=sys.stderr)
+            return EXIT_CANNOT_REWRITE
+        print(f"push {push} of {push_attempts} starts from {tip_before}")
+        boundary = boundary_commit(repo, keep_days=keep_days, today=today)
 
 
 def _say_what_a_squash_would_do(repo: Path, boundary: str | None) -> None:
@@ -352,6 +450,7 @@ def _squash_as_declared(
     from idhazh.contracts.knobs.gardener import HistoryPolicy, TaskKind
     from idhazh.gardener import registry, runner
     from idhazh.gardener.context import TaskContext
+    from idhazh.gardener.file_listing import FileListing
 
     try:
         if not re.fullmatch(RUN_ID_PATTERN, run_id):
@@ -369,6 +468,8 @@ def _squash_as_declared(
         return EXIT_CANNOT_REWRITE
 
     owns = runner.owner_of(TASK_NAME, settings.tasks)
+    # Made once for the run and never again: a pass after a refused push records
+    # under the same run id and attempt, into the same file, as the first pass.
     context = TaskContext(
         state_dir=repo / ledger.STATE_DIRNAME,
         repo_root=repo,
@@ -380,6 +481,7 @@ def _squash_as_declared(
         shard=0,
         git_sha=_git(repo, "rev-parse", "HEAD").strip(),
         owned_folders=tuple(policy.owns or ()),
+        listing=FileListing.from_disk(repo, policy.owns or ()),
     )
 
     def record() -> tuple[str, ...]:
@@ -397,6 +499,8 @@ def _squash_as_declared(
         message=SQUASH_MESSAGE.format(keep_days=keep_days),
         dry_run=policy.dry_run,
         record=record,
+        push_attempts=policy.push_attempts,
+        push_retry_delay_seconds=policy.push_retry_delay_seconds,
     )
 
 

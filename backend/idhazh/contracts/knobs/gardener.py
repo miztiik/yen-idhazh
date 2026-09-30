@@ -2,9 +2,9 @@
 
 Two shapes, and they answer one question at two sizes. `GardenerConfig` is
 `config/idhazh_gardener.json`: how many shards a wake splits into, how many
-times a shard may try to land its record, and how much one shard may check out.
-`TaskPolicy` is one file under `config/gardener/`: one task, what it owns, how
-far back it keeps, and whether it may delete at all.
+times a shard may try to land its record, and how much one shard may download.
+`TaskPolicy` is one file under `config/gardener/`: one task, what it owns and
+what it only reads, how far back it keeps, and whether it may delete at all.
 
 **Every default reports and deletes nothing.** A task has no default for
 `dry_run`, so a declaration says which it is in so many words. That is the same
@@ -25,6 +25,7 @@ vocabulary of their own here.
 from __future__ import annotations
 
 from enum import StrEnum
+from pathlib import PurePosixPath
 from typing import Annotated, Final, Literal, Self
 
 from pydantic import Field, model_validator
@@ -55,18 +56,18 @@ class PrunableCollection(StrEnum):
 # --- config/idhazh_gardener.json ---------------------------------------------
 
 
-#: The most one shard's owned folders may weigh at the commit it checked out, in
-#: megabytes of 1024 * 1024 bytes. An estimate, not a measurement of a limit
-#: (Guardrail #10): the heaviest shard's trees sit inside a 390-day and a
-#: 14-month window, which at the rates read on 2026-09-28 fill at about 550 to
-#: 600 MB, and this leaves about 30 percent of room for the rates to rise. The
-#: first scheduled runs' checkout times say whether a shard that size still
-#: fits its job.
-DEFAULT_MAX_CONE_MB: Final = 768
+#: The most file content one shard may download for its tasks, in megabytes of
+#: 1024 * 1024 bytes. An estimate, not a measurement of a limit (Guardrail #10):
+#: a shard checks out only code and config, and a task downloads the day or
+#: month folders it reads - a month of the scores ledger measured 3.5 MB on
+#: 2026-09-30 - so this leaves room for a compaction that catches up on several
+#: months at once. Move it to about twice the largest `downloaded_bytes` of the
+#: first thirty scheduled wakes.
+DEFAULT_MAX_DOWNLOADED_MB: Final = 128
 
 
 class GardenerConfig(Model):
-    """How a wake is split into shards, how hard each tries to land, and how much one may hold."""
+    """How a wake is split into shards, how hard each tries to land, and how much one may fetch."""
 
     version: DateStamp = Field(
         description="The UTC day this file's shape was last changed, as YYYY-MM-DD."
@@ -86,14 +87,15 @@ class GardenerConfig(Model):
             "fewer tasks, so no shard is ever empty."
         ),
     )
-    max_cone_mb: int = Field(
-        default=DEFAULT_MAX_CONE_MB,
+    max_downloaded_mb: int = Field(
+        default=DEFAULT_MAX_DOWNLOADED_MB,
         ge=1,
         description=(
-            "The most one shard's owned folders may weigh at the commit it checked out, "
-            "in megabytes of 1024 * 1024 bytes. The code every shard checks out is not "
+            "The most file content one shard may download for its tasks, in megabytes "
+            "of 1024 * 1024 bytes. The code and config every shard checks out are not "
             "counted. A shard over it still runs its tasks and lands its record, then "
-            "exits 1 naming the size, this ceiling and its three heaviest folders."
+            "exits 1 naming what it downloaded, this ceiling and its three heaviest "
+            "folders."
         ),
     )
 
@@ -205,8 +207,8 @@ class _Declared(Model):
         default=None,
         description=(
             "The repository-relative folders this task may delete or write under. A "
-            "folder, never a file: a shard checks out folders, so a file here would "
-            "match nothing."
+            "folder, never a file: a shard lists the files under each folder, so a "
+            "file here would list nothing."
         ),
     )
     owns_everything_else_under: list[RelPath] | None = Field(
@@ -225,6 +227,14 @@ class _Declared(Model):
             "the folder it lands in stays with whichever task owns it."
         ),
     )
+    reads: list[RelPath] = Field(
+        default_factory=list,
+        description=(
+            "The repository-relative folders this task reads and does not own. Their file "
+            "names are listed for it and it may open their files; it never writes or "
+            "deletes there. A folder it neither owns nor reads is refused when it asks."
+        ),
+    )
 
     @model_validator(mode="after")
     def _one_way_of_owning(self) -> Self:
@@ -234,6 +244,24 @@ class _Declared(Model):
                 "what a task may touch is either a list of folders or everything under a "
                 "root that nothing else owns"
             )
+        return self
+
+    @model_validator(mode="after")
+    def _reads_only_what_it_does_not_own(self) -> Self:
+        if self.reads and self.owns is None:
+            raise ValueError(
+                "a task that owns everything else under a root already lists every folder "
+                "there, so it declares no reads"
+            )
+        for read in self.reads:
+            for owned in self.owns or ():
+                inner, outer = PurePosixPath(read).parts, PurePosixPath(owned).parts
+                if inner[: len(outer)] == outer or outer[: len(inner)] == inner:
+                    raise ValueError(
+                        f"{read} is in reads and {owned} is in owns, and one is or holds "
+                        "the other: a folder a task owns is listed for it already, so "
+                        "reads names only folders it does not own"
+                    )
         return self
 
     def claims(self) -> tuple[str, ...]:
@@ -436,6 +464,23 @@ class HistoryPolicy(_Declared):
         description=(
             "How many whole days apart two rewrites of history may run. Each one costs a "
             "force-push of main, the one exception CLAUDE.md section 8 allows."
+        ),
+    )
+    push_attempts: int = Field(
+        ge=1,
+        description=(
+            "How many pushes one run makes in all. A push is refused when main moved "
+            "after the run read it, and each refusal is followed by a whole new squash "
+            "on the new tip. After the last refusal the run is not recorded, so the "
+            "squash is due again at the next daily wake. No default."
+        ),
+    )
+    push_retry_delay_seconds: int = Field(
+        ge=0,
+        description=(
+            "How many seconds a run waits after a refused push before it fetches main "
+            "and squashes again. Every wait, and every squash, must fit inside the "
+            "history job's timeout. No default."
         ),
     )
 

@@ -120,7 +120,7 @@
         }
       },
       {
-        "column": "source_seen_word_count",
+        "column": "source_words",
         "stat": {
           "count": 627,
           "maximum": 3846.0,
@@ -132,7 +132,7 @@
         }
       },
       {
-        "column": "source_word_count",
+        "column": "source_words_before_cap",
         "stat": {
           "count": 627,
           "maximum": 7741.0,
@@ -156,7 +156,7 @@
         }
       },
       {
-        "column": "summary_word_count",
+        "column": "summary_words",
         "stat": {
           "count": 627,
           "maximum": 223.0,
@@ -1000,7 +1000,7 @@
         }
       },
       {
-        "column": "source_seen_word_count",
+        "column": "source_words",
         "stat": {
           "count": 598,
           "maximum": 3846.0,
@@ -1012,7 +1012,7 @@
         }
       },
       {
-        "column": "source_word_count",
+        "column": "source_words_before_cap",
         "stat": {
           "count": 598,
           "maximum": 11399.0,
@@ -1036,7 +1036,7 @@
         }
       },
       {
-        "column": "summary_word_count",
+        "column": "summary_words",
         "stat": {
           "count": 598,
           "maximum": 212.0,
@@ -1850,7 +1850,7 @@
         }
       },
       {
-        "column": "source_seen_word_count",
+        "column": "source_words",
         "stat": {
           "count": 593,
           "maximum": 3846.0,
@@ -1862,7 +1862,7 @@
         }
       },
       {
-        "column": "source_word_count",
+        "column": "source_words_before_cap",
         "stat": {
           "count": 593,
           "maximum": 11191.0,
@@ -1886,7 +1886,7 @@
         }
       },
       {
-        "column": "summary_word_count",
+        "column": "summary_words",
         "stat": {
           "count": 593,
           "maximum": 196.0,
@@ -2670,7 +2670,7 @@
         }
       },
       {
-        "column": "source_seen_word_count",
+        "column": "source_words",
         "stat": {
           "count": 582,
           "maximum": 3846.0,
@@ -2682,7 +2682,7 @@
         }
       },
       {
-        "column": "source_word_count",
+        "column": "source_words_before_cap",
         "stat": {
           "count": 582,
           "maximum": 7177.0,
@@ -2706,7 +2706,7 @@
         }
       },
       {
-        "column": "summary_word_count",
+        "column": "summary_words",
         "stat": {
           "count": 582,
           "maximum": 242.0,
@@ -3460,7 +3460,7 @@
         }
       },
       {
-        "column": "source_seen_word_count",
+        "column": "source_words",
         "stat": {
           "count": 456,
           "maximum": 3700.0,
@@ -3472,7 +3472,7 @@
         }
       },
       {
-        "column": "source_word_count",
+        "column": "source_words_before_cap",
         "stat": {
           "count": 456,
           "maximum": 3700.0,
@@ -3496,7 +3496,7 @@
         }
       },
       {
-        "column": "summary_word_count",
+        "column": "summary_words",
         "stat": {
           "count": 456,
           "maximum": 223.0,
@@ -4094,7 +4094,7 @@
         }
       },
       {
-        "column": "source_seen_word_count",
+        "column": "source_words",
         "stat": {
           "count": 387,
           "maximum": 3631.0,
@@ -4106,7 +4106,7 @@
         }
       },
       {
-        "column": "source_word_count",
+        "column": "source_words_before_cap",
         "stat": {
           "count": 387,
           "maximum": 3631.0,
@@ -4130,7 +4130,7 @@
         }
       },
       {
-        "column": "summary_word_count",
+        "column": "summary_words",
         "stat": {
           "count": 387,
           "maximum": 185.0,
@@ -4704,7 +4704,7 @@
         }
       },
       {
-        "column": "source_seen_word_count",
+        "column": "source_words",
         "stat": {
           "count": 357,
           "maximum": 3846.0,
@@ -4716,7 +4716,7 @@
         }
       },
       {
-        "column": "source_word_count",
+        "column": "source_words_before_cap",
         "stat": {
           "count": 357,
           "maximum": 4014.0,
@@ -4740,7 +4740,7 @@
         }
       },
       {
-        "column": "summary_word_count",
+        "column": "summary_words",
         "stat": {
           "count": 357,
           "maximum": 201.0,
@@ -5350,7 +5350,7 @@
         }
       },
       {
-        "column": "source_seen_word_count",
+        "column": "source_words",
         "stat": {
           "count": 282,
           "maximum": 2666.0,
@@ -5362,7 +5362,7 @@
         }
       },
       {
-        "column": "source_word_count",
+        "column": "source_words_before_cap",
         "stat": {
           "count": 282,
           "maximum": 2666.0,
@@ -5386,7 +5386,7 @@
         }
       },
       {
-        "column": "summary_word_count",
+        "column": "summary_words",
         "stat": {
           "count": 282,
           "maximum": 219.0,
@@ -6053,7 +6053,7 @@
         }
       },
       {
-        "column": "source_seen_word_count",
+        "column": "source_words",
         "stat": {
           "count": 427,
           "maximum": 5937.0,
@@ -6065,7 +6065,7 @@
         }
       },
       {
-        "column": "source_word_count",
+        "column": "source_words_before_cap",
         "stat": {
           "count": 427,
           "maximum": 5937.0,
@@ -6089,7 +6089,7 @@
         }
       },
       {
-        "column": "summary_word_count",
+        "column": "summary_words",
         "stat": {
           "count": 427,
           "maximum": 222.0,
@@ -6810,7 +6810,7 @@
         }
       },
       {
-        "column": "source_seen_word_count",
+        "column": "source_words",
         "stat": {
           "count": 365,
           "maximum": 5905.0,
@@ -6822,7 +6822,7 @@
         }
       },
       {
-        "column": "source_word_count",
+        "column": "source_words_before_cap",
         "stat": {
           "count": 365,
           "maximum": 5905.0,
@@ -6846,7 +6846,7 @@
         }
       },
       {
-        "column": "summary_word_count",
+        "column": "summary_words",
         "stat": {
           "count": 365,
           "maximum": 157.0,
@@ -7561,7 +7561,7 @@
         }
       },
       {
-        "column": "source_seen_word_count",
+        "column": "source_words",
         "stat": {
           "count": 372,
           "maximum": 3826.0,
@@ -7573,7 +7573,7 @@
         }
       },
       {
-        "column": "source_word_count",
+        "column": "source_words_before_cap",
         "stat": {
           "count": 372,
           "maximum": 3826.0,
@@ -7597,7 +7597,7 @@
         }
       },
       {
-        "column": "summary_word_count",
+        "column": "summary_words",
         "stat": {
           "count": 372,
           "maximum": 166.0,
@@ -8330,7 +8330,7 @@
         }
       },
       {
-        "column": "source_seen_word_count",
+        "column": "source_words",
         "stat": {
           "count": 356,
           "maximum": 3841.0,
@@ -8342,7 +8342,7 @@
         }
       },
       {
-        "column": "source_word_count",
+        "column": "source_words_before_cap",
         "stat": {
           "count": 356,
           "maximum": 3841.0,
@@ -8366,7 +8366,7 @@
         }
       },
       {
-        "column": "summary_word_count",
+        "column": "summary_words",
         "stat": {
           "count": 356,
           "maximum": 160.0,
@@ -8955,7 +8955,7 @@
         }
       },
       {
-        "column": "source_seen_word_count",
+        "column": "source_words",
         "stat": {
           "count": 255,
           "maximum": 5190.0,
@@ -8967,7 +8967,7 @@
         }
       },
       {
-        "column": "source_word_count",
+        "column": "source_words_before_cap",
         "stat": {
           "count": 255,
           "maximum": 5190.0,
@@ -8991,7 +8991,7 @@
         }
       },
       {
-        "column": "summary_word_count",
+        "column": "summary_words",
         "stat": {
           "count": 255,
           "maximum": 145.0,
@@ -9490,7 +9490,7 @@
         }
       },
       {
-        "column": "source_seen_word_count",
+        "column": "source_words",
         "stat": {
           "count": 97,
           "maximum": 1697.0,
@@ -9502,7 +9502,7 @@
         }
       },
       {
-        "column": "source_word_count",
+        "column": "source_words_before_cap",
         "stat": {
           "count": 97,
           "maximum": 1697.0,
@@ -9526,7 +9526,7 @@
         }
       },
       {
-        "column": "summary_word_count",
+        "column": "summary_words",
         "stat": {
           "count": 97,
           "maximum": 136.0,
@@ -9833,7 +9833,7 @@
         }
       },
       {
-        "column": "source_seen_word_count",
+        "column": "source_words",
         "stat": {
           "count": 250,
           "maximum": 4404.0,
@@ -9845,7 +9845,7 @@
         }
       },
       {
-        "column": "source_word_count",
+        "column": "source_words_before_cap",
         "stat": {
           "count": 250,
           "maximum": 4404.0,
@@ -9869,7 +9869,7 @@
         }
       },
       {
-        "column": "summary_word_count",
+        "column": "summary_words",
         "stat": {
           "count": 250,
           "maximum": 143.0,
@@ -10488,7 +10488,7 @@
         }
       },
       {
-        "column": "source_seen_word_count",
+        "column": "source_words",
         "stat": {
           "count": 364,
           "maximum": 3384.0,
@@ -10500,7 +10500,7 @@
         }
       },
       {
-        "column": "source_word_count",
+        "column": "source_words_before_cap",
         "stat": {
           "count": 364,
           "maximum": 3384.0,
@@ -10524,7 +10524,7 @@
         }
       },
       {
-        "column": "summary_word_count",
+        "column": "summary_words",
         "stat": {
           "count": 364,
           "maximum": 149.0,
@@ -11239,7 +11239,7 @@
         }
       },
       {
-        "column": "source_seen_word_count",
+        "column": "source_words",
         "stat": {
           "count": 343,
           "maximum": 5283.0,
@@ -11251,7 +11251,7 @@
         }
       },
       {
-        "column": "source_word_count",
+        "column": "source_words_before_cap",
         "stat": {
           "count": 343,
           "maximum": 5283.0,
@@ -11275,7 +11275,7 @@
         }
       },
       {
-        "column": "summary_word_count",
+        "column": "summary_words",
         "stat": {
           "count": 343,
           "maximum": 149.0,
@@ -11972,7 +11972,7 @@
         }
       },
       {
-        "column": "source_seen_word_count",
+        "column": "source_words",
         "stat": {
           "count": 138,
           "maximum": 3166.0,
@@ -11984,7 +11984,7 @@
         }
       },
       {
-        "column": "source_word_count",
+        "column": "source_words_before_cap",
         "stat": {
           "count": 138,
           "maximum": 3166.0,
@@ -12008,7 +12008,7 @@
         }
       },
       {
-        "column": "summary_word_count",
+        "column": "summary_words",
         "stat": {
           "count": 138,
           "maximum": 147.0,
@@ -12549,7 +12549,7 @@
         }
       },
       {
-        "column": "source_seen_word_count",
+        "column": "source_words",
         "stat": {
           "count": 301,
           "maximum": 6346.0,
@@ -12561,7 +12561,7 @@
         }
       },
       {
-        "column": "source_word_count",
+        "column": "source_words_before_cap",
         "stat": {
           "count": 301,
           "maximum": 6346.0,
@@ -12585,7 +12585,7 @@
         }
       },
       {
-        "column": "summary_word_count",
+        "column": "summary_words",
         "stat": {
           "count": 301,
           "maximum": 156.0,
@@ -13186,7 +13186,7 @@
         }
       },
       {
-        "column": "source_seen_word_count",
+        "column": "source_words",
         "stat": {
           "count": 291,
           "maximum": 3824.0,
@@ -13198,7 +13198,7 @@
         }
       },
       {
-        "column": "source_word_count",
+        "column": "source_words_before_cap",
         "stat": {
           "count": 291,
           "maximum": 3824.0,
@@ -13222,7 +13222,7 @@
         }
       },
       {
-        "column": "summary_word_count",
+        "column": "summary_words",
         "stat": {
           "count": 291,
           "maximum": 149.0,
@@ -13919,7 +13919,7 @@
         }
       },
       {
-        "column": "source_seen_word_count",
+        "column": "source_words",
         "stat": {
           "count": 356,
           "maximum": 2707.0,
@@ -13931,7 +13931,7 @@
         }
       },
       {
-        "column": "source_word_count",
+        "column": "source_words_before_cap",
         "stat": {
           "count": 356,
           "maximum": 2707.0,
@@ -13955,7 +13955,7 @@
         }
       },
       {
-        "column": "summary_word_count",
+        "column": "summary_words",
         "stat": {
           "count": 356,
           "maximum": 151.0,
@@ -14604,7 +14604,7 @@
         }
       },
       {
-        "column": "source_seen_word_count",
+        "column": "source_words",
         "stat": {
           "count": 341,
           "maximum": 3206.0,
@@ -14616,7 +14616,7 @@
         }
       },
       {
-        "column": "source_word_count",
+        "column": "source_words_before_cap",
         "stat": {
           "count": 341,
           "maximum": 3206.0,
@@ -14640,7 +14640,7 @@
         }
       },
       {
-        "column": "summary_word_count",
+        "column": "summary_words",
         "stat": {
           "count": 341,
           "maximum": 145.0,
@@ -15337,7 +15337,7 @@
         }
       },
       {
-        "column": "source_seen_word_count",
+        "column": "source_words",
         "stat": {
           "count": 370,
           "maximum": 3214.0,
@@ -15349,7 +15349,7 @@
         }
       },
       {
-        "column": "source_word_count",
+        "column": "source_words_before_cap",
         "stat": {
           "count": 370,
           "maximum": 3214.0,
@@ -15373,7 +15373,7 @@
         }
       },
       {
-        "column": "summary_word_count",
+        "column": "summary_words",
         "stat": {
           "count": 370,
           "maximum": 139.0,
@@ -16076,7 +16076,7 @@
         }
       },
       {
-        "column": "source_seen_word_count",
+        "column": "source_words",
         "stat": {
           "count": 363,
           "maximum": 2384.0,
@@ -16088,7 +16088,7 @@
         }
       },
       {
-        "column": "source_word_count",
+        "column": "source_words_before_cap",
         "stat": {
           "count": 363,
           "maximum": 2384.0,
@@ -16112,7 +16112,7 @@
         }
       },
       {
-        "column": "summary_word_count",
+        "column": "summary_words",
         "stat": {
           "count": 363,
           "maximum": 136.0,
@@ -16773,7 +16773,7 @@
         }
       },
       {
-        "column": "source_seen_word_count",
+        "column": "source_words",
         "stat": {
           "count": 366,
           "maximum": 2638.0,
@@ -16785,7 +16785,7 @@
         }
       },
       {
-        "column": "source_word_count",
+        "column": "source_words_before_cap",
         "stat": {
           "count": 366,
           "maximum": 2638.0,
@@ -16809,7 +16809,7 @@
         }
       },
       {
-        "column": "summary_word_count",
+        "column": "summary_words",
         "stat": {
           "count": 366,
           "maximum": 145.0,
@@ -17392,7 +17392,7 @@
         }
       },
       {
-        "column": "source_seen_word_count",
+        "column": "source_words",
         "stat": {
           "count": 345,
           "maximum": 3868.0,
@@ -17404,7 +17404,7 @@
         }
       },
       {
-        "column": "source_word_count",
+        "column": "source_words_before_cap",
         "stat": {
           "count": 345,
           "maximum": 3868.0,
@@ -17428,7 +17428,7 @@
         }
       },
       {
-        "column": "summary_word_count",
+        "column": "summary_words",
         "stat": {
           "count": 345,
           "maximum": 137.0,
@@ -18005,7 +18005,7 @@
         }
       },
       {
-        "column": "source_seen_word_count",
+        "column": "source_words",
         "stat": {
           "count": 355,
           "maximum": 3286.0,
@@ -18017,7 +18017,7 @@
         }
       },
       {
-        "column": "source_word_count",
+        "column": "source_words_before_cap",
         "stat": {
           "count": 355,
           "maximum": 3286.0,
@@ -18041,7 +18041,7 @@
         }
       },
       {
-        "column": "summary_word_count",
+        "column": "summary_words",
         "stat": {
           "count": 355,
           "maximum": 125.0,
@@ -18633,90 +18633,90 @@
     "visuals_rendered": 0
   },
   {
-    "addresses_considered": 10217,
+    "addresses_considered": 10233,
     "bands": {
-      "high": 213,
-      "low": 12,
-      "medium": 66
+      "high": 248,
+      "low": 16,
+      "medium": 76
     },
     "date": "2026-09-29",
     "determinism_violations": 0,
     "extraction": {
-      "chartable": 122,
+      "chartable": 157,
       "chartable_charted": 0,
-      "chartable_published": 119,
-      "elements_found": 3235,
-      "items": 298,
-      "narrative": 30,
-      "span_integrity_pass": 298,
-      "unclassified": 146
+      "chartable_published": 153,
+      "elements_found": 4397,
+      "items": 375,
+      "narrative": 38,
+      "span_integrity_pass": 375,
+      "unclassified": 180
     },
     "extraction_suspect": 0,
     "instruments": [
       {
         "column": "coherence",
         "stat": {
-          "count": 291,
-          "maximum": 0.6829004262454217,
-          "minimum": 0.08642835051462747,
-          "p25": 0.2382817710574656,
-          "p50": 0.2950574322248906,
+          "count": 366,
+          "maximum": 0.708937545004719,
+          "minimum": 0.07299067539722276,
+          "p25": 0.2446398744259269,
+          "p50": 0.29702625637096447,
           "p75": 0.3647505231564434,
-          "total": 88.74815687254923
+          "total": 112.03958430989611
         }
       },
       {
         "column": "compression",
         "stat": {
-          "count": 291,
+          "count": 366,
           "maximum": 1.0,
           "minimum": 0.009926131117266852,
-          "p25": 0.0960735171261487,
-          "p50": 0.13003901170351106,
-          "p75": 0.18820224719101122,
-          "total": 50.31739302323691
+          "p25": 0.0915805022156573,
+          "p50": 0.128428927680798,
+          "p75": 0.1864951768488746,
+          "total": 62.066487598159725
         }
       },
       {
         "column": "evidential_density",
         "stat": {
-          "count": 291,
-          "maximum": 0.02406417112299465,
+          "count": 366,
+          "maximum": 0.02531645569620253,
           "minimum": 0.0,
           "p25": 0.0,
-          "p50": 0.0006925207756232687,
-          "p75": 0.003289473684210526,
-          "total": 0.6730915052669386
+          "p50": 0.0007974481658692185,
+          "p75": 0.0029585798816568047,
+          "total": 0.8479212721584859
         }
       },
       {
         "column": "extractiveness",
         "stat": {
-          "count": 291,
+          "count": 366,
           "maximum": 0.7407407407407407,
           "minimum": 0.0,
-          "p25": 0.057692307692307696,
-          "p50": 0.11864406779661017,
-          "p75": 0.20652173913043478,
-          "total": 43.6128126951718
+          "p25": 0.05454545454545454,
+          "p50": 0.11594202898550725,
+          "p75": 0.20588235294117646,
+          "total": 53.9909902655497
         }
       },
       {
         "column": "hhem",
         "stat": {
-          "count": 291,
+          "count": 366,
           "maximum": 0.9905507564544678,
           "minimum": 0.01028603408485651,
-          "p25": 0.8980045318603516,
-          "p50": 0.9374496340751648,
-          "p75": 0.9580107927322388,
-          "total": 259.10759604070336
+          "p25": 0.8982726335525513,
+          "p50": 0.9364879727363586,
+          "p75": 0.956559956073761,
+          "total": 324.2929211044684
         }
       },
       {
         "column": "hhem_delta",
         "stat": {
-          "count": 291,
+          "count": 366,
           "maximum": 0.0,
           "minimum": 0.0,
           "p25": 0.0,
@@ -18728,31 +18728,31 @@
       {
         "column": "hhem_full",
         "stat": {
-          "count": 291,
+          "count": 366,
           "maximum": 0.9905507564544678,
           "minimum": 0.01028603408485651,
-          "p25": 0.8980045318603516,
-          "p50": 0.9374496340751648,
-          "p75": 0.9580107927322388,
-          "total": 259.10759604070336
+          "p25": 0.8982726335525513,
+          "p50": 0.9364879727363586,
+          "p75": 0.956559956073761,
+          "total": 324.2929211044684
         }
       },
       {
         "column": "score_ms",
         "stat": {
-          "count": 291,
+          "count": 366,
           "maximum": 15660.0,
           "minimum": 136.0,
-          "p25": 700.0,
-          "p50": 1239.0,
-          "p75": 2638.0,
-          "total": 644891.0
+          "p25": 689.0,
+          "p50": 1247.0,
+          "p75": 2747.0,
+          "total": 829887.0
         }
       },
       {
         "column": "self_repetition",
         "stat": {
-          "count": 291,
+          "count": 366,
           "maximum": 0.024390243902439046,
           "minimum": 0.0,
           "p25": 0.0,
@@ -18764,108 +18764,108 @@
       {
         "column": "semantic_coverage",
         "stat": {
-          "count": 291,
+          "count": 366,
           "maximum": 0.95,
           "minimum": 0.0,
           "p25": 0.4,
           "p50": 0.5,
           "p75": 0.6,
-          "total": 146.1642857142857
+          "total": 184.0142857142857
         }
       },
       {
-        "column": "source_seen_word_count",
+        "column": "source_words",
         "stat": {
-          "count": 291,
+          "count": 366,
           "maximum": 4288.0,
           "minimum": 43.0,
-          "p25": 332.0,
-          "p50": 504.0,
-          "p75": 793.0,
-          "total": 185529.0
+          "p25": 333.0,
+          "p50": 518.0,
+          "p75": 808.0,
+          "total": 241851.0
         }
       },
       {
-        "column": "source_word_count",
+        "column": "source_words_before_cap",
         "stat": {
-          "count": 291,
+          "count": 366,
           "maximum": 4288.0,
           "minimum": 43.0,
-          "p25": 332.0,
-          "p50": 504.0,
-          "p75": 793.0,
-          "total": 185529.0
+          "p25": 333.0,
+          "p50": 518.0,
+          "p75": 808.0,
+          "total": 241851.0
         }
       },
       {
         "column": "speculative_density",
         "stat": {
-          "count": 291,
+          "count": 366,
           "maximum": 0.030864197530864196,
           "minimum": 0.0,
-          "p25": 0.0015600624024961,
-          "p50": 0.004301075268817204,
-          "p75": 0.008746355685131196,
-          "total": 1.6890627349182687
+          "p25": 0.001488095238095238,
+          "p50": 0.004273504273504274,
+          "p75": 0.007751937984496124,
+          "total": 2.0353642008535684
         }
       },
       {
-        "column": "summary_word_count",
+        "column": "summary_words",
         "stat": {
-          "count": 291,
-          "maximum": 132.0,
+          "count": 366,
+          "maximum": 145.0,
           "minimum": 31.0,
           "p25": 58.0,
           "p50": 65.0,
-          "p75": 83.0,
-          "total": 20802.0
+          "p75": 87.0,
+          "total": 26460.0
         }
       },
       {
         "column": "verbatim_run",
         "stat": {
-          "count": 291,
+          "count": 366,
           "maximum": 0.45098039215686275,
           "minimum": 0.024390243902439025,
-          "p25": 0.07272727272727272,
-          "p50": 0.0958904109589041,
-          "p75": 0.13559322033898305,
-          "total": 32.03874417123066
+          "p25": 0.06930693069306931,
+          "p50": 0.09523809523809523,
+          "p75": 0.13333333333333333,
+          "total": 39.856690940844366
         }
       }
     ],
-    "items_failed": 29,
-    "items_planned": 320,
-    "items_published": 291,
+    "items_failed": 34,
+    "items_planned": 400,
+    "items_published": 340,
     "items_truncated": 0,
     "label_similarity": {
       "encoder_ref": "all-minilm-l6-v2-quantized/2026-08-22",
       "nearest": {
-        "count": 291,
+        "count": 340,
         "maximum": 0.4866199854528152,
         "minimum": 0.016323814489787807,
-        "p25": 0.15625624604087837,
-        "p50": 0.20722770756569572,
-        "p75": 0.283479875440757,
-        "total": 65.64234972189783
+        "p25": 0.15529401156717693,
+        "p50": 0.2091645157939376,
+        "p75": 0.28098261382063905,
+        "total": 76.09145702270662
       },
       "taxonomy_digest": "364e4557f4b0c60cc3b4dc8c9a8c4a33eb5312b785fe732e92e0592031765edc"
     },
     "model_id": "qwen3-5-9b-q4-k-m",
     "reasons": {
-      "faithfulness": 34,
-      "hedge_dropped": 41,
+      "faithfulness": 40,
+      "hedge_dropped": 47,
       "lead_missing": 0,
       "not_scored": 0,
       "unattributed": 0,
-      "unsupported_number": 3
+      "unsupported_number": 5
     },
-    "revision": 4,
-    "runs": 4,
+    "revision": 5,
+    "runs": 5,
     "sources": [
       {
-        "doubted": 1,
-        "published": 6,
+        "doubted": 2,
+        "published": 8,
         "source_id": "abc-au-world",
         "truncated": 0
       },
@@ -18888,8 +18888,8 @@
         "truncated": 0
       },
       {
-        "doubted": 0,
-        "published": 3,
+        "doubted": 1,
+        "published": 5,
         "source_id": "ars-technica-ai",
         "truncated": 0
       },
@@ -18906,20 +18906,20 @@
         "truncated": 0
       },
       {
-        "doubted": 1,
-        "published": 2,
+        "doubted": 2,
+        "published": 3,
         "source_id": "bbc-tech",
         "truncated": 0
       },
       {
         "doubted": 0,
-        "published": 4,
+        "published": 6,
         "source_id": "bbc-world",
         "truncated": 0
       },
       {
         "doubted": 1,
-        "published": 4,
+        "published": 6,
         "source_id": "bleepingcomputer",
         "truncated": 0
       },
@@ -18927,6 +18927,12 @@
         "doubted": 2,
         "published": 4,
         "source_id": "business-today-in",
+        "truncated": 0
+      },
+      {
+        "doubted": 0,
+        "published": 1,
+        "source_id": "canary-media",
         "truncated": 0
       },
       {
@@ -18954,8 +18960,8 @@
         "truncated": 0
       },
       {
-        "doubted": 2,
-        "published": 8,
+        "doubted": 3,
+        "published": 10,
         "source_id": "cna-business",
         "truncated": 0
       },
@@ -18973,7 +18979,7 @@
       },
       {
         "doubted": 0,
-        "published": 1,
+        "published": 2,
         "source_id": "databricks-blog",
         "truncated": 0
       },
@@ -18996,26 +19002,26 @@
         "truncated": 0
       },
       {
-        "doubted": 0,
-        "published": 8,
+        "doubted": 1,
+        "published": 10,
         "source_id": "economic-times",
         "truncated": 0
       },
       {
         "doubted": 0,
-        "published": 5,
+        "published": 6,
         "source_id": "electrek",
         "truncated": 0
       },
       {
-        "doubted": 1,
-        "published": 4,
+        "doubted": 3,
+        "published": 6,
         "source_id": "elpais-en",
         "truncated": 0
       },
       {
         "doubted": 1,
-        "published": 1,
+        "published": 2,
         "source_id": "et-default",
         "truncated": 0
       },
@@ -19032,6 +19038,12 @@
         "truncated": 0
       },
       {
+        "doubted": 0,
+        "published": 1,
+        "source_id": "fed-press",
+        "truncated": 0
+      },
+      {
         "doubted": 2,
         "published": 3,
         "source_id": "fed-speeches",
@@ -19044,8 +19056,8 @@
         "truncated": 0
       },
       {
-        "doubted": 5,
-        "published": 7,
+        "doubted": 6,
+        "published": 9,
         "source_id": "free-press-journal",
         "truncated": 0
       },
@@ -19068,8 +19080,14 @@
         "truncated": 0
       },
       {
-        "doubted": 4,
-        "published": 6,
+        "doubted": 0,
+        "published": 1,
+        "source_id": "grist",
+        "truncated": 0
+      },
+      {
+        "doubted": 5,
+        "published": 7,
         "source_id": "guardian-ai",
         "truncated": 0
       },
@@ -19081,7 +19099,7 @@
       },
       {
         "doubted": 1,
-        "published": 6,
+        "published": 8,
         "source_id": "guardian-world",
         "truncated": 0
       },
@@ -19111,8 +19129,14 @@
       },
       {
         "doubted": 3,
-        "published": 6,
+        "published": 8,
         "source_id": "india-today",
+        "truncated": 0
+      },
+      {
+        "doubted": 0,
+        "published": 1,
+        "source_id": "inside-climate-news",
         "truncated": 0
       },
       {
@@ -19134,8 +19158,8 @@
         "truncated": 0
       },
       {
-        "doubted": 2,
-        "published": 7,
+        "doubted": 3,
+        "published": 9,
         "source_id": "livemint",
         "truncated": 0
       },
@@ -19159,7 +19183,7 @@
       },
       {
         "doubted": 1,
-        "published": 1,
+        "published": 2,
         "source_id": "modern-power",
         "truncated": 0
       },
@@ -19195,7 +19219,7 @@
       },
       {
         "doubted": 2,
-        "published": 7,
+        "published": 9,
         "source_id": "oilprice",
         "truncated": 0
       },
@@ -19207,7 +19231,7 @@
       },
       {
         "doubted": 1,
-        "published": 3,
+        "published": 4,
         "source_id": "power-magazine",
         "truncated": 0
       },
@@ -19219,7 +19243,7 @@
       },
       {
         "doubted": 2,
-        "published": 5,
+        "published": 6,
         "source_id": "quartz",
         "truncated": 0
       },
@@ -19236,8 +19260,8 @@
         "truncated": 0
       },
       {
-        "doubted": 0,
-        "published": 1,
+        "doubted": 1,
+        "published": 2,
         "source_id": "simon-willison",
         "truncated": 0
       },
@@ -19249,19 +19273,19 @@
       },
       {
         "doubted": 0,
-        "published": 1,
+        "published": 3,
         "source_id": "straitstimes-opinion",
         "truncated": 0
       },
       {
         "doubted": 1,
-        "published": 7,
+        "published": 9,
         "source_id": "techcrunch-ai",
         "truncated": 0
       },
       {
-        "doubted": 1,
-        "published": 2,
+        "doubted": 2,
+        "published": 3,
         "source_id": "techpolicy-ai",
         "truncated": 0
       },
@@ -19272,14 +19296,14 @@
         "truncated": 0
       },
       {
-        "doubted": 3,
-        "published": 8,
+        "doubted": 4,
+        "published": 10,
         "source_id": "the-hindu-national",
         "truncated": 0
       },
       {
         "doubted": 2,
-        "published": 8,
+        "published": 9,
         "source_id": "thehindu-all",
         "truncated": 0
       },
@@ -19297,19 +19321,19 @@
       },
       {
         "doubted": 1,
-        "published": 6,
+        "published": 7,
         "source_id": "thehindu-intl",
         "truncated": 0
       },
       {
         "doubted": 1,
-        "published": 8,
+        "published": 10,
         "source_id": "toi-india",
         "truncated": 0
       },
       {
-        "doubted": 3,
-        "published": 8,
+        "doubted": 4,
+        "published": 9,
         "source_id": "toi-top",
         "truncated": 0
       },
@@ -19344,43 +19368,668 @@
         "truncated": 0
       }
     ],
-    "sources_present": 80,
+    "sources_present": 84,
     "stage_timing": [
       {
         "max_ms": 6199,
-        "p50_ms": 549,
-        "p90_ms": 1747,
+        "p50_ms": 541,
+        "p90_ms": 1656,
         "stage": "fetch",
-        "sum_ms": 255433,
-        "timed": 320
+        "sum_ms": 306795,
+        "timed": 400
       },
       {
         "max_ms": 248,
-        "p50_ms": 53,
-        "p90_ms": 96,
+        "p50_ms": 50,
+        "p90_ms": 95,
         "stage": "extract",
-        "sum_ms": 19168,
-        "timed": 320
+        "sum_ms": 23341,
+        "timed": 400
       },
       {
         "max_ms": 1327684,
-        "p50_ms": 432192,
-        "p90_ms": 742450,
+        "p50_ms": 422860,
+        "p90_ms": 742885,
         "stage": "summarize",
-        "sum_ms": 133393089,
-        "timed": 291
+        "sum_ms": 168807881,
+        "timed": 368
       }
     ],
-    "summaries_scored": 291,
+    "summaries_scored": 340,
     "throughput": {
-      "cached_tokens": 1728706,
-      "decode_ms": 71041820,
-      "input_tokens": 2377714,
-      "items": 291,
-      "output_tokens": 360218,
-      "prefill_ms": 62324034
+      "cached_tokens": 2192941,
+      "decode_ms": 90329384,
+      "input_tokens": 3026450,
+      "items": 366,
+      "output_tokens": 458352,
+      "prefill_ms": 75791681
     },
-    "version": "2026-09-14T01:30",
+    "version": "2026-09-29",
+    "visuals_rendered": 0
+  },
+  {
+    "addresses_considered": 10281,
+    "bands": {
+      "high": 107,
+      "low": 6,
+      "medium": 31
+    },
+    "date": "2026-09-30",
+    "determinism_violations": 0,
+    "extraction": {
+      "chartable": 62,
+      "chartable_charted": 0,
+      "chartable_published": 61,
+      "elements_found": 1483,
+      "items": 146,
+      "narrative": 15,
+      "span_integrity_pass": 146,
+      "unclassified": 69
+    },
+    "extraction_suspect": 0,
+    "instruments": [
+      {
+        "column": "coherence",
+        "stat": {
+          "count": 142,
+          "maximum": 0.6651754740359731,
+          "minimum": 0.04041812172459454,
+          "p25": 0.24871247150811232,
+          "p50": 0.3081923576293615,
+          "p75": 0.38292107247609586,
+          "total": 43.2935114894081
+        }
+      },
+      {
+        "column": "compression",
+        "stat": {
+          "count": 142,
+          "maximum": 0.9166666666666666,
+          "minimum": 0.017004936917169502,
+          "p25": 0.10707803992740472,
+          "p50": 0.1423290203327172,
+          "p75": 0.22406639004149378,
+          "total": 27.271476855099124
+        }
+      },
+      {
+        "column": "evidential_density",
+        "stat": {
+          "count": 142,
+          "maximum": 0.027777777777777776,
+          "minimum": 0.0,
+          "p25": 0.0,
+          "p50": 0.0,
+          "p75": 0.002638522427440633,
+          "total": 0.2770455158978194
+        }
+      },
+      {
+        "column": "extractiveness",
+        "stat": {
+          "count": 142,
+          "maximum": 0.9078947368421053,
+          "minimum": 0.0,
+          "p25": 0.07692307692307693,
+          "p50": 0.15254237288135594,
+          "p75": 0.22784810126582278,
+          "total": 23.965941859059743
+        }
+      },
+      {
+        "column": "hhem",
+        "stat": {
+          "count": 142,
+          "maximum": 0.9855906963348389,
+          "minimum": 0.0508553721010685,
+          "p25": 0.8755622506141663,
+          "p50": 0.9383223056793213,
+          "p75": 0.961457371711731,
+          "total": 125.3186278603971
+        }
+      },
+      {
+        "column": "hhem_delta",
+        "stat": {
+          "count": 142,
+          "maximum": 0.0,
+          "minimum": 0.0,
+          "p25": 0.0,
+          "p50": 0.0,
+          "p75": 0.0,
+          "total": 0.0
+        }
+      },
+      {
+        "column": "hhem_full",
+        "stat": {
+          "count": 142,
+          "maximum": 0.9855906963348389,
+          "minimum": 0.0508553721010685,
+          "p25": 0.8755622506141663,
+          "p50": 0.9383223056793213,
+          "p75": 0.961457371711731,
+          "total": 125.3186278603971
+        }
+      },
+      {
+        "column": "score_ms",
+        "stat": {
+          "count": 142,
+          "maximum": 17844.0,
+          "minimum": 216.0,
+          "p25": 618.0,
+          "p50": 975.0,
+          "p75": 1627.0,
+          "total": 239717.0
+        }
+      },
+      {
+        "column": "self_repetition",
+        "stat": {
+          "count": 142,
+          "maximum": 0.0,
+          "minimum": 0.0,
+          "p25": 0.0,
+          "p50": 0.0,
+          "p75": 0.0,
+          "total": 0.0
+        }
+      },
+      {
+        "column": "semantic_coverage",
+        "stat": {
+          "count": 142,
+          "maximum": 0.9,
+          "minimum": 0.2,
+          "p25": 0.45,
+          "p50": 0.55,
+          "p75": 0.6,
+          "total": 75.35
+        }
+      },
+      {
+        "column": "source_words",
+        "stat": {
+          "count": 142,
+          "maximum": 4192.0,
+          "minimum": 36.0,
+          "p25": 306.0,
+          "p50": 444.0,
+          "p75": 659.0,
+          "total": 79593.0
+        }
+      },
+      {
+        "column": "source_words_before_cap",
+        "stat": {
+          "count": 142,
+          "maximum": 4192.0,
+          "minimum": 36.0,
+          "p25": 306.0,
+          "p50": 444.0,
+          "p75": 659.0,
+          "total": 79593.0
+        }
+      },
+      {
+        "column": "speculative_density",
+        "stat": {
+          "count": 142,
+          "maximum": 0.038461538461538464,
+          "minimum": 0.0,
+          "p25": 0.0,
+          "p50": 0.002533783783783784,
+          "p75": 0.005571030640668524,
+          "total": 0.6204732061935333
+        }
+      },
+      {
+        "column": "summary_words",
+        "stat": {
+          "count": 142,
+          "maximum": 147.0,
+          "minimum": 31.0,
+          "p25": 56.0,
+          "p50": 62.0,
+          "p75": 73.0,
+          "total": 9721.0
+        }
+      },
+      {
+        "column": "verbatim_run",
+        "stat": {
+          "count": 142,
+          "maximum": 0.4177215189873418,
+          "minimum": 0.015384615384615385,
+          "p25": 0.08080808080808081,
+          "p50": 0.1111111111111111,
+          "p75": 0.15254237288135594,
+          "total": 17.780084349861028
+        }
+      }
+    ],
+    "items_failed": 16,
+    "items_planned": 160,
+    "items_published": 144,
+    "items_truncated": 0,
+    "label_similarity": {
+      "encoder_ref": "all-minilm-l6-v2-quantized/2026-08-22",
+      "nearest": {
+        "count": 144,
+        "maximum": 0.4370444127050762,
+        "minimum": 0.012509728290242106,
+        "p25": 0.15583210584827528,
+        "p50": 0.20432436976138899,
+        "p75": 0.2658338285355106,
+        "total": 30.25359251500008
+      },
+      "taxonomy_digest": "364e4557f4b0c60cc3b4dc8c9a8c4a33eb5312b785fe732e92e0592031765edc"
+    },
+    "model_id": "qwen3-5-9b-q4-k-m",
+    "reasons": {
+      "faithfulness": 22,
+      "hedge_dropped": 15,
+      "lead_missing": 0,
+      "not_scored": 0,
+      "unattributed": 0,
+      "unsupported_number": 0
+    },
+    "revision": 2,
+    "runs": 2,
+    "sources": [
+      {
+        "doubted": 1,
+        "published": 1,
+        "source_id": "abc-au-world",
+        "truncated": 0
+      },
+      {
+        "doubted": 0,
+        "published": 1,
+        "source_id": "africanews",
+        "truncated": 0
+      },
+      {
+        "doubted": 0,
+        "published": 2,
+        "source_id": "anadolu-world",
+        "truncated": 0
+      },
+      {
+        "doubted": 1,
+        "published": 2,
+        "source_id": "ars-technica-ai",
+        "truncated": 0
+      },
+      {
+        "doubted": 1,
+        "published": 2,
+        "source_id": "bbc-business",
+        "truncated": 0
+      },
+      {
+        "doubted": 1,
+        "published": 3,
+        "source_id": "bbc-world",
+        "truncated": 0
+      },
+      {
+        "doubted": 0,
+        "published": 2,
+        "source_id": "bleepingcomputer",
+        "truncated": 0
+      },
+      {
+        "doubted": 1,
+        "published": 4,
+        "source_id": "business-today-in",
+        "truncated": 0
+      },
+      {
+        "doubted": 1,
+        "published": 3,
+        "source_id": "cgtn-business",
+        "truncated": 0
+      },
+      {
+        "doubted": 0,
+        "published": 4,
+        "source_id": "cgtn-china",
+        "truncated": 0
+      },
+      {
+        "doubted": 0,
+        "published": 4,
+        "source_id": "cna-business",
+        "truncated": 0
+      },
+      {
+        "doubted": 0,
+        "published": 2,
+        "source_id": "cna-world",
+        "truncated": 0
+      },
+      {
+        "doubted": 0,
+        "published": 1,
+        "source_id": "databricks-blog",
+        "truncated": 0
+      },
+      {
+        "doubted": 1,
+        "published": 4,
+        "source_id": "deccan-chronicle",
+        "truncated": 0
+      },
+      {
+        "doubted": 1,
+        "published": 3,
+        "source_id": "dna-india",
+        "truncated": 0
+      },
+      {
+        "doubted": 0,
+        "published": 4,
+        "source_id": "economic-times",
+        "truncated": 0
+      },
+      {
+        "doubted": 1,
+        "published": 1,
+        "source_id": "electrek",
+        "truncated": 0
+      },
+      {
+        "doubted": 0,
+        "published": 1,
+        "source_id": "et-default",
+        "truncated": 0
+      },
+      {
+        "doubted": 1,
+        "published": 4,
+        "source_id": "euronews",
+        "truncated": 0
+      },
+      {
+        "doubted": 0,
+        "published": 1,
+        "source_id": "fastcompany-tech",
+        "truncated": 0
+      },
+      {
+        "doubted": 0,
+        "published": 1,
+        "source_id": "fed-press",
+        "truncated": 0
+      },
+      {
+        "doubted": 0,
+        "published": 1,
+        "source_id": "france24-europe",
+        "truncated": 0
+      },
+      {
+        "doubted": 0,
+        "published": 4,
+        "source_id": "free-press-journal",
+        "truncated": 0
+      },
+      {
+        "doubted": 2,
+        "published": 4,
+        "source_id": "frontline",
+        "truncated": 0
+      },
+      {
+        "doubted": 1,
+        "published": 2,
+        "source_id": "greentech",
+        "truncated": 0
+      },
+      {
+        "doubted": 1,
+        "published": 1,
+        "source_id": "grist",
+        "truncated": 0
+      },
+      {
+        "doubted": 0,
+        "published": 1,
+        "source_id": "guardian-ai",
+        "truncated": 0
+      },
+      {
+        "doubted": 3,
+        "published": 3,
+        "source_id": "guardian-business",
+        "truncated": 0
+      },
+      {
+        "doubted": 0,
+        "published": 4,
+        "source_id": "guardian-world",
+        "truncated": 0
+      },
+      {
+        "doubted": 3,
+        "published": 3,
+        "source_id": "hindustan-times",
+        "truncated": 0
+      },
+      {
+        "doubted": 1,
+        "published": 4,
+        "source_id": "india-today",
+        "truncated": 0
+      },
+      {
+        "doubted": 0,
+        "published": 3,
+        "source_id": "japan-times",
+        "truncated": 0
+      },
+      {
+        "doubted": 1,
+        "published": 1,
+        "source_id": "liberty-street",
+        "truncated": 0
+      },
+      {
+        "doubted": 2,
+        "published": 4,
+        "source_id": "livemint",
+        "truncated": 0
+      },
+      {
+        "doubted": 1,
+        "published": 1,
+        "source_id": "mit-tech-review-ai",
+        "truncated": 0
+      },
+      {
+        "doubted": 0,
+        "published": 1,
+        "source_id": "modern-power",
+        "truncated": 0
+      },
+      {
+        "doubted": 0,
+        "published": 1,
+        "source_id": "mongabay",
+        "truncated": 0
+      },
+      {
+        "doubted": 0,
+        "published": 2,
+        "source_id": "mongabay-india",
+        "truncated": 0
+      },
+      {
+        "doubted": 1,
+        "published": 3,
+        "source_id": "oilprice",
+        "truncated": 0
+      },
+      {
+        "doubted": 0,
+        "published": 1,
+        "source_id": "power-magazine",
+        "truncated": 0
+      },
+      {
+        "doubted": 0,
+        "published": 2,
+        "source_id": "pv-magazine",
+        "truncated": 0
+      },
+      {
+        "doubted": 1,
+        "published": 2,
+        "source_id": "quartz",
+        "truncated": 0
+      },
+      {
+        "doubted": 1,
+        "published": 1,
+        "source_id": "scroll-in",
+        "truncated": 0
+      },
+      {
+        "doubted": 0,
+        "published": 2,
+        "source_id": "semafor",
+        "truncated": 0
+      },
+      {
+        "doubted": 1,
+        "published": 1,
+        "source_id": "simon-willison",
+        "truncated": 0
+      },
+      {
+        "doubted": 0,
+        "published": 4,
+        "source_id": "straitstimes-business",
+        "truncated": 0
+      },
+      {
+        "doubted": 0,
+        "published": 1,
+        "source_id": "straitstimes-opinion",
+        "truncated": 0
+      },
+      {
+        "doubted": 1,
+        "published": 4,
+        "source_id": "techcrunch-ai",
+        "truncated": 0
+      },
+      {
+        "doubted": 1,
+        "published": 3,
+        "source_id": "techpolicy-ai",
+        "truncated": 0
+      },
+      {
+        "doubted": 1,
+        "published": 3,
+        "source_id": "the-federal",
+        "truncated": 0
+      },
+      {
+        "doubted": 2,
+        "published": 4,
+        "source_id": "the-hindu-national",
+        "truncated": 0
+      },
+      {
+        "doubted": 0,
+        "published": 4,
+        "source_id": "thehindu-all",
+        "truncated": 0
+      },
+      {
+        "doubted": 2,
+        "published": 3,
+        "source_id": "thehindu-biz",
+        "truncated": 0
+      },
+      {
+        "doubted": 1,
+        "published": 4,
+        "source_id": "thehindu-business",
+        "truncated": 0
+      },
+      {
+        "doubted": 0,
+        "published": 1,
+        "source_id": "thehindu-intl",
+        "truncated": 0
+      },
+      {
+        "doubted": 0,
+        "published": 4,
+        "source_id": "toi-india",
+        "truncated": 0
+      },
+      {
+        "doubted": 0,
+        "published": 4,
+        "source_id": "toi-top",
+        "truncated": 0
+      },
+      {
+        "doubted": 0,
+        "published": 1,
+        "source_id": "wired-ai",
+        "truncated": 0
+      },
+      {
+        "doubted": 0,
+        "published": 2,
+        "source_id": "world-nuclear-news",
+        "truncated": 0
+      }
+    ],
+    "sources_present": 59,
+    "stage_timing": [
+      {
+        "max_ms": 9719,
+        "p50_ms": 544,
+        "p90_ms": 1752,
+        "stage": "fetch",
+        "sum_ms": 143442,
+        "timed": 160
+      },
+      {
+        "max_ms": 222,
+        "p50_ms": 51,
+        "p90_ms": 107,
+        "stage": "extract",
+        "sum_ms": 9299,
+        "timed": 160
+      },
+      {
+        "max_ms": 1520260,
+        "p50_ms": 353536,
+        "p90_ms": 660512,
+        "stage": "summarize",
+        "sum_ms": 59224795,
+        "timed": 146
+      }
+    ],
+    "summaries_scored": 142,
+    "throughput": {
+      "cached_tokens": 856843,
+      "decode_ms": 32619351,
+      "input_tokens": 1128340,
+      "items": 145,
+      "output_tokens": 170760,
+      "prefill_ms": 25267615
+    },
+    "version": "2026-09-29",
     "visuals_rendered": 0
   }
 ]

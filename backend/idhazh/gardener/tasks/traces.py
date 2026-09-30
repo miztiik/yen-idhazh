@@ -25,7 +25,7 @@ def run(context: TaskContext) -> Pass:
 
     from idhazh import ledger, telemetry
     from idhazh.contracts.ledger_name import LedgerName
-    from idhazh.gardener import retention_files
+    from idhazh.gardener import named_trees, retention_files
 
     first_kept = retention_files.first_kept_day(
         context.policy.window,
@@ -40,7 +40,7 @@ def run(context: TaskContext) -> Pass:
         if tree is None or first_kept is None:
             return []
         found: list[retention_files.Aged] = []
-        for path in sorted(tree.rglob("*.jsonl")):
+        for path in named_trees.files_named(context.listing, tree, ".jsonl"):
             published = telemetry.trace_date(path, tree)
             if published is not None and published < first_kept:
                 found.append(retention_files.Aged(path=path, day=published.isoformat()))
